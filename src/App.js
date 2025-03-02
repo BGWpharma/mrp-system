@@ -1,6 +1,6 @@
 // src/App.js
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 
@@ -13,18 +13,36 @@ import Dashboard from './pages/Dashboard/Dashboard';
 import RecipesPage from './pages/Recipes/RecipesPage';
 import RecipeDetailsPage from './pages/Recipes/RecipeDetailsPage';
 import NewRecipePage from './pages/Recipes/NewRecipePage';
+import EditRecipePage from './pages/Recipes/EditRecipePage';
 
 // Production
 import ProductionPage from './pages/Production/ProductionPage';
 import NewTaskPage from './pages/Production/NewTaskPage';
+import ProductionCalendarPage from './pages/Production/ProductionCalendarPage';
+import TaskDetailsPage from './pages/Production/TaskDetailsPage';
+import EditTaskPage from './pages/Production/EditTaskPage';
 
 // Inventory
 import InventoryPage from './pages/Inventory/InventoryPage';
 import ItemDetailsPage from './pages/Inventory/ItemDetailsPage';
+import NewInventoryItemPage from './pages/Inventory/NewInventoryItemPage';
+import EditInventoryItemPage from './pages/Inventory/EditInventoryItemPage';
+import ReceiveInventoryPage from './pages/Inventory/ReceiveInventoryPage';
+import IssueInventoryPage from './pages/Inventory/IssueInventoryPage';
+import InventoryHistoryPage from './pages/Inventory/InventoryHistoryPage';
+import ExpiryDatesPage from './pages/Inventory/ExpiryDatesPage';
 
 // Quality
 import QualityPage from './pages/Quality/QualityPage';
 import NewTestPage from './pages/Quality/NewTestPage';
+
+// Orders
+import OrdersList from './components/orders/OrdersList';
+import OrderForm from './components/orders/OrderForm';
+import OrderDetails from './components/orders/OrderDetails';
+
+// Analytics
+import AnalyticsDashboard from './pages/Analytics/Dashboard';
 
 // Common Components
 import Navbar from './components/common/Navbar';
@@ -50,18 +68,37 @@ function App() {
               <Route path="/recipes" element={<PrivateLayout><RecipesPage /></PrivateLayout>} />
               <Route path="/recipes/new" element={<PrivateLayout><NewRecipePage /></PrivateLayout>} />
               <Route path="/recipes/:id" element={<PrivateLayout><RecipeDetailsPage /></PrivateLayout>} />
+              <Route path="/recipes/:id/edit" element={<PrivateLayout><EditRecipePage /></PrivateLayout>} />
               
               {/* Production Routes */}
               <Route path="/production" element={<PrivateLayout><ProductionPage /></PrivateLayout>} />
               <Route path="/production/new-task" element={<PrivateLayout><NewTaskPage /></PrivateLayout>} />
+              <Route path="/production/calendar" element={<PrivateLayout><ProductionCalendarPage /></PrivateLayout>} />
+              <Route path="/production/tasks/:id" element={<PrivateLayout><TaskDetailsPage /></PrivateLayout>} />
+              <Route path="/production/tasks/:id/edit" element={<PrivateLayout><EditTaskPage /></PrivateLayout>} />
               
               {/* Inventory Routes */}
               <Route path="/inventory" element={<PrivateLayout><InventoryPage /></PrivateLayout>} />
+              <Route path="/inventory/new" element={<PrivateLayout><NewInventoryItemPage /></PrivateLayout>} />
               <Route path="/inventory/:id" element={<PrivateLayout><ItemDetailsPage /></PrivateLayout>} />
+              <Route path="/inventory/:id/edit" element={<PrivateLayout><EditInventoryItemPage /></PrivateLayout>} />
+              <Route path="/inventory/:id/receive" element={<PrivateLayout><ReceiveInventoryPage /></PrivateLayout>} />
+              <Route path="/inventory/:id/issue" element={<PrivateLayout><IssueInventoryPage /></PrivateLayout>} />
+              <Route path="/inventory/:id/history" element={<PrivateLayout><InventoryHistoryPage /></PrivateLayout>} />
+              <Route path="/inventory/expiry-dates" element={<PrivateLayout><ExpiryDatesPage /></PrivateLayout>} />
               
               {/* Quality Routes */}
               <Route path="/quality" element={<PrivateLayout><QualityPage /></PrivateLayout>} />
               <Route path="/quality/new-test" element={<PrivateLayout><NewTestPage /></PrivateLayout>} />
+              
+              {/* Orders Routes */}
+              <Route path="/orders" element={<PrivateLayout><OrdersList /></PrivateLayout>} />
+              <Route path="/orders/new" element={<PrivateLayout><OrderForm /></PrivateLayout>} />
+              <Route path="/orders/edit/:orderId" element={<PrivateLayout><EditOrderWrapper /></PrivateLayout>} />
+              <Route path="/orders/:orderId" element={<PrivateLayout><OrderDetails /></PrivateLayout>} />
+              
+              {/* Analytics Routes */}
+              <Route path="/analytics" element={<PrivateLayout><AnalyticsDashboard /></PrivateLayout>} />
               
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
@@ -87,6 +124,12 @@ function PrivateLayout({ children }) {
       </div>
     </PrivateRoute>
   );
+}
+
+// Komponent pomocniczy do obsługi edycji zamówienia
+function EditOrderWrapper() {
+  const { orderId } = useParams();
+  return <OrderForm orderId={orderId} />;
 }
 
 export default App;

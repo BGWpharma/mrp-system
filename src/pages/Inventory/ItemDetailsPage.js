@@ -17,18 +17,22 @@ import {
   TableHead,
   TableRow,
   Tab,
-  Tabs
+  Tabs,
+  Alert,
+  AlertTitle
 } from '@mui/material';
 import {
   Edit as EditIcon,
   ArrowBack as ArrowBackIcon,
   ArrowUpward as ReceiveIcon,
   ArrowDownward as IssueIcon,
-  History as HistoryIcon
+  History as HistoryIcon,
+  Warning as WarningIcon
 } from '@mui/icons-material';
-import { getInventoryItemById, getItemTransactions } from '../../services/inventoryService';
+import { getInventoryItemById, getItemTransactions, getItemBatches } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
+import { Timestamp } from 'firebase/firestore';
 
 // TabPanel component
 function TabPanel(props) {
@@ -57,6 +61,7 @@ const ItemDetailsPage = () => {
   const { showError } = useNotification();
   const [item, setItem] = useState(null);
   const [transactions, setTransactions] = useState([]);
+  const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tabValue, setTabValue] = useState(0);
 
@@ -70,6 +75,10 @@ const ItemDetailsPage = () => {
         // Pobierz historię transakcji
         const transactionsData = await getItemTransactions(id);
         setTransactions(transactionsData);
+        
+        // Pobierz partie
+        const batchesData = await getItemBatches(id);
+        setBatches(batchesData);
       } catch (error) {
         showError('Błąd podczas pobierania danych pozycji: ' + error.message);
         console.error('Error fetching item details:', error);
@@ -96,6 +105,41 @@ const ItemDetailsPage = () => {
       return <Chip label="Optymalny stan" color="success" />;
     }
   };
+
+  // Sprawdź, czy są partie z krótkim terminem ważności (30 dni)
+  const getExpiringBatches = () => {
+    const today = new Date();
+    const thirtyDaysFromNow = new Date();
+    thirtyDaysFromNow.setDate(today.getDate() + 30);
+    
+    return batches.filter(batch => {
+      if (batch.quantity <= 0) return false;
+      
+      const expiryDate = batch.expiryDate instanceof Timestamp 
+        ? batch.expiryDate.toDate() 
+        : new Date(batch.expiryDate);
+      
+      return expiryDate > today && expiryDate <= thirtyDaysFromNow;
+    });
+  };
+  
+  // Sprawdź, czy są przeterminowane partie
+  const getExpiredBatches = () => {
+    const today = new Date();
+    
+    return batches.filter(batch => {
+      if (batch.quantity <= 0) return false;
+      
+      const expiryDate = batch.expiryDate instanceof Timestamp 
+        ? batch.expiryDate.toDate() 
+        : new Date(batch.expiryDate);
+      
+      return expiryDate < today;
+    });
+  };
+  
+  const expiringBatches = getExpiringBatches();
+  const expiredBatches = getExpiredBatches();
 
   if (loading) {
     return <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>Ładowanie danych...</Container>;
@@ -213,10 +257,29 @@ const ItemDetailsPage = () => {
           </Button>
         </Box>
 
+        {expiredBatches.length > 0 && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            <AlertTitle>Przeterminowane partie</AlertTitle>
+            W magazynie znajduje się {expiredBatches.length} {expiredBatches.length === 1 ? 'przeterminowana partia' : 
+              expiredBatches.length < 5 ? 'przeterminowane partie' : 'przeterminowanych partii'} tego produktu.
+            Łącznie {expiredBatches.reduce((sum, batch) => sum + batch.quantity, 0)} {item?.unit}.
+          </Alert>
+        )}
+        
+        {expiringBatches.length > 0 && (
+          <Alert severity="warning" sx={{ mb: 3 }}>
+            <AlertTitle>Partie z krótkim terminem ważności</AlertTitle>
+            W magazynie znajduje się {expiringBatches.length} {expiringBatches.length === 1 ? 'partia' : 
+              expiringBatches.length < 5 ? 'partie' : 'partii'} tego produktu z terminem ważności krótszym niż 30 dni.
+            Łącznie {expiringBatches.reduce((sum, batch) => sum + batch.quantity, 0)} {item?.unit}.
+          </Alert>
+        )}
+
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tabs value={tabValue} onChange={handleTabChange} aria-label="item tabs">
             <Tab label="Szczegółowe informacje" id="item-tab-0" />
-            <Tab label="Historia transakcji" id="item-tab-1" />
+            <Tab label="Partie i daty ważności" id="item-tab-1" />
+            <Tab label="Historia transakcji" id="item-tab-2" />
           </Tabs>
         </Box>
 
@@ -254,6 +317,106 @@ const ItemDetailsPage = () => {
         </TabPanel>
 
         <TabPanel value={tabValue} index={1}>
+          <Typography variant="h6" gutterBottom>Partie i daty ważności</Typography>
+          
+          {batches.length === 0 ? (
+            <Typography variant="body1">Brak zarejestrowanych partii dla tego produktu.</Typography>
+          ) : (
+            <TableContainer component={Paper} sx={{ mt: 2 }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Numer partii</TableCell>
+                    <TableCell>Data ważności</TableCell>
+                    <TableCell>Ilość</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Data przyjęcia</TableCell>
+                    <TableCell>Notatki</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {batches
+                    .sort((a, b) => {
+                      const dateA = a.expiryDate instanceof Timestamp ? a.expiryDate.toDate() : new Date(a.expiryDate);
+                      const dateB = b.expiryDate instanceof Timestamp ? b.expiryDate.toDate() : new Date(b.expiryDate);
+                      return dateA - dateB;
+                    })
+                    .map(batch => {
+                      const expiryDate = batch.expiryDate instanceof Timestamp 
+                        ? batch.expiryDate.toDate() 
+                        : new Date(batch.expiryDate);
+                      
+                      const receivedDate = batch.receivedDate instanceof Timestamp 
+                        ? batch.receivedDate.toDate() 
+                        : new Date(batch.receivedDate);
+                      
+                      const today = new Date();
+                      const thirtyDaysFromNow = new Date();
+                      thirtyDaysFromNow.setDate(today.getDate() + 30);
+                      
+                      let status = 'valid';
+                      if (expiryDate < today) {
+                        status = 'expired';
+                      } else if (expiryDate <= thirtyDaysFromNow) {
+                        status = 'expiring';
+                      }
+                      
+                      return (
+                        <TableRow key={batch.id}>
+                          <TableCell>{batch.batchNumber || '-'}</TableCell>
+                          <TableCell>
+                            {expiryDate.toLocaleDateString('pl-PL')}
+                            {status === 'expired' && (
+                              <Chip 
+                                size="small" 
+                                label="Przeterminowane" 
+                                color="error" 
+                                sx={{ ml: 1 }} 
+                              />
+                            )}
+                            {status === 'expiring' && (
+                              <Chip 
+                                size="small" 
+                                label="Wkrótce wygaśnie" 
+                                color="warning" 
+                                sx={{ ml: 1 }} 
+                              />
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {batch.quantity} {item.unit}
+                            {batch.quantity === 0 && (
+                              <Chip 
+                                size="small" 
+                                label="Wydane" 
+                                color="default" 
+                                sx={{ ml: 1 }} 
+                              />
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {status === 'expired' ? (
+                              <Chip label="Przeterminowane" color="error" />
+                            ) : status === 'expiring' ? (
+                              <Chip label="Wkrótce wygaśnie" color="warning" />
+                            ) : batch.quantity <= 0 ? (
+                              <Chip label="Wydane" color="default" />
+                            ) : (
+                              <Chip label="Aktualne" color="success" />
+                            )}
+                          </TableCell>
+                          <TableCell>{receivedDate.toLocaleDateString('pl-PL')}</TableCell>
+                          <TableCell>{batch.notes || '-'}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={2}>
           <Typography variant="h6" gutterBottom>Historia transakcji</Typography>
           
           {transactions.length === 0 ? (

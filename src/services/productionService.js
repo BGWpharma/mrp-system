@@ -10,7 +10,8 @@ import {
     query, 
     where,
     orderBy,
-    serverTimestamp 
+    serverTimestamp,
+    Timestamp
   } from 'firebase/firestore';
   import { db } from './firebase/config';
   
@@ -31,18 +32,56 @@ import {
   // Pobieranie zadań produkcyjnych na dany okres
   export const getTasksByDateRange = async (startDate, endDate) => {
     const tasksRef = collection(db, PRODUCTION_TASKS_COLLECTION);
-    const q = query(
-      tasksRef, 
-      where('scheduledDate', '>=', startDate),
-      where('scheduledDate', '<=', endDate),
-      orderBy('scheduledDate', 'asc')
-    );
     
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    // Konwersja stringów dat na obiekty Date
+    let startDateTime, endDateTime;
+    
+    try {
+      startDateTime = new Date(startDate);
+      endDateTime = new Date(endDate);
+      
+      // Sprawdzenie, czy daty są poprawne
+      if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) {
+        throw new Error('Nieprawidłowy format daty');
+      }
+      
+      // Konwersja na Timestamp dla Firestore
+      const startTimestamp = Timestamp.fromDate(startDateTime);
+      const endTimestamp = Timestamp.fromDate(endDateTime);
+      
+      // Pobierz zadania, które zaczynają się w zakresie dat
+      // lub kończą się w zakresie dat
+      // lub obejmują cały zakres dat (zaczynają się przed i kończą po)
+      const q = query(
+        tasksRef,
+        where('scheduledDate', '<=', endTimestamp),
+        orderBy('scheduledDate', 'asc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+        .filter(task => {
+          // Sprawdź, czy zadanie kończy się po dacie początkowej zakresu
+          const taskEndDate = task.endDate 
+            ? (task.endDate instanceof Timestamp ? task.endDate.toDate() : new Date(task.endDate))
+            : (task.scheduledDate instanceof Timestamp ? new Date(task.scheduledDate.toDate().getTime() + 60 * 60 * 1000) : new Date(new Date(task.scheduledDate).getTime() + 60 * 60 * 1000));
+          
+          return taskEndDate >= startDateTime;
+        });
+    } catch (error) {
+      console.error('Error parsing dates:', error);
+      // W przypadku błędu zwróć wszystkie zadania
+      const q = query(tasksRef, orderBy('scheduledDate', 'asc'));
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    }
   };
   
   // Pobieranie zadania po ID
@@ -62,6 +101,16 @@ import {
   
   // Tworzenie nowego zadania produkcyjnego
   export const createTask = async (taskData, userId) => {
+    // Upewnij się, że endDate jest ustawiona
+    if (!taskData.endDate) {
+      // Jeśli nie ma endDate, ustaw na 1 godzinę po scheduledDate
+      const scheduledDate = taskData.scheduledDate instanceof Date 
+        ? taskData.scheduledDate 
+        : new Date(taskData.scheduledDate);
+      
+      taskData.endDate = new Date(scheduledDate.getTime() + 60 * 60 * 1000);
+    }
+    
     const taskWithMeta = {
       ...taskData,
       createdBy: userId,
@@ -80,6 +129,16 @@ import {
   
   // Aktualizacja zadania produkcyjnego
   export const updateTask = async (taskId, taskData, userId) => {
+    // Upewnij się, że endDate jest ustawiona
+    if (!taskData.endDate) {
+      // Jeśli nie ma endDate, ustaw na 1 godzinę po scheduledDate
+      const scheduledDate = taskData.scheduledDate instanceof Date 
+        ? taskData.scheduledDate 
+        : new Date(taskData.scheduledDate);
+      
+      taskData.endDate = new Date(scheduledDate.getTime() + 60 * 60 * 1000);
+    }
+    
     const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
     
     const updatedTask = {
@@ -131,16 +190,40 @@ import {
   
   // Pobieranie zadań według statusu
   export const getTasksByStatus = async (status) => {
-    const tasksRef = collection(db, PRODUCTION_TASKS_COLLECTION);
-    const q = query(
-      tasksRef, 
-      where('status', '==', status),
-      orderBy('scheduledDate', 'asc')
-    );
+    console.log(`Próba pobrania zadań o statusie: "${status}"`);
     
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    // Sprawdźmy, czy status nie jest pusty
+    if (!status) {
+      console.error('Błąd: status nie może być pusty');
+      return [];
+    }
+    
+    try {
+      const tasksRef = collection(db, PRODUCTION_TASKS_COLLECTION);
+      
+      // Utwórz zapytanie
+      const q = query(
+        tasksRef, 
+        where('status', '==', status),
+        orderBy('scheduledDate', 'asc')
+      );
+      
+      console.log(`Wykonuję zapytanie do kolekcji ${PRODUCTION_TASKS_COLLECTION} o zadania ze statusem "${status}"`);
+      
+      // Pobierz dane
+      const querySnapshot = await getDocs(q);
+      
+      // Mapuj rezultaty
+      const tasks = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      console.log(`Znaleziono ${tasks.length} zadań o statusie "${status}"`);
+      
+      return tasks;
+    } catch (error) {
+      console.error(`Błąd podczas pobierania zadań o statusie "${status}":`, error);
+      throw error;
+    }
   };

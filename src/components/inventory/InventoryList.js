@@ -14,7 +14,9 @@ import {
   IconButton,
   Typography,
   Box,
-  Chip
+  Chip,
+  Tooltip,
+  Badge
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -23,9 +25,10 @@ import {
   Delete as DeleteIcon,
   ArrowUpward as ReceiveIcon,
   ArrowDownward as IssueIcon,
-  History as HistoryIcon
+  History as HistoryIcon,
+  Warning as WarningIcon
 } from '@mui/icons-material';
-import { getAllInventoryItems, deleteInventoryItem } from '../../services/inventoryService';
+import { getAllInventoryItems, deleteInventoryItem, getExpiringBatches, getExpiredBatches } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
 
@@ -34,11 +37,14 @@ const InventoryList = () => {
   const [filteredItems, setFilteredItems] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [expiringCount, setExpiringCount] = useState(0);
+  const [expiredCount, setExpiredCount] = useState(0);
   const { showSuccess, showError } = useNotification();
 
   // Pobierz wszystkie pozycje przy montowaniu komponentu
   useEffect(() => {
     fetchInventoryItems();
+    fetchExpiryData();
   }, []);
 
   // Filtruj pozycje przy zmianie searchTerm lub inventoryItems
@@ -66,6 +72,18 @@ const InventoryList = () => {
       console.error('Error fetching inventory items:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchExpiryData = async () => {
+    try {
+      const expiringBatches = await getExpiringBatches();
+      const expiredBatches = await getExpiredBatches();
+      
+      setExpiringCount(expiringBatches.length);
+      setExpiredCount(expiredBatches.length);
+    } catch (error) {
+      console.error('Error fetching expiry data:', error);
     }
   };
 
@@ -103,15 +121,33 @@ const InventoryList = () => {
     <div>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5">Magazyn</Typography>
-        <Button 
-          variant="contained" 
-          color="primary" 
-          component={Link} 
-          to="/inventory/new"
-          startIcon={<AddIcon />}
-        >
-          Nowa pozycja
-        </Button>
+        <Box>
+          <Tooltip title="Sprawdź daty ważności produktów">
+            <Button 
+              variant="outlined" 
+              color="warning" 
+              component={Link} 
+              to="/inventory/expiry-dates"
+              startIcon={
+                <Badge badgeContent={expiringCount + expiredCount} color="error" max={99}>
+                  <WarningIcon />
+                </Badge>
+              }
+              sx={{ mr: 2 }}
+            >
+              Daty ważności
+            </Button>
+          </Tooltip>
+          <Button 
+            variant="contained" 
+            color="primary" 
+            component={Link} 
+            to="/inventory/new"
+            startIcon={<AddIcon />}
+          >
+            Nowa pozycja
+          </Button>
+        </Box>
       </Box>
 
       <Box sx={{ display: 'flex', mb: 3 }}>
@@ -149,7 +185,9 @@ const InventoryList = () => {
               {filteredItems.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell component="th" scope="row">
-                    {item.name}
+                    <Link to={`/inventory/${item.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                      {item.name}
+                    </Link>
                   </TableCell>
                   <TableCell>{item.category || '—'}</TableCell>
                   <TableCell align="right">{item.quantity}</TableCell>

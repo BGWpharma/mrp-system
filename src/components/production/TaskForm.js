@@ -44,6 +44,7 @@ const TaskForm = ({ taskId }) => {
     quantity: '',
     unit: 'szt.',
     scheduledDate: new Date(),
+    endDate: new Date(new Date().getTime() + 60 * 60 * 1000), // Domyślnie 1 godzina później
     estimatedDuration: '', // w minutach
     priority: 'Normalny',
     status: 'Zaplanowane',
@@ -73,9 +74,15 @@ const TaskForm = ({ taskId }) => {
             (task.scheduledDate.toDate ? task.scheduledDate.toDate() : new Date(task.scheduledDate)) : 
             new Date();
           
+          // Konwertuj timestamp endDate lub ustaw domyślną datę (1 godzina po scheduledDate)
+          const endDate = task.endDate ? 
+            (task.endDate.toDate ? task.endDate.toDate() : new Date(task.endDate)) : 
+            new Date(scheduledDate.getTime() + 60 * 60 * 1000);
+          
           setTaskData({
             ...task,
-            scheduledDate
+            scheduledDate,
+            endDate
           });
         } catch (error) {
           showError('Błąd podczas pobierania zadania: ' + error.message);
@@ -137,6 +144,31 @@ const TaskForm = ({ taskId }) => {
       ...prev,
       scheduledDate: newDate
     }));
+  };
+
+  const handleEndDateChange = (newDate) => {
+    setTaskData(prev => ({
+      ...prev,
+      endDate: newDate
+    }));
+  };
+
+  const handleDurationChange = (e) => {
+    const duration = parseInt(e.target.value);
+    if (!isNaN(duration) && duration > 0) {
+      // Aktualizacja endDate na podstawie scheduledDate i podanego czasu trwania
+      const endDate = new Date(taskData.scheduledDate.getTime() + duration * 60 * 1000);
+      setTaskData(prev => ({
+        ...prev,
+        estimatedDuration: duration,
+        endDate: endDate
+      }));
+    } else {
+      setTaskData(prev => ({
+        ...prev,
+        estimatedDuration: e.target.value
+      }));
+    }
   };
 
   if (loading) {
@@ -247,9 +279,18 @@ const TaskForm = ({ taskId }) => {
             </Grid>
             <Grid item xs={6}>
               <DateTimePicker
-                label="Data realizacji"
+                label="Data rozpoczęcia"
                 value={taskData.scheduledDate}
                 onChange={handleDateChange}
+                renderInput={(params) => <TextField {...params} fullWidth required />}
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <DateTimePicker
+                label="Data zakończenia"
+                value={taskData.endDate}
+                onChange={handleEndDateChange}
+                minDate={taskData.scheduledDate}
                 renderInput={(params) => <TextField {...params} fullWidth required />}
               />
             </Grid>
@@ -259,9 +300,10 @@ const TaskForm = ({ taskId }) => {
                 name="estimatedDuration"
                 type="number"
                 value={taskData.estimatedDuration || ''}
-                onChange={handleChange}
+                onChange={handleDurationChange}
                 fullWidth
                 inputProps={{ min: 0 }}
+                helperText="Automatycznie aktualizuje datę zakończenia"
               />
             </Grid>
             <Grid item xs={6}>

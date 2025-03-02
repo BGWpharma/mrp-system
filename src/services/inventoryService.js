@@ -11,12 +11,14 @@ import {
     where,
     orderBy,
     serverTimestamp,
-    increment
+    increment,
+    Timestamp
   } from 'firebase/firestore';
   import { db } from './firebase/config';
   
   const INVENTORY_COLLECTION = 'inventory';
   const INVENTORY_TRANSACTIONS_COLLECTION = 'inventoryTransactions';
+  const INVENTORY_BATCHES_COLLECTION = 'inventoryBatches';
   
   // Pobieranie wszystkich pozycji magazynowych
   export const getAllInventoryItems = async () => {
@@ -128,7 +130,70 @@ import {
     return { success: true };
   };
   
-  // Przyjęcie towaru (zwiększenie stanu)
+  // Pobieranie partii dla danej pozycji magazynowej
+  export const getItemBatches = async (itemId) => {
+    const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
+    const q = query(
+      batchesRef, 
+      where('itemId', '==', itemId),
+      orderBy('expiryDate', 'asc') // Sortowanie po dacie ważności (FEFO)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  };
+
+  // Pobieranie partii z krótkim terminem ważności (wygasające w ciągu określonej liczby dni)
+  export const getExpiringBatches = async (daysThreshold = 30) => {
+    const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
+    
+    // Oblicz datę graniczną (dzisiaj + daysThreshold dni)
+    const today = new Date();
+    const thresholdDate = new Date();
+    thresholdDate.setDate(today.getDate() + daysThreshold);
+    
+    // Używamy filtrów po stronie serwera z indeksem złożonym
+    const q = query(
+      batchesRef,
+      where('expiryDate', '>=', Timestamp.fromDate(today)),
+      where('expiryDate', '<=', Timestamp.fromDate(thresholdDate)),
+      where('quantity', '>', 0), // Tylko partie z ilością większą od 0
+      orderBy('expiryDate', 'asc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  };
+
+  // Pobieranie przeterminowanych partii
+  export const getExpiredBatches = async () => {
+    const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
+    
+    // Dzisiejsza data
+    const today = new Date();
+    
+    // Używamy filtrów po stronie serwera z indeksem złożonym
+    const q = query(
+      batchesRef,
+      where('expiryDate', '<', Timestamp.fromDate(today)),
+      where('quantity', '>', 0), // Tylko partie z ilością większą od 0
+      orderBy('expiryDate', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  };
+
+  // Przyjęcie towaru (zwiększenie stanu) z datą ważności
   export const receiveInventory = async (itemId, quantity, transactionData, userId) => {
     // Pobierz bieżącą pozycję
     const currentItem = await getInventoryItemById(itemId);
@@ -154,15 +219,33 @@ import {
       createdBy: userId
     };
     
-    await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transaction);
+    const transactionRef = await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transaction);
+    
+    // Jeśli podano datę ważności, dodaj partię
+    if (transactionData.expiryDate) {
+      const batch = {
+        itemId,
+        itemName: currentItem.name,
+        transactionId: transactionRef.id,
+        quantity: Number(quantity),
+        initialQuantity: Number(quantity),
+        batchNumber: transactionData.batchNumber || '',
+        expiryDate: transactionData.expiryDate,
+        receivedDate: serverTimestamp(),
+        notes: transactionData.batchNotes || '',
+        createdBy: userId
+      };
+      
+      await addDoc(collection(db, INVENTORY_BATCHES_COLLECTION), batch);
+    }
     
     return {
       id: itemId,
       quantity: currentItem.quantity + Number(quantity)
     };
   };
-  
-  // Wydanie towaru (zmniejszenie stanu)
+
+  // Wydanie towaru (zmniejszenie stanu) z uwzględnieniem partii (FEFO)
   export const issueInventory = async (itemId, quantity, transactionData, userId) => {
     // Pobierz bieżącą pozycję
     const currentItem = await getInventoryItemById(itemId);
@@ -195,10 +278,71 @@ import {
     
     await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transaction);
     
+    // Jeśli podano konkretną partię do wydania
+    if (transactionData.batchId) {
+      const batchRef = doc(db, INVENTORY_BATCHES_COLLECTION, transactionData.batchId);
+      const batchDoc = await getDoc(batchRef);
+      
+      if (batchDoc.exists()) {
+        const batchData = batchDoc.data();
+        
+        if (batchData.quantity < Number(quantity)) {
+          throw new Error('Niewystarczająca ilość w wybranej partii');
+        }
+        
+        await updateDoc(batchRef, {
+          quantity: increment(-Number(quantity)),
+          updatedAt: serverTimestamp()
+        });
+      }
+    } else {
+      // Automatyczne wydanie według FEFO (First Expired, First Out)
+      let remainingQuantity = Number(quantity);
+      const batches = await getItemBatches(itemId);
+      
+      // Sortuj partie według daty ważności (najwcześniej wygasające pierwsze)
+      const sortedBatches = batches
+        .filter(batch => batch.quantity > 0)
+        .sort((a, b) => {
+          const dateA = a.expiryDate instanceof Timestamp ? a.expiryDate.toDate() : new Date(a.expiryDate);
+          const dateB = b.expiryDate instanceof Timestamp ? b.expiryDate.toDate() : new Date(b.expiryDate);
+          return dateA - dateB;
+        });
+      
+      for (const batch of sortedBatches) {
+        if (remainingQuantity <= 0) break;
+        
+        const quantityToDeduct = Math.min(batch.quantity, remainingQuantity);
+        remainingQuantity -= quantityToDeduct;
+        
+        const batchRef = doc(db, INVENTORY_BATCHES_COLLECTION, batch.id);
+        await updateDoc(batchRef, {
+          quantity: increment(-quantityToDeduct),
+          updatedAt: serverTimestamp()
+        });
+      }
+    }
+    
     return {
       id: itemId,
       quantity: currentItem.quantity - Number(quantity)
     };
+  };
+
+  // Pobieranie historii partii dla danej pozycji
+  export const getItemBatchHistory = async (itemId) => {
+    const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
+    const q = query(
+      batchesRef, 
+      where('itemId', '==', itemId),
+      orderBy('receivedDate', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
   };
   
   // Pobieranie historii transakcji dla danej pozycji

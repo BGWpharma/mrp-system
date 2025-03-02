@@ -154,3 +154,46 @@ import {
     
     return { success: true };
   };
+  
+  // Przywracanie poprzedniej wersji receptury
+  export const restoreRecipeVersion = async (recipeId, versionNumber, userId) => {
+    try {
+      // Pobierz wersję, którą chcemy przywrócić
+      const versionToRestore = await getRecipeVersion(recipeId, versionNumber);
+      
+      // Pobierz aktualną wersję
+      const currentRecipe = await getRecipeById(recipeId);
+      const newVersion = (currentRecipe.version || 0) + 1;
+      
+      // Przygotuj dane do aktualizacji
+      const restoredData = {
+        ...versionToRestore.data,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId,
+        version: newVersion,
+        restoredFrom: versionNumber
+      };
+      
+      // Aktualizuj główny dokument
+      const recipeRef = doc(db, RECIPES_COLLECTION, recipeId);
+      await updateDoc(recipeRef, restoredData);
+      
+      // Zapisz nową wersję w kolekcji wersji (z informacją, że to przywrócona wersja)
+      await addDoc(collection(db, RECIPE_VERSIONS_COLLECTION), {
+        recipeId,
+        version: newVersion,
+        data: restoredData,
+        createdBy: userId,
+        createdAt: serverTimestamp(),
+        restoredFrom: versionNumber
+      });
+      
+      return {
+        id: recipeId,
+        ...restoredData
+      };
+    } catch (error) {
+      console.error('Error restoring recipe version:', error);
+      throw new Error(`Błąd podczas przywracania wersji: ${error.message}`);
+    }
+  };

@@ -22,31 +22,71 @@ import {
   Schedule as ProductionIcon,
   Inventory as InventoryIcon,
   VerifiedUser as QualityIcon,
-  Add as AddIcon
+  ShoppingCart as OrdersIcon,
+  Add as AddIcon,
+  InsertChart as AnalyticsIcon
 } from '@mui/icons-material';
 import { getTasksByStatus } from '../../services/productionService';
 import { getAllRecipes } from '../../services/recipeService';
+import { getOrdersStats } from '../../services/orderService';
+import { getKpiData } from '../../services/analyticsService';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDate } from '../../utils/formatters';
+import { formatCurrency } from '../../utils/formatUtils';
+import { formatTimestamp } from '../../utils/dateUtils';
 
 const Dashboard = () => {
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState([]);
   const [recipes, setRecipes] = useState([]);
+  const [orderStats, setOrderStats] = useState(null);
+  const [analyticsData, setAnalyticsData] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         // Pobierz zadania produkcyjne w trakcie
+        console.log('Próba pobrania zadań w trakcie...');
         const tasksInProgress = await getTasksByStatus('W trakcie');
-        setTasks(tasksInProgress);
+        console.log('Zadania produkcyjne w trakcie:', tasksInProgress);
+        
+        // Jeśli nie ma zadań w trakcie, sprawdź inne statusy, aby zweryfikować połączenie z bazą
+        if (!tasksInProgress || tasksInProgress.length === 0) {
+          console.log('Brak zadań w trakcie, sprawdzam zadania zaplanowane...');
+          const plannedTasks = await getTasksByStatus('Zaplanowane');
+          console.log('Zadania zaplanowane:', plannedTasks);
+          
+          // Jeśli są zadania o innym statusie, ale nie ma w trakcie
+          if (plannedTasks && plannedTasks.length > 0) {
+            console.log('Znaleziono zadania zaplanowane, ale brak zadań w trakcie');
+            setTasks([]); // Pusto, bo nie ma zadań w trakcie
+          } else {
+            console.log('Brak jakichkolwiek zadań produkcyjnych w bazie');
+            setTasks([]);
+          }
+        } else {
+          // Ustaw znalezione zadania w trakcie
+          console.log(`Ustawiam ${tasksInProgress.length} zadań w trakcie`);
+          setTasks(tasksInProgress);
+        }
         
         // Pobierz ostatnie receptury
         const allRecipes = await getAllRecipes();
-        setRecipes(allRecipes.slice(0, 5)); // Tylko 5 najnowszych
+        console.log('Wszystkie receptury:', allRecipes);
+        setRecipes(allRecipes ? allRecipes.slice(0, 5) : []); // Tylko 5 najnowszych
+        
+        // Pobierz statystyki zamówień
+        const stats = await getOrdersStats();
+        console.log('Statystyki zamówień:', stats);
+        setOrderStats(stats || null);
+        
+        // Pobierz dane analityczne
+        const kpiData = await getKpiData();
+        console.log('Dane KPI:', kpiData);
+        setAnalyticsData(kpiData || null);
       } catch (error) {
-        console.error('Error fetching dashboard data:', error);
+        console.error('Błąd podczas pobierania danych dashboardu:', error);
       } finally {
         setLoading(false);
       }
@@ -58,6 +98,19 @@ const Dashboard = () => {
   if (loading) {
     return <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>Ładowanie danych...</Container>;
   }
+
+  // Mapowanie statusów zamówień na kolory
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'Nowe': return 'info';
+      case 'W realizacji': return 'warning';
+      case 'Gotowe do wysyłki': return 'success';
+      case 'Wysłane': return 'primary';
+      case 'Dostarczone': return 'success';
+      case 'Anulowane': return 'error';
+      default: return 'default';
+    }
+  };
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -193,6 +246,62 @@ const Dashboard = () => {
             </CardActions>
           </Card>
         </Grid>
+        
+        {/* Dodaję moduł Zamówień */}
+        <Grid item xs={12} md={3}>
+          <Card>
+            <CardContent sx={{ textAlign: 'center' }}>
+              <OrdersIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
+              <Typography variant="h6">Zamówienia</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Zarządzaj zamówieniami klientów
+              </Typography>
+            </CardContent>
+            <CardActions>
+              <Button 
+                component={Link} 
+                to="/orders" 
+                fullWidth
+              >
+                Przejdź
+              </Button>
+              <Button 
+                component={Link} 
+                to="/orders/new" 
+                color="primary"
+                variant="contained"
+                fullWidth
+                startIcon={<AddIcon />}
+              >
+                Nowe
+              </Button>
+            </CardActions>
+          </Card>
+        </Grid>
+        
+        {/* Dodaję moduł Analizy i Raporty */}
+        <Grid item xs={12} md={3}>
+          <Card>
+            <CardContent sx={{ textAlign: 'center' }}>
+              <AnalyticsIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
+              <Typography variant="h6">Analizy i Raporty</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Panel analityczny i raporty
+              </Typography>
+            </CardContent>
+            <CardActions>
+              <Button 
+                component={Link} 
+                to="/analytics" 
+                fullWidth
+                variant="contained"
+                color="primary"
+              >
+                Przejdź
+              </Button>
+            </CardActions>
+          </Card>
+        </Grid>
 
         {/* Zadania produkcyjne w trakcie */}
         <Grid item xs={12} md={6}>
@@ -202,13 +311,43 @@ const Dashboard = () => {
             </Typography>
             <Divider sx={{ mb: 2 }} />
             
-            {tasks.length === 0 ? (
-              <Typography variant="body2" color="text.secondary" align="center">
-                Brak aktywnych zadań produkcyjnych
-              </Typography>
+            {tasks && tasks.length === 0 ? (
+              <Box sx={{ mt: 2, mb: 2 }}>
+                <Typography variant="body2" color="text.secondary" align="center">
+                  Brak aktywnych zadań produkcyjnych
+                </Typography>
+                {analyticsData && analyticsData.production && (
+                  <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-around' }}>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="h6" color="primary.main">
+                        {analyticsData.production.tasksInProgress}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        W trakcie
+                      </Typography>
+                    </Box>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="h6" color="success.main">
+                        {analyticsData.production.completedTasks}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Ukończone
+                      </Typography>
+                    </Box>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="h6" color="info.main">
+                        {analyticsData.production.efficiency}%
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Wydajność
+                      </Typography>
+                    </Box>
+                  </Box>
+                )}
+              </Box>
             ) : (
               <List>
-                {tasks.map((task) => (
+                {tasks && tasks.map((task) => (
                   <React.Fragment key={task.id}>
                     <ListItem button component={Link} to={`/production/tasks/${task.id}`}>
                       <ListItemText
@@ -247,6 +386,122 @@ const Dashboard = () => {
           </Paper>
         </Grid>
 
+        {/* Ostatnie zamówienia */}
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column' }}>
+            <Typography variant="h6" gutterBottom>
+              Ostatnie zamówienia
+            </Typography>
+            <Divider sx={{ mb: 2 }} />
+            
+            {!orderStats || !orderStats.recentOrders || orderStats.recentOrders.length === 0 ? (
+              <Box sx={{ mt: 2, mb: 2 }}>
+                <Typography variant="body2" color="text.secondary" align="center">
+                  Brak zamówień
+                </Typography>
+                
+                {analyticsData && analyticsData.sales && (
+                  <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-around' }}>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="h6" color="primary.main">
+                        {analyticsData.sales.totalOrders}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Łącznie
+                      </Typography>
+                    </Box>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="h6" color="primary.main">
+                        {formatCurrency(analyticsData.sales.totalValue)}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Wartość
+                      </Typography>
+                    </Box>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography 
+                        variant="h6" 
+                        color={analyticsData.sales.growthRate >= 0 ? 'success.main' : 'error.main'}
+                      >
+                        {analyticsData.sales.growthRate >= 0 ? '+' : ''}{analyticsData.sales.growthRate.toFixed(1)}%
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Wzrost
+                      </Typography>
+                    </Box>
+                  </Box>
+                )}
+              </Box>
+            ) : (
+              <List>
+                {orderStats.recentOrders.map((order) => (
+                  <React.Fragment key={order.id}>
+                    <ListItem button component={Link} to={`/orders/${order.id}`}>
+                      <ListItemText
+                        primary={order.customer}
+                        secondary={
+                          <>
+                            <Typography component="span" variant="body2" color="text.primary">
+                              {formatCurrency(order.value)}
+                            </Typography>
+                            {' — '}{formatTimestamp(order.date, false)}
+                          </>
+                        }
+                      />
+                      <Chip 
+                        label={order.status} 
+                        color={getStatusColor(order.status)} 
+                        size="small" 
+                        sx={{ ml: 1 }}
+                      />
+                    </ListItem>
+                    <Divider />
+                  </React.Fragment>
+                ))}
+              </List>
+            )}
+            
+            {orderStats && (
+              <Box sx={{ mt: 2, mb: 2, display: 'flex', justifyContent: 'space-around' }}>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="h6" color="primary">
+                    {orderStats.total}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Zamówień łącznie
+                  </Typography>
+                </Box>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="h6" color="primary">
+                    {formatCurrency(orderStats.totalValue)}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Wartość łącznie
+                  </Typography>
+                </Box>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="h6" color="warning.main">
+                    {orderStats.byStatus['W realizacji'] || 0}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    W realizacji
+                  </Typography>
+                </Box>
+              </Box>
+            )}
+            
+            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+              <Button 
+                component={Link} 
+                to="/orders"
+                variant="text"
+              >
+                Zobacz wszystkie
+              </Button>
+            </Box>
+          </Paper>
+        </Grid>
+
         {/* Ostatnie receptury */}
         <Grid item xs={12} md={6}>
           <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column' }}>
@@ -255,10 +510,33 @@ const Dashboard = () => {
             </Typography>
             <Divider sx={{ mb: 2 }} />
             
-            {recipes.length === 0 ? (
-              <Typography variant="body2" color="text.secondary" align="center">
-                Brak receptur
-              </Typography>
+            {!recipes || recipes.length === 0 ? (
+              <Box sx={{ mt: 2, mb: 2 }}>
+                <Typography variant="body2" color="text.secondary" align="center">
+                  Brak receptur
+                </Typography>
+                
+                {analyticsData && analyticsData.inventory && (
+                  <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-around' }}>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="h6" color="primary.main">
+                        {analyticsData.inventory.totalItems}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Produktów magazynowych
+                      </Typography>
+                    </Box>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="h6" color="error.main">
+                        {analyticsData.inventory.lowStockItems}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Niski stan
+                      </Typography>
+                    </Box>
+                  </Box>
+                )}
+              </Box>
             ) : (
               <List>
                 {recipes.map((recipe) => (

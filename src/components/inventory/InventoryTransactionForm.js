@@ -1,6 +1,6 @@
 // src/components/inventory/InventoryTransactionForm.js
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -13,23 +13,37 @@ import {
   Radio,
   RadioGroup,
   FormControlLabel,
-  Divider
+  Divider,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  MenuItem,
+  Select,
+  InputLabel,
+  Checkbox,
+  FormGroup,
+  Switch
 } from '@mui/material';
 import {
   Save as SaveIcon,
   ArrowBack as ArrowBackIcon,
   ArrowUpward as ReceiveIcon,
-  ArrowDownward as IssueIcon
+  ArrowDownward as IssueIcon,
+  ExpandMore as ExpandMoreIcon
 } from '@mui/icons-material';
-import { getInventoryItemById, receiveInventory, issueInventory } from '../../services/inventoryService';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
+import { pl } from 'date-fns/locale';
+import { getInventoryItemById, receiveInventory, issueInventory, getItemBatches } from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { Timestamp } from 'firebase/firestore';
 
-const InventoryTransactionForm = () => {
-  const { itemId, transactionType } = useParams();
+const InventoryTransactionForm = ({ itemId, transactionType }) => {
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [batches, setBatches] = useState([]);
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
   const navigate = useNavigate();
@@ -43,8 +57,16 @@ const InventoryTransactionForm = () => {
     notes: ''
   });
 
+  const [batchData, setBatchData] = useState({
+    useBatch: isReceive, // Domyślnie włączone dla przyjęcia
+    batchNumber: '',
+    expiryDate: null,
+    batchNotes: '',
+    batchId: '' // Dla wydania - ID wybranej partii
+  });
+
   useEffect(() => {
-    const fetchItem = async () => {
+    const fetchData = async () => {
       try {
         if (!itemId) {
           showError('Nie wybrano pozycji magazynowej');
@@ -54,17 +76,23 @@ const InventoryTransactionForm = () => {
         
         const fetchedItem = await getInventoryItemById(itemId);
         setItem(fetchedItem);
+        
+        // Pobierz partie dla wydania
+        if (!isReceive) {
+          const fetchedBatches = await getItemBatches(itemId);
+          setBatches(fetchedBatches.filter(batch => batch.quantity > 0));
+        }
       } catch (error) {
-        showError('Błąd podczas pobierania pozycji: ' + error.message);
-        console.error('Error fetching inventory item:', error);
+        showError('Błąd podczas pobierania danych: ' + error.message);
+        console.error('Error fetching data:', error);
         navigate('/inventory');
       } finally {
         setLoading(false);
       }
     };
     
-    fetchItem();
-  }, [itemId, navigate, showError]);
+    fetchData();
+  }, [itemId, navigate, showError, isReceive]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -75,19 +103,31 @@ const InventoryTransactionForm = () => {
         throw new Error('Ilość musi być większa od zera');
       }
       
+      // Przygotuj dane transakcji
+      const transactionPayload = {
+        reason: transactionData.reason,
+        reference: transactionData.reference,
+        notes: transactionData.notes
+      };
+      
+      // Dodaj dane partii, jeśli włączone
+      if (isReceive && batchData.useBatch) {
+        if (!batchData.expiryDate) {
+          throw new Error('Data ważności jest wymagana');
+        }
+        
+        transactionPayload.batchNumber = batchData.batchNumber;
+        transactionPayload.expiryDate = Timestamp.fromDate(batchData.expiryDate);
+        transactionPayload.batchNotes = batchData.batchNotes;
+      } else if (!isReceive && batchData.useBatch && batchData.batchId) {
+        transactionPayload.batchId = batchData.batchId;
+      }
+      
       if (isReceive) {
-        await receiveInventory(itemId, transactionData.quantity, {
-          reason: transactionData.reason,
-          reference: transactionData.reference,
-          notes: transactionData.notes
-        }, currentUser.uid);
+        await receiveInventory(itemId, transactionData.quantity, transactionPayload, currentUser.uid);
         showSuccess(`Przyjęto ${transactionData.quantity} ${item.unit} do magazynu`);
       } else {
-        await issueInventory(itemId, transactionData.quantity, {
-          reason: transactionData.reason,
-          reference: transactionData.reference,
-          notes: transactionData.notes
-        }, currentUser.uid);
+        await issueInventory(itemId, transactionData.quantity, transactionPayload, currentUser.uid);
         showSuccess(`Wydano ${transactionData.quantity} ${item.unit} z magazynu`);
       }
       
@@ -103,6 +143,18 @@ const InventoryTransactionForm = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setTransactionData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleBatchChange = (e) => {
+    const { name, value, checked, type } = e.target;
+    setBatchData(prev => ({ 
+      ...prev, 
+      [name]: type === 'checkbox' ? checked : value 
+    }));
+  };
+
+  const handleDateChange = (date) => {
+    setBatchData(prev => ({ ...prev, expiryDate: date }));
   };
 
   if (loading) {
@@ -245,6 +297,132 @@ const InventoryTransactionForm = () => {
         </Grid>
       </Paper>
 
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6">
+            {isReceive ? 'Informacje o partii' : 'Wybór partii'}
+          </Typography>
+          <FormGroup>
+            <FormControlLabel 
+              control={
+                <Switch 
+                  checked={batchData.useBatch} 
+                  onChange={handleBatchChange}
+                  name="useBatch"
+                  color="primary"
+                />
+              } 
+              label={isReceive ? "Dodaj informacje o partii" : "Wybierz konkretną partię"}
+            />
+          </FormGroup>
+        </Box>
+
+        {batchData.useBatch && (
+          <Grid container spacing={3}>
+            {isReceive ? (
+              // Formularz dla przyjęcia
+              <>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Numer partii"
+                    name="batchNumber"
+                    value={batchData.batchNumber}
+                    onChange={handleBatchChange}
+                    fullWidth
+                    placeholder="Numer partii od dostawcy"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                    <DatePicker
+                      label="Data ważności"
+                      value={batchData.expiryDate}
+                      onChange={handleDateChange}
+                      renderInput={(params) => 
+                        <TextField 
+                          {...params} 
+                          fullWidth 
+                          required
+                          error={!batchData.expiryDate}
+                          helperText={!batchData.expiryDate ? "Data ważności jest wymagana" : ""}
+                        />
+                      }
+                      disablePast
+                    />
+                  </LocalizationProvider>
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    label="Dodatkowe informacje o partii"
+                    name="batchNotes"
+                    value={batchData.batchNotes}
+                    onChange={handleBatchChange}
+                    fullWidth
+                    multiline
+                    rows={2}
+                    placeholder="Dodatkowe informacje o partii, certyfikaty, itp."
+                  />
+                </Grid>
+              </>
+            ) : (
+              // Formularz dla wydania
+              <Grid item xs={12}>
+                <FormControl fullWidth required error={batchData.useBatch && !batchData.batchId}>
+                  <InputLabel>Wybierz partię</InputLabel>
+                  <Select
+                    name="batchId"
+                    value={batchData.batchId}
+                    onChange={handleBatchChange}
+                    label="Wybierz partię"
+                  >
+                    {batches.length === 0 ? (
+                      <MenuItem value="" disabled>Brak dostępnych partii</MenuItem>
+                    ) : (
+                      batches.map(batch => {
+                        const expiryDate = batch.expiryDate instanceof Timestamp 
+                          ? batch.expiryDate.toDate() 
+                          : new Date(batch.expiryDate);
+                        
+                        const isExpired = expiryDate < new Date();
+                        const expiryDateFormatted = expiryDate.toLocaleDateString('pl-PL');
+                        
+                        return (
+                          <MenuItem 
+                            key={batch.id} 
+                            value={batch.id}
+                            disabled={batch.quantity < parseFloat(transactionData.quantity || 0)}
+                          >
+                            {batch.batchNumber ? `${batch.batchNumber} - ` : ''}
+                            Ilość: {batch.quantity} {item.unit} | 
+                            Ważne do: {expiryDateFormatted}
+                            {isExpired ? ' (PRZETERMINOWANE)' : ''}
+                          </MenuItem>
+                        );
+                      })
+                    )}
+                  </Select>
+                  {batchData.useBatch && !batchData.batchId && (
+                    <FormHelperText>Wybierz partię do wydania</FormHelperText>
+                  )}
+                </FormControl>
+                {batches.length > 0 && !batchData.batchId && (
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                    Partie są sortowane według daty ważności (FEFO - First Expired, First Out)
+                  </Typography>
+                )}
+              </Grid>
+            )}
+          </Grid>
+        )}
+        
+        {!batchData.useBatch && !isReceive && (
+          <Typography variant="body2" color="text.secondary">
+            Towar zostanie wydany automatycznie według zasady FEFO (First Expired, First Out) - 
+            najpierw wydawane są partie z najkrótszym terminem ważności.
+          </Typography>
+        )}
+      </Paper>
+
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
         <Button 
           sx={{ mr: 2 }}
@@ -257,7 +435,7 @@ const InventoryTransactionForm = () => {
           color={isReceive ? 'success' : 'warning'} 
           type="submit"
           startIcon={isReceive ? <ReceiveIcon /> : <IssueIcon />}
-          disabled={processing || !transactionData.quantity || (isReceive ? false : parseFloat(transactionData.quantity || 0) > item.quantity)}
+          disabled={processing}
         >
           {processing ? 'Przetwarzanie...' : (isReceive ? 'Przyjmij' : 'Wydaj')}
         </Button>
