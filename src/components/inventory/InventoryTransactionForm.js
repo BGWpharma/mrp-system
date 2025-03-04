@@ -54,7 +54,8 @@ const InventoryTransactionForm = ({ itemId, transactionType }) => {
     quantity: '',
     reason: '',
     reference: '',
-    notes: ''
+    notes: '',
+    unitPrice: ''
   });
 
   const [batchData, setBatchData] = useState({
@@ -107,7 +108,8 @@ const InventoryTransactionForm = ({ itemId, transactionType }) => {
       const transactionPayload = {
         reason: transactionData.reason,
         reference: transactionData.reference,
-        notes: transactionData.notes
+        notes: transactionData.notes,
+        unitPrice: isReceive ? parseFloat(transactionData.unitPrice) || 0 : undefined
       };
       
       // Dodaj dane partii, jeśli włączone
@@ -294,6 +296,21 @@ const InventoryTransactionForm = ({ itemId, transactionType }) => {
               placeholder="Dodatkowe informacje dotyczące transakcji..."
             />
           </Grid>
+          {isReceive && (
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Cena jednostkowa (zł)"
+                name="unitPrice"
+                type="number"
+                value={transactionData.unitPrice}
+                onChange={handleChange}
+                inputProps={{ min: 0, step: 0.01 }}
+                helperText="Cena za jednostkę, używana w kalkulacji kosztów receptur i produkcji. Ważne dla dokładnych obliczeń!"
+                required
+              />
+            </Grid>
+          )}
         </Grid>
       </Paper>
 

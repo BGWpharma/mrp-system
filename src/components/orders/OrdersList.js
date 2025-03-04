@@ -47,7 +47,8 @@ import {
   MoreVert as MoreVertIcon,
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  People as CustomersIcon
 } from '@mui/icons-material';
 import { 
   getAllOrders, 
@@ -247,16 +248,29 @@ const OrdersList = () => {
   };
 
   return (
-    <Box sx={{ pb: 4 }}>
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h4">Zamówienia</Typography>
-        <Button 
-          variant="contained" 
-          startIcon={<AddIcon />} 
-          onClick={handleAddOrder}
-        >
-          Nowe zamówienie
-        </Button>
+    <Box sx={{ p: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4" component="h1">
+          Zamówienia
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Button
+            variant="outlined"
+            color="primary"
+            startIcon={<CustomersIcon />}
+            onClick={() => navigate('/customers')}
+          >
+            Zarządzaj klientami
+          </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={handleAddOrder}
+          >
+            Nowe zamówienie
+          </Button>
+        </Box>
       </Box>
 
       <Paper sx={{ p: 2, mb: 3 }}>
@@ -383,8 +397,8 @@ const OrdersList = () => {
                 <TableHead>
                   <TableRow>
                     <TableCell width="5%"></TableCell>
-                    <TableCell>ID</TableCell>
                     <TableCell>Klient</TableCell>
+                    <TableCell>Numer zamówienia</TableCell>
                     <TableCell>Data zamówienia</TableCell>
                     <TableCell>Wartość</TableCell>
                     <TableCell>Status</TableCell>
@@ -392,8 +406,14 @@ const OrdersList = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {displayedOrders.length > 0 ? (
-                    displayedOrders.map((order) => (
+                  {filteredOrders.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} align="center">
+                        Brak zamówień
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredOrders.map((order) => (
                       <React.Fragment key={order.id}>
                         <TableRow hover>
                           <TableCell>
@@ -410,12 +430,16 @@ const OrdersList = () => {
                           </TableCell>
                           <TableCell>
                             <Typography variant="body2" fontWeight="medium">
-                              #{order.id.substring(0, 8).toUpperCase()}
+                              {order.customer?.name || 'Brak danych klienta'}
                             </Typography>
                           </TableCell>
-                          <TableCell>{order.customer?.name}</TableCell>
                           <TableCell>
-                            {order.orderDate ? formatTimestamp(order.orderDate) : '-'}
+                            <Typography variant="body2" fontWeight="medium">
+                              #{order.orderNumber || order.id.substring(0, 8).toUpperCase()}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            {formatDate(order.orderDate)}
                           </TableCell>
                           <TableCell>{formatCurrency(order.totalValue || 0)}</TableCell>
                           <TableCell>
@@ -551,22 +575,6 @@ const OrdersList = () => {
                         </TableRow>
                       </React.Fragment>
                     ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={7} align="center">
-                        <Typography variant="body1">
-                          Nie znaleziono zamówień
-                        </Typography>
-                        <Button 
-                          variant="text" 
-                          startIcon={<RefreshIcon />}
-                          onClick={resetFilters}
-                          sx={{ mt: 1 }}
-                        >
-                          Resetuj filtry
-                        </Button>
-                      </TableCell>
-                    </TableRow>
                   )}
                 </TableBody>
               </Table>

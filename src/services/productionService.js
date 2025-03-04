@@ -14,6 +14,7 @@ import {
     Timestamp
   } from 'firebase/firestore';
   import { db } from './firebase/config';
+  import { generateMONumber } from '../utils/numberGenerators';
   
   const PRODUCTION_TASKS_COLLECTION = 'productionTasks';
   
@@ -101,30 +102,39 @@ import {
   
   // Tworzenie nowego zadania produkcyjnego
   export const createTask = async (taskData, userId) => {
-    // Upewnij się, że endDate jest ustawiona
-    if (!taskData.endDate) {
-      // Jeśli nie ma endDate, ustaw na 1 godzinę po scheduledDate
-      const scheduledDate = taskData.scheduledDate instanceof Date 
-        ? taskData.scheduledDate 
-        : new Date(taskData.scheduledDate);
+    try {
+      // Wygeneruj numer MO
+      const moNumber = await generateMONumber();
       
-      taskData.endDate = new Date(scheduledDate.getTime() + 60 * 60 * 1000);
+      // Przygotuj dane zadania z metadanymi
+      const taskWithMeta = {
+        ...taskData,
+        moNumber, // Dodaj numer MO
+        createdBy: userId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+      
+      // Jeśli nie podano daty zakończenia, ustaw ją na 1 godzinę po dacie rozpoczęcia
+      if (!taskWithMeta.endDate && taskWithMeta.scheduledDate) {
+        const scheduledDate = taskWithMeta.scheduledDate instanceof Date 
+          ? taskWithMeta.scheduledDate 
+          : new Date(taskWithMeta.scheduledDate);
+        
+        const endDate = new Date(scheduledDate.getTime() + 60 * 60 * 1000); // +1 godzina
+        taskWithMeta.endDate = endDate;
+      }
+      
+      const docRef = await addDoc(collection(db, PRODUCTION_TASKS_COLLECTION), taskWithMeta);
+      
+      return {
+        id: docRef.id,
+        ...taskWithMeta
+      };
+    } catch (error) {
+      console.error('Error creating task:', error);
+      throw error;
     }
-    
-    const taskWithMeta = {
-      ...taskData,
-      createdBy: userId,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      status: taskData.status || 'Zaplanowane'
-    };
-    
-    const docRef = await addDoc(collection(db, PRODUCTION_TASKS_COLLECTION), taskWithMeta);
-    
-    return {
-      id: docRef.id,
-      ...taskWithMeta
-    };
   };
   
   // Aktualizacja zadania produkcyjnego

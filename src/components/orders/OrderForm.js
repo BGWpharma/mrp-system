@@ -47,7 +47,7 @@ import {
   PAYMENT_METHODS,
   DEFAULT_ORDER 
 } from '../../services/orderService';
-import { getAllInventoryItems } from '../../services/inventoryService';
+import { getAllInventoryItems, getIngredientPrices } from '../../services/inventoryService';
 import { getAllCustomers } from '../../services/customerService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -66,6 +66,10 @@ const OrderForm = ({ orderId }) => {
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
   const navigate = useNavigate();
+
+  // Dodajemy stan dla kalkulacji kosztów
+  const [costCalculation, setCostCalculation] = useState(null);
+  const [calculatingCosts, setCalculatingCosts] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -364,6 +368,67 @@ const OrderForm = ({ orderId }) => {
     return subtotal + shippingCost;
   };
 
+  // Funkcja do kalkulacji kosztów zamówienia
+  const handleCalculateCosts = async () => {
+    try {
+      setCalculatingCosts(true);
+      
+      // Sprawdź, czy zamówienie ma produkty
+      if (!orderData.items || orderData.items.length === 0) {
+        showError('Zamówienie musi zawierać produkty, aby obliczyć koszty');
+        setCalculatingCosts(false);
+        return;
+      }
+      
+      // Pobierz ID produktów
+      const productIds = orderData.items.map(item => item.id).filter(Boolean);
+      
+      if (productIds.length === 0) {
+        showError('Brak prawidłowych identyfikatorów produktów');
+        setCalculatingCosts(false);
+        return;
+      }
+      
+      // Pobierz ceny produktów
+      const pricesMap = await getIngredientPrices(productIds);
+      
+      // Oblicz koszty
+      let totalCost = 0;
+      let totalRevenue = 0;
+      
+      const itemsWithCosts = orderData.items.map(item => {
+        const productPrice = pricesMap[item.id] || 0;
+        const itemCost = productPrice * item.quantity;
+        const itemRevenue = item.price * item.quantity;
+        
+        totalCost += itemCost;
+        totalRevenue += itemRevenue;
+        
+        return {
+          ...item,
+          cost: itemCost,
+          revenue: itemRevenue,
+          profit: itemRevenue - itemCost,
+          margin: itemCost > 0 ? ((itemRevenue - itemCost) / itemRevenue * 100) : 0
+        };
+      });
+      
+      setCostCalculation({
+        items: itemsWithCosts,
+        totalCost: totalCost,
+        totalRevenue: totalRevenue,
+        totalProfit: totalRevenue - totalCost,
+        profitMargin: totalRevenue > 0 ? ((totalRevenue - totalCost) / totalRevenue * 100) : 0
+      });
+      
+    } catch (error) {
+      console.error('Błąd podczas kalkulacji kosztów:', error);
+      showError('Nie udało się obliczyć kosztów: ' + error.message);
+    } finally {
+      setCalculatingCosts(false);
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
@@ -383,20 +448,27 @@ const OrderForm = ({ orderId }) => {
             Powrót
           </Button>
           <Typography variant="h5">
-            {orderId ? 'Edycja zamówienia' : 'Nowe zamówienie'}
+            {orderId ? 'Edytuj zamówienie' : 'Nowe zamówienie'}
           </Typography>
           <Button 
+            type="submit" 
             variant="contained" 
-            color="primary" 
-            type="submit"
-            startIcon={<SaveIcon />}
+            color="primary"
             disabled={saving}
+            startIcon={<SaveIcon />}
           >
             {saving ? 'Zapisywanie...' : 'Zapisz'}
           </Button>
         </Box>
 
-        {/* Dane podstawowe */}
+        {orderData.orderNumber && (
+          <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
+            <Typography variant="subtitle1" color="primary" fontWeight="bold">
+              Numer zamówienia klienta: {orderData.orderNumber}
+            </Typography>
+          </Box>
+        )}
+        
         <Paper sx={{ p: 3, mb: 3 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6">Dane podstawowe</Typography>
@@ -696,6 +768,103 @@ const OrderForm = ({ orderId }) => {
             rows={4}
             placeholder="Dodatkowe informacje, uwagi..."
           />
+        </Paper>
+
+        {/* Sekcja kalkulacji kosztów */}
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">Kalkulacja kosztów i rentowności</Typography>
+            <Button
+              variant="outlined"
+              startIcon={<CalculateIcon />}
+              onClick={handleCalculateCosts}
+              disabled={calculatingCosts || orderData.items.length === 0}
+            >
+              {calculatingCosts ? 'Obliczanie...' : 'Oblicz rentowność'}
+            </Button>
+          </Box>
+          
+          {costCalculation && (
+            <Box>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6} md={3}>
+                  <Typography variant="subtitle2">Całkowity koszt:</Typography>
+                  <Typography variant="body1">{costCalculation.totalCost.toFixed(2)} zł</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                  <Typography variant="subtitle2">Całkowity przychód:</Typography>
+                  <Typography variant="body1">{costCalculation.totalRevenue.toFixed(2)} zł</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                  <Typography variant="subtitle2">Zysk:</Typography>
+                  <Typography variant="body1" fontWeight="bold" color={costCalculation.totalProfit >= 0 ? "success.main" : "error.main"}>
+                    {costCalculation.totalProfit.toFixed(2)} zł
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                  <Typography variant="subtitle2">Marża zysku:</Typography>
+                  <Typography variant="body1" fontWeight="bold" color={costCalculation.profitMargin >= 0 ? "success.main" : "error.main"}>
+                    {costCalculation.profitMargin.toFixed(2)}%
+                  </Typography>
+                </Grid>
+              </Grid>
+              
+              <Divider sx={{ my: 2 }} />
+              
+              <Typography variant="subtitle1" gutterBottom>Szczegóły produktów:</Typography>
+              
+              <Grid container spacing={2} sx={{ mt: 1 }}>
+                <Grid item xs={12}>
+                  <Box sx={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid rgba(224, 224, 224, 1)' }}>
+                          <th style={{ padding: '8px', textAlign: 'left' }}>Produkt</th>
+                          <th style={{ padding: '8px', textAlign: 'right' }}>Ilość</th>
+                          <th style={{ padding: '8px', textAlign: 'right' }}>Koszt jedn.</th>
+                          <th style={{ padding: '8px', textAlign: 'right' }}>Cena jedn.</th>
+                          <th style={{ padding: '8px', textAlign: 'right' }}>Koszt całk.</th>
+                          <th style={{ padding: '8px', textAlign: 'right' }}>Przychód</th>
+                          <th style={{ padding: '8px', textAlign: 'right' }}>Zysk</th>
+                          <th style={{ padding: '8px', textAlign: 'right' }}>Marża</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {costCalculation.items.map((item, index) => {
+                          const product = products.find(p => p.id === item.id) || {};
+                          const unitCost = item.quantity > 0 ? (item.cost / item.quantity) : 0;
+                          
+                          return (
+                            <tr key={index} style={{ borderBottom: '1px solid rgba(224, 224, 224, 0.5)' }}>
+                              <td style={{ padding: '8px' }}>{product.name || item.name}</td>
+                              <td style={{ padding: '8px', textAlign: 'right' }}>{item.quantity} {item.unit}</td>
+                              <td style={{ padding: '8px', textAlign: 'right' }}>{unitCost.toFixed(2)} zł</td>
+                              <td style={{ padding: '8px', textAlign: 'right' }}>{item.price.toFixed(2)} zł</td>
+                              <td style={{ padding: '8px', textAlign: 'right' }}>{item.cost.toFixed(2)} zł</td>
+                              <td style={{ padding: '8px', textAlign: 'right' }}>{item.revenue.toFixed(2)} zł</td>
+                              <td style={{ padding: '8px', textAlign: 'right', color: item.profit >= 0 ? 'green' : 'red' }}>
+                                {item.profit.toFixed(2)} zł
+                              </td>
+                              <td style={{ padding: '8px', textAlign: 'right', color: item.margin >= 0 ? 'green' : 'red' }}>
+                                {item.margin.toFixed(2)}%
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </Box>
+                </Grid>
+              </Grid>
+            </Box>
+          )}
+          
+          {!costCalculation && (
+            <Typography variant="body2" color="text.secondary">
+              Kliknij "Oblicz rentowność", aby zobaczyć kalkulację kosztów i zysków dla tego zamówienia.
+              Upewnij się, że zamówienie zawiera produkty z cenami.
+            </Typography>
+          )}
         </Paper>
       </Box>
       

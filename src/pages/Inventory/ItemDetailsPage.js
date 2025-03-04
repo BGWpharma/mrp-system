@@ -27,7 +27,9 @@ import {
   ArrowUpward as ReceiveIcon,
   ArrowDownward as IssueIcon,
   History as HistoryIcon,
-  Warning as WarningIcon
+  Warning as WarningIcon,
+  ViewList as ViewListIcon,
+  Add as AddIcon
 } from '@mui/icons-material';
 import { getInventoryItemById, getItemTransactions, getItemBatches } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
@@ -176,14 +178,30 @@ const ItemDetailsPage = () => {
         </Typography>
         <Box>
           <Button 
-            variant="contained" 
-            color="primary" 
-            component={Link}
+            variant="outlined" 
+            component={Link} 
             to={`/inventory/${id}/edit`}
             startIcon={<EditIcon />}
             sx={{ mr: 1 }}
           >
             Edytuj
+          </Button>
+          <Button 
+            variant="outlined" 
+            component={Link} 
+            to={`/inventory/${id}/batches`}
+            startIcon={<ViewListIcon />}
+            sx={{ mr: 1 }}
+          >
+            Zarządzaj partiami
+          </Button>
+          <Button 
+            variant="outlined" 
+            component={Link} 
+            to={`/inventory/${id}/receive`}
+            startIcon={<AddIcon />}
+          >
+            Przyjmij dostawę
           </Button>
         </Box>
       </Box>

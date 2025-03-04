@@ -1,6 +1,6 @@
 // src/components/recipes/RecipeForm.js
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -16,26 +16,40 @@ import {
   IconButton,
   Card,
   CardContent,
-  CardActions
+  CardActions,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Autocomplete,
+  CircularProgress,
+  Chip
 } from '@mui/material';
 import {
   Save as SaveIcon,
   Delete as DeleteIcon,
   Add as AddIcon,
-  ArrowBack as ArrowBackIcon
+  ArrowBack as ArrowBackIcon,
+  Calculate as CalculateIcon,
+  Inventory as InventoryIcon,
+  Edit as EditIcon
 } from '@mui/icons-material';
 import { createRecipe, updateRecipe, getRecipeById } from '../../services/recipeService';
+import { getAllInventoryItems, getIngredientPrices } from '../../services/inventoryService';
+import { calculateRecipeTotalCost } from '../../utils/costCalculator';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 
 const DEFAULT_INGREDIENT = { name: '', quantity: '', unit: 'g', allergens: [] };
 
 const RecipeForm = ({ recipeId }) => {
+  const { currentUser } = useAuth();
+  const { showSuccess, showError, showWarning } = useNotification();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(!!recipeId);
   const [saving, setSaving] = useState(false);
-  const { currentUser } = useAuth();
-  const { showSuccess, showError } = useNotification();
-  const navigate = useNavigate();
   
   const [recipeData, setRecipeData] = useState({
     name: '',
@@ -48,6 +62,15 @@ const RecipeForm = ({ recipeId }) => {
     notes: '',
     status: 'Robocza'
   });
+
+  // Dodajemy stan dla kalkulacji kosztów
+  const [costCalculation, setCostCalculation] = useState(null);
+  const [showCostDetails, setShowCostDetails] = useState(false);
+  const [calculatingCosts, setCalculatingCosts] = useState(false);
+
+  // Dodajemy stan dla składników z magazynu
+  const [inventoryItems, setInventoryItems] = useState([]);
+  const [loadingInventory, setLoadingInventory] = useState(false);
 
   useEffect(() => {
     if (recipeId) {
@@ -65,6 +88,22 @@ const RecipeForm = ({ recipeId }) => {
       
       fetchRecipe();
     }
+
+    // Pobierz składniki z magazynu
+    const fetchInventoryItems = async () => {
+      try {
+        setLoadingInventory(true);
+        const items = await getAllInventoryItems();
+        setInventoryItems(items);
+      } catch (error) {
+        console.error('Błąd podczas pobierania składników z magazynu:', error);
+        showError('Nie udało się pobrać składników z magazynu');
+      } finally {
+        setLoadingInventory(false);
+      }
+    };
+    
+    fetchInventoryItems();
   }, [recipeId, showError]);
 
   const handleSubmit = async (e) => {
@@ -132,6 +171,121 @@ const RecipeForm = ({ recipeId }) => {
       ...prev,
       ingredients: updatedIngredients
     }));
+  };
+
+  // Funkcja do kalkulacji kosztów receptury
+  const handleCalculateCosts = async () => {
+    try {
+      setCalculatingCosts(true);
+      
+      // Sprawdź, czy receptura ma składniki
+      if (!recipeData.ingredients || recipeData.ingredients.length === 0) {
+        showError('Receptura musi zawierać składniki, aby obliczyć koszty');
+        setCalculatingCosts(false);
+        return;
+      }
+      
+      // Pobierz ID składników z magazynu
+      const ingredientIds = recipeData.ingredients
+        .filter(ing => ing.id) // Tylko składniki z ID (z magazynu)
+        .map(ing => ing.id);
+      
+      // Logowanie dla celów diagnostycznych
+      console.log('Składniki w recepturze:', recipeData.ingredients);
+      console.log('Składniki z ID (z magazynu):', ingredientIds);
+      
+      // Sprawdź, czy mamy jakiekolwiek składniki z magazynu
+      if (ingredientIds.length === 0) {
+        showError('Brak składników z magazynu. Tylko składniki wybrane z magazynu mają przypisane ceny. Dodaj składniki z magazynu, aby obliczyć koszty.');
+        setCalculatingCosts(false);
+        return;
+      }
+      
+      // Informuj użytkownika, jeśli nie wszystkie składniki mają ceny
+      if (ingredientIds.length < recipeData.ingredients.length) {
+        showWarning('Uwaga: Tylko składniki wybrane z magazynu mają przypisane ceny. Składniki dodane ręcznie nie będą uwzględnione w kalkulacji kosztów.');
+      }
+      
+      console.log('Pobieranie cen dla składników:', ingredientIds);
+      
+      // Pobierz ceny składników
+      const pricesMap = await getIngredientPrices(ingredientIds);
+      
+      console.log('Otrzymana mapa cen:', pricesMap);
+      
+      // Sprawdź, czy wszystkie składniki mają ceny
+      const missingPrices = ingredientIds.filter(id => {
+        if (!pricesMap[id]) return true;
+        
+        const hasBatchPrice = pricesMap[id].batchPrice !== undefined && pricesMap[id].batchPrice > 0;
+        const hasItemPrice = pricesMap[id].itemPrice !== undefined && pricesMap[id].itemPrice > 0;
+        
+        return !hasBatchPrice && !hasItemPrice;
+      });
+      
+      if (missingPrices.length > 0) {
+        const missingNames = missingPrices.map(id => {
+          const ing = recipeData.ingredients.find(i => i.id === id);
+          return ing ? ing.name : id;
+        });
+        
+        showWarning(`Uwaga: Następujące składniki nie mają przypisanych cen: ${missingNames.join(', ')}. Edytuj partie tych składników w magazynie, aby dodać ceny.`);
+      }
+      
+      // Sprawdź, czy mamy jakiekolwiek ceny
+      const hasAnyPrices = Object.values(pricesMap).some(price => 
+        (price.batchPrice !== undefined && price.batchPrice > 0) || 
+        (price.itemPrice !== undefined && price.itemPrice > 0)
+      );
+      
+      if (!hasAnyPrices) {
+        showError('Żaden ze składników nie ma przypisanej ceny. Edytuj składniki w magazynie, aby dodać ceny.');
+        setCalculatingCosts(false);
+        return;
+      }
+      
+      // Oblicz koszty
+      const costData = calculateRecipeTotalCost(recipeData, pricesMap);
+      console.log('Wynik kalkulacji kosztów:', costData);
+      
+      setCostCalculation(costData);
+      setShowCostDetails(true);
+      
+    } catch (error) {
+      console.error('Błąd podczas kalkulacji kosztów:', error);
+      showError('Nie udało się obliczyć kosztów: ' + error.message);
+    } finally {
+      setCalculatingCosts(false);
+    }
+  };
+
+  // Funkcja do dodawania składnika z magazynu
+  const handleAddInventoryItem = (item) => {
+    if (!item) return;
+    
+    // Sprawdź, czy składnik już istnieje w recepturze
+    const existingIndex = recipeData.ingredients.findIndex(
+      ing => ing.id === item.id
+    );
+    
+    if (existingIndex >= 0) {
+      showError('Ten składnik już istnieje w recepturze');
+      return;
+    }
+    
+    // Dodaj nowy składnik z danymi z magazynu
+    const newIngredient = {
+      id: item.id,
+      name: item.name,
+      quantity: '',
+      unit: item.unit || 'szt.',
+      notes: ''
+    };
+    
+    setRecipeData({
+      ...recipeData,
+      ingredients: [...recipeData.ingredients, newIngredient]
+    });
   };
 
   if (loading) {
@@ -243,70 +397,151 @@ const RecipeForm = ({ recipeId }) => {
       </Paper>
 
       <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>Składniki</Typography>
-        <Divider sx={{ mb: 2 }} />
+        <Typography variant="h6" gutterBottom>
+          Składniki
+        </Typography>
         
-        {recipeData.ingredients.map((ingredient, index) => (
-          <Box key={index} sx={{ mb: 2 }}>
-            <Grid container spacing={2} alignItems="center">
-              <Grid item xs={4}>
-                <TextField
-                  required
-                  label="Nazwa składnika"
-                  value={ingredient.name}
-                  onChange={(e) => handleIngredientChange(index, 'name', e.target.value)}
-                  fullWidth
-                />
-              </Grid>
-              <Grid item xs={3}>
-                <TextField
-                  required
-                  label="Ilość"
-                  type="number"
-                  value={ingredient.quantity}
-                  onChange={(e) => handleIngredientChange(index, 'quantity', e.target.value)}
-                  fullWidth
-                  inputProps={{ min: 0, step: 0.01 }}
-                />
-              </Grid>
-              <Grid item xs={3}>
-                <FormControl fullWidth>
-                  <InputLabel>Jednostka</InputLabel>
-                  <Select
-                    value={ingredient.unit}
-                    onChange={(e) => handleIngredientChange(index, 'unit', e.target.value)}
-                    label="Jednostka"
-                  >
-                    <MenuItem value="g">g</MenuItem>
-                    <MenuItem value="kg">kg</MenuItem>
-                    <MenuItem value="ml">ml</MenuItem>
-                    <MenuItem value="l">l</MenuItem>
-                    <MenuItem value="szt.">szt.</MenuItem>
-                    <MenuItem value="łyżka">łyżka</MenuItem>
-                    <MenuItem value="łyżeczka">łyżeczka</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={2}>
-                <IconButton 
-                  color="error" 
-                  onClick={() => removeIngredient(index)}
-                  disabled={recipeData.ingredients.length === 1}
-                >
-                  <DeleteIcon />
-                </IconButton>
-              </Grid>
-            </Grid>
-          </Box>
-        ))}
+        {/* Dodajemy wybór składników z magazynu */}
+        <Box sx={{ mb: 2 }}>
+          <Autocomplete
+            options={inventoryItems}
+            getOptionLabel={(option) => option.name || ''}
+            loading={loadingInventory}
+            onChange={(event, newValue) => handleAddInventoryItem(newValue)}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Dodaj składnik z magazynu"
+                variant="outlined"
+                fullWidth
+                helperText="Tylko składniki z magazynu mają przypisane ceny do kalkulacji kosztów. Składniki dodane ręcznie nie będą uwzględnione w kalkulacji."
+                InputProps={{
+                  ...params.InputProps,
+                  endAdornment: (
+                    <>
+                      {loadingInventory ? <CircularProgress color="inherit" size={20} /> : null}
+                      {params.InputProps.endAdornment}
+                    </>
+                  ),
+                  startAdornment: <InventoryIcon color="action" sx={{ mr: 1 }} />
+                }}
+              />
+            )}
+            renderOption={(props, option) => {
+              const { key, ...otherProps } = props;
+              return (
+                <li key={key} {...otherProps}>
+                  <Box>
+                    <Typography variant="body1">{option.name}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {option.unitPrice ? `Cena: ${option.unitPrice.toFixed(2)} zł/${option.unit}` : 'Brak ceny jednostkowej'}
+                    </Typography>
+                  </Box>
+                </li>
+              );
+            }}
+          />
+        </Box>
         
-        <Button 
-          variant="outlined" 
-          startIcon={<AddIcon />} 
+        <Divider sx={{ my: 2 }} />
+        
+        {recipeData.ingredients.length > 0 ? (
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Nazwa składnika</TableCell>
+                  <TableCell>Ilość</TableCell>
+                  <TableCell>Jednostka</TableCell>
+                  <TableCell>Uwagi</TableCell>
+                  <TableCell>Źródło</TableCell>
+                  <TableCell>Akcje</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {recipeData.ingredients.map((ingredient, index) => (
+                  <TableRow key={index}>
+                    <TableCell>
+                      <TextField
+                        fullWidth
+                        variant="standard"
+                        value={ingredient.name}
+                        onChange={(e) => handleIngredientChange(index, 'name', e.target.value)}
+                        disabled={!!ingredient.id} // Blokujemy edycję nazwy dla składników z magazynu
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <TextField
+                        fullWidth
+                        variant="standard"
+                        type="number"
+                        value={ingredient.quantity}
+                        onChange={(e) => handleIngredientChange(index, 'quantity', e.target.value)}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <TextField
+                        fullWidth
+                        variant="standard"
+                        value={ingredient.unit}
+                        onChange={(e) => handleIngredientChange(index, 'unit', e.target.value)}
+                        disabled={!!ingredient.id} // Blokujemy edycję jednostki dla składników z magazynu
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <TextField
+                        fullWidth
+                        variant="standard"
+                        value={ingredient.notes || ''}
+                        onChange={(e) => handleIngredientChange(index, 'notes', e.target.value)}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      {ingredient.id ? (
+                        <Chip 
+                          size="small" 
+                          color="primary" 
+                          label="Magazyn" 
+                          icon={<InventoryIcon />} 
+                          title="Składnik z magazynu - ma przypisaną cenę do kalkulacji kosztów" 
+                        />
+                      ) : (
+                        <Chip 
+                          size="small" 
+                          color="default" 
+                          label="Ręczny" 
+                          icon={<EditIcon />} 
+                          title="Składnik dodany ręcznie - brak ceny do kalkulacji kosztów" 
+                        />
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <IconButton 
+                        color="error" 
+                        onClick={() => removeIngredient(index)}
+                        size="small"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        ) : (
+          <Typography variant="body2" color="text.secondary" sx={{ my: 2 }}>
+            Brak składników. Dodaj składniki z magazynu lub ręcznie.
+          </Typography>
+        )}
+        
+        <Button
+          variant="outlined"
+          startIcon={<AddIcon />}
           onClick={addIngredient}
           sx={{ mt: 2 }}
         >
-          Dodaj składnik
+          Dodaj składnik ręcznie
         </Button>
       </Paper>
 
@@ -336,6 +571,94 @@ const RecipeForm = ({ recipeId }) => {
           rows={3}
           placeholder="Dodatkowe uwagi, alternatywne składniki, informacje o alergenach..."
         />
+      </Paper>
+
+      {/* Sekcja kalkulacji kosztów */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6">Kalkulacja kosztów</Typography>
+          <Button
+            variant="outlined"
+            startIcon={<CalculateIcon />}
+            onClick={handleCalculateCosts}
+            disabled={calculatingCosts || !recipeData.ingredients.length}
+          >
+            {calculatingCosts ? 'Obliczanie...' : 'Oblicz koszty'}
+          </Button>
+        </Box>
+        
+        {costCalculation && (
+          <Box>
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+              <Grid item xs={12} sm={4}>
+                <Typography variant="subtitle2">Koszt składników:</Typography>
+                <Typography variant="body1">{costCalculation.ingredientsCost.toFixed(2)} zł</Typography>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Typography variant="subtitle2">Koszt robocizny:</Typography>
+                <Typography variant="body1">{costCalculation.laborCost.toFixed(2)} zł</Typography>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Typography variant="subtitle2">Koszt energii:</Typography>
+                <Typography variant="body1">{costCalculation.energyCost.toFixed(2)} zł</Typography>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Typography variant="subtitle2">Koszty pośrednie:</Typography>
+                <Typography variant="body1">{costCalculation.overheadCost.toFixed(2)} zł</Typography>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Typography variant="subtitle2">Koszt całkowity:</Typography>
+                <Typography variant="body1" fontWeight="bold">{costCalculation.totalCost.toFixed(2)} zł</Typography>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Typography variant="subtitle2">Koszt jednostkowy:</Typography>
+                <Typography variant="body1" fontWeight="bold">
+                  {costCalculation.unitCost.toFixed(2)} zł / {costCalculation.yieldUnit}
+                </Typography>
+              </Grid>
+            </Grid>
+            
+            <Button 
+              variant="text" 
+              onClick={() => setShowCostDetails(!showCostDetails)}
+              sx={{ mb: 2 }}
+            >
+              {showCostDetails ? 'Ukryj szczegóły' : 'Pokaż szczegóły'}
+            </Button>
+            
+            {showCostDetails && (
+              <TableContainer component={Paper} variant="outlined">
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Składnik</TableCell>
+                      <TableCell align="right">Ilość</TableCell>
+                      <TableCell align="right">Cena jedn.</TableCell>
+                      <TableCell align="right">Koszt</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {costCalculation.ingredientsDetails.map((detail, index) => (
+                      <TableRow key={index}>
+                        <TableCell>{detail.name}</TableCell>
+                        <TableCell align="right">{detail.quantity} {detail.unit}</TableCell>
+                        <TableCell align="right">{detail.unitPrice.toFixed(2)} zł</TableCell>
+                        <TableCell align="right">{detail.cost.toFixed(2)} zł</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </Box>
+        )}
+        
+        {!costCalculation && (
+          <Typography variant="body2" color="text.secondary">
+            Kliknij "Oblicz koszty", aby zobaczyć kalkulację kosztów dla tej receptury.
+            Upewnij się, że dodałeś składniki i czas przygotowania.
+          </Typography>
+        )}
       </Paper>
     </Box>
   );

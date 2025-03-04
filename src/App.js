@@ -31,6 +31,8 @@ import ReceiveInventoryPage from './pages/Inventory/ReceiveInventoryPage';
 import IssueInventoryPage from './pages/Inventory/IssueInventoryPage';
 import InventoryHistoryPage from './pages/Inventory/InventoryHistoryPage';
 import ExpiryDatesPage from './pages/Inventory/ExpiryDatesPage';
+import BatchesPage from './pages/Inventory/BatchesPage';
+import BatchEditPage from './pages/Inventory/BatchEditPage';
 
 // Quality
 import QualityPage from './pages/Quality/QualityPage';
@@ -40,6 +42,16 @@ import NewTestPage from './pages/Quality/NewTestPage';
 import OrdersList from './components/orders/OrdersList';
 import OrderForm from './components/orders/OrderForm';
 import OrderDetails from './components/orders/OrderDetails';
+
+// Purchase Orders
+import PurchaseOrdersPage from './pages/PurchaseOrdersPage';
+import PurchaseOrderFormPage from './pages/PurchaseOrderFormPage';
+import PurchaseOrderDetailsPage from './pages/PurchaseOrderDetailsPage';
+import SuppliersPage from './pages/SuppliersPage';
+import SupplierFormPage from './pages/SupplierFormPage';
+
+// Customers
+import CustomersList from './components/customers/CustomersList';
 
 // Analytics
 import AnalyticsDashboard from './pages/Analytics/Dashboard';
@@ -81,6 +93,8 @@ function App() {
               <Route path="/inventory" element={<PrivateLayout><InventoryPage /></PrivateLayout>} />
               <Route path="/inventory/new" element={<PrivateLayout><NewInventoryItemPage /></PrivateLayout>} />
               <Route path="/inventory/:id" element={<PrivateLayout><ItemDetailsPage /></PrivateLayout>} />
+              <Route path="/inventory/:id/batches" element={<PrivateLayout><BatchesPage /></PrivateLayout>} />
+              <Route path="/inventory/:id/batches/:batchId/edit" element={<PrivateLayout><BatchEditPage /></PrivateLayout>} />
               <Route path="/inventory/:id/edit" element={<PrivateLayout><EditInventoryItemPage /></PrivateLayout>} />
               <Route path="/inventory/:id/receive" element={<PrivateLayout><ReceiveInventoryPage /></PrivateLayout>} />
               <Route path="/inventory/:id/issue" element={<PrivateLayout><IssueInventoryPage /></PrivateLayout>} />
@@ -96,6 +110,20 @@ function App() {
               <Route path="/orders/new" element={<PrivateLayout><OrderForm /></PrivateLayout>} />
               <Route path="/orders/edit/:orderId" element={<PrivateLayout><EditOrderWrapper /></PrivateLayout>} />
               <Route path="/orders/:orderId" element={<PrivateLayout><OrderDetails /></PrivateLayout>} />
+              
+              {/* Purchase Orders Routes */}
+              <Route path="/purchase-orders" element={<PrivateLayout><PurchaseOrdersPage /></PrivateLayout>} />
+              <Route path="/purchase-orders/new" element={<PrivateLayout><PurchaseOrderFormPage /></PrivateLayout>} />
+              <Route path="/purchase-orders/:id" element={<PrivateLayout><PurchaseOrderDetailsPage /></PrivateLayout>} />
+              <Route path="/purchase-orders/:id/edit" element={<PrivateLayout><PurchaseOrderFormPage /></PrivateLayout>} />
+              
+              {/* Suppliers Routes */}
+              <Route path="/suppliers" element={<PrivateLayout><SuppliersPage /></PrivateLayout>} />
+              <Route path="/suppliers/new" element={<PrivateLayout><SupplierFormPage /></PrivateLayout>} />
+              <Route path="/suppliers/:id/edit" element={<PrivateLayout><SupplierFormPage /></PrivateLayout>} />
+              
+              {/* Customers Routes */}
+              <Route path="/customers" element={<PrivateLayout><CustomersList /></PrivateLayout>} />
               
               {/* Analytics Routes */}
               <Route path="/analytics" element={<PrivateLayout><AnalyticsDashboard /></PrivateLayout>} />

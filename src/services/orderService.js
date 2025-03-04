@@ -14,6 +14,7 @@ import {
   limit
 } from 'firebase/firestore';
 import { db } from './firebase/config';
+import { generateCONumber, generatePONumber } from '../utils/numberGenerators';
 
 const ORDERS_COLLECTION = 'orders';
 
@@ -109,32 +110,56 @@ export const getOrderById = async (orderId) => {
  */
 export const createOrder = async (orderData, userId) => {
   try {
-    // Walidacja danych zamówienia
-    validateOrderData(orderData);
+    // Wygeneruj numer CO
+    const orderNumber = await generateCONumber();
     
-    // Obliczanie wartości zamówienia
-    const totalValue = calculateOrderTotal(orderData.items);
-    
-    const newOrder = {
+    const orderWithMeta = {
       ...orderData,
-      totalValue,
+      orderNumber, // Dodaj numer CO
+      status: orderData.status || 'Nowe',
       createdBy: userId,
       createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      // Konwersja dat na timestampy Firestore
-      orderDate: Timestamp.fromDate(new Date(orderData.orderDate)),
-      expectedDeliveryDate: orderData.expectedDeliveryDate 
-        ? Timestamp.fromDate(new Date(orderData.expectedDeliveryDate)) 
-        : null,
-      deliveryDate: orderData.deliveryDate 
-        ? Timestamp.fromDate(new Date(orderData.deliveryDate)) 
-        : null
+      updatedAt: serverTimestamp()
     };
     
-    const docRef = await addDoc(collection(db, ORDERS_COLLECTION), newOrder);
-    return docRef.id;
+    const docRef = await addDoc(collection(db, ORDERS_COLLECTION), orderWithMeta);
+    
+    return {
+      id: docRef.id,
+      ...orderWithMeta
+    };
   } catch (error) {
     console.error('Błąd podczas tworzenia zamówienia:', error);
+    throw error;
+  }
+};
+
+/**
+ * Tworzy nowe zamówienie zakupu
+ */
+export const createPurchaseOrder = async (orderData, userId) => {
+  try {
+    // Wygeneruj numer PO
+    const orderNumber = await generatePONumber();
+    
+    const orderWithMeta = {
+      ...orderData,
+      orderNumber, // Dodaj numer PO
+      type: 'purchase', // Oznacz jako zamówienie zakupu
+      status: orderData.status || 'Nowe',
+      createdBy: userId,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+    
+    const docRef = await addDoc(collection(db, ORDERS_COLLECTION), orderWithMeta);
+    
+    return {
+      id: docRef.id,
+      ...orderWithMeta
+    };
+  } catch (error) {
+    console.error('Błąd podczas tworzenia zamówienia zakupu:', error);
     throw error;
   }
 };

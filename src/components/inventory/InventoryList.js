@@ -26,7 +26,9 @@ import {
   ArrowUpward as ReceiveIcon,
   ArrowDownward as IssueIcon,
   History as HistoryIcon,
-  Warning as WarningIcon
+  Warning as WarningIcon,
+  Info as InfoIcon,
+  ViewList as ViewListIcon
 } from '@mui/icons-material';
 import { getAllInventoryItems, deleteInventoryItem, getExpiringBatches, getExpiredBatches } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
@@ -201,6 +203,14 @@ const InventoryList = () => {
                   <TableCell align="right">
                     <IconButton 
                       component={Link} 
+                      to={`/inventory/${item.id}`}
+                      color="secondary"
+                      title="Szczegóły"
+                    >
+                      <InfoIcon />
+                    </IconButton>
+                    <IconButton 
+                      component={Link} 
                       to={`/inventory/${item.id}/receive`}
                       color="success"
                       title="Przyjmij"
@@ -225,8 +235,16 @@ const InventoryList = () => {
                     </IconButton>
                     <IconButton 
                       component={Link} 
-                      to={`/inventory/${item.id}/edit`}
+                      to={`/inventory/${item.id}/batches`}
                       color="primary"
+                      title="Partie"
+                    >
+                      <ViewListIcon />
+                    </IconButton>
+                    <IconButton 
+                      component={Link} 
+                      to={`/inventory/${item.id}/edit`}
+                      color="default"
                       title="Edytuj"
                     >
                       <EditIcon />

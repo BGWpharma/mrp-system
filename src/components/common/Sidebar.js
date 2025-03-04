@@ -18,19 +18,23 @@ import {
   MenuBook as RecipesIcon, 
   Schedule as ProductionIcon, 
   Inventory as InventoryIcon, 
-  VerifiedUser as QualityIcon,
+  Science as QualityIcon,
   ShoppingCart as OrdersIcon,
+  People as CustomersIcon,
+  BarChart as AnalyticsIcon,
   ExpandLess,
   ExpandMore,
-  CalendarMonth as CalendarIcon,
   ViewList as ListIcon,
-  InsertChart as AnalyticsIcon
+  CalendarMonth as CalendarIcon,
+  ShoppingBasket as PurchaseOrdersIcon,
+  Business as SuppliersIcon
 } from '@mui/icons-material';
 
 const Sidebar = () => {
   const location = useLocation();
   const drawerWidth = 240;
   const [openProduction, setOpenProduction] = useState(location.pathname.startsWith('/production'));
+  const [openOrders, setOpenOrders] = useState(location.pathname.startsWith('/orders') || location.pathname.startsWith('/customers'));
   
   const isActive = (path) => {
     return location.pathname.startsWith(path);
@@ -38,6 +42,10 @@ const Sidebar = () => {
   
   const handleProductionClick = () => {
     setOpenProduction(!openProduction);
+  };
+  
+  const handleOrdersClick = () => {
+    setOpenOrders(!openOrders);
   };
   
   const menuItems = [
@@ -56,7 +64,10 @@ const Sidebar = () => {
     { text: 'Magazyn', icon: <InventoryIcon />, path: '/inventory' },
     { text: 'Jakość', icon: <QualityIcon />, path: '/quality' },
     { text: 'Zamówienia', icon: <OrdersIcon />, path: '/orders' },
-    { text: 'Analizy i Raporty', icon: <AnalyticsIcon />, path: '/analytics' },
+    { text: 'Zamówienia zakupowe', icon: <PurchaseOrdersIcon />, path: '/purchase-orders' },
+    { text: 'Dostawcy', icon: <SuppliersIcon />, path: '/suppliers' },
+    { text: 'Klienci', icon: <CustomersIcon />, path: '/customers' },
+    { text: 'Analityka', icon: <AnalyticsIcon />, path: '/analytics' },
   ];
 
   return (
@@ -81,12 +92,19 @@ const Sidebar = () => {
         {menuItems.map((item) => (
           item.hasSubmenu ? (
             <React.Fragment key={item.text}>
-              <ListItemButton onClick={handleProductionClick} selected={isActive(item.path)}>
+              <ListItemButton 
+                onClick={item.text === 'Produkcja' ? handleProductionClick : handleOrdersClick} 
+                selected={isActive(item.path)}
+              >
                 <ListItemIcon>{item.icon}</ListItemIcon>
                 <ListItemText primary={item.text} />
-                {openProduction ? <ExpandLess /> : <ExpandMore />}
+                {(item.text === 'Produkcja' && openProduction) || (item.text === 'Zamówienia' && openOrders) ? <ExpandLess /> : <ExpandMore />}
               </ListItemButton>
-              <Collapse in={openProduction} timeout="auto" unmountOnExit>
+              <Collapse 
+                in={item.text === 'Produkcja' ? openProduction : openOrders} 
+                timeout="auto" 
+                unmountOnExit
+              >
                 <List component="div" disablePadding>
                   {item.submenu.map((subItem) => (
                     <ListItem

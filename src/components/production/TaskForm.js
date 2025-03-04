@@ -13,7 +13,9 @@ import {
   Select,
   MenuItem,
   Autocomplete,
-  FormHelperText
+  FormHelperText,
+  CircularProgress,
+  Divider
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -21,10 +23,13 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { pl } from 'date-fns/locale';
 import {
   Save as SaveIcon,
-  ArrowBack as ArrowBackIcon
+  ArrowBack as ArrowBackIcon,
+  Calculate as CalculateIcon
 } from '@mui/icons-material';
 import { createTask, updateTask, getTaskById } from '../../services/productionService';
-import { getAllRecipes } from '../../services/recipeService';
+import { getAllRecipes, getRecipeById } from '../../services/recipeService';
+import { getIngredientPrices } from '../../services/inventoryService';
+import { calculateProductionTaskCost } from '../../utils/costCalculator';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 
@@ -48,8 +53,13 @@ const TaskForm = ({ taskId }) => {
     estimatedDuration: '', // w minutach
     priority: 'Normalny',
     status: 'Zaplanowane',
-    notes: ''
+    notes: '',
+    moNumber: ''
   });
+
+  // Dodajemy stan dla kalkulacji kosztów
+  const [costCalculation, setCostCalculation] = useState(null);
+  const [calculatingCosts, setCalculatingCosts] = useState(false);
 
   useEffect(() => {
     const fetchRecipes = async () => {
@@ -67,23 +77,20 @@ const TaskForm = ({ taskId }) => {
     if (taskId) {
       const fetchTask = async () => {
         try {
+          setLoading(true);
           const task = await getTaskById(taskId);
+          setTaskData(task);
           
-          // Konwertuj timestamp na Date lub ustaw bieżącą datę
-          const scheduledDate = task.scheduledDate ? 
-            (task.scheduledDate.toDate ? task.scheduledDate.toDate() : new Date(task.scheduledDate)) : 
-            new Date();
-          
-          // Konwertuj timestamp endDate lub ustaw domyślną datę (1 godzina po scheduledDate)
-          const endDate = task.endDate ? 
-            (task.endDate.toDate ? task.endDate.toDate() : new Date(task.endDate)) : 
-            new Date(scheduledDate.getTime() + 60 * 60 * 1000);
-          
-          setTaskData({
-            ...task,
-            scheduledDate,
-            endDate
-          });
+          // Jeśli zadanie ma przypisaną recepturę, pobierz jej szczegóły
+          if (task.recipeId) {
+            const recipe = await getRecipeById(task.recipeId);
+            setTaskData(prev => ({
+              ...prev,
+              recipeId: recipe.id,
+              productName: recipe.name,
+              unit: recipe.yield?.unit || 'szt.'
+            }));
+          }
         } catch (error) {
           showError('Błąd podczas pobierania zadania: ' + error.message);
           console.error('Error fetching task:', error);
@@ -171,6 +178,42 @@ const TaskForm = ({ taskId }) => {
     }
   };
 
+  // Funkcja do kalkulacji kosztów zadania produkcyjnego
+  const handleCalculateCosts = async () => {
+    try {
+      setCalculatingCosts(true);
+      
+      // Sprawdź, czy zadanie ma przypisaną recepturę
+      if (!taskData.recipeId) {
+        showError('Zadanie musi mieć przypisaną recepturę, aby obliczyć koszty');
+        setCalculatingCosts(false);
+        return;
+      }
+      
+      // Pobierz ID składników
+      const ingredientIds = taskData.recipeId ? taskData.recipeId.split(',').map(id => id.trim()).filter(Boolean) : [];
+      
+      if (ingredientIds.length === 0) {
+        showError('Brak prawidłowych identyfikatorów składników');
+        setCalculatingCosts(false);
+        return;
+      }
+      
+      // Pobierz ceny składników
+      const pricesMap = await getIngredientPrices(ingredientIds);
+      
+      // Oblicz koszty
+      const costData = calculateProductionTaskCost(taskData, recipes.find(recipe => recipe.id === taskData.recipeId), pricesMap);
+      setCostCalculation(costData);
+      
+    } catch (error) {
+      console.error('Błąd podczas kalkulacji kosztów:', error);
+      showError('Nie udało się obliczyć kosztów: ' + error.message);
+    } finally {
+      setCalculatingCosts(false);
+    }
+  };
+
   if (loading) {
     return <div>Ładowanie zadania...</div>;
   }
@@ -186,19 +229,27 @@ const TaskForm = ({ taskId }) => {
             Powrót
           </Button>
           <Typography variant="h5">
-            {taskId ? 'Edycja zadania produkcyjnego' : 'Nowe zadanie produkcyjne'}
+            {taskId ? 'Edytuj zadanie produkcyjne' : 'Nowe zadanie produkcyjne'}
           </Typography>
           <Button 
+            type="submit" 
             variant="contained" 
-            color="primary" 
-            type="submit"
-            startIcon={<SaveIcon />}
+            color="primary"
             disabled={saving}
+            startIcon={<SaveIcon />}
           >
             {saving ? 'Zapisywanie...' : 'Zapisz'}
           </Button>
         </Box>
 
+        {taskData.moNumber && (
+          <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
+            <Typography variant="subtitle1" color="primary" fontWeight="bold">
+              Numer zlecenia produkcyjnego: {taskData.moNumber}
+            </Typography>
+          </Box>
+        )}
+        
         <Paper sx={{ p: 3, mb: 3 }}>
           <Grid container spacing={3}>
             <Grid item xs={12}>
@@ -340,6 +391,76 @@ const TaskForm = ({ taskId }) => {
               </FormControl>
             </Grid>
           </Grid>
+        </Paper>
+
+        {/* Sekcja kalkulacji kosztów */}
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">Kalkulacja kosztów produkcji</Typography>
+            <Button
+              variant="outlined"
+              startIcon={<CalculateIcon />}
+              onClick={handleCalculateCosts}
+              disabled={calculatingCosts || !taskData.recipeId}
+            >
+              {calculatingCosts ? 'Obliczanie...' : 'Oblicz koszty'}
+            </Button>
+          </Box>
+          
+          {costCalculation && (
+            <Box>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6} md={4}>
+                  <Typography variant="subtitle2">Koszt jednostkowy produktu:</Typography>
+                  <Typography variant="body1" fontWeight="bold">
+                    {costCalculation.unitCost.toFixed(2)} zł / {costCalculation.yieldUnit}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6} md={4}>
+                  <Typography variant="subtitle2">Ilość do wyprodukowania:</Typography>
+                  <Typography variant="body1">
+                    {costCalculation.taskQuantity} {costCalculation.taskUnit}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6} md={4}>
+                  <Typography variant="subtitle2">Całkowity koszt zadania:</Typography>
+                  <Typography variant="body1" fontWeight="bold" color="primary">
+                    {costCalculation.taskTotalCost.toFixed(2)} zł
+                  </Typography>
+                </Grid>
+              </Grid>
+              
+              <Divider sx={{ my: 2 }} />
+              
+              <Typography variant="subtitle1" gutterBottom>Szczegóły kosztów:</Typography>
+              
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6} md={3}>
+                  <Typography variant="subtitle2">Koszt składników:</Typography>
+                  <Typography variant="body1">{costCalculation.ingredientsCost.toFixed(2)} zł</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                  <Typography variant="subtitle2">Koszt robocizny:</Typography>
+                  <Typography variant="body1">{costCalculation.laborCost.toFixed(2)} zł</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                  <Typography variant="subtitle2">Koszt energii:</Typography>
+                  <Typography variant="body1">{costCalculation.energyCost.toFixed(2)} zł</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                  <Typography variant="subtitle2">Koszty pośrednie:</Typography>
+                  <Typography variant="body1">{costCalculation.overheadCost.toFixed(2)} zł</Typography>
+                </Grid>
+              </Grid>
+            </Box>
+          )}
+          
+          {!costCalculation && (
+            <Typography variant="body2" color="text.secondary">
+              Kliknij "Oblicz koszty", aby zobaczyć kalkulację kosztów dla tego zadania produkcyjnego.
+              Upewnij się, że zadanie ma przypisaną recepturę z odpowiednimi składnikami.
+            </Typography>
+          )}
         </Paper>
 
         <Paper sx={{ p: 3 }}>

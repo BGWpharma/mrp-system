@@ -15,6 +15,7 @@ import {
     Timestamp
   } from 'firebase/firestore';
   import { db } from './firebase/config';
+  import { generateLOTNumber } from '../utils/numberGenerators';
   
   const INVENTORY_COLLECTION = 'inventory';
   const INVENTORY_TRANSACTIONS_COLLECTION = 'inventoryTransactions';
@@ -132,18 +133,31 @@ import {
   
   // Pobieranie partii dla danej pozycji magazynowej
   export const getItemBatches = async (itemId) => {
-    const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
-    const q = query(
-      batchesRef, 
-      where('itemId', '==', itemId),
-      orderBy('expiryDate', 'asc') // Sortowanie po dacie ważności (FEFO)
-    );
-    
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    try {
+      const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
+      const q = query(
+        batchesRef,
+        where('itemId', '==', itemId),
+        orderBy('expiryDate', 'asc') // Sortuj wg daty ważności (FEFO)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          // Konwertuj Timestamp na Date dla łatwiejszej obsługi
+          expiryDate: data.expiryDate ? data.expiryDate.toDate() : null,
+          receivedDate: data.receivedDate ? data.receivedDate.toDate() : null,
+          // Upewnij się, że cena jednostkowa jest dostępna
+          unitPrice: data.unitPrice || 0
+        };
+      });
+    } catch (error) {
+      console.error('Error getting item batches:', error);
+      throw error;
+    }
   };
 
   // Pobieranie partii z krótkim terminem ważności (wygasające w ciągu określonej liczby dni)
@@ -195,54 +209,66 @@ import {
 
   // Przyjęcie towaru (zwiększenie stanu) z datą ważności
   export const receiveInventory = async (itemId, quantity, transactionData, userId) => {
-    // Pobierz bieżącą pozycję
-    const currentItem = await getInventoryItemById(itemId);
-    
-    // Aktualizuj stan
-    const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
-    await updateDoc(itemRef, {
-      quantity: increment(Number(quantity)),
-      updatedAt: serverTimestamp(),
-      updatedBy: userId
-    });
-    
-    // Dodaj transakcję
-    const transaction = {
-      itemId,
-      itemName: currentItem.name,
-      type: 'RECEIVE',
-      quantity: Number(quantity),
-      previousQuantity: currentItem.quantity,
-      newQuantity: currentItem.quantity + Number(quantity),
-      ...transactionData,
-      transactionDate: serverTimestamp(),
-      createdBy: userId
-    };
-    
-    const transactionRef = await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transaction);
-    
-    // Jeśli podano datę ważności, dodaj partię
-    if (transactionData.expiryDate) {
-      const batch = {
+    try {
+      // Pobierz bieżącą pozycję
+      const currentItem = await getInventoryItemById(itemId);
+      
+      // Aktualizuj stan
+      const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
+      await updateDoc(itemRef, {
+        quantity: increment(Number(quantity)),
+        updatedAt: serverTimestamp(),
+        updatedBy: userId,
+        // Aktualizujemy cenę jednostkową w pozycji magazynowej, jeśli została podana
+        ...(transactionData.unitPrice !== undefined && { unitPrice: transactionData.unitPrice })
+      });
+      
+      // Dodaj transakcję
+      const transaction = {
         itemId,
         itemName: currentItem.name,
-        transactionId: transactionRef.id,
+        type: 'RECEIVE',
         quantity: Number(quantity),
-        initialQuantity: Number(quantity),
-        batchNumber: transactionData.batchNumber || '',
-        expiryDate: transactionData.expiryDate,
-        receivedDate: serverTimestamp(),
-        notes: transactionData.batchNotes || '',
+        previousQuantity: currentItem.quantity,
+        newQuantity: currentItem.quantity + Number(quantity),
+        ...transactionData,
+        transactionDate: serverTimestamp(),
         createdBy: userId
       };
       
-      await addDoc(collection(db, INVENTORY_BATCHES_COLLECTION), batch);
+      const transactionRef = await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transaction);
+      
+      // Jeśli podano datę ważności, dodaj partię
+      if (transactionData.expiryDate) {
+        // Wygeneruj numer LOT
+        const lotNumber = await generateLOTNumber();
+        
+        const batch = {
+          itemId,
+          itemName: currentItem.name,
+          transactionId: transactionRef.id,
+          quantity: Number(quantity),
+          initialQuantity: Number(quantity),
+          batchNumber: transactionData.batchNumber || lotNumber, // Użyj podanego numeru partii lub wygenerowanego LOT
+          lotNumber, // Dodaj numer LOT
+          expiryDate: transactionData.expiryDate,
+          receivedDate: serverTimestamp(),
+          notes: transactionData.batchNotes || '',
+          unitPrice: transactionData.unitPrice || 0, // Dodajemy cenę jednostkową do partii
+          createdBy: userId
+        };
+        
+        await addDoc(collection(db, INVENTORY_BATCHES_COLLECTION), batch);
+      }
+      
+      return {
+        id: itemId,
+        quantity: currentItem.quantity + Number(quantity)
+      };
+    } catch (error) {
+      console.error('Error receiving inventory:', error);
+      throw error;
     }
-    
-    return {
-      id: itemId,
-      quantity: currentItem.quantity + Number(quantity)
-    };
   };
 
   // Wydanie towaru (zmniejszenie stanu) z uwzględnieniem partii (FEFO)
@@ -375,4 +401,150 @@ import {
       id: doc.id,
       ...doc.data()
     }));
+  };
+
+  /**
+   * Pobiera ceny wszystkich składników lub określonych składników
+   * @param {Array} ingredientIds - Opcjonalna lista ID składników do pobrania
+   * @param {Object} options - Opcje pobierania cen
+   * @returns {Object} - Mapa cen składników (id -> cena)
+   */
+  export const getIngredientPrices = async (ingredientIds = null, options = {}) => {
+    try {
+      // Opcje
+      const { useBatchPrices = true } = options;
+      
+      let itemsQuery;
+      let querySnapshot;
+      
+      // Logowanie dla celów diagnostycznych
+      console.log('Żądane ID składników:', ingredientIds);
+      
+      if (ingredientIds && ingredientIds.length > 0) {
+        // Pobierz wszystkie składniki i filtruj po stronie klienta
+        // Nie używamy where('id', 'in', ingredientIds), ponieważ szukamy po ID dokumentu, a nie po polu 'id'
+        itemsQuery = collection(db, INVENTORY_COLLECTION);
+        querySnapshot = await getDocs(itemsQuery);
+      } else {
+        // Pobierz wszystkie składniki
+        itemsQuery = collection(db, INVENTORY_COLLECTION);
+        querySnapshot = await getDocs(itemsQuery);
+      }
+      
+      const pricesMap = {};
+      const itemsToFetchBatches = [];
+      
+      // Najpierw pobierz ceny z pozycji magazynowych
+      querySnapshot.forEach((doc) => {
+        const item = doc.data();
+        const itemId = doc.id;
+        
+        // Jeśli mamy listę ID i element nie jest na liście, pomiń go
+        if (ingredientIds && ingredientIds.length > 0 && !ingredientIds.includes(itemId)) {
+          return;
+        }
+        
+        // Zapisz cenę jednostkową składnika
+        pricesMap[itemId] = {
+          itemPrice: item.unitPrice || 0,
+          batchPrice: null, // Będzie uzupełnione później, jeśli dostępne
+          name: item.name || 'Nieznany składnik'
+        };
+        
+        // Dodaj do listy elementów, dla których chcemy pobrać partie
+        if (useBatchPrices) {
+          itemsToFetchBatches.push(itemId);
+        }
+      });
+      
+      // Sprawdź, czy wszystkie żądane składniki zostały znalezione
+      if (ingredientIds) {
+        ingredientIds.forEach(id => {
+          if (!pricesMap[id]) {
+            console.warn(`Nie znaleziono składnika o ID: ${id} w magazynie`);
+            // Dodaj pusty wpis, aby uniknąć błędów przy dostępie do pricesMap[id]
+            pricesMap[id] = {
+              itemPrice: 0,
+              batchPrice: 0,
+              name: 'Nieznaleziony składnik'
+            };
+          }
+        });
+      }
+      
+      // Jeśli mamy używać cen z partii, pobierz je
+      if (useBatchPrices && itemsToFetchBatches.length > 0) {
+        // Dla każdego składnika pobierz partie i użyj ceny z najnowszej partii
+        for (const itemId of itemsToFetchBatches) {
+          try {
+            const batches = await getItemBatches(itemId);
+            
+            // Znajdź najnowszą partię z ceną i ilością > 0
+            const validBatches = batches
+              .filter(batch => batch.quantity > 0 && batch.unitPrice !== undefined && batch.unitPrice > 0)
+              .sort((a, b) => {
+                // Sortuj od najnowszej do najstarszej
+                const dateA = a.receivedDate instanceof Date ? a.receivedDate : new Date(a.receivedDate);
+                const dateB = b.receivedDate instanceof Date ? b.receivedDate : new Date(b.receivedDate);
+                return dateB - dateA;
+              });
+            
+            // Jeśli znaleziono partię z ceną, użyj jej
+            if (validBatches.length > 0) {
+              pricesMap[itemId].batchPrice = validBatches[0].unitPrice;
+            } else {
+              console.warn(`Nie znaleziono ważnych partii z ceną dla składnika ${itemId}`);
+            }
+          } catch (error) {
+            console.error(`Błąd podczas pobierania partii dla składnika ${itemId}:`, error);
+            // Kontynuuj z następnym składnikiem
+          }
+        }
+      }
+      
+      console.log('Pobrane ceny składników:', pricesMap);
+      return pricesMap;
+    } catch (error) {
+      console.error('Błąd podczas pobierania cen składników:', error);
+      throw error;
+    }
+  };
+
+  // Aktualizacja danych partii
+  export const updateBatch = async (batchId, batchData, userId) => {
+    try {
+      const batchRef = doc(db, INVENTORY_BATCHES_COLLECTION, batchId);
+      
+      // Pobierz aktualne dane partii
+      const batchDoc = await getDoc(batchRef);
+      if (!batchDoc.exists()) {
+        throw new Error('Partia nie istnieje');
+      }
+      
+      const currentBatch = batchDoc.data();
+      
+      // Przygotuj dane do aktualizacji
+      const updateData = {
+        ...batchData,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      };
+      
+      // Jeśli zmieniono datę ważności, konwertuj ją na Timestamp
+      if (batchData.expiryDate && batchData.expiryDate instanceof Date) {
+        updateData.expiryDate = Timestamp.fromDate(batchData.expiryDate);
+      }
+      
+      // Aktualizuj partię
+      await updateDoc(batchRef, updateData);
+      
+      return {
+        id: batchId,
+        ...currentBatch,
+        ...updateData
+      };
+    } catch (error) {
+      console.error('Error updating batch:', error);
+      throw error;
+    }
   };

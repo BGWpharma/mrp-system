@@ -211,9 +211,10 @@ const TaskList = () => {
             <TableHead>
               <TableRow>
                 <TableCell>Nazwa zadania</TableCell>
+                <TableCell>Numer MO</TableCell>
                 <TableCell>Produkt</TableCell>
                 <TableCell>Ilość</TableCell>
-                <TableCell>Zaplanowano na</TableCell>
+                <TableCell>Data rozpoczęcia</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell align="right">Akcje</TableCell>
               </TableRow>
@@ -223,6 +224,9 @@ const TaskList = () => {
                 <TableRow key={task.id}>
                   <TableCell component="th" scope="row">
                     {task.name}
+                  </TableCell>
+                  <TableCell>
+                    {task.moNumber || '-'}
                   </TableCell>
                   <TableCell>{task.productName}</TableCell>
                   <TableCell>
