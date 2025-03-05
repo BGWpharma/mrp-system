@@ -39,7 +39,8 @@ const InventoryItemForm = ({ itemId }) => {
     minStock: '',
     maxStock: '',
     supplierInfo: '',
-    notes: ''
+    notes: '',
+    bookedQuantity: 0
   });
 
   useEffect(() => {
@@ -156,14 +157,38 @@ const InventoryItemForm = ({ itemId }) => {
           </Grid>
           <Grid item xs={12} sm={6}>
             <TextField
-              label="Ilość początkowa"
+              fullWidth
+              label="Ilość"
               name="quantity"
               type="number"
-              value={itemData.quantity}
+              value={itemData.quantity || ''}
               onChange={handleChange}
+              inputProps={{ min: 0, step: 0.01 }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
               fullWidth
-              InputProps={{ readOnly: !!itemId }} // Tylko dla nowych pozycji
-              helperText={itemId ? "Użyj formularzy przyjęcia/wydania, aby zmienić ilość" : "Początkowy stan magazynowy"}
+              label="Ilość zarezerwowana"
+              name="bookedQuantity"
+              type="number"
+              value={itemData.bookedQuantity || 0}
+              InputProps={{
+                readOnly: true,
+              }}
+              helperText="Ilość zarezerwowana na zadania produkcyjne"
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              label="Ilość dostępna"
+              type="number"
+              value={(itemData.quantity || 0) - (itemData.bookedQuantity || 0)}
+              InputProps={{
+                readOnly: true,
+              }}
+              helperText="Ilość dostępna do wykorzystania"
             />
           </Grid>
           <Grid item xs={12} sm={6}>

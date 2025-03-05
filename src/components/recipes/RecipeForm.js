@@ -34,9 +34,10 @@ import {
   ArrowBack as ArrowBackIcon,
   Calculate as CalculateIcon,
   Inventory as InventoryIcon,
-  Edit as EditIcon
+  Edit as EditIcon,
+  Build as BuildIcon
 } from '@mui/icons-material';
-import { createRecipe, updateRecipe, getRecipeById } from '../../services/recipeService';
+import { createRecipe, updateRecipe, getRecipeById, fixRecipeYield } from '../../services/recipeService';
 import { getAllInventoryItems, getIngredientPrices } from '../../services/inventoryService';
 import { calculateRecipeTotalCost } from '../../utils/costCalculator';
 import { useAuth } from '../../hooks/useAuth';
@@ -138,7 +139,7 @@ const RecipeForm = ({ recipeId }) => {
       ...prev,
       yield: {
         ...prev.yield,
-        [name]: value
+        [name]: name === 'quantity' ? parseFloat(value) || '' : value
       }
     }));
   };
@@ -288,6 +289,26 @@ const RecipeForm = ({ recipeId }) => {
     });
   };
 
+  // Funkcja naprawiająca wydajność receptury
+  const handleFixYield = async () => {
+    if (!recipeId) return;
+    
+    try {
+      setSaving(true);
+      const result = await fixRecipeYield(recipeId, currentUser.uid);
+      showSuccess(result.message);
+      
+      // Odśwież dane receptury
+      const updatedRecipe = await getRecipeById(recipeId);
+      setRecipeData(updatedRecipe);
+    } catch (error) {
+      console.error('Błąd podczas naprawiania wydajności:', error);
+      showError('Nie udało się naprawić wydajności receptury');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return <div>Ładowanie receptury...</div>;
   }
@@ -377,6 +398,19 @@ const RecipeForm = ({ recipeId }) => {
               </Select>
             </FormControl>
           </Grid>
+          {recipeId && (
+            <Grid item xs={6}>
+              <Button 
+                variant="outlined" 
+                color="secondary" 
+                onClick={handleFixYield}
+                disabled={saving}
+                startIcon={<BuildIcon />}
+              >
+                Napraw wydajność
+              </Button>
+            </Grid>
+          )}
           <Grid item xs={12}>
             <FormControl fullWidth>
               <InputLabel>Status</InputLabel>

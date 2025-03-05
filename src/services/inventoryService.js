@@ -125,10 +125,42 @@ import {
   
   // Usuwanie pozycji magazynowej
   export const deleteInventoryItem = async (itemId) => {
-    const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
-    await deleteDoc(itemRef);
-    
-    return { success: true };
+    try {
+      // Najpierw pobierz wszystkie partie związane z tym produktem
+      const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
+      const q = query(batchesRef, where('itemId', '==', itemId));
+      const batchesSnapshot = await getDocs(q);
+      
+      // Usuń wszystkie partie
+      const batchDeletions = batchesSnapshot.docs.map(doc => 
+        deleteDoc(doc.ref)
+      );
+      
+      // Poczekaj na usunięcie wszystkich partii
+      await Promise.all(batchDeletions);
+      
+      // Pobierz transakcje związane z tym produktem
+      const transactionsRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
+      const transactionsQuery = query(transactionsRef, where('itemId', '==', itemId));
+      const transactionsSnapshot = await getDocs(transactionsQuery);
+      
+      // Usuń wszystkie transakcje
+      const transactionDeletions = transactionsSnapshot.docs.map(doc => 
+        deleteDoc(doc.ref)
+      );
+      
+      // Poczekaj na usunięcie wszystkich transakcji
+      await Promise.all(transactionDeletions);
+      
+      // Na końcu usuń sam produkt
+      const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
+      await deleteDoc(itemRef);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Błąd podczas usuwania pozycji magazynowej:', error);
+      throw error;
+    }
   };
   
   // Pobieranie partii dla danej pozycji magazynowej
@@ -357,34 +389,51 @@ import {
 
   // Pobieranie historii partii dla danej pozycji
   export const getItemBatchHistory = async (itemId) => {
-    const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
-    const q = query(
-      batchesRef, 
-      where('itemId', '==', itemId),
-      orderBy('receivedDate', 'desc')
-    );
-    
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    try {
+      const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
+      const q = query(
+        batchesRef,
+        where('itemId', '==', itemId),
+        orderBy('createdAt', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate() || new Date(),
+        expiryDate: doc.data().expiryDate?.toDate() || null
+      }));
+    } catch (error) {
+      console.error('Error getting batch history:', error);
+      throw error;
+    }
   };
   
-  // Pobieranie historii transakcji dla danej pozycji
+  /**
+   * Pobiera wszystkie transakcje dla danego produktu
+   * @param {string} itemId - ID produktu
+   * @returns {Promise<Array>} - Lista transakcji
+   */
   export const getItemTransactions = async (itemId) => {
-    const transactionsRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
-    const q = query(
-      transactionsRef, 
-      where('itemId', '==', itemId),
-      orderBy('transactionDate', 'desc')
-    );
-    
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    try {
+      const transactionsRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
+      const q = query(
+        transactionsRef,
+        where('itemId', '==', itemId),
+        orderBy('createdAt', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate() || new Date()
+      }));
+    } catch (error) {
+      console.error('Error getting item transactions:', error);
+      throw error;
+    }
   };
   
   // Pobieranie wszystkich transakcji
@@ -545,6 +594,268 @@ import {
       };
     } catch (error) {
       console.error('Error updating batch:', error);
+      throw error;
+    }
+  };
+
+  // Bookowanie produktu na zadanie produkcyjne
+  export const bookInventoryForTask = async (itemId, quantity, taskId, userId) => {
+    try {
+      // Pobierz aktualny stan produktu
+      const item = await getInventoryItemById(itemId);
+      
+      // Sprawdź, czy jest wystarczająca ilość produktu
+      if (item.quantity < quantity) {
+        throw new Error(`Niewystarczająca ilość produktu w magazynie. Dostępne: ${item.quantity} ${item.unit}`);
+      }
+      
+      // Aktualizuj pole bookedQuantity w produkcie
+      const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
+      
+      // Jeśli pole bookedQuantity nie istnieje, utwórz je
+      if (item.bookedQuantity === undefined) {
+        await updateDoc(itemRef, {
+          bookedQuantity: quantity,
+          updatedAt: serverTimestamp(),
+          updatedBy: userId
+        });
+      } else {
+        // W przeciwnym razie zwiększ istniejącą wartość
+        await updateDoc(itemRef, {
+          bookedQuantity: increment(quantity),
+          updatedAt: serverTimestamp(),
+          updatedBy: userId
+        });
+      }
+      
+      // Dodaj wpis w transakcjach
+      const transactionRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
+      await addDoc(transactionRef, {
+        itemId,
+        itemName: item.name,
+        quantity,
+        type: 'booking',
+        reason: 'Zadanie produkcyjne',
+        referenceId: taskId,
+        notes: `Zarezerwowano na zadanie produkcyjne ID: ${taskId}`,
+        createdAt: serverTimestamp(),
+        createdBy: userId
+      });
+      
+      // Emituj zdarzenie o zmianie stanu magazynu
+      const event = new CustomEvent('inventory-updated', { 
+        detail: { itemId, action: 'booked', quantity }
+      });
+      window.dispatchEvent(event);
+      
+      return {
+        success: true,
+        message: `Zarezerwowano ${quantity} ${item.unit} produktu ${item.name} na zadanie produkcyjne`
+      };
+    } catch (error) {
+      console.error('Błąd podczas bookowania produktu:', error);
+      throw error;
+    }
+  };
+
+  // Anulowanie bookowania produktu
+  export const cancelBooking = async (itemId, quantity, taskId, userId) => {
+    try {
+      // Pobierz aktualny stan produktu
+      const item = await getInventoryItemById(itemId);
+      
+      // Sprawdź, czy jest wystarczająca ilość zarezerwowana
+      if (!item.bookedQuantity || item.bookedQuantity < quantity) {
+        throw new Error(`Nie można anulować rezerwacji. Zarezerwowano tylko: ${item.bookedQuantity || 0} ${item.unit}`);
+      }
+      
+      // Aktualizuj pole bookedQuantity w produkcie
+      const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
+      await updateDoc(itemRef, {
+        bookedQuantity: increment(-quantity),
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      });
+      
+      // Dodaj wpis w transakcjach
+      const transactionRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
+      await addDoc(transactionRef, {
+        itemId,
+        itemName: item.name,
+        quantity,
+        type: 'booking_cancel',
+        reason: 'Anulowanie rezerwacji',
+        referenceId: taskId,
+        notes: `Anulowano rezerwację dla zadania produkcyjnego ID: ${taskId}`,
+        createdAt: serverTimestamp(),
+        createdBy: userId
+      });
+      
+      // Emituj zdarzenie o zmianie stanu magazynu
+      const event = new CustomEvent('inventory-updated', { 
+        detail: { itemId, action: 'booking_cancel', quantity }
+      });
+      window.dispatchEvent(event);
+      
+      return {
+        success: true,
+        message: `Anulowano rezerwację ${quantity} ${item.unit} produktu ${item.name}`
+      };
+    } catch (error) {
+      console.error('Błąd podczas anulowania rezerwacji produktu:', error);
+      throw error;
+    }
+  };
+
+  // Pobieranie produktów na zasadzie FIFO (First In, First Out)
+  export const getProductsFIFO = async (itemId, quantity) => {
+    try {
+      // Sprawdź, czy quantity jest prawidłową liczbą przed rozpoczęciem
+      const parsedQuantity = parseFloat(quantity);
+      if (isNaN(parsedQuantity) || parsedQuantity <= 0) {
+        throw new Error(`Nieprawidłowa ilość: ${quantity}. Podaj liczbę większą od zera.`);
+      }
+
+      // Pobierz wszystkie partie danego produktu
+      const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
+      
+      // Proste zapytanie tylko po itemId, bez dodatkowych warunków i sortowania
+      const q = query(
+        batchesRef, 
+        where('itemId', '==', itemId)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const batches = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // Filtruj partie z ilością > 0
+      const availableBatches = batches.filter(batch => {
+        const batchQuantity = parseFloat(batch.quantity);
+        return !isNaN(batchQuantity) && batchQuantity > 0;
+      });
+      
+      if (availableBatches.length === 0) {
+        throw new Error(`Brak dostępnych partii produktu w magazynie.`);
+      }
+      
+      // Sortuj według daty utworzenia (od najstarszej) - FIFO
+      availableBatches.sort((a, b) => {
+        const dateA = a.createdAt instanceof Timestamp ? a.createdAt.toDate() : new Date(a.createdAt);
+        const dateB = b.createdAt instanceof Timestamp ? b.createdAt.toDate() : new Date(b.createdAt);
+        return dateA - dateB;
+      });
+      
+      // Wybierz partie, które pokryją żądaną ilość
+      let remainingQuantity = parsedQuantity; // Używamy już zwalidowanej wartości
+      
+      const selectedBatches = [];
+      
+      for (const batch of availableBatches) {
+        if (remainingQuantity <= 0) break;
+        
+        const batchQuantity = parseFloat(batch.quantity);
+        const quantityFromBatch = Math.min(batchQuantity, remainingQuantity);
+        
+        selectedBatches.push({
+          ...batch,
+          selectedQuantity: quantityFromBatch
+        });
+        
+        remainingQuantity -= quantityFromBatch;
+      }
+      
+      // Sprawdź, czy udało się pokryć całą żądaną ilość
+      if (remainingQuantity > 0) {
+        throw new Error(`Niewystarczająca ilość produktu w magazynie. Brakuje: ${remainingQuantity}`);
+      }
+      
+      return selectedBatches;
+    } catch (error) {
+      console.error('Błąd podczas pobierania partii metodą FIFO:', error);
+      throw error;
+    }
+  };
+
+  // Pobieranie produktów z najkrótszą datą ważności
+  export const getProductsWithEarliestExpiry = async (itemId, quantity) => {
+    try {
+      // Sprawdź, czy quantity jest prawidłową liczbą przed rozpoczęciem
+      const parsedQuantity = parseFloat(quantity);
+      if (isNaN(parsedQuantity) || parsedQuantity <= 0) {
+        throw new Error(`Nieprawidłowa ilość: ${quantity}. Podaj liczbę większą od zera.`);
+      }
+
+      // Pobierz wszystkie partie danego produktu bez żadnych dodatkowych warunków
+      const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
+      
+      // Proste zapytanie tylko po itemId, bez dodatkowych warunków i sortowania
+      const q = query(
+        batchesRef, 
+        where('itemId', '==', itemId)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const batches = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // Filtruj partie z ilością > 0 i upewnij się, że quantity jest liczbą
+      const availableBatches = batches.filter(batch => {
+        const batchQuantity = parseFloat(batch.quantity);
+        return !isNaN(batchQuantity) && batchQuantity > 0;
+      });
+      
+      if (availableBatches.length === 0) {
+        throw new Error(`Brak dostępnych partii produktu w magazynie.`);
+      }
+      
+      // Filtruj partie, które mają datę ważności (nie null)
+      const batchesWithExpiry = availableBatches.filter(batch => batch.expiryDate);
+      
+      // Sortuj według daty ważności (od najwcześniejszej) - sortowanie po stronie klienta
+      batchesWithExpiry.sort((a, b) => {
+        const dateA = a.expiryDate instanceof Timestamp ? a.expiryDate.toDate() : new Date(a.expiryDate);
+        const dateB = b.expiryDate instanceof Timestamp ? b.expiryDate.toDate() : new Date(b.expiryDate);
+        return dateA - dateB;
+      });
+      
+      // Dodaj partie bez daty ważności na koniec
+      const batchesWithoutExpiry = availableBatches.filter(batch => !batch.expiryDate);
+      
+      // Połącz obie listy
+      const sortedBatches = [...batchesWithExpiry, ...batchesWithoutExpiry];
+      
+      // Wybierz partie, które pokryją żądaną ilość
+      let remainingQuantity = parsedQuantity; // Używamy już zwalidowanej wartości
+      
+      const selectedBatches = [];
+      
+      for (const batch of sortedBatches) {
+        if (remainingQuantity <= 0) break;
+        
+        const batchQuantity = parseFloat(batch.quantity);
+        const quantityFromBatch = Math.min(batchQuantity, remainingQuantity);
+        
+        selectedBatches.push({
+          ...batch,
+          selectedQuantity: quantityFromBatch
+        });
+        
+        remainingQuantity -= quantityFromBatch;
+      }
+      
+      // Sprawdź, czy udało się pokryć całą żądaną ilość
+      if (remainingQuantity > 0) {
+        throw new Error(`Niewystarczająca ilość produktu w magazynie. Brakuje: ${remainingQuantity}`);
+      }
+      
+      return selectedBatches;
+    } catch (error) {
+      console.error('Błąd podczas pobierania partii z najkrótszą datą ważności:', error);
       throw error;
     }
   };

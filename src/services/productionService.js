@@ -11,10 +11,13 @@ import {
     where,
     orderBy,
     serverTimestamp,
-    Timestamp
+    Timestamp,
+    setDoc,
+    increment
   } from 'firebase/firestore';
   import { db } from './firebase/config';
-  import { generateMONumber } from '../utils/numberGenerators';
+  import { generateMONumber, generateLOTNumber } from '../utils/numberGenerators';
+  import { getInventoryItemByName, receiveInventory, createInventoryItem } from './inventoryService';
   
   const PRODUCTION_TASKS_COLLECTION = 'productionTasks';
   
@@ -167,35 +170,74 @@ import {
   
   // Aktualizacja statusu zadania
   export const updateTaskStatus = async (taskId, status, userId) => {
-    const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
-    
-    const updates = {
-      status,
-      updatedAt: serverTimestamp(),
-      updatedBy: userId
-    };
-    
-    // Dodaj daty odpowiadające statusom
-    if (status === 'W trakcie') {
-      updates.startedAt = serverTimestamp();
-    } else if (status === 'Zakończone') {
-      updates.completedAt = serverTimestamp();
+    try {
+      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+      const taskDoc = await getDoc(taskRef);
+      
+      if (!taskDoc.exists()) {
+        throw new Error('Zadanie nie istnieje');
+      }
+      
+      const taskData = taskDoc.data();
+      const updates = {
+        status,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      };
+      
+      // Jeśli zadanie jest zakończone, oznacz je jako gotowe do dodania do magazynu
+      if (status === 'Zakończone') {
+        updates.readyForInventory = true;
+        updates.completedAt = serverTimestamp();
+      }
+      
+      await updateDoc(taskRef, updates);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji statusu zadania:', error);
+      throw error;
     }
-    
-    await updateDoc(taskRef, updates);
-    
-    return {
-      id: taskId,
-      ...updates
-    };
   };
   
   // Usuwanie zadania produkcyjnego
   export const deleteTask = async (taskId) => {
-    const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
-    await deleteDoc(taskRef);
-    
-    return { success: true };
+    try {
+      // Sprawdź, czy zadanie ma powiązane partie w magazynie
+      const batchesRef = collection(db, 'inventoryBatches');
+      const q = query(batchesRef, where('sourceId', '==', taskId), where('source', '==', 'Produkcja'));
+      const batchesSnapshot = await getDocs(q);
+      
+      // Usuń wszystkie powiązane partie
+      const batchDeletions = batchesSnapshot.docs.map(doc => 
+        deleteDoc(doc.ref)
+      );
+      
+      // Poczekaj na usunięcie wszystkich partii
+      await Promise.all(batchDeletions);
+      
+      // Pobierz transakcje związane z tym zadaniem
+      const transactionsRef = collection(db, 'inventoryTransactions');
+      const transactionsQuery = query(transactionsRef, where('reference', '==', `Zadanie: ${taskId}`));
+      const transactionsSnapshot = await getDocs(transactionsQuery);
+      
+      // Usuń wszystkie transakcje
+      const transactionDeletions = transactionsSnapshot.docs.map(doc => 
+        deleteDoc(doc.ref)
+      );
+      
+      // Poczekaj na usunięcie wszystkich transakcji
+      await Promise.all(transactionDeletions);
+      
+      // Na końcu usuń samo zadanie
+      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+      await deleteDoc(taskRef);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Błąd podczas usuwania zadania produkcyjnego:', error);
+      throw error;
+    }
   };
   
   // Pobieranie zadań według statusu
@@ -234,6 +276,165 @@ import {
       return tasks;
     } catch (error) {
       console.error(`Błąd podczas pobierania zadań o statusie "${status}":`, error);
+      throw error;
+    }
+  };
+  
+  // Dodanie produktu z zadania produkcyjnego do magazynu jako partii
+  export const addTaskProductToInventory = async (taskId, userId) => {
+    const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+    
+    // Pobierz aktualne dane zadania
+    const taskDoc = await getDoc(taskRef);
+    if (!taskDoc.exists()) {
+      throw new Error('Zadanie nie istnieje');
+    }
+    
+    const taskData = taskDoc.data();
+    
+    // Sprawdź, czy zadanie jest zakończone i gotowe do dodania do magazynu
+    if (taskData.status !== 'Zakończone' || !taskData.readyForInventory) {
+      throw new Error('Zadanie nie jest gotowe do dodania do magazynu');
+    }
+    
+    // Sprawdź, czy zadanie ma nazwę produktu i ilość
+    if (!taskData.productName || !taskData.quantity) {
+      throw new Error('Zadanie nie zawiera informacji o produkcie lub ilości');
+    }
+    
+    try {
+      let inventoryItem;
+      let inventoryItemId;
+      
+      // Jeśli zadanie ma powiązany produkt z magazynu, użyj go
+      if (taskData.inventoryProductId) {
+        inventoryItemId = taskData.inventoryProductId;
+        const itemRef = doc(db, 'inventory', inventoryItemId);
+        const itemDoc = await getDoc(itemRef);
+        
+        if (itemDoc.exists()) {
+          inventoryItem = itemDoc.data();
+        } else {
+          throw new Error(`Produkt o ID ${inventoryItemId} nie istnieje w magazynie`);
+        }
+      } else {
+        // Spróbuj znaleźć produkt po nazwie
+        const inventoryRef = collection(db, 'inventory');
+        const q = query(
+          inventoryRef,
+          where('name', '==', taskData.productName),
+          where('category', '==', 'Gotowe produkty')
+        );
+        
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          // Użyj pierwszego znalezionego produktu
+          const doc = querySnapshot.docs[0];
+          inventoryItemId = doc.id;
+          inventoryItem = doc.data();
+        } else {
+          // Produkt nie istnieje, utwórz nowy
+          const newItemRef = doc(collection(db, 'inventory'));
+          inventoryItemId = newItemRef.id;
+          
+          const newItem = {
+            name: taskData.productName,
+            description: `Produkt utworzony automatycznie z zadania produkcyjnego: ${taskData.name}`,
+            category: 'Gotowe produkty',
+            quantity: 0,
+            unit: taskData.unit || 'szt.',
+            minStockLevel: 0,
+            optimalStockLevel: taskData.quantity * 2, // Przykładowa wartość
+            location: 'Magazyn główny',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            createdBy: userId,
+            updatedBy: userId
+          };
+          
+          await setDoc(newItemRef, newItem);
+          inventoryItem = newItem;
+        }
+      }
+      
+      // Wygeneruj numer LOT
+      const lotNumber = await generateLOTNumber();
+      
+      // Dodaj partię do magazynu
+      const batchRef = doc(collection(db, 'inventoryBatches'));
+      const batchData = {
+        itemId: inventoryItemId,
+        itemName: taskData.productName,
+        quantity: taskData.quantity,
+        initialQuantity: taskData.quantity,
+        batchNumber: `PROD-${taskId.substring(0, 6)}`,
+        receivedDate: serverTimestamp(),
+        expiryDate: null, // Można dodać logikę określania daty ważności
+        lotNumber: lotNumber,
+        source: 'Produkcja',
+        sourceId: taskId,
+        notes: `Partia z zadania produkcyjnego: ${taskData.name}`,
+        unitPrice: taskData.costs ? (taskData.costs.totalCost / taskData.quantity) : 0,
+        createdAt: serverTimestamp(),
+        createdBy: userId
+      };
+      
+      await setDoc(batchRef, batchData);
+      
+      // Zaktualizuj ilość w magazynie
+      const itemRef = doc(db, 'inventory', inventoryItemId);
+      await updateDoc(itemRef, {
+        quantity: increment(taskData.quantity),
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      });
+      
+      // Dodaj transakcję do historii
+      const transactionRef = doc(collection(db, 'inventoryTransactions'));
+      const transactionData = {
+        itemId: inventoryItemId,
+        itemName: taskData.productName,
+        type: 'receive',
+        quantity: taskData.quantity,
+        date: serverTimestamp(),
+        reason: 'Z produkcji',
+        reference: `Zadanie: ${taskData.name} (ID: ${taskId})`,
+        notes: `Produkt dodany do magazynu z zadania produkcyjnego`,
+        batchId: batchRef.id,
+        createdBy: userId,
+        createdAt: serverTimestamp()
+      };
+      
+      await setDoc(transactionRef, transactionData);
+      
+      // Zaktualizuj zadanie
+      const updates = {
+        inventoryUpdated: true,
+        inventoryItemId: inventoryItemId,
+        inventoryBatchId: batchRef.id,
+        readyForInventory: false, // Oznacz jako już dodane do magazynu
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      };
+      
+      await updateDoc(taskRef, updates);
+      
+      return {
+        success: true,
+        inventoryItemId,
+        inventoryBatchId: batchRef.id
+      };
+    } catch (error) {
+      console.error('Błąd podczas dodawania produktu do magazynu:', error);
+      
+      // Zaktualizuj zadanie z informacją o błędzie
+      await updateDoc(taskRef, {
+        inventoryError: error.message,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      });
+      
       throw error;
     }
   };

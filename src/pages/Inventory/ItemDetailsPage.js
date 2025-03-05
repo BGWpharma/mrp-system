@@ -90,6 +90,22 @@ const ItemDetailsPage = () => {
     };
 
     fetchItemData();
+    
+    // Dodaj nasłuchiwanie na zdarzenie aktualizacji magazynu
+    const handleInventoryUpdate = (event) => {
+      // Sprawdź, czy aktualizacja dotyczy tego produktu
+      if (event.detail && event.detail.itemId === id) {
+        console.log('Wykryto aktualizację produktu, odświeżam dane...');
+        fetchItemData();
+      }
+    };
+    
+    window.addEventListener('inventory-updated', handleInventoryUpdate);
+    
+    // Usuń nasłuchiwanie przy odmontowaniu komponentu
+    return () => {
+      window.removeEventListener('inventory-updated', handleInventoryUpdate);
+    };
   }, [id, showError]);
 
   const handleTabChange = (event, newValue) => {

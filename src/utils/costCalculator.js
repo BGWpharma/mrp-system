@@ -35,7 +35,23 @@ export const calculateIngredientsCost = (ingredients, pricesMap, options = {}) =
   ingredients.forEach(ingredient => {
     if (!ingredient) return;
 
-    const { id, name, quantity } = ingredient;
+    const { id, name } = ingredient;
+    
+    // Upewnij się, że ilość jest poprawnie sparsowana
+    const parsedQuantity = parseFloat(ingredient.quantity);
+    if (isNaN(parsedQuantity) || parsedQuantity <= 0) {
+      // Dodaj składnik z zerowymi wartościami, ale nie wpływaj na całkowity koszt
+      details.push({
+        id,
+        name: name || 'Nieznany składnik',
+        quantity: 0,
+        unit: ingredient.unit || 'szt.',
+        unitPrice: 0,
+        priceSource: 'nieprawidłowa ilość',
+        cost: 0
+      });
+      return; // Przejdź do następnego składnika
+    }
     
     // Pobierz cenę jednostkową - najpierw z partii, jeśli dostępna i opcja włączona
     let unitPrice = 0;
@@ -43,40 +59,52 @@ export const calculateIngredientsCost = (ingredients, pricesMap, options = {}) =
     
     if (id && pricesMap[id]) {
       // Jeśli mamy cenę z partii i opcja jest włączona, użyj jej
-      if (useBatchPrices && pricesMap[id].batchPrice !== undefined && pricesMap[id].batchPrice > 0) {
-        unitPrice = pricesMap[id].batchPrice;
-        priceSource = 'partia';
+      if (useBatchPrices && pricesMap[id].batchPrice !== undefined) {
+        const batchPrice = parseFloat(pricesMap[id].batchPrice);
+        if (!isNaN(batchPrice) && batchPrice > 0) {
+          unitPrice = batchPrice;
+          priceSource = 'partia';
+        }
       } 
       // W przeciwnym razie użyj standardowej ceny z pozycji magazynowej
-      else if (pricesMap[id].itemPrice !== undefined && pricesMap[id].itemPrice > 0) {
-        unitPrice = pricesMap[id].itemPrice;
-        priceSource = 'magazyn';
+      if (unitPrice === 0 && pricesMap[id].itemPrice !== undefined) {
+        const itemPrice = parseFloat(pricesMap[id].itemPrice);
+        if (!isNaN(itemPrice) && itemPrice > 0) {
+          unitPrice = itemPrice;
+          priceSource = 'magazyn';
+        }
       }
       // Dla wstecznej kompatybilności - jeśli pricesMap zawiera bezpośrednio cenę
-      else if (typeof pricesMap[id] === 'number' && pricesMap[id] > 0) {
-        unitPrice = pricesMap[id];
-        priceSource = 'bezpośrednia';
+      if (unitPrice === 0 && typeof pricesMap[id] === 'number') {
+        const directPrice = parseFloat(pricesMap[id]);
+        if (!isNaN(directPrice) && directPrice > 0) {
+          unitPrice = directPrice;
+          priceSource = 'bezpośrednia';
+        }
       }
-      // Jeśli nie znaleziono ceny, spróbuj użyć dowolnej dostępnej wartości
-      else if (pricesMap[id].batchPrice !== undefined) {
-        unitPrice = pricesMap[id].batchPrice || 0;
-        priceSource = 'partia (0)';
-      }
-      else if (pricesMap[id].itemPrice !== undefined) {
-        unitPrice = pricesMap[id].itemPrice || 0;
-        priceSource = 'magazyn (0)';
-      }
-      else if (typeof pricesMap[id] === 'number') {
-        unitPrice = pricesMap[id];
-        priceSource = 'bezpośrednia (0)';
+      
+      // Jeśli nadal nie mamy ceny, spróbuj użyć dowolnej dostępnej wartości, nawet jeśli jest zerowa
+      if (unitPrice === 0) {
+        if (pricesMap[id].batchPrice !== undefined) {
+          unitPrice = parseFloat(pricesMap[id].batchPrice) || 0;
+          priceSource = 'partia (0)';
+        }
+        else if (pricesMap[id].itemPrice !== undefined) {
+          unitPrice = parseFloat(pricesMap[id].itemPrice) || 0;
+          priceSource = 'magazyn (0)';
+        }
+        else if (typeof pricesMap[id] === 'number') {
+          unitPrice = parseFloat(pricesMap[id]) || 0;
+          priceSource = 'bezpośrednia (0)';
+        }
       }
     }
     
-    // Upewnij się, że ilość jest poprawnie sparsowana
-    const parsedQuantity = parseFloat(quantity) || 0;
+    // Oblicz koszt składnika
     const cost = parsedQuantity * unitPrice;
 
-    totalCost += isNaN(cost) ? 0 : cost;
+    // Dodaj do całkowitego kosztu
+    totalCost += cost;
 
     details.push({
       id,
@@ -84,8 +112,8 @@ export const calculateIngredientsCost = (ingredients, pricesMap, options = {}) =
       quantity: parsedQuantity,
       unit: ingredient.unit || 'szt.',
       unitPrice,
-      priceSource, // Dodajemy informację o źródle ceny
-      cost: isNaN(cost) ? 0 : cost
+      priceSource,
+      cost
     });
   });
 
@@ -154,15 +182,41 @@ export const calculateRecipeTotalCost = (recipe, pricesMap, options = {}) => {
     overheadPercentage = 10
   } = options;
 
+  // Sprawdź, czy recipe.ingredients istnieje
+  if (!recipe.ingredients || !Array.isArray(recipe.ingredients)) {
+    console.warn('Brak składników w recepturze lub nieprawidłowy format');
+    return {
+      ingredientsCost: 0,
+      laborCost: 0,
+      energyCost: 0,
+      overheadCost: 0,
+      totalCost: 0,
+      unitCost: 0,
+      yieldQuantity: 0,
+      yieldUnit: 'szt.',
+      ingredientsDetails: []
+    };
+  }
+
   // Oblicz koszt składników
   const ingredientsCostResult = calculateIngredientsCost(recipe.ingredients, pricesMap);
   const ingredientsCost = ingredientsCostResult.totalCost;
 
+  // Pobierz czas przygotowania i upewnij się, że jest liczbą
+  let prepTime = 0;
+  if (recipe.preparationTime) {
+    prepTime = parseFloat(recipe.preparationTime);
+    if (isNaN(prepTime) || prepTime < 0) {
+      console.warn('Nieprawidłowy czas przygotowania:', recipe.preparationTime);
+      prepTime = 0;
+    }
+  }
+
   // Oblicz koszt robocizny
-  const laborCost = calculateLaborCost(recipe.preparationTime, hourlyLaborRate);
+  const laborCost = calculateLaborCost(prepTime, hourlyLaborRate);
 
   // Oblicz koszt energii
-  const energyCost = calculateEnergyCost(recipe.preparationTime, hourlyEnergyRate);
+  const energyCost = calculateEnergyCost(prepTime, hourlyEnergyRate);
 
   // Oblicz koszty pośrednie (narzut)
   const directCosts = ingredientsCost + laborCost + energyCost;
@@ -171,9 +225,25 @@ export const calculateRecipeTotalCost = (recipe, pricesMap, options = {}) => {
   // Oblicz koszt całkowity
   const totalCost = directCosts + overheadCost;
 
+  // Pobierz wydajność receptury i upewnij się, że jest liczbą
+  let yieldQuantity = 1;
+  if (recipe.yield) {
+    if (typeof recipe.yield === 'object' && recipe.yield.quantity) {
+      yieldQuantity = parseFloat(recipe.yield.quantity);
+    } else if (typeof recipe.yield === 'number') {
+      yieldQuantity = recipe.yield;
+    } else if (typeof recipe.yield === 'string') {
+      yieldQuantity = parseFloat(recipe.yield);
+    }
+  }
+
+  if (isNaN(yieldQuantity) || yieldQuantity <= 0) {
+    console.warn('Nieprawidłowa wydajność receptury:', recipe.yield);
+    yieldQuantity = 1; // Domyślna wartość, aby uniknąć dzielenia przez zero
+  }
+
   // Oblicz koszt jednostkowy
-  const yieldQuantity = recipe.yield && recipe.yield.quantity ? parseFloat(recipe.yield.quantity) : 1;
-  const unitCost = yieldQuantity > 0 ? totalCost / yieldQuantity : totalCost;
+  const unitCost = totalCost / yieldQuantity;
 
   return {
     ingredientsCost,
@@ -215,11 +285,37 @@ export const calculateProductionTaskCost = (task, recipe, pricesMap, options = {
   const recipeCost = calculateRecipeTotalCost(recipe, pricesMap, options);
 
   // Oblicz koszt zadania na podstawie ilości
-  const taskQuantity = parseFloat(task.quantity) || 0;
-  const recipeYield = recipe.yield && recipe.yield.quantity ? parseFloat(recipe.yield.quantity) : 1;
+  const taskQuantity = parseFloat(task.quantity);
+  // Sprawdź, czy taskQuantity jest prawidłową liczbą
+  if (isNaN(taskQuantity) || taskQuantity <= 0) {
+    console.warn('Nieprawidłowa ilość zadania:', task.quantity);
+    return {
+      ...recipeCost,
+      taskQuantity: 0,
+      taskUnit: task.unit || (recipe.yield && recipe.yield.unit) || 'szt.',
+      taskTotalCost: 0
+    };
+  }
+
+  // Pobierz wydajność receptury i sprawdź, czy jest prawidłową liczbą
+  let recipeYield = 1;
+  if (recipe.yield) {
+    if (typeof recipe.yield === 'object' && recipe.yield.quantity) {
+      recipeYield = parseFloat(recipe.yield.quantity);
+    } else if (typeof recipe.yield === 'number') {
+      recipeYield = recipe.yield;
+    } else if (typeof recipe.yield === 'string') {
+      recipeYield = parseFloat(recipe.yield);
+    }
+  }
+
+  if (isNaN(recipeYield) || recipeYield <= 0) {
+    console.warn('Nieprawidłowa wydajność receptury:', recipe.yield);
+    recipeYield = 1; // Domyślna wartość, aby uniknąć dzielenia przez zero
+  }
 
   // Współczynnik skalowania (ile razy musimy wykonać recepturę)
-  const scaleFactor = recipeYield > 0 ? taskQuantity / recipeYield : 0;
+  const scaleFactor = taskQuantity / recipeYield;
 
   // Całkowity koszt zadania
   const taskTotalCost = recipeCost.totalCost * scaleFactor;
@@ -227,7 +323,7 @@ export const calculateProductionTaskCost = (task, recipe, pricesMap, options = {
   return {
     ...recipeCost,
     taskQuantity,
-    taskUnit: task.unit || recipe.yield.unit || 'szt.',
+    taskUnit: task.unit || (recipe.yield && recipe.yield.unit) || 'szt.',
     taskTotalCost
   };
 }; 

@@ -46,8 +46,17 @@ import {
   
   // Tworzenie nowej receptury
   export const createRecipe = async (recipeData, userId) => {
-    const recipeWithMeta = {
+    // Upewnij się, że wydajność jest zapisana jako liczba
+    const processedRecipeData = {
       ...recipeData,
+      yield: recipeData.yield ? {
+        ...recipeData.yield,
+        quantity: parseFloat(recipeData.yield.quantity) || 0
+      } : { quantity: 1, unit: 'szt.' }
+    };
+    
+    const recipeWithMeta = {
+      ...processedRecipeData,
       createdBy: userId,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -74,6 +83,15 @@ import {
   
   // Aktualizacja receptury (tworzy nową wersję)
   export const updateRecipe = async (recipeId, recipeData, userId) => {
+    // Upewnij się, że wydajność jest zapisana jako liczba
+    const processedRecipeData = {
+      ...recipeData,
+      yield: recipeData.yield ? {
+        ...recipeData.yield,
+        quantity: parseFloat(recipeData.yield.quantity) || 0
+      } : { quantity: 1, unit: 'szt.' }
+    };
+    
     const recipeRef = doc(db, RECIPES_COLLECTION, recipeId);
     
     // Pobierz aktualną wersję
@@ -81,7 +99,7 @@ import {
     const newVersion = (currentRecipe.version || 0) + 1;
     
     const updatedRecipe = {
-      ...recipeData,
+      ...processedRecipeData,
       updatedAt: serverTimestamp(),
       updatedBy: userId,
       version: newVersion
@@ -95,7 +113,7 @@ import {
       recipeId,
       version: newVersion,
       data: {
-        ...recipeData,
+        ...processedRecipeData,
         version: newVersion
       },
       createdBy: userId,
@@ -146,13 +164,29 @@ import {
   
   // Usuwanie receptury
   export const deleteRecipe = async (recipeId) => {
-    const recipeRef = doc(db, RECIPES_COLLECTION, recipeId);
-    await deleteDoc(recipeRef);
-    
-    // Uwaga: Historia wersji pozostaje w bazie danych
-    // dla celów audytu i możliwości odtworzenia
-    
-    return { success: true };
+    try {
+      // Pobierz wszystkie wersje przepisu
+      const versionsRef = collection(db, RECIPE_VERSIONS_COLLECTION);
+      const q = query(versionsRef, where('recipeId', '==', recipeId));
+      const versionsSnapshot = await getDocs(q);
+      
+      // Usuń wszystkie wersje
+      const versionDeletions = versionsSnapshot.docs.map(doc => 
+        deleteDoc(doc.ref)
+      );
+      
+      // Poczekaj na usunięcie wszystkich wersji
+      await Promise.all(versionDeletions);
+      
+      // Na końcu usuń sam przepis
+      const recipeRef = doc(db, RECIPES_COLLECTION, recipeId);
+      await deleteDoc(recipeRef);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Błąd podczas usuwania przepisu:', error);
+      throw error;
+    }
   };
   
   // Przywracanie poprzedniej wersji receptury
@@ -195,5 +229,39 @@ import {
     } catch (error) {
       console.error('Error restoring recipe version:', error);
       throw new Error(`Błąd podczas przywracania wersji: ${error.message}`);
+    }
+  };
+  
+  // Funkcja naprawiająca wydajność w istniejących recepturach
+  export const fixRecipeYield = async (recipeId, userId) => {
+    try {
+      // Pobierz recepturę
+      const recipe = await getRecipeById(recipeId);
+      
+      if (!recipe) {
+        throw new Error('Receptura nie istnieje');
+      }
+      
+      // Napraw wydajność
+      const fixedYield = recipe.yield ? {
+        ...recipe.yield,
+        quantity: parseFloat(recipe.yield.quantity) || 1
+      } : { quantity: 1, unit: 'szt.' };
+      
+      // Aktualizuj recepturę
+      const recipeRef = doc(db, RECIPES_COLLECTION, recipeId);
+      await updateDoc(recipeRef, {
+        yield: fixedYield,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      });
+      
+      return {
+        success: true,
+        message: 'Wydajność receptury została naprawiona'
+      };
+    } catch (error) {
+      console.error('Błąd podczas naprawiania wydajności receptury:', error);
+      throw error;
     }
   };

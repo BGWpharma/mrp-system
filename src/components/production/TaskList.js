@@ -18,7 +18,10 @@ import {
   FormControl,
   InputLabel,
   Select,
-  MenuItem
+  MenuItem,
+  Container,
+  Tooltip,
+  CircularProgress
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -27,9 +30,10 @@ import {
   Delete as DeleteIcon,
   PlayArrow as StartIcon,
   Stop as StopIcon,
-  CheckCircle as CompleteIcon
+  CheckCircle as CompleteIcon,
+  Inventory as InventoryIcon
 } from '@mui/icons-material';
-import { getAllTasks, updateTaskStatus, deleteTask } from '../../services/productionService';
+import { getAllTasks, updateTaskStatus, deleteTask, addTaskProductToInventory } from '../../services/productionService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
@@ -109,13 +113,79 @@ const TaskList = () => {
     }
   };
 
+  // Funkcja obsługująca dodanie produktu do magazynu
+  const handleAddToInventory = async (id) => {
+    try {
+      await addTaskProductToInventory(id, currentUser.uid);
+      showSuccess('Produkt został dodany do magazynu jako partia');
+      // Odśwież listę zadań
+      fetchTasks();
+    } catch (error) {
+      showError('Błąd podczas dodawania produktu do magazynu: ' + error.message);
+      console.error('Error adding product to inventory:', error);
+    }
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
-      case 'Zaplanowane': return 'info';
+      case 'Zaplanowane': return 'primary';
       case 'W trakcie': return 'warning';
       case 'Zakończone': return 'success';
       case 'Anulowane': return 'error';
       default: return 'default';
+    }
+  };
+
+  // Funkcja zwracająca chip informujący o statusie dodania produktu do magazynu
+  const getInventoryStatus = (task) => {
+    if (task.status !== 'Zakończone') {
+      return null;
+    }
+
+    if (task.inventoryUpdated) {
+      return (
+        <Tooltip title={`Produkt dodany do magazynu jako partia (ID: ${task.inventoryItemId})`}>
+          <Chip 
+            label="Dodano do magazynu" 
+            color="success" 
+            size="small" 
+            variant="outlined"
+          />
+        </Tooltip>
+      );
+    } else if (task.readyForInventory) {
+      return (
+        <Tooltip title="Gotowy do dodania do magazynu">
+          <Chip 
+            label="Gotowy do dodania" 
+            color="info" 
+            size="small" 
+            variant="outlined"
+          />
+        </Tooltip>
+      );
+    } else if (task.inventoryError) {
+      return (
+        <Tooltip title={`Błąd: ${task.inventoryError}`}>
+          <Chip 
+            label="Błąd" 
+            color="error" 
+            size="small" 
+            variant="outlined"
+          />
+        </Tooltip>
+      );
+    } else {
+      return (
+        <Tooltip title="Produkt nie został dodany do magazynu">
+          <Chip 
+            label="Nie dodano" 
+            color="warning" 
+            size="small" 
+            variant="outlined"
+          />
+        </Tooltip>
+      );
     }
   };
 
@@ -150,6 +220,20 @@ const TaskList = () => {
             </IconButton>
           </>
         );
+      case 'Zakończone':
+        // Jeśli zadanie jest zakończone i gotowe do dodania do magazynu, pokaż przycisk dodania do magazynu
+        if (task.readyForInventory) {
+          return (
+            <IconButton 
+              color="primary" 
+              onClick={() => handleAddToInventory(task.id)}
+              title="Dodaj produkt do magazynu"
+            >
+              <InventoryIcon />
+            </IconButton>
+          );
+        }
+        return null;
       default:
         return null;
     }
@@ -160,7 +244,7 @@ const TaskList = () => {
   }
 
   return (
-    <div>
+    <Container>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5">Zadania produkcyjne</Typography>
         <Button 
@@ -206,7 +290,7 @@ const TaskList = () => {
           Nie znaleziono zadań produkcyjnych
         </Typography>
       ) : (
-        <TableContainer component={Paper}>
+        <TableContainer component={Paper} sx={{ mt: 3 }}>
           <Table>
             <TableHead>
               <TableRow>
@@ -216,6 +300,8 @@ const TaskList = () => {
                 <TableCell>Ilość</TableCell>
                 <TableCell>Data rozpoczęcia</TableCell>
                 <TableCell>Status</TableCell>
+                <TableCell>Koszt</TableCell>
+                <TableCell>Magazyn</TableCell>
                 <TableCell align="right">Akcje</TableCell>
               </TableRow>
             </TableHead>
@@ -242,6 +328,16 @@ const TaskList = () => {
                       size="small" 
                     />
                   </TableCell>
+                  <TableCell>
+                    {task.costs ? (
+                      task.costs.totalCost.toLocaleString('pl-PL') + ' zł'
+                    ) : (
+                      '-'
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {getInventoryStatus(task)}
+                  </TableCell>
                   <TableCell align="right">
                     {getStatusActions(task)}
                     <IconButton 
@@ -267,7 +363,7 @@ const TaskList = () => {
           </Table>
         </TableContainer>
       )}
-    </div>
+    </Container>
   );
 };
 

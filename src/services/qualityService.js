@@ -106,6 +106,20 @@ import { db, storage } from './firebase/config';
   // Usuwanie testu jakościowego
   export const deleteTest = async (testId) => {
     try {
+      // Najpierw pobierz wszystkie wyniki związane z tym testem
+      const resultsRef = collection(db, QUALITY_RESULTS_COLLECTION);
+      const q = query(resultsRef, where('testId', '==', testId));
+      const resultsSnapshot = await getDocs(q);
+      
+      // Usuń wszystkie wyniki
+      const resultDeletions = resultsSnapshot.docs.map(doc => 
+        deleteDoc(doc.ref)
+      );
+      
+      // Poczekaj na usunięcie wszystkich wyników
+      await Promise.all(resultDeletions);
+      
+      // Na końcu usuń sam test
       await deleteDoc(doc(db, QUALITY_TESTS_COLLECTION, testId));
       return true;
     } catch (error) {
