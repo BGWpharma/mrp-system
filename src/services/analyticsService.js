@@ -135,7 +135,7 @@ export const getDashboardConfig = async (userId) => {
           { id: 'sales', type: 'kpi', title: 'Sprzedaż', visible: true },
           { id: 'inventory', type: 'kpi', title: 'Magazyn', visible: true },
           { id: 'production', type: 'kpi', title: 'Produkcja', visible: true },
-          { id: 'quality', type: 'kpi', title: 'Jakość', visible: true },
+          { id: 'quality', type: 'kpi', title: 'Raporty', visible: true },
           { id: 'salesChart', type: 'chart', chartType: 'line', dataSource: 'sales', title: 'Sprzedaż w czasie', visible: true },
           { id: 'inventoryChart', type: 'chart', chartType: 'bar', dataSource: 'inventory', title: 'Stany magazynowe', visible: true },
           { id: 'productionChart', type: 'chart', chartType: 'bar', dataSource: 'production', title: 'Efektywność produkcji', visible: true }

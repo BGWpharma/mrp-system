@@ -503,7 +503,7 @@ const KpiCard = ({ title, data, type, sx }) => {
       <>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
           {getIcon()}
-          <Tooltip title={title || 'Jakość'}>
+          <Tooltip title={title || 'Raporty'}>
             <Typography 
               variant="subtitle1" 
               component="div" 
@@ -516,7 +516,7 @@ const KpiCard = ({ title, data, type, sx }) => {
                 maxWidth: { xs: '80px', sm: '120px', md: '100%' }
               }}
             >
-              {title || 'Jakość'}
+              {title || 'Raporty'}
             </Typography>
           </Tooltip>
         </Box>
@@ -598,7 +598,7 @@ const KpiCard = ({ title, data, type, sx }) => {
                 >
                   {`${(data.rejectionRate || 0).toFixed(2)}%`}
                 </Typography>
-            </Paper>
+              </Paper>
             </Tooltip>
           </Grid>
         </Grid>
@@ -662,4 +662,4 @@ const KpiCard = ({ title, data, type, sx }) => {
   );
 };
 
-export default KpiCard; 
+export default KpiCard;

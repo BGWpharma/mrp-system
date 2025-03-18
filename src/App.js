@@ -21,6 +21,9 @@ import NewTaskPage from './pages/Production/NewTaskPage';
 import ProductionCalendarPage from './pages/Production/ProductionCalendarPage';
 import TaskDetailsPage from './pages/Production/TaskDetailsPage';
 import EditTaskPage from './pages/Production/EditTaskPage';
+import ConsumptionPage from './pages/Production/ConsumptionPage';
+import ForecastPage from './pages/Production/ForecastPage';
+import ReportsPage from './pages/Production/ReportsPage';
 
 // Inventory
 import InventoryPage from './pages/Inventory/InventoryPage';
@@ -37,6 +40,7 @@ import BatchEditPage from './pages/Inventory/BatchEditPage';
 // Quality
 import QualityPage from './pages/Quality/QualityPage';
 import NewTestPage from './pages/Quality/NewTestPage';
+import QualityReportsPage from './pages/Quality/QualityReportsPage';
 
 // Orders
 import OrdersList from './components/orders/OrdersList';
@@ -52,6 +56,7 @@ import SupplierFormPage from './pages/SupplierFormPage';
 
 // Customers
 import CustomersList from './components/customers/CustomersList';
+import CustomerDetail from './components/customers/CustomerDetail';
 
 // Analytics
 import AnalyticsDashboard from './pages/Analytics/Dashboard';
@@ -63,6 +68,9 @@ import PrivateRoute from './components/common/PrivateRoute';
 
 // Styles
 import './assets/styles/global.css';
+
+// Import komponentu WarehousesList
+import WarehousesList from './components/inventory/WarehousesList';
 
 function App() {
   return (
@@ -88,6 +96,9 @@ function App() {
               <Route path="/production/calendar" element={<PrivateLayout><ProductionCalendarPage /></PrivateLayout>} />
               <Route path="/production/tasks/:id" element={<PrivateLayout><TaskDetailsPage /></PrivateLayout>} />
               <Route path="/production/tasks/:id/edit" element={<PrivateLayout><EditTaskPage /></PrivateLayout>} />
+              <Route path="/production/consumption/:taskId" element={<PrivateLayout><ConsumptionPage /></PrivateLayout>} />
+              <Route path="/production/forecast" element={<PrivateLayout><ForecastPage /></PrivateLayout>} />
+              <Route path="/production/reports" element={<PrivateLayout><ReportsPage /></PrivateLayout>} />
               
               {/* Inventory Routes */}
               <Route path="/inventory" element={<PrivateLayout><InventoryPage /></PrivateLayout>} />
@@ -104,6 +115,7 @@ function App() {
               {/* Quality Routes */}
               <Route path="/quality" element={<PrivateLayout><QualityPage /></PrivateLayout>} />
               <Route path="/quality/new-test" element={<PrivateLayout><NewTestPage /></PrivateLayout>} />
+              <Route path="/quality/reports" element={<PrivateLayout><QualityReportsPage /></PrivateLayout>} />
               
               {/* Orders Routes */}
               <Route path="/orders" element={<PrivateLayout><OrdersList /></PrivateLayout>} />
@@ -124,6 +136,7 @@ function App() {
               
               {/* Customers Routes */}
               <Route path="/customers" element={<PrivateLayout><CustomersList /></PrivateLayout>} />
+              <Route path="/customers/:customerId" element={<PrivateLayout><CustomerDetail /></PrivateLayout>} />
               
               {/* Analytics Routes */}
               <Route path="/analytics" element={<PrivateLayout><AnalyticsDashboard /></PrivateLayout>} />

@@ -1,61 +1,57 @@
-import axios from 'axios';
-import { API_URL } from '../config';
+import { 
+  collection, 
+  doc, 
+  addDoc, 
+  updateDoc, 
+  getDoc, 
+  getDocs, 
+  deleteDoc, 
+  query, 
+  where,
+  orderBy,
+  serverTimestamp 
+} from 'firebase/firestore';
+import { db } from './firebase/config';
 
-// Tymczasowe dane dla dostawców
-let suppliers = [
-  {
-    id: '1',
-    name: 'Dostawca Surowców Spożywczych',
-    contactPerson: 'Jan Kowalski',
-    email: 'jan.kowalski@dostawca.pl',
-    phone: '+48 123 456 789',
-    address: 'ul. Przemysłowa 15, 00-001 Warszawa',
-    taxId: '1234567890',
-    notes: 'Główny dostawca surowców spożywczych'
-  },
-  {
-    id: '2',
-    name: 'Opakowania Premium',
-    contactPerson: 'Anna Nowak',
-    email: 'anna.nowak@opakowania.pl',
-    phone: '+48 987 654 321',
-    address: 'ul. Fabryczna 8, 30-001 Kraków',
-    taxId: '0987654321',
-    notes: 'Dostawca opakowań premium'
-  }
-];
-
-// Tymczasowe dane dla zamówień zakupowych
-let purchaseOrders = [
-  {
-    id: '1',
-    number: 'PO-2023-001',
-    supplier: suppliers[0],
-    orderDate: new Date().toISOString(),
-    expectedDeliveryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-    status: 'draft',
-    currency: 'PLN',
-    items: [
-      {
-        id: '1',
-        name: 'Mąka pszenna',
-        quantity: 100,
-        unit: 'kg',
-        unitPrice: 2.5,
-        totalPrice: 250
-      }
-    ],
-    totalValue: 250,
-    deliveryAddress: 'ul. Produkcyjna 10, 00-001 Warszawa',
-    notes: 'Pilne zamówienie'
-  }
-];
+// Stałe dla kolekcji w Firebase
+const PURCHASE_ORDERS_COLLECTION = 'purchaseOrders';
+const SUPPLIERS_COLLECTION = 'suppliers';
 
 // Funkcje do obsługi zamówień zakupowych
 export const getAllPurchaseOrders = async () => {
   try {
-    // Symulacja opóźnienia sieciowego
-    await new Promise(resolve => setTimeout(resolve, 500));
+    const q = query(
+      collection(db, PURCHASE_ORDERS_COLLECTION), 
+      orderBy('createdAt', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const purchaseOrders = [];
+    
+    for (const docRef of querySnapshot.docs) {
+      const poData = docRef.data();
+      
+      // Pobierz dane dostawcy, jeśli zamówienie ma referencję do dostawcy
+      let supplierData = null;
+      if (poData.supplierId) {
+        const supplierDoc = await getDoc(doc(db, SUPPLIERS_COLLECTION, poData.supplierId));
+        if (supplierDoc.exists()) {
+          supplierData = { id: supplierDoc.id, ...supplierDoc.data() };
+        }
+      }
+      
+      purchaseOrders.push({
+        id: docRef.id,
+        ...poData,
+        supplier: supplierData,
+        // Konwersja Timestamp na ISO string (dla kompatybilności z istniejącym kodem)
+        orderDate: poData.orderDate ? poData.orderDate.toDate().toISOString() : null,
+        expectedDeliveryDate: poData.expectedDeliveryDate ? poData.expectedDeliveryDate.toDate().toISOString() : null,
+        createdAt: poData.createdAt ? poData.createdAt.toDate().toISOString() : null,
+        updatedAt: poData.updatedAt ? poData.updatedAt.toDate().toISOString() : null
+      });
+    }
+    
     return purchaseOrders;
   } catch (error) {
     console.error('Błąd podczas pobierania zamówień zakupowych:', error);
@@ -65,13 +61,33 @@ export const getAllPurchaseOrders = async () => {
 
 export const getPurchaseOrderById = async (id) => {
   try {
-    // Symulacja opóźnienia sieciowego
-    await new Promise(resolve => setTimeout(resolve, 500));
-    const purchaseOrder = purchaseOrders.find(po => po.id === id);
-    if (!purchaseOrder) {
+    const purchaseOrderDoc = await getDoc(doc(db, PURCHASE_ORDERS_COLLECTION, id));
+    
+    if (!purchaseOrderDoc.exists()) {
       throw new Error(`Nie znaleziono zamówienia zakupowego o ID ${id}`);
     }
-    return purchaseOrder;
+    
+    const poData = purchaseOrderDoc.data();
+    
+    // Pobierz dane dostawcy, jeśli zamówienie ma referencję do dostawcy
+    let supplierData = null;
+    if (poData.supplierId) {
+      const supplierDoc = await getDoc(doc(db, SUPPLIERS_COLLECTION, poData.supplierId));
+      if (supplierDoc.exists()) {
+        supplierData = { id: supplierDoc.id, ...supplierDoc.data() };
+      }
+    }
+    
+    return {
+      id: purchaseOrderDoc.id,
+      ...poData,
+      supplier: supplierData,
+      // Konwersja Timestamp na ISO string (dla kompatybilności z istniejącym kodem)
+      orderDate: poData.orderDate ? poData.orderDate.toDate().toISOString() : null,
+      expectedDeliveryDate: poData.expectedDeliveryDate ? poData.expectedDeliveryDate.toDate().toISOString() : null,
+      createdAt: poData.createdAt ? poData.createdAt.toDate().toISOString() : null,
+      updatedAt: poData.updatedAt ? poData.updatedAt.toDate().toISOString() : null
+    };
   } catch (error) {
     console.error(`Błąd podczas pobierania zamówienia zakupowego o ID ${id}:`, error);
     throw error;
@@ -80,19 +96,64 @@ export const getPurchaseOrderById = async (id) => {
 
 export const createPurchaseOrder = async (purchaseOrderData) => {
   try {
-    // Symulacja opóźnienia sieciowego
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // Generuj numer zamówienia
+    const poNumberPrefix = 'PO-' + new Date().getFullYear() + '-';
+    const qPo = query(collection(db, PURCHASE_ORDERS_COLLECTION), where('number', '>=', poNumberPrefix), where('number', '<', poNumberPrefix + '999'));
+    const existingPOs = await getDocs(qPo);
+    
+    let highestNumber = 0;
+    existingPOs.forEach(doc => {
+      const poNumber = doc.data().number;
+      const numberPart = poNumber.split('-')[2];
+      const numValue = parseInt(numberPart, 10);
+      if (!isNaN(numValue) && numValue > highestNumber) {
+        highestNumber = numValue;
+      }
+    });
+    
+    const newNumberSuffix = String(highestNumber + 1).padStart(3, '0');
+    const poNumber = poNumberPrefix + newNumberSuffix;
+    
+    // Przygotuj dane zamówienia do zapisania
+    // Zapisujemy tylko ID dostawcy, a nie cały obiekt
+    const supplierId = purchaseOrderData.supplier?.id;
     
     const newPurchaseOrder = {
-      id: String(purchaseOrders.length + 1),
-      number: `PO-2023-${String(purchaseOrders.length + 1).padStart(3, '0')}`,
-      ...purchaseOrderData,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      number: poNumber,
+      supplierId: supplierId,
+      items: purchaseOrderData.items || [],
+      totalValue: purchaseOrderData.totalValue || 0,
+      currency: purchaseOrderData.currency || 'PLN',
+      status: purchaseOrderData.status || 'draft',
+      orderDate: purchaseOrderData.orderDate ? new Date(purchaseOrderData.orderDate) : new Date(),
+      expectedDeliveryDate: purchaseOrderData.expectedDeliveryDate ? new Date(purchaseOrderData.expectedDeliveryDate) : null,
+      deliveryAddress: purchaseOrderData.deliveryAddress || '',
+      notes: purchaseOrderData.notes || '',
+      createdBy: purchaseOrderData.createdBy || null,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
     };
     
-    purchaseOrders.push(newPurchaseOrder);
-    return newPurchaseOrder;
+    // Zapisz zamówienie w bazie danych
+    const docRef = await addDoc(collection(db, PURCHASE_ORDERS_COLLECTION), newPurchaseOrder);
+    
+    // Pobierz dane dostawcy dla zwrócenia pełnego obiektu zamówienia
+    let supplierData = null;
+    if (supplierId) {
+      const supplierDoc = await getDoc(doc(db, SUPPLIERS_COLLECTION, supplierId));
+      if (supplierDoc.exists()) {
+        supplierData = { id: supplierDoc.id, ...supplierDoc.data() };
+      }
+    }
+    
+    return {
+      id: docRef.id,
+      ...newPurchaseOrder,
+      supplier: supplierData,
+      // Konwersja Date na ISO string (dla kompatybilności z istniejącym kodem)
+      orderDate: newPurchaseOrder.orderDate.toISOString(),
+      expectedDeliveryDate: newPurchaseOrder.expectedDeliveryDate ? newPurchaseOrder.expectedDeliveryDate.toISOString() : null
+    };
   } catch (error) {
     console.error('Błąd podczas tworzenia zamówienia zakupowego:', error);
     throw error;
@@ -101,22 +162,54 @@ export const createPurchaseOrder = async (purchaseOrderData) => {
 
 export const updatePurchaseOrder = async (id, purchaseOrderData) => {
   try {
-    // Symulacja opóźnienia sieciowego
-    await new Promise(resolve => setTimeout(resolve, 500));
+    const purchaseOrderRef = doc(db, PURCHASE_ORDERS_COLLECTION, id);
     
-    const index = purchaseOrders.findIndex(po => po.id === id);
-    if (index === -1) {
+    // Sprawdź, czy zamówienie istnieje
+    const docSnap = await getDoc(purchaseOrderRef);
+    if (!docSnap.exists()) {
       throw new Error(`Nie znaleziono zamówienia zakupowego o ID ${id}`);
     }
     
-    const updatedPurchaseOrder = {
-      ...purchaseOrders[index],
-      ...purchaseOrderData,
-      updatedAt: new Date().toISOString()
+    // Przygotuj dane do aktualizacji
+    // Zapisujemy tylko ID dostawcy, a nie cały obiekt
+    const supplierId = purchaseOrderData.supplier?.id;
+    
+    const updates = {
+      supplierId: supplierId,
+      items: purchaseOrderData.items || [],
+      totalValue: purchaseOrderData.totalValue || 0,
+      currency: purchaseOrderData.currency || 'PLN',
+      status: purchaseOrderData.status || 'draft',
+      orderDate: purchaseOrderData.orderDate ? new Date(purchaseOrderData.orderDate) : new Date(),
+      expectedDeliveryDate: purchaseOrderData.expectedDeliveryDate ? new Date(purchaseOrderData.expectedDeliveryDate) : null,
+      deliveryAddress: purchaseOrderData.deliveryAddress || '',
+      notes: purchaseOrderData.notes || '',
+      updatedBy: purchaseOrderData.updatedBy || null,
+      updatedAt: serverTimestamp()
     };
     
-    purchaseOrders[index] = updatedPurchaseOrder;
-    return updatedPurchaseOrder;
+    // Aktualizuj zamówienie w bazie danych
+    await updateDoc(purchaseOrderRef, updates);
+    
+    // Pobierz dane dostawcy dla zwrócenia pełnego obiektu zamówienia
+    let supplierData = null;
+    if (supplierId) {
+      const supplierDoc = await getDoc(doc(db, SUPPLIERS_COLLECTION, supplierId));
+      if (supplierDoc.exists()) {
+        supplierData = { id: supplierDoc.id, ...supplierDoc.data() };
+      }
+    }
+    
+    return {
+      id: id,
+      ...docSnap.data(),
+      ...updates,
+      supplier: supplierData,
+      // Konwersja Date na ISO string (dla kompatybilności z istniejącym kodem)
+      orderDate: updates.orderDate.toISOString(),
+      expectedDeliveryDate: updates.expectedDeliveryDate ? updates.expectedDeliveryDate.toISOString() : null,
+      updatedAt: new Date().toISOString() // Ponieważ serverTimestamp() nie zwraca rzeczywistej wartości od razu
+    };
   } catch (error) {
     console.error(`Błąd podczas aktualizacji zamówienia zakupowego o ID ${id}:`, error);
     throw error;
@@ -125,15 +218,17 @@ export const updatePurchaseOrder = async (id, purchaseOrderData) => {
 
 export const deletePurchaseOrder = async (id) => {
   try {
-    // Symulacja opóźnienia sieciowego
-    await new Promise(resolve => setTimeout(resolve, 500));
+    const purchaseOrderRef = doc(db, PURCHASE_ORDERS_COLLECTION, id);
     
-    const index = purchaseOrders.findIndex(po => po.id === id);
-    if (index === -1) {
+    // Sprawdź, czy zamówienie istnieje
+    const docSnap = await getDoc(purchaseOrderRef);
+    if (!docSnap.exists()) {
       throw new Error(`Nie znaleziono zamówienia zakupowego o ID ${id}`);
     }
     
-    purchaseOrders.splice(index, 1);
+    // Usuń zamówienie z bazy danych
+    await deleteDoc(purchaseOrderRef);
+    
     return { id };
   } catch (error) {
     console.error(`Błąd podczas usuwania zamówienia zakupowego o ID ${id}:`, error);
@@ -141,20 +236,48 @@ export const deletePurchaseOrder = async (id) => {
   }
 };
 
-export const updatePurchaseOrderStatus = async (id, status) => {
+export const updatePurchaseOrderStatus = async (id, status, userId) => {
   try {
-    // Symulacja opóźnienia sieciowego
-    await new Promise(resolve => setTimeout(resolve, 500));
+    const purchaseOrderRef = doc(db, PURCHASE_ORDERS_COLLECTION, id);
     
-    const index = purchaseOrders.findIndex(po => po.id === id);
-    if (index === -1) {
+    // Sprawdź, czy zamówienie istnieje
+    const docSnap = await getDoc(purchaseOrderRef);
+    if (!docSnap.exists()) {
       throw new Error(`Nie znaleziono zamówienia zakupowego o ID ${id}`);
     }
     
-    purchaseOrders[index].status = status;
-    purchaseOrders[index].updatedAt = new Date().toISOString();
+    // Aktualizuj status zamówienia
+    const updates = {
+      status: status,
+      updatedBy: userId,
+      updatedAt: serverTimestamp()
+    };
     
-    return purchaseOrders[index];
+    await updateDoc(purchaseOrderRef, updates);
+    
+    // Zwróć zaktualizowane dane zamówienia
+    const updatedDoc = await getDoc(purchaseOrderRef);
+    const poData = updatedDoc.data();
+    
+    // Pobierz dane dostawcy
+    let supplierData = null;
+    if (poData.supplierId) {
+      const supplierDoc = await getDoc(doc(db, SUPPLIERS_COLLECTION, poData.supplierId));
+      if (supplierDoc.exists()) {
+        supplierData = { id: supplierDoc.id, ...supplierDoc.data() };
+      }
+    }
+    
+    return {
+      id: updatedDoc.id,
+      ...poData,
+      supplier: supplierData,
+      // Konwersja Timestamp na ISO string (dla kompatybilności z istniejącym kodem)
+      orderDate: poData.orderDate ? poData.orderDate.toDate().toISOString() : null,
+      expectedDeliveryDate: poData.expectedDeliveryDate ? poData.expectedDeliveryDate.toDate().toISOString() : null,
+      createdAt: poData.createdAt ? poData.createdAt.toDate().toISOString() : null,
+      updatedAt: poData.updatedAt ? poData.updatedAt.toDate().toISOString() : null
+    };
   } catch (error) {
     console.error(`Błąd podczas aktualizacji statusu zamówienia zakupowego o ID ${id}:`, error);
     throw error;
@@ -164,8 +287,21 @@ export const updatePurchaseOrderStatus = async (id, status) => {
 // Funkcje do obsługi dostawców
 export const getAllSuppliers = async () => {
   try {
-    // Symulacja opóźnienia sieciowego
-    await new Promise(resolve => setTimeout(resolve, 500));
+    const q = query(
+      collection(db, SUPPLIERS_COLLECTION), 
+      orderBy('name', 'asc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const suppliers = [];
+    
+    querySnapshot.forEach(doc => {
+      suppliers.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+    
     return suppliers;
   } catch (error) {
     console.error('Błąd podczas pobierania dostawców:', error);
@@ -175,59 +311,66 @@ export const getAllSuppliers = async () => {
 
 export const getSupplierById = async (id) => {
   try {
-    // Symulacja opóźnienia sieciowego
-    await new Promise(resolve => setTimeout(resolve, 500));
+    const supplierDoc = await getDoc(doc(db, SUPPLIERS_COLLECTION, id));
     
-    const supplier = suppliers.find(s => s.id === id);
-    if (!supplier) {
+    if (!supplierDoc.exists()) {
       throw new Error(`Nie znaleziono dostawcy o ID ${id}`);
     }
     
-    return supplier;
+    return {
+      id: supplierDoc.id,
+      ...supplierDoc.data()
+    };
   } catch (error) {
     console.error(`Błąd podczas pobierania dostawcy o ID ${id}:`, error);
     throw error;
   }
 };
 
-export const createSupplier = async (supplierData) => {
+export const createSupplier = async (supplierData, userId) => {
   try {
-    // Symulacja opóźnienia sieciowego
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
     const newSupplier = {
-      id: String(suppliers.length + 1),
       ...supplierData,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      createdBy: userId,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
     };
     
-    suppliers.push(newSupplier);
-    return newSupplier;
+    const docRef = await addDoc(collection(db, SUPPLIERS_COLLECTION), newSupplier);
+    
+    return {
+      id: docRef.id,
+      ...newSupplier
+    };
   } catch (error) {
     console.error('Błąd podczas tworzenia dostawcy:', error);
     throw error;
   }
 };
 
-export const updateSupplier = async (id, supplierData) => {
+export const updateSupplier = async (id, supplierData, userId) => {
   try {
-    // Symulacja opóźnienia sieciowego
-    await new Promise(resolve => setTimeout(resolve, 500));
+    const supplierRef = doc(db, SUPPLIERS_COLLECTION, id);
     
-    const index = suppliers.findIndex(s => s.id === id);
-    if (index === -1) {
+    // Sprawdź, czy dostawca istnieje
+    const docSnap = await getDoc(supplierRef);
+    if (!docSnap.exists()) {
       throw new Error(`Nie znaleziono dostawcy o ID ${id}`);
     }
     
-    const updatedSupplier = {
-      ...suppliers[index],
+    const updates = {
       ...supplierData,
-      updatedAt: new Date().toISOString()
+      updatedBy: userId,
+      updatedAt: serverTimestamp()
     };
     
-    suppliers[index] = updatedSupplier;
-    return updatedSupplier;
+    await updateDoc(supplierRef, updates);
+    
+    return {
+      id: id,
+      ...docSnap.data(),
+      ...updates
+    };
   } catch (error) {
     console.error(`Błąd podczas aktualizacji dostawcy o ID ${id}:`, error);
     throw error;
@@ -236,21 +379,25 @@ export const updateSupplier = async (id, supplierData) => {
 
 export const deleteSupplier = async (id) => {
   try {
-    // Symulacja opóźnienia sieciowego
-    await new Promise(resolve => setTimeout(resolve, 500));
+    const supplierRef = doc(db, SUPPLIERS_COLLECTION, id);
     
-    const index = suppliers.findIndex(s => s.id === id);
-    if (index === -1) {
+    // Sprawdź, czy dostawca istnieje
+    const docSnap = await getDoc(supplierRef);
+    if (!docSnap.exists()) {
       throw new Error(`Nie znaleziono dostawcy o ID ${id}`);
     }
     
     // Sprawdź, czy dostawca jest używany w zamówieniach
-    const isUsed = purchaseOrders.some(po => po.supplier && po.supplier.id === id);
-    if (isUsed) {
+    const q = query(collection(db, PURCHASE_ORDERS_COLLECTION), where('supplierId', '==', id));
+    const poSnapshot = await getDocs(q);
+    
+    if (!poSnapshot.empty) {
       throw new Error(`Nie można usunąć dostawcy, ponieważ jest używany w zamówieniach`);
     }
     
-    suppliers.splice(index, 1);
+    // Usuń dostawcę z bazy danych
+    await deleteDoc(supplierRef);
+    
     return { id };
   } catch (error) {
     console.error(`Błąd podczas usuwania dostawcy o ID ${id}:`, error);
@@ -261,10 +408,40 @@ export const deleteSupplier = async (id) => {
 // Funkcje pomocnicze
 export const getPurchaseOrdersByStatus = async (status) => {
   try {
-    // Symulacja opóźnienia sieciowego
-    await new Promise(resolve => setTimeout(resolve, 500));
+    const q = query(
+      collection(db, PURCHASE_ORDERS_COLLECTION), 
+      where('status', '==', status),
+      orderBy('createdAt', 'desc')
+    );
     
-    return purchaseOrders.filter(po => po.status === status);
+    const querySnapshot = await getDocs(q);
+    const purchaseOrders = [];
+    
+    for (const docRef of querySnapshot.docs) {
+      const poData = docRef.data();
+      
+      // Pobierz dane dostawcy
+      let supplierData = null;
+      if (poData.supplierId) {
+        const supplierDoc = await getDoc(doc(db, SUPPLIERS_COLLECTION, poData.supplierId));
+        if (supplierDoc.exists()) {
+          supplierData = { id: supplierDoc.id, ...supplierDoc.data() };
+        }
+      }
+      
+      purchaseOrders.push({
+        id: docRef.id,
+        ...poData,
+        supplier: supplierData,
+        // Konwersja Timestamp na ISO string (dla kompatybilności z istniejącym kodem)
+        orderDate: poData.orderDate ? poData.orderDate.toDate().toISOString() : null,
+        expectedDeliveryDate: poData.expectedDeliveryDate ? poData.expectedDeliveryDate.toDate().toISOString() : null,
+        createdAt: poData.createdAt ? poData.createdAt.toDate().toISOString() : null,
+        updatedAt: poData.updatedAt ? poData.updatedAt.toDate().toISOString() : null
+      });
+    }
+    
+    return purchaseOrders;
   } catch (error) {
     console.error(`Błąd podczas pobierania zamówień zakupowych o statusie ${status}:`, error);
     throw error;
@@ -273,10 +450,40 @@ export const getPurchaseOrdersByStatus = async (status) => {
 
 export const getPurchaseOrdersBySupplier = async (supplierId) => {
   try {
-    // Symulacja opóźnienia sieciowego
-    await new Promise(resolve => setTimeout(resolve, 500));
+    const q = query(
+      collection(db, PURCHASE_ORDERS_COLLECTION), 
+      where('supplierId', '==', supplierId),
+      orderBy('createdAt', 'desc')
+    );
     
-    return purchaseOrders.filter(po => po.supplier && po.supplier.id === supplierId);
+    const querySnapshot = await getDocs(q);
+    const purchaseOrders = [];
+    
+    for (const docRef of querySnapshot.docs) {
+      const poData = docRef.data();
+      
+      // Pobierz dane dostawcy
+      let supplierData = null;
+      if (poData.supplierId) {
+        const supplierDoc = await getDoc(doc(db, SUPPLIERS_COLLECTION, poData.supplierId));
+        if (supplierDoc.exists()) {
+          supplierData = { id: supplierDoc.id, ...supplierDoc.data() };
+        }
+      }
+      
+      purchaseOrders.push({
+        id: docRef.id,
+        ...poData,
+        supplier: supplierData,
+        // Konwersja Timestamp na ISO string (dla kompatybilności z istniejącym kodem)
+        orderDate: poData.orderDate ? poData.orderDate.toDate().toISOString() : null,
+        expectedDeliveryDate: poData.expectedDeliveryDate ? poData.expectedDeliveryDate.toDate().toISOString() : null,
+        createdAt: poData.createdAt ? poData.createdAt.toDate().toISOString() : null,
+        updatedAt: poData.updatedAt ? poData.updatedAt.toDate().toISOString() : null
+      });
+    }
+    
+    return purchaseOrders;
   } catch (error) {
     console.error(`Błąd podczas pobierania zamówień zakupowych dla dostawcy o ID ${supplierId}:`, error);
     throw error;
@@ -285,11 +492,8 @@ export const getPurchaseOrdersBySupplier = async (supplierId) => {
 
 export const getSuppliersByItem = async (itemId) => {
   try {
-    // Symulacja opóźnienia sieciowego
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // W tym przypadku zwracamy wszystkich dostawców, ponieważ nie mamy powiązania między przedmiotami a dostawcami
-    return suppliers;
+    // Pobierz wszystkich dostawców - w przyszłości można dodać powiązanie między przedmiotami a dostawcami
+    return getAllSuppliers();
   } catch (error) {
     console.error(`Błąd podczas pobierania dostawców dla przedmiotu o ID ${itemId}:`, error);
     throw error;

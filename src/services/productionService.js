@@ -17,7 +17,15 @@ import {
   } from 'firebase/firestore';
   import { db } from './firebase/config';
   import { generateMONumber, generateLOTNumber } from '../utils/numberGenerators';
-  import { getInventoryItemByName, receiveInventory, createInventoryItem } from './inventoryService';
+  import { 
+    getInventoryItemByName, 
+    getInventoryItemById,
+    receiveInventory, 
+    createInventoryItem, 
+    getAllInventoryItems,
+    bookInventoryForTask,
+    cancelBooking
+  } from './inventoryService';
   
   const PRODUCTION_TASKS_COLLECTION = 'productionTasks';
   
@@ -130,6 +138,19 @@ import {
       
       const docRef = await addDoc(collection(db, PRODUCTION_TASKS_COLLECTION), taskWithMeta);
       
+      // Teraz, gdy zadanie zostało utworzone, zarezerwuj materiały
+      if (taskWithMeta.materials && taskWithMeta.materials.length > 0) {
+        for (const material of taskWithMeta.materials) {
+          try {
+            // Sprawdź dostępność i zarezerwuj materiał
+            await bookInventoryForTask(material.id, material.quantity, docRef.id, userId);
+          } catch (error) {
+            console.error(`Błąd przy rezerwacji materiału ${material.name}:`, error);
+            // Kontynuuj rezerwację pozostałych materiałów mimo błędu
+          }
+        }
+      }
+      
       return {
         id: docRef.id,
         ...taskWithMeta
@@ -169,31 +190,38 @@ import {
   };
   
   // Aktualizacja statusu zadania
-  export const updateTaskStatus = async (taskId, status, userId) => {
+  export const updateTaskStatus = async (taskId, newStatus, userId) => {
     try {
       const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
-      const taskDoc = await getDoc(taskRef);
+      const taskSnapshot = await getDoc(taskRef);
       
-      if (!taskDoc.exists()) {
+      if (!taskSnapshot.exists()) {
         throw new Error('Zadanie nie istnieje');
       }
       
-      const taskData = taskDoc.data();
-      const updates = {
-        status,
-        updatedAt: serverTimestamp(),
-        updatedBy: userId
-      };
+      const task = taskSnapshot.data();
+      const updates = { status: newStatus };
       
-      // Jeśli zadanie jest zakończone, oznacz je jako gotowe do dodania do magazynu
-      if (status === 'Zakończone') {
-        updates.readyForInventory = true;
-        updates.completedAt = serverTimestamp();
+      if (newStatus === 'W trakcie') {
+        updates.startDate = new Date().toISOString();
+      }
+      else if (newStatus === 'Zakończone') {
+        updates.completionDate = new Date().toISOString();
+        
+        // Jeśli zadanie ma produkt, oznaczamy je jako gotowe do dodania do magazynu
+        if (task.productName) {
+          updates.readyForInventory = true;
+          
+          // Jeśli zadanie ma potwierdzenie zużycia materiałów, dodajemy produkty do magazynu od razu
+          if (task.materialConsumptionConfirmed || !task.materials || task.materials.length === 0) {
+            await addTaskProductToInventory(taskId, userId);
+          }
+        }
       }
       
       await updateDoc(taskRef, updates);
       
-      return { success: true };
+      return { success: true, message: `Status zadania zmieniony na ${newStatus}` };
     } catch (error) {
       console.error('Błąd podczas aktualizacji statusu zadania:', error);
       throw error;
@@ -203,6 +231,29 @@ import {
   // Usuwanie zadania produkcyjnego
   export const deleteTask = async (taskId) => {
     try {
+      // Pobierz zadanie, aby sprawdzić materiały
+      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+      const taskSnapshot = await getDoc(taskRef);
+      
+      if (!taskSnapshot.exists()) {
+        throw new Error('Zadanie nie istnieje');
+      }
+      
+      const task = taskSnapshot.data();
+      
+      // Jeśli zadanie jest w stanie "Zaplanowane" i ma materiały, anuluj rezerwacje
+      if (task.status === 'Zaplanowane' && task.materials && task.materials.length > 0) {
+        for (const material of task.materials) {
+          try {
+            // Anuluj rezerwację materiału
+            await cancelBooking(material.id, material.quantity, taskId, task.createdBy || 'system');
+          } catch (error) {
+            console.error(`Błąd przy anulowaniu rezerwacji materiału ${material.name}:`, error);
+            // Kontynuuj anulowanie rezerwacji pozostałych materiałów mimo błędu
+          }
+        }
+      }
+      
       // Sprawdź, czy zadanie ma powiązane partie w magazynie
       const batchesRef = collection(db, 'inventoryBatches');
       const q = query(batchesRef, where('sourceId', '==', taskId), where('source', '==', 'Produkcja'));
@@ -230,7 +281,6 @@ import {
       await Promise.all(transactionDeletions);
       
       // Na końcu usuń samo zadanie
-      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
       await deleteDoc(taskRef);
       
       return { success: true };
@@ -253,11 +303,11 @@ import {
     try {
       const tasksRef = collection(db, PRODUCTION_TASKS_COLLECTION);
       
-      // Utwórz zapytanie
+      // Utwórz zapytanie - bez sortowania, aby uniknąć problemów z indeksem
+      // Zapytanie tylko po statusie nie wymaga złożonego indeksu
       const q = query(
         tasksRef, 
-        where('status', '==', status),
-        orderBy('scheduledDate', 'asc')
+        where('status', '==', status)
       );
       
       console.log(`Wykonuję zapytanie do kolekcji ${PRODUCTION_TASKS_COLLECTION} o zadania ze statusem "${status}"`);
@@ -266,10 +316,17 @@ import {
       const querySnapshot = await getDocs(q);
       
       // Mapuj rezultaty
-      const tasks = querySnapshot.docs.map(doc => ({
+      let tasks = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
+      
+      // Sortowanie po stronie klienta
+      tasks = tasks.sort((a, b) => {
+        const dateA = a.scheduledDate ? new Date(a.scheduledDate) : new Date(0);
+        const dateB = b.scheduledDate ? new Date(b.scheduledDate) : new Date(0);
+        return dateA - dateB;
+      });
       
       console.log(`Znaleziono ${tasks.length} zadań o statusie "${status}"`);
       
@@ -435,6 +492,461 @@ import {
         updatedBy: userId
       });
       
+      throw error;
+    }
+  };
+
+  // Pobiera dane prognozy zapotrzebowania materiałów
+  export const getForecastData = async (startDate, endDate, filteredTasks, inventoryItems) => {
+    try {
+      // Pobierz zadania i materiały, jeśli nie zostały przekazane
+      let tasks = filteredTasks;
+      let materials = inventoryItems;
+      
+      if (!tasks) {
+        tasks = await getAllPlannedTasks();
+        tasks = tasks.filter(task => {
+          const taskDate = task.scheduledDate ? new Date(task.scheduledDate) : null;
+          if (!taskDate) return false;
+          return taskDate >= startDate && taskDate <= endDate;
+        });
+      }
+      
+      if (!materials) {
+        materials = await getAllInventoryItems();
+      }
+      
+      // Oblicz potrzebne ilości materiałów na podstawie zadań produkcyjnych
+      const materialRequirements = {};
+      
+      for (const task of tasks) {
+        if (!task.materials || task.materials.length === 0) continue;
+        
+        for (const material of task.materials) {
+          const materialId = material.id;
+          const requiredQuantity = (material.quantity || 0) * (task.quantity || 1);
+          
+          if (!materialRequirements[materialId]) {
+            materialRequirements[materialId] = {
+              id: materialId,
+              name: material.name,
+              category: material.category || 'Inne',
+              unit: material.unit || 'szt.',
+              requiredQuantity: 0,
+              availableQuantity: 0
+            };
+          }
+          
+          materialRequirements[materialId].requiredQuantity += requiredQuantity;
+        }
+      }
+      
+      // Uzupełnij dostępne ilości z magazynu
+      for (const material of materials) {
+        if (materialRequirements[material.id]) {
+          materialRequirements[material.id].availableQuantity = material.quantity || 0;
+        }
+      }
+      
+      // Przekształć obiekt do tablicy
+      const result = Object.values(materialRequirements);
+      
+      // Posortuj według zapotrzebowania (od największego)
+      result.sort((a, b) => b.requiredQuantity - a.requiredQuantity);
+      
+      return result;
+    } catch (error) {
+      console.error('Błąd podczas pobierania danych prognozy:', error);
+      throw error;
+    }
+  };
+
+  // Generuje raport materiałowy do pobrania
+  export const generateMaterialsReport = async (forecastData, startDate, endDate) => {
+    try {
+      // Tutaj można by zaimplementować generowanie PDF lub CSV
+      // Dla uproszczenia, zwracamy przykładowy URL do pliku
+      console.log('Generowanie raportu materiałowego:', {
+        forecastData,
+        startDate,
+        endDate
+      });
+      
+      return "#"; // Symulacja URL do pobrania raportu
+    } catch (error) {
+      console.error('Błąd podczas generowania raportu materiałowego:', error);
+      throw error;
+    }
+  };
+
+  // Pobiera tylko zaplanowane zadania produkcyjne
+  export const getAllPlannedTasks = async () => {
+    try {
+      const tasksRef = collection(db, 'productionTasks');
+      const q = query(tasksRef, where('status', '==', 'Zaplanowane'));
+      const snapshot = await getDocs(q);
+      
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Błąd podczas pobierania zaplanowanych zadań:', error);
+      throw error;
+    }
+  };
+
+  // Pobiera dane do raportów produkcyjnych
+  export const getProductionReports = async (startDate, endDate) => {
+    try {
+      const tasksRef = collection(db, 'productionTasks');
+      const snapshot = await getDocs(tasksRef);
+      
+      const tasks = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // Filtruj zadania według daty
+      return tasks.filter(task => {
+        // Sprawdź daty rozpoczęcia lub zakończenia
+        let taskDate = null;
+        
+        if (task.completionDate) {
+          taskDate = new Date(task.completionDate);
+        } else if (task.startDate) {
+          taskDate = new Date(task.startDate);
+        } else if (task.scheduledDate) {
+          taskDate = new Date(task.scheduledDate);
+        }
+        
+        if (!taskDate) return false;
+        
+        return taskDate >= startDate && taskDate <= endDate;
+      });
+    } catch (error) {
+      console.error('Błąd podczas pobierania danych raportów:', error);
+      throw error;
+    }
+  };
+
+  // Pobiera statystyki dla ukończonych zadań
+  export const getCompletedTasksStats = async (startDate, endDate) => {
+    try {
+      // Pobierz wszystkie zakończone zadania w danym okresie
+      const tasksRef = collection(db, 'productionTasks');
+      const q = query(tasksRef, where('status', '==', 'Zakończone'));
+      const snapshot = await getDocs(q);
+      
+      const completedTasks = snapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+        .filter(task => {
+          if (!task.completionDate) return false;
+          const completionDate = new Date(task.completionDate);
+          return completionDate >= startDate && completionDate <= endDate;
+        });
+      
+      if (completedTasks.length === 0) {
+        return {
+          completedTasks: 0,
+          producedItems: 0,
+          avgProductionTime: 0,
+          materialsUsage: []
+        };
+      }
+      
+      // Obliczanie statystyk
+      let totalItems = 0;
+      let totalProductionTime = 0;
+      const materialUsage = {};
+      const productivityByCategory = {};
+      const dailyOutput = {};
+      
+      for (const task of completedTasks) {
+        // Zliczanie produktów
+        totalItems += task.quantity || 0;
+        
+        // Czas produkcji
+        if (task.startDate && task.completionDate) {
+          const startDate = new Date(task.startDate);
+          const endDate = new Date(task.completionDate);
+          const productionTime = (endDate - startDate) / (1000 * 60 * 60); // w godzinach
+          totalProductionTime += productionTime;
+          
+          // Zapisz czas produkcji w zadaniu
+          task.productionTime = productionTime.toFixed(1);
+        }
+        
+        // Produktywność według kategorii
+        const category = task.category || 'Inne';
+        if (!productivityByCategory[category]) {
+          productivityByCategory[category] = 0;
+        }
+        productivityByCategory[category] += task.quantity || 0;
+        
+        // Dzienny wynik
+        if (task.completionDate) {
+          const dateStr = new Date(task.completionDate).toISOString().split('T')[0];
+          if (!dailyOutput[dateStr]) {
+            dailyOutput[dateStr] = 0;
+          }
+          dailyOutput[dateStr] += task.quantity || 0;
+        }
+        
+        // Zużycie materiałów
+        if (task.materials && task.materials.length > 0) {
+          for (const material of task.materials) {
+            const actualQuantity = task.actualMaterialUsage && task.actualMaterialUsage[material.id] 
+              ? task.actualMaterialUsage[material.id] 
+              : material.quantity * task.quantity;
+            
+            if (!materialUsage[material.id]) {
+              materialUsage[material.id] = {
+                id: material.id,
+                name: material.name,
+                category: material.category || 'Inne',
+                unit: material.unit || 'szt.',
+                usedQuantity: 0,
+                usageCount: 0
+              };
+            }
+            
+            materialUsage[material.id].usedQuantity += actualQuantity;
+            materialUsage[material.id].usageCount += 1;
+          }
+        }
+      }
+      
+      // Przekształć materiały do formatu tablicy i oblicz średnie zużycie
+      const materialsUsage = Object.values(materialUsage).map(material => {
+        const daysDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) || 1;
+        material.avgDailyUsage = (material.usedQuantity / daysDiff).toFixed(2);
+        return material;
+      });
+      
+      // Posortuj materiały według zużycia
+      materialsUsage.sort((a, b) => b.usedQuantity - a.usedQuantity);
+      
+      return {
+        completedTasks: completedTasks.length,
+        producedItems: totalItems,
+        avgProductionTime: completedTasks.length ? (totalProductionTime / completedTasks.length).toFixed(1) : 0,
+        productivityByCategory,
+        dailyOutput,
+        materialsUsage
+      };
+    } catch (error) {
+      console.error('Błąd podczas pobierania statystyk zadań:', error);
+      throw error;
+    }
+  };
+
+  // Generuje raport produkcyjny do pobrania
+  export const generateProductionReport = async (startDate, endDate, reportType = 'summary') => {
+    try {
+      // Tutaj można by zaimplementować generowanie PDF lub CSV
+      // Dla uproszczenia, zwracamy przykładowy URL do pliku
+      console.log(`Generowanie raportu produkcyjnego typu ${reportType}:`, {
+        startDate,
+        endDate
+      });
+      
+      return "#"; // Symulacja URL do pobrania raportu
+    } catch (error) {
+      console.error('Błąd podczas generowania raportu produkcyjnego:', error);
+      throw error;
+    }
+  };
+
+  // Aktualizuje faktyczne zużycie materiałów po zakończeniu produkcji
+  export const updateActualMaterialUsage = async (taskId, materialUsage) => {
+    try {
+      const taskRef = doc(db, 'productionTasks', taskId);
+      const taskSnapshot = await getDoc(taskRef);
+      
+      if (!taskSnapshot.exists()) {
+        throw new Error('Zadanie nie istnieje');
+      }
+      
+      const task = {
+        id: taskSnapshot.id,
+        ...taskSnapshot.data()
+      };
+      
+      // Aktualizacja tylko faktycznego zużycia
+      await updateDoc(taskRef, {
+        actualMaterialUsage: materialUsage,
+        materialConsumptionConfirmed: false // Resetuje potwierdzenie zużycia
+      });
+      
+      return { success: true, message: 'Zużycie materiałów zaktualizowane' };
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji zużycia materiałów:', error);
+      throw error;
+    }
+  };
+
+  // Potwierdza zużycie materiałów i aktualizuje stany magazynowe
+  export const confirmMaterialConsumption = async (taskId) => {
+    try {
+      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+      const taskSnapshot = await getDoc(taskRef);
+      
+      if (!taskSnapshot.exists()) {
+        throw new Error('Zadanie nie istnieje');
+      }
+      
+      const task = {
+        id: taskSnapshot.id,
+        ...taskSnapshot.data()
+      };
+      
+      if (task.materialConsumptionConfirmed) {
+        throw new Error('Zużycie materiałów zostało już potwierdzone');
+      }
+      
+      // Pobierz materiały
+      const materials = task.materials || [];
+      const actualUsage = task.actualMaterialUsage || {};
+      
+      // Dla każdego materiału, zaktualizuj stan magazynowy
+      for (const material of materials) {
+        const materialId = material.id;
+        let consumedQuantity = actualUsage[materialId] !== undefined 
+          ? actualUsage[materialId] 
+          : material.quantity;
+        
+        // Sprawdź, czy consumedQuantity jest dodatnią liczbą
+        if (isNaN(consumedQuantity) || consumedQuantity < 0) {
+          throw new Error(`Zużycie materiału "${material.name}" jest nieprawidłowe (${consumedQuantity}). Musi być liczbą większą lub równą 0.`);
+        }
+        
+        // Pobierz aktualny stan magazynowy
+        const inventoryRef = doc(db, 'inventory', materialId);
+        const inventorySnapshot = await getDoc(inventoryRef);
+        
+        if (inventorySnapshot.exists()) {
+          const inventoryItem = {
+            id: inventorySnapshot.id,
+            ...inventorySnapshot.data()
+          };
+          
+          // 1. Najpierw pobierz i sprawdź przypisane loty/partie do tego materiału w zadaniu
+          let assignedBatches = [];
+          
+          // Sprawdź, czy zadanie ma przypisane konkretne partie dla tego materiału
+          if (task.materialBatches && task.materialBatches[materialId]) {
+            assignedBatches = task.materialBatches[materialId];
+          } else {
+            // Jeśli nie ma przypisanych partii, pobierz dostępne partie według FEFO
+            const batchesRef = collection(db, 'inventoryBatches');
+            const q = query(
+              batchesRef, 
+              where('itemId', '==', materialId),
+              where('quantity', '>', 0)
+            );
+            
+            const batchesSnapshot = await getDocs(q);
+            const availableBatches = batchesSnapshot.docs
+              .map(doc => ({
+                id: doc.id,
+                ...doc.data()
+              }))
+              .sort((a, b) => {
+                const dateA = a.expiryDate ? new Date(a.expiryDate) : new Date(9999, 11, 31);
+                const dateB = b.expiryDate ? new Date(b.expiryDate) : new Date(9999, 11, 31);
+                return dateA - dateB;
+              });
+            
+            // Przypisz partie automatycznie według FEFO
+            let remainingQuantity = consumedQuantity;
+            
+            for (const batch of availableBatches) {
+              if (remainingQuantity <= 0) break;
+              
+              const quantityFromBatch = Math.min(batch.quantity, remainingQuantity);
+              remainingQuantity -= quantityFromBatch;
+              
+              assignedBatches.push({
+                batchId: batch.id,
+                quantity: quantityFromBatch,
+                batchNumber: batch.batchNumber || batch.lotNumber || 'Bez numeru'
+              });
+            }
+            
+            // Jeśli nie udało się przypisać wszystkich wymaganych ilości
+            if (remainingQuantity > 0) {
+              throw new Error(`Nie można znaleźć wystarczającej ilości partii dla materiału "${material.name}"`);
+            }
+          }
+          
+          // 2. Odejmij ilości z przypisanych partii
+          for (const batchAssignment of assignedBatches) {
+            const batchRef = doc(db, 'inventoryBatches', batchAssignment.batchId);
+            await updateDoc(batchRef, {
+              quantity: increment(-batchAssignment.quantity),
+              updatedAt: serverTimestamp()
+            });
+            
+            // Dodaj transakcję dla każdej wykorzystanej partii
+            const transactionRef = doc(collection(db, 'inventoryTransactions'));
+            await setDoc(transactionRef, {
+              itemId: materialId,
+              itemName: material.name,
+              type: 'issue',
+              quantity: batchAssignment.quantity,
+              date: serverTimestamp(),
+              reason: 'Zużycie w produkcji',
+              reference: `Zadanie: ${task.name || taskId}`,
+              batchId: batchAssignment.batchId,
+              batchNumber: batchAssignment.batchNumber,
+              notes: `Materiał zużyty w zadaniu produkcyjnym: ${task.name || taskId}`,
+              createdAt: serverTimestamp()
+            });
+          }
+          
+          // 3. Aktualizuj ogólny stan magazynowy
+          await updateDoc(inventoryRef, {
+            quantity: increment(-consumedQuantity),
+            lastUpdated: new Date().toISOString()
+          });
+          
+          // 4. Zapisz informacje o wykorzystanych partiach w zadaniu
+          if (!task.usedBatches) task.usedBatches = {};
+          task.usedBatches[materialId] = assignedBatches;
+          
+          // 5. Anuluj rezerwację materiału, ponieważ został już zużyty
+          try {
+            // Sprawdź, czy przedmiot ma zarezerwowaną ilość
+            if (inventoryItem.bookedQuantity && inventoryItem.bookedQuantity > 0) {
+              const bookingQuantity = material.quantity || 0;
+              
+              // Anuluj rezerwację tylko jeśli jakąś ilość zarezerwowano
+              if (bookingQuantity > 0) {
+                await cancelBooking(materialId, bookingQuantity, taskId, task.createdBy || 'system');
+                console.log(`Anulowano rezerwację ${bookingQuantity} ${inventoryItem.unit} materiału ${material.name} po zatwierdzeniu zużycia`);
+              }
+            }
+          } catch (error) {
+            console.error(`Błąd przy anulowaniu rezerwacji materiału ${material.name}:`, error);
+            // Kontynuuj mimo błędu anulowania rezerwacji
+          }
+        }
+      }
+      
+      // Oznacz zużycie jako potwierdzone i zapisz informacje o wykorzystanych partiach
+      await updateDoc(taskRef, {
+        materialConsumptionConfirmed: true,
+        materialConsumptionDate: new Date().toISOString(),
+        usedBatches: task.usedBatches || {}
+      });
+      
+      return { success: true, message: 'Zużycie materiałów potwierdzone i stany magazynowe zaktualizowane' };
+    } catch (error) {
+      console.error('Błąd podczas potwierdzania zużycia materiałów:', error);
       throw error;
     }
   };

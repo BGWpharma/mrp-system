@@ -432,7 +432,7 @@ const TaskForm = ({ taskId }) => {
   // Modyfikuję funkcję handleBookIngredients, aby obsługiwała różne metody rezerwacji
   const handleBookIngredients = async () => {
     if (!taskData.recipeId) {
-      showError('Wybierz recepturę, aby zarezerwować składniki');
+      showError('Wybierz recepturę, aby zaplanować składniki');
       return;
     }
 
@@ -475,8 +475,8 @@ const TaskForm = ({ taskId }) => {
         setRecipeYieldError(false);
       }
       
-      // Przygotuj listę zarezerwowanych składników
-      const booked = [];
+      // Przygotuj listę materiałów do zadania, ale bez faktycznej rezerwacji
+      const materialsForTask = [];
       let hasErrors = false;
       
       // Dla każdego składnika z receptury
@@ -494,52 +494,59 @@ const TaskForm = ({ taskId }) => {
         }
         
         // Oblicz ilość potrzebną do produkcji
-        const requiredQuantity = (ingredientQuantity * taskQuantity) / recipeYield;
+        let requiredQuantity = (ingredientQuantity * taskQuantity) / recipeYield;
+        
+        // Dodatkowa walidacja - upewnij się, że requiredQuantity jest dodatnie
+        if (requiredQuantity <= 0) {
+          showError(`Obliczona ilość dla składnika ${ingredient.name} jest nieprawidłowa (${requiredQuantity}). Sprawdź dane receptury.`);
+          continue;
+        }
         
         try {
-          // Pobierz partie według wybranej metody rezerwacji
-          let batches;
-          if (reservationMethod === 'fifo') {
-            batches = await getProductsFIFO(ingredient.id, requiredQuantity);
-          } else {
-            batches = await getProductsWithEarliestExpiry(ingredient.id, requiredQuantity);
+          // Sprawdź dostępność, ale nie rezerwuj faktycznie
+          const item = await getInventoryItemById(ingredient.id);
+          
+          // Tylko sprawdź, czy jest wystarczająca ilość
+          if (item.quantity < requiredQuantity) {
+            hasErrors = true;
+            showError(`Niewystarczająca ilość składnika ${ingredient.name} w magazynie. Dostępne: ${item.quantity} ${item.unit}, wymagane: ${requiredQuantity.toFixed(2)} ${item.unit}`);
           }
           
-          // Zarezerwuj składnik
-          await bookInventoryForTask(ingredient.id, requiredQuantity, taskId || 'new', currentUser.uid);
-          
-          // Dodaj do listy zarezerwowanych
-          booked.push({
+          // Dodaj do listy materiałów do zadania
+          materialsForTask.push({
             id: ingredient.id,
             name: ingredient.name,
             quantity: requiredQuantity,
-            unit: ingredient.unit,
-            batches
+            unit: ingredient.unit || item.unit,
+            category: ingredient.category || item.category
           });
         } catch (error) {
           hasErrors = true;
           const errorMessage = error.message || 'Nieznany błąd';
-          showError(`Nie udało się zarezerwować składnika ${ingredient.name}: ${errorMessage}`);
-          console.error(`Błąd przy rezerwacji składnika ${ingredient.name}:`, error);
+          showError(`Nie udało się sprawdzić dostępności składnika ${ingredient.name}: ${errorMessage}`);
+          console.error(`Błąd przy sprawdzaniu składnika ${ingredient.name}:`, error);
         }
       }
       
-      if (booked.length > 0) {
-        setBookedIngredients(booked);
-        setShowBookingDetails(true);
+      if (materialsForTask.length > 0) {
+        // Zapisz listę materiałów do formularza, aby została zapisana z zadaniem
+        setTaskData(prev => ({
+          ...prev,
+          materials: materialsForTask
+        }));
         
         if (hasErrors) {
-          showError('Niektóre składniki nie zostały zarezerwowane. Sprawdź szczegóły powyżej.');
+          showError('Niektóre składniki mogą być niedostępne. Sprawdź komunikaty powyżej.');
         } else {
-          showSuccess('Zarezerwowano wszystkie składniki na zadanie produkcyjne');
+          showSuccess('Zaplanowano wszystkie materiały na zadanie produkcyjne. Materiały zostaną zarezerwowane po zapisaniu zadania.');
         }
       } else {
-        showError('Nie udało się zarezerwować żadnego składnika. Sprawdź dostępność w magazynie.');
+        showError('Nie udało się zaplanować żadnego materiału. Sprawdź dostępność w magazynie.');
       }
     } catch (error) {
       const errorMessage = error.message || 'Nieznany błąd';
-      showError('Błąd podczas rezerwacji składników: ' + errorMessage);
-      console.error('Error booking ingredients:', error);
+      showError('Błąd podczas planowania materiałów: ' + errorMessage);
+      console.error('Error planning materials:', error);
     } finally {
       setLoading(false);
     }

@@ -220,9 +220,9 @@ const Dashboard = () => {
           <Card>
             <CardContent sx={{ textAlign: 'center' }}>
               <QualityIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
-              <Typography variant="h6">Jakość</Typography>
+              <Typography variant="h6">Raporty</Typography>
               <Typography variant="body2" color="text.secondary">
-                Kontroluj jakość produkcji
+                Przeglądaj raporty i analizy
               </Typography>
             </CardContent>
             <CardActions>

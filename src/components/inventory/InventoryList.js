@@ -27,7 +27,10 @@ import {
   Select,
   MenuItem,
   TableSortLabel,
-  Link
+  Link,
+  Tab,
+  Tabs,
+  Grid
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -41,13 +44,15 @@ import {
   Info as InfoIcon,
   ViewList as ViewListIcon,
   BookmarkAdded as ReservationIcon,
-  GetApp as GetAppIcon
+  GetApp as GetAppIcon,
+  Warehouse as WarehouseIcon
 } from '@mui/icons-material';
-import { getAllInventoryItems, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions } from '../../services/inventoryService';
+import { getAllInventoryItems, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
 import { toast } from 'react-hot-toast';
 import { exportToCSV } from '../../utils/exportUtils';
+import { useAuth } from '../../hooks/useAuth';
 
 const InventoryList = () => {
   const [inventoryItems, setInventoryItems] = useState([]);
@@ -64,6 +69,19 @@ const InventoryList = () => {
   const [reservationFilter, setReservationFilter] = useState('all');
   const [sortOrder, setSortOrder] = useState('desc');
   const [sortField, setSortField] = useState('createdAt');
+  const [warehouses, setWarehouses] = useState([]);
+  const [selectedWarehouse, setSelectedWarehouse] = useState('');
+  const [warehousesLoading, setWarehousesLoading] = useState(true);
+  const [currentTab, setCurrentTab] = useState(0);
+  const [openWarehouseDialog, setOpenWarehouseDialog] = useState(false);
+  const [dialogMode, setDialogMode] = useState('add');
+  const [warehouseFormData, setWarehouseFormData] = useState({
+    name: '',
+    address: '',
+    description: ''
+  });
+  const [savingWarehouse, setSavingWarehouse] = useState(false);
+  const { currentUser } = useAuth();
 
   // Pobierz wszystkie pozycje przy montowaniu komponentu
   useEffect(() => {
@@ -98,19 +116,53 @@ const InventoryList = () => {
     }
   }, [searchTerm, inventoryItems]);
 
-  const fetchInventoryItems = async () => {
+  // Dodaj nowy useEffect do pobrania magazynów
+  useEffect(() => {
+    fetchWarehouses();
+  }, []);
+
+  // Przeniesiona funkcja fetchWarehouses
+  const fetchWarehouses = async () => {
     try {
-      setLoading(true);
-      const fetchedItems = await getAllInventoryItems();
-      setInventoryItems(fetchedItems);
-      setFilteredItems(fetchedItems);
+      const warehousesList = await getAllWarehouses();
+      setWarehouses(warehousesList);
     } catch (error) {
-      showError('Błąd podczas pobierania pozycji magazynowych: ' + error.message);
+      console.error('Błąd podczas pobierania magazynów:', error);
+      showError('Błąd podczas pobierania magazynów');
+    } finally {
+      setWarehousesLoading(false);
+    }
+  };
+
+  // Zmodyfikuj funkcję fetchInventoryItems, aby uwzględniała filtrowanie po magazynie
+  const fetchInventoryItems = async () => {
+    setLoading(true);
+    try {
+      const items = await getAllInventoryItems(selectedWarehouse || null);
+      setInventoryItems(items);
+      setFilteredItems(items);
+      
+      // Pobierz informacje o rezerwacjach dla każdego przedmiotu
+      const reservationPromises = items.map(item => fetchReservations(item));
+      await Promise.all(reservationPromises);
+      
+    } catch (error) {
       console.error('Error fetching inventory items:', error);
+      showError('Błąd podczas pobierania pozycji magazynowych');
     } finally {
       setLoading(false);
     }
   };
+  
+  // Dodaj funkcję obsługującą zmianę wybranego magazynu
+  const handleWarehouseChange = (event) => {
+    setSelectedWarehouse(event.target.value);
+  };
+  
+  // Efekt, który ponownie pobiera dane po zmianie magazynu
+  useEffect(() => {
+    fetchInventoryItems();
+  }, [selectedWarehouse]);
 
   const fetchExpiryData = async () => {
     try {
@@ -278,6 +330,85 @@ const InventoryList = () => {
     }
   };
 
+  // Obsługa przełączania zakładek
+  const handleTabChange = (event, newValue) => {
+    setCurrentTab(newValue);
+  };
+  
+  // Zarządzanie magazynami - nowe funkcje
+  const handleOpenWarehouseDialog = (mode, warehouse = null) => {
+    setDialogMode(mode);
+    setSelectedWarehouse(warehouse);
+    
+    if (mode === 'edit' && warehouse) {
+      setWarehouseFormData({
+        name: warehouse.name || '',
+        address: warehouse.address || '',
+        description: warehouse.description || ''
+      });
+    } else {
+      setWarehouseFormData({
+        name: '',
+        address: '',
+        description: ''
+      });
+    }
+    
+    setOpenWarehouseDialog(true);
+  };
+
+  const handleCloseWarehouseDialog = () => {
+    setOpenWarehouseDialog(false);
+    setSelectedWarehouse(null);
+  };
+
+  const handleWarehouseFormChange = (e) => {
+    const { name, value } = e.target;
+    setWarehouseFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmitWarehouse = async () => {
+    if (!warehouseFormData.name.trim()) {
+      showError('Nazwa magazynu jest wymagana');
+      return;
+    }
+    
+    setSavingWarehouse(true);
+    
+    try {
+      if (dialogMode === 'add') {
+        await createWarehouse(warehouseFormData, currentUser.uid);
+        showSuccess('Magazyn został utworzony');
+      } else {
+        await updateWarehouse(selectedWarehouse.id, warehouseFormData, currentUser.uid);
+        showSuccess('Magazyn został zaktualizowany');
+      }
+      
+      handleCloseWarehouseDialog();
+      fetchWarehouses();
+    } catch (error) {
+      showError('Błąd podczas zapisywania magazynu: ' + error.message);
+      console.error('Error saving warehouse:', error);
+    } finally {
+      setSavingWarehouse(false);
+    }
+  };
+
+  const handleDeleteWarehouse = async (warehouseId) => {
+    if (!window.confirm('Czy na pewno chcesz usunąć ten magazyn? Ta operacja jest nieodwracalna.')) {
+      return;
+    }
+    
+    try {
+      await deleteWarehouse(warehouseId);
+      showSuccess('Magazyn został usunięty');
+      fetchWarehouses();
+    } catch (error) {
+      showError('Błąd podczas usuwania magazynu: ' + error.message);
+      console.error('Error deleting warehouse:', error);
+    }
+  };
+
   if (loading) {
     return <div>Ładowanie pozycji magazynowych...</div>;
   }
@@ -315,144 +446,235 @@ const InventoryList = () => {
         </Box>
       </Box>
 
-      <Box sx={{ display: 'flex', mb: 3 }}>
-        <TextField
-          label="Szukaj pozycji"
-          variant="outlined"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          fullWidth
-          InputProps={{
-            startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
-          }}
-        />
-      </Box>
+      {/* Dodaj zakładki */}
+      <Tabs
+        value={currentTab}
+        onChange={handleTabChange}
+        sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}
+      >
+        <Tab label="Magazyn" />
+        <Tab label="Magazyny" />
+      </Tabs>
 
-      {filteredItems.length === 0 ? (
-        <Typography variant="body1" align="center">
-          Nie znaleziono pozycji magazynowych
-        </Typography>
-      ) : (
-        <TableContainer component={Paper} sx={{ mt: 3 }}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Nazwa</TableCell>
-                <TableCell>Kategoria</TableCell>
-                <TableCell>Ilość całkowita</TableCell>
-                <TableCell>Ilość zarezerwowana</TableCell>
-                <TableCell>Ilość dostępna</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Lokalizacja</TableCell>
-                <TableCell>Akcje</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredItems.map((item) => {
-                // Oblicz ilość dostępną (całkowita - zarezerwowana)
-                const bookedQuantity = item.bookedQuantity || 0;
-                const availableQuantity = item.quantity - bookedQuantity;
-                
-                return (
-                  <TableRow key={item.id}>
-                    <TableCell>
-                      <Typography variant="body1">{item.name}</Typography>
-                      <Typography variant="body2" color="textSecondary">{item.description}</Typography>
-                    </TableCell>
-                    <TableCell>{item.category}</TableCell>
-                    <TableCell>
-                      <Typography variant="body1">{item.quantity} {item.unit}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography 
-                        variant="body1" 
-                        color={bookedQuantity > 0 ? "secondary" : "textSecondary"}
-                        sx={{ cursor: bookedQuantity > 0 ? 'pointer' : 'default' }}
-                        onClick={bookedQuantity > 0 ? () => handleShowReservations(item) : undefined}
-                      >
-                        {bookedQuantity} {item.unit}
-                        {bookedQuantity > 0 && (
-                          <Tooltip title="Kliknij, aby zobaczyć szczegóły rezerwacji">
-                            <ReservationIcon fontSize="small" sx={{ ml: 1 }} />
-                          </Tooltip>
-                        )}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography 
-                        variant="body1" 
-                        color={availableQuantity < item.minStockLevel ? "error" : "primary"}
-                      >
-                        {availableQuantity} {item.unit}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      {getStockLevelIndicator(availableQuantity, item.minStockLevel, item.optimalStockLevel)}
-                    </TableCell>
-                    <TableCell>{item.location}</TableCell>
-                    <TableCell align="right">
-                      <IconButton 
-                        component={RouterLink} 
-                        to={`/inventory/${item.id}`}
-                        color="secondary"
-                        title="Szczegóły"
-                      >
-                        <InfoIcon />
-                      </IconButton>
-                      <IconButton 
-                        component={RouterLink} 
-                        to={`/inventory/${item.id}/receive`}
-                        color="success"
-                        title="Przyjmij"
-                      >
-                        <ReceiveIcon />
-                      </IconButton>
-                      <IconButton 
-                        component={RouterLink} 
-                        to={`/inventory/${item.id}/issue`}
-                        color="warning"
-                        title="Wydaj"
-                      >
-                        <IssueIcon />
-                      </IconButton>
-                      <IconButton 
-                        component={RouterLink} 
-                        to={`/inventory/${item.id}/history`}
-                        color="info"
-                        title="Historia"
-                      >
-                        <HistoryIcon />
-                      </IconButton>
-                      <IconButton 
-                        component={RouterLink} 
-                        to={`/inventory/${item.id}/batches`}
-                        color="primary"
-                        title="Partie"
-                      >
-                        <ViewListIcon />
-                      </IconButton>
-                      <IconButton 
-                        component={RouterLink} 
-                        to={`/inventory/${item.id}/edit`}
-                        color="default"
-                        title="Edytuj"
-                      >
-                        <EditIcon />
-                      </IconButton>
-                      <IconButton 
-                        onClick={() => handleDelete(item.id)} 
-                        color="error"
-                        title="Usuń"
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </TableCell>
+      {/* Zawartość pierwszej zakładki - Magazyn */}
+      {currentTab === 0 && (
+        <>
+          <Box sx={{ display: 'flex', mb: 3 }}>
+            <TextField
+              label="Szukaj pozycji"
+              variant="outlined"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              fullWidth
+              InputProps={{
+                startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
+              }}
+            />
+          </Box>
+
+          {filteredItems.length === 0 ? (
+            <Typography variant="body1" align="center">
+              Nie znaleziono pozycji magazynowych
+            </Typography>
+          ) : (
+            <TableContainer component={Paper} sx={{ mt: 3 }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Nazwa</TableCell>
+                    <TableCell>Kategoria</TableCell>
+                    <TableCell>Ilość całkowita</TableCell>
+                    <TableCell>Ilość zarezerwowana</TableCell>
+                    <TableCell>Ilość dostępna</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Lokalizacja</TableCell>
+                    <TableCell>Magazyn</TableCell>
+                    <TableCell>Akcje</TableCell>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                </TableHead>
+                <TableBody>
+                  {filteredItems.map((item) => {
+                    // Oblicz ilość dostępną (całkowita - zarezerwowana)
+                    const bookedQuantity = item.bookedQuantity || 0;
+                    const availableQuantity = item.quantity - bookedQuantity;
+                    
+                    // Znajdź nazwę magazynu
+                    const warehouse = warehouses.find(w => w.id === item.warehouseId);
+                    const warehouseName = warehouse ? warehouse.name : 'Nieznany';
+                    
+                    return (
+                      <TableRow key={item.id}>
+                        <TableCell>
+                          <Typography variant="body1">{item.name}</Typography>
+                          <Typography variant="body2" color="textSecondary">{item.description}</Typography>
+                        </TableCell>
+                        <TableCell>{item.category}</TableCell>
+                        <TableCell>
+                          <Typography variant="body1">{item.quantity} {item.unit}</Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography 
+                            variant="body1" 
+                            color={bookedQuantity > 0 ? "secondary" : "textSecondary"}
+                            sx={{ cursor: bookedQuantity > 0 ? 'pointer' : 'default' }}
+                            onClick={bookedQuantity > 0 ? () => handleShowReservations(item) : undefined}
+                          >
+                            {bookedQuantity} {item.unit}
+                            {bookedQuantity > 0 && (
+                              <Tooltip title="Kliknij, aby zobaczyć szczegóły rezerwacji">
+                                <ReservationIcon fontSize="small" sx={{ ml: 1 }} />
+                              </Tooltip>
+                            )}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography 
+                            variant="body1" 
+                            color={availableQuantity < item.minStockLevel ? "error" : "primary"}
+                          >
+                            {availableQuantity} {item.unit}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          {getStockLevelIndicator(availableQuantity, item.minStockLevel, item.optimalStockLevel)}
+                        </TableCell>
+                        <TableCell>{item.location}</TableCell>
+                        <TableCell>{warehouseName}</TableCell>
+                        <TableCell align="right">
+                          <IconButton 
+                            component={RouterLink} 
+                            to={`/inventory/${item.id}`}
+                            color="secondary"
+                            title="Szczegóły"
+                          >
+                            <InfoIcon />
+                          </IconButton>
+                          <IconButton 
+                            component={RouterLink} 
+                            to={`/inventory/${item.id}/receive`}
+                            color="success"
+                            title="Przyjmij"
+                          >
+                            <ReceiveIcon />
+                          </IconButton>
+                          <IconButton 
+                            component={RouterLink} 
+                            to={`/inventory/${item.id}/issue`}
+                            color="warning"
+                            title="Wydaj"
+                          >
+                            <IssueIcon />
+                          </IconButton>
+                          <IconButton 
+                            component={RouterLink} 
+                            to={`/inventory/${item.id}/history`}
+                            color="info"
+                            title="Historia"
+                          >
+                            <HistoryIcon />
+                          </IconButton>
+                          <IconButton 
+                            component={RouterLink} 
+                            to={`/inventory/${item.id}/batches`}
+                            color="primary"
+                            title="Partie"
+                          >
+                            <ViewListIcon />
+                          </IconButton>
+                          <IconButton 
+                            component={RouterLink} 
+                            to={`/inventory/${item.id}/edit`}
+                            color="default"
+                            title="Edytuj"
+                          >
+                            <EditIcon />
+                          </IconButton>
+                          <IconButton 
+                            onClick={() => handleDelete(item.id)} 
+                            color="error"
+                            title="Usuń"
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </>
+      )}
+
+      {/* Zawartość drugiej zakładki - Magazyny */}
+      {currentTab === 1 && (
+        <>
+          <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end' }}>
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<AddIcon />}
+              onClick={() => handleOpenWarehouseDialog('add')}
+            >
+              Dodaj magazyn
+            </Button>
+          </Box>
+
+          <Paper sx={{ width: '100%', overflow: 'hidden' }}>
+            <TableContainer sx={{ maxHeight: 440 }}>
+              {warehousesLoading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                  <CircularProgress />
+                </Box>
+              ) : (
+                <Table stickyHeader aria-label="sticky table">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Nazwa</TableCell>
+                      <TableCell>Adres</TableCell>
+                      <TableCell>Opis</TableCell>
+                      <TableCell align="right">Akcje</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {warehouses.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} align="center">
+                          <Typography variant="body1" sx={{ py: 2 }}>
+                            Brak magazynów. Dodaj pierwszy magazyn, aby rozpocząć.
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      warehouses.map((warehouse) => (
+                        <TableRow key={warehouse.id} hover>
+                          <TableCell>{warehouse.name}</TableCell>
+                          <TableCell>{warehouse.address}</TableCell>
+                          <TableCell>{warehouse.description}</TableCell>
+                          <TableCell align="right">
+                            <IconButton
+                              color="primary"
+                              onClick={() => handleOpenWarehouseDialog('edit', warehouse)}
+                            >
+                              <EditIcon />
+                            </IconButton>
+                            <IconButton
+                              color="error"
+                              onClick={() => handleDeleteWarehouse(warehouse.id)}
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </TableContainer>
+          </Paper>
+        </>
       )}
 
       {/* Dialog z rezerwacjami */}
@@ -607,6 +829,60 @@ const InventoryList = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseReservationDialog}>Zamknij</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog do dodawania/edycji magazynu */}
+      <Dialog open={openWarehouseDialog} onClose={handleCloseWarehouseDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          {dialogMode === 'add' ? 'Dodaj nowy magazyn' : 'Edytuj magazyn'}
+        </DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <TextField
+                name="name"
+                label="Nazwa magazynu"
+                value={warehouseFormData.name}
+                onChange={handleWarehouseFormChange}
+                fullWidth
+                required
+                error={!warehouseFormData.name.trim()}
+                helperText={!warehouseFormData.name.trim() ? 'Nazwa jest wymagana' : ''}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                name="address"
+                label="Adres"
+                value={warehouseFormData.address}
+                onChange={handleWarehouseFormChange}
+                fullWidth
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                name="description"
+                label="Opis"
+                value={warehouseFormData.description}
+                onChange={handleWarehouseFormChange}
+                fullWidth
+                multiline
+                rows={3}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseWarehouseDialog}>Anuluj</Button>
+          <Button
+            onClick={handleSubmitWarehouse}
+            variant="contained"
+            color="primary"
+            disabled={savingWarehouse || !warehouseFormData.name.trim()}
+          >
+            {savingWarehouse ? 'Zapisywanie...' : 'Zapisz'}
+          </Button>
         </DialogActions>
       </Dialog>
     </div>

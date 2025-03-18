@@ -102,19 +102,6 @@ const TestsList = () => {
 
   return (
     <div>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5">Testy jakościowe</Typography>
-        <Button 
-          variant="contained" 
-          color="primary" 
-          component={Link} 
-          to="/quality/new-test"
-          startIcon={<AddIcon />}
-        >
-          Nowy test
-        </Button>
-      </Box>
-
       <Box sx={{ display: 'flex', mb: 3, gap: 2 }}>
         <TextField
           label="Szukaj testu"

@@ -20,11 +20,98 @@ import {
   const INVENTORY_COLLECTION = 'inventory';
   const INVENTORY_TRANSACTIONS_COLLECTION = 'inventoryTransactions';
   const INVENTORY_BATCHES_COLLECTION = 'inventoryBatches';
+  const WAREHOUSES_COLLECTION = 'warehouses';
   
-  // Pobieranie wszystkich pozycji magazynowych
-  export const getAllInventoryItems = async () => {
+  // ------ ZARZĄDZANIE MAGAZYNAMI ------
+  
+  // Pobieranie wszystkich magazynów
+  export const getAllWarehouses = async () => {
+    const warehousesRef = collection(db, WAREHOUSES_COLLECTION);
+    const q = query(warehousesRef, orderBy('name', 'asc'));
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  };
+  
+  // Pobieranie magazynu po ID
+  export const getWarehouseById = async (warehouseId) => {
+    const docRef = doc(db, WAREHOUSES_COLLECTION, warehouseId);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      return {
+        id: docSnap.id,
+        ...docSnap.data()
+      };
+    } else {
+      throw new Error('Magazyn nie istnieje');
+    }
+  };
+  
+  // Tworzenie nowego magazynu
+  export const createWarehouse = async (warehouseData, userId) => {
+    const warehouseWithMeta = {
+      ...warehouseData,
+      createdBy: userId,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+    
+    const docRef = await addDoc(collection(db, WAREHOUSES_COLLECTION), warehouseWithMeta);
+    
+    return {
+      id: docRef.id,
+      ...warehouseWithMeta
+    };
+  };
+  
+  // Aktualizacja magazynu
+  export const updateWarehouse = async (warehouseId, warehouseData, userId) => {
+    const warehouseRef = doc(db, WAREHOUSES_COLLECTION, warehouseId);
+    
+    const updates = {
+      ...warehouseData,
+      updatedBy: userId,
+      updatedAt: serverTimestamp()
+    };
+    
+    await updateDoc(warehouseRef, updates);
+    
+    return {
+      id: warehouseId,
+      ...updates
+    };
+  };
+  
+  // Usuwanie magazynu
+  export const deleteWarehouse = async (warehouseId) => {
     const itemsRef = collection(db, INVENTORY_COLLECTION);
-    const q = query(itemsRef, orderBy('name', 'asc'));
+    const q = query(itemsRef, where('warehouseId', '==', warehouseId));
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.docs.length > 0) {
+      throw new Error('Nie można usunąć magazynu, który zawiera pozycje magazynowe');
+    }
+    
+    await deleteDoc(doc(db, WAREHOUSES_COLLECTION, warehouseId));
+    return true;
+  };
+  
+  // ------ ZARZĄDZANIE POZYCJAMI MAGAZYNOWYMI ------
+  
+  // Pobieranie wszystkich pozycji magazynowych z możliwością filtrowania po magazynie
+  export const getAllInventoryItems = async (warehouseId = null) => {
+    const itemsRef = collection(db, INVENTORY_COLLECTION);
+    let q;
+    
+    if (warehouseId) {
+      q = query(itemsRef, where('warehouseId', '==', warehouseId), orderBy('name', 'asc'));
+    } else {
+      q = query(itemsRef, orderBy('name', 'asc'));
+    }
     
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({

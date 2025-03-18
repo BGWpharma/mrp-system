@@ -31,7 +31,8 @@ import {
   Delete as DeleteIcon,
   Clear as ClearIcon,
   Email as EmailIcon,
-  Phone as PhoneIcon
+  Phone as PhoneIcon,
+  Info as InfoIcon
 } from '@mui/icons-material';
 import { 
   getAllCustomers, 
@@ -234,7 +235,7 @@ const CustomersList = () => {
                 </TableHead>
                 <TableBody>
                   {filteredCustomers.length === 0 ? (
-                    <TableRow>
+                    <TableRow key="no-customers">
                       <TableCell colSpan={5} align="center">
                         Brak klientów do wyświetlenia
                       </TableCell>
@@ -243,13 +244,13 @@ const CustomersList = () => {
                     filteredCustomers
                       .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                       .map((customer) => (
-                        <TableRow key={customer.id}>
+                        <TableRow key={customer.id || `customer-${Math.random()}`}>
                           <TableCell>{customer.name}</TableCell>
                           <TableCell>
                             {customer.email ? (
                               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                 <EmailIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
-                                {customer.email}
+                                <Typography variant="body2">{customer.email}</Typography>
                               </Box>
                             ) : (
                               '-'
@@ -259,21 +260,43 @@ const CustomersList = () => {
                             {customer.phone ? (
                               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                 <PhoneIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
-                                {customer.phone}
+                                <Typography variant="body2">{customer.phone}</Typography>
                               </Box>
                             ) : (
                               '-'
                             )}
                           </TableCell>
-                          <TableCell>{customer.address || '-'}</TableCell>
+                          <TableCell>
+                            {customer.address ? (
+                              <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
+                                {customer.address}
+                              </Typography>
+                            ) : (
+                              '-'
+                            )}
+                          </TableCell>
                           <TableCell align="right">
+                            <Tooltip title="Szczegóły">
+                              <IconButton 
+                                color="primary"
+                                onClick={() => navigate(`/customers/${customer.id}`)}
+                              >
+                                <InfoIcon />
+                              </IconButton>
+                            </Tooltip>
                             <Tooltip title="Edytuj">
-                              <IconButton onClick={() => handleEditCustomer(customer)}>
+                              <IconButton
+                                color="primary"
+                                onClick={() => handleEditCustomer(customer)}
+                              >
                                 <EditIcon />
                               </IconButton>
                             </Tooltip>
                             <Tooltip title="Usuń">
-                              <IconButton color="error" onClick={() => handleDeleteClick(customer)}>
+                              <IconButton
+                                color="error"
+                                onClick={() => handleDeleteClick(customer)}
+                              >
                                 <DeleteIcon />
                               </IconButton>
                             </Tooltip>

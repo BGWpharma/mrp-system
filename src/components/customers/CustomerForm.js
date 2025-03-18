@@ -124,6 +124,37 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
             fullWidth
           />
         </Grid>
+        <Grid item xs={12} sm={6}>
+          <TextField
+            name="vatEu"
+            label="VAT-EU"
+            value={formData.vatEu || ''}
+            onChange={handleChange}
+            fullWidth
+          />
+        </Grid>
+        <Grid item xs={12} sm={6}>
+          <TextField
+            name="billingAddress"
+            label="Adres do faktury"
+            value={formData.billingAddress || ''}
+            onChange={handleChange}
+            fullWidth
+            multiline
+            rows={3}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6}>
+          <TextField
+            name="shippingAddress"
+            label="Adres do wysyłki"
+            value={formData.shippingAddress || ''}
+            onChange={handleChange}
+            fullWidth
+            multiline
+            rows={3}
+          />
+        </Grid>
         <Grid item xs={12}>
           <TextField
             name="address"

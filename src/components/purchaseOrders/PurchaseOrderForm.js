@@ -15,9 +15,12 @@ import {
   createPurchaseOrder, 
   getPurchaseOrderById, 
   updatePurchaseOrder,
-  getAllSuppliers
+  getAllSuppliers,
+  PURCHASE_ORDER_STATUSES,
+  translateStatus
 } from '../../services/purchaseOrderService';
 import { getAllInventoryItems } from '../../services/inventoryService';
+import { CURRENCY_OPTIONS } from '../../config';
 
 const PurchaseOrderForm = ({ orderId }) => {
   const { poId } = useParams();
@@ -42,7 +45,7 @@ const PurchaseOrderForm = ({ orderId }) => {
     expectedDeliveryDate: '',
     deliveryAddress: '',
     notes: '',
-    attachments: []
+    status: PURCHASE_ORDER_STATUSES.DRAFT
   });
   
   useEffect(() => {
@@ -59,7 +62,16 @@ const PurchaseOrderForm = ({ orderId }) => {
         // Jeśli edytujemy istniejące zamówienie, pobierz jego dane
         if (currentOrderId && currentOrderId !== 'new') {
           const poDetails = await getPurchaseOrderById(currentOrderId);
-          setPoData(poDetails);
+          
+          // Konwersja dat z ISO string do formatu yyyy-MM-dd
+          const formattedOrderDate = poDetails.orderDate ? poDetails.orderDate.split('T')[0] : new Date().toISOString().split('T')[0];
+          const formattedDeliveryDate = poDetails.expectedDeliveryDate ? poDetails.expectedDeliveryDate.split('T')[0] : '';
+          
+          setPoData({
+            ...poDetails,
+            orderDate: formattedOrderDate,
+            expectedDeliveryDate: formattedDeliveryDate
+          });
         }
         
         setLoading(false);
@@ -85,113 +97,110 @@ const PurchaseOrderForm = ({ orderId }) => {
   };
   
   const handleSupplierChange = (event, newValue) => {
-    setPoData(prev => ({ ...prev, supplier: newValue }));
+    setPoData({ 
+      ...poData, 
+      supplier: newValue,
+      // Jeśli dostawca ma adresy, ustaw domyślny adres dostawy na adres główny lub pierwszy z listy
+      deliveryAddress: newValue && newValue.addresses && newValue.addresses.length > 0
+        ? formatAddress(newValue.addresses.find(a => a.isMain) || newValue.addresses[0])
+        : ''
+    });
   };
   
-  const handleDateChange = (name, date) => {
-    setPoData(prev => ({ ...prev, [name]: date ? date.toISOString().split('T')[0] : '' }));
+  // Funkcja formatująca adres
+  const formatAddress = (address) => {
+    if (!address) return '';
+    return `${address.name ? address.name + ', ' : ''}${address.street}, ${address.postalCode} ${address.city}, ${address.country}`;
   };
   
   const handleAddItem = () => {
     setPoData(prev => ({
       ...prev,
       items: [...prev.items, {
-        id: Date.now().toString(), // Tymczasowe ID
-        inventoryItemId: '',
+        id: `temp-${Date.now()}`,
         name: '',
-        quantity: 0,
-        unit: '',
+        quantity: 1,
+        unit: 'szt',
         unitPrice: 0,
-        totalPrice: 0,
-        expectedDeliveryDate: prev.expectedDeliveryDate
+        totalPrice: 0
       }]
     }));
   };
   
   const handleRemoveItem = (index) => {
-    const newItems = [...poData.items];
-    newItems.splice(index, 1);
-    setPoData(prev => ({ ...prev, items: newItems }));
+    const updatedItems = [...poData.items];
+    updatedItems.splice(index, 1);
+    setPoData(prev => ({ ...prev, items: updatedItems }));
   };
   
   const handleItemChange = (index, field, value) => {
-    const newItems = [...poData.items];
-    newItems[index][field] = value;
+    const updatedItems = [...poData.items];
+    updatedItems[index][field] = value;
     
-    // Jeśli zmieniono ilość lub cenę jednostkową, przelicz cenę całkowitą
+    // Przelicz totalPrice jeśli zmieniono quantity lub unitPrice
     if (field === 'quantity' || field === 'unitPrice') {
-      const quantity = field === 'quantity' ? parseFloat(value) || 0 : parseFloat(newItems[index].quantity) || 0;
-      const unitPrice = field === 'unitPrice' ? parseFloat(value) || 0 : parseFloat(newItems[index].unitPrice) || 0;
-      newItems[index].totalPrice = quantity * unitPrice;
+      const quantity = field === 'quantity' ? value : updatedItems[index].quantity;
+      const unitPrice = field === 'unitPrice' ? value : updatedItems[index].unitPrice;
+      updatedItems[index].totalPrice = quantity * unitPrice;
     }
     
-    setPoData(prev => ({ ...prev, items: newItems }));
+    setPoData(prev => ({ ...prev, items: updatedItems }));
   };
   
-  const handleInventoryItemSelect = (index, item) => {
-    if (!item) return;
+  const handleItemSelect = (index, selectedItem) => {
+    if (!selectedItem) return;
     
-    const newItems = [...poData.items];
-    newItems[index] = {
-      ...newItems[index],
-      inventoryItemId: item.id,
-      name: item.name,
-      unit: item.unit || 'szt.',
-      // Możemy również ustawić domyślną cenę, jeśli jest dostępna
-      unitPrice: item.unitPrice || newItems[index].unitPrice
+    const updatedItems = [...poData.items];
+    updatedItems[index] = {
+      ...updatedItems[index],
+      id: selectedItem.id,
+      name: selectedItem.name,
+      unit: selectedItem.unit || 'szt',
+      // Zachowujemy istniejące wartości jeśli są, lub ustawiamy domyślne
+      quantity: updatedItems[index].quantity || 1,
+      unitPrice: updatedItems[index].unitPrice || 0,
+      totalPrice: (updatedItems[index].quantity || 1) * (updatedItems[index].unitPrice || 0)
     };
     
-    // Przelicz cenę całkowitą
-    const quantity = parseFloat(newItems[index].quantity) || 0;
-    const unitPrice = parseFloat(newItems[index].unitPrice) || 0;
-    newItems[index].totalPrice = quantity * unitPrice;
-    
-    setPoData(prev => ({ ...prev, items: newItems }));
+    setPoData(prev => ({ ...prev, items: updatedItems }));
   };
   
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Walidacja
+    // Walidacja podstawowa
     if (!poData.supplier) {
       showError('Wybierz dostawcę');
       return;
     }
     
     if (poData.items.length === 0) {
-      showError('Dodaj co najmniej jeden przedmiot do zamówienia');
+      showError('Dodaj co najmniej jeden produkt');
       return;
     }
     
-    if (!poData.expectedDeliveryDate) {
-      showError('Podaj oczekiwaną datę dostawy');
-      return;
-    }
-    
-    if (!poData.deliveryAddress) {
-      showError('Podaj adres dostawy');
+    // Walidacja kompletności danych przedmiotów
+    const invalidItem = poData.items.find(item => !item.name || !item.quantity || !item.unitPrice);
+    if (invalidItem) {
+      showError('Uzupełnij wszystkie dane dla każdego przedmiotu');
       return;
     }
     
     try {
       setSaving(true);
       
-      // Przygotuj dane do zapisania
+      // Dodajemy dane użytkownika
       const orderData = {
         ...poData,
-        status: poData.status || 'draft',
-        createdBy: currentUser.uid,
-        updatedBy: currentUser.uid
+        createdBy: currentUser?.uid || null,
+        updatedBy: currentUser?.uid || null
       };
       
       let result;
-      
       if (currentOrderId && currentOrderId !== 'new') {
-        // Aktualizacja istniejącego zamówienia
         result = await updatePurchaseOrder(currentOrderId, orderData);
         showSuccess('Zamówienie zakupowe zostało zaktualizowane');
       } else {
-        // Tworzenie nowego zamówienia
         result = await createPurchaseOrder(orderData);
         showSuccess('Zamówienie zakupowe zostało utworzone');
       }
@@ -203,6 +212,10 @@ const PurchaseOrderForm = ({ orderId }) => {
       showError('Nie udało się zapisać zamówienia');
       setSaving(false);
     }
+  };
+  
+  const handleCancel = () => {
+    navigate('/purchase-orders');
   };
   
   if (loading) {
@@ -265,7 +278,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                 <DatePicker
                   label="Data zamówienia"
                   value={poData.orderDate ? new Date(poData.orderDate) : null}
-                  onChange={(date) => handleDateChange('orderDate', date)}
+                  onChange={(date) => handleChange('orderDate')}
                   slotProps={{ textField: { fullWidth: true } }}
                 />
               </LocalizationProvider>
@@ -277,7 +290,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                 <DatePicker
                   label="Planowana data dostawy"
                   value={poData.expectedDeliveryDate ? new Date(poData.expectedDeliveryDate) : null}
-                  onChange={(date) => handleDateChange('expectedDeliveryDate', date)}
+                  onChange={(date) => handleChange('expectedDeliveryDate')}
                   slotProps={{ textField: { fullWidth: true, required: true } }}
                 />
               </LocalizationProvider>
@@ -292,8 +305,41 @@ const PurchaseOrderForm = ({ orderId }) => {
                 onChange={handleChange}
                 fullWidth
                 multiline
-                rows={2}
+                rows={3}
+                helperText={poData.supplier && poData.supplier.addresses && poData.supplier.addresses.length > 0 
+                  ? 'Możesz wybrać z adresów dostawcy:' 
+                  : 'Wprowadź adres dostawy'
+                }
               />
+              
+              {/* Lista adresów dostawcy */}
+              {poData.supplier && poData.supplier.addresses && poData.supplier.addresses.length > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Wybierz adres dostawcy:
+                  </Typography>
+                  <Grid container spacing={1}>
+                    {poData.supplier.addresses.map((address, idx) => (
+                      <Grid item xs={12} sm={6} key={address.id || idx}>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          fullWidth
+                          sx={{ justifyContent: 'flex-start', textAlign: 'left', py: 1 }}
+                          onClick={() => setPoData({ ...poData, deliveryAddress: formatAddress(address) })}
+                        >
+                          <Box>
+                            <Typography variant="body2" fontWeight="bold">
+                              {address.name} {address.isMain && '(główny)'}
+                            </Typography>
+                            <Typography variant="body2">{formatAddress(address)}</Typography>
+                          </Box>
+                        </Button>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Box>
+              )}
             </Grid>
             
             {/* Uwagi */}
@@ -337,7 +383,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                         options={inventoryItems}
                         getOptionLabel={(option) => option.name}
                         value={inventoryItems.find(i => i.id === item.inventoryItemId) || null}
-                        onChange={(event, newValue) => handleInventoryItemSelect(index, newValue)}
+                        onChange={(event, newValue) => handleItemSelect(index, newValue)}
                         renderInput={(params) => (
                           <TextField
                             {...params}
@@ -425,7 +471,7 @@ const PurchaseOrderForm = ({ orderId }) => {
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
             <Button
               variant="outlined"
-              onClick={() => navigate('/purchase-orders')}
+              onClick={handleCancel}
               disabled={saving}
             >
               Anuluj

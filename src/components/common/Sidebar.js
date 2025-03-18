@@ -11,24 +11,80 @@ import {
   Typography,
   Box,
   Collapse,
-  ListItemButton
+  ListItemButton,
+  alpha,
+  styled,
+  Avatar,
+  Tooltip,
+  Badge
 } from '@mui/material';
 import { 
   Dashboard as DashboardIcon, 
-  MenuBook as RecipesIcon, 
-  Schedule as ProductionIcon, 
+  Book as RecipesIcon, 
+  Engineering as ProductionIcon, 
   Inventory as InventoryIcon, 
-  Science as QualityIcon,
+  FactCheck as QualityIcon,
   ShoppingCart as OrdersIcon,
   People as CustomersIcon,
-  BarChart as AnalyticsIcon,
+  Assessment as AnalyticsIcon,
   ExpandLess,
   ExpandMore,
-  ViewList as ListIcon,
   CalendarMonth as CalendarIcon,
   ShoppingBasket as PurchaseOrdersIcon,
-  Business as SuppliersIcon
+  Business as SuppliersIcon,
+  Store as WarehouseIcon,
+  List as ListIcon,
+  BarChart as ReportsIcon,
+  Bolt as ConsumptionIcon,
+  FormatListNumbered as ForecastIcon,
+  Assignment as TestsIcon,
+  AssessmentOutlined as QualityReportsIcon
 } from '@mui/icons-material';
+
+// Styled components
+const StyledListItemButton = styled(ListItemButton)(({ theme }) => ({
+  borderRadius: theme.shape.borderRadius,
+  margin: '4px 8px',
+  padding: '8px 12px',
+  '&.Mui-selected': {
+    backgroundColor: alpha(theme.palette.primary.main, 0.15),
+    '&:hover': {
+      backgroundColor: alpha(theme.palette.primary.main, 0.25),
+    },
+  },
+  '&:hover': {
+    backgroundColor: alpha(theme.palette.common.white, 0.05),
+  },
+  transition: theme.transitions.create(['background-color', 'box-shadow'], {
+    duration: 200,
+  }),
+}));
+
+const StyledListItem = styled(ListItem)(({ theme }) => ({
+  borderRadius: theme.shape.borderRadius,
+  margin: '4px 8px',
+  padding: '8px 12px',
+  '&.Mui-selected': {
+    backgroundColor: alpha(theme.palette.primary.main, 0.15),
+    '&:hover': {
+      backgroundColor: alpha(theme.palette.primary.main, 0.25),
+    },
+  },
+  '&:hover': {
+    backgroundColor: alpha(theme.palette.common.white, 0.05),
+  },
+  transition: theme.transitions.create(['background-color', 'box-shadow'], {
+    duration: 200,
+  }),
+}));
+
+const StyledBadge = styled(Badge)(({ theme }) => ({
+  '& .MuiBadge-badge': {
+    backgroundColor: theme.palette.primary.main,
+    color: theme.palette.primary.contrastText,
+    fontSize: '0.65rem',
+  },
+}));
 
 const Sidebar = () => {
   const location = useLocation();
@@ -51,18 +107,18 @@ const Sidebar = () => {
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
     { text: 'Receptury', icon: <RecipesIcon />, path: '/recipes' },
-    { 
-      text: 'Produkcja', 
-      icon: <ProductionIcon />, 
+    {
+      text: 'Produkcja',
+      icon: <ProductionIcon />,
       path: '/production',
       hasSubmenu: true,
-      submenu: [
+      children: [
         { text: 'Lista zadań', icon: <ListIcon />, path: '/production' },
-        { text: 'Kalendarz', icon: <CalendarIcon />, path: '/production/calendar' }
+        { text: 'Kalendarz', icon: <CalendarIcon />, path: '/production/calendar' },
+        { text: 'Prognoza zapotrzebowania', icon: <ForecastIcon />, path: '/production/forecast' }
       ]
     },
-    { text: 'Magazyn', icon: <InventoryIcon />, path: '/inventory' },
-    { text: 'Jakość', icon: <QualityIcon />, path: '/quality' },
+    { text: 'Magazyn', icon: <InventoryIcon />, path: '/inventory', badge: 5 },
     { text: 'Zamówienia', icon: <OrdersIcon />, path: '/orders' },
     { text: 'Zamówienia zakupowe', icon: <PurchaseOrdersIcon />, path: '/purchase-orders' },
     { text: 'Dostawcy', icon: <SuppliersIcon />, path: '/suppliers' },
@@ -79,64 +135,143 @@ const Sidebar = () => {
         '& .MuiDrawer-paper': {
           width: drawerWidth,
           boxSizing: 'border-box',
+          backgroundColor: '#182136',
+          border: 'none',
+          backgroundImage: 'none',
+          boxShadow: '4px 0 8px rgba(0, 0, 0, 0.1)',
         },
       }}
     >
-      <Box sx={{ p: 2 }}>
-        <Typography variant="h6" component="div" align="center">
-          Menu
+      <Box 
+        sx={{ 
+          p: 2.5, 
+          display: 'flex', 
+          alignItems: 'center',
+          justifyContent: 'flex-start',
+          mb: 1
+        }}
+      >
+        <Avatar 
+          sx={{ 
+            width: 32, 
+            height: 32, 
+            bgcolor: 'primary.main',
+            backgroundImage: 'linear-gradient(135deg, #1976d2 30%, #42a5f5 90%)',
+            mr: 1.5,
+            boxShadow: '0 2px 6px rgba(0, 0, 0, 0.15)'
+          }}
+        >
+          M
+        </Avatar>
+        <Typography 
+          variant="h6" 
+          component="div" 
+          sx={{ 
+            fontWeight: 'bold',
+            fontSize: '1.1rem'
+          }}
+        >
+          Widgets
         </Typography>
       </Box>
-      <Divider />
-      <List>
+      <Divider sx={{ 
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+        mb: 1 
+      }} />
+      <List component="nav" sx={{ p: 1 }}>
         {menuItems.map((item) => (
-          item.hasSubmenu ? (
+          item.children ? (
             <React.Fragment key={item.text}>
-              <ListItemButton 
-                onClick={item.text === 'Produkcja' ? handleProductionClick : handleOrdersClick} 
+              <StyledListItemButton 
+                onClick={item.text === 'Produkcja' ? handleProductionClick : 
+                         item.text === 'Zamówienia' ? handleOrdersClick : () => {}} 
                 selected={isActive(item.path)}
               >
-                <ListItemIcon>{item.icon}</ListItemIcon>
-                <ListItemText primary={item.text} />
-                {(item.text === 'Produkcja' && openProduction) || (item.text === 'Zamówienia' && openOrders) ? <ExpandLess /> : <ExpandMore />}
-              </ListItemButton>
+                <Tooltip title={item.text} placement="right" arrow>
+                  <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>
+                    {item.badge ? (
+                      <StyledBadge badgeContent={item.badge} color="primary">
+                        {item.icon}
+                      </StyledBadge>
+                    ) : (
+                      item.icon
+                    )}
+                  </ListItemIcon>
+                </Tooltip>
+                <ListItemText 
+                  primary={item.text} 
+                  primaryTypographyProps={{ 
+                    fontSize: '0.875rem',
+                    fontWeight: isActive(item.path) ? 'medium' : 'normal'
+                  }} 
+                />
+                {(item.text === 'Produkcja' && openProduction) || 
+                 (item.text === 'Zamówienia' && openOrders) ? <ExpandLess /> : <ExpandMore />}
+              </StyledListItemButton>
               <Collapse 
-                in={item.text === 'Produkcja' ? openProduction : openOrders} 
+                in={item.text === 'Produkcja' ? openProduction : 
+                     item.text === 'Zamówienia' ? openOrders : false} 
                 timeout="auto" 
                 unmountOnExit
               >
                 <List component="div" disablePadding>
-                  {item.submenu.map((subItem) => (
-                    <ListItem
-                      button
+                  {item.children.map((subItem) => (
+                    <StyledListItem
+                      component={subItem.path ? Link : 'div'}
                       key={subItem.text}
-                      component={Link}
                       to={subItem.path}
-                      selected={location.pathname === subItem.path}
+                      onClick={subItem.onClick}
+                      selected={subItem.path ? location.pathname === subItem.path : false}
                       sx={{ pl: 4 }}
                     >
-                      <ListItemIcon>{subItem.icon}</ListItemIcon>
-                      <ListItemText primary={subItem.text} />
-                    </ListItem>
+                      <Tooltip title={subItem.text} placement="right" arrow>
+                        <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>
+                          {subItem.icon}
+                        </ListItemIcon>
+                      </Tooltip>
+                      <ListItemText 
+                        primary={subItem.text} 
+                        primaryTypographyProps={{ 
+                          fontSize: '0.875rem',
+                          fontWeight: subItem.path && location.pathname === subItem.path ? 'medium' : 'normal'
+                        }} 
+                      />
+                    </StyledListItem>
                   ))}
                 </List>
               </Collapse>
             </React.Fragment>
           ) : (
-            <ListItem 
-              button 
-              key={item.text} 
+            <StyledListItem 
               component={Link} 
+              key={item.text} 
               to={item.path}
               selected={item.path === '/' ? location.pathname === '/' : isActive(item.path)}
             >
-              <ListItemIcon>{item.icon}</ListItemIcon>
-              <ListItemText primary={item.text} />
-            </ListItem>
+              <Tooltip title={item.text} placement="right" arrow>
+                <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>
+                  {item.badge ? (
+                    <StyledBadge badgeContent={item.badge} color="primary">
+                      {item.icon}
+                    </StyledBadge>
+                  ) : (
+                    item.icon
+                  )}
+                </ListItemIcon>
+              </Tooltip>
+              <ListItemText 
+                primary={item.text} 
+                primaryTypographyProps={{ 
+                  fontSize: '0.875rem',
+                  fontWeight: item.path === '/' 
+                    ? location.pathname === '/' ? 'medium' : 'normal'
+                    : isActive(item.path) ? 'medium' : 'normal'
+                }} 
+              />
+            </StyledListItem>
           )
         ))}
       </List>
-      <Divider />
     </Drawer>
   );
 };

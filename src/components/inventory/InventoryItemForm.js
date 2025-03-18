@@ -18,13 +18,20 @@ import {
   Save as SaveIcon,
   ArrowBack as ArrowBackIcon
 } from '@mui/icons-material';
-import { createInventoryItem, updateInventoryItem, getInventoryItemById } from '../../services/inventoryService';
+import { 
+  createInventoryItem, 
+  updateInventoryItem, 
+  getInventoryItemById,
+  getAllWarehouses
+} from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 
 const InventoryItemForm = ({ itemId }) => {
   const [loading, setLoading] = useState(!!itemId);
   const [saving, setSaving] = useState(false);
+  const [warehouses, setWarehouses] = useState([]);
+  const [warehousesLoading, setWarehousesLoading] = useState(true);
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
   const navigate = useNavigate();
@@ -36,12 +43,33 @@ const InventoryItemForm = ({ itemId }) => {
     quantity: 0,
     unit: 'szt.',
     location: '',
+    warehouseId: '',
     minStock: '',
     maxStock: '',
     supplierInfo: '',
     notes: '',
     bookedQuantity: 0
   });
+
+  useEffect(() => {
+    const fetchWarehouses = async () => {
+      try {
+        const warehouseList = await getAllWarehouses();
+        setWarehouses(warehouseList);
+        
+        // Jeśli jest tylko jeden magazyn, ustaw go jako domyślny
+        if (warehouseList.length === 1 && !itemId) {
+          setItemData(prev => ({ ...prev, warehouseId: warehouseList[0].id }));
+        }
+      } catch (error) {
+        showError('Błąd podczas pobierania magazynów: ' + error.message);
+      } finally {
+        setWarehousesLoading(false);
+      }
+    };
+    
+    fetchWarehouses();
+  }, [showError, itemId]);
 
   useEffect(() => {
     if (itemId) {
@@ -58,12 +86,21 @@ const InventoryItemForm = ({ itemId }) => {
       };
       
       fetchItem();
+    } else {
+      setLoading(false);
     }
   }, [itemId, showError]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
+    
+    // Walidacja
+    if (!itemData.warehouseId) {
+      showError('Należy wybrać magazyn');
+      setSaving(false);
+      return;
+    }
     
     try {
       if (itemId) {
@@ -87,8 +124,8 @@ const InventoryItemForm = ({ itemId }) => {
     setItemData(prev => ({ ...prev, [name]: value }));
   };
 
-  if (loading) {
-    return <div>Ładowanie pozycji...</div>;
+  if (loading || warehousesLoading) {
+    return <div>Ładowanie...</div>;
   }
 
   return (
@@ -100,32 +137,58 @@ const InventoryItemForm = ({ itemId }) => {
         >
           Powrót
         </Button>
-        <Typography variant="h5">
-          {itemId ? 'Edycja pozycji magazynowej' : 'Nowa pozycja magazynowa'}
+        <Typography variant="h6">
+          {itemId ? 'Edytuj pozycję magazynową' : 'Dodaj nową pozycję magazynową'}
         </Typography>
         <Button 
-          variant="contained" 
-          color="primary" 
           type="submit"
-          startIcon={<SaveIcon />}
+          variant="contained" 
+          color="primary"
           disabled={saving}
+          startIcon={<SaveIcon />}
         >
           {saving ? 'Zapisywanie...' : 'Zapisz'}
         </Button>
       </Box>
 
-      <Paper sx={{ p: 3, mb: 3 }}>
+      <Paper sx={{ p: 3 }}>
         <Grid container spacing={3}>
           <Grid item xs={12} sm={6}>
             <TextField
               required
+              fullWidth
               label="Nazwa"
               name="name"
               value={itemData.name}
               onChange={handleChange}
-              fullWidth
             />
           </Grid>
+          
+          <Grid item xs={12} sm={6}>
+            <FormControl fullWidth required>
+              <InputLabel id="warehouse-label">Magazyn</InputLabel>
+              <Select
+                labelId="warehouse-label"
+                name="warehouseId"
+                value={itemData.warehouseId}
+                onChange={handleChange}
+                label="Magazyn"
+              >
+                <MenuItem value="">
+                  <em>Wybierz magazyn</em>
+                </MenuItem>
+                {warehouses.map((warehouse) => (
+                  <MenuItem key={warehouse.id} value={warehouse.id}>
+                    {warehouse.name}
+                  </MenuItem>
+                ))}
+              </Select>
+              {!itemData.warehouseId && (
+                <FormHelperText error>Wybór magazynu jest wymagany</FormHelperText>
+              )}
+            </FormControl>
+          </Grid>
+          
           <Grid item xs={12} sm={6}>
             <FormControl fullWidth>
               <InputLabel>Kategoria</InputLabel>

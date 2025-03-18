@@ -128,7 +128,7 @@ const SuppliersList = () => {
                 <TableCell>Osoba kontaktowa</TableCell>
                 <TableCell>Email</TableCell>
                 <TableCell>Telefon</TableCell>
-                <TableCell>NIP</TableCell>
+                <TableCell>Adres</TableCell>
                 <TableCell>Akcje</TableCell>
               </TableRow>
             </TableHead>
@@ -136,23 +136,23 @@ const SuppliersList = () => {
               {filteredSuppliers.map((supplier) => (
                 <TableRow key={supplier.id}>
                   <TableCell>{supplier.name}</TableCell>
-                  <TableCell>{supplier.contactPerson || '-'}</TableCell>
-                  <TableCell>{supplier.email || '-'}</TableCell>
-                  <TableCell>{supplier.phone || '-'}</TableCell>
-                  <TableCell>{supplier.taxId || '-'}</TableCell>
+                  <TableCell>{supplier.contactPerson}</TableCell>
+                  <TableCell>{supplier.email}</TableCell>
+                  <TableCell>{supplier.phone}</TableCell>
                   <TableCell>
-                    <IconButton
-                      color="secondary"
-                      onClick={() => navigate(`/suppliers/${supplier.id}/edit`)}
-                      title="Edytuj"
-                    >
+                    {supplier.addresses && supplier.addresses.length > 0 
+                      ? supplier.addresses.find(a => a.isMain)?.street || supplier.addresses[0].street
+                      : 'Brak adresu'
+                    }
+                  </TableCell>
+                  <TableCell>
+                    <IconButton color="primary" onClick={() => navigate(`/suppliers/${supplier.id}/view`)} title="Podgląd">
+                      <ViewIcon />
+                    </IconButton>
+                    <IconButton color="secondary" onClick={() => navigate(`/suppliers/${supplier.id}/edit`)} title="Edytuj">
                       <EditIcon />
                     </IconButton>
-                    <IconButton
-                      color="error"
-                      onClick={() => handleDeleteClick(supplier)}
-                      title="Usuń"
-                    >
+                    <IconButton color="error" onClick={() => handleDeleteClick(supplier)} title="Usuń">
                       <DeleteIcon />
                     </IconButton>
                   </TableCell>

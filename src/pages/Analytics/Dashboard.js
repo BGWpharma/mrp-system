@@ -211,7 +211,7 @@ const Dashboard = () => {
           case 'production':
             return <KpiCard title="Produkcja" data={kpiData?.production} type="production" />;
           case 'quality':
-            return <KpiCard title="Jakość" data={kpiData?.quality} type="quality" />;
+            return <KpiCard title="Raporty" data={kpiData?.quality} type="quality" />;
           default:
             return <Typography>Nieznany widżet KPI</Typography>;
         }
@@ -394,7 +394,7 @@ const Dashboard = () => {
           <KpiCard title="Produkcja" data={kpiData?.production} type="production" />
         </Grid>
         <Grid item xs={6} sm={6} md={3}>
-          <KpiCard title="Jakość" data={kpiData?.quality} type="quality" />
+          <KpiCard title="Raporty" data={kpiData?.quality} type="quality" />
         </Grid>
       </Grid>
       
