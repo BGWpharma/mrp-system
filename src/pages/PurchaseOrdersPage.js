@@ -4,13 +4,13 @@ import PurchaseOrderList from '../components/purchaseOrders/PurchaseOrderList';
 
 const PurchaseOrdersPage = () => {
   return (
-    <Container>
-      <Box sx={{ my: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          Zamówienia Zakupowe
+    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h5">
+          Zamówienia Komponentów
         </Typography>
-        <PurchaseOrderList />
       </Box>
+      <PurchaseOrderList />
     </Container>
   );
 };

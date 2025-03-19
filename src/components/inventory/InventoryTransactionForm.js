@@ -341,12 +341,13 @@ const InventoryTransactionForm = ({ itemId, transactionType }) => {
               <>
                 <Grid item xs={12} sm={6}>
                   <TextField
-                    label="Numer partii"
+                    label="Numer partii/LOT"
                     name="batchNumber"
                     value={batchData.batchNumber}
                     onChange={handleBatchChange}
                     fullWidth
-                    placeholder="Numer partii od dostawcy"
+                    placeholder="Numer partii od dostawcy lub zostaw puste dla auto-generacji"
+                    helperText="Jeśli pole pozostanie puste, system automatycznie wygeneruje numer LOT"
                   />
                 </Grid>
                 <Grid item xs={12} sm={6}>

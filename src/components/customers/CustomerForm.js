@@ -90,7 +90,7 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
 
   return (
     <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
-      <Grid container spacing={2}>
+      <Grid container spacing={3}>
         <Grid item xs={12}>
           <TextField
             name="name"
@@ -103,7 +103,8 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
             helperText={errors.name}
           />
         </Grid>
-        <Grid item xs={12} sm={6}>
+        
+        <Grid item xs={12} md={6}>
           <TextField
             name="email"
             label="Email"
@@ -115,7 +116,8 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
             helperText={errors.email}
           />
         </Grid>
-        <Grid item xs={12} sm={6}>
+        
+        <Grid item xs={12} md={6}>
           <TextField
             name="phone"
             label="Telefon"
@@ -124,7 +126,8 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
             fullWidth
           />
         </Grid>
-        <Grid item xs={12} sm={6}>
+        
+        <Grid item xs={12} md={6}>
           <TextField
             name="vatEu"
             label="VAT-EU"
@@ -133,7 +136,8 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
             fullWidth
           />
         </Grid>
-        <Grid item xs={12} sm={6}>
+        
+        <Grid item xs={12} md={6}>
           <TextField
             name="billingAddress"
             label="Adres do faktury"
@@ -144,7 +148,8 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
             rows={3}
           />
         </Grid>
-        <Grid item xs={12} sm={6}>
+        
+        <Grid item xs={12} md={6}>
           <TextField
             name="shippingAddress"
             label="Adres do wysyłki"
@@ -155,17 +160,7 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
             rows={3}
           />
         </Grid>
-        <Grid item xs={12}>
-          <TextField
-            name="address"
-            label="Adres"
-            value={formData.address || ''}
-            onChange={handleChange}
-            fullWidth
-            multiline
-            rows={3}
-          />
-        </Grid>
+        
         <Grid item xs={12}>
           <TextField
             name="notes"
@@ -177,6 +172,7 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
             rows={3}
           />
         </Grid>
+        
         <Grid item xs={12} sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 2 }}>
           <Button 
             variant="outlined" 

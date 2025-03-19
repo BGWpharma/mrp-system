@@ -359,8 +359,11 @@ import {
       
       // Jeśli podano datę ważności, dodaj partię
       if (transactionData.expiryDate) {
-        // Wygeneruj numer LOT
-        const lotNumber = await generateLOTNumber();
+        // Wygeneruj numer LOT jeśli nie podano
+        const generatedLotNumber = await generateLOTNumber();
+        
+        // Użyj podanego numeru partii/LOT lub wygenerowanego
+        const batchLotNumber = transactionData.batchNumber || transactionData.lotNumber || generatedLotNumber;
         
         const batch = {
           itemId,
@@ -368,8 +371,8 @@ import {
           transactionId: transactionRef.id,
           quantity: Number(quantity),
           initialQuantity: Number(quantity),
-          batchNumber: transactionData.batchNumber || lotNumber, // Użyj podanego numeru partii lub wygenerowanego LOT
-          lotNumber, // Dodaj numer LOT
+          batchNumber: batchLotNumber, // Używamy jednego numeru dla partii/LOT
+          lotNumber: batchLotNumber, // Ten sam numer dla spójności danych
           expiryDate: transactionData.expiryDate,
           receivedDate: serverTimestamp(),
           notes: transactionData.batchNotes || '',
@@ -688,8 +691,20 @@ import {
   // Bookowanie produktu na zadanie produkcyjne
   export const bookInventoryForTask = async (itemId, quantity, taskId, userId) => {
     try {
-      // Pobierz aktualny stan produktu
-      const item = await getInventoryItemById(itemId);
+      // Sprawdź, czy pozycja magazynowa istnieje
+      let item;
+      try {
+        item = await getInventoryItemById(itemId);
+      } catch (error) {
+        if (error.message === 'Pozycja magazynowa nie istnieje') {
+          console.warn(`Pozycja magazynowa o ID ${itemId} nie istnieje, pomijam rezerwację`);
+          return {
+            success: false,
+            message: `Pozycja magazynowa o ID ${itemId} nie istnieje`
+          };
+        }
+        throw error;
+      }
       
       // Sprawdź, czy jest wystarczająca ilość produktu
       if (item.quantity < quantity) {

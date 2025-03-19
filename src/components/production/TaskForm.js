@@ -33,10 +33,23 @@ import {
   ArrowBack as ArrowBackIcon,
   Calculate as CalculateIcon
 } from '@mui/icons-material';
-import { createTask, updateTask, getTaskById } from '../../services/productionService';
+import {
+  createTask,
+  updateTask,
+  getTaskById,
+  reserveMaterialsForTask
+} from '../../services/productionService';
 import { getAllRecipes, getRecipeById } from '../../services/recipeService';
-import { getAllInventoryItems, getInventoryItemById, getIngredientPrices, getProductsWithEarliestExpiry, getProductsFIFO, bookInventoryForTask } from '../../services/inventoryService';
+import {
+  getAllInventoryItems,
+  getInventoryItemById,
+  getIngredientPrices,
+  getProductsWithEarliestExpiry,
+  getProductsFIFO,
+  bookInventoryForTask
+} from '../../services/inventoryService';
 import { calculateProductionTaskCost } from '../../utils/costCalculator';
+import { calculateEstimatedProductionTime } from '../../utils/costCalculator';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 
@@ -44,6 +57,7 @@ const TaskForm = ({ taskId }) => {
   const [loading, setLoading] = useState(!!taskId);
   const [saving, setSaving] = useState(false);
   const [recipes, setRecipes] = useState([]);
+  const [recipe, setRecipe] = useState(null);
   const [inventoryProducts, setInventoryProducts] = useState([]);
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -153,36 +167,61 @@ const TaskForm = ({ taskId }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setSaving(true);
+    
+    if (saving) return;
     
     try {
-      // Sprawdź, czy mamy obliczone koszty
-      if (!costCalculation && taskData.recipeId) {
-        // Jeśli nie mamy obliczonych kosztów, a mamy recepturę, oblicz je teraz
-        await handleCalculateCosts();
+      setSaving(true);
+      // Walidacja danych zadania
+      if (!taskData.productName) {
+        showError('Nazwa produktu jest wymagana');
+        setSaving(false);
+        return;
       }
       
-      // Przygotuj dane zadania z informacjami o kosztach
-      const taskDataWithCosts = {
-        ...taskData,
-        costs: costCalculation ? {
-          ingredientsCost: costCalculation.ingredientsCost,
-          laborCost: costCalculation.laborCost,
-          energyCost: costCalculation.energyCost,
-          overheadCost: costCalculation.overheadCost,
-          unitCost: costCalculation.unitCost,
-          totalCost: costCalculation.taskTotalCost,
-          calculatedAt: new Date()
-        } : null
-      };
+      // Przygotuj dane zadania z kosztami
+      let taskDataWithCosts = { ...taskData };
+      if (costCalculation) {
+        taskDataWithCosts = {
+          ...taskDataWithCosts,
+          costs: costCalculation
+        };
+      }
+      
+      let savedTaskId;
       
       if (taskId) {
+        // Aktualizacja zadania
         await updateTask(taskId, taskDataWithCosts, currentUser.uid);
+        savedTaskId = taskId;
         showSuccess('Zadanie zostało zaktualizowane');
       } else {
-        await createTask(taskDataWithCosts, currentUser.uid);
+        // Utworzenie nowego zadania
+        const newTask = await createTask(taskDataWithCosts, currentUser.uid);
+        savedTaskId = newTask.id;
         showSuccess('Zadanie zostało utworzone');
+        
+        // Dokonaj faktycznej rezerwacji składników tylko po utworzeniu nowego zadania
+        if (taskData.materials && taskData.materials.length > 0) {
+          try {
+            // Zarezerwuj składniki faktycznie po utworzeniu zadania
+            const bookingResult = await reserveMaterialsForTask(savedTaskId, taskData.materials, reservationMethod);
+            if (bookingResult.success) {
+              showSuccess('Materiały zostały zarezerwowane dla zadania');
+            } else if (bookingResult.errors && bookingResult.errors.length > 0) {
+              let errorMsg = 'Zadanie zostało utworzone, ale nie wszystkie materiały zostały zarezerwowane:';
+              bookingResult.errors.forEach(err => {
+                errorMsg += '\n- ' + err;
+              });
+              showError(errorMsg);
+            }
+          } catch (bookingError) {
+            showError(`Zadanie zostało utworzone, ale wystąpił błąd podczas rezerwacji materiałów: ${bookingError.message}`);
+            console.error('Error booking ingredients:', bookingError);
+          }
+        }
       }
+      
       navigate('/production');
     } catch (error) {
       showError('Błąd podczas zapisywania zadania: ' + error.message);
@@ -199,41 +238,68 @@ const TaskForm = ({ taskId }) => {
 
   const handleRecipeChange = async (e) => {
     const recipeId = e.target.value;
-    
+    setTaskData({
+      ...taskData,
+      recipeId
+    });
+
     if (!recipeId) {
-      setTaskData(prev => ({
-        ...prev,
-        recipeId: '',
-        // Nie zmieniaj nazwy produktu, jeśli wybrano produkt z magazynu
-        ...(selectedProduct ? {} : { productName: '', unit: '' })
-      }));
+      setRecipe(null);
       return;
     }
-    
-    setTaskData(prev => ({
-      ...prev,
-      recipeId
-    }));
-    
+
     try {
-      const recipe = await getRecipeById(recipeId);
+      const selectedRecipe = await getRecipeById(recipeId);
+      setRecipe(selectedRecipe);
       
-      // Nie zmieniaj nazwy produktu, jeśli wybrano produkt z magazynu
-      if (!selectedProduct) {
+      // Ustaw nazwę produktu z receptury
+      if (selectedRecipe.output && selectedRecipe.output.name) {
         setTaskData(prev => ({
           ...prev,
-          productName: recipe.name,
-          unit: recipe.unit || 'szt.'
+          productName: selectedRecipe.output.name,
+          unit: selectedRecipe.output.unit || 'szt.'
         }));
       }
       
-      // Jeśli mamy recepturę i kalkulację kosztów, zaktualizuj koszty
-      if (costCalculation) {
-        // ... existing code for cost calculation ...
+      // Przygotuj listę materiałów z receptury
+      if (selectedRecipe.ingredients && selectedRecipe.ingredients.length > 0) {
+        const materials = selectedRecipe.ingredients.map(ingredient => ({
+          id: ingredient.id,
+          name: ingredient.name,
+          category: ingredient.category || 'Surowce',
+          quantity: ingredient.quantity || 0,
+          unit: ingredient.unit || 'szt.'
+        }));
+        
+        setTaskData(prev => ({
+          ...prev,
+          materials
+        }));
       }
+      
+      // Ustawienie szacowanego czasu trwania na podstawie czasu przygotowania z receptury
+      if (selectedRecipe.preparationTime) {
+        const quantity = taskData.quantity || 1;
+        const estimatedTime = calculateEstimatedProductionTime(selectedRecipe, quantity);
+        setTaskData(prev => ({
+          ...prev,
+          estimatedDuration: estimatedTime
+        }));
+        
+        // Zaktualizuj datę zakończenia na podstawie szacowanego czasu
+        if (taskData.scheduledDate) {
+          const startDate = new Date(taskData.scheduledDate);
+          const endDate = new Date(startDate.getTime() + (estimatedTime * 60 * 1000));
+          setTaskData(prev => ({
+            ...prev,
+            endDate
+          }));
+        }
+      }
+      
     } catch (error) {
-      showError('Błąd podczas pobierania receptury: ' + error.message);
-      console.error('Error fetching recipe:', error);
+      console.error('Error loading recipe details:', error);
+      showError('Błąd podczas ładowania szczegółów receptury');
     }
   };
 
@@ -270,82 +336,50 @@ const TaskForm = ({ taskId }) => {
   };
 
   // Funkcja do aktualizacji kosztów przy zmianie ilości
-  const handleQuantityChange = async (e) => {
-    // Konwertuj wartość na liczbę i sprawdź, czy jest prawidłowa
-    const newQuantityStr = e.target.value;
+  const handleQuantityChange = (e) => {
+    const newQuantity = e.target.value === '' ? '' : Number(e.target.value);
     
-    // Aktualizuj stan zadania - zachowaj string w stanie dla pola formularza
-    setTaskData(prev => ({
-      ...prev,
-      quantity: newQuantityStr
-    }));
+    setTaskData({
+      ...taskData,
+      quantity: newQuantity
+    });
     
-    // Konwertuj na liczbę tylko dla obliczeń
-    const newQuantity = parseFloat(newQuantityStr);
-    
-    // Jeśli wartość nie jest liczbą lub jest mniejsza/równa zero, nie kontynuuj obliczeń kosztów
-    if (isNaN(newQuantity) || newQuantity <= 0) {
-      // Wyczyść kalkulację kosztów, jeśli ilość jest nieprawidłowa
-      if (costCalculation) {
-        setCostCalculation(null);
+    // Aktualizuj materiały i czas produkcji na podstawie nowej ilości
+    if (newQuantity !== '' && recipe) {
+      // Zaktualizuj szacowany czas produkcji
+      const estimatedTime = calculateEstimatedProductionTime(recipe, newQuantity);
+      setTaskData(prev => ({
+        ...prev,
+        estimatedDuration: estimatedTime
+      }));
+      
+      // Zaktualizuj datę zakończenia
+      if (taskData.scheduledDate) {
+        const startDate = new Date(taskData.scheduledDate);
+        const endDate = new Date(startDate.getTime() + (estimatedTime * 60 * 1000));
+        setTaskData(prev => ({
+          ...prev,
+          endDate
+        }));
       }
-      return;
-    }
-    
-    // Jeśli mamy recepturę i kalkulację kosztów, zaktualizuj koszty
-    if (taskData.recipeId) {
-      try {
-        // Pobierz szczegóły receptury
-        const recipe = await getRecipeById(taskData.recipeId);
-        
-        if (!recipe || !recipe.ingredients || recipe.ingredients.length === 0) {
-          return; // Nie ma składników, nie można obliczyć kosztów
-        }
-        
-        // Sprawdź, czy yield receptury jest prawidłową liczbą
-        let recipeYield = 1;
-        if (recipe.yield) {
-          if (typeof recipe.yield === 'object' && recipe.yield.quantity) {
-            recipeYield = parseFloat(recipe.yield.quantity);
-          } else if (typeof recipe.yield === 'number') {
-            recipeYield = recipe.yield;
-          } else if (typeof recipe.yield === 'string') {
-            recipeYield = parseFloat(recipe.yield);
+      
+      // Zaktualizuj ilości materiałów
+      if (taskData.materials && taskData.materials.length > 0) {
+        const updatedMaterials = taskData.materials.map(material => {
+          const recipeIngredient = recipe.ingredients.find(ing => ing.id === material.id);
+          if (recipeIngredient) {
+            return {
+              ...material,
+              quantity: (recipeIngredient.quantity || 0) * newQuantity
+            };
           }
-        }
+          return material;
+        });
         
-        if (isNaN(recipeYield) || recipeYield <= 0) {
-          console.warn('Receptura ma nieprawidłową wydajność:', recipe.yield);
-          setRecipeYieldError(true);
-          return;
-        } else {
-          setRecipeYieldError(false);
-        }
-        
-        // Pobierz ID składników z receptury
-        const ingredientIds = recipe.ingredients
-          .filter(ing => ing.id)
-          .map(ing => ing.id);
-        
-        if (ingredientIds.length === 0) {
-          return; // Brak składników z magazynu
-        }
-        
-        // Pobierz ceny składników
-        const pricesMap = await getIngredientPrices(ingredientIds);
-        
-        // Tymczasowo zaktualizuj taskData z nową ilością
-        const tempTaskData = {
-          ...taskData,
-          quantity: newQuantity
-        };
-        
-        // Oblicz koszty
-        const newCostData = calculateProductionTaskCost(tempTaskData, recipe, pricesMap);
-        setCostCalculation(newCostData);
-        
-      } catch (error) {
-        console.error('Błąd podczas aktualizacji kosztów:', error);
+        setTaskData(prev => ({
+          ...prev,
+          materials: updatedMaterials
+        }));
       }
     }
   };
@@ -477,6 +511,7 @@ const TaskForm = ({ taskId }) => {
       
       // Przygotuj listę materiałów do zadania, ale bez faktycznej rezerwacji
       const materialsForTask = [];
+      const tempBookedIngredients = []; // Tylko do pokazania, bez faktycznej rezerwacji
       let hasErrors = false;
       
       // Dla każdego składnika z receptury
@@ -520,6 +555,37 @@ const TaskForm = ({ taskId }) => {
             unit: ingredient.unit || item.unit,
             category: ingredient.category || item.category
           });
+          
+          // Pobierz batche (partie) składnika zgodnie z wybraną metodą
+          let batches = [];
+          if (reservationMethod === 'expiry') {
+            try {
+              batches = await getProductsWithEarliestExpiry(ingredient.id, requiredQuantity);
+            } catch (error) {
+              console.warn(`Nie można pobrać partii według daty ważności dla ${ingredient.name}:`, error);
+              showError(`Nie udało się wyszukać partii według daty ważności dla ${ingredient.name}. Sprawdź czy są dostępne partie.`);
+            }
+          } else {
+            try {
+              batches = await getProductsFIFO(ingredient.id, requiredQuantity);
+            } catch (error) {
+              console.warn(`Nie można pobrać partii metodą FIFO dla ${ingredient.name}:`, error);
+              showError(`Nie udało się wyszukać partii metodą FIFO dla ${ingredient.name}. Sprawdź czy są dostępne partie.`);
+            }
+          }
+          
+          // Dodaj do listy zarezerwowanych składników (tylko do pokazania)
+          tempBookedIngredients.push({
+            id: ingredient.id,
+            name: ingredient.name,
+            quantity: requiredQuantity,
+            unit: item.unit,
+            batches: batches.map(b => ({
+              ...b,
+              selectedQuantity: b.selectedQuantity || b.quantity
+            }))
+          });
+          
         } catch (error) {
           hasErrors = true;
           const errorMessage = error.message || 'Nieznany błąd';
@@ -534,6 +600,10 @@ const TaskForm = ({ taskId }) => {
           ...prev,
           materials: materialsForTask
         }));
+        
+        // Ustawienie tymczasowo zarezerwowanych składników do wyświetlenia
+        setBookedIngredients(tempBookedIngredients);
+        setShowBookingDetails(true);
         
         if (hasErrors) {
           showError('Niektóre składniki mogą być niedostępne. Sprawdź komunikaty powyżej.');

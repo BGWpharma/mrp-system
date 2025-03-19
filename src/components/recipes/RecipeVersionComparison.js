@@ -37,7 +37,6 @@ const RecipeVersionComparison = ({ currentVersion, previousVersion }) => {
     const basicFields = [
       { key: 'name', label: 'Nazwa' },
       { key: 'description', label: 'Opis' },
-      { key: 'instructions', label: 'Instrukcje' },
       { key: 'prepTime', label: 'Czas przygotowania' },
       { key: 'status', label: 'Status' },
       { key: 'notes', label: 'Notatki' }

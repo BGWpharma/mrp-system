@@ -38,7 +38,11 @@ import {
   Bolt as ConsumptionIcon,
   FormatListNumbered as ForecastIcon,
   Assignment as TestsIcon,
-  AssessmentOutlined as QualityReportsIcon
+  AssessmentOutlined as QualityReportsIcon,
+  LocalShipping as LogisticsIcon,
+  Inventory2 as WaybillIcon,
+  Receipt as InvoicesIcon,
+  Add as AddIcon
 } from '@mui/icons-material';
 
 // Styled components
@@ -91,6 +95,9 @@ const Sidebar = () => {
   const drawerWidth = 240;
   const [openProduction, setOpenProduction] = useState(location.pathname.startsWith('/production'));
   const [openOrders, setOpenOrders] = useState(location.pathname.startsWith('/orders') || location.pathname.startsWith('/customers'));
+  const [openInventory, setOpenInventory] = useState(location.pathname.startsWith('/inventory') || location.pathname.startsWith('/purchase-orders'));
+  const [openLogistics, setOpenLogistics] = useState(location.pathname.startsWith('/logistics'));
+  const [openCustomers, setOpenCustomers] = useState(location.pathname.startsWith('/customers') || location.pathname.startsWith('/orders'));
   
   const isActive = (path) => {
     return location.pathname.startsWith(path);
@@ -103,28 +110,64 @@ const Sidebar = () => {
   const handleOrdersClick = () => {
     setOpenOrders(!openOrders);
   };
+
+  const handleInventoryClick = () => {
+    setOpenInventory(!openInventory);
+  };
+  
+  const handleLogisticsClick = () => {
+    setOpenLogistics(!openLogistics);
+  };
+  
+  const handleCustomersClick = () => {
+    setOpenCustomers(!openCustomers);
+  };
   
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
-    { text: 'Receptury', icon: <RecipesIcon />, path: '/recipes' },
-    {
-      text: 'Produkcja',
+    { text: 'Analityka', icon: <AnalyticsIcon />, path: '/analytics' },
+    { text: 'Klienci',
+      icon: <CustomersIcon />,
+      path: '/customers',
+      hasSubmenu: true,
+      children: [
+        { text: 'Faktury', icon: <InvoicesIcon />, path: '/invoices' },
+        { text: 'Lista klientów', icon: <CustomersIcon />, path: '/customers' },
+        { text: 'Nowe zadanie produkcyjne', icon: <AddIcon />, path: '/production/create-from-order' },
+        { text: 'Zamówienia', icon: <OrdersIcon />, path: '/orders' },
+      ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
+    },
+    { text: 'Logistyka',
+      icon: <LogisticsIcon />,
+      path: '/logistics',
+      hasSubmenu: true,
+      children: [
+        { text: 'Listy przewozowe', icon: <WaybillIcon />, path: '/logistics/waybill' },
+      ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
+    },
+    { text: 'Magazyn', 
+      icon: <InventoryIcon />, 
+      path: '/inventory', 
+      badge: 5,
+      hasSubmenu: true,
+      children: [
+        { text: 'Dostawcy', icon: <SuppliersIcon />, path: '/suppliers' },
+        { text: 'Stan magazynowy', icon: <InventoryIcon />, path: '/inventory' },
+        { text: 'Zamówienia komponentów', icon: <PurchaseOrdersIcon />, path: '/purchase-orders' },
+      ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
+    },
+    { text: 'Produkcja',
       icon: <ProductionIcon />,
       path: '/production',
       hasSubmenu: true,
       children: [
-        { text: 'Lista zadań', icon: <ListIcon />, path: '/production' },
         { text: 'Kalendarz', icon: <CalendarIcon />, path: '/production/calendar' },
-        { text: 'Prognoza zapotrzebowania', icon: <ForecastIcon />, path: '/production/forecast' }
-      ]
+        { text: 'Lista zadań', icon: <ListIcon />, path: '/production' },
+        { text: 'Prognoza zapotrzebowania', icon: <ForecastIcon />, path: '/production/forecast' },
+      ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
     },
-    { text: 'Magazyn', icon: <InventoryIcon />, path: '/inventory', badge: 5 },
-    { text: 'Zamówienia', icon: <OrdersIcon />, path: '/orders' },
-    { text: 'Zamówienia zakupowe', icon: <PurchaseOrdersIcon />, path: '/purchase-orders' },
-    { text: 'Dostawcy', icon: <SuppliersIcon />, path: '/suppliers' },
-    { text: 'Klienci', icon: <CustomersIcon />, path: '/customers' },
-    { text: 'Analityka', icon: <AnalyticsIcon />, path: '/analytics' },
-  ];
+    { text: 'Receptury', icon: <RecipesIcon />, path: '/recipes' },
+  ].sort((a, b) => a.text.localeCompare(b.text, 'pl'));
 
   return (
     <Drawer
@@ -184,7 +227,10 @@ const Sidebar = () => {
             <React.Fragment key={item.text}>
               <StyledListItemButton 
                 onClick={item.text === 'Produkcja' ? handleProductionClick : 
-                         item.text === 'Zamówienia' ? handleOrdersClick : () => {}} 
+                         item.text === 'Zamówienia' ? handleOrdersClick : 
+                         item.text === 'Magazyn' ? handleInventoryClick :
+                         item.text === 'Klienci' ? handleCustomersClick :
+                         item.text === 'Logistyka' ? handleLogisticsClick : () => {}} 
                 selected={isActive(item.path)}
               >
                 <Tooltip title={item.text} placement="right" arrow>
@@ -206,11 +252,17 @@ const Sidebar = () => {
                   }} 
                 />
                 {(item.text === 'Produkcja' && openProduction) || 
-                 (item.text === 'Zamówienia' && openOrders) ? <ExpandLess /> : <ExpandMore />}
+                 (item.text === 'Zamówienia' && openOrders) ||
+                 (item.text === 'Magazyn' && openInventory) ||
+                 (item.text === 'Klienci' && openCustomers) ||
+                 (item.text === 'Logistyka' && openLogistics) ? <ExpandLess /> : <ExpandMore />}
               </StyledListItemButton>
               <Collapse 
                 in={item.text === 'Produkcja' ? openProduction : 
-                     item.text === 'Zamówienia' ? openOrders : false} 
+                     item.text === 'Zamówienia' ? openOrders : 
+                     item.text === 'Magazyn' ? openInventory :
+                     item.text === 'Klienci' ? openCustomers :
+                     item.text === 'Logistyka' ? openLogistics : false} 
                 timeout="auto" 
                 unmountOnExit
               >

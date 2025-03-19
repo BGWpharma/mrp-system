@@ -25,18 +25,15 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useReactToPrint } from 'react-to-print';
 
-const PurchaseOrderDetails = () => {
-  const { poId } = useParams();
-  const navigate = useNavigate();
-  const { currentUser } = useAuth();
-  const { showSuccess, showError } = useNotification();
-  
+const PurchaseOrderDetails = ({ orderId }) => {
   const [purchaseOrder, setPurchaseOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [newStatus, setNewStatus] = useState('');
-  
+  const navigate = useNavigate();
+  const { currentUser } = useAuth();
+  const { showSuccess, showError } = useNotification();
   const printRef = useRef();
   
   // Funkcja do drukowania lub eksportu do PDF
@@ -48,8 +45,13 @@ const PurchaseOrderDetails = () => {
   useEffect(() => {
     const fetchPurchaseOrder = async () => {
       try {
+        // Sprawdź, czy ID jest zdefiniowane
+        if (!orderId) {
+          throw new Error('Brak ID zamówienia');
+        }
+        
         setLoading(true);
-        const data = await getPurchaseOrderById(poId);
+        const data = await getPurchaseOrderById(orderId);
         setPurchaseOrder(data);
         setLoading(false);
       } catch (error) {
@@ -62,7 +64,7 @@ const PurchaseOrderDetails = () => {
     };
     
     fetchPurchaseOrder();
-  }, [poId, navigate]);
+  }, [orderId, navigate, showError]);
   
   const handleDeleteClick = () => {
     setDeleteDialogOpen(true);
@@ -70,7 +72,7 @@ const PurchaseOrderDetails = () => {
   
   const handleDeleteConfirm = async () => {
     try {
-      await deletePurchaseOrder(poId);
+      await deletePurchaseOrder(orderId);
       setDeleteDialogOpen(false);
       showSuccess('Zamówienie zostało usunięte');
       navigate('/purchase-orders');
@@ -93,7 +95,7 @@ const PurchaseOrderDetails = () => {
     }
     
     try {
-      const updatedPO = await updatePurchaseOrderStatus(poId, newStatus, currentUser?.uid);
+      const updatedPO = await updatePurchaseOrderStatus(orderId, newStatus, currentUser?.uid);
       setPurchaseOrder(updatedPO);
       setStatusDialogOpen(false);
       showSuccess('Status zamówienia został zaktualizowany');
@@ -189,7 +191,7 @@ const PurchaseOrderDetails = () => {
               variant="outlined"
               color="secondary"
               startIcon={<EditIcon />}
-              onClick={() => navigate(`/purchase-orders/${poId}/edit`)}
+              onClick={() => navigate(`/purchase-orders/${orderId}/edit`)}
             >
               Edytuj
             </Button>
@@ -291,8 +293,16 @@ const PurchaseOrderDetails = () => {
                   <TableCell>{item.name}</TableCell>
                   <TableCell align="right">{item.quantity}</TableCell>
                   <TableCell>{item.unit}</TableCell>
-                  <TableCell align="right">{item.unitPrice.toFixed(2)} {purchaseOrder.currency}</TableCell>
-                  <TableCell align="right">{item.totalPrice.toFixed(2)} {purchaseOrder.currency}</TableCell>
+                  <TableCell align="right">
+                    {typeof item.unitPrice === 'number' 
+                      ? `${item.unitPrice.toFixed(2)} ${purchaseOrder.currency}` 
+                      : `${item.unitPrice || 0} ${purchaseOrder.currency}`}
+                  </TableCell>
+                  <TableCell align="right">
+                    {typeof item.totalPrice === 'number' 
+                      ? `${item.totalPrice.toFixed(2)} ${purchaseOrder.currency}`
+                      : `${item.totalPrice || 0} ${purchaseOrder.currency}`}
+                  </TableCell>
                 </TableRow>
               ))}
               <TableRow>
@@ -301,7 +311,9 @@ const PurchaseOrderDetails = () => {
                 </TableCell>
                 <TableCell align="right">
                   <Typography variant="body1" fontWeight="bold">
-                    {purchaseOrder.totalValue.toFixed(2)} {purchaseOrder.currency}
+                    {typeof purchaseOrder.totalValue === 'number'
+                      ? `${purchaseOrder.totalValue.toFixed(2)} ${purchaseOrder.currency}`
+                      : `${purchaseOrder.totalValue || 0} ${purchaseOrder.currency}`}
                   </Typography>
                 </TableCell>
               </TableRow>
@@ -373,8 +385,16 @@ const PurchaseOrderDetails = () => {
                     <TableCell>{item.name}</TableCell>
                     <TableCell align="right">{item.quantity}</TableCell>
                     <TableCell>{item.unit}</TableCell>
-                    <TableCell align="right">{item.unitPrice.toFixed(2)} {purchaseOrder.currency}</TableCell>
-                    <TableCell align="right">{item.totalPrice.toFixed(2)} {purchaseOrder.currency}</TableCell>
+                    <TableCell align="right">
+                      {typeof item.unitPrice === 'number' 
+                        ? `${item.unitPrice.toFixed(2)} ${purchaseOrder.currency}` 
+                        : `${item.unitPrice || 0} ${purchaseOrder.currency}`}
+                    </TableCell>
+                    <TableCell align="right">
+                      {typeof item.totalPrice === 'number' 
+                        ? `${item.totalPrice.toFixed(2)} ${purchaseOrder.currency}`
+                        : `${item.totalPrice || 0} ${purchaseOrder.currency}`}
+                    </TableCell>
                   </TableRow>
                 ))}
                 <TableRow>
@@ -383,7 +403,9 @@ const PurchaseOrderDetails = () => {
                   </TableCell>
                   <TableCell align="right">
                     <Typography variant="body1" fontWeight="bold">
-                      {purchaseOrder.totalValue.toFixed(2)} {purchaseOrder.currency}
+                      {typeof purchaseOrder.totalValue === 'number'
+                        ? `${purchaseOrder.totalValue.toFixed(2)} ${purchaseOrder.currency}`
+                        : `${purchaseOrder.totalValue || 0} ${purchaseOrder.currency}`}
                     </Typography>
                   </TableCell>
                 </TableRow>

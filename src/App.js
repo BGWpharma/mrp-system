@@ -24,6 +24,7 @@ import EditTaskPage from './pages/Production/EditTaskPage';
 import ConsumptionPage from './pages/Production/ConsumptionPage';
 import ForecastPage from './pages/Production/ForecastPage';
 import ReportsPage from './pages/Production/ReportsPage';
+import CreateFromOrderPage from './pages/Production/CreateFromOrderPage';
 
 // Inventory
 import InventoryPage from './pages/Inventory/InventoryPage';
@@ -58,6 +59,12 @@ import SupplierFormPage from './pages/SupplierFormPage';
 import CustomersList from './components/customers/CustomersList';
 import CustomerDetail from './components/customers/CustomerDetail';
 
+// Logistics - nowy moduł
+import WaybillListPage from './pages/Logistics/Waybill/WaybillListPage';
+import WaybillDetailsPage from './pages/Logistics/Waybill/WaybillDetailsPage';
+import WaybillCreatePage from './pages/Logistics/Waybill/WaybillCreatePage';
+import WaybillEditPage from './pages/Logistics/Waybill/WaybillEditPage';
+
 // Analytics
 import AnalyticsDashboard from './pages/Analytics/Dashboard';
 
@@ -71,6 +78,9 @@ import './assets/styles/global.css';
 
 // Import komponentu WarehousesList
 import WarehousesList from './components/inventory/WarehousesList';
+
+// Invoices
+import InvoicesPage from './pages/Invoices/InvoicesPage';
 
 function App() {
   return (
@@ -99,6 +109,7 @@ function App() {
               <Route path="/production/consumption/:taskId" element={<PrivateLayout><ConsumptionPage /></PrivateLayout>} />
               <Route path="/production/forecast" element={<PrivateLayout><ForecastPage /></PrivateLayout>} />
               <Route path="/production/reports" element={<PrivateLayout><ReportsPage /></PrivateLayout>} />
+              <Route path="/production/create-from-order" element={<PrivateLayout><CreateFromOrderPage /></PrivateLayout>} />
               
               {/* Inventory Routes */}
               <Route path="/inventory" element={<PrivateLayout><InventoryPage /></PrivateLayout>} />
@@ -123,6 +134,9 @@ function App() {
               <Route path="/orders/edit/:orderId" element={<PrivateLayout><EditOrderWrapper /></PrivateLayout>} />
               <Route path="/orders/:orderId" element={<PrivateLayout><OrderDetails /></PrivateLayout>} />
               
+              {/* Invoices Routes */}
+              <Route path="/invoices" element={<PrivateLayout><InvoicesPage /></PrivateLayout>} />
+              
               {/* Purchase Orders Routes */}
               <Route path="/purchase-orders" element={<PrivateLayout><PurchaseOrdersPage /></PrivateLayout>} />
               <Route path="/purchase-orders/new" element={<PrivateLayout><PurchaseOrderFormPage /></PrivateLayout>} />
@@ -133,6 +147,12 @@ function App() {
               <Route path="/suppliers" element={<PrivateLayout><SuppliersPage /></PrivateLayout>} />
               <Route path="/suppliers/new" element={<PrivateLayout><SupplierFormPage /></PrivateLayout>} />
               <Route path="/suppliers/:id/edit" element={<PrivateLayout><SupplierFormPage /></PrivateLayout>} />
+              
+              {/* Logistics Routes */}
+              <Route path="/logistics/waybill" element={<PrivateLayout><WaybillListPage /></PrivateLayout>} />
+              <Route path="/logistics/waybill/create" element={<PrivateLayout><WaybillCreatePage /></PrivateLayout>} />
+              <Route path="/logistics/waybill/:id" element={<PrivateLayout><WaybillDetailsPage /></PrivateLayout>} />
+              <Route path="/logistics/waybill/:id/edit" element={<PrivateLayout><WaybillEditPage /></PrivateLayout>} />
               
               {/* Customers Routes */}
               <Route path="/customers" element={<PrivateLayout><CustomersList /></PrivateLayout>} />

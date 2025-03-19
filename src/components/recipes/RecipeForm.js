@@ -55,7 +55,6 @@ const RecipeForm = ({ recipeId }) => {
   const [recipeData, setRecipeData] = useState({
     name: '',
     description: '',
-    instructions: '',
     yield: { quantity: '', unit: 'szt.' },
     prepTime: '',
     ingredients: [{ ...DEFAULT_INGREDIENT }],
@@ -577,20 +576,6 @@ const RecipeForm = ({ recipeId }) => {
         >
           Dodaj składnik ręcznie
         </Button>
-      </Paper>
-
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>Instrukcja przygotowania</Typography>
-        <Divider sx={{ mb: 2 }} />
-        <TextField
-          name="instructions"
-          value={recipeData.instructions || ''}
-          onChange={handleChange}
-          fullWidth
-          multiline
-          rows={6}
-          placeholder="Wpisz instrukcję przygotowania krok po kroku..."
-        />
       </Paper>
 
       <Paper sx={{ p: 3 }}>

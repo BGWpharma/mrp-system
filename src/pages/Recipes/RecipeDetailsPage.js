@@ -286,19 +286,10 @@ const RecipeDetailsPage = () => {
               </TableContainer>
             </Grid>
             <Grid item xs={12} md={7}>
-              <Typography variant="h6" gutterBottom>Instrukcja przygotowania</Typography>
+              <Typography variant="h6" gutterBottom>Notatki dodatkowe</Typography>
               <Typography variant="body1" paragraph style={{ whiteSpace: 'pre-line' }}>
-                {recipe.instructions || 'Brak instrukcji'}
+                {recipe.notes || 'Brak dodatkowych notatek'}
               </Typography>
-              
-              {recipe.notes && (
-                <>
-                  <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>Notatki dodatkowe</Typography>
-                  <Typography variant="body1" paragraph style={{ whiteSpace: 'pre-line' }}>
-                    {recipe.notes}
-                  </Typography>
-                </>
-              )}
             </Grid>
           </Grid>
         </TabPanel>

@@ -788,8 +788,10 @@ const OrderForm = ({ orderId }) => {
             <Box>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6} md={3}>
-                  <Typography variant="subtitle2">Całkowity koszt:</Typography>
-                  <Typography variant="body1">{costCalculation.totalCost.toFixed(2)} zł</Typography>
+                  <Typography variant="subtitle2">Koszt całkowity:</Typography>
+                  <Typography variant="body1" fontWeight="medium">
+                    {(Number(costCalculation.totalCost) || 0).toFixed(2)} zł
+                  </Typography>
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
                   <Typography variant="subtitle2">Całkowity przychód:</Typography>
@@ -798,7 +800,7 @@ const OrderForm = ({ orderId }) => {
                 <Grid item xs={12} sm={6} md={3}>
                   <Typography variant="subtitle2">Zysk:</Typography>
                   <Typography variant="body1" fontWeight="bold" color={costCalculation.totalProfit >= 0 ? "success.main" : "error.main"}>
-                    {costCalculation.totalProfit.toFixed(2)} zł
+                    {(Number(costCalculation.totalProfit) || 0).toFixed(2)} zł
                   </Typography>
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
@@ -839,14 +841,14 @@ const OrderForm = ({ orderId }) => {
                               <td style={{ padding: '8px' }}>{product.name || item.name}</td>
                               <td style={{ padding: '8px', textAlign: 'right' }}>{item.quantity} {item.unit}</td>
                               <td style={{ padding: '8px', textAlign: 'right' }}>{unitCost.toFixed(2)} zł</td>
-                              <td style={{ padding: '8px', textAlign: 'right' }}>{item.price.toFixed(2)} zł</td>
-                              <td style={{ padding: '8px', textAlign: 'right' }}>{item.cost.toFixed(2)} zł</td>
-                              <td style={{ padding: '8px', textAlign: 'right' }}>{item.revenue.toFixed(2)} zł</td>
+                              <td style={{ padding: '8px', textAlign: 'right' }}>{(Number(item.price) || 0).toFixed(2)} zł</td>
+                              <td style={{ padding: '8px', textAlign: 'right' }}>{(Number(item.cost) || 0).toFixed(2)} zł</td>
+                              <td style={{ padding: '8px', textAlign: 'right' }}>{(Number(item.revenue) || 0).toFixed(2)} zł</td>
                               <td style={{ padding: '8px', textAlign: 'right', color: item.profit >= 0 ? 'green' : 'red' }}>
-                                {item.profit.toFixed(2)} zł
+                                {(Number(item.profit) || 0).toFixed(2)} zł
                               </td>
                               <td style={{ padding: '8px', textAlign: 'right', color: item.margin >= 0 ? 'green' : 'red' }}>
-                                {item.margin.toFixed(2)}%
+                                {(Number(item.margin) || 0).toFixed(2)}%
                               </td>
                             </tr>
                           );
@@ -869,13 +871,13 @@ const OrderForm = ({ orderId }) => {
       </Box>
       
       {/* Dialog dodawania nowego klienta */}
-      <Dialog open={isCustomerDialogOpen} onClose={handleCloseCustomerDialog}>
+      <Dialog open={isCustomerDialogOpen} onClose={handleCloseCustomerDialog} maxWidth="md" fullWidth>
         <DialogTitle>Dodaj nowego klienta</DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
+          <DialogContentText sx={{ mb: 3 }}>
             Wprowadź dane nowego klienta. Klient zostanie dodany do bazy danych.
           </DialogContentText>
-          <Grid container spacing={2}>
+          <Grid container spacing={3}>
             <Grid item xs={12}>
               <TextField
                 name="customer_name"
@@ -885,51 +887,79 @@ const OrderForm = ({ orderId }) => {
                 fullWidth
                 required
                 autoFocus
-                margin="dense"
                 error={!orderData.customer.name}
                 helperText={!orderData.customer.name ? 'Nazwa klienta jest wymagana' : ''}
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12} md={6}>
               <TextField
                 name="customer_email"
                 label="Email"
                 value={orderData.customer.email || ''}
                 onChange={handleCustomerDetailChange}
                 fullWidth
-                margin="dense"
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12} md={6}>
               <TextField
                 name="customer_phone"
                 label="Telefon"
                 value={orderData.customer.phone || ''}
                 onChange={handleCustomerDetailChange}
                 fullWidth
-                margin="dense"
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                name="customer_vatEu"
+                label="VAT-EU"
+                value={orderData.customer.vatEu || ''}
+                onChange={handleCustomerDetailChange}
+                fullWidth
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                name="customer_billingAddress"
+                label="Adres do faktury"
+                value={orderData.customer.billingAddress || ''}
+                onChange={handleCustomerDetailChange}
+                fullWidth
+                multiline
+                rows={3}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                name="customer_shippingAddress"
+                label="Adres do wysyłki"
+                value={orderData.customer.shippingAddress || ''}
+                onChange={handleCustomerDetailChange}
+                fullWidth
+                multiline
+                rows={3}
               />
             </Grid>
             <Grid item xs={12}>
               <TextField
-                name="customer_address"
-                label="Adres"
-                value={orderData.customer.address || ''}
+                name="customer_notes"
+                label="Notatki"
+                value={orderData.customer.notes || ''}
                 onChange={handleCustomerDetailChange}
                 fullWidth
                 multiline
                 rows={2}
-                margin="dense"
               />
             </Grid>
           </Grid>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseCustomerDialog}>Anuluj</Button>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={handleCloseCustomerDialog} variant="outlined">Anuluj</Button>
           <Button 
             onClick={handleSaveNewCustomer} 
             variant="contained"
             disabled={!orderData.customer.name || saving}
+            color="primary"
           >
             {saving ? 'Zapisywanie...' : 'Zapisz'}
           </Button>

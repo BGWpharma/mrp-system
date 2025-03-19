@@ -16,6 +16,7 @@ import {
     increment
   } from 'firebase/firestore';
   import { db } from './firebase/config';
+  import { format } from 'date-fns';
   import { generateMONumber, generateLOTNumber } from '../utils/numberGenerators';
   import { 
     getInventoryItemByName, 
@@ -24,7 +25,8 @@ import {
     createInventoryItem, 
     getAllInventoryItems,
     bookInventoryForTask,
-    cancelBooking
+    cancelBooking,
+    addInventoryItem
   } from './inventoryService';
   
   const PRODUCTION_TASKS_COLLECTION = 'productionTasks';
@@ -143,7 +145,11 @@ import {
         for (const material of taskWithMeta.materials) {
           try {
             // Sprawdź dostępność i zarezerwuj materiał
-            await bookInventoryForTask(material.id, material.quantity, docRef.id, userId);
+            if (material.inventoryItemId) {
+              await bookInventoryForTask(material.inventoryItemId, material.quantity, docRef.id, userId);
+            } else if (material.id) {
+              await bookInventoryForTask(material.id, material.quantity, docRef.id, userId);
+            }
           } catch (error) {
             console.error(`Błąd przy rezerwacji materiału ${material.name}:`, error);
             // Kontynuuj rezerwację pozostałych materiałów mimo błędu
@@ -499,33 +505,75 @@ import {
   // Pobiera dane prognozy zapotrzebowania materiałów
   export const getForecastData = async (startDate, endDate, filteredTasks, inventoryItems) => {
     try {
+      console.log('Rozpoczynam pobieranie danych prognozy zapotrzebowania');
+      
       // Pobierz zadania i materiały, jeśli nie zostały przekazane
       let tasks = filteredTasks;
       let materials = inventoryItems;
       
       if (!tasks) {
+        console.log('Brak przekazanych zadań, pobieram zaplanowane zadania');
         tasks = await getAllPlannedTasks();
         tasks = tasks.filter(task => {
-          const taskDate = task.scheduledDate ? new Date(task.scheduledDate) : null;
-          if (!taskDate) return false;
+          if (!task.scheduledDate) return false;
+          
+          // Konwersja ciągu znaków na obiekt Date, jeśli to konieczne
+          const taskDate = typeof task.scheduledDate === 'string' 
+            ? new Date(task.scheduledDate) 
+            : task.scheduledDate instanceof Timestamp 
+              ? task.scheduledDate.toDate()
+              : task.scheduledDate;
+              
           return taskDate >= startDate && taskDate <= endDate;
         });
       }
       
       if (!materials) {
+        console.log('Brak przekazanych materiałów, pobieram wszystkie materiały z magazynu');
         materials = await getAllInventoryItems();
+      }
+      
+      console.log(`Znaleziono ${tasks.length} zadań i ${materials ? materials.length : 0} materiałów`);
+      
+      // Sprawdzamy, czy mamy zadania do analizy
+      if (!tasks || tasks.length === 0) {
+        console.warn('Brak zadań do prognozy zapotrzebowania materiałów');
+        return [];
       }
       
       // Oblicz potrzebne ilości materiałów na podstawie zadań produkcyjnych
       const materialRequirements = {};
       
       for (const task of tasks) {
-        if (!task.materials || task.materials.length === 0) continue;
+        // Upewnij się, że zadanie ma materiały
+        if (!task.materials || task.materials.length === 0) {
+          console.log(`Zadanie ${task.id} (${task.name || 'bez nazwy'}) nie ma materiałów, pomijam`);
+          continue;
+        }
+        
+        console.log(`Analizuję zadanie ${task.id} (${task.name || 'bez nazwy'}), liczba materiałów: ${task.materials.length}`);
         
         for (const material of task.materials) {
-          const materialId = material.id;
-          const requiredQuantity = (material.quantity || 0) * (task.quantity || 1);
+          // Upewnij się, że materiał ma prawidłowe ID - akceptujemy zarówno id jak i inventoryItemId
+          const materialId = material.id || material.inventoryItemId;
           
+          if (!materialId) {
+            console.warn('Materiał bez ID, pomijam', material);
+            continue;
+          }
+          
+          // Konwertuj quantity na liczbę i upewnij się, że jest poprawna
+          const materialQuantity = parseFloat(material.quantity) || 0;
+          const taskQuantity = parseFloat(task.quantity) || 1;
+          
+          if (materialQuantity <= 0) {
+            console.warn(`Materiał ${material.name} ma nieprawidłową ilość: ${material.quantity}`);
+            continue;
+          }
+          
+          const requiredQuantity = materialQuantity * taskQuantity;
+          
+          // Dodaj lub zaktualizuj materiał w wymaganiach
           if (!materialRequirements[materialId]) {
             materialRequirements[materialId] = {
               id: materialId,
@@ -544,12 +592,23 @@ import {
       // Uzupełnij dostępne ilości z magazynu
       for (const material of materials) {
         if (materialRequirements[material.id]) {
-          materialRequirements[material.id].availableQuantity = material.quantity || 0;
+          materialRequirements[material.id].availableQuantity = parseFloat(material.quantity) || 0;
         }
       }
       
-      // Przekształć obiekt do tablicy
-      const result = Object.values(materialRequirements);
+      // Przekształć obiekt do tablicy i upewnij się, że wartości są liczbowe
+      const result = Object.values(materialRequirements).map(item => ({
+        ...item,
+        requiredQuantity: parseFloat(item.requiredQuantity) || 0,
+        availableQuantity: parseFloat(item.availableQuantity) || 0
+      }));
+      
+      // Sprawdź czy wynik nie jest pusty
+      if (result.length === 0) {
+        console.warn('Brak materiałów w prognozie zapotrzebowania');
+      } else {
+        console.log(`Znaleziono ${result.length} materiałów w prognozie zapotrzebowania`);
+      }
       
       // Posortuj według zapotrzebowania (od największego)
       result.sort((a, b) => b.requiredQuantity - a.requiredQuantity);
@@ -564,26 +623,95 @@ import {
   // Generuje raport materiałowy do pobrania
   export const generateMaterialsReport = async (forecastData, startDate, endDate) => {
     try {
-      // Tutaj można by zaimplementować generowanie PDF lub CSV
-      // Dla uproszczenia, zwracamy przykładowy URL do pliku
-      console.log('Generowanie raportu materiałowego:', {
-        forecastData,
-        startDate,
-        endDate
+      console.log('Rozpoczynam generowanie raportu z danymi:', { forecastDataLength: forecastData?.length });
+      
+      // Sprawdź, czy dane prognozy są dostępne
+      if (!forecastData || forecastData.length === 0) {
+        // Zamiast rzucać wyjątek, próbujemy pobrać dane jeszcze raz
+        console.log('Brak danych prognozy, próba ponownego pobrania danych...');
+        const refreshedData = await getForecastData(startDate, endDate);
+        
+        if (!refreshedData || refreshedData.length === 0) {
+          console.error('Nie udało się pobrać danych prognozy. Generuję pusty raport.');
+          showEmptyReportAlert();
+          return null;
+        }
+        
+        forecastData = refreshedData;
+      }
+
+      // Konwertuj daty do czytelnego formatu
+      const formattedStartDate = format(startDate, 'dd.MM.yyyy');
+      const formattedEndDate = format(endDate, 'dd.MM.yyyy');
+
+      console.log(`Generuję raport za okres ${formattedStartDate} - ${formattedEndDate}`);
+
+      // Dla uproszczenia generujemy raport w formie CSV
+      const headers = ["Materiał", "Kategoria", "Dostępna ilość", "Potrzebna ilość", "Bilans", "Jednostka"];
+      let csvContent = headers.join(",") + "\n";
+      
+      // Dodaj dane materiałów
+      forecastData.forEach(item => {
+        // Sprawdź, czy wartości są liczbami i ustaw domyślne wartości, jeśli nie są
+        const availableQuantity = isNaN(parseFloat(item.availableQuantity)) ? 0 : parseFloat(item.availableQuantity);
+        const requiredQuantity = isNaN(parseFloat(item.requiredQuantity)) ? 0 : parseFloat(item.requiredQuantity);
+        const balance = availableQuantity - requiredQuantity;
+        
+        const row = [
+          `"${(item.name || 'Nieznany').replace(/"/g, '""')}"`, 
+          `"${(item.category || 'Inne').replace(/"/g, '""')}"`,
+          availableQuantity.toFixed(2),
+          requiredQuantity.toFixed(2),
+          balance.toFixed(2),
+          `"${(item.unit || 'szt.').replace(/"/g, '""')}"`
+        ];
+        csvContent += row.join(",") + "\n";
       });
       
-      return "#"; // Symulacja URL do pobrania raportu
+      console.log('Raport wygenerowany, tworzę blob');
+      
+      // Tworzymy blob z zawartością CSV
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const reportUrl = URL.createObjectURL(blob);
+      
+      console.log('Raport URL utworzony:', reportUrl);
+      
+      // Pobieramy plik używając standardowego mechanizmu
+      const link = document.createElement('a');
+      const filename = `Raport_zapotrzebowania_${formattedStartDate.replace(/\./g, '-')}_${formattedEndDate.replace(/\./g, '-')}.csv`;
+      
+      link.setAttribute('href', reportUrl);
+      link.setAttribute('download', filename);
+      link.style.visibility = 'hidden';
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      console.log('Pobieranie raportu zainicjowane');
+      
+      return reportUrl;
     } catch (error) {
       console.error('Błąd podczas generowania raportu materiałowego:', error);
-      throw error;
+      alert('Wystąpił błąd podczas generowania raportu. Spróbuj ponownie.');
+      return null;
     }
+  };
+  
+  // Pomocnicza funkcja do wyświetlania komunikatu o pustym raporcie
+  const showEmptyReportAlert = () => {
+    alert('Brak danych do wygenerowania raportu. Upewnij się, że istnieją zadania produkcyjne w wybranym okresie.');
   };
 
   // Pobiera tylko zaplanowane zadania produkcyjne
   export const getAllPlannedTasks = async () => {
     try {
       const tasksRef = collection(db, 'productionTasks');
-      const q = query(tasksRef, where('status', '==', 'Zaplanowane'));
+      // Pobierz zadania zarówno zaplanowane jak i w trakcie realizacji
+      const q = query(
+        tasksRef, 
+        where('status', 'in', ['Zaplanowane', 'W trakcie'])
+      );
       const snapshot = await getDocs(q);
       
       return snapshot.docs.map(doc => ({
@@ -949,4 +1077,71 @@ import {
       console.error('Błąd podczas potwierdzania zużycia materiałów:', error);
       throw error;
     }
+  };
+
+  // Zarezerwowanie składników dla zadania
+  export const reserveMaterialsForTask = async (taskId, materials, reservationMethod = 'auto') => {
+    try {
+      console.log(`Bookowanie składników dla zadania ID: ${taskId}, metoda: ${reservationMethod}`);
+      console.log('Materiały do zarezerwowania:', materials);
+      
+      if (!materials || materials.length === 0) {
+        return { success: true, message: 'Brak materiałów do zarezerwowania' };
+      }
+      
+      const errors = [];
+      const reservedItems = [];
+      
+      // Dla każdego materiału w zadaniu
+      for (const material of materials) {
+        if (!material.inventoryItemId) {
+          // Jeśli materiał nie ma przypisanego ID pozycji magazynowej, pomijamy go
+          console.log(`Materiał ${material.name} nie ma przypisanego ID pozycji magazynowej, pomijamy`);
+          continue;
+        }
+        
+        try {
+          // Sprawdź, czy pozycja magazynowa istnieje
+          await getInventoryItemById(material.inventoryItemId);
+          
+          // Zarezerwuj materiał w magazynie
+          const result = await bookInventoryForTask(material.inventoryItemId, material.quantity, taskId, getCurrentUserId());
+          reservedItems.push({
+            itemId: material.inventoryItemId,
+            name: material.name,
+            quantity: material.quantity,
+            unit: material.unit
+          });
+        } catch (error) {
+          console.error(`Błąd podczas rezerwacji materiału ${material.name}:`, error);
+          errors.push(`Nie można zarezerwować materiału ${material.name}: ${error.message}`);
+        }
+      }
+      
+      // Zwróć informację o wyniku operacji
+      if (errors.length === 0) {
+        return {
+          success: true,
+          message: `Zarezerwowano wszystkie ${reservedItems.length} materiały dla zadania`,
+          reservedItems
+        };
+      } else {
+        return {
+          success: false,
+          message: `Zarezerwowano częściowo materiały dla zadania (${reservedItems.length} z ${materials.length})`,
+          reservedItems,
+          errors
+        };
+      }
+    } catch (error) {
+      console.error('Błąd podczas rezerwacji materiałów:', error);
+      throw error;
+    }
+  };
+
+  // Pomocnicza funkcja do pobierania aktualnego ID użytkownika
+  const getCurrentUserId = () => {
+    // W prawdziwej aplikacji należałoby pobrać ID z kontekstu Auth
+    // Na potrzeby tego kodu zwracamy stałą wartość
+    return 'system';
   };

@@ -326,4 +326,32 @@ export const calculateProductionTaskCost = (task, recipe, pricesMap, options = {
     taskUnit: task.unit || (recipe.yield && recipe.yield.unit) || 'szt.',
     taskTotalCost
   };
+};
+
+/**
+ * Oblicza szacowany czas trwania zadania produkcyjnego na podstawie receptury
+ * @param {Object} recipe - Obiekt receptury
+ * @param {Number} taskQuantity - Ilość produktu do wyprodukowania w zadaniu
+ * @returns {Number} - Szacowany czas trwania w minutach
+ */
+export const calculateEstimatedProductionTime = (recipe, taskQuantity = 1) => {
+  if (!recipe) {
+    return 0;
+  }
+
+  // Pobierz czas przygotowania z receptury
+  let prepTime = 0;
+  if (recipe.preparationTime) {
+    prepTime = parseFloat(recipe.preparationTime);
+    if (isNaN(prepTime) || prepTime < 0) {
+      console.warn('Nieprawidłowy czas przygotowania:', recipe.preparationTime);
+      prepTime = 0;
+    }
+  }
+
+  // Oblicz szacowany czas na podstawie czasu przygotowania i ilości produktu
+  // Czas = Czas przygotowania * Ilość produktu
+  const estimatedTime = prepTime * taskQuantity;
+
+  return estimatedTime;
 }; 

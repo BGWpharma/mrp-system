@@ -19,7 +19,7 @@ import {
   PURCHASE_ORDER_STATUSES,
   translateStatus
 } from '../../services/purchaseOrderService';
-import { getAllInventoryItems } from '../../services/inventoryService';
+import { getAllInventoryItems, getAllWarehouses } from '../../services/inventoryService';
 import { CURRENCY_OPTIONS } from '../../config';
 
 const PurchaseOrderForm = ({ orderId }) => {
@@ -35,12 +35,16 @@ const PurchaseOrderForm = ({ orderId }) => {
   const [saving, setSaving] = useState(false);
   const [suppliers, setSuppliers] = useState([]);
   const [inventoryItems, setInventoryItems] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
   
   const [poData, setPoData] = useState({
     supplier: null,
     items: [],
     totalValue: 0,
+    totalGross: 0,
     currency: 'PLN',
+    vatRate: 23, // Domyślna stawka VAT 23%
+    targetWarehouseId: '', // Nowe pole dla magazynu docelowego
     orderDate: new Date().toISOString().split('T')[0],
     expectedDeliveryDate: '',
     deliveryAddress: '',
@@ -59,6 +63,10 @@ const PurchaseOrderForm = ({ orderId }) => {
         const itemsData = await getAllInventoryItems();
         setInventoryItems(itemsData);
         
+        // Pobierz magazyny
+        const warehousesData = await getAllWarehouses();
+        setWarehouses(warehousesData);
+        
         // Jeśli edytujemy istniejące zamówienie, pobierz jego dane
         if (currentOrderId && currentOrderId !== 'new') {
           const poDetails = await getPurchaseOrderById(currentOrderId);
@@ -70,7 +78,9 @@ const PurchaseOrderForm = ({ orderId }) => {
           setPoData({
             ...poDetails,
             orderDate: formattedOrderDate,
-            expectedDeliveryDate: formattedDeliveryDate
+            expectedDeliveryDate: formattedDeliveryDate,
+            vatRate: poDetails.vatRate || 23,
+            targetWarehouseId: poDetails.targetWarehouseId || ''
           });
         }
         
@@ -85,15 +95,32 @@ const PurchaseOrderForm = ({ orderId }) => {
     fetchData();
   }, [currentOrderId]);
   
-  // Aktualizacja całkowitej wartości zamówienia
+  // Aktualizacja całkowitej wartości zamówienia (netto i brutto)
   useEffect(() => {
-    const total = poData.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
-    setPoData(prev => ({ ...prev, totalValue: total }));
-  }, [poData.items]);
+    const totalNet = poData.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
+    const vatRate = poData.vatRate / 100 || 0.23;
+    const totalGross = totalNet * (1 + vatRate);
+    
+    setPoData(prev => ({ 
+      ...prev, 
+      totalValue: totalNet,
+      totalGross: totalGross 
+    }));
+  }, [poData.items, poData.vatRate]);
   
   const handleChange = (e) => {
     const { name, value } = e.target;
     setPoData(prev => ({ ...prev, [name]: value }));
+  };
+  
+  const handleDateChange = (name, date) => {
+    if (date) {
+      // Konwertuj datę do formatu ISO i zachowaj tylko część z datą (YYYY-MM-DD)
+      const formattedDate = date.toISOString().split('T')[0];
+      setPoData(prev => ({ ...prev, [name]: formattedDate }));
+    } else {
+      setPoData(prev => ({ ...prev, [name]: '' }));
+    }
   };
   
   const handleSupplierChange = (event, newValue) => {
@@ -154,6 +181,7 @@ const PurchaseOrderForm = ({ orderId }) => {
     updatedItems[index] = {
       ...updatedItems[index],
       id: selectedItem.id,
+      inventoryItemId: selectedItem.id,
       name: selectedItem.name,
       unit: selectedItem.unit || 'szt',
       // Zachowujemy istniejące wartości jeśli są, lub ustawiamy domyślne
@@ -168,18 +196,21 @@ const PurchaseOrderForm = ({ orderId }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Walidacja podstawowa
     if (!poData.supplier) {
       showError('Wybierz dostawcę');
       return;
     }
     
-    if (poData.items.length === 0) {
-      showError('Dodaj co najmniej jeden produkt');
+    if (!poData.targetWarehouseId) {
+      showError('Wybierz magazyn docelowy');
       return;
     }
     
-    // Walidacja kompletności danych przedmiotów
+    if (poData.items.length === 0) {
+      showError('Dodaj przynajmniej jeden przedmiot do zamówienia');
+      return;
+    }
+    
     const invalidItem = poData.items.find(item => !item.name || !item.quantity || !item.unitPrice);
     if (invalidItem) {
       showError('Uzupełnij wszystkie dane dla każdego przedmiotu');
@@ -199,10 +230,10 @@ const PurchaseOrderForm = ({ orderId }) => {
       let result;
       if (currentOrderId && currentOrderId !== 'new') {
         result = await updatePurchaseOrder(currentOrderId, orderData);
-        showSuccess('Zamówienie zakupowe zostało zaktualizowane');
+        showSuccess('Zamówienie komponentów zostało zaktualizowane');
       } else {
         result = await createPurchaseOrder(orderData);
-        showSuccess('Zamówienie zakupowe zostało utworzone');
+        showSuccess('Zamówienie komponentów zostało utworzone');
       }
       
       setSaving(false);
@@ -230,7 +261,7 @@ const PurchaseOrderForm = ({ orderId }) => {
     <Container>
       <Box sx={{ mb: 3 }}>
         <Typography variant="h5">
-          {currentOrderId === 'new' ? 'Nowe Zamówienie Zakupu' : 'Edytuj Zamówienie Zakupu'}
+          {currentOrderId === 'new' ? 'Nowe Zamówienie Komponentów' : 'Edytuj Zamówienie Komponentów'}
         </Typography>
       </Box>
       
@@ -255,8 +286,28 @@ const PurchaseOrderForm = ({ orderId }) => {
               />
             </Grid>
             
-            {/* Waluta */}
+            {/* Magazyn docelowy */}
             <Grid item xs={12} md={6}>
+              <FormControl fullWidth required>
+                <InputLabel>Magazyn docelowy</InputLabel>
+                <Select
+                  name="targetWarehouseId"
+                  value={poData.targetWarehouseId}
+                  onChange={handleChange}
+                  label="Magazyn docelowy"
+                >
+                  <MenuItem value=""><em>Wybierz magazyn</em></MenuItem>
+                  {warehouses.map((warehouse) => (
+                    <MenuItem key={warehouse.id} value={warehouse.id}>
+                      {warehouse.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            
+            {/* Waluta */}
+            <Grid item xs={12} md={3}>
               <FormControl fullWidth>
                 <InputLabel>Waluta</InputLabel>
                 <Select
@@ -272,13 +323,31 @@ const PurchaseOrderForm = ({ orderId }) => {
               </FormControl>
             </Grid>
             
+            {/* Stawka VAT */}
+            <Grid item xs={12} md={3}>
+              <FormControl fullWidth>
+                <InputLabel>Stawka VAT</InputLabel>
+                <Select
+                  name="vatRate"
+                  value={poData.vatRate}
+                  onChange={handleChange}
+                  label="Stawka VAT"
+                >
+                  <MenuItem value={0}>0%</MenuItem>
+                  <MenuItem value={5}>5%</MenuItem>
+                  <MenuItem value={8}>8%</MenuItem>
+                  <MenuItem value={23}>23%</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            
             {/* Data zamówienia */}
             <Grid item xs={12} md={6}>
               <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                 <DatePicker
                   label="Data zamówienia"
                   value={poData.orderDate ? new Date(poData.orderDate) : null}
-                  onChange={(date) => handleChange('orderDate')}
+                  onChange={(date) => handleDateChange('orderDate', date)}
                   slotProps={{ textField: { fullWidth: true } }}
                 />
               </LocalizationProvider>
@@ -290,7 +359,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                 <DatePicker
                   label="Planowana data dostawy"
                   value={poData.expectedDeliveryDate ? new Date(poData.expectedDeliveryDate) : null}
-                  onChange={(date) => handleChange('expectedDeliveryDate')}
+                  onChange={(date) => handleDateChange('expectedDeliveryDate', date)}
                   slotProps={{ textField: { fullWidth: true, required: true } }}
                 />
               </LocalizationProvider>
@@ -449,23 +518,34 @@ const PurchaseOrderForm = ({ orderId }) => {
             </Table>
           </TableContainer>
           
+          <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
+            <Grid container spacing={2} justifyContent="flex-end">
+              <Grid item xs={12} md={4}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Wartość netto: <strong>{poData.totalValue.toFixed(2)} {poData.currency}</strong>
+                </Typography>
+                <Typography variant="subtitle1" gutterBottom>
+                  Stawka VAT: <strong>{poData.vatRate}%</strong>
+                </Typography>
+                <Typography variant="h6" color="primary" gutterBottom>
+                  Wartość brutto: <strong>{poData.totalGross.toFixed(2)} {poData.currency}</strong>
+                </Typography>
+              </Grid>
+            </Grid>
+          </Box>
+          
           <Box sx={{ mb: 3 }}>
             <Button
               variant="outlined"
               startIcon={<AddIcon />}
               onClick={handleAddItem}
+              sx={{ mt: 2 }}
             >
               Dodaj pozycję
             </Button>
           </Box>
           
           <Divider sx={{ my: 3 }} />
-          
-          {/* Podsumowanie */}
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-            <Typography variant="h6">Wartość całkowita:</Typography>
-            <Typography variant="h6">{poData.totalValue.toFixed(2)} {poData.currency}</Typography>
-          </Box>
           
           {/* Przyciski */}
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
