@@ -162,7 +162,7 @@ const Sidebar = () => {
       hasSubmenu: true,
       children: [
         { text: 'Kalendarz', icon: <CalendarIcon />, path: '/production/calendar' },
-        { text: 'Lista zadań', icon: <ListIcon />, path: '/production' },
+        { text: 'Zadania MO', icon: <ListIcon />, path: '/production' },
         { text: 'Prognoza zapotrzebowania', icon: <ForecastIcon />, path: '/production/forecast' },
       ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
     },

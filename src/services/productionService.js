@@ -563,12 +563,26 @@ import {
           }
           
           // Konwertuj quantity na liczbę i upewnij się, że jest poprawna
-          const materialQuantity = parseFloat(material.quantity) || 0;
-          const taskQuantity = parseFloat(task.quantity) || 1;
+          let materialQuantity = parseFloat(material.quantity) || 0;
+          let taskQuantity = parseFloat(task.quantity) || 1;
           
           if (materialQuantity <= 0) {
             console.warn(`Materiał ${material.name} ma nieprawidłową ilość: ${material.quantity}`);
             continue;
+          }
+          
+          // Dodatkowa logika dla określenia rzeczywistej ilości materiału na jednostkę produktu
+          const quantityPerUnit = material.perUnit || material.quantityPerUnit; 
+          if (quantityPerUnit && quantityPerUnit > 0) {
+            // Jeśli jest explicit określona ilość na jednostkę, użyj jej
+            materialQuantity = quantityPerUnit;
+          } else if (material.isFullTaskQuantity || material.isTotal) {
+            // Jeśli jest oznaczone, że ilość jest dla całego zadania
+            materialQuantity = materialQuantity / taskQuantity;
+          } else if (materialQuantity > 20 && taskQuantity > 1) {
+            // Heurystyka: jeśli ilość materiału jest znacznie większa niż 1 i mamy więcej niż 1 jednostkę produktu,
+            // zakładamy, że jest to ilość dla całego zadania
+            materialQuantity = materialQuantity / taskQuantity;
           }
           
           const requiredQuantity = materialQuantity * taskQuantity;
@@ -581,7 +595,8 @@ import {
               category: material.category || 'Inne',
               unit: material.unit || 'szt.',
               requiredQuantity: 0,
-              availableQuantity: 0
+              availableQuantity: 0,
+              perUnit: materialQuantity // Zapamiętaj ilość na jednostkę produktu
             };
           }
           
@@ -599,7 +614,7 @@ import {
       // Przekształć obiekt do tablicy i upewnij się, że wartości są liczbowe
       const result = Object.values(materialRequirements).map(item => ({
         ...item,
-        requiredQuantity: parseFloat(item.requiredQuantity) || 0,
+        requiredQuantity: parseFloat(item.requiredQuantity.toFixed(2)) || 0,
         availableQuantity: parseFloat(item.availableQuantity) || 0
       }));
       

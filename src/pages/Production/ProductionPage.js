@@ -15,7 +15,7 @@ const ProductionPage = () => {
     setActiveTab(newValue);
     
     switch (newValue) {
-      case 0: // Lista zadań
+      case 0: // Zadania MO
         setViewMode('list');
         break;
       case 1: // Kalendarz
@@ -52,7 +52,7 @@ const ProductionPage = () => {
         scrollButtons="auto"
         sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}
       >
-        <Tab icon={<ListIcon />} label="Lista zadań" iconPosition="start" />
+        <Tab icon={<ListIcon />} label="Zadania MO" iconPosition="start" />
         <Tab icon={<CalendarIcon />} label="Kalendarz" iconPosition="start" />
         <Tab icon={<ReportIcon />} label="Raporty" iconPosition="start" />
         <Tab icon={<ForecastIcon />} label="Prognoza zapotrzebowania" iconPosition="start" />
