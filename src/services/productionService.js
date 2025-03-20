@@ -218,8 +218,13 @@ import {
         if (task.productName) {
           updates.readyForInventory = true;
           
-          // Jeśli zadanie ma potwierdzenie zużycia materiałów, dodajemy produkty do magazynu od razu
-          if (task.materialConsumptionConfirmed || !task.materials || task.materials.length === 0) {
+          // Sprawdź czy zadanie ma materiały i czy nie ma potwierdzonego zużycia
+          if (!task.materialConsumptionConfirmed && task.materials && task.materials.length > 0) {
+            // Zmień status na "Potwierdzenie zużycia" zamiast "Zakończone"
+            updates.status = 'Potwierdzenie zużycia';
+            console.log(`Zadanie ${taskId} wymaga potwierdzenia zużycia, zmieniono status na "Potwierdzenie zużycia"`);
+          } else {
+            // Jeśli zadanie ma potwierdzenie zużycia materiałów lub nie ma materiałów, dodajemy produkty do magazynu od razu
             await addTaskProductToInventory(taskId, userId);
           }
         }
@@ -227,7 +232,7 @@ import {
       
       await updateDoc(taskRef, updates);
       
-      return { success: true, message: `Status zadania zmieniony na ${newStatus}` };
+      return { success: true, message: `Status zadania zmieniony na ${updates.status}` };
     } catch (error) {
       console.error('Błąd podczas aktualizacji statusu zadania:', error);
       throw error;
@@ -1081,11 +1086,29 @@ import {
       }
       
       // Oznacz zużycie jako potwierdzone i zapisz informacje o wykorzystanych partiach
-      await updateDoc(taskRef, {
+      const updates = {
         materialConsumptionConfirmed: true,
         materialConsumptionDate: new Date().toISOString(),
         usedBatches: task.usedBatches || {}
-      });
+      };
+      
+      // Jeśli zadanie miało status "Potwierdzenie zużycia", zmień na "Zakończone"
+      if (task.status === 'Potwierdzenie zużycia') {
+        updates.status = 'Zakończone';
+        console.log(`Zadanie ${taskId} zmieniło status z "Potwierdzenie zużycia" na "Zakończone"`);
+      }
+      
+      await updateDoc(taskRef, updates);
+      
+      // Jeśli zadanie ma produkt i jest gotowe do dodania do magazynu, dodaj produkt do magazynu
+      if (task.productName && task.readyForInventory) {
+        try {
+          await addTaskProductToInventory(taskId, task.createdBy || 'system');
+        } catch (error) {
+          console.error(`Błąd podczas dodawania produktu do magazynu: ${error.message}`);
+          // Kontynuuj mimo błędu, zużycie materiałów zostało już potwierdzone
+        }
+      }
       
       return { success: true, message: 'Zużycie materiałów potwierdzone i stany magazynowe zaktualizowane' };
     } catch (error) {

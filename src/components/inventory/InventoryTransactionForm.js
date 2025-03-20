@@ -34,7 +34,7 @@ import {
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { pl } from 'date-fns/locale';
-import { getInventoryItemById, receiveInventory, issueInventory, getItemBatches } from '../../services/inventoryService';
+import { getInventoryItemById, receiveInventory, issueInventory, getItemBatches, getAllWarehouses } from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { Timestamp } from 'firebase/firestore';
@@ -44,6 +44,7 @@ const InventoryTransactionForm = ({ itemId, transactionType }) => {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [batches, setBatches] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
   const navigate = useNavigate();
@@ -55,7 +56,8 @@ const InventoryTransactionForm = ({ itemId, transactionType }) => {
     reason: '',
     reference: '',
     notes: '',
-    unitPrice: ''
+    unitPrice: '',
+    warehouseId: ''
   });
 
   const [batchData, setBatchData] = useState({
@@ -75,12 +77,17 @@ const InventoryTransactionForm = ({ itemId, transactionType }) => {
           return;
         }
         
-        const fetchedItem = await getInventoryItemById(itemId);
+        const [fetchedItem, warehousesList] = await Promise.all([
+          getInventoryItemById(itemId),
+          getAllWarehouses()
+        ]);
+        
         setItem(fetchedItem);
+        setWarehouses(warehousesList);
         
         // Pobierz partie dla wydania
-        if (!isReceive) {
-          const fetchedBatches = await getItemBatches(itemId);
+        if (!isReceive && transactionData.warehouseId) {
+          const fetchedBatches = await getItemBatches(itemId, transactionData.warehouseId);
           setBatches(fetchedBatches.filter(batch => batch.quantity > 0));
         }
       } catch (error) {
@@ -93,7 +100,7 @@ const InventoryTransactionForm = ({ itemId, transactionType }) => {
     };
     
     fetchData();
-  }, [itemId, navigate, showError, isReceive]);
+  }, [itemId, navigate, showError, isReceive, transactionData.warehouseId]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -104,11 +111,16 @@ const InventoryTransactionForm = ({ itemId, transactionType }) => {
         throw new Error('Ilość musi być większa od zera');
       }
       
+      if (!transactionData.warehouseId) {
+        throw new Error('Należy wybrać magazyn');
+      }
+      
       // Przygotuj dane transakcji
       const transactionPayload = {
         reason: transactionData.reason,
         reference: transactionData.reference,
         notes: transactionData.notes,
+        warehouseId: transactionData.warehouseId,
         unitPrice: isReceive ? parseFloat(transactionData.unitPrice) || 0 : undefined
       };
       
@@ -226,6 +238,31 @@ const InventoryTransactionForm = ({ itemId, transactionType }) => {
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom>Szczegóły transakcji</Typography>
         <Grid container spacing={3}>
+          <Grid item xs={12} sm={6}>
+            <FormControl fullWidth required>
+              <InputLabel id="warehouse-label">Magazyn</InputLabel>
+              <Select
+                labelId="warehouse-label"
+                name="warehouseId"
+                value={transactionData.warehouseId}
+                onChange={handleChange}
+                label="Magazyn"
+                error={!transactionData.warehouseId}
+              >
+                <MenuItem value="">
+                  <em>Wybierz magazyn</em>
+                </MenuItem>
+                {warehouses.map((warehouse) => (
+                  <MenuItem key={warehouse.id} value={warehouse.id}>
+                    {warehouse.name}
+                  </MenuItem>
+                ))}
+              </Select>
+              {!transactionData.warehouseId && (
+                <FormHelperText error>Wybór magazynu jest wymagany</FormHelperText>
+              )}
+            </FormControl>
+          </Grid>
           <Grid item xs={12} sm={6}>
             <TextField
               required

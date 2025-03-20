@@ -88,12 +88,13 @@ import {
   
   // Usuwanie magazynu
   export const deleteWarehouse = async (warehouseId) => {
-    const itemsRef = collection(db, INVENTORY_COLLECTION);
-    const q = query(itemsRef, where('warehouseId', '==', warehouseId));
+    // Sprawdź, czy magazyn zawiera jakieś partie
+    const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
+    const q = query(batchesRef, where('warehouseId', '==', warehouseId));
     const querySnapshot = await getDocs(q);
     
     if (querySnapshot.docs.length > 0) {
-      throw new Error('Nie można usunąć magazynu, który zawiera pozycje magazynowe');
+      throw new Error('Nie można usunąć magazynu, który zawiera partie magazynowe');
     }
     
     await deleteDoc(doc(db, WAREHOUSES_COLLECTION, warehouseId));
@@ -105,19 +106,32 @@ import {
   // Pobieranie wszystkich pozycji magazynowych z możliwością filtrowania po magazynie
   export const getAllInventoryItems = async (warehouseId = null) => {
     const itemsRef = collection(db, INVENTORY_COLLECTION);
-    let q;
-    
-    if (warehouseId) {
-      q = query(itemsRef, where('warehouseId', '==', warehouseId), orderBy('name', 'asc'));
-    } else {
-      q = query(itemsRef, orderBy('name', 'asc'));
-    }
+    const q = query(itemsRef, orderBy('name', 'asc'));
     
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
+    const items = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
+
+    // Jeśli podano warehouseId, filtrujemy za pomocą partii
+    if (warehouseId) {
+      // Pobierz wszystkie partie dla podanego magazynu
+      const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
+      const batchesQuery = query(batchesRef, where('warehouseId', '==', warehouseId));
+      const batchesSnapshot = await getDocs(batchesQuery);
+      
+      // Zbierz ID pozycji, które mają partie w danym magazynie
+      const itemIdsInWarehouse = new Set();
+      batchesSnapshot.docs.forEach(doc => {
+        itemIdsInWarehouse.add(doc.data().itemId);
+      });
+      
+      // Filtruj pozycje, które mają partie w danym magazynie
+      return items.filter(item => itemIdsInWarehouse.has(item.id));
+    }
+    
+    return items;
   };
   
   // Pobieranie pozycji magazynowej po ID
@@ -160,8 +174,11 @@ import {
       throw new Error('Pozycja magazynowa o takiej nazwie już istnieje');
     }
     
+    // Usuwamy warehouseId, ponieważ teraz pozycje nie są przypisane do magazynów
+    const { warehouseId, ...dataWithoutWarehouse } = itemData;
+    
     const itemWithMeta = {
-      ...itemData,
+      ...dataWithoutWarehouse,
       quantity: Number(itemData.quantity) || 0,
       createdBy: userId,
       createdAt: serverTimestamp(),
@@ -191,8 +208,11 @@ import {
       }
     }
     
+    // Usuwamy warehouseId, ponieważ teraz pozycje nie są przypisane do magazynów
+    const { warehouseId, ...dataWithoutWarehouse } = itemData;
+    
     const updatedItem = {
-      ...itemData,
+      ...dataWithoutWarehouse,
       updatedAt: serverTimestamp(),
       updatedBy: userId
     };
@@ -251,14 +271,27 @@ import {
   };
   
   // Pobieranie partii dla danej pozycji magazynowej
-  export const getItemBatches = async (itemId) => {
+  export const getItemBatches = async (itemId, warehouseId = null) => {
     try {
       const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
-      const q = query(
-        batchesRef,
-        where('itemId', '==', itemId),
-        orderBy('expiryDate', 'asc') // Sortuj wg daty ważności (FEFO)
-      );
+      
+      let q;
+      if (warehouseId) {
+        // Jeśli podano magazyn, filtruj partie po magazynie
+        q = query(
+          batchesRef,
+          where('itemId', '==', itemId),
+          where('warehouseId', '==', warehouseId),
+          orderBy('expiryDate', 'asc') // Sortuj wg daty ważności (FEFO)
+        );
+      } else {
+        // W przeciwnym razie pobierz wszystkie partie dla pozycji
+        q = query(
+          batchesRef,
+          where('itemId', '==', itemId),
+          orderBy('expiryDate', 'asc') // Sortuj wg daty ważności (FEFO)
+        );
+      }
       
       const querySnapshot = await getDocs(q);
       return querySnapshot.docs.map(doc => {
@@ -329,6 +362,11 @@ import {
   // Przyjęcie towaru (zwiększenie stanu) z datą ważności
   export const receiveInventory = async (itemId, quantity, transactionData, userId) => {
     try {
+      // Sprawdź, czy podano warehouseId - jest teraz wymagany
+      if (!transactionData.warehouseId) {
+        throw new Error('Należy określić magazyn dla przyjęcia towaru');
+      }
+      
       // Pobierz bieżącą pozycję
       const currentItem = await getInventoryItemById(itemId);
       
@@ -350,6 +388,7 @@ import {
         quantity: Number(quantity),
         previousQuantity: currentItem.quantity,
         newQuantity: currentItem.quantity + Number(quantity),
+        warehouseId: transactionData.warehouseId, // Dodajemy warehouseId do transakcji
         ...transactionData,
         transactionDate: serverTimestamp(),
         createdBy: userId
@@ -373,10 +412,31 @@ import {
           initialQuantity: Number(quantity),
           batchNumber: batchLotNumber, // Używamy jednego numeru dla partii/LOT
           lotNumber: batchLotNumber, // Ten sam numer dla spójności danych
+          warehouseId: transactionData.warehouseId, // Zawsze dodajemy warehouseId
           expiryDate: transactionData.expiryDate,
           receivedDate: serverTimestamp(),
           notes: transactionData.batchNotes || '',
           unitPrice: transactionData.unitPrice || 0, // Dodajemy cenę jednostkową do partii
+          createdBy: userId
+        };
+        
+        await addDoc(collection(db, INVENTORY_BATCHES_COLLECTION), batch);
+      } else {
+        // Nawet jeśli nie podano daty ważności, tworzymy partię
+        const generatedLotNumber = await generateLOTNumber();
+        
+        const batch = {
+          itemId,
+          itemName: currentItem.name,
+          transactionId: transactionRef.id,
+          quantity: Number(quantity),
+          initialQuantity: Number(quantity),
+          batchNumber: generatedLotNumber,
+          lotNumber: generatedLotNumber,
+          warehouseId: transactionData.warehouseId, // Zawsze dodajemy warehouseId
+          receivedDate: serverTimestamp(),
+          notes: transactionData.batchNotes || '',
+          unitPrice: transactionData.unitPrice || 0,
           createdBy: userId
         };
         
@@ -395,15 +455,26 @@ import {
 
   // Wydanie towaru (zmniejszenie stanu) z uwzględnieniem partii (FEFO)
   export const issueInventory = async (itemId, quantity, transactionData, userId) => {
+    // Sprawdź, czy podano warehouseId - jest teraz wymagany
+    if (!transactionData.warehouseId) {
+      throw new Error('Należy określić magazyn dla wydania towaru');
+    }
+
     // Pobierz bieżącą pozycję
     const currentItem = await getInventoryItemById(itemId);
     
-    // Sprawdź, czy jest wystarczająca ilość
-    if (currentItem.quantity < Number(quantity)) {
-      throw new Error('Niewystarczająca ilość towaru w magazynie');
+    // Pobierz partie w danym magazynie
+    const batches = await getItemBatches(itemId, transactionData.warehouseId);
+    
+    // Oblicz dostępną ilość w magazynie (suma ilości we wszystkich partiach)
+    const availableQuantity = batches.reduce((sum, batch) => sum + (batch.quantity || 0), 0);
+    
+    // Sprawdź, czy jest wystarczająca ilość w danym magazynie
+    if (availableQuantity < Number(quantity)) {
+      throw new Error(`Niewystarczająca ilość towaru w magazynie. Dostępne: ${availableQuantity}`);
     }
     
-    // Aktualizuj stan
+    // Aktualizuj stan głównej pozycji
     const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
     await updateDoc(itemRef, {
       quantity: increment(-Number(quantity)),
@@ -419,6 +490,7 @@ import {
       quantity: Number(quantity),
       previousQuantity: currentItem.quantity,
       newQuantity: currentItem.quantity - Number(quantity),
+      warehouseId: transactionData.warehouseId, // Dodajemy warehouseId do transakcji
       ...transactionData,
       transactionDate: serverTimestamp(),
       createdBy: userId
@@ -434,6 +506,11 @@ import {
       if (batchDoc.exists()) {
         const batchData = batchDoc.data();
         
+        // Sprawdź czy partia jest w wybranym magazynie
+        if (batchData.warehouseId !== transactionData.warehouseId) {
+          throw new Error('Wybrana partia nie znajduje się w wybranym magazynie');
+        }
+        
         if (batchData.quantity < Number(quantity)) {
           throw new Error('Niewystarczająca ilość w wybranej partii');
         }
@@ -446,11 +523,10 @@ import {
     } else {
       // Automatyczne wydanie według FEFO (First Expired, First Out)
       let remainingQuantity = Number(quantity);
-      const batches = await getItemBatches(itemId);
       
       // Sortuj partie według daty ważności (najwcześniej wygasające pierwsze)
       const sortedBatches = batches
-        .filter(batch => batch.quantity > 0)
+        .filter(batch => batch.quantity > 0 && batch.warehouseId === transactionData.warehouseId)
         .sort((a, b) => {
           const dateA = a.expiryDate instanceof Timestamp ? a.expiryDate.toDate() : new Date(a.expiryDate);
           const dateB = b.expiryDate instanceof Timestamp ? b.expiryDate.toDate() : new Date(b.expiryDate);
@@ -958,6 +1034,211 @@ import {
       return selectedBatches;
     } catch (error) {
       console.error('Błąd podczas pobierania partii z najkrótszą datą ważności:', error);
+      throw error;
+    }
+  };
+
+  // Przenoszenie partii między magazynami
+  export const transferBatch = async (batchId, sourceWarehouseId, targetWarehouseId, quantity, userData) => {
+    // Sprawdź, czy wszystkie parametry są prawidłowe
+    if (!batchId) {
+      throw new Error('Nie podano identyfikatora partii');
+    }
+    
+    if (!sourceWarehouseId) {
+      throw new Error('Nie podano identyfikatora magazynu źródłowego');
+    }
+    
+    if (!targetWarehouseId) {
+      throw new Error('Nie podano identyfikatora magazynu docelowego');
+    }
+    
+    if (sourceWarehouseId === targetWarehouseId) {
+      throw new Error('Magazyn źródłowy i docelowy muszą być różne');
+    }
+    
+    try {
+      // Zabezpiecz userData
+      userData = userData || {};
+      const userId = (userData.userId || 'unknown').toString();
+      const notes = (userData.notes || '').toString();
+      
+      // Pobierz dane partii
+      const batchRef = doc(db, INVENTORY_BATCHES_COLLECTION, batchId);
+      const batchDoc = await getDoc(batchRef);
+      
+      if (!batchDoc.exists()) {
+        throw new Error('Partia nie istnieje');
+      }
+      
+      const batchData = batchDoc.data() || {};
+      
+      // Sprawdź, czy partia należy do źródłowego magazynu
+      if (batchData.warehouseId !== sourceWarehouseId) {
+        throw new Error('Partia nie znajduje się w podanym magazynie źródłowym');
+      }
+      
+      // Sprawdź, czy ilość jest prawidłowa
+      const availableQuantity = Number(batchData.quantity || 0);
+      const transferQuantity = Number(quantity);
+      
+      if (isNaN(transferQuantity) || transferQuantity <= 0) {
+        throw new Error('Nieprawidłowa ilość do transferu');
+      }
+      
+      if (availableQuantity < transferQuantity) {
+        throw new Error(`Niewystarczająca ilość w partii. Dostępne: ${availableQuantity}, żądane: ${transferQuantity}`);
+      }
+      
+      // Pobierz dane magazynów do transakcji
+      const sourceWarehouseRef = doc(db, WAREHOUSES_COLLECTION, sourceWarehouseId);
+      const sourceWarehouseDoc = await getDoc(sourceWarehouseRef);
+      
+      const targetWarehouseRef = doc(db, WAREHOUSES_COLLECTION, targetWarehouseId);
+      const targetWarehouseDoc = await getDoc(targetWarehouseRef);
+      
+      if (!sourceWarehouseDoc.exists()) {
+        throw new Error('Magazyn źródłowy nie istnieje');
+      }
+      
+      if (!targetWarehouseDoc.exists()) {
+        throw new Error('Magazyn docelowy nie istnieje');
+      }
+      
+      // Pobierz dane pozycji magazynowej
+      const itemId = batchData.itemId;
+      if (!itemId) {
+        throw new Error('Partia nie ma przypisanego ID pozycji');
+      }
+      
+      const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
+      const itemDoc = await getDoc(itemRef);
+      
+      if (!itemDoc.exists()) {
+        throw new Error('Pozycja magazynowa nie istnieje');
+      }
+      
+      const itemData = itemDoc.data() || {};
+      
+      // Sprawdź, czy istnieje już partia tego samego przedmiotu w magazynie docelowym
+      // z tym samym numerem partii i datą ważności
+      const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
+      const existingBatchQuery = query(
+        batchesRef,
+        where('itemId', '==', itemId),
+        where('batchNumber', '==', batchData.batchNumber),
+        where('warehouseId', '==', targetWarehouseId)
+      );
+      
+      const existingBatchSnapshot = await getDocs(existingBatchQuery);
+      
+      let targetBatchId;
+      let isNewBatch = true;
+      
+      if (!existingBatchSnapshot.empty) {
+        const existingBatch = existingBatchSnapshot.docs[0];
+        const existingBatchData = existingBatch.data();
+        
+        // Sprawdź, czy daty ważności są takie same
+        const existingExpiryDate = existingBatchData.expiryDate;
+        const sourceExpiryDate = batchData.expiryDate;
+        
+        let datesMatch = true;
+        
+        // Sprawdzenie dat (jeśli istnieją)
+        if (existingExpiryDate && sourceExpiryDate) {
+          const existingDate = existingExpiryDate instanceof Timestamp 
+            ? existingExpiryDate.toDate().getTime() 
+            : new Date(existingExpiryDate).getTime();
+          
+          const sourceDate = sourceExpiryDate instanceof Timestamp 
+            ? sourceExpiryDate.toDate().getTime() 
+            : new Date(sourceExpiryDate).getTime();
+          
+          datesMatch = existingDate === sourceDate;
+        } else if (existingExpiryDate || sourceExpiryDate) {
+          // Jedna ma datę, druga nie
+          datesMatch = false;
+        }
+        
+        if (datesMatch) {
+          // Użyj istniejącej partii
+          targetBatchId = existingBatch.id;
+          isNewBatch = false;
+        }
+      }
+      
+      // Aktualizuj partię źródłową
+      await updateDoc(batchRef, {
+        quantity: increment(-transferQuantity),
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      });
+      
+      if (isNewBatch) {
+        // Utwórz nową partię w magazynie docelowym
+        const newBatchData = {
+          ...batchData,
+          id: undefined, // Usuń ID, aby Firebase wygenerowało nowe
+          quantity: transferQuantity,
+          initialQuantity: transferQuantity,
+          warehouseId: targetWarehouseId,
+          transferredFrom: sourceWarehouseId,
+          transferredAt: serverTimestamp(),
+          transferredBy: userId,
+          transferNotes: notes,
+          createdAt: serverTimestamp(),
+          createdBy: userId
+        };
+        
+        // Wyczyść pole timestamp z istniejącej referencji dokumentu
+        const newBatchDataForFirestore = {};
+        Object.entries(newBatchData).forEach(([key, value]) => {
+          if (value !== undefined && key !== 'id') {
+            newBatchDataForFirestore[key] = value;
+          }
+        });
+        
+        const newBatchRef = await addDoc(collection(db, INVENTORY_BATCHES_COLLECTION), newBatchDataForFirestore);
+        targetBatchId = newBatchRef.id;
+      } else {
+        // Zaktualizuj istniejącą partię w magazynie docelowym
+        const targetBatchRef = doc(db, INVENTORY_BATCHES_COLLECTION, targetBatchId);
+        await updateDoc(targetBatchRef, {
+          quantity: increment(transferQuantity),
+          updatedAt: serverTimestamp(),
+          updatedBy: userId,
+          lastTransferFrom: sourceWarehouseId,
+          lastTransferAt: serverTimestamp()
+        });
+      }
+      
+      // Dodaj transakcję
+      const transactionData = {
+        type: 'TRANSFER',
+        itemId,
+        itemName: itemData.name,
+        quantity: transferQuantity,
+        sourceWarehouseId,
+        targetWarehouseId,
+        sourceBatchId: batchId,
+        targetBatchId,
+        notes,
+        createdBy: userId,
+        createdAt: serverTimestamp()
+      };
+      
+      await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
+      
+      return {
+        success: true,
+        sourceWarehouseId,
+        targetWarehouseId,
+        quantity: transferQuantity,
+        message: 'Transfer zakończony pomyślnie'
+      };
+    } catch (error) {
+      console.error('Błąd podczas transferu partii:', error);
       throw error;
     }
   };

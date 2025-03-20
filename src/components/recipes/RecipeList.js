@@ -1,6 +1,6 @@
 // src/components/recipes/RecipeList.js
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   Table, 
   TableBody, 
@@ -14,14 +14,16 @@ import {
   IconButton,
   Typography,
   Chip,
-  Box
+  Box,
+  Tooltip
 } from '@mui/material';
 import { 
   Add as AddIcon, 
   Search as SearchIcon, 
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Visibility as ViewIcon
+  Visibility as ViewIcon,
+  ProductionQuantityLimits as ProductIcon
 } from '@mui/icons-material';
 import { getAllRecipes, deleteRecipe } from '../../services/recipeService';
 import { useNotification } from '../../hooks/useNotification';
@@ -33,6 +35,7 @@ const RecipeList = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const { showSuccess, showError } = useNotification();
+  const navigate = useNavigate();
 
   // Pobierz wszystkie receptury przy montowaniu komponentu
   useEffect(() => {
@@ -78,6 +81,12 @@ const RecipeList = () => {
         console.error('Error deleting recipe:', error);
       }
     }
+  };
+
+  // Funkcja otwierająca formularz receptury z oknem dodawania produktu
+  const handleAddProductToInventory = (recipeId) => {
+    // Przekierowanie do edycji receptury z parametrem wskazującym na otwarcie okna dialogowego
+    navigate(`/recipes/${recipeId}/edit`, { state: { openProductDialog: true } });
   };
 
   if (loading) {
@@ -165,6 +174,14 @@ const RecipeList = () => {
                     >
                       <EditIcon />
                     </IconButton>
+                    <Tooltip title="Dodaj produkt do magazynu">
+                      <IconButton 
+                        onClick={() => handleAddProductToInventory(recipe.id)} 
+                        color="primary"
+                      >
+                        <ProductIcon />
+                      </IconButton>
+                    </Tooltip>
                     <IconButton 
                       onClick={() => handleDelete(recipe.id)} 
                       color="error"

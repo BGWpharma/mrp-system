@@ -1,6 +1,6 @@
 // src/components/recipes/RecipeForm.js
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -25,7 +25,12 @@ import {
   TableRow,
   Autocomplete,
   CircularProgress,
-  Chip
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -35,10 +40,11 @@ import {
   Calculate as CalculateIcon,
   Inventory as InventoryIcon,
   Edit as EditIcon,
-  Build as BuildIcon
+  Build as BuildIcon,
+  ProductionQuantityLimits as ProductIcon
 } from '@mui/icons-material';
 import { createRecipe, updateRecipe, getRecipeById, fixRecipeYield } from '../../services/recipeService';
-import { getAllInventoryItems, getIngredientPrices } from '../../services/inventoryService';
+import { getAllInventoryItems, getIngredientPrices, createInventoryItem, getAllWarehouses } from '../../services/inventoryService';
 import { calculateRecipeTotalCost } from '../../utils/costCalculator';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -49,6 +55,7 @@ const RecipeForm = ({ recipeId }) => {
   const { currentUser } = useAuth();
   const { showSuccess, showError, showWarning } = useNotification();
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(!!recipeId);
   const [saving, setSaving] = useState(false);
   
@@ -71,6 +78,22 @@ const RecipeForm = ({ recipeId }) => {
   // Dodajemy stan dla składników z magazynu
   const [inventoryItems, setInventoryItems] = useState([]);
   const [loadingInventory, setLoadingInventory] = useState(false);
+  
+  // Dodajemy stan dla tworzenia produktu w magazynie
+  const [createProductDialogOpen, setCreateProductDialogOpen] = useState(false);
+  const [creatingProduct, setCreatingProduct] = useState(false);
+  const [warehouses, setWarehouses] = useState([]);
+  const [productData, setProductData] = useState({
+    name: '',
+    description: '',
+    category: '',
+    unit: 'szt.',
+    minStockLevel: 0,
+    maxStockLevel: 0,
+    warehouseId: '',
+    quantity: 0,
+    recipeId: ''
+  });
 
   useEffect(() => {
     if (recipeId) {
@@ -78,6 +101,20 @@ const RecipeForm = ({ recipeId }) => {
         try {
           const recipe = await getRecipeById(recipeId);
           setRecipeData(recipe);
+          
+          // Ustawiamy domyślne dane produktu na podstawie receptury
+          setProductData(prev => ({
+            ...prev,
+            name: recipe.name,
+            description: recipe.description || '',
+            unit: recipe.yield?.unit || 'szt.',
+            recipeId: recipeId
+          }));
+          
+          // Sprawdź czy mamy otworzyć okno dodawania produktu
+          if (location.state?.openProductDialog) {
+            setCreateProductDialogOpen(true);
+          }
         } catch (error) {
           showError('Błąd podczas pobierania receptury: ' + error.message);
           console.error('Error fetching recipe:', error);
@@ -103,8 +140,27 @@ const RecipeForm = ({ recipeId }) => {
       }
     };
     
+    // Pobierz magazyny
+    const fetchWarehouses = async () => {
+      try {
+        const warehousesData = await getAllWarehouses();
+        setWarehouses(warehousesData);
+        
+        // Ustaw domyślny magazyn, jeśli istnieje
+        if (warehousesData.length > 0) {
+          setProductData(prev => ({
+            ...prev,
+            warehouseId: warehousesData[0].id
+          }));
+        }
+      } catch (error) {
+        console.error('Błąd podczas pobierania magazynów:', error);
+      }
+    };
+    
     fetchInventoryItems();
-  }, [recipeId, showError]);
+    fetchWarehouses();
+  }, [recipeId, showError, location.state]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -308,6 +364,87 @@ const RecipeForm = ({ recipeId }) => {
     }
   };
 
+  // Funkcja do obsługi zmiany danych produktu
+  const handleProductDataChange = (e) => {
+    const { name, value } = e.target;
+    setProductData(prev => ({
+      ...prev,
+      [name]: name === 'quantity' || name === 'minStockLevel' || name === 'maxStockLevel' 
+        ? parseFloat(value) || 0 
+        : value
+    }));
+  };
+  
+  // Funkcja do tworzenia produktu w magazynie
+  const handleCreateProduct = async () => {
+    if (!productData.name || !productData.warehouseId) {
+      showError('Nazwa produktu i magazyn są wymagane');
+      return;
+    }
+    
+    try {
+      setCreatingProduct(true);
+      
+      // Obliczymy koszt produktu na podstawie kosztów składników, jeśli dostępne
+      let unitCost = 0;
+      if (costCalculation) {
+        unitCost = costCalculation.unitCost;
+      } else {
+        // Spróbuj obliczyć koszty jeśli nie są jeszcze obliczone
+        await handleCalculateCosts();
+        if (costCalculation) {
+          unitCost = costCalculation.unitCost;
+        }
+      }
+      
+      // Dane produktu do utworzenia
+      const newProductData = {
+        ...productData,
+        type: 'Produkt gotowy',
+        isRawMaterial: false,
+        isFinishedProduct: true,
+        unitPrice: unitCost > 0 ? unitCost : null,
+        batchPrice: null,
+        recipeId: recipeId, // Przypisujemy ID receptury
+        productionCost: unitCost > 0 ? unitCost : null
+      };
+      
+      // Utwórz produkt w magazynie
+      const createdProduct = await createInventoryItem(newProductData, currentUser.uid);
+      
+      showSuccess(`Produkt "${createdProduct.name}" został dodany do magazynu`);
+      setCreateProductDialogOpen(false);
+      
+      // Odśwież listę składników, aby nowo utworzony produkt był widoczny
+      const updatedItems = await getAllInventoryItems();
+      setInventoryItems(updatedItems);
+      
+    } catch (error) {
+      showError('Błąd podczas tworzenia produktu: ' + error.message);
+      console.error('Error creating product:', error);
+    } finally {
+      setCreatingProduct(false);
+    }
+  };
+
+  // Dodajemy przycisk do tworzenia produktu w magazynie
+  const renderCreateProductButton = () => {
+    // Przycisk dostępny tylko przy edycji istniejącej receptury
+    if (!recipeId) return null;
+    
+    return (
+      <Button
+        variant="outlined"
+        color="primary"
+        startIcon={<ProductIcon />}
+        onClick={() => setCreateProductDialogOpen(true)}
+        sx={{ ml: 2 }}
+      >
+        Dodaj produkt do magazynu
+      </Button>
+    );
+  };
+
   if (loading) {
     return <div>Ładowanie receptury...</div>;
   }
@@ -324,15 +461,18 @@ const RecipeForm = ({ recipeId }) => {
         <Typography variant="h5">
           {recipeId ? 'Edycja receptury' : 'Nowa receptura'}
         </Typography>
-        <Button 
-          variant="contained" 
-          color="primary" 
-          type="submit"
-          startIcon={<SaveIcon />}
-          disabled={saving}
-        >
-          {saving ? 'Zapisywanie...' : 'Zapisz'}
-        </Button>
+        <Box>
+          <Button 
+            variant="contained" 
+            color="primary" 
+            type="submit"
+            startIcon={<SaveIcon />}
+            disabled={saving}
+          >
+            {saving ? 'Zapisywanie...' : 'Zapisz'}
+          </Button>
+          {recipeId && renderCreateProductButton()}
+        </Box>
       </Box>
 
       <Paper sx={{ p: 3, mb: 3 }}>
@@ -679,6 +819,147 @@ const RecipeForm = ({ recipeId }) => {
           </Typography>
         )}
       </Paper>
+
+      {/* Dialog tworzenia produktu w magazynie */}
+      <Dialog open={createProductDialogOpen} onClose={() => setCreateProductDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Dodaj produkt do magazynu</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Utwórz nowy produkt gotowy w magazynie na podstawie tej receptury. 
+            Produkt będzie miał przypisaną recepturę i koszt produkcji.
+          </DialogContentText>
+          
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Nazwa produktu"
+                name="name"
+                value={productData.name}
+                onChange={handleProductDataChange}
+                fullWidth
+                required
+                margin="normal"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Kategoria"
+                name="category"
+                value={productData.category}
+                onChange={handleProductDataChange}
+                fullWidth
+                margin="normal"
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                label="Opis"
+                name="description"
+                value={productData.description}
+                onChange={handleProductDataChange}
+                fullWidth
+                multiline
+                rows={2}
+                margin="normal"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth margin="normal">
+                <InputLabel>Jednostka</InputLabel>
+                <Select
+                  name="unit"
+                  value={productData.unit}
+                  onChange={handleProductDataChange}
+                  label="Jednostka"
+                >
+                  <MenuItem value="szt.">szt.</MenuItem>
+                  <MenuItem value="g">g</MenuItem>
+                  <MenuItem value="kg">kg</MenuItem>
+                  <MenuItem value="ml">ml</MenuItem>
+                  <MenuItem value="l">l</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth margin="normal">
+                <InputLabel>Magazyn</InputLabel>
+                <Select
+                  name="warehouseId"
+                  value={productData.warehouseId}
+                  onChange={handleProductDataChange}
+                  label="Magazyn"
+                  required
+                >
+                  {warehouses.map(warehouse => (
+                    <MenuItem key={warehouse.id} value={warehouse.id}>
+                      {warehouse.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                label="Ilość początkowa"
+                name="quantity"
+                type="number"
+                value={productData.quantity}
+                onChange={handleProductDataChange}
+                fullWidth
+                margin="normal"
+                inputProps={{ min: 0 }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                label="Minimalny stan magazynowy"
+                name="minStockLevel"
+                type="number"
+                value={productData.minStockLevel}
+                onChange={handleProductDataChange}
+                fullWidth
+                margin="normal"
+                inputProps={{ min: 0 }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                label="Maksymalny stan magazynowy"
+                name="maxStockLevel"
+                type="number"
+                value={productData.maxStockLevel}
+                onChange={handleProductDataChange}
+                fullWidth
+                margin="normal"
+                inputProps={{ min: 0 }}
+              />
+            </Grid>
+            {costCalculation && (
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" color="primary">
+                  Koszt wytworzenia produktu: {costCalculation.unitCost.toFixed(2)} zł / {costCalculation.yieldUnit}
+                </Typography>
+                <Typography variant="caption">
+                  Ta wartość zostanie zapisana jako koszt produkcji i cena jednostkowa produktu.
+                </Typography>
+              </Grid>
+            )}
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCreateProductDialogOpen(false)}>
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleCreateProduct} 
+            variant="contained" 
+            color="primary"
+            disabled={creatingProduct || !productData.name || !productData.warehouseId}
+          >
+            {creatingProduct ? <CircularProgress size={24} /> : 'Utwórz produkt'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

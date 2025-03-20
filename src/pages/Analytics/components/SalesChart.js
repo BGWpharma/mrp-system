@@ -1,42 +1,24 @@
 import React from 'react';
 import { 
-  Typography, 
   Box, 
-  useTheme,
+  Typography, 
+  useTheme 
 } from '@mui/material';
-import {
+import { 
+  AreaChart, 
+  Area, 
   BarChart,
   Bar,
   LineChart,
   Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  Legend,
-  ResponsiveContainer,
-  ReferenceLine,
-  Label,
-  Cell,
-  AreaChart,
-  Area
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  ResponsiveContainer 
 } from 'recharts';
-import { formatCurrency, formatPercent } from '../../../utils/formatUtils';
-
-/**
- * Formatuje wartości na osi Y dla lepszej czytelności
- * @param {number} value - wartość do sformatowania
- * @returns {string} sformatowana wartość (K dla tysięcy, M dla milionów)
- */
-const formatYAxis = (value) => {
-  if (value >= 1000000) {
-    return `${(value / 1000000).toFixed(1)}M`;
-  }
-  if (value >= 1000) {
-    return `${(value / 1000).toFixed(1)}k`;
-  }
-  return value;
-};
+import { formatCurrency } from '../../../utils/formatUtils';
 
 /**
  * Komponent wykresu sprzedaży, pokazujący trendy w formie wybranego typu wykresu
@@ -80,207 +62,194 @@ const SalesChart = ({ title, data, chartType = 'line', sx }) => {
     );
   }
   
+  // Filtrujemy nieprawidłowe dane
+  const validData = data.filter(item => 
+    item && 
+    item.date && 
+    typeof item.value === 'number' && 
+    !isNaN(item.value)
+  );
+  
+  // Jeśli brak prawidłowych danych
+  if (validData.length === 0) {
+    return (
+      <Box 
+        sx={{ 
+          ...sx, 
+          height: '100%', 
+          width: '100%', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          flexDirection: 'column'
+        }}
+      >
+        <Typography variant="body2" color="textSecondary">
+          Nieprawidłowe dane sprzedażowe
+        </Typography>
+      </Box>
+    );
+  }
+  
   // Obliczanie maksymalnej i minimalnej wartości dla skali wykresu
-  const dataValues = data.map(item => item.value);
+  const dataValues = validData.map(item => item.value);
   const maxValue = Math.max(...dataValues) * 1.1; // 10% marginesu na górze
   const minValue = Math.min(0, ...dataValues); // Nie dopuszczaj do negatywnych wartości chyba że takie istnieją
   
   // Obliczanie średniej wartości
   const avgValue = dataValues.reduce((sum, val) => sum + val, 0) / dataValues.length;
-
-  /**
-   * Komponent niestandardowego tooltipa dla lepszej prezentacji danych
-   */
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      return (
-        <Box
-          sx={{
-            backgroundColor: 'background.paper',
-            p: 1.5,
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1,
-            boxShadow: theme.shadows[2]
-          }}
-        >
-          <Typography variant="body2" fontWeight="bold">
-            {label}
-          </Typography>
-          <Box sx={{ mt: 1 }}>
-            <Typography variant="body2" color="textSecondary">
-              Wartość: <span style={{ fontWeight: 'bold', color: theme.palette.text.primary }}>{formatCurrency(payload[0].value)}</span>
-            </Typography>
-            {payload[0].payload && payload[0].payload.change !== undefined && (
-              <Typography variant="body2" color="textSecondary">
-                Zmiana: <span style={{ 
-                  fontWeight: 'bold', 
-                  color: payload[0].payload.change >= 0 ? theme.palette.success.main : theme.palette.error.main 
-                }}>
-                  {formatPercent(payload[0].payload.change/100)}
-                </span>
-              </Typography>
-            )}
-          </Box>
-        </Box>
-      );
+  
+  // Formatowanie daty dla etykiety
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '';
+    
+    try {
+      const date = new Date(dateStr);
+      
+      if (isNaN(date.getTime())) {
+        // Jeśli to nie jest poprawna data, zwróć oryginalny string
+        return dateStr;
+      }
+      
+      return new Intl.DateTimeFormat('pl-PL', { 
+        month: 'short', 
+        day: 'numeric' 
+      }).format(date);
+    } catch (error) {
+      return dateStr;
     }
-    return null;
   };
 
-  /**
-   * Renderuje odpowiedni typ wykresu na podstawie parametru chartType
-   */
+  // Renderowanie odpowiedniego wykresu w zależności od typu
   const renderChart = () => {
     switch (chartType) {
       case 'bar':
         return (
-          <BarChart
-            data={data}
-            margin={{ top: 20, right: 30, left: 20, bottom: 30 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis 
-              dataKey="name" 
-              tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
-              axisLine={{ stroke: theme.palette.divider }}
-              tickLine={{ stroke: theme.palette.divider }}
-            />
-            <YAxis 
-              tickFormatter={formatYAxis}
-              tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
-              axisLine={{ stroke: theme.palette.divider }}
-              tickLine={{ stroke: theme.palette.divider }}
-            />
-            <RechartsTooltip content={<CustomTooltip />} />
-            <ReferenceLine 
-              y={avgValue} 
-              stroke={theme.palette.warning.main} 
-              strokeDasharray="3 3"
-            >
-              <Label 
-                value="Średnia" 
-                position="insideBottomRight" 
-                fill={theme.palette.warning.main}
-                fontSize={12}
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={validData} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis 
+                dataKey="date" 
+                tickFormatter={formatDate}
+                tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
+                axisLine={{ stroke: theme.palette.divider }}
+                tickLine={{ stroke: theme.palette.divider }}
               />
-            </ReferenceLine>
-            <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-              {data.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={barColors[index % barColors.length]} />
-              ))}
-            </Bar>
-          </BarChart>
+              <YAxis 
+                domain={[minValue, maxValue]}
+                tickFormatter={(value) => formatCurrency(value, { compact: true })}
+                tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
+                axisLine={{ stroke: theme.palette.divider }}
+                tickLine={{ stroke: theme.palette.divider }}
+              />
+              <Tooltip 
+                formatter={(value) => formatCurrency(value)}
+                labelFormatter={(label) => {
+                  const item = validData.find(d => d.date === label);
+                  return item ? `Data: ${formatDate(label)}` : label;
+                }}
+              />
+              <Bar dataKey="value" fill={barColors[0]} radius={[4, 4, 0, 0]} />
+              <Tooltip formatter={(value) => formatCurrency(value)} />
+            </BarChart>
+          </ResponsiveContainer>
         );
+        
       case 'area':
         return (
-          <AreaChart
-            data={data}
-            margin={{ top: 20, right: 30, left: 20, bottom: 30 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis 
-              dataKey="name" 
-              tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
-              axisLine={{ stroke: theme.palette.divider }}
-              tickLine={{ stroke: theme.palette.divider }}
-            />
-            <YAxis 
-              tickFormatter={formatYAxis}
-              tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
-              axisLine={{ stroke: theme.palette.divider }}
-              tickLine={{ stroke: theme.palette.divider }}
-            />
-            <RechartsTooltip content={<CustomTooltip />} />
-            <ReferenceLine 
-              y={avgValue} 
-              stroke={theme.palette.warning.main} 
-              strokeDasharray="3 3"
-            >
-              <Label 
-                value="Średnia" 
-                position="insideBottomRight" 
-                fill={theme.palette.warning.main}
-                fontSize={12}
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={validData} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis 
+                dataKey="date" 
+                tickFormatter={formatDate}
+                tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
+                axisLine={{ stroke: theme.palette.divider }}
+                tickLine={{ stroke: theme.palette.divider }}
               />
-            </ReferenceLine>
-            <Area 
-              type="monotone" 
-              dataKey="value" 
-              stroke={areaColor} 
-              fill={areaColor} 
-              fillOpacity={0.2}
-            />
-          </AreaChart>
+              <YAxis 
+                domain={[minValue, maxValue]}
+                tickFormatter={(value) => formatCurrency(value, { compact: true })}
+                tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
+                axisLine={{ stroke: theme.palette.divider }}
+                tickLine={{ stroke: theme.palette.divider }}
+              />
+              <Tooltip 
+                formatter={(value) => formatCurrency(value)}
+                labelFormatter={(label) => {
+                  const item = validData.find(d => d.date === label);
+                  return item ? `Data: ${formatDate(label)}` : label;
+                }}
+              />
+              <Area 
+                type="monotone" 
+                dataKey="value" 
+                stroke={areaColor} 
+                fillOpacity={0.3}
+                fill={areaColor} 
+              />
+              <Tooltip formatter={(value) => formatCurrency(value)} />
+            </AreaChart>
+          </ResponsiveContainer>
         );
+        
       case 'line':
       default:
         return (
-          <LineChart
-            data={data}
-            margin={{ top: 20, right: 30, left: 20, bottom: 30 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis 
-              dataKey="name" 
-              tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
-              axisLine={{ stroke: theme.palette.divider }}
-              tickLine={{ stroke: theme.palette.divider }}
-            />
-            <YAxis 
-              tickFormatter={formatYAxis}
-              tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
-              axisLine={{ stroke: theme.palette.divider }}
-              tickLine={{ stroke: theme.palette.divider }}
-            />
-            <RechartsTooltip content={<CustomTooltip />} />
-            <ReferenceLine 
-              y={avgValue} 
-              stroke={theme.palette.warning.main} 
-              strokeDasharray="3 3"
-            >
-              <Label 
-                value="Średnia" 
-                position="insideBottomRight" 
-                fill={theme.palette.warning.main}
-                fontSize={12}
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={validData} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis 
+                dataKey="date" 
+                tickFormatter={formatDate}
+                tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
+                axisLine={{ stroke: theme.palette.divider }}
+                tickLine={{ stroke: theme.palette.divider }}
               />
-            </ReferenceLine>
-            <Line 
-              type="monotone" 
-              dataKey="value" 
-              stroke={lineColor} 
-              strokeWidth={2}
-              dot={{ fill: lineColor, r: 4 }}
-              activeDot={{ fill: lineColor, r: 6, strokeWidth: 0 }}
-            />
-          </LineChart>
+              <YAxis 
+                domain={[minValue, maxValue]}
+                tickFormatter={(value) => formatCurrency(value, { compact: true })}
+                tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
+                axisLine={{ stroke: theme.palette.divider }}
+                tickLine={{ stroke: theme.palette.divider }}
+              />
+              <Tooltip 
+                formatter={(value) => formatCurrency(value)}
+                labelFormatter={(label) => {
+                  const item = validData.find(d => d.date === label);
+                  return item ? `Data: ${formatDate(label)}` : label;
+                }}
+              />
+              <Line 
+                type="monotone" 
+                dataKey="value" 
+                stroke={lineColor} 
+                strokeWidth={2}
+                dot={{ fill: lineColor, r: 4 }}
+                activeDot={{ fill: lineColor, r: 6 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
         );
     }
   };
 
   return (
-    <Box 
-      sx={{ 
-        width: '100%', 
-        height: '100%', 
-        display: 'flex', 
-        flexDirection: 'column',
-        ...sx 
-      }}
-    >
+    <Box sx={{ ...sx, height: '100%', width: '100%' }}>
       {title && (
-        <Box sx={{ mb: 1, display: 'flex', justifyContent: 'center' }}>
-          <Typography variant="h6" color="textPrimary">
-            {title}
-          </Typography>
-        </Box>
+        <Typography variant="h6" sx={{ mb: 2 }}>
+          {title}
+        </Typography>
       )}
       
-      <Box sx={{ flexGrow: 1, width: '100%', height: '100%', minHeight: 250 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          {renderChart()}
-        </ResponsiveContainer>
+      <Box sx={{ mb: 1 }}>
+        <Typography variant="body2" sx={{ mb: 0.5 }}>
+          Wartość {isNaN(avgValue) ? "0,00 zł" : formatCurrency(avgValue)}
+        </Typography>
+      </Box>
+      
+      <Box sx={{ height: 'calc(100% - 60px)' }}>
+        {renderChart()}
       </Box>
     </Box>
   );

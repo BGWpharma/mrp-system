@@ -45,14 +45,16 @@ import {
   ViewList as ViewListIcon,
   BookmarkAdded as ReservationIcon,
   GetApp as GetAppIcon,
-  Warehouse as WarehouseIcon
+  Warehouse as WarehouseIcon,
+  QrCode as QrCodeIcon
 } from '@mui/icons-material';
-import { getAllInventoryItems, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse } from '../../services/inventoryService';
+import { getAllInventoryItems, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, getItemBatches } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
 import { toast } from 'react-hot-toast';
 import { exportToCSV } from '../../utils/exportUtils';
 import { useAuth } from '../../hooks/useAuth';
+import LabelDialog from './LabelDialog';
 
 const InventoryList = () => {
   const [inventoryItems, setInventoryItems] = useState([]);
@@ -82,6 +84,9 @@ const InventoryList = () => {
   });
   const [savingWarehouse, setSavingWarehouse] = useState(false);
   const { currentUser } = useAuth();
+  const [labelDialogOpen, setLabelDialogOpen] = useState(false);
+  const [selectedItemBatches, setSelectedItemBatches] = useState([]);
+  const [loadingBatches, setLoadingBatches] = useState(false);
 
   // Pobierz wszystkie pozycje przy montowaniu komponentu
   useEffect(() => {
@@ -409,6 +414,33 @@ const InventoryList = () => {
     }
   };
 
+  // Funkcja otwierająca dialog etykiet
+  const handleOpenLabelDialog = async (item) => {
+    setSelectedItem(item);
+    setLabelDialogOpen(true);
+    
+    try {
+      setLoadingBatches(true);
+      const batches = await getItemBatches(item.id);
+      setSelectedItemBatches(batches);
+    } catch (error) {
+      console.error('Błąd podczas pobierania partii:', error);
+      showError('Nie udało się pobrać partii dla tego produktu');
+    } finally {
+      setLoadingBatches(false);
+    }
+  };
+
+  // Funkcja zamykająca dialog etykiet
+  const handleCloseLabelDialog = () => {
+    setLabelDialogOpen(false);
+    // Opóźnij czyszczenie danych, aby uniknąć migotania UI
+    setTimeout(() => {
+      setSelectedItem(null);
+      setSelectedItemBatches([]);
+    }, 300);
+  };
+
   if (loading) {
     return <div>Ładowanie pozycji magazynowych...</div>;
   }
@@ -498,10 +530,6 @@ const InventoryList = () => {
                     const bookedQuantity = item.bookedQuantity || 0;
                     const availableQuantity = item.quantity - bookedQuantity;
                     
-                    // Znajdź nazwę magazynu
-                    const warehouse = warehouses.find(w => w.id === item.warehouseId);
-                    const warehouseName = warehouse ? warehouse.name : 'Nieznany';
-                    
                     return (
                       <TableRow key={item.id}>
                         <TableCell>
@@ -538,8 +566,18 @@ const InventoryList = () => {
                         <TableCell>
                           {getStockLevelIndicator(availableQuantity, item.minStockLevel, item.optimalStockLevel)}
                         </TableCell>
-                        <TableCell>{item.location}</TableCell>
-                        <TableCell>{warehouseName}</TableCell>
+                        <TableCell>
+                          {item.location || '-'}
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            icon={<WarehouseIcon />}
+                            label="W wielu magazynach"
+                            variant="outlined"
+                            color="primary"
+                            size="small"
+                          />
+                        </TableCell>
                         <TableCell align="right">
                           <IconButton 
                             component={RouterLink} 
@@ -580,6 +618,13 @@ const InventoryList = () => {
                             title="Partie"
                           >
                             <ViewListIcon />
+                          </IconButton>
+                          <IconButton 
+                            onClick={() => handleOpenLabelDialog(item)}
+                            color="default"
+                            title="Drukuj etykietę"
+                          >
+                            <QrCodeIcon />
                           </IconButton>
                           <IconButton 
                             component={RouterLink} 
@@ -885,6 +930,14 @@ const InventoryList = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Dialog z etykietami */}
+      <LabelDialog
+        open={labelDialogOpen}
+        onClose={handleCloseLabelDialog}
+        item={selectedItem}
+        batches={selectedItemBatches}
+      />
     </div>
   );
 };

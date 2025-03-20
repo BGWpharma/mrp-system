@@ -32,8 +32,10 @@ import {
   ShoppingCart as ShoppingCartIcon
 } from '@mui/icons-material';
 import { getAllOrders, getOrderById } from '../../services/orderService';
-import { createTask } from '../../services/productionService';
-import { getAllRecipes } from '../../services/recipeService';
+import { createTask, reserveMaterialsForTask } from '../../services/productionService';
+import { getAllRecipes, getRecipeById } from '../../services/recipeService';
+import { getIngredientPrices, getInventoryItemById } from '../../services/inventoryService';
+import { calculateProductionTaskCost } from '../../utils/costCalculator';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/dateUtils';
@@ -115,10 +117,11 @@ const CreateFromOrderPage = () => {
     
     // Stwórz listę materiałów z odpowiednio przeliczonymi ilościami
     const materials = recipe.ingredients.map(ingredient => ({
+      id: ingredient.id || ingredient.inventoryItemId,
       name: ingredient.name,
       quantity: parseFloat((ingredient.quantity * scaleFactor).toFixed(2)),
       unit: ingredient.unit,
-      inventoryItemId: ingredient.inventoryItemId || null,
+      inventoryItemId: ingredient.inventoryItemId || ingredient.id || null,
       notes: `Z receptury: ${recipe.name}`
     }));
     
@@ -243,10 +246,51 @@ const CreateFromOrderPage = () => {
           ? createMaterialsFromRecipe(recipe, item.quantity)
           : [];
         
-        // Jeśli znaleziono recepturę, dodaj odniesienie do niej
+        // Jeśli znaleziono recepturę, dodaj odniesienie do niej i oblicz koszty
         const recipeData = recipe 
           ? { recipeId: recipe.id, recipeName: recipe.name }
           : {};
+        
+        // Oblicz koszt produkcji jeśli mamy recepturę
+        let costs = null;
+        
+        if (recipe) {
+          try {
+            // Przygotuj dane zadania dla kalkulatora kosztów
+            const taskForCostCalc = {
+              quantity: item.quantity,
+              unit: item.unit || 'szt.'
+            };
+            
+            // Pobierz ID składników z receptury
+            const ingredientIds = recipe.ingredients
+              .filter(ing => ing.id)
+              .map(ing => ing.id);
+              
+            if (ingredientIds.length > 0) {
+              // Pobierz ceny składników
+              const pricesMap = await getIngredientPrices(ingredientIds);
+              
+              // Oblicz koszty
+              const costData = calculateProductionTaskCost(taskForCostCalc, recipe, pricesMap);
+              
+              // Zapisz całkowity koszt produkcji (zamiast kosztu jednostkowego)
+              costs = {
+                ingredientsCost: costData.ingredientsCost,
+                laborCost: costData.laborCost,
+                energyCost: costData.energyCost,
+                overheadCost: costData.overheadCost,
+                unitCost: costData.unitCost,
+                totalCost: costData.taskTotalCost // Używamy kosztu całkowitego zadania
+              };
+              
+              console.log(`Obliczono koszt produkcji ${item.quantity} ${item.unit || 'szt.'} produktu ${item.name}: ${costs.totalCost.toFixed(2)} zł`);
+            }
+          } catch (error) {
+            console.error('Błąd podczas obliczania kosztów:', error);
+            // Kontynuujemy bez kosztów
+          }
+        }
         
         const taskData = {
           ...taskForm,
@@ -257,10 +301,27 @@ const CreateFromOrderPage = () => {
           orderId: selectedOrder.id,
           orderNumber: selectedOrder.orderNumber || selectedOrder.id.substring(0, 8),
           materials: materials,
+          costs: costs, // Dodajemy obliczone koszty
           ...recipeData
         };
         
-        await createTask(taskData, currentUser.uid);
+        // Utwórz zadanie produkcyjne
+        const newTask = await createTask(taskData, currentUser.uid);
+        
+        // Dodatkowa rezerwacja materiałów po utworzeniu zadania
+        if (materials && materials.length > 0) {
+          try {
+            // Zarezerwuj materiały dla utworzonego zadania
+            const reservationResult = await reserveMaterialsForTask(newTask.id, materials, 'fifo');
+            if (reservationResult.success) {
+              console.log(`Zarezerwowano materiały dla zadania produkcyjnego ${newTask.id}`);
+            } else {
+              console.warn(`Częściowa rezerwacja materiałów dla zadania ${newTask.id}:`, reservationResult.errors);
+            }
+          } catch (reservationError) {
+            console.error(`Błąd podczas rezerwacji materiałów dla zadania ${newTask.id}:`, reservationError);
+          }
+        }
       }
       
       showSuccess('Zadania produkcyjne zostały utworzone');

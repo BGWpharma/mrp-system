@@ -12,6 +12,7 @@ export const RECIPE_STATUSES = {
   export const PRODUCTION_TASK_STATUSES = {
     PLANNED: 'Zaplanowane',
     IN_PROGRESS: 'W trakcie',
+    PENDING_CONSUMPTION: 'Potwierdzenie zużycia',
     COMPLETED: 'Zakończone',
     CANCELLED: 'Anulowane'
   };

@@ -31,7 +31,8 @@ import {
   PlayArrow as StartIcon,
   Stop as StopIcon,
   CheckCircle as CompleteIcon,
-  Inventory as InventoryIcon
+  Inventory as InventoryIcon,
+  Check as CheckIcon
 } from '@mui/icons-material';
 import { getAllTasks, updateTaskStatus, deleteTask, addTaskProductToInventory } from '../../services/productionService';
 import { useAuth } from '../../hooks/useAuth';
@@ -130,6 +131,7 @@ const TaskList = () => {
     switch (status) {
       case 'Zaplanowane': return 'primary';
       case 'W trakcie': return 'warning';
+      case 'Potwierdzenie zużycia': return 'info';
       case 'Zakończone': return 'success';
       case 'Anulowane': return 'error';
       default: return 'default';
@@ -219,6 +221,17 @@ const TaskList = () => {
               <StopIcon />
             </IconButton>
           </>
+        );
+      case 'Potwierdzenie zużycia':
+        return (
+          <IconButton 
+            color="info" 
+            component={Link}
+            to={`/production/consumption/${task.id}`}
+            title="Potwierdź zużycie materiałów"
+          >
+            <CheckIcon />
+          </IconButton>
         );
       case 'Zakończone':
         // Jeśli zadanie jest zakończone i gotowe do dodania do magazynu, pokaż przycisk dodania do magazynu

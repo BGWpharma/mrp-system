@@ -25,6 +25,53 @@ import {
 import { formatCurrency } from '../../../utils/formatUtils';
 
 /**
+ * Renderuje aktywny sektor w wykresie kołowym
+ */
+const renderActiveShape = (props) => {
+  const RADIAN = Math.PI / 180;
+  const { cx, cy, midAngle, innerRadius, outerRadius, startAngle, endAngle,
+    fill, payload, percent, value } = props;
+  const sin = Math.sin(-RADIAN * midAngle);
+  const cos = Math.cos(-RADIAN * midAngle);
+  const sx = cx + (outerRadius + 10) * cos;
+  const sy = cy + (outerRadius + 10) * sin;
+  const mx = cx + (outerRadius + 30) * cos;
+  const my = cy + (outerRadius + 30) * sin;
+  const ex = mx + (cos >= 0 ? 1 : -1) * 22;
+  const ey = my;
+  const textAnchor = cos >= 0 ? 'start' : 'end';
+
+  return (
+    <g>
+      <Sector
+        cx={cx}
+        cy={cy}
+        innerRadius={innerRadius}
+        outerRadius={outerRadius}
+        startAngle={startAngle}
+        endAngle={endAngle}
+        fill={fill}
+      />
+      <Sector
+        cx={cx}
+        cy={cy}
+        startAngle={startAngle}
+        endAngle={endAngle}
+        innerRadius={outerRadius + 6}
+        outerRadius={outerRadius + 10}
+        fill={fill}
+      />
+      <path d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`} stroke={fill} fill="none" />
+      <circle cx={ex} cy={ey} r={2} fill={fill} stroke="none" />
+      <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} textAnchor={textAnchor} fill="#333">{payload.name}</text>
+      <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} dy={18} textAnchor={textAnchor} fill="#999">
+        {`${formatCurrency(value)} (${(percent * 100).toFixed(0)}%)`}
+      </text>
+    </g>
+  );
+};
+
+/**
  * Komponent wykresu inwentarza
  * 
  * @param {Object} props Właściwości komponentu
@@ -52,18 +99,33 @@ const InventoryChart = ({ title, data, sx }) => {
   // Jeśli brak danych, wyświetl informację
   if (!data || data.length === 0) {
     return (
-      <Card sx={{ ...sx, height: '100%' }}>
-        <CardContent sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Typography variant="body2" color="textSecondary">
-            Brak danych magazynowych do wyświetlenia
-          </Typography>
-        </CardContent>
-      </Card>
+      <Box 
+        sx={{ 
+          ...sx, 
+          height: '100%', 
+          width: '100%', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          flexDirection: 'column'
+        }}
+      >
+        <Typography variant="body2" color="textSecondary">
+          Brak danych magazynowych do wyświetlenia
+        </Typography>
+      </Box>
     );
   }
 
-  // Sortowanie danych malejąco według wartości
-  const sortedData = [...data].sort((a, b) => b.value - a.value);
+  // Sortowanie danych malejąco według wartości i filtrowanie nieprawidłowych wartości
+  const validData = data.filter(item => 
+    item && 
+    item.name && 
+    typeof item.value === 'number' && 
+    !isNaN(item.value)
+  );
+  
+  const sortedData = [...validData].sort((a, b) => b.value - a.value);
   
   // Formatowanie danych do wykresu
   const chartData = sortedData.map(item => ({
@@ -79,141 +141,20 @@ const InventoryChart = ({ title, data, sx }) => {
     setActiveIndex(index);
   };
 
-  // Renderowanie aktywnego sektora
-  const renderActiveShape = (props) => {
-    const { 
-      cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent, value 
-    } = props;
-    
-    return (
-      <g>
-        <text x={cx} y={cy - 25} dy={8} textAnchor="middle" fill={theme.palette.text.primary}>
-          {payload.name}
-        </text>
-        <text x={cx} y={cy} dy={8} textAnchor="middle" fill={theme.palette.text.primary} fontWeight="bold">
-          {formatCurrency(value)}
-        </text>
-        <text x={cx} y={cy + 25} dy={8} textAnchor="middle" fill={theme.palette.text.secondary}>
-          {`${(percent * 100).toFixed(1)}%`}
-        </text>
-        <Sector
-          cx={cx}
-          cy={cy}
-          innerRadius={innerRadius}
-          outerRadius={outerRadius + 6}
-          startAngle={startAngle}
-          endAngle={endAngle}
-          fill={fill}
-        />
-        <Sector
-          cx={cx}
-          cy={cy}
-          startAngle={startAngle}
-          endAngle={endAngle}
-          innerRadius={outerRadius + 6}
-          outerRadius={outerRadius + 10}
-          fill={fill}
-        />
-      </g>
-    );
-  };
-
-  // Konfiguracja tooltipa
-  const CustomTooltip = ({ active, payload }) => {
-    if (active && payload && payload.length) {
-      return (
-        <Box
-          sx={{
-            backgroundColor: 'background.paper',
-            p: 1.5,
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1,
-            boxShadow: theme.shadows[2]
-          }}
-        >
-          <Typography variant="body2" fontWeight="bold" color="primary">
-            {payload[0].name}
-          </Typography>
-          <Box sx={{ mt: 1 }}>
-            <Typography variant="body2" color="textSecondary">
-              Wartość: <span style={{ fontWeight: 'bold', color: theme.palette.text.primary }}>{formatCurrency(payload[0].value)}</span>
-            </Typography>
-            <Typography variant="body2" color="textSecondary">
-              Udział: <span style={{ fontWeight: 'bold', color: theme.palette.text.primary }}>{`${(payload[0].value / totalValue * 100).toFixed(1)}%`}</span>
-            </Typography>
-          </Box>
-        </Box>
-      );
-    }
-    return null;
-  };
-
-  const renderLegend = (props) => {
-    const { payload } = props;
-    
-    return (
-      <Box 
-        sx={{ 
-          display: 'flex', 
-          flexWrap: 'wrap', 
-          justifyContent: 'center', 
-          mt: 1
-        }}
-      >
-        {payload.slice(0, 5).map((entry, index) => (
-          <Box 
-            key={`legend-${index}`} 
-            sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              mr: 2, 
-              mb: 1,
-              cursor: 'pointer'
-            }}
-            onClick={() => setActiveIndex(index)}
-          >
-            <Box 
-              sx={{ 
-                width: 12, 
-                height: 12, 
-                backgroundColor: entry.color,
-                borderRadius: '50%',
-                mr: 1
-              }} 
-            />
-            <Typography 
-              variant="caption" 
-              sx={{ 
-                color: activeIndex === index ? 'text.primary' : 'text.secondary',
-                fontWeight: activeIndex === index ? 'bold' : 'regular'
-              }}
-            >
-              {entry.value}
-            </Typography>
-          </Box>
-        ))}
-      </Box>
-    );
-  };
-
   return (
-    <Card sx={{ ...sx, height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <CardHeader
-        title={<Typography variant="h6">{title || 'Struktura magazynu'}</Typography>}
-        sx={{ pb: 0 }}
-      />
-      <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', pt: 2 }}>
-        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 1 }}>
-          <Typography variant="body2" color="textSecondary">
-            Łączna wartość magazynu
-          </Typography>
-          <Typography variant="h6" color="primary" fontWeight="bold">
-            {formatCurrency(totalValue)}
-          </Typography>
-        </Box>
-        
-        <ResponsiveContainer width="99%" height={250}>
+    <Box sx={{ ...sx, height: '100%', width: '100%' }}>
+      {title && (
+        <Typography variant="h6" sx={{ mb: 2 }}>
+          {title}
+        </Typography>
+      )}
+      
+      <Typography variant="body2" sx={{ mb: 1 }}>
+        Struktura magazynu
+      </Typography>
+      
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <ResponsiveContainer width="100%" height={240}>
           <PieChart>
             <Pie
               activeIndex={activeIndex}
@@ -223,7 +164,7 @@ const InventoryChart = ({ title, data, sx }) => {
               cy="50%"
               innerRadius={60}
               outerRadius={80}
-              paddingAngle={2}
+              fill="#8884d8"
               dataKey="value"
               onMouseEnter={onPieEnter}
             >
@@ -231,12 +172,18 @@ const InventoryChart = ({ title, data, sx }) => {
                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
               ))}
             </Pie>
-            <Tooltip content={<CustomTooltip />} />
-            <Legend content={renderLegend} />
+            <Tooltip formatter={(value) => formatCurrency(value)} />
           </PieChart>
         </ResponsiveContainer>
-      </CardContent>
-    </Card>
+        
+        <Typography align="center" variant="subtitle1" sx={{ mt: 1, mb: 0.5 }}>
+          Łączna wartość magazynu
+        </Typography>
+        <Typography align="center" variant="h5" color="primary" sx={{ fontWeight: 'bold' }}>
+          {isNaN(totalValue) ? '0,00 zł' : formatCurrency(totalValue)}
+        </Typography>
+      </Box>
+    </Box>
   );
 };
 

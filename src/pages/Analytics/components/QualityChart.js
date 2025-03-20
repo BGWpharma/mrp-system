@@ -6,7 +6,8 @@ import {
   Card, 
   CardContent, 
   CardHeader, 
-  Divider 
+  Divider,
+  LinearProgress
 } from '@mui/material';
 import { 
   AreaChart,
@@ -63,129 +64,141 @@ const QualityChart = ({ title, data, sx }) => {
     );
   }
 
-  // Przygotowanie danych do wykresu
-  const chartData = data.map(item => ({
-    name: item.category,
-    value: item.defectCount,
-    percent: item.percentage
-  }));
-  
-  // Obliczenie łącznej liczby defektów
-  const totalDefects = chartData.reduce((sum, item) => sum + item.value, 0);
-  
-  // Tooltip dla wykresu
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      return (
-        <Box
-          sx={{
-            backgroundColor: 'background.paper',
-            p: 1.5,
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1,
-            boxShadow: theme.shadows[2]
-          }}
-        >
-          <Typography variant="body2" fontWeight="bold">
-            {payload[0].payload.name}
-          </Typography>
-          <Box sx={{ mt: 1 }}>
-            <Typography variant="body2" color="textSecondary">
-              Liczba: <span style={{ fontWeight: 'bold', color: theme.palette.text.primary }}>
-                {payload[0].value}
-              </span>
-            </Typography>
-            {payload[0].payload.percent !== undefined && (
-              <Typography variant="body2" color="textSecondary">
-                Udział: <span style={{ fontWeight: 'bold', color: theme.palette.text.primary }}>
-                  {formatPercent(payload[0].payload.percent/100)}
-                </span>
-              </Typography>
-            )}
-          </Box>
-        </Box>
-      );
+  // Przygotowanie danych do wykresu kołowego
+  const getPieData = () => {
+    // Znajdź dane o wkaźnikach jakości
+    const qualityRates = data.filter(item => 
+      item && item.name && 
+      (item.name.toLowerCase().includes('pozytywne') || item.name.toLowerCase().includes('pass') ||
+       item.name.toLowerCase().includes('negatywne') || item.name.toLowerCase().includes('fail'))
+    );
+    
+    if (qualityRates.length === 0) {
+      // Domyślne dane
+      return [
+        { name: 'Pozytywne testy', value: 95, fill: theme.palette.success.main },
+        { name: 'Negatywne testy', value: 5, fill: theme.palette.error.main }
+      ];
     }
-    return null;
+    
+    // Upewnij się, że wartości są poprawne
+    const validRates = qualityRates.map(item => ({
+      ...item,
+      value: typeof item.value === 'number' && !isNaN(item.value) ? item.value : 0
+    }));
+    
+    return validRates;
   };
-
+  
+  // Przygotowanie danych do wykresu liniowego
+  const getLineData = () => {
+    // Znajdź dane o trendach
+    const trendData = data.filter(item => item && item.date && !isNaN(new Date(item.date).getTime()));
+    
+    if (trendData.length === 0) {
+      // Brak danych o trendach
+      return [];
+    }
+    
+    return trendData;
+  };
+  
+  // Kolorowanie paska postępu
+  const getProgressColor = (value) => {
+    if (value >= 90) return theme.palette.success.main;
+    if (value >= 70) return theme.palette.warning.main;
+    return theme.palette.error.main;
+  };
+  
+  // Pozyskaj dane do różnych wykresów
+  const pieData = getPieData();
+  const lineData = getLineData();
+  
+  // Obliczenie sumy wartości dla wykresu kołowego
+  const totalQuality = pieData.reduce((sum, item) => sum + item.value, 0);
+  
+  // Znajdź wartość wskaźnika pozytywnych wyników
+  const passRate = pieData.find(item => 
+    item.name.toLowerCase().includes('pozytywne') || 
+    item.name.toLowerCase().includes('pass')
+  )?.value || 0;
+  
   return (
-    <Box 
-      sx={{ 
-        width: '100%', 
-        height: '100%', 
-        display: 'flex', 
-        flexDirection: 'column',
-        ...sx 
-      }}
-    >
-      <Box sx={{ mb: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <Typography variant="body2" color="textSecondary">
+    <Box sx={{ ...sx, height: '100%', width: '100%' }}>
+      {title && (
+        <Typography variant="h6" sx={{ mb: 2 }}>
+          {title}
+        </Typography>
+      )}
+      
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="body2" sx={{ mb: 1 }}>
           Łączna liczba defektów
         </Typography>
-        <Typography variant="h6" color="error" fontWeight="bold">
-          {totalDefects}
+        
+        <Typography align="center" color={passRate >= 90 ? "success.main" : passRate >= 75 ? "warning.main" : "error.main"} 
+          variant="h5" sx={{ fontWeight: 'bold', mb: 1 }}>
+          {isNaN(passRate) ? "NaN" : Math.round(passRate * 10) / 10}
         </Typography>
+        
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box sx={{ flexGrow: 1, mr: 1 }}>
+            <LinearProgress 
+              variant="determinate" 
+              value={isNaN(passRate) ? 0 : Math.min(passRate, 100)} 
+              sx={{ 
+                height: 8, 
+                borderRadius: 5,
+                backgroundColor: theme.palette.grey[200],
+                '& .MuiLinearProgress-bar': {
+                  backgroundColor: getProgressColor(passRate)
+                }
+              }} 
+            />
+          </Box>
+          <Typography variant="body2" color="text.secondary">
+            {isNaN(passRate) ? "0%" : `${Math.round(passRate)}%`}
+          </Typography>
+        </Box>
       </Box>
       
-      <Box sx={{ flexGrow: 1, width: '100%', height: '100%', minHeight: 250 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={chartData}
-            layout="vertical"
-            margin={{ top: 20, right: 30, left: 80, bottom: 20 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-            <XAxis 
-              type="number"
-              tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
-              axisLine={{ stroke: theme.palette.divider }}
-              tickLine={{ stroke: theme.palette.divider }}
-            />
-            <YAxis 
-              dataKey="name" 
-              type="category"
-              tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
-              axisLine={{ stroke: theme.palette.divider }}
-              tickLine={{ stroke: theme.palette.divider }}
-              width={80}
-            />
-            <RechartsTooltip content={<CustomTooltip />} />
-            <Bar 
-              dataKey="value" 
-              radius={[0, 4, 4, 0]} 
-              fill={theme.palette.error.main}
-              label={{
-                position: 'right',
-                content: (props) => {
-                  const { x, y, width, height, value } = props;
-                  
-                  // Sprawdź czy props.payload.percent istnieje
-                  if (!props.payload || props.payload.percent === undefined) {
-                    return null;
-                  }
-                  
-                  return (
-                    <g>
-                      <text 
-                        x={x + width + 5} 
-                        y={y + height / 2} 
-                        fill={theme.palette.text.secondary}
-                        textAnchor="start"
-                        dominantBaseline="middle"
-                        fontSize={12}
-                      >
-                        {formatPercent(props.payload.percent/100)}
-                      </text>
-                    </g>
-                  );
-                }
-              }}
-            />
-          </BarChart>
-        </ResponsiveContainer>
-      </Box>
+      {pieData.length > 0 && (
+        <Box sx={{ height: 200, mt: 2 }}>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            Wskaźniki jakości
+          </Typography>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={pieData}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
+                outerRadius={80}
+                fill="#8884d8"
+                dataKey="value"
+              >
+                {pieData.map((entry, index) => (
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill={entry.fill || (
+                      entry.name.toLowerCase().includes('pozytywne') || 
+                      entry.name.toLowerCase().includes('pass')
+                        ? theme.palette.success.main
+                        : theme.palette.error.main
+                    )} 
+                  />
+                ))}
+              </Pie>
+              <RechartsTooltip 
+                formatter={(value) => `${value.toFixed(1)}`} 
+                labelFormatter={(name) => name} 
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        </Box>
+      )}
     </Box>
   );
 };

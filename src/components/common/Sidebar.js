@@ -1,5 +1,5 @@
 // src/components/common/Sidebar.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   Drawer, 
@@ -39,11 +39,11 @@ import {
   FormatListNumbered as ForecastIcon,
   Assignment as TestsIcon,
   AssessmentOutlined as QualityReportsIcon,
-  LocalShipping as LogisticsIcon,
   Inventory2 as WaybillIcon,
   Receipt as InvoicesIcon,
   Add as AddIcon
 } from '@mui/icons-material';
+import { getExpiringBatches, getExpiredBatches } from '../../services/inventoryService';
 
 // Styled components
 const StyledListItemButton = styled(ListItemButton)(({ theme }) => ({
@@ -96,8 +96,31 @@ const Sidebar = () => {
   const [openProduction, setOpenProduction] = useState(location.pathname.startsWith('/production'));
   const [openOrders, setOpenOrders] = useState(location.pathname.startsWith('/orders') || location.pathname.startsWith('/customers'));
   const [openInventory, setOpenInventory] = useState(location.pathname.startsWith('/inventory') || location.pathname.startsWith('/purchase-orders'));
-  const [openLogistics, setOpenLogistics] = useState(location.pathname.startsWith('/logistics'));
   const [openCustomers, setOpenCustomers] = useState(location.pathname.startsWith('/customers') || location.pathname.startsWith('/orders'));
+  const [expiringItemsCount, setExpiringItemsCount] = useState(0);
+  
+  useEffect(() => {
+    const fetchExpiringProducts = async () => {
+      try {
+        // Pobierz produkty zbliżające się do końca terminu ważności (domyślnie 30 dni)
+        const expiringBatches = await getExpiringBatches(30);
+        // Pobierz produkty, które już są przeterminowane
+        const expiredBatches = await getExpiredBatches();
+        // Łączna ilość produktów wygasających i przeterminowanych
+        setExpiringItemsCount(expiringBatches.length + expiredBatches.length);
+      } catch (error) {
+        console.error('Błąd podczas pobierania danych o wygasających produktach:', error);
+        setExpiringItemsCount(0);
+      }
+    };
+
+    fetchExpiringProducts();
+    
+    // Odświeżaj dane co 30 minut
+    const intervalId = setInterval(fetchExpiringProducts, 30 * 60 * 1000);
+    
+    return () => clearInterval(intervalId);
+  }, []);
   
   const isActive = (path) => {
     return location.pathname.startsWith(path);
@@ -113,10 +136,6 @@ const Sidebar = () => {
 
   const handleInventoryClick = () => {
     setOpenInventory(!openInventory);
-  };
-  
-  const handleLogisticsClick = () => {
-    setOpenLogistics(!openLogistics);
   };
   
   const handleCustomersClick = () => {
@@ -137,23 +156,17 @@ const Sidebar = () => {
         { text: 'Zamówienia', icon: <OrdersIcon />, path: '/orders' },
       ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
     },
-    { text: 'Logistyka',
-      icon: <LogisticsIcon />,
-      path: '/logistics',
-      hasSubmenu: true,
-      children: [
-        { text: 'Listy przewozowe', icon: <WaybillIcon />, path: '/logistics/waybill' },
-      ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
-    },
     { text: 'Magazyn', 
       icon: <InventoryIcon />, 
       path: '/inventory', 
-      badge: 5,
+      badge: expiringItemsCount > 0 ? expiringItemsCount : null,
       hasSubmenu: true,
       children: [
+        { text: 'CMR', icon: <WaybillIcon />, path: '/inventory/cmr' },
         { text: 'Dostawcy', icon: <SuppliersIcon />, path: '/suppliers' },
         { text: 'Stan magazynowy', icon: <InventoryIcon />, path: '/inventory' },
         { text: 'Zamówienia komponentów', icon: <PurchaseOrdersIcon />, path: '/purchase-orders' },
+        { text: 'Terminy ważności', icon: <CalendarIcon />, path: '/inventory/expiry-dates' },
       ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
     },
     { text: 'Produkcja',
@@ -229,8 +242,7 @@ const Sidebar = () => {
                 onClick={item.text === 'Produkcja' ? handleProductionClick : 
                          item.text === 'Zamówienia' ? handleOrdersClick : 
                          item.text === 'Magazyn' ? handleInventoryClick :
-                         item.text === 'Klienci' ? handleCustomersClick :
-                         item.text === 'Logistyka' ? handleLogisticsClick : () => {}} 
+                         item.text === 'Klienci' ? handleCustomersClick : () => {}} 
                 selected={isActive(item.path)}
               >
                 <Tooltip title={item.text} placement="right" arrow>
@@ -254,15 +266,13 @@ const Sidebar = () => {
                 {(item.text === 'Produkcja' && openProduction) || 
                  (item.text === 'Zamówienia' && openOrders) ||
                  (item.text === 'Magazyn' && openInventory) ||
-                 (item.text === 'Klienci' && openCustomers) ||
-                 (item.text === 'Logistyka' && openLogistics) ? <ExpandLess /> : <ExpandMore />}
+                 (item.text === 'Klienci' && openCustomers) ? <ExpandLess /> : <ExpandMore />}
               </StyledListItemButton>
               <Collapse 
                 in={item.text === 'Produkcja' ? openProduction : 
                      item.text === 'Zamówienia' ? openOrders : 
                      item.text === 'Magazyn' ? openInventory :
-                     item.text === 'Klienci' ? openCustomers :
-                     item.text === 'Logistyka' ? openLogistics : false} 
+                     item.text === 'Klienci' ? openCustomers : false} 
                 timeout="auto" 
                 unmountOnExit
               >

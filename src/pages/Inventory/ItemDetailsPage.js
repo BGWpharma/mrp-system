@@ -29,12 +29,14 @@ import {
   History as HistoryIcon,
   Warning as WarningIcon,
   ViewList as ViewListIcon,
-  Add as AddIcon
+  Add as AddIcon,
+  QrCode as QrCodeIcon
 } from '@mui/icons-material';
 import { getInventoryItemById, getItemTransactions, getItemBatches } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
 import { Timestamp } from 'firebase/firestore';
+import LabelDialog from '../../components/inventory/LabelDialog';
 
 // TabPanel component
 function TabPanel(props) {
@@ -66,6 +68,7 @@ const ItemDetailsPage = () => {
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tabValue, setTabValue] = useState(0);
+  const [labelDialogOpen, setLabelDialogOpen] = useState(false);
 
   useEffect(() => {
     const fetchItemData = async () => {
@@ -159,6 +162,16 @@ const ItemDetailsPage = () => {
   const expiringBatches = getExpiringBatches();
   const expiredBatches = getExpiredBatches();
 
+  // Funkcja otwierająca dialog etykiet
+  const handleOpenLabelDialog = () => {
+    setLabelDialogOpen(true);
+  };
+  
+  // Funkcja zamykająca dialog etykiet
+  const handleCloseLabelDialog = () => {
+    setLabelDialogOpen(false);
+  };
+
   if (loading) {
     return <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>Ładowanie danych...</Container>;
   }
@@ -210,6 +223,14 @@ const ItemDetailsPage = () => {
             sx={{ mr: 1 }}
           >
             Zarządzaj partiami
+          </Button>
+          <Button 
+            variant="outlined"
+            onClick={handleOpenLabelDialog}
+            startIcon={<QrCodeIcon />}
+            sx={{ mr: 1 }}
+          >
+            Drukuj etykietę
           </Button>
           <Button 
             variant="outlined" 
@@ -493,6 +514,14 @@ const ItemDetailsPage = () => {
           )}
         </TabPanel>
       </Paper>
+
+      {/* Dialog etykiet */}
+      <LabelDialog
+        open={labelDialogOpen}
+        onClose={handleCloseLabelDialog}
+        item={item}
+        batches={batches}
+      />
     </Container>
   );
 };

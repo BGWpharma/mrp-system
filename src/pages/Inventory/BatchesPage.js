@@ -20,7 +20,16 @@ import {
   TextField,
   InputAdornment,
   IconButton,
-  Tooltip
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  FormHelperText
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -28,17 +37,23 @@ import {
   Clear as ClearIcon,
   Warning as WarningIcon,
   Info as InfoIcon,
-  Edit as EditIcon
+  Edit as EditIcon,
+  SwapHoriz as SwapHorizIcon,
+  QrCode as QrCodeIcon,
+  Print as PrintIcon
 } from '@mui/icons-material';
-import { getInventoryItemById, getItemBatches } from '../../services/inventoryService';
+import { getInventoryItemById, getItemBatches, getAllWarehouses, transferBatch } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
 import { Timestamp } from 'firebase/firestore';
+import { useAuth } from '../../hooks/useAuth';
+import LabelDialog from '../../components/inventory/LabelDialog';
 
 const BatchesPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { showError } = useNotification();
+  const { showError, showSuccess } = useNotification();
+  const { user } = useAuth();
   const [item, setItem] = useState(null);
   const [batches, setBatches] = useState([]);
   const [filteredBatches, setFilteredBatches] = useState([]);
@@ -46,19 +61,29 @@ const BatchesPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [selectedBatch, setSelectedBatch] = useState(null);
+  const [warehouses, setWarehouses] = useState([]);
+  const [targetWarehouseId, setTargetWarehouseId] = useState('');
+  const [transferQuantity, setTransferQuantity] = useState('');
+  const [transferErrors, setTransferErrors] = useState({});
+  const [processingTransfer, setProcessingTransfer] = useState(false);
+  const [labelDialogOpen, setLabelDialogOpen] = useState(false);
+  const [selectedBatchForLabel, setSelectedBatchForLabel] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        // Pobierz dane pozycji
         const itemData = await getInventoryItemById(id);
         setItem(itemData);
         
-        // Pobierz partie
         const batchesData = await getItemBatches(id);
         setBatches(batchesData);
         setFilteredBatches(batchesData);
+        
+        const warehousesData = await getAllWarehouses();
+        setWarehouses(warehousesData);
       } catch (error) {
         showError('Błąd podczas pobierania danych partii: ' + error.message);
         console.error('Error fetching batch data:', error);
@@ -170,6 +195,106 @@ const BatchesPage = () => {
     return null;
   };
 
+  const openTransferDialog = (batch) => {
+    console.log('Otwieranie dialogu dla partii:', batch);
+    setSelectedBatch(batch);
+    setTransferQuantity(batch.quantity.toString());
+    setTargetWarehouseId('');
+    setTransferErrors({});
+    setTransferDialogOpen(true);
+  };
+
+  const closeTransferDialog = () => {
+    setTransferDialogOpen(false);
+    setSelectedBatch(null);
+  };
+
+  const validateTransferForm = () => {
+    const errors = {};
+    
+    if (!targetWarehouseId) {
+      errors.targetWarehouseId = 'Wybierz magazyn docelowy';
+    }
+    
+    // Pobierz sourceWarehouseId z partii - musi być zdefiniowany
+    const sourceWarehouseId = selectedBatch.warehouseId;
+    
+    if (!sourceWarehouseId) {
+      errors.general = 'Nie można określić magazynu źródłowego. Odśwież stronę.';
+    } else if (sourceWarehouseId === targetWarehouseId) {
+      errors.targetWarehouseId = 'Magazyn docelowy musi być inny niż bieżący';
+    }
+    
+    if (!transferQuantity) {
+      errors.transferQuantity = 'Podaj ilość do przeniesienia';
+    } else {
+      const qty = parseFloat(transferQuantity);
+      if (isNaN(qty) || qty <= 0) {
+        errors.transferQuantity = 'Podaj prawidłową ilość większą od zera';
+      } else if (qty > selectedBatch.quantity) {
+        errors.transferQuantity = `Maksymalna dostępna ilość to ${selectedBatch.quantity}`;
+      }
+    }
+    
+    setTransferErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleTransferBatch = async () => {
+    if (!validateTransferForm()) return;
+    
+    try {
+      setProcessingTransfer(true);
+      
+      // Partie zawsze mają warehouseId w nowym modelu danych
+      const sourceWarehouseId = selectedBatch.warehouseId;
+      
+      if (!sourceWarehouseId) {
+        throw new Error('Nie można określić magazynu źródłowego. Spróbuj odświeżyć stronę.');
+      }
+      
+      await transferBatch(
+        selectedBatch.id,
+        sourceWarehouseId,
+        targetWarehouseId,
+        transferQuantity,
+        {
+          userId: user?.uid || 'unknown',
+          notes: `Przeniesienie partii ${selectedBatch.batchNumber || selectedBatch.lotNumber || 'bez numeru'}`
+        }
+      );
+      
+      showSuccess('Partia została przeniesiona pomyślnie');
+      closeTransferDialog();
+      
+      const batchesData = await getItemBatches(id);
+      setBatches(batchesData);
+      setFilteredBatches(batchesData);
+    } catch (error) {
+      console.error('Error transferring batch:', error);
+      showError(error.message);
+    } finally {
+      setProcessingTransfer(false);
+    }
+  };
+
+  const handleOpenItemLabelDialog = () => {
+    setSelectedBatchForLabel(null);
+    setLabelDialogOpen(true);
+  };
+
+  const handleOpenBatchLabelDialog = (batch) => {
+    setSelectedBatchForLabel(batch);
+    setLabelDialogOpen(true);
+  };
+
+  const handleCloseLabelDialog = () => {
+    setLabelDialogOpen(false);
+    setTimeout(() => {
+      setSelectedBatchForLabel(null);
+    }, 300);
+  };
+
   if (loading) {
     return <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>Ładowanie danych...</Container>;
   }
@@ -204,6 +329,15 @@ const BatchesPage = () => {
           Partie: {item.name}
         </Typography>
         <Box>
+          <Button 
+            variant="outlined"
+            color="secondary" 
+            startIcon={<QrCodeIcon />}
+            onClick={handleOpenItemLabelDialog}
+            sx={{ mr: 2 }}
+          >
+            Drukuj etykietę
+          </Button>
           <Button 
             variant="contained" 
             color="primary" 
@@ -266,6 +400,7 @@ const BatchesPage = () => {
                 <TableCell>Numer LOT</TableCell>
                 <TableCell>Data przyjęcia</TableCell>
                 <TableCell>Data ważności</TableCell>
+                <TableCell>Magazyn</TableCell>
                 <TableCell>Ilość początkowa</TableCell>
                 <TableCell>Ilość aktualna</TableCell>
                 <TableCell>Cena jedn.</TableCell>
@@ -277,7 +412,7 @@ const BatchesPage = () => {
             <TableBody>
               {filteredBatches.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} align="center">
+                  <TableCell colSpan={11} align="center">
                     Brak partii do wyświetlenia
                   </TableCell>
                 </TableRow>
@@ -295,6 +430,9 @@ const BatchesPage = () => {
                         </TableCell>
                         <TableCell>
                           {formatDate(batch.expiryDate)}
+                        </TableCell>
+                        <TableCell>
+                          {batch.warehouseName || 'Magazyn podstawowy'}
                         </TableCell>
                         <TableCell>
                           {batch.initialQuantity} {item.unit}
@@ -315,15 +453,37 @@ const BatchesPage = () => {
                         </TableCell>
                         <TableCell>{batch.notes || '-'}</TableCell>
                         <TableCell>
-                          <Tooltip title="Edytuj partię">
-                            <IconButton 
-                              size="small" 
-                              color="primary"
-                              onClick={() => navigate(`/inventory/${id}/batches/${batch.id}/edit`)}
-                            >
-                              <EditIcon />
-                            </IconButton>
-                          </Tooltip>
+                          <Box sx={{ display: 'flex' }}>
+                            <Tooltip title="Edytuj partię">
+                              <IconButton 
+                                size="small" 
+                                color="primary"
+                                onClick={() => navigate(`/inventory/${id}/batches/${batch.id}/edit`)}
+                              >
+                                <EditIcon />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Drukuj etykietę">
+                              <IconButton 
+                                size="small" 
+                                color="secondary"
+                                onClick={() => handleOpenBatchLabelDialog(batch)}
+                              >
+                                <QrCodeIcon />
+                              </IconButton>
+                            </Tooltip>
+                            {batch.quantity > 0 && (
+                              <Tooltip title="Przenieś do innego magazynu">
+                                <IconButton 
+                                  size="small" 
+                                  color="secondary"
+                                  onClick={() => openTransferDialog(batch)}
+                                >
+                                  <SwapHorizIcon />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                          </Box>
                         </TableCell>
                       </TableRow>
                     );
@@ -344,6 +504,89 @@ const BatchesPage = () => {
           labelDisplayedRows={({ from, to, count }) => `${from}-${to} z ${count}`}
         />
       </Paper>
+
+      <Dialog open={transferDialogOpen} onClose={closeTransferDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          Przenieś partię do innego magazynu
+        </DialogTitle>
+        <DialogContent>
+          {selectedBatch && (
+            <Box sx={{ pt: 1 }}>
+              <Typography variant="subtitle1" gutterBottom>
+                Informacje o partii:
+              </Typography>
+              <Typography variant="body2" gutterBottom>
+                <strong>Numer partii/LOT:</strong> {selectedBatch.batchNumber || selectedBatch.lotNumber || '-'}
+              </Typography>
+              <Typography variant="body2" gutterBottom>
+                <strong>Bieżący magazyn:</strong> {selectedBatch.warehouseName || 'Magazyn podstawowy'}
+              </Typography>
+              <Typography variant="body2" gutterBottom>
+                <strong>Dostępna ilość:</strong> {selectedBatch.quantity} {item?.unit || 'szt.'}
+              </Typography>
+              
+              <Box sx={{ mt: 3, mb: 2 }}>
+                <Grid container spacing={2}>
+                  <Grid item xs={12}>
+                    <FormControl fullWidth error={!!transferErrors.targetWarehouseId}>
+                      <InputLabel>Magazyn docelowy</InputLabel>
+                      <Select
+                        value={targetWarehouseId}
+                        onChange={(e) => setTargetWarehouseId(e.target.value)}
+                        label="Magazyn docelowy"
+                      >
+                        {warehouses
+                          .filter(wh => wh.id !== selectedBatch.warehouseId)
+                          .map(warehouse => (
+                            <MenuItem key={warehouse.id} value={warehouse.id}>
+                              {warehouse.name}
+                            </MenuItem>
+                          ))
+                        }
+                      </Select>
+                      {transferErrors.targetWarehouseId && (
+                        <FormHelperText>{transferErrors.targetWarehouseId}</FormHelperText>
+                      )}
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Ilość do przeniesienia"
+                      type="number"
+                      value={transferQuantity}
+                      onChange={(e) => setTransferQuantity(e.target.value)}
+                      inputProps={{ min: 0, max: selectedBatch.quantity, step: 'any' }}
+                      error={!!transferErrors.transferQuantity}
+                      helperText={transferErrors.transferQuantity || ''}
+                    />
+                  </Grid>
+                </Grid>
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeTransferDialog} disabled={processingTransfer}>
+            Anuluj
+          </Button>
+          <Button 
+            variant="contained" 
+            color="primary" 
+            onClick={handleTransferBatch}
+            disabled={processingTransfer}
+          >
+            {processingTransfer ? 'Przetwarzanie...' : 'Przenieś partię'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <LabelDialog
+        open={labelDialogOpen}
+        onClose={handleCloseLabelDialog}
+        item={item}
+        batches={selectedBatchForLabel ? [selectedBatchForLabel] : batches}
+      />
     </Container>
   );
 };

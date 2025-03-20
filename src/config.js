@@ -47,6 +47,7 @@ export const PURCHASE_ORDER_STATUSES = {
 export const PRODUCTION_STATUSES = {
   PLANNED: 'planned',
   IN_PROGRESS: 'in_progress',
+  PENDING_CONSUMPTION: 'pending_consumption',
   COMPLETED: 'completed',
   CANCELLED: 'cancelled'
 };
@@ -80,6 +81,7 @@ export const STATUS_TRANSLATIONS = {
   // Produkcja
   [PRODUCTION_STATUSES.PLANNED]: 'Zaplanowane',
   [PRODUCTION_STATUSES.IN_PROGRESS]: 'W trakcie',
+  [PRODUCTION_STATUSES.PENDING_CONSUMPTION]: 'Potwierdzenie zużycia',
   [PRODUCTION_STATUSES.COMPLETED]: 'Zakończone',
   [PRODUCTION_STATUSES.CANCELLED]: 'Anulowane',
   

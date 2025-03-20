@@ -82,6 +82,12 @@ import WarehousesList from './components/inventory/WarehousesList';
 // Invoices
 import InvoicesPage from './pages/Invoices/InvoicesPage';
 
+// CMR
+import CmrListPage from './pages/Inventory/Cmr/CmrListPage';
+import CmrCreatePage from './pages/Inventory/Cmr/CmrCreatePage';
+import CmrDetailsPage from './pages/Inventory/Cmr/CmrDetailsPage';
+import CmrEditPage from './pages/Inventory/Cmr/CmrEditPage';
+
 function App() {
   return (
     <Router>
@@ -122,6 +128,12 @@ function App() {
               <Route path="/inventory/:id/issue" element={<PrivateLayout><IssueInventoryPage /></PrivateLayout>} />
               <Route path="/inventory/:id/history" element={<PrivateLayout><InventoryHistoryPage /></PrivateLayout>} />
               <Route path="/inventory/expiry-dates" element={<PrivateLayout><ExpiryDatesPage /></PrivateLayout>} />
+              
+              {/* CMR Routes */}
+              <Route path="/inventory/cmr" element={<PrivateLayout><CmrListPage /></PrivateLayout>} />
+              <Route path="/inventory/cmr/create" element={<PrivateLayout><CmrCreatePage /></PrivateLayout>} />
+              <Route path="/inventory/cmr/:id" element={<PrivateLayout><CmrDetailsPage /></PrivateLayout>} />
+              <Route path="/inventory/cmr/:id/edit" element={<PrivateLayout><CmrEditPage /></PrivateLayout>} />
               
               {/* Quality Routes */}
               <Route path="/quality" element={<PrivateLayout><QualityPage /></PrivateLayout>} />
