@@ -37,7 +37,9 @@ import {
   AttachMoney as AttachMoneyIcon,
   LocalShipping as LocalShippingIcon,
   EventNote as EventNoteIcon,
-  Calculate as CalculateIcon
+  Calculate as CalculateIcon,
+  Upload as UploadIcon,
+  DownloadRounded as DownloadIcon
 } from '@mui/icons-material';
 import { 
   createOrder, 
@@ -52,7 +54,10 @@ import { getAllCustomers } from '../../services/customerService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatCurrency } from '../../utils/formatUtils';
+import { formatDateForInput } from '../../utils/dateUtils';
 import { createCustomer } from '../../services/customerService';
+import { storage } from '../../services/firebase/config';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 const OrderForm = ({ orderId }) => {
   const [loading, setLoading] = useState(!!orderId);
@@ -62,10 +67,12 @@ const OrderForm = ({ orderId }) => {
   const [products, setProducts] = useState([]);
   const [validationErrors, setValidationErrors] = useState({});
   const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
   const navigate = useNavigate();
+  const fileInputRef = React.useRef(null);
 
   // Dodajemy stan dla kalkulacji kosztów
   const [costCalculation, setCostCalculation] = useState(null);
@@ -94,9 +101,9 @@ const OrderForm = ({ orderId }) => {
           
           setOrderData({
             ...fetchedOrder,
-            orderDate: orderDate.toISOString().split('T')[0], // Format YYYY-MM-DD
-            expectedDeliveryDate: expectedDeliveryDate ? expectedDeliveryDate.toISOString().split('T')[0] : '',
-            deliveryDate: deliveryDate ? deliveryDate.toISOString().split('T')[0] : ''
+            orderDate: formatDateForInput(orderDate),
+            expectedDeliveryDate: expectedDeliveryDate ? formatDateForInput(expectedDeliveryDate) : '',
+            deliveryDate: deliveryDate ? formatDateForInput(deliveryDate) : ''
           });
         }
         
@@ -180,7 +187,16 @@ const OrderForm = ({ orderId }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setOrderData(prev => ({ ...prev, [name]: value }));
+    
+    // Dla pól typu date upewnij się, że format jest poprawny
+    if (['orderDate', 'expectedDeliveryDate', 'deliveryDate'].includes(name)) {
+      setOrderData(prev => ({ 
+        ...prev, 
+        [name]: formatDateForInput(value) 
+      }));
+    } else {
+      setOrderData(prev => ({ ...prev, [name]: value }));
+    }
     
     // Wyczyść błąd walidacji dla tego pola
     if (validationErrors[name]) {
@@ -199,7 +215,8 @@ const OrderForm = ({ orderId }) => {
           name: selectedCustomer.name,
           email: selectedCustomer.email || '',
           phone: selectedCustomer.phone || '',
-          address: selectedCustomer.address || ''
+          address: selectedCustomer.address || '',
+          shippingAddress: selectedCustomer.shippingAddress || ''
         }
       }));
       
@@ -366,6 +383,79 @@ const OrderForm = ({ orderId }) => {
     const subtotal = calculateSubtotal();
     const shippingCost = parseFloat(orderData.shippingCost) || 0;
     return subtotal + shippingCost;
+  };
+
+  // Funkcja do obsługi przesyłania dowodu dostawy
+  const handleDeliveryProofUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      setUploading(true);
+      
+      // Tworzymy tymczasowe ID dla nowego zamówienia, jeśli to potrzebne
+      const tempId = orderId || `temp-${Date.now()}`;
+      
+      // Tworzymy referencję do pliku w Firebase Storage
+      const storageRef = ref(storage, `delivery_proofs/${tempId}/${file.name}`);
+      
+      // Przesyłamy plik
+      await uploadBytes(storageRef, file);
+      
+      // Pobieramy URL do pliku
+      const downloadURL = await getDownloadURL(storageRef);
+      
+      // Aktualizujemy stan lokalny
+      setOrderData(prev => ({
+        ...prev,
+        deliveryProof: downloadURL
+      }));
+      
+      showSuccess('Dowód dostawy został pomyślnie przesłany');
+    } catch (error) {
+      console.error('Błąd podczas przesyłania pliku:', error);
+      showError('Wystąpił błąd podczas przesyłania pliku');
+    } finally {
+      setUploading(false);
+      // Reset input by umożliwić ponowne przesłanie tego samego pliku
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+  
+  // Funkcja do usuwania dowodu dostawy
+  const handleDeleteDeliveryProof = async () => {
+    if (!orderData.deliveryProof) return;
+    
+    try {
+      setUploading(true);
+      
+      // Próbujemy wyciągnąć ścieżkę pliku z URL
+      const fileUrl = orderData.deliveryProof;
+      
+      try {
+        // Próbujemy usunąć plik z Firebase Storage
+        const storageRef = ref(storage, fileUrl);
+        await deleteObject(storageRef);
+      } catch (storageError) {
+        console.warn('Nie można usunąć pliku ze Storage:', storageError);
+        // Kontynuujemy, nawet jeśli nie udało się usunąć pliku z Storage
+      }
+      
+      // Aktualizujemy stan lokalny
+      setOrderData(prev => ({
+        ...prev,
+        deliveryProof: null
+      }));
+      
+      showSuccess('Dowód dostawy został usunięty');
+    } catch (error) {
+      console.error('Błąd podczas usuwania pliku:', error);
+      showError('Wystąpił błąd podczas usuwania pliku');
+    } finally {
+      setUploading(false);
+    }
   };
 
   // Funkcja do kalkulacji kosztów zamówienia
@@ -556,9 +646,9 @@ const OrderForm = ({ orderId }) => {
             </Grid>
             <Grid item xs={12}>
               <TextField
-                name="customer_address"
-                label="Adres klienta"
-                value={orderData.customer.address || ''}
+                name="customer_shippingAddress"
+                label="Adres dostawy"
+                value={orderData.customer.shippingAddress || ''}
                 onChange={handleCustomerDetailChange}
                 fullWidth
                 multiline
@@ -768,6 +858,68 @@ const OrderForm = ({ orderId }) => {
             rows={4}
             placeholder="Dodatkowe informacje, uwagi..."
           />
+        </Paper>
+
+        {/* Sekcja dowodu dostawy */}
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>Dowód dostawy</Typography>
+          <Divider sx={{ mb: 2 }} />
+          
+          {orderData.deliveryProof ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <Box sx={{ width: '100%', maxWidth: 600, mb: 2 }}>
+                <img 
+                  src={orderData.deliveryProof} 
+                  alt="Dowód dostawy" 
+                  style={{ width: '100%', height: 'auto', borderRadius: 4 }} 
+                />
+              </Box>
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <Button 
+                  variant="outlined"
+                  startIcon={<DownloadIcon />}
+                  href={orderData.deliveryProof}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Pobierz
+                </Button>
+                <Button 
+                  variant="outlined" 
+                  color="error" 
+                  startIcon={<DeleteIcon />}
+                  onClick={handleDeleteDeliveryProof}
+                  disabled={uploading}
+                >
+                  Usuń
+                </Button>
+              </Box>
+            </Box>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <Typography variant="body1" sx={{ mb: 2 }}>
+                Brak załączonego dowodu dostawy. Dodaj skan lub zdjęcie potwierdzenia dostawy.
+              </Typography>
+              <input
+                ref={fileInputRef}
+                accept="image/*, application/pdf"
+                style={{ display: 'none' }}
+                id="delivery-proof-upload"
+                type="file"
+                onChange={handleDeliveryProofUpload}
+              />
+              <label htmlFor="delivery-proof-upload">
+                <Button
+                  variant="contained"
+                  component="span"
+                  startIcon={<UploadIcon />}
+                  disabled={uploading}
+                >
+                  {uploading ? 'Przesyłanie...' : 'Dodaj dowód dostawy'}
+                </Button>
+              </label>
+            </Box>
+          )}
         </Paper>
 
         {/* Sekcja kalkulacji kosztów */}

@@ -31,6 +31,7 @@ const SupplierForm = () => {
     phone: '',
     addresses: [],
     taxId: '',
+    vatEu: '',
     notes: ''
   });
   
@@ -266,6 +267,17 @@ const SupplierForm = () => {
                 name="taxId"
                 label="NIP"
                 value={supplierData.taxId}
+                onChange={handleChange}
+                fullWidth
+              />
+            </Grid>
+            
+            {/* VAT-EU */}
+            <Grid item xs={12} md={6}>
+              <TextField
+                name="vatEu"
+                label="VAT-EU"
+                value={supplierData.vatEu}
                 onChange={handleChange}
                 fullWidth
               />

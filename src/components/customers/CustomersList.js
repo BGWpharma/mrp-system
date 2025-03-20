@@ -229,7 +229,7 @@ const CustomersList = () => {
                     <TableCell>Nazwa</TableCell>
                     <TableCell>Email</TableCell>
                     <TableCell>Telefon</TableCell>
-                    <TableCell>Adres</TableCell>
+                    <TableCell>Adres do faktury</TableCell>
                     <TableCell align="right">Akcje</TableCell>
                   </TableRow>
                 </TableHead>
@@ -267,9 +267,9 @@ const CustomersList = () => {
                             )}
                           </TableCell>
                           <TableCell>
-                            {customer.address ? (
+                            {customer.billingAddress ? (
                               <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
-                                {customer.address}
+                                {customer.billingAddress}
                               </Typography>
                             ) : (
                               '-'

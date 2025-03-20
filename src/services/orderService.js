@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase/config';
 import { generateCONumber, generatePONumber } from '../utils/numberGenerators';
+import { formatDateForInput } from '../utils/dateUtils';
 
 const ORDERS_COLLECTION = 'orders';
 
@@ -400,7 +401,8 @@ export const DEFAULT_ORDER = {
     name: '',
     email: '',
     phone: '',
-    address: ''
+    address: '',
+    shippingAddress: ''
   },
   items: [
     {
@@ -411,13 +413,15 @@ export const DEFAULT_ORDER = {
       price: 0
     }
   ],
-  orderDate: new Date(),
-  expectedDeliveryDate: null,
-  deliveryDate: null,
+  orderDate: formatDateForInput(new Date()),
+  expectedDeliveryDate: '',
+  deliveryDate: '',
   status: 'Nowe',
   paymentMethod: 'Przelew',
   paymentStatus: 'Nieopłacone',
   notes: '',
   shippingMethod: '',
-  shippingCost: 0
+  shippingCost: 0,
+  deliveryProof: null, // URL do zdjęcia/skanu dowodu dostawy
+  shippingAddress: ''
 }; 

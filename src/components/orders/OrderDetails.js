@@ -18,7 +18,9 @@ import {
   Card,
   CardContent,
   Link,
-  Stack
+  Stack,
+  TextField,
+  Input
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -31,19 +33,26 @@ import {
   Payment as PaymentIcon,
   Person as PersonIcon,
   LocationOn as LocationOnIcon,
-  Phone as PhoneIcon
+  Phone as PhoneIcon,
+  Upload as UploadIcon,
+  DownloadRounded as DownloadIcon,
+  Delete as DeleteIcon
 } from '@mui/icons-material';
-import { getOrderById, ORDER_STATUSES } from '../../services/orderService';
+import { getOrderById, ORDER_STATUSES, updateOrder } from '../../services/orderService';
 import { useNotification } from '../../hooks/useNotification';
 import { formatCurrency } from '../../utils/formatUtils';
 import { formatTimestamp, formatDate } from '../../utils/dateUtils';
+import { storage } from '../../services/firebase/config';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 const OrderDetails = () => {
   const { orderId } = useParams();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
-  const { showError } = useNotification();
+  const [uploading, setUploading] = useState(false);
+  const { showError, showSuccess } = useNotification();
   const navigate = useNavigate();
+  const fileInputRef = React.useRef(null);
 
   useEffect(() => {
     const fetchOrderDetails = async () => {
@@ -81,7 +90,66 @@ const OrderDetails = () => {
     // Funkcjonalność wysyłania emaila do zaimplementowania w przyszłości
     const emailAddress = order?.customer?.email;
     if (emailAddress) {
-      window.location.href = `mailto:${emailAddress}?subject=Zamówienie ${order.id.substring(0, 8).toUpperCase()}`;
+      window.location.href = `mailto:${emailAddress}?subject=Zamówienie ${order.orderNumber || order.id.substring(0, 8).toUpperCase()}`;
+    }
+  };
+
+  const handleDeliveryProofUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      setUploading(true);
+      
+      // Tworzymy referencję do pliku w Firebase Storage
+      const storageRef = ref(storage, `delivery_proofs/${orderId}/${file.name}`);
+      
+      // Przesyłamy plik
+      await uploadBytes(storageRef, file);
+      
+      // Pobieramy URL do pliku
+      const downloadURL = await getDownloadURL(storageRef);
+      
+      // Aktualizujemy zamówienie z URL do dowodu dostawy
+      await updateOrder(orderId, { ...order, deliveryProof: downloadURL }, order.createdBy);
+      
+      // Aktualizujemy stan lokalny
+      setOrder({ ...order, deliveryProof: downloadURL });
+      
+      showSuccess('Dowód dostawy został pomyślnie przesłany');
+    } catch (error) {
+      console.error('Błąd podczas przesyłania pliku:', error);
+      showError('Wystąpił błąd podczas przesyłania pliku');
+    } finally {
+      setUploading(false);
+    }
+  };
+  
+  const handleDeleteDeliveryProof = async () => {
+    if (!order.deliveryProof) return;
+    
+    try {
+      setUploading(true);
+      
+      // Wyciągamy ścieżkę pliku z URL
+      const fileUrl = order.deliveryProof;
+      const storageRef = ref(storage, fileUrl);
+      
+      // Usuwamy plik z Firebase Storage
+      await deleteObject(storageRef);
+      
+      // Aktualizujemy zamówienie
+      await updateOrder(orderId, { ...order, deliveryProof: null }, order.createdBy);
+      
+      // Aktualizujemy stan lokalny
+      setOrder({ ...order, deliveryProof: null });
+      
+      showSuccess('Dowód dostawy został usunięty');
+    } catch (error) {
+      console.error('Błąd podczas usuwania pliku:', error);
+      showError('Wystąpił błąd podczas usuwania pliku');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -132,7 +200,7 @@ const OrderDetails = () => {
           Powrót
         </Button>
         <Typography variant="h5">
-          Zamówienie #{order.id.substring(0, 8).toUpperCase()}
+          Zamówienie {order.orderNumber || `#${order.id.substring(0, 8).toUpperCase()}`}
         </Typography>
         <Box>
           <Button 
@@ -222,7 +290,7 @@ const OrderDetails = () => {
             </Typography>
             <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center' }}>
               <LocationOnIcon sx={{ mr: 1 }} fontSize="small" />
-              Adres: {order.customer?.address || '-'}
+              Adres dostawy: {order.customer?.shippingAddress || '-'}
             </Typography>
           </Paper>
         </Grid>
@@ -319,6 +387,68 @@ const OrderDetails = () => {
             </TableRow>
           </TableBody>
         </Table>
+      </Paper>
+
+      {/* Sekcja dowodu dostawy */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>Dowód dostawy</Typography>
+        <Divider sx={{ mb: 2 }} />
+        
+        {order.deliveryProof ? (
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <Box sx={{ width: '100%', maxWidth: 600, mb: 2 }}>
+              <img 
+                src={order.deliveryProof} 
+                alt="Dowód dostawy" 
+                style={{ width: '100%', height: 'auto', borderRadius: 4 }} 
+              />
+            </Box>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <Button 
+                variant="outlined"
+                startIcon={<DownloadIcon />}
+                href={order.deliveryProof}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Pobierz
+              </Button>
+              <Button 
+                variant="outlined" 
+                color="error" 
+                startIcon={<DeleteIcon />}
+                onClick={handleDeleteDeliveryProof}
+                disabled={uploading}
+              >
+                Usuń
+              </Button>
+            </Box>
+          </Box>
+        ) : (
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <Typography variant="body1" sx={{ mb: 2 }}>
+              Brak załączonego dowodu dostawy. Dodaj skan lub zdjęcie potwierdzenia dostawy.
+            </Typography>
+            <input
+              ref={fileInputRef}
+              accept="image/*, application/pdf"
+              style={{ display: 'none' }}
+              id="delivery-proof-upload"
+              type="file"
+              onChange={handleDeliveryProofUpload}
+            />
+            <label htmlFor="delivery-proof-upload">
+              <Button
+                variant="contained"
+                component="span"
+                startIcon={<UploadIcon />}
+                disabled={uploading}
+              >
+                {uploading ? 'Przesyłanie...' : 'Dodaj dowód dostawy'}
+              </Button>
+            </label>
+          </Box>
+        )}
       </Paper>
 
       {/* Uwagi */}

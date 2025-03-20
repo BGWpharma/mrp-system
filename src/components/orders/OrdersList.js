@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -58,7 +58,7 @@ import {
 } from '../../services/orderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import { formatDate, formatTimestamp } from '../../utils/dateUtils';
+import { formatDate, formatTimestamp, formatDateForInput } from '../../utils/dateUtils';
 import { formatCurrency } from '../../utils/formatUtils';
 
 const OrdersList = () => {
@@ -77,13 +77,17 @@ const OrdersList = () => {
   const [expandedOrderId, setExpandedOrderId] = useState(null);
   const [orderToDelete, setOrderToDelete] = useState(null);
   const [statusChangeInfo, setStatusChangeInfo] = useState(null);
+  const [customers, setCustomers] = useState([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
 
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     fetchOrders();
+    fetchCustomers();
   }, []);
 
   const fetchOrders = async () => {
@@ -99,10 +103,28 @@ const OrdersList = () => {
     }
   };
 
+  const fetchCustomers = async () => {
+    try {
+      setCustomersLoading(true);
+      const { getAllCustomers } = await import('../../services/customerService');
+      const data = await getAllCustomers();
+      setCustomers(data);
+    } catch (error) {
+      console.error('Błąd podczas pobierania klientów:', error);
+    } finally {
+      setCustomersLoading(false);
+    }
+  };
+
   const applyFilters = async () => {
     try {
       setLoading(true);
-      const data = await getAllOrders(filters);
+      // Przygotuj obiekty z filtrami - dla dat musimy odpowiednio sformatować wartości
+      const filtersToApply = {
+        ...filters,
+        // Format dat jest już odpowiedni dla filtrów, więc nie musimy go przekształcać
+      };
+      const data = await getAllOrders(filtersToApply);
       setOrders(data);
       setPage(0);
     } catch (error) {
@@ -112,6 +134,33 @@ const OrdersList = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (location.state?.customerId) {
+      setFilters(prev => ({
+        ...prev,
+        customerId: location.state.customerId
+      }));
+      
+      if (location.state?.customerName) {
+        showSuccess(`Wyświetlam zamówienia klienta: ${location.state.customerName}`);
+      }
+      
+      // Zastosuj filtry przy pierwszym załadowaniu
+      const timer = setTimeout(() => {
+        applyFilters();
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [location.state, showSuccess]);
+
+  useEffect(() => {
+    if (orders && orders.length > 0) {
+      // To tylko sprawdza czy daty są poprawnie sformatowane
+      // W razie potrzeby można tu wykonać jakieś działania
+    }
+  }, [orders]);
 
   const resetFilters = () => {
     setFilters({
@@ -125,6 +174,7 @@ const OrdersList = () => {
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
+    // Dla pól typu date (fromDate, toDate) zapewniamy poprawny format
     setFilters(prev => ({
       ...prev,
       [name]: value
@@ -247,6 +297,17 @@ const OrdersList = () => {
     }
   };
 
+  // Nawigacja do listy zamówień filtrowanej po kliencie
+  const handleViewCustomerOrders = (customerId, customerName) => {
+    // Ustawiam filtry i przechodzę do listy zamówień
+    setFilters(prev => ({
+      ...prev,
+      customerId: customerId
+    }));
+    showSuccess(`Wyświetlam zamówienia klienta: ${customerName}`);
+    applyFilters();
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -349,6 +410,7 @@ const OrdersList = () => {
                     size="small"
                     fullWidth
                     InputLabelProps={{ shrink: true }}
+                    inputProps={{ max: filters.toDate || undefined }}
                   />
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
@@ -361,7 +423,27 @@ const OrdersList = () => {
                     size="small"
                     fullWidth
                     InputLabelProps={{ shrink: true }}
+                    inputProps={{ min: filters.fromDate || undefined }}
                   />
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Klient</InputLabel>
+                    <Select
+                      name="customerId"
+                      value={filters.customerId}
+                      onChange={handleFilterChange}
+                      label="Klient"
+                      disabled={customersLoading}
+                    >
+                      <MenuItem value="">Wszyscy klienci</MenuItem>
+                      {customers.map(customer => (
+                        <MenuItem key={customer.id} value={customer.id}>
+                          {customer.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
                   <Box sx={{ display: 'flex', gap: 1 }}>
@@ -439,7 +521,7 @@ const OrdersList = () => {
                             </Typography>
                           </TableCell>
                           <TableCell>
-                            {formatDate(order.orderDate)}
+                            {order.orderDate ? formatDate(order.orderDate) : '-'}
                           </TableCell>
                           <TableCell>{formatCurrency(order.totalValue || 0)}</TableCell>
                           <TableCell>

@@ -165,6 +165,7 @@ export const DEFAULT_CUSTOMER = {
   email: '',
   phone: '',
   vatEu: '', // Numer VAT-EU
+  supplierVatEu: '', // Numer VAT-EU dostawcy
   billingAddress: '', // Adres do faktury
   shippingAddress: '', // Adres do wysyłki
   address: '', // Stare pole adresu zachowane dla kompatybilności

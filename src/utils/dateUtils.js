@@ -56,15 +56,38 @@ export const formatDate = (date, includeTime = true) => {
 export const formatDateForInput = (date) => {
   if (!date) return '';
   
-  // Konwersja na obiekt Date jeśli potrzebne
-  const dateObj = date instanceof Date ? date : new Date(date);
+  // Obsługa obiektu timestamp z Firebase
+  if (date && typeof date.toDate === 'function') {
+    date = date.toDate();
+  }
+  
+  // Obsługa string w różnych formatach
+  let dateObj;
+  if (typeof date === 'string') {
+    // Sprawdź, czy format jest już poprawny dla pola input (YYYY-MM-DD)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return date;
+    }
+    
+    // Spróbuj sparsować datę
+    dateObj = new Date(date);
+  } else {
+    // Jeśli to obiekt Date, użyj go bezpośrednio
+    dateObj = date instanceof Date ? date : new Date(date);
+  }
   
   // Sprawdź czy data jest prawidłowa
   if (isNaN(dateObj.getTime())) {
+    console.warn('Nieprawidłowy format daty:', date);
     return '';
   }
   
-  return dateObj.toISOString().split('T')[0];
+  // Formatuj do YYYY-MM-DD
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  
+  return `${year}-${month}-${day}`;
 };
 
 /**

@@ -15,7 +15,9 @@ import {
   ListItem,
   ListItemText,
   Divider,
-  Chip
+  Chip,
+  LinearProgress,
+  Icon
 } from '@mui/material';
 import {
   MenuBook as RecipesIcon,
@@ -24,7 +26,10 @@ import {
   VerifiedUser as QualityIcon,
   ShoppingCart as OrdersIcon,
   Add as AddIcon,
-  InsertChart as AnalyticsIcon
+  InsertChart as AnalyticsIcon,
+  ArrowUpward as ArrowUpIcon,
+  ArrowDownward as ArrowDownIcon,
+  Timeline as TimelineIcon
 } from '@mui/icons-material';
 import { getTasksByStatus } from '../../services/productionService';
 import { getAllRecipes } from '../../services/recipeService';
@@ -112,6 +117,15 @@ const Dashboard = () => {
     }
   };
 
+  // Dane dla wykresów statystyk
+  const mockData = {
+    salesTrend: 8.6,
+    accountsGrowth: 23.7,
+    inventoryUtilization: 78,
+    productionEfficiency: 68,
+    ordersTrend: -5.2
+  };
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Typography variant="h4" gutterBottom>
@@ -122,22 +136,50 @@ const Dashboard = () => {
       </Typography>
 
       <Grid container spacing={3}>
-        {/* Skróty do głównych modułów */}
+        {/* Główne karty KPI */}
         <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <RecipesIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
+          <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
+            <CardContent sx={{ textAlign: 'center', p: 3 }}>
+              <RecipesIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
               <Typography variant="h6">Receptury</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Zarządzaj recepturami i składnikami
+              <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
+                {recipes?.length || 0}
               </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {mockData.salesTrend > 0 ? (
+                  <ArrowUpIcon sx={{ color: 'success.main', fontSize: 16 }} />
+                ) : (
+                  <ArrowDownIcon sx={{ color: 'error.main', fontSize: 16 }} />
+                )}
+                <Typography 
+                  variant="body2" 
+                  color={mockData.salesTrend > 0 ? 'success.main' : 'error.main'}
+                  sx={{ mr: 1 }}
+                >
+                  {Math.abs(mockData.salesTrend)}%
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Zarządzaj recepturami i składnikami
+                </Typography>
+              </Box>
+              {/* Tło stylizowane na wykres */}
+              <Box sx={{ position: 'relative', mt: 2 }}>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={mockData.inventoryUtilization} 
+                  sx={{ 
+                    height: 8, 
+                    borderRadius: 4, 
+                    backgroundColor: 'rgba(0,230,130,0.1)',
+                    '& .MuiLinearProgress-bar': {
+                      backgroundColor: 'success.main'
+                    }
+                  }} 
+                />
+              </Box>
             </CardContent>
-            <CardActions>
-              <Button 
-                component={Link} 
-                to="/recipes" 
-                fullWidth
-              >
+            <CardActions sx={{ p: 2, pt: 0, justifyContent: 'space-between' }}>
+              <Button component={Link} to="/recipes" sx={{ flexGrow: 1 }}>
                 Przejdź
               </Button>
               <Button 
@@ -145,7 +187,7 @@ const Dashboard = () => {
                 to="/recipes/new" 
                 color="primary"
                 variant="contained"
-                fullWidth
+                sx={{ flexGrow: 1 }}
                 startIcon={<AddIcon />}
               >
                 Nowa
@@ -155,20 +197,36 @@ const Dashboard = () => {
         </Grid>
 
         <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <ProductionIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
+          <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
+            <CardContent sx={{ textAlign: 'center', p: 3 }}>
+              <ProductionIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
               <Typography variant="h6">Produkcja</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Planuj i zarządzaj produkcją
+              <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
+                {tasks?.length || 0} aktywnych zadań
               </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography variant="body2" color="text.secondary">
+                  Planuj i zarządzaj produkcją
+                </Typography>
+              </Box>
+              {/* Tło stylizowane na wykres */}
+              <Box sx={{ position: 'relative', mt: 2 }}>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={mockData.productionEfficiency} 
+                  sx={{ 
+                    height: 8, 
+                    borderRadius: 4, 
+                    backgroundColor: 'rgba(33,150,243,0.1)',
+                    '& .MuiLinearProgress-bar': {
+                      backgroundColor: 'primary.main'
+                    }
+                  }} 
+                />
+              </Box>
             </CardContent>
-            <CardActions>
-              <Button 
-                component={Link} 
-                to="/production" 
-                fullWidth
-              >
+            <CardActions sx={{ p: 2, pt: 0, justifyContent: 'space-between' }}>
+              <Button component={Link} to="/production" sx={{ flexGrow: 1 }}>
                 Przejdź
               </Button>
               <Button 
@@ -176,7 +234,7 @@ const Dashboard = () => {
                 to="/production/new-task" 
                 color="primary"
                 variant="contained"
-                fullWidth
+                sx={{ flexGrow: 1 }}
                 startIcon={<AddIcon />}
               >
                 Nowe
@@ -186,20 +244,48 @@ const Dashboard = () => {
         </Grid>
 
         <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <InventoryIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
+          <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
+            <CardContent sx={{ textAlign: 'center', p: 3 }}>
+              <InventoryIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
               <Typography variant="h6">Magazyn</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Zarządzaj stanami magazynowymi
+              <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
+                {analyticsData?.inventory?.totalItems || 0} produktów
               </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {mockData.accountsGrowth > 0 ? (
+                  <ArrowUpIcon sx={{ color: 'success.main', fontSize: 16 }} />
+                ) : (
+                  <ArrowDownIcon sx={{ color: 'error.main', fontSize: 16 }} />
+                )}
+                <Typography 
+                  variant="body2" 
+                  color={mockData.accountsGrowth > 0 ? 'success.main' : 'error.main'}
+                  sx={{ mr: 1 }}
+                >
+                  {Math.abs(mockData.accountsGrowth)}%
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Zarządzaj stanami magazynowymi
+                </Typography>
+              </Box>
+              {/* Tło stylizowane na wykres */}
+              <Box sx={{ position: 'relative', mt: 2 }}>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={85} 
+                  sx={{ 
+                    height: 8, 
+                    borderRadius: 4, 
+                    backgroundColor: 'rgba(255,152,0,0.1)',
+                    '& .MuiLinearProgress-bar': {
+                      backgroundColor: 'warning.main'
+                    }
+                  }} 
+                />
+              </Box>
             </CardContent>
-            <CardActions>
-              <Button 
-                component={Link} 
-                to="/inventory" 
-                fullWidth
-              >
+            <CardActions sx={{ p: 2, pt: 0, justifyContent: 'space-between' }}>
+              <Button component={Link} to="/inventory" sx={{ flexGrow: 1 }}>
                 Przejdź
               </Button>
               <Button 
@@ -207,7 +293,7 @@ const Dashboard = () => {
                 to="/inventory/new" 
                 color="primary"
                 variant="contained"
-                fullWidth
+                sx={{ flexGrow: 1 }}
                 startIcon={<AddIcon />}
               >
                 Przyjmij
@@ -217,20 +303,36 @@ const Dashboard = () => {
         </Grid>
 
         <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <QualityIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
+          <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
+            <CardContent sx={{ textAlign: 'center', p: 3 }}>
+              <QualityIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
               <Typography variant="h6">Raporty</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Przeglądaj raporty i analizy
+              <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
+                Analizy i zestawienia
               </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography variant="body2" color="text.secondary">
+                  Przeglądaj raporty i analizy
+                </Typography>
+              </Box>
+              {/* Tło stylizowane na wykres */}
+              <Box sx={{ position: 'relative', mt: 2 }}>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={55} 
+                  sx={{ 
+                    height: 8, 
+                    borderRadius: 4, 
+                    backgroundColor: 'rgba(233,30,99,0.1)',
+                    '& .MuiLinearProgress-bar': {
+                      backgroundColor: 'secondary.main'
+                    }
+                  }} 
+                />
+              </Box>
             </CardContent>
-            <CardActions>
-              <Button 
-                component={Link} 
-                to="/quality" 
-                fullWidth
-              >
+            <CardActions sx={{ p: 2, pt: 0, justifyContent: 'space-between' }}>
+              <Button component={Link} to="/quality" sx={{ flexGrow: 1 }}>
                 Przejdź
               </Button>
               <Button 
@@ -238,7 +340,7 @@ const Dashboard = () => {
                 to="/quality/new-test" 
                 color="primary"
                 variant="contained"
-                fullWidth
+                sx={{ flexGrow: 1 }}
                 startIcon={<AddIcon />}
               >
                 Nowy test
@@ -247,22 +349,77 @@ const Dashboard = () => {
           </Card>
         </Grid>
         
-        {/* Dodaję moduł Zamówień */}
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <OrdersIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
+        {/* Zamówienia */}
+        <Grid item xs={12} md={6}>
+          <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
+            <CardContent sx={{ textAlign: 'center', p: 3 }}>
+              <OrdersIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
               <Typography variant="h6">Zamówienia</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Zarządzaj zamówieniami klientów
+              <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
+                {orderStats?.total || 0} zamówień ({formatCurrency(orderStats?.totalValue || 0)})
               </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {mockData.ordersTrend > 0 ? (
+                  <ArrowUpIcon sx={{ color: 'success.main', fontSize: 16 }} />
+                ) : (
+                  <ArrowDownIcon sx={{ color: 'error.main', fontSize: 16 }} />
+                )}
+                <Typography 
+                  variant="body2" 
+                  color={mockData.ordersTrend > 0 ? 'success.main' : 'error.main'}
+                  sx={{ mr: 1 }}
+                >
+                  {Math.abs(mockData.ordersTrend)}%
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Zarządzaj zamówieniami klientów
+                </Typography>
+              </Box>
+              
+              {/* Tło stylizowane na wykres */}
+              <Box sx={{ position: 'relative', mt: 2 }}>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={64} 
+                  sx={{ 
+                    height: 8, 
+                    borderRadius: 4, 
+                    backgroundColor: 'rgba(76,175,80,0.1)',
+                    '& .MuiLinearProgress-bar': {
+                      backgroundColor: 'success.main'
+                    }
+                  }} 
+                />
+              </Box>
+              
+              {orderStats?.recentOrders && orderStats.recentOrders.length > 0 && (
+                <Box sx={{ mt: 3, textAlign: 'left' }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Ostatnie zamówienia:
+                  </Typography>
+                  <List sx={{ maxHeight: '150px', overflow: 'auto' }}>
+                    {orderStats.recentOrders.slice(0, 3).map((order) => (
+                      <ListItem key={order.id} sx={{ py: 0.5 }}>
+                        <ListItemText
+                          primary={order.customer}
+                          secondary={`${formatCurrency(order.value)} - ${formatTimestamp(order.date, false)}`}
+                          primaryTypographyProps={{ variant: 'body2' }}
+                          secondaryTypographyProps={{ variant: 'caption' }}
+                        />
+                        <Chip
+                          label={order.status}
+                          color={getStatusColor(order.status)}
+                          size="small"
+                          sx={{ ml: 1 }}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+              )}
             </CardContent>
-            <CardActions>
-              <Button 
-                component={Link} 
-                to="/orders" 
-                fullWidth
-              >
+            <CardActions sx={{ p: 2, pt: 0, justifyContent: 'space-between' }}>
+              <Button component={Link} to="/orders" sx={{ flexGrow: 1 }}>
                 Przejdź
               </Button>
               <Button 
@@ -270,7 +427,7 @@ const Dashboard = () => {
                 to="/orders/new" 
                 color="primary"
                 variant="contained"
-                fullWidth
+                sx={{ flexGrow: 1 }}
                 startIcon={<AddIcon />}
               >
                 Nowe
@@ -279,17 +436,65 @@ const Dashboard = () => {
           </Card>
         </Grid>
         
-        {/* Dodaję moduł Analizy i Raporty */}
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <AnalyticsIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
+        {/* Analizy i Raporty */}
+        <Grid item xs={12} md={6}>
+          <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
+            <CardContent sx={{ textAlign: 'center', p: 3 }}>
+              <AnalyticsIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
               <Typography variant="h6">Analizy i Raporty</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Panel analityczny i raporty
+              <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
+                Szczegółowa analityka biznesowa
               </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography variant="body2" color="text.secondary">
+                  Panel analityczny i raporty
+                </Typography>
+              </Box>
+              
+              {/* Tło stylizowane na wykres */}
+              <Box sx={{ position: 'relative', mt: 2 }}>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={78} 
+                  sx={{ 
+                    height: 8, 
+                    borderRadius: 4, 
+                    backgroundColor: 'rgba(156,39,176,0.1)',
+                    '& .MuiLinearProgress-bar': {
+                      backgroundColor: 'secondary.dark'
+                    }
+                  }} 
+                />
+              </Box>
+              
+              <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-around' }}>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="h6" color="primary.main">
+                    {analyticsData?.production?.tasksInProgress || 0}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    W trakcie
+                  </Typography>
+                </Box>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="h6" color="success.main">
+                    {analyticsData?.production?.completedTasks || 2}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Ukończone
+                  </Typography>
+                </Box>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="h6" color="info.main">
+                    {analyticsData?.production?.efficiency || 0}%
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Wydajność
+                  </Typography>
+                </Box>
+              </Box>
             </CardContent>
-            <CardActions>
+            <CardActions sx={{ p: 2, pt: 0, justifyContent: 'center' }}>
               <Button 
                 component={Link} 
                 to="/analytics" 
@@ -297,278 +502,103 @@ const Dashboard = () => {
                 variant="contained"
                 color="primary"
               >
-                Przejdź
+                Przejdź do analiz
               </Button>
             </CardActions>
           </Card>
         </Grid>
-
+        
         {/* Zadania produkcyjne w trakcie */}
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column' }}>
-            <Typography variant="h6" gutterBottom>
-              Zadania produkcyjne w trakcie
-            </Typography>
-            <Divider sx={{ mb: 2 }} />
-            
-            {tasks && tasks.length === 0 ? (
-              <Box sx={{ mt: 2, mb: 2 }}>
-                <Typography variant="body2" color="text.secondary" align="center">
-                  Brak aktywnych zadań produkcyjnych
+        <Grid item xs={12}>
+          <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
+            <CardContent sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6">
+                  Zadania produkcyjne w trakcie
                 </Typography>
-                {analyticsData && analyticsData.production && (
-                  <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-around' }}>
-                    <Box sx={{ textAlign: 'center' }}>
-                      <Typography variant="h6" color="primary.main">
-                        {analyticsData.production.tasksInProgress}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        W trakcie
-                      </Typography>
-                    </Box>
-                    <Box sx={{ textAlign: 'center' }}>
-                      <Typography variant="h6" color="success.main">
-                        {analyticsData.production.completedTasks}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Ukończone
-                      </Typography>
-                    </Box>
-                    <Box sx={{ textAlign: 'center' }}>
-                      <Typography variant="h6" color="info.main">
-                        {analyticsData.production.efficiency}%
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Wydajność
-                      </Typography>
-                    </Box>
-                  </Box>
-                )}
+                <Button 
+                  component={Link} 
+                  to="/production"
+                  variant="outlined"
+                  size="small"
+                >
+                  Zobacz wszystkie
+                </Button>
               </Box>
-            ) : (
-              <List>
-                {tasks && tasks.map((task) => (
-                  <React.Fragment key={task.id}>
-                    <ListItem button component={Link} to={`/production/tasks/${task.id}`}>
-                      <ListItemText
-                        primary={task.name}
-                        secondary={
-                          <>
-                            <Typography component="span" variant="body2" color="text.primary">
-                              {task.productName}
-                            </Typography>
-                            {' — '}{task.quantity} {task.unit}
-                          </>
-                        }
-                      />
-                      <Chip 
-                        label="W trakcie" 
-                        color="warning" 
-                        size="small" 
-                        sx={{ ml: 1 }}
-                      />
-                    </ListItem>
-                    <Divider />
-                  </React.Fragment>
-                ))}
-              </List>
-            )}
-            
-            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-              <Button 
-                component={Link} 
-                to="/production"
-                variant="text"
-              >
-                Zobacz wszystkie
-              </Button>
-            </Box>
-          </Paper>
-        </Grid>
-
-        {/* Ostatnie zamówienia */}
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column' }}>
-            <Typography variant="h6" gutterBottom>
-              Ostatnie zamówienia
-            </Typography>
-            <Divider sx={{ mb: 2 }} />
-            
-            {!orderStats || !orderStats.recentOrders || orderStats.recentOrders.length === 0 ? (
-              <Box sx={{ mt: 2, mb: 2 }}>
-                <Typography variant="body2" color="text.secondary" align="center">
-                  Brak zamówień
-                </Typography>
+              <Divider sx={{ mb: 2 }} />
+              
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={4}>
+                  <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'primary.light', borderRadius: 2, color: 'white' }}>
+                    <Typography variant="h3" sx={{ mb: 1 }}>
+                      {analyticsData?.production?.tasksInProgress || 0}
+                    </Typography>
+                    <Typography variant="body1">
+                      W trakcie
+                    </Typography>
+                  </Box>
+                </Grid>
                 
-                {analyticsData && analyticsData.sales && (
-                  <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-around' }}>
-                    <Box sx={{ textAlign: 'center' }}>
-                      <Typography variant="h6" color="primary.main">
-                        {analyticsData.sales.totalOrders}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Łącznie
-                      </Typography>
-                    </Box>
-                    <Box sx={{ textAlign: 'center' }}>
-                      <Typography variant="h6" color="primary.main">
-                        {formatCurrency(analyticsData.sales.totalValue)}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Wartość
-                      </Typography>
-                    </Box>
-                    <Box sx={{ textAlign: 'center' }}>
-                      <Typography 
-                        variant="h6" 
-                        color={analyticsData.sales.growthRate >= 0 ? 'success.main' : 'error.main'}
+                <Grid item xs={12} md={4}>
+                  <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'success.light', borderRadius: 2, color: 'white' }}>
+                    <Typography variant="h3" sx={{ mb: 1 }}>
+                      {analyticsData?.production?.completedTasks || 2}
+                    </Typography>
+                    <Typography variant="body1">
+                      Ukończone
+                    </Typography>
+                  </Box>
+                </Grid>
+                
+                <Grid item xs={12} md={4}>
+                  <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'info.light', borderRadius: 2, color: 'white' }}>
+                    <Typography variant="h3" sx={{ mb: 1 }}>
+                      0%
+                    </Typography>
+                    <Typography variant="body1">
+                      Wydajność
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+              
+              {tasks && tasks.length > 0 ? (
+                <Box sx={{ mt: 3 }}>
+                  <List sx={{ bgcolor: 'background.paper', borderRadius: 2 }}>
+                    {tasks.map((task) => (
+                      <ListItem 
+                        key={task.id} 
+                        button 
+                        component={Link} 
+                        to={`/production/tasks/${task.id}`}
+                        sx={{ 
+                          borderBottom: '1px solid', 
+                          borderColor: 'divider',
+                          '&:last-child': { borderBottom: 'none' }
+                        }}
                       >
-                        {analyticsData.sales.growthRate >= 0 ? '+' : ''}{analyticsData.sales.growthRate.toFixed(1)}%
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Wzrost
-                      </Typography>
-                    </Box>
-                  </Box>
-                )}
-              </Box>
-            ) : (
-              <List>
-                {orderStats.recentOrders.map((order) => (
-                  <React.Fragment key={order.id}>
-                    <ListItem button component={Link} to={`/orders/${order.id}`}>
-                      <ListItemText
-                        primary={order.customer}
-                        secondary={
-                          <>
-                            <Typography component="span" variant="body2" color="text.primary">
-                              {formatCurrency(order.value)}
-                            </Typography>
-                            {' — '}{formatTimestamp(order.date, false)}
-                          </>
-                        }
-                      />
-                      <Chip 
-                        label={order.status} 
-                        color={getStatusColor(order.status)} 
-                        size="small" 
-                        sx={{ ml: 1 }}
-                      />
-                    </ListItem>
-                    <Divider />
-                  </React.Fragment>
-                ))}
-              </List>
-            )}
-            
-            {orderStats && (
-              <Box sx={{ mt: 2, mb: 2, display: 'flex', justifyContent: 'space-around' }}>
-                <Box sx={{ textAlign: 'center' }}>
-                  <Typography variant="h6" color="primary">
-                    {orderStats.total}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Zamówień łącznie
+                        <ListItemText
+                          primary={task.name}
+                          secondary={`${task.productName} - ${task.quantity} ${task.unit}`}
+                        />
+                        <Chip 
+                          label="W trakcie" 
+                          color="warning" 
+                          size="small" 
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+              ) : (
+                <Box sx={{ mt: 3, p: 3, textAlign: 'center', bgcolor: 'background.paper', borderRadius: 2 }}>
+                  <Typography variant="body1" color="text.secondary">
+                    Brak aktywnych zadań produkcyjnych
                   </Typography>
                 </Box>
-                <Box sx={{ textAlign: 'center' }}>
-                  <Typography variant="h6" color="primary">
-                    {formatCurrency(orderStats.totalValue)}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Wartość łącznie
-                  </Typography>
-                </Box>
-                <Box sx={{ textAlign: 'center' }}>
-                  <Typography variant="h6" color="warning.main">
-                    {orderStats.byStatus['W realizacji'] || 0}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    W realizacji
-                  </Typography>
-                </Box>
-              </Box>
-            )}
-            
-            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-              <Button 
-                component={Link} 
-                to="/orders"
-                variant="text"
-              >
-                Zobacz wszystkie
-              </Button>
-            </Box>
-          </Paper>
-        </Grid>
-
-        {/* Ostatnie receptury */}
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column' }}>
-            <Typography variant="h6" gutterBottom>
-              Ostatnie receptury
-            </Typography>
-            <Divider sx={{ mb: 2 }} />
-            
-            {!recipes || recipes.length === 0 ? (
-              <Box sx={{ mt: 2, mb: 2 }}>
-                <Typography variant="body2" color="text.secondary" align="center">
-                  Brak receptur
-                </Typography>
-                
-                {analyticsData && analyticsData.inventory && (
-                  <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-around' }}>
-                    <Box sx={{ textAlign: 'center' }}>
-                      <Typography variant="h6" color="primary.main">
-                        {analyticsData.inventory.totalItems}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Produktów magazynowych
-                      </Typography>
-                    </Box>
-                    <Box sx={{ textAlign: 'center' }}>
-                      <Typography variant="h6" color="error.main">
-                        {analyticsData.inventory.lowStockItems}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Niski stan
-                      </Typography>
-                    </Box>
-                  </Box>
-                )}
-              </Box>
-            ) : (
-              <List>
-                {recipes.map((recipe) => (
-                  <React.Fragment key={recipe.id}>
-                    <ListItem button component={Link} to={`/recipes/${recipe.id}`}>
-                      <ListItemText
-                        primary={recipe.name}
-                        secondary={`Ostatnia aktualizacja: ${formatDate(recipe.updatedAt)}`}
-                      />
-                      <Chip 
-                        label={recipe.status || 'Robocza'} 
-                        color={recipe.status === 'Zatwierdzona' ? 'success' : 'default'} 
-                        size="small" 
-                        sx={{ ml: 1 }}
-                      />
-                    </ListItem>
-                    <Divider />
-                  </React.Fragment>
-                ))}
-              </List>
-            )}
-            
-            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-              <Button 
-                component={Link} 
-                to="/recipes"
-                variant="text"
-              >
-                Zobacz wszystkie
-              </Button>
-            </Box>
-          </Paper>
+              )}
+            </CardContent>
+          </Card>
         </Grid>
       </Grid>
     </Container>

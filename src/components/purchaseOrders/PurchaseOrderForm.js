@@ -21,6 +21,8 @@ import {
 } from '../../services/purchaseOrderService';
 import { getAllInventoryItems, getAllWarehouses } from '../../services/inventoryService';
 import { CURRENCY_OPTIONS } from '../../config';
+import { formatCurrency } from '../../utils/formatUtils';
+import { formatDateForInput } from '../../utils/dateUtils';
 
 const PurchaseOrderForm = ({ orderId }) => {
   const { poId } = useParams();
@@ -45,7 +47,7 @@ const PurchaseOrderForm = ({ orderId }) => {
     currency: 'PLN',
     vatRate: 23, // Domyślna stawka VAT 23%
     targetWarehouseId: '', // Nowe pole dla magazynu docelowego
-    orderDate: new Date().toISOString().split('T')[0],
+    orderDate: formatDateForInput(new Date()),
     expectedDeliveryDate: '',
     deliveryAddress: '',
     notes: '',
@@ -71,9 +73,9 @@ const PurchaseOrderForm = ({ orderId }) => {
         if (currentOrderId && currentOrderId !== 'new') {
           const poDetails = await getPurchaseOrderById(currentOrderId);
           
-          // Konwersja dat z ISO string do formatu yyyy-MM-dd
-          const formattedOrderDate = poDetails.orderDate ? poDetails.orderDate.split('T')[0] : new Date().toISOString().split('T')[0];
-          const formattedDeliveryDate = poDetails.expectedDeliveryDate ? poDetails.expectedDeliveryDate.split('T')[0] : '';
+          // Użyj formatDateForInput do formatowania dat
+          const formattedOrderDate = poDetails.orderDate ? formatDateForInput(poDetails.orderDate) : formatDateForInput(new Date());
+          const formattedDeliveryDate = poDetails.expectedDeliveryDate ? formatDateForInput(poDetails.expectedDeliveryDate) : '';
           
           setPoData({
             ...poDetails,
@@ -115,8 +117,8 @@ const PurchaseOrderForm = ({ orderId }) => {
   
   const handleDateChange = (name, date) => {
     if (date) {
-      // Konwertuj datę do formatu ISO i zachowaj tylko część z datą (YYYY-MM-DD)
-      const formattedDate = date.toISOString().split('T')[0];
+      // Użyj funkcji formatDateForInput aby poprawnie sformatować datę
+      const formattedDate = formatDateForInput(date);
       setPoData(prev => ({ ...prev, [name]: formattedDate }));
     } else {
       setPoData(prev => ({ ...prev, [name]: '' }));

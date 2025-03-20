@@ -34,6 +34,7 @@ import {
   Add as AddIcon
 } from '@mui/icons-material';
 import { getCustomerById } from '../../services/customerService';
+import { getCustomerOrders } from '../../services/orderService';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 import CustomerForm from './CustomerForm';
@@ -109,32 +110,10 @@ const CustomerDetail = () => {
   const fetchOrders = async () => {
     try {
       setOrdersLoading(true);
-      // Tutaj będzie kod do pobierania zamówień klienta, gdy zaimplementujesz odpowiedni serwis
-      // const customerOrders = await getOrdersByCustomerId(customerId);
-      // setOrders(customerOrders);
-      
-      // Tymczasowe dane przykładowe
-      setTimeout(() => {
-        setOrders([
-          { 
-            id: '1', 
-            number: 'ZAM/2023/001', 
-            date: new Date().toISOString(), 
-            status: 'completed', 
-            total: 1250.00, 
-            currency: 'PLN' 
-          },
-          { 
-            id: '2', 
-            number: 'ZAM/2023/002', 
-            date: new Date().toISOString(), 
-            status: 'in_progress', 
-            total: 3450.00, 
-            currency: 'PLN' 
-          }
-        ]);
-        setOrdersLoading(false);
-      }, 500);
+      // Pobierz rzeczywiste zamówienia klienta
+      const customerOrders = await getCustomerOrders(customerId);
+      setOrders(customerOrders);
+      setOrdersLoading(false);
     } catch (error) {
       console.error('Błąd podczas pobierania zamówień:', error);
       showError('Nie udało się pobrać zamówień klienta');
@@ -442,14 +421,25 @@ const CustomerDetail = () => {
             <Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Typography variant="subtitle1">Zamówienia klienta</Typography>
-                <Button 
-                  variant="contained" 
-                  color="primary" 
-                  startIcon={<AddIcon />}
-                  onClick={handleCreateOrder}
-                >
-                  Nowe zamówienie
-                </Button>
+                <Box>
+                  <Button 
+                    variant="outlined"
+                    color="primary"
+                    startIcon={<OrderIcon />}
+                    onClick={() => navigate('/orders', { state: { customerId: customer.id, customerName: customer.name } })}
+                    sx={{ mr: 1 }}
+                  >
+                    Wszystkie zamówienia
+                  </Button>
+                  <Button 
+                    variant="contained" 
+                    color="primary" 
+                    startIcon={<AddIcon />}
+                    onClick={handleCreateOrder}
+                  >
+                    Nowe zamówienie
+                  </Button>
+                </Box>
               </Box>
               
               {ordersLoading ? (
@@ -475,10 +465,10 @@ const CustomerDetail = () => {
                     <TableBody>
                       {orders.map((order) => (
                         <TableRow key={order.id}>
-                          <TableCell>{order.number}</TableCell>
-                          <TableCell>{formatDate(order.date)}</TableCell>
+                          <TableCell>{order.orderNumber || `#${order.id.substring(0, 8).toUpperCase()}`}</TableCell>
+                          <TableCell>{formatDate(order.orderDate)}</TableCell>
                           <TableCell>{renderOrderStatus(order.status)}</TableCell>
-                          <TableCell align="right">{formatCurrency(order.total, order.currency)}</TableCell>
+                          <TableCell align="right">{formatCurrency(order.totalValue, 'PLN')}</TableCell>
                           <TableCell align="right">
                             <Button
                               size="small"

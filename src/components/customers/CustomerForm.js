@@ -139,6 +139,16 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
         
         <Grid item xs={12} md={6}>
           <TextField
+            name="supplierVatEu"
+            label="VAT-EU dostawcy"
+            value={formData.supplierVatEu || ''}
+            onChange={handleChange}
+            fullWidth
+          />
+        </Grid>
+        
+        <Grid item xs={12} md={6}>
+          <TextField
             name="billingAddress"
             label="Adres do faktury"
             value={formData.billingAddress || ''}
