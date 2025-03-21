@@ -30,7 +30,10 @@ import {
   Link,
   Tab,
   Tabs,
-  Grid
+  Grid,
+  Menu,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -46,7 +49,8 @@ import {
   BookmarkAdded as ReservationIcon,
   GetApp as GetAppIcon,
   Warehouse as WarehouseIcon,
-  QrCode as QrCodeIcon
+  QrCode as QrCodeIcon,
+  MoreVert as MoreVertIcon,
 } from '@mui/icons-material';
 import { getAllInventoryItems, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, getItemBatches } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
@@ -87,6 +91,7 @@ const InventoryList = () => {
   const [labelDialogOpen, setLabelDialogOpen] = useState(false);
   const [selectedItemBatches, setSelectedItemBatches] = useState([]);
   const [loadingBatches, setLoadingBatches] = useState(false);
+  const [anchorEl, setAnchorEl] = useState(null);
 
   // Pobierz wszystkie pozycje przy montowaniu komponentu
   useEffect(() => {
@@ -441,6 +446,16 @@ const InventoryList = () => {
     }, 300);
   };
 
+  const handleMenuOpen = (event, item) => {
+    setAnchorEl(event.currentTarget);
+    setSelectedItem(item);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+    setSelectedItem(null);
+  };
+
   if (loading) {
     return <div>Ładowanie pozycji magazynowych...</div>;
   }
@@ -520,8 +535,7 @@ const InventoryList = () => {
                     <TableCell>Ilość dostępna</TableCell>
                     <TableCell>Status</TableCell>
                     <TableCell>Lokalizacja</TableCell>
-                    <TableCell>Magazyn</TableCell>
-                    <TableCell>Akcje</TableCell>
+                    <TableCell align="right">Akcje</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -569,15 +583,6 @@ const InventoryList = () => {
                         <TableCell>
                           {item.location || '-'}
                         </TableCell>
-                        <TableCell>
-                          <Chip 
-                            icon={<WarehouseIcon />}
-                            label="W wielu magazynach"
-                            variant="outlined"
-                            color="primary"
-                            size="small"
-                          />
-                        </TableCell>
                         <TableCell align="right">
                           <IconButton 
                             component={RouterLink} 
@@ -603,43 +608,12 @@ const InventoryList = () => {
                           >
                             <IssueIcon />
                           </IconButton>
-                          <IconButton 
-                            component={RouterLink} 
-                            to={`/inventory/${item.id}/history`}
-                            color="info"
-                            title="Historia"
-                          >
-                            <HistoryIcon />
-                          </IconButton>
-                          <IconButton 
-                            component={RouterLink} 
-                            to={`/inventory/${item.id}/batches`}
+                          <IconButton
+                            onClick={(e) => handleMenuOpen(e, item)}
                             color="primary"
-                            title="Partie"
+                            title="Więcej akcji"
                           >
-                            <ViewListIcon />
-                          </IconButton>
-                          <IconButton 
-                            onClick={() => handleOpenLabelDialog(item)}
-                            color="default"
-                            title="Drukuj etykietę"
-                          >
-                            <QrCodeIcon />
-                          </IconButton>
-                          <IconButton 
-                            component={RouterLink} 
-                            to={`/inventory/${item.id}/edit`}
-                            color="default"
-                            title="Edytuj"
-                          >
-                            <EditIcon />
-                          </IconButton>
-                          <IconButton 
-                            onClick={() => handleDelete(item.id)} 
-                            color="error"
-                            title="Usuń"
-                          >
-                            <DeleteIcon />
+                            <MoreVertIcon />
                           </IconButton>
                         </TableCell>
                       </TableRow>
@@ -938,6 +912,61 @@ const InventoryList = () => {
         item={selectedItem}
         batches={selectedItemBatches}
       />
+
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleMenuClose}
+      >
+        <MenuItem 
+          component={RouterLink} 
+          to={selectedItem ? `/inventory/${selectedItem.id}/history` : '#'}
+          onClick={handleMenuClose}
+        >
+          <ListItemIcon>
+            <HistoryIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Historia</ListItemText>
+        </MenuItem>
+        <MenuItem 
+          component={RouterLink} 
+          to={selectedItem ? `/inventory/${selectedItem.id}/batches` : '#'}
+          onClick={handleMenuClose}
+        >
+          <ListItemIcon>
+            <ViewListIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Partie</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={() => {
+          if (selectedItem) handleOpenLabelDialog(selectedItem);
+          handleMenuClose();
+        }}>
+          <ListItemIcon>
+            <QrCodeIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Drukuj etykietę</ListItemText>
+        </MenuItem>
+        <MenuItem 
+          component={RouterLink} 
+          to={selectedItem ? `/inventory/${selectedItem.id}/edit` : '#'}
+          onClick={handleMenuClose}
+        >
+          <ListItemIcon>
+            <EditIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Edytuj</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={() => {
+          if (selectedItem) handleDelete(selectedItem.id);
+          handleMenuClose();
+        }}>
+          <ListItemIcon>
+            <DeleteIcon fontSize="small" color="error" />
+          </ListItemIcon>
+          <ListItemText sx={{ color: 'error.main' }}>Usuń</ListItemText>
+        </MenuItem>
+      </Menu>
     </div>
   );
 };

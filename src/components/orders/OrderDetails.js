@@ -36,7 +36,8 @@ import {
   Phone as PhoneIcon,
   Upload as UploadIcon,
   DownloadRounded as DownloadIcon,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  Engineering as EngineeringIcon
 } from '@mui/icons-material';
 import { getOrderById, ORDER_STATUSES, updateOrder } from '../../services/orderService';
 import { useNotification } from '../../hooks/useNotification';
@@ -461,6 +462,59 @@ const OrderDetails = () => {
           </Typography>
         </Paper>
       )}
+
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Zadania produkcyjne
+        </Typography>
+        <Divider sx={{ mb: 2 }} />
+        
+        {!order.productionTasks || order.productionTasks.length === 0 ? (
+          <Typography variant="body1" color="text.secondary">
+            Brak powiązanych zadań produkcyjnych
+          </Typography>
+        ) : (
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Nr MO</TableCell>
+                <TableCell>Nazwa zadania</TableCell>
+                <TableCell>Produkt</TableCell>
+                <TableCell>Ilość</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell align="right">Akcje</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {order.productionTasks.map((task) => (
+                <TableRow key={task.id}>
+                  <TableCell>{task.moNumber}</TableCell>
+                  <TableCell>{task.name}</TableCell>
+                  <TableCell>{task.productName}</TableCell>
+                  <TableCell>{task.quantity} {task.unit}</TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={task.status} 
+                      color={getStatusChipColor(task.status)}
+                      size="small"
+                      icon={<EngineeringIcon />}
+                    />
+                  </TableCell>
+                  <TableCell align="right">
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => navigate(`/production/tasks/${task.id}`)}
+                    >
+                      Szczegóły
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </Paper>
     </Box>
   );
 };

@@ -1183,3 +1183,78 @@ import {
     // Na potrzeby tego kodu zwracamy stałą wartość
     return 'system';
   };
+
+  // Rozpoczęcie produkcji
+  export const startProduction = async (taskId, userId) => {
+    const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+    
+    await updateDoc(taskRef, {
+      status: 'W trakcie',
+      startDate: serverTimestamp(),
+      productionSessions: [],
+      updatedAt: serverTimestamp(),
+      updatedBy: userId
+    });
+  };
+
+  // Zatrzymanie produkcji
+  export const stopProduction = async (taskId, completedQuantity, timeSpent, userId) => {
+    const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+    const taskDoc = await getDoc(taskRef);
+    const task = taskDoc.data();
+    
+    // Pobierz aktualną sesję produkcyjną
+    const productionSessions = task.productionSessions || [];
+    
+    // Dodaj nową sesję używając zwykłej daty
+    const newSession = {
+      startDate: task.startDate,
+      endDate: new Date().toISOString(),
+      completedQuantity,
+      timeSpent, // w minutach
+      createdBy: userId
+    };
+    
+    productionSessions.push(newSession);
+    
+    // Oblicz całkowitą wyprodukowaną ilość
+    const totalCompletedQuantity = productionSessions.reduce((sum, session) => sum + session.completedQuantity, 0);
+    
+    // Sprawdź czy zadanie zostało ukończone
+    const isCompleted = totalCompletedQuantity >= task.quantity;
+    
+    const updates = {
+      status: isCompleted ? 'Zakończone' : 'Wstrzymane',
+      productionSessions,
+      totalCompletedQuantity,
+      lastSessionEndDate: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      updatedBy: userId
+    };
+
+    // Jeśli zadanie jest zakończone, dodaj dodatkowe pola
+    if (isCompleted) {
+      updates.completionDate = serverTimestamp();
+      updates.readyForInventory = true; // Dodajemy flagę gotowości do dodania do magazynu
+    }
+    
+    await updateDoc(taskRef, updates);
+    
+    return {
+      isCompleted,
+      totalCompletedQuantity
+    };
+  };
+
+  // Pobieranie historii produkcji dla zadania
+  export const getProductionHistory = async (taskId) => {
+    const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+    const taskDoc = await getDoc(taskRef);
+    
+    if (!taskDoc.exists()) {
+      throw new Error('Zadanie nie istnieje');
+    }
+    
+    const task = taskDoc.data();
+    return task.productionSessions || [];
+  };

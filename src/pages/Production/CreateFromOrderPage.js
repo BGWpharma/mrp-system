@@ -31,7 +31,7 @@ import {
   Engineering as EngineeringIcon,
   ShoppingCart as ShoppingCartIcon
 } from '@mui/icons-material';
-import { getAllOrders, getOrderById } from '../../services/orderService';
+import { getAllOrders, getOrderById, addProductionTaskToOrder } from '../../services/orderService';
 import { createTask, reserveMaterialsForTask } from '../../services/productionService';
 import { getAllRecipes, getRecipeById } from '../../services/recipeService';
 import { getIngredientPrices, getInventoryItemById } from '../../services/inventoryService';
@@ -281,14 +281,11 @@ const CreateFromOrderPage = () => {
                 energyCost: costData.energyCost,
                 overheadCost: costData.overheadCost,
                 unitCost: costData.unitCost,
-                totalCost: costData.taskTotalCost // Używamy kosztu całkowitego zadania
+                totalCost: costData.taskTotalCost
               };
-              
-              console.log(`Obliczono koszt produkcji ${item.quantity} ${item.unit || 'szt.'} produktu ${item.name}: ${costs.totalCost.toFixed(2)} zł`);
             }
           } catch (error) {
             console.error('Błąd podczas obliczania kosztów:', error);
-            // Kontynuujemy bez kosztów
           }
         }
         
@@ -301,12 +298,15 @@ const CreateFromOrderPage = () => {
           orderId: selectedOrder.id,
           orderNumber: selectedOrder.orderNumber || selectedOrder.id.substring(0, 8),
           materials: materials,
-          costs: costs, // Dodajemy obliczone koszty
+          costs: costs,
           ...recipeData
         };
         
         // Utwórz zadanie produkcyjne
         const newTask = await createTask(taskData, currentUser.uid);
+        
+        // Dodaj zadanie do zamówienia
+        await addProductionTaskToOrder(selectedOrder.id, newTask);
         
         // Dodatkowa rezerwacja materiałów po utworzeniu zadania
         if (materials && materials.length > 0) {
@@ -324,7 +324,7 @@ const CreateFromOrderPage = () => {
         }
       }
       
-      showSuccess('Zadania produkcyjne zostały utworzone');
+      showSuccess('Zadania produkcyjne zostały utworzone i powiązane z zamówieniem');
       navigate('/production');
     } catch (error) {
       showError('Błąd podczas tworzenia zadania produkcyjnego: ' + error.message);

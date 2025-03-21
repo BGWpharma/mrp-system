@@ -32,12 +32,15 @@ import {
   Stop as StopIcon,
   CheckCircle as CompleteIcon,
   Inventory as InventoryIcon,
-  Check as CheckIcon
+  Check as CheckIcon,
+  Info as InfoIcon
 } from '@mui/icons-material';
 import { getAllTasks, updateTaskStatus, deleteTask, addTaskProductToInventory } from '../../services/productionService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
+import { useTheme } from '@mui/material/styles';
+import { useNavigate } from 'react-router-dom';
 
 const TaskList = () => {
   const [tasks, setTasks] = useState([]);
@@ -47,6 +50,8 @@ const TaskList = () => {
   const [loading, setLoading] = useState(true);
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
+  const theme = useTheme();
+  const navigate = useNavigate();
 
   // Pobierz zadania przy montowaniu komponentu
   useEffect(() => {
@@ -134,6 +139,7 @@ const TaskList = () => {
       case 'Potwierdzenie zużycia': return 'info';
       case 'Zakończone': return 'success';
       case 'Anulowane': return 'error';
+      case 'Wstrzymane': return 'default';
       default: return 'default';
     }
   };
@@ -194,6 +200,7 @@ const TaskList = () => {
   const getStatusActions = (task) => {
     switch (task.status) {
       case 'Zaplanowane':
+      case 'Wstrzymane':
         return (
           <IconButton 
             color="warning" 
@@ -234,8 +241,8 @@ const TaskList = () => {
           </IconButton>
         );
       case 'Zakończone':
-        // Jeśli zadanie jest zakończone i gotowe do dodania do magazynu, pokaż przycisk dodania do magazynu
-        if (task.readyForInventory) {
+        // Jeśli zadanie jest zakończone i nie zostało jeszcze dodane do magazynu
+        if (!task.inventoryUpdated) {
           return (
             <IconButton 
               color="primary" 
@@ -292,6 +299,7 @@ const TaskList = () => {
             <MenuItem value="">Wszystkie</MenuItem>
             <MenuItem value="Zaplanowane">Zaplanowane</MenuItem>
             <MenuItem value="W trakcie">W trakcie</MenuItem>
+            <MenuItem value="Wstrzymane">Wstrzymane</MenuItem>
             <MenuItem value="Zakończone">Zakończone</MenuItem>
             <MenuItem value="Anulowane">Anulowane</MenuItem>
           </Select>
@@ -353,21 +361,28 @@ const TaskList = () => {
                   </TableCell>
                   <TableCell align="right">
                     {getStatusActions(task)}
-                    <IconButton 
-                      component={Link} 
-                      to={`/production/tasks/${task.id}`}
+                    <IconButton
+                      size="small"
+                      onClick={() => navigate(`/production/tasks/${task.id}`)}
+                      title="Szczegóły"
                       color="primary"
+                    >
+                      <InfoIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      onClick={() => navigate(`/production/tasks/${task.id}/edit`)}
                       title="Edytuj"
                     >
-                      <EditIcon />
+                      <EditIcon fontSize="small" />
                     </IconButton>
-                    <IconButton 
-                      onClick={() => handleDelete(task.id)} 
-                      color="error"
+                    <IconButton
+                      size="small"
+                      onClick={() => handleDelete(task.id)}
                       title="Usuń"
-                      disabled={task.status === 'W trakcie' || task.status === 'Zakończone'}
+                      color="error"
                     >
-                      <DeleteIcon />
+                      <DeleteIcon fontSize="small" />
                     </IconButton>
                   </TableCell>
                 </TableRow>

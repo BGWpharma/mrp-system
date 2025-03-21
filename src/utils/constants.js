@@ -14,7 +14,8 @@ export const RECIPE_STATUSES = {
     IN_PROGRESS: 'W trakcie',
     PENDING_CONSUMPTION: 'Potwierdzenie zużycia',
     COMPLETED: 'Zakończone',
-    CANCELLED: 'Anulowane'
+    CANCELLED: 'Anulowane',
+    PAUSED: 'Wstrzymane'
   };
   
   // Priorytety zadań produkcyjnych

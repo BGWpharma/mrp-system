@@ -38,7 +38,7 @@ import {
   Cancel as CancelIcon,
   Inventory as InventoryIcon
 } from '@mui/icons-material';
-import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory } from '../../services/productionService';
+import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory } from '../../services/productionService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
@@ -59,6 +59,12 @@ const TaskDetailsPage = () => {
   const [editMode, setEditMode] = useState(false);
   const [materialQuantities, setMaterialQuantities] = useState({});
   const [errors, setErrors] = useState({});
+
+  const [stopProductionDialogOpen, setStopProductionDialogOpen] = useState(false);
+  const [completedQuantity, setCompletedQuantity] = useState('');
+  const [timeSpent, setTimeSpent] = useState('');
+  const [productionHistory, setProductionHistory] = useState([]);
+  const [productionError, setProductionError] = useState(null);
 
   useEffect(() => {
     const fetchTask = async () => {
@@ -101,6 +107,21 @@ const TaskDetailsPage = () => {
     
     fetchTask();
   }, [id, navigate, showError]);
+
+  useEffect(() => {
+    const fetchProductionHistory = async () => {
+      if (task?.id) {
+        try {
+          const history = await getProductionHistory(task.id);
+          setProductionHistory(history);
+        } catch (error) {
+          console.error('Błąd podczas pobierania historii produkcji:', error);
+        }
+      }
+    };
+
+    fetchProductionHistory();
+  }, [task?.id]);
 
   const handleStatusChange = async (newStatus) => {
     try {
@@ -286,9 +307,9 @@ const TaskDetailsPage = () => {
               variant="contained" 
               color="error" 
               startIcon={<StopIcon />}
-              onClick={() => handleStatusChange('Anulowane')}
+              onClick={() => setStopProductionDialogOpen(true)}
             >
-              Anuluj produkcję
+              Zatrzymaj produkcję
             </Button>
           </>
         );
@@ -321,6 +342,58 @@ const TaskDetailsPage = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleStartProduction = async () => {
+    try {
+      await startProduction(id, currentUser.uid);
+      showSuccess('Produkcja rozpoczęta');
+      const updatedTask = await getTaskById(id);
+      setTask(updatedTask);
+    } catch (error) {
+      showError('Błąd podczas rozpoczynania produkcji: ' + error.message);
+    }
+  };
+
+  const handleStopProduction = async () => {
+    try {
+      setProductionError(null);
+      
+      if (!completedQuantity || !timeSpent) {
+        setProductionError('Wypełnij wszystkie pola');
+        return;
+      }
+
+      const quantity = parseFloat(completedQuantity);
+      const time = parseFloat(timeSpent);
+
+      if (isNaN(quantity) || quantity < 0) {
+        setProductionError('Nieprawidłowa ilość');
+        return;
+      }
+
+      if (isNaN(time) || time < 0) {
+        setProductionError('Nieprawidłowy czas');
+        return;
+      }
+
+      const result = await stopProduction(id, quantity, time, currentUser.uid);
+      
+      setStopProductionDialogOpen(false);
+      showSuccess(result.isCompleted ? 
+        'Produkcja zakończona. Zadanie zostało ukończone.' : 
+        'Sesja produkcyjna zapisana. Możesz kontynuować produkcję później.'
+      );
+      
+      const updatedTask = await getTaskById(id);
+      setTask(updatedTask);
+      
+      // Odśwież historię produkcji
+      const history = await getProductionHistory(id);
+      setProductionHistory(history);
+    } catch (error) {
+      showError('Błąd podczas zatrzymywania produkcji: ' + error.message);
     }
   };
 
@@ -660,6 +733,97 @@ const TaskDetailsPage = () => {
           </Button>
           <Button onClick={handleConfirmConsumption} variant="contained" autoFocus>
             Potwierdź
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Sekcja historii produkcji */}
+      {productionHistory.length > 0 && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            Historia produkcji
+          </Typography>
+          <Divider sx={{ mb: 2 }} />
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Data rozpoczęcia</TableCell>
+                  <TableCell>Data zakończenia</TableCell>
+                  <TableCell align="right">Wyprodukowana ilość</TableCell>
+                  <TableCell align="right">Czas produkcji (min)</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {productionHistory.map((session, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{formatDate(session.startDate)}</TableCell>
+                    <TableCell>{formatDate(session.endDate)}</TableCell>
+                    <TableCell align="right">{session.completedQuantity} {task.unit}</TableCell>
+                    <TableCell align="right">{session.timeSpent}</TableCell>
+                  </TableRow>
+                ))}
+                <TableRow>
+                  <TableCell colSpan={2} align="right" sx={{ fontWeight: 'bold' }}>
+                    Suma:
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                    {productionHistory.reduce((sum, session) => sum + session.completedQuantity, 0)} {task.unit}
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                    {productionHistory.reduce((sum, session) => sum + session.timeSpent, 0)}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
+      )}
+
+      {/* Dialog zatrzymania produkcji */}
+      <Dialog
+        open={stopProductionDialogOpen}
+        onClose={() => setStopProductionDialogOpen(false)}
+      >
+        <DialogTitle>Zatrzymaj produkcję</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Wprowadź informacje o zakończonej sesji produkcyjnej
+          </DialogContentText>
+          
+          {productionError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {productionError}
+            </Alert>
+          )}
+
+          <TextField
+            label="Wyprodukowana ilość"
+            type="number"
+            value={completedQuantity}
+            onChange={(e) => setCompletedQuantity(e.target.value)}
+            fullWidth
+            margin="dense"
+            InputProps={{
+              endAdornment: task?.unit
+            }}
+          />
+          
+          <TextField
+            label="Czas produkcji (minuty)"
+            type="number"
+            value={timeSpent}
+            onChange={(e) => setTimeSpent(e.target.value)}
+            fullWidth
+            margin="dense"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStopProductionDialogOpen(false)}>
+            Anuluj
+          </Button>
+          <Button onClick={handleStopProduction} variant="contained">
+            Zatwierdź
           </Button>
         </DialogActions>
       </Dialog>

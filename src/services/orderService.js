@@ -116,7 +116,8 @@ export const createOrder = async (orderData, userId) => {
     
     const orderWithMeta = {
       ...orderData,
-      orderNumber, // Dodaj numer CO
+      orderNumber,
+      productionTasks: [], // Inicjalizacja pustej listy zadań produkcyjnych
       status: orderData.status || 'Nowe',
       createdBy: userId,
       createdAt: serverTimestamp(),
@@ -397,7 +398,7 @@ export const PAYMENT_METHODS = [
  */
 export const DEFAULT_ORDER = {
   customer: {
-    id: '', // opcjonalne - ID klienta z bazy
+    id: '',
     name: '',
     email: '',
     phone: '',
@@ -406,13 +407,14 @@ export const DEFAULT_ORDER = {
   },
   items: [
     {
-      id: '', // opcjonalne - ID produktu z bazy
+      id: '',
       name: '',
       quantity: 1,
       unit: 'szt.',
       price: 0
     }
   ],
+  productionTasks: [], // Lista powiązanych zadań produkcyjnych (MO)
   orderDate: formatDateForInput(new Date()),
   expectedDeliveryDate: '',
   deliveryDate: '',
@@ -422,6 +424,44 @@ export const DEFAULT_ORDER = {
   notes: '',
   shippingMethod: '',
   shippingCost: 0,
-  deliveryProof: null, // URL do zdjęcia/skanu dowodu dostawy
+  deliveryProof: null,
   shippingAddress: ''
+};
+
+// Dodaj nową funkcję do aktualizacji listy zadań produkcyjnych
+export const addProductionTaskToOrder = async (orderId, taskData) => {
+  try {
+    const orderRef = doc(db, ORDERS_COLLECTION, orderId);
+    const orderDoc = await getDoc(orderRef);
+    
+    if (!orderDoc.exists()) {
+      throw new Error('Zamówienie nie istnieje');
+    }
+    
+    const order = orderDoc.data();
+    const productionTasks = order.productionTasks || [];
+    
+    // Dodaj nowe zadanie do listy
+    productionTasks.push({
+      id: taskData.id,
+      moNumber: taskData.moNumber,
+      name: taskData.name,
+      status: taskData.status,
+      createdAt: new Date().toISOString(), // Używamy zwykłej daty zamiast serverTimestamp
+      productName: taskData.productName,
+      quantity: taskData.quantity,
+      unit: taskData.unit
+    });
+    
+    // Zaktualizuj zamówienie
+    await updateDoc(orderRef, {
+      productionTasks,
+      updatedAt: serverTimestamp()
+    });
+    
+    return true;
+  } catch (error) {
+    console.error('Błąd podczas dodawania zadania produkcyjnego do zamówienia:', error);
+    throw error;
+  }
 }; 
