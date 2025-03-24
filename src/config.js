@@ -7,6 +7,21 @@ export const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/a
 export const APP_NAME = 'MRP System';
 export const APP_VERSION = '1.0.0';
 
+// Konfiguracja informacji firmowych (dla faktur)
+export const COMPANY_INFO = {
+  name: 'Twoja Firma Sp. z o.o.',
+  address: 'ul. Przykładowa 123',
+  city: '00-000 Miasto',
+  nip: '123-456-78-90',
+  regon: '123456789',
+  krs: '0000123456',
+  email: 'kontakt@twojafirma.pl',
+  phone: '+48 123 456 789',
+  website: 'www.twojafirma.pl',
+  bankName: 'Bank Polski S.A.',
+  bankAccount: 'PL 00 1234 5678 9012 3456 7890 1234'
+};
+
 // Konfiguracja paginacji
 export const DEFAULT_PAGE_SIZE = 10;
 export const PAGE_SIZE_OPTIONS = [5, 10, 25, 50, 100];

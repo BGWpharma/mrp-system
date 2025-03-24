@@ -252,15 +252,15 @@ export const getCustomerOrders = async (customerId) => {
     querySnapshot.forEach((doc) => {
       const data = doc.data();
       
-      // Konwertuj daty z Timestamp na Date
+      // Konwertuj daty z Timestamp na Date - sprawdzamy czy data jest obiektem Timestamp
       const orderWithDates = {
         id: doc.id,
         ...data,
-        orderDate: data.orderDate ? data.orderDate.toDate() : null,
-        expectedDeliveryDate: data.expectedDeliveryDate ? data.expectedDeliveryDate.toDate() : null,
-        deliveryDate: data.deliveryDate ? data.deliveryDate.toDate() : null,
-        createdAt: data.createdAt ? data.createdAt.toDate() : null,
-        updatedAt: data.updatedAt ? data.updatedAt.toDate() : null
+        orderDate: data.orderDate && typeof data.orderDate.toDate === 'function' ? data.orderDate.toDate() : data.orderDate,
+        expectedDeliveryDate: data.expectedDeliveryDate && typeof data.expectedDeliveryDate.toDate === 'function' ? data.expectedDeliveryDate.toDate() : data.expectedDeliveryDate,
+        deliveryDate: data.deliveryDate && typeof data.deliveryDate.toDate === 'function' ? data.deliveryDate.toDate() : data.deliveryDate,
+        createdAt: data.createdAt && typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate() : data.createdAt,
+        updatedAt: data.updatedAt && typeof data.updatedAt.toDate === 'function' ? data.updatedAt.toDate() : data.updatedAt
       };
       
       orders.push(orderWithDates);

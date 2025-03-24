@@ -44,6 +44,8 @@ import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import plLocale from 'date-fns/locale/pl';
 import { formatDateForInput } from '../../utils/dateUtils';
+import { COMPANY_INFO } from '../../config';
+import { getCompanyInfo } from '../../services/companyService';
 
 const InvoiceForm = ({ invoiceId }) => {
   const [searchParams] = useSearchParams();
@@ -59,6 +61,8 @@ const InvoiceForm = ({ invoiceId }) => {
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [selectedOrderId, setSelectedOrderId] = useState('');
   const [filteredOrders, setFilteredOrders] = useState([]);
+  const [redirectToList, setRedirectToList] = useState(false);
+  const [companyInfo, setCompanyInfo] = useState(COMPANY_INFO);
 
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -69,6 +73,14 @@ const InvoiceForm = ({ invoiceId }) => {
       // Pobierz dane klientów
       fetchCustomers();
       fetchOrders();
+      
+      // Pobierz dane firmy
+      try {
+        const companyData = await getCompanyInfo();
+        setCompanyInfo(companyData);
+      } catch (error) {
+        console.error('Błąd podczas pobierania danych firmy:', error);
+      }
       
       // Jeśli mamy ID faktury, pobierz jej dane
       if (invoiceId) {
@@ -139,6 +151,14 @@ const InvoiceForm = ({ invoiceId }) => {
     }
   };
 
+  const fetchCustomerOrders = (customerId) => {
+    if (!customerId) return;
+    
+    // Filtrowanie zamówień dla wybranego klienta
+    const customerOrders = orders.filter(order => order.customer?.id === customerId);
+    setFilteredOrders(customerOrders);
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setInvoice(prev => ({
@@ -196,42 +216,40 @@ const InvoiceForm = ({ invoiceId }) => {
     }));
   };
 
-  const handleCustomerSelect = async (customerId) => {
+  const handleCustomerSelect = (customerId) => {
+    setSelectedCustomerId(null);
+    setCustomerDialogOpen(false);
+    
     if (!customerId) {
       setInvoice(prev => ({
         ...prev,
-        customer: {
-          id: '',
-          name: '',
-          email: '',
-          phone: '',
-          billingAddress: '',
-          shippingAddress: ''
-        }
+        customer: null,
+        billingAddress: '',
+        shippingAddress: ''
       }));
-      setSelectedCustomerId('');
       return;
     }
-
-    try {
-      const customer = await getCustomerById(customerId);
+    
+    const selectedCustomer = customers.find(c => c.id === customerId);
+    if (selectedCustomer) {
       setInvoice(prev => ({
         ...prev,
         customer: {
-          id: customer.id,
-          name: customer.name,
-          email: customer.email || '',
-          phone: customer.phone || '',
-          billingAddress: customer.billingAddress || customer.address || '',
-          shippingAddress: customer.shippingAddress || customer.address || ''
+          id: selectedCustomer.id,
+          name: selectedCustomer.name,
+          email: selectedCustomer.email,
+          phone: selectedCustomer.phone,
+          address: selectedCustomer.address || '',
+          vatEu: selectedCustomer.vatEu || '',
+          billingAddress: selectedCustomer.billingAddress || selectedCustomer.address || '',
+          shippingAddress: selectedCustomer.shippingAddress || selectedCustomer.address || ''
         },
-        billingAddress: customer.billingAddress || customer.address || '',
-        shippingAddress: customer.shippingAddress || customer.address || ''
+        billingAddress: selectedCustomer.billingAddress || selectedCustomer.address || '',
+        shippingAddress: selectedCustomer.shippingAddress || selectedCustomer.address || ''
       }));
-      setSelectedCustomerId(customerId);
-      setCustomerDialogOpen(false);
-    } catch (error) {
-      showError('Błąd podczas pobierania danych klienta: ' + error.message);
+      
+      // Pobierz zamówienia klienta, jeśli klient jest wybrany
+      fetchCustomerOrders(selectedCustomer.id);
     }
   };
 
@@ -244,20 +262,36 @@ const InvoiceForm = ({ invoiceId }) => {
     const selectedOrder = orders.find(order => order.id === orderId);
     if (!selectedOrder) return;
 
-    // Ustaw dane faktury na podstawie zamówienia
-    setInvoice(prev => ({
-      ...prev,
-      orderId: selectedOrder.id,
-      orderNumber: selectedOrder.orderNumber,
-      items: selectedOrder.items,
-      customer: selectedOrder.customer,
-      billingAddress: selectedOrder.customer.billingAddress || selectedOrder.customer.address || '',
-      shippingAddress: selectedOrder.shippingAddress || selectedOrder.customer.shippingAddress || selectedOrder.customer.address || '',
-      total: calculateInvoiceTotal(selectedOrder.items)
-    }));
+    // Zachowujemy bieżące dane faktury i aktualizujemy tylko pola związane z zamówieniem
+    setInvoice(prev => {
+      // Zachowujemy obecne pozycje, jeśli lista jest pusta w zamówieniu
+      const updatedItems = selectedOrder.items && selectedOrder.items.length > 0 
+        ? selectedOrder.items 
+        : prev.items;
+        
+      return {
+        ...prev,
+        orderId: selectedOrder.id,
+        orderNumber: selectedOrder.orderNumber,
+        // Aktualizujemy pozycje tylko jeśli są dostępne w zamówieniu
+        items: updatedItems,
+        // Zachowujemy bieżącego klienta, jeśli już jest wybrany
+        // W przeciwnym razie używamy klienta z zamówienia
+        customer: prev.customer?.id ? prev.customer : selectedOrder.customer,
+        // Podobnie dla adresów - zachowujemy istniejące adresy, jeśli są
+        billingAddress: prev.billingAddress || selectedOrder.customer?.billingAddress || selectedOrder.customer?.address || '',
+        shippingAddress: prev.shippingAddress || selectedOrder.shippingAddress || selectedOrder.customer?.shippingAddress || selectedOrder.customer?.address || '',
+        // Aktualizujemy łączną kwotę na podstawie pozycji
+        total: calculateInvoiceTotal(updatedItems)
+      };
+    });
     
     setSelectedOrderId(orderId);
-    setSelectedCustomerId(selectedOrder.customer.id);
+    
+    // Aktualizujemy ID klienta tylko jeśli nie był wcześniej wybrany
+    if (!selectedCustomerId && selectedOrder.customer?.id) {
+      setSelectedCustomerId(selectedOrder.customer.id);
+    }
   };
 
   const validateForm = () => {
@@ -301,23 +335,51 @@ const InvoiceForm = ({ invoiceId }) => {
     return true;
   };
 
-  const handleSubmit = async () => {
-    if (!validateForm()) return;
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
     
     setSaving(true);
+    
     try {
-      // Aktualizacja lub tworzenie faktury
+      // Przygotuj dane faktury
+      const invoiceData = {
+        ...invoice,
+        // Ustaw dane sprzedawcy z pobranych danych
+        seller: {
+          name: companyInfo.name,
+          address: companyInfo.address,
+          city: companyInfo.city,
+          nip: companyInfo.nip,
+          regon: companyInfo.regon,
+          email: companyInfo.email,
+          phone: companyInfo.phone,
+          bankName: companyInfo.bankName,
+          bankAccount: companyInfo.bankAccount
+        }
+      };
+      
       if (invoiceId) {
-        await updateInvoice(invoiceId, invoice, currentUser.uid);
+        // Aktualizacja istniejącej faktury
+        await updateInvoice(invoiceId, invoiceData, currentUser.uid);
         showSuccess('Faktura została zaktualizowana');
-        navigate(`/invoices/${invoiceId}`);
       } else {
-        const newInvoiceId = await createInvoice(invoice, currentUser.uid);
+        // Tworzenie nowej faktury
+        const newInvoiceId = await createInvoice(invoiceData, currentUser.uid);
         showSuccess('Faktura została utworzona');
-        navigate(`/invoices/${newInvoiceId}`);
+        
+        if (redirectToList) {
+          navigate('/invoices');
+        } else {
+          navigate(`/invoices/${newInvoiceId}`);
+        }
       }
     } catch (error) {
-      showError('Błąd podczas zapisywania faktury: ' + error.message);
+      console.error('Błąd podczas zapisywania faktury:', error);
+      showError('Nie udało się zapisać faktury: ' + error.message);
     } finally {
       setSaving(false);
     }
@@ -452,14 +514,19 @@ const InvoiceForm = ({ invoiceId }) => {
                     <Typography variant="body1" fontWeight="bold" gutterBottom>
                       {invoice.customer.name}
                     </Typography>
-                    {invoice.customer.email && (
+                    {invoice.customer?.email && (
                       <Typography variant="body2" gutterBottom>
                         Email: {invoice.customer.email}
                       </Typography>
                     )}
-                    {invoice.customer.phone && (
+                    {invoice.customer?.phone && (
                       <Typography variant="body2" gutterBottom>
                         Telefon: {invoice.customer.phone}
+                      </Typography>
+                    )}
+                    {invoice.customer?.vatEu && (
+                      <Typography variant="body2" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                        VAT-EU: {invoice.customer.vatEu}
                       </Typography>
                     )}
                     {invoice.billingAddress && (
@@ -660,9 +727,9 @@ const InvoiceForm = ({ invoiceId }) => {
             value={customers.find(c => c.id === selectedCustomerId) || null}
             onChange={(e, newValue) => {
               if (newValue) {
-                handleCustomerSelect(newValue.id);
+                setSelectedCustomerId(newValue.id);
               } else {
-                handleCustomerSelect(null);
+                setSelectedCustomerId('');
               }
             }}
             renderInput={(params) => (
@@ -698,6 +765,14 @@ const InvoiceForm = ({ invoiceId }) => {
             onClick={() => navigate('/customers')}
           >
             Zarządzaj klientami
+          </Button>
+          <Button 
+            variant="contained"
+            color="primary"
+            onClick={() => handleCustomerSelect(selectedCustomerId)}
+            disabled={!selectedCustomerId}
+          >
+            Wybierz
           </Button>
         </DialogActions>
       </Dialog>

@@ -38,7 +38,8 @@ import {
   Download as DownloadIcon,
   Send as SendIcon,
   Receipt as ReceiptIcon,
-  People as CustomersIcon
+  People as CustomersIcon,
+  Settings as SettingsIcon
 } from '@mui/icons-material';
 import { 
   getAllInvoices, 
@@ -273,6 +274,14 @@ const InvoicesList = () => {
             onClick={() => navigate('/customers')}
           >
             Zarządzaj klientami
+          </Button>
+          <Button
+            variant="outlined"
+            color="primary"
+            startIcon={<SettingsIcon />}
+            onClick={() => navigate('/invoices/company-settings')}
+          >
+            Dane firmy
           </Button>
           <Button
             variant="contained"

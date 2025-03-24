@@ -1430,6 +1430,23 @@ import {
     }
   };
   
+  // Pobieranie partii dla inwentaryzacji
+  export const getStocktakingBatches = async (stocktakingId) => {
+    try {
+      const itemsRef = collection(db, STOCKTAKING_ITEMS_COLLECTION);
+      const q = query(itemsRef, where('stocktakingId', '==', stocktakingId));
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Błąd podczas pobierania partii inwentaryzacji:', error);
+      throw error;
+    }
+  };
+  
   // Dodawanie pozycji do inwentaryzacji
   export const addItemToStocktaking = async (stocktakingId, itemData, userId) => {
     try {
@@ -1441,25 +1458,67 @@ import {
         throw new Error('Nie można dodawać pozycji do zakończonej inwentaryzacji');
       }
       
-      // Pobierz aktualne dane produktu z magazynu
-      const inventoryItem = await getInventoryItemById(itemData.inventoryItemId);
+      let stocktakingItem;
       
-      const stocktakingItem = {
-        stocktakingId,
-        inventoryItemId: itemData.inventoryItemId,
-        name: inventoryItem.name,
-        category: inventoryItem.category,
-        unit: inventoryItem.unit,
-        location: inventoryItem.location,
-        systemQuantity: inventoryItem.quantity || 0,
-        countedQuantity: itemData.countedQuantity || 0,
-        discrepancy: (itemData.countedQuantity || 0) - (inventoryItem.quantity || 0),
-        notes: itemData.notes || '',
-        status: 'Dodano',
-        createdBy: userId,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      };
+      // Jeśli podano batchId, oznacza to, że dodajemy konkretną partię (LOT)
+      if (itemData.batchId) {
+        // Pobierz informacje o partii
+        const batchRef = doc(db, INVENTORY_BATCHES_COLLECTION, itemData.batchId);
+        const batchDoc = await getDoc(batchRef);
+        
+        if (!batchDoc.exists()) {
+          throw new Error('Wybrana partia nie istnieje');
+        }
+        
+        const batchData = batchDoc.data();
+        
+        // Pobierz dane produktu z magazynu
+        const inventoryItem = await getInventoryItemById(batchData.itemId);
+        
+        stocktakingItem = {
+          stocktakingId,
+          inventoryItemId: batchData.itemId,
+          batchId: itemData.batchId,
+          name: inventoryItem.name,
+          category: inventoryItem.category,
+          unit: inventoryItem.unit,
+          location: batchData.warehouseId ? batchData.warehouseId : (inventoryItem.location || ''),
+          lotNumber: batchData.lotNumber || '',
+          batchNumber: batchData.batchNumber || '',
+          expiryDate: batchData.expiryDate,
+          systemQuantity: batchData.quantity || 0,
+          countedQuantity: itemData.countedQuantity || 0,
+          discrepancy: (itemData.countedQuantity || 0) - (batchData.quantity || 0),
+          unitPrice: batchData.unitPrice || 0, // Dodajemy cenę jednostkową partii
+          notes: itemData.notes || '',
+          status: 'Dodano',
+          createdBy: userId,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        };
+      } else {
+        // Oryginalna logika dla pozycji magazynowych
+        // Pobierz aktualne dane produktu z magazynu
+        const inventoryItem = await getInventoryItemById(itemData.inventoryItemId);
+        
+        stocktakingItem = {
+          stocktakingId,
+          inventoryItemId: itemData.inventoryItemId,
+          name: inventoryItem.name,
+          category: inventoryItem.category,
+          unit: inventoryItem.unit,
+          location: inventoryItem.location,
+          systemQuantity: inventoryItem.quantity || 0,
+          countedQuantity: itemData.countedQuantity || 0,
+          discrepancy: (itemData.countedQuantity || 0) - (inventoryItem.quantity || 0),
+          unitPrice: inventoryItem.unitPrice || 0, // Dodajemy cenę jednostkową
+          notes: itemData.notes || '',
+          status: 'Dodano',
+          createdBy: userId,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        };
+      }
       
       const docRef = await addDoc(collection(db, STOCKTAKING_ITEMS_COLLECTION), stocktakingItem);
       
@@ -1497,9 +1556,16 @@ import {
       // Oblicz nową rozbieżność
       const discrepancy = (itemData.countedQuantity || 0) - currentItem.systemQuantity;
       
+      // Jeśli to inwentaryzacja LOTu, dodajemy koszt rozbieżności
+      let differenceValue = 0;
+      if (currentItem.batchId && currentItem.unitPrice) {
+        differenceValue = discrepancy * currentItem.unitPrice;
+      }
+      
       const updatedItem = {
         ...itemData,
         discrepancy,
+        differenceValue,
         updatedAt: serverTimestamp(),
         updatedBy: userId
       };
@@ -1564,35 +1630,94 @@ import {
       // Jeśli mamy dostosować stany magazynowe
       if (adjustInventory) {
         for (const item of items) {
-          const inventoryItemRef = doc(db, INVENTORY_COLLECTION, item.inventoryItemId);
-          
-          // Pobierz aktualny stan
-          const inventoryItem = await getInventoryItemById(item.inventoryItemId);
-          
-          // Aktualizuj stan magazynowy
-          const adjustment = item.countedQuantity - inventoryItem.quantity;
-          
-          await updateDoc(inventoryItemRef, {
-            quantity: item.countedQuantity,
-            updatedAt: serverTimestamp(),
-            updatedBy: userId
-          });
-          
-          // Dodaj transakcję korygującą
-          const transactionData = {
-            itemId: item.inventoryItemId,
-            itemName: item.name,
-            type: adjustment > 0 ? 'adjustment-add' : 'adjustment-remove',
-            quantity: Math.abs(adjustment),
-            date: serverTimestamp(),
-            reason: 'Korekta z inwentaryzacji',
-            reference: `Inwentaryzacja #${stocktakingId}`,
-            notes: item.notes || 'Korekta stanu po inwentaryzacji',
-            createdBy: userId,
-            createdAt: serverTimestamp()
-          };
-          
-          await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
+          // Jeśli to inwentaryzacja LOTu/partii
+          if (item.batchId) {
+            const batchRef = doc(db, INVENTORY_BATCHES_COLLECTION, item.batchId);
+            
+            // Pobierz aktualny stan partii
+            const batchDoc = await getDoc(batchRef);
+            if (!batchDoc.exists()) {
+              console.error(`Partia ${item.batchId} nie istnieje`);
+              continue;
+            }
+            
+            const batchData = batchDoc.data();
+            
+            // Aktualizuj stan partii
+            await updateDoc(batchRef, {
+              quantity: item.countedQuantity,
+              updatedAt: serverTimestamp(),
+              updatedBy: userId
+            });
+            
+            // Aktualizuj również łączny stan produktu
+            const inventoryItemRef = doc(db, INVENTORY_COLLECTION, item.inventoryItemId);
+            const inventoryItem = await getInventoryItemById(item.inventoryItemId);
+            
+            // Oblicz różnicę dla tej partii
+            const adjustment = item.countedQuantity - batchData.quantity;
+            
+            // Zaktualizuj stan łączny produktu
+            await updateDoc(inventoryItemRef, {
+              quantity: increment(adjustment),
+              updatedAt: serverTimestamp(),
+              updatedBy: userId
+            });
+            
+            // Dodaj transakcję korygującą
+            const transactionData = {
+              itemId: item.inventoryItemId,
+              itemName: item.name,
+              type: adjustment > 0 ? 'adjustment-add' : 'adjustment-remove',
+              quantity: Math.abs(adjustment),
+              date: serverTimestamp(),
+              reason: 'Korekta z inwentaryzacji',
+              reference: `Inwentaryzacja #${stocktakingId}`,
+              notes: `Korekta stanu partii ${item.lotNumber || item.batchNumber} po inwentaryzacji. ${item.notes || ''}`,
+              warehouseId: item.location || batchData.warehouseId, // Dodajemy identyfikator magazynu
+              batchId: item.batchId, // Dodajemy ID partii
+              lotNumber: item.lotNumber || batchData.lotNumber, // Dodajemy numer LOT
+              unitPrice: item.unitPrice || batchData.unitPrice, // Dodajemy cenę jednostkową
+              differenceValue: item.differenceValue || (adjustment * (item.unitPrice || batchData.unitPrice || 0)), // Dodajemy wartość różnicy
+              createdBy: userId,
+              createdAt: serverTimestamp()
+            };
+            
+            await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
+          } else {
+            // Oryginalna logika dla pozycji magazynowych
+            const inventoryItemRef = doc(db, INVENTORY_COLLECTION, item.inventoryItemId);
+            
+            // Pobierz aktualny stan
+            const inventoryItem = await getInventoryItemById(item.inventoryItemId);
+            
+            // Aktualizuj stan magazynowy
+            const adjustment = item.countedQuantity - inventoryItem.quantity;
+            
+            await updateDoc(inventoryItemRef, {
+              quantity: item.countedQuantity,
+              updatedAt: serverTimestamp(),
+              updatedBy: userId
+            });
+            
+            // Dodaj transakcję korygującą
+            const transactionData = {
+              itemId: item.inventoryItemId,
+              itemName: item.name,
+              type: adjustment > 0 ? 'adjustment-add' : 'adjustment-remove',
+              quantity: Math.abs(adjustment),
+              date: serverTimestamp(),
+              reason: 'Korekta z inwentaryzacji',
+              reference: `Inwentaryzacja #${stocktakingId}`,
+              notes: item.notes || 'Korekta stanu po inwentaryzacji',
+              unitPrice: item.unitPrice || inventoryItem.unitPrice || 0, // Dodajemy cenę jednostkową
+              differenceValue: item.differenceValue || (adjustment * (item.unitPrice || inventoryItem.unitPrice || 0)), // Dodajemy wartość różnicy
+              createdBy: userId,
+              createdAt: serverTimestamp()
+            };
+            
+            await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
+          }
           
           // Aktualizuj status elementu inwentaryzacji
           const itemRef = doc(db, STOCKTAKING_ITEMS_COLLECTION, item.id);
@@ -1643,70 +1768,118 @@ import {
       const totalPositiveDiscrepancy = positiveDiscrepancies.reduce((sum, item) => sum + item.discrepancy, 0);
       const totalNegativeDiscrepancy = negativeDiscrepancies.reduce((sum, item) => sum + item.discrepancy, 0);
       
-      // Dane raportu
-      const reportData = {
-        id: stocktakingId,
-        stocktaking,
-        items,
-        stats: {
-          totalItems,
-          itemsWithDiscrepancy,
-          itemsWithPositiveDiscrepancy: positiveDiscrepancies.length,
-          itemsWithNegativeDiscrepancy: negativeDiscrepancies.length,
-          totalPositiveDiscrepancy,
-          totalNegativeDiscrepancy,
-          totalDiscrepancy: totalPositiveDiscrepancy + totalNegativeDiscrepancy
-        }
-      };
+      // Oblicz wartości pieniężne strat i nadwyżek
+      const totalPositiveValue = positiveDiscrepancies.reduce((sum, item) => {
+        const unitPrice = item.unitPrice || 0;
+        return sum + (item.discrepancy * unitPrice);
+      }, 0);
       
-      // Użyj jsPDF do wygenerowania pliku PDF
+      const totalNegativeValue = negativeDiscrepancies.reduce((sum, item) => {
+        const unitPrice = item.unitPrice || 0;
+        return sum + (item.discrepancy * unitPrice);
+      }, 0);
+      
+      // Importuj tylko jsPDF i autoTable
       const { jsPDF } = await import('jspdf');
       const autoTable = (await import('jspdf-autotable')).default;
       
-      const doc = new jsPDF();
+      // Utwórz dokument PDF
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4',
+      });
+      
+      // Funkcja do poprawiania polskich znaków
+      const fixPolishChars = (text) => {
+        if (!text) return '';
+        
+        return text.toString()
+          .replace(/ą/g, 'a')
+          .replace(/ć/g, 'c')
+          .replace(/ę/g, 'e')
+          .replace(/ł/g, 'l')
+          .replace(/ń/g, 'n')
+          .replace(/ó/g, 'o')
+          .replace(/ś/g, 's')
+          .replace(/ź/g, 'z')
+          .replace(/ż/g, 'z')
+          .replace(/Ą/g, 'A')
+          .replace(/Ć/g, 'C')
+          .replace(/Ę/g, 'E')
+          .replace(/Ł/g, 'L')
+          .replace(/Ń/g, 'N')
+          .replace(/Ó/g, 'O')
+          .replace(/Ś/g, 'S')
+          .replace(/Ź/g, 'Z')
+          .replace(/Ż/g, 'Z');
+      };
       
       // Nagłówek
       doc.setFontSize(18);
-      doc.text('Raport inwentaryzacji', 14, 20);
+      doc.text(fixPolishChars('Raport inwentaryzacji'), 14, 20);
       
       doc.setFontSize(12);
-      doc.text(`Nazwa: ${stocktaking.name}`, 14, 30);
-      doc.text(`Status: ${stocktaking.status}`, 14, 38);
-      doc.text(`Lokalizacja: ${stocktaking.location || 'Wszystkie lokalizacje'}`, 14, 46);
+      doc.text(fixPolishChars(`Nazwa: ${stocktaking.name}`), 14, 30);
+      doc.text(fixPolishChars(`Status: ${stocktaking.status}`), 14, 38);
+      doc.text(fixPolishChars(`Lokalizacja: ${stocktaking.location || 'Wszystkie lokalizacje'}`), 14, 46);
       
       // Data wygenerowania
       const currentDate = new Date();
       const formattedDate = `${currentDate.getDate()}.${currentDate.getMonth() + 1}.${currentDate.getFullYear()}`;
-      doc.text(`Wygenerowano: ${formattedDate}`, 14, 54);
+      doc.text(fixPolishChars(`Wygenerowano: ${formattedDate}`), 14, 54);
       
       // Statystyki
       doc.setFontSize(14);
-      doc.text('Podsumowanie', 14, 68);
+      doc.text(fixPolishChars('Podsumowanie'), 14, 68);
       
       doc.setFontSize(10);
-      doc.text(`Łączna liczba produktów: ${totalItems}`, 14, 78);
-      doc.text(`Produkty zgodne: ${totalItems - itemsWithDiscrepancy}`, 14, 85);
-      doc.text(`Produkty z różnicami: ${itemsWithDiscrepancy}`, 14, 92);
-      doc.text(`Nadwyżki: ${positiveDiscrepancies.length}`, 14, 99);
-      doc.text(`Braki: ${negativeDiscrepancies.length}`, 14, 106);
+      doc.text(fixPolishChars(`Liczba produktow/partii: ${totalItems}`), 14, 78);
+      doc.text(fixPolishChars(`Pozycje zgodne: ${totalItems - itemsWithDiscrepancy}`), 14, 85);
+      doc.text(fixPolishChars(`Pozycje z roznicami: ${itemsWithDiscrepancy}`), 14, 92);
+      doc.text(fixPolishChars(`Nadwyzki: ${positiveDiscrepancies.length}`), 14, 99);
+      doc.text(fixPolishChars(`Braki: ${negativeDiscrepancies.length}`), 14, 106);
+      doc.text(fixPolishChars(`Wartosc nadwyzek: ${totalPositiveValue.toFixed(2)} PLN`), 14, 113);
+      doc.text(fixPolishChars(`Wartosc brakow: ${totalNegativeValue.toFixed(2)} PLN`), 14, 120);
+      doc.text(fixPolishChars(`Laczna wartosc roznic: ${(totalPositiveValue + totalNegativeValue).toFixed(2)} PLN`), 14, 127);
       
-      // Tabela produktów
+      // Przygotuj dane tabeli
       const tableData = items.map(item => [
-        item.name,
-        item.category || '',
+        fixPolishChars(item.name),
+        fixPolishChars(item.lotNumber || item.batchNumber || 'N/D'),
+        fixPolishChars(item.category || ''),
         item.systemQuantity ? item.systemQuantity.toString() : '0',
         item.countedQuantity ? item.countedQuantity.toString() : '0',
         item.discrepancy ? item.discrepancy.toString() : '0',
-        item.notes || ''
+        item.unitPrice ? item.unitPrice.toFixed(2) + ' PLN' : '0.00 PLN',
+        item.discrepancy && item.unitPrice ? (item.discrepancy * item.unitPrice).toFixed(2) + ' PLN' : '0.00 PLN',
+        fixPolishChars(item.notes || '')
       ]);
       
+      // Nagłówki tabeli
+      const tableHeaders = [
+        'Nazwa produktu',
+        'LOT/Partia',
+        'Kategoria',
+        'Stan systemowy',
+        'Stan policzony',
+        'Roznica',
+        'Cena jedn.',
+        'Wartosc roznicy',
+        'Uwagi'
+      ];
+      
+      // Generuj tabelę
       autoTable(doc, {
-        startY: 120,
-        head: [['Nazwa produktu', 'Kategoria', 'Stan systemowy', 'Stan policzony', 'Różnica', 'Uwagi']],
+        startY: 135,
+        head: [tableHeaders],
         body: tableData,
-        headStyles: { fillColor: [66, 139, 202] },
+        headStyles: { fillColor: [66, 139, 202], font: 'helvetica' },
         alternateRowStyles: { fillColor: [241, 245, 249] },
-        margin: { top: 120 },
+        styles: { font: 'helvetica', fontSize: 8, cellPadding: 2 },
+        margin: { top: 135 },
+        tableLineWidth: 0.1,
+        tableLineColor: [0, 0, 0]
       });
       
       // Stopka

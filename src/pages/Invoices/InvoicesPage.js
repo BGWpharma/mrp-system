@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { 
   Container, 
   Typography, 
@@ -101,6 +101,10 @@ const InvoicesPage = () => {
                 <ListItem>
                   <ListItemIcon><SettingsIcon color="primary" /></ListItemIcon>
                   <ListItemText primary="Dostosowanie szablonów faktur" />
+                </ListItem>
+                <ListItem button component={RouterLink} to="/invoices/company-settings">
+                  <ListItemIcon><SettingsIcon color="primary" /></ListItemIcon>
+                  <ListItemText primary="Dane firmy na fakturach" />
                 </ListItem>
                 <ListItem>
                   <ListItemIcon><SettingsIcon color="primary" /></ListItemIcon>

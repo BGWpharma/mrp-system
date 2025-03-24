@@ -26,7 +26,13 @@ import {
   CircularProgress,
   Divider,
   Alert,
-  Tooltip
+  Tooltip,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  FormControlLabel,
+  Switch
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -37,7 +43,8 @@ import {
   ListAlt as ReportIcon,
   Done as DoneIcon,
   Close as CancelIcon,
-  Save as SaveIcon
+  Save as SaveIcon,
+  Inventory as InventoryIcon
 } from '@mui/icons-material';
 import {
   getStocktakingById,
@@ -46,7 +53,8 @@ import {
   updateStocktakingItem,
   deleteStocktakingItem,
   completeStocktaking,
-  getAllInventoryItems
+  getAllInventoryItems,
+  getItemBatches
 } from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -69,6 +77,12 @@ const StocktakingDetailsPage = () => {
   const [selectedItem, setSelectedItem] = useState(null);
   const [countedQuantity, setCountedQuantity] = useState('');
   const [notes, setNotes] = useState('');
+  
+  // Dodane stany dla obsługi LOTów
+  const [isLotMode, setIsLotMode] = useState(true); // Domyślnie tryb LOT włączony
+  const [batches, setBatches] = useState([]);
+  const [selectedBatch, setSelectedBatch] = useState(null);
+  const [loadingBatches, setLoadingBatches] = useState(false);
   
   const [addItemDialogOpen, setAddItemDialogOpen] = useState(false);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
@@ -112,6 +126,36 @@ const StocktakingDetailsPage = () => {
     }
   };
   
+  // Nowa funkcja do pobierania partii dla wybranego produktu
+  const fetchItemBatches = async (itemId) => {
+    if (!itemId) {
+      setBatches([]);
+      setSelectedBatch(null);
+      return;
+    }
+    
+    try {
+      setLoadingBatches(true);
+      const batchesData = await getItemBatches(itemId);
+      setBatches(batchesData);
+      setLoadingBatches(false);
+    } catch (error) {
+      console.error('Błąd podczas pobierania partii:', error);
+      setLoadingBatches(false);
+    }
+  };
+  
+  // Obsługa wyboru produktu (teraz wyzwala pobieranie partii)
+  const handleItemSelect = (item) => {
+    setSelectedItem(item);
+    if (isLotMode && item) {
+      fetchItemBatches(item.id);
+    } else {
+      setBatches([]);
+      setSelectedBatch(null);
+    }
+  };
+  
   const filterItems = () => {
     if (!searchTerm.trim()) {
       setFilteredItems(items);
@@ -121,43 +165,90 @@ const StocktakingDetailsPage = () => {
     const term = searchTerm.toLowerCase();
     const filtered = items.filter(item => 
       (item.name && item.name.toLowerCase().includes(term)) ||
-      (item.category && item.category.toLowerCase().includes(term))
+      (item.category && item.category.toLowerCase().includes(term)) ||
+      // Dodaj wyszukiwanie po numerze LOT/partii
+      (item.lotNumber && item.lotNumber.toLowerCase().includes(term)) ||
+      (item.batchNumber && item.batchNumber.toLowerCase().includes(term))
     );
     
     setFilteredItems(filtered);
   };
   
   const handleAddItem = async () => {
-    if (!selectedItem) {
-      showError('Wybierz produkt z magazynu');
-      return;
-    }
-    
-    if (countedQuantity === '' || isNaN(countedQuantity) || Number(countedQuantity) < 0) {
-      showError('Podaj prawidłową ilość policzoną');
-      return;
-    }
-    
-    try {
-      await addItemToStocktaking(id, {
-        inventoryItemId: selectedItem.id,
-        countedQuantity: Number(countedQuantity),
-        notes
-      }, currentUser.uid);
+    // Walidacja dla trybu LOT
+    if (isLotMode) {
+      if (!selectedItem) {
+        showError('Wybierz produkt z magazynu');
+        return;
+      }
       
-      showSuccess('Produkt został dodany do inwentaryzacji');
-      setAddItemDialogOpen(false);
+      if (!selectedBatch) {
+        showError('Wybierz partię (LOT) produktu');
+        return;
+      }
       
-      // Reset form
-      setSelectedItem(null);
-      setCountedQuantity('');
-      setNotes('');
+      if (countedQuantity === '' || isNaN(countedQuantity) || Number(countedQuantity) < 0) {
+        showError('Podaj prawidłową ilość policzoną');
+        return;
+      }
       
-      // Refresh data
-      fetchStocktakingData();
-    } catch (error) {
-      console.error('Błąd podczas dodawania przedmiotu:', error);
-      showError(`Błąd podczas dodawania: ${error.message}`);
+      try {
+        // Dodaj pozycję jako partię (LOT)
+        await addItemToStocktaking(id, {
+          batchId: selectedBatch.id,
+          countedQuantity: Number(countedQuantity),
+          notes
+        }, currentUser.uid);
+        
+        showSuccess('Partia została dodana do inwentaryzacji');
+        setAddItemDialogOpen(false);
+        
+        // Reset form
+        setSelectedItem(null);
+        setSelectedBatch(null);
+        setBatches([]);
+        setCountedQuantity('');
+        setNotes('');
+        
+        // Refresh data
+        fetchStocktakingData();
+      } catch (error) {
+        console.error('Błąd podczas dodawania partii:', error);
+        showError(`Błąd podczas dodawania: ${error.message}`);
+      }
+    } else {
+      // Oryginalna logika dla pozycji magazynowych
+      if (!selectedItem) {
+        showError('Wybierz produkt z magazynu');
+        return;
+      }
+      
+      if (countedQuantity === '' || isNaN(countedQuantity) || Number(countedQuantity) < 0) {
+        showError('Podaj prawidłową ilość policzoną');
+        return;
+      }
+      
+      try {
+        await addItemToStocktaking(id, {
+          inventoryItemId: selectedItem.id,
+          countedQuantity: Number(countedQuantity),
+          notes
+        }, currentUser.uid);
+        
+        showSuccess('Produkt został dodany do inwentaryzacji');
+        setAddItemDialogOpen(false);
+        
+        // Reset form
+        setSelectedItem(null);
+        setCountedQuantity('');
+        setNotes('');
+        
+        // Refresh data
+        fetchStocktakingData();
+      } catch (error) {
+        console.error('Błąd podczas dodawania przedmiotu:', error);
+        showError(`Błąd podczas dodawania: ${error.message}`);
+      }
     }
   };
   
@@ -468,10 +559,13 @@ const StocktakingDetailsPage = () => {
             <TableHead>
               <TableRow>
                 <TableCell>Nazwa produktu</TableCell>
+                <TableCell>LOT/Partia</TableCell>
                 <TableCell>Kategoria</TableCell>
                 <TableCell align="right">Stan systemowy</TableCell>
                 <TableCell align="right">Stan policzony</TableCell>
                 <TableCell align="right">Różnica</TableCell>
+                <TableCell align="right">Cena jedn.</TableCell>
+                <TableCell align="right">Wartość różnicy</TableCell>
                 <TableCell>Uwagi</TableCell>
                 {!isCompleted && <TableCell align="center">Akcje</TableCell>}
               </TableRow>
@@ -482,6 +576,14 @@ const StocktakingDetailsPage = () => {
                   {editItemId === item.id ? (
                     <>
                       <TableCell>{item.name}</TableCell>
+                      <TableCell>
+                        {item.lotNumber || item.batchNumber || 'N/D'}
+                        {item.expiryDate && (
+                          <Typography variant="caption" display="block" color="textSecondary">
+                            Ważne do: {new Date(item.expiryDate.seconds * 1000).toLocaleDateString('pl-PL')}
+                          </Typography>
+                        )}
+                      </TableCell>
                       <TableCell>{item.category}</TableCell>
                       <TableCell align="right">{item.systemQuantity} {item.unit}</TableCell>
                       <TableCell align="right">
@@ -500,6 +602,15 @@ const StocktakingDetailsPage = () => {
                           color={Number(countedQuantity) - item.systemQuantity === 0 ? 'success' : Number(countedQuantity) - item.systemQuantity > 0 ? 'primary' : 'error'}
                           size="small"
                         />
+                      </TableCell>
+                      <TableCell align="right">
+                        {item.unitPrice ? `${item.unitPrice.toFixed(2)} PLN` : '-'}
+                      </TableCell>
+                      <TableCell align="right">
+                        {item.unitPrice 
+                          ? `${((Number(countedQuantity) - item.systemQuantity) * item.unitPrice).toFixed(2)} PLN` 
+                          : '-'
+                        }
                       </TableCell>
                       <TableCell>
                         <TextField
@@ -521,6 +632,14 @@ const StocktakingDetailsPage = () => {
                   ) : (
                     <>
                       <TableCell>{item.name}</TableCell>
+                      <TableCell>
+                        {item.lotNumber || item.batchNumber || 'N/D'}
+                        {item.expiryDate && (
+                          <Typography variant="caption" display="block" color="textSecondary">
+                            Ważne do: {new Date(item.expiryDate.seconds * 1000).toLocaleDateString('pl-PL')}
+                          </Typography>
+                        )}
+                      </TableCell>
                       <TableCell>{item.category}</TableCell>
                       <TableCell align="right">{item.systemQuantity} {item.unit}</TableCell>
                       <TableCell align="right">{item.countedQuantity} {item.unit}</TableCell>
@@ -530,6 +649,17 @@ const StocktakingDetailsPage = () => {
                           color={getDiscrepancyColor(item.discrepancy)}
                           size="small"
                         />
+                      </TableCell>
+                      <TableCell align="right">
+                        {item.unitPrice ? `${item.unitPrice.toFixed(2)} PLN` : '-'}
+                      </TableCell>
+                      <TableCell align="right">
+                        {item.differenceValue !== undefined 
+                          ? `${item.differenceValue.toFixed(2)} PLN`
+                          : item.unitPrice && item.discrepancy
+                            ? `${(item.discrepancy * item.unitPrice).toFixed(2)} PLN`
+                            : '-'
+                        }
                       </TableCell>
                       <TableCell>{item.notes || '-'}</TableCell>
                       {!isCompleted && (
@@ -556,11 +686,29 @@ const StocktakingDetailsPage = () => {
         <DialogTitle>Dodaj produkt do inwentaryzacji</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
+            {/* Przełącznik trybu LOT/Pozycja magazynowa */}
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={isLotMode}
+                  onChange={(e) => {
+                    setIsLotMode(e.target.checked);
+                    // Reset stanu przy zmianie trybu
+                    setSelectedBatch(null);
+                    setBatches([]);
+                  }}
+                  color="primary"
+                />
+              }
+              label={isLotMode ? "Tryb inwentaryzacji LOT" : "Tryb inwentaryzacji pozycji magazynowej"}
+              sx={{ mb: 2 }}
+            />
+            
             <Autocomplete
               options={inventoryItems}
               getOptionLabel={(option) => `${option.name} (${option.quantity} ${option.unit})`}
               value={selectedItem}
-              onChange={(event, newValue) => setSelectedItem(newValue)}
+              onChange={(event, newValue) => handleItemSelect(newValue)}
               renderInput={(params) => (
                 <TextField
                   {...params}
@@ -571,6 +719,63 @@ const StocktakingDetailsPage = () => {
                 />
               )}
             />
+            
+            {/* Pole wyboru partii, widoczne tylko dla trybu LOT */}
+            {isLotMode && selectedItem && (
+              <FormControl fullWidth margin="normal">
+                <InputLabel id="batch-select-label">Wybierz partię (LOT)</InputLabel>
+                <Select
+                  labelId="batch-select-label"
+                  value={selectedBatch || ''}
+                  onChange={(e) => setSelectedBatch(e.target.value)}
+                  displayEmpty
+                  required
+                  renderValue={(selected) => {
+                    if (!selected) return <em>Wybierz partię</em>;
+                    return `LOT: ${selected.lotNumber || selected.batchNumber} - Ilość: ${selected.quantity} ${selectedItem.unit}`;
+                  }}
+                  label="Wybierz partię (LOT)"
+                >
+                  {loadingBatches ? (
+                    <MenuItem disabled>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2 }}>
+                        <CircularProgress size={24} sx={{ mr: 1 }} />
+                        <Typography>Ładowanie partii...</Typography>
+                      </Box>
+                    </MenuItem>
+                  ) : batches.length === 0 ? (
+                    <MenuItem disabled>Brak partii dla wybranego produktu</MenuItem>
+                  ) : (
+                    batches.map((batch) => (
+                      <MenuItem key={batch.id} value={batch}>
+                        <Grid container>
+                          <Grid item xs={12}>
+                            <Typography variant="body1">
+                              LOT: {batch.lotNumber || batch.batchNumber || 'Brak numeru'}
+                            </Typography>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Typography variant="body2" color="textSecondary">
+                              Ilość: {batch.quantity} {selectedItem.unit} 
+                              {batch.expiryDate && ` | Data ważności: ${new Date(batch.expiryDate).toLocaleDateString('pl-PL')}`}
+                              {batch.unitPrice > 0 && ` | Cena: ${batch.unitPrice.toFixed(2)} PLN`}
+                            </Typography>
+                          </Grid>
+                        </Grid>
+                      </MenuItem>
+                    ))
+                  )}
+                </Select>
+              </FormControl>
+            )}
+            
+            {/* Wyświetl informację o cenie jednostkowej dla wybranej partii */}
+            {isLotMode && selectedBatch && selectedBatch.unitPrice > 0 && (
+              <Alert severity="info" sx={{ mt: 1, mb: 1 }}>
+                Cena jednostkowa partii: {selectedBatch.unitPrice.toFixed(2)} PLN
+              </Alert>
+            )}
+            
             <TextField
               label="Stan policzony"
               type="number"
@@ -581,6 +786,18 @@ const StocktakingDetailsPage = () => {
               margin="normal"
               inputProps={{ min: 0, step: 0.01 }}
             />
+            
+            {/* Wyświetl różnicę i jej wartość pieniężną, jeśli wybrano partię */}
+            {isLotMode && selectedBatch && countedQuantity !== '' && !isNaN(countedQuantity) && (
+              <Alert 
+                severity={Number(countedQuantity) === selectedBatch.quantity ? "success" : Number(countedQuantity) > selectedBatch.quantity ? "info" : "warning"}
+                sx={{ mt: 1, mb: 1 }}
+              >
+                Różnica: {Number(countedQuantity) - selectedBatch.quantity} {selectedItem?.unit}
+                {selectedBatch.unitPrice > 0 && ` | Wartość różnicy: ${((Number(countedQuantity) - selectedBatch.quantity) * selectedBatch.unitPrice).toFixed(2)} PLN`}
+              </Alert>
+            )}
+            
             <TextField
               label="Uwagi"
               fullWidth

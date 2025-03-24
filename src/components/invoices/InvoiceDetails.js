@@ -49,6 +49,8 @@ import { useNotification } from '../../hooks/useNotification';
 import { format } from 'date-fns';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { COMPANY_INFO } from '../../config';
+import { getCompanyInfo } from '../../services/companyService';
 
 const InvoiceDetails = () => {
   const { invoiceId } = useParams();
@@ -56,6 +58,7 @@ const InvoiceDetails = () => {
   const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [pdfGenerating, setPdfGenerating] = useState(false);
+  const [companyInfo, setCompanyInfo] = useState(COMPANY_INFO);
   
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -64,6 +67,7 @@ const InvoiceDetails = () => {
   useEffect(() => {
     if (invoiceId) {
       fetchInvoice();
+      fetchCompanyInfo();
     }
   }, [invoiceId]);
   
@@ -71,12 +75,22 @@ const InvoiceDetails = () => {
     setLoading(true);
     try {
       const fetchedInvoice = await getInvoiceById(invoiceId);
+      console.log('Pobrano fakturę:', fetchedInvoice);
       setInvoice(fetchedInvoice);
     } catch (error) {
       showError('Błąd podczas pobierania danych faktury: ' + error.message);
       navigate('/invoices');
     } finally {
       setLoading(false);
+    }
+  };
+  
+  const fetchCompanyInfo = async () => {
+    try {
+      const data = await getCompanyInfo();
+      setCompanyInfo(data);
+    } catch (error) {
+      console.error('Błąd podczas pobierania danych firmy:', error);
     }
   };
   
@@ -157,37 +171,86 @@ const InvoiceDetails = () => {
     
     try {
       // Utwórz nowy dokument PDF
-      const doc = new jsPDF();
+      const { jsPDF } = require('jspdf');
+      const autoTable = require('jspdf-autotable').default;
+      
+      // Inicjalizacja dokumentu z obsługą polskich znaków
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+        compress: true
+      });
+      
+      // Dodawanie polskiej czcionki
+      doc.addFont('https://fonts.gstatic.com/s/roboto/v30/KFOmCnqEu92Fr1Me5Q.ttf', 'Roboto', 'normal');
+      doc.setFont('Roboto');
       
       // Dodaj nagłówek
       doc.setFontSize(20);
       doc.text('Faktura', 105, 15, { align: 'center' });
+      
       doc.setFontSize(12);
       doc.text(`Nr: ${invoice.number}`, 105, 22, { align: 'center' });
       
       // Dodaj informacje o sprzedawcy i nabywcy
       doc.setFontSize(10);
+      
+      // Dane sprzedawcy
       doc.text('Sprzedawca:', 14, 35);
-      doc.text('Twoja Firma Sp. z o.o.', 14, 40);
-      doc.text('ul. Przykładowa 123', 14, 45);
-      doc.text('00-000 Miasto', 14, 50);
-      doc.text('NIP: 123-456-78-90', 14, 55);
+      const sellerLines = [
+        companyInfo.name,
+        companyInfo.address,
+        companyInfo.city,
+        `NIP: ${companyInfo.nip}`,
+        `Tel: ${companyInfo.phone}`
+      ];
       
+      sellerLines.forEach((line, index) => {
+        doc.text(line, 14, 40 + (index * 5));
+      });
+      
+      // Dane nabywcy
       doc.text('Nabywca:', 120, 35);
-      doc.text(`${invoice.customer.name}`, 120, 40);
-      doc.text(`${invoice.billingAddress || '-'}`, 120, 45);
-      const customerEmail = invoice.customer.email ? `Email: ${invoice.customer.email}` : '';
-      const customerPhone = invoice.customer.phone ? `Tel: ${invoice.customer.phone}` : '';
-      if (customerEmail) doc.text(customerEmail, 120, 50);
-      if (customerPhone) doc.text(customerPhone, 120, 55);
+      const buyerLines = [
+        invoice.customer.name,
+        invoice.billingAddress || '-'
+      ];
       
-      // Dodaj informacje o dacie i płatności
-      doc.text(`Data wystawienia: ${formatDate(invoice.issueDate)}`, 14, 70);
-      doc.text(`Termin płatności: ${formatDate(invoice.dueDate)}`, 14, 75);
-      doc.text(`Metoda płatności: ${invoice.paymentMethod}`, 14, 80);
+      // VAT-EU zawsze wyświetlany jako druga linia po nazwie klienta (jeśli istnieje)
+      if (invoice.customer?.vatEu) {
+        buyerLines.splice(1, 0, `VAT-EU: ${invoice.customer.vatEu}`);
+      }
       
-      // Przygotuj dane dla tabeli pozycji faktury
-      const tableColumn = ["Lp.", "Nazwa", "Ilość", "J.m.", "Cena netto", "VAT", "Wartość netto", "Wartość brutto"];
+      if (invoice.customer.email) buyerLines.push(`Email: ${invoice.customer.email}`);
+      if (invoice.customer.phone) buyerLines.push(`Tel: ${invoice.customer.phone}`);
+      
+      buyerLines.forEach((line, index) => {
+        doc.text(line, 120, 40 + (index * 5));
+      });
+      
+      // Informacje o płatności (w jednej kolumnie)
+      const paymentInfoY = 70;
+      doc.text('Dane faktury:', 14, paymentInfoY);
+      doc.text(`Data wystawienia: ${formatDate(invoice.issueDate)}`, 14, paymentInfoY + 5);
+      doc.text(`Termin płatności: ${formatDate(invoice.dueDate)}`, 14, paymentInfoY + 10);
+      doc.text(`Metoda płatności: ${invoice.paymentMethod}`, 14, paymentInfoY + 15);
+      doc.text(`Bank: ${companyInfo.bankName}`, 14, paymentInfoY + 20);
+      doc.text(`Nr konta: ${companyInfo.bankAccount}`, 14, paymentInfoY + 25);
+      
+      // Nagłówki tabeli
+      const tableColumn = [
+        { header: 'Lp.', dataKey: 'lp' },
+        { header: 'Nazwa', dataKey: 'nazwa' },
+        { header: 'Ilość', dataKey: 'ilosc' },
+        { header: 'J.m.', dataKey: 'jm' },
+        { header: 'Cena netto', dataKey: 'cena' },
+        { header: 'VAT', dataKey: 'vat' },
+        { header: 'Wartość netto', dataKey: 'netto' },
+        { header: 'Wartość brutto', dataKey: 'brutto' }
+      ];
+      
+      // Dane do tabeli
       const tableRows = [];
       
       invoice.items.forEach((item, index) => {
@@ -199,35 +262,71 @@ const InvoiceDetails = () => {
         const vatValue = netValue * (vat / 100);
         const grossValue = netValue + vatValue;
         
-        const itemData = [
-          index + 1,
-          item.name,
-          quantity,
-          item.unit,
-          `${price.toFixed(2)} zł`,
-          `${vat}%`,
-          `${netValue.toFixed(2)} zł`,
-          `${grossValue.toFixed(2)} zł`
-        ];
-        
-        tableRows.push(itemData);
+        tableRows.push({
+          lp: (index + 1).toString(),
+          nazwa: item.name,
+          ilosc: quantity.toString(),
+          jm: item.unit,
+          cena: `${price.toFixed(2)}`,
+          vat: `${vat}%`,
+          netto: `${netValue.toFixed(2)}`,
+          brutto: `${grossValue.toFixed(2)}`
+        });
       });
       
-      // Dodaj tabelę pozycji faktury - użyj autoTable jako funkcji
+      // Dodaj tabelę pozycji faktury
       autoTable(doc, {
-        head: [tableColumn],
-        body: tableRows,
-        startY: 90,
+        head: [tableColumn.map(col => col.header)],
+        body: tableRows.map(row => [
+          row.lp,
+          row.nazwa,
+          row.ilosc,
+          row.jm,
+          row.cena,
+          row.vat,
+          row.netto,
+          row.brutto
+        ]),
+        startY: 100,
         theme: 'grid',
-        styles: { fontSize: 8 },
-        columnStyles: {
-          0: { cellWidth: 10 },
-          4: { halign: 'right' },
-          5: { halign: 'right' },
-          6: { halign: 'right' },
-          7: { halign: 'right' }
+        tableWidth: 'auto',
+        styles: { 
+          fontSize: 9,
+          cellPadding: 2,
+          font: 'Roboto'
         },
-        headStyles: { fillColor: [41, 128, 185], textColor: 255 }
+        columnStyles: {
+          0: { cellWidth: 10, halign: 'center' },
+          1: { cellWidth: 50 },
+          2: { cellWidth: 15, halign: 'right' },
+          3: { cellWidth: 15, halign: 'center' },
+          4: { cellWidth: 20, halign: 'right' },
+          5: { cellWidth: 15, halign: 'center' },
+          6: { cellWidth: 25, halign: 'right' },
+          7: { cellWidth: 25, halign: 'right' }
+        },
+        headStyles: { 
+          fillColor: [41, 128, 185], 
+          textColor: 255,
+          halign: 'center',
+          valign: 'middle',
+          font: 'Roboto'
+        },
+        didDrawPage: function(data) {
+          // Dodawanie zł po każdej wartości w kolumnach z cenami
+          data.table.body.forEach((row, rowIndex) => {
+            if (rowIndex >= 0) { // Pomijamy nagłówek
+              [4, 6, 7].forEach(colIndex => {
+                if (row.cells[colIndex]) {
+                  const cell = row.cells[colIndex];
+                  if (cell.text) {
+                    cell.text = `${cell.text} zł`;
+                  }
+                }
+              });
+            }
+          });
+        }
       });
       
       // Oblicz sumy
@@ -246,17 +345,21 @@ const InvoiceDetails = () => {
       
       const totalBrutto = totalNetto + totalVat;
       
-      // Dodaj podsumowanie - użyj doc.lastAutoTable.finalY
+      // Dodaj podsumowanie
       const finalY = doc.lastAutoTable.finalY + 10;
-      doc.text('Podsumowanie:', 130, finalY);
-      doc.text(`Razem netto: ${totalNetto.toFixed(2)} zł`, 130, finalY + 5);
-      doc.text(`Razem VAT: ${totalVat.toFixed(2)} zł`, 130, finalY + 10);
-      doc.text(`Razem brutto: ${totalBrutto.toFixed(2)} zł`, 130, finalY + 15);
+      doc.setFont('Roboto', 'bold');
+      doc.text('Podsumowanie:', 140, finalY);
+      doc.setFont('Roboto', 'normal');
+      doc.text(`Razem netto: ${totalNetto.toFixed(2)} zł`, 140, finalY + 6);
+      doc.text(`Razem VAT: ${totalVat.toFixed(2)} zł`, 140, finalY + 12);
+      doc.setFont('Roboto', 'bold');
+      doc.text(`Razem brutto: ${totalBrutto.toFixed(2)} zł`, 140, finalY + 18);
+      doc.setFont('Roboto', 'normal');
       
       // Dodaj uwagi, jeśli istnieją
       if (invoice.notes) {
         doc.text('Uwagi:', 14, finalY + 30);
-        doc.text(invoice.notes, 14, finalY + 35);
+        doc.text(invoice.notes, 14, finalY + 36);
       }
       
       // Dodaj stopkę
@@ -268,7 +371,7 @@ const InvoiceDetails = () => {
       showSuccess('Faktura została pobrana w formacie PDF');
     } catch (error) {
       console.error('Błąd podczas generowania PDF:', error);
-      showError('Nie udało się wygenerować pliku PDF');
+      showError('Nie udało się wygenerować pliku PDF: ' + error.message);
     } finally {
       setPdfGenerating(false);
     }
@@ -352,7 +455,7 @@ const InvoiceDetails = () => {
         </Box>
       </Box>
       
-      <Paper sx={{ p: 3, mb: 3 }}>
+      <Paper sx={{ p: 3, mb: 4 }}>
         <Grid container spacing={3}>
           <Grid item xs={12} md={8}>
             <Box sx={{ mb: 3 }}>
@@ -360,7 +463,7 @@ const InvoiceDetails = () => {
                 Dane podstawowe
               </Typography>
               <Grid container spacing={2}>
-                <Grid item xs={6}>
+                <Grid item xs={12} sm={6}>
                   <Typography variant="body2" color="text.secondary">
                     Numer faktury
                   </Typography>
@@ -368,7 +471,7 @@ const InvoiceDetails = () => {
                     {invoice.number}
                   </Typography>
                 </Grid>
-                <Grid item xs={6}>
+                <Grid item xs={12} sm={6}>
                   <Typography variant="body2" color="text.secondary">
                     Status
                   </Typography>
@@ -376,7 +479,7 @@ const InvoiceDetails = () => {
                     {renderInvoiceStatus(invoice.status)}
                   </Box>
                 </Grid>
-                <Grid item xs={6}>
+                <Grid item xs={12} sm={6}>
                   <Typography variant="body2" color="text.secondary">
                     Data wystawienia
                   </Typography>
@@ -384,7 +487,7 @@ const InvoiceDetails = () => {
                     {formatDate(invoice.issueDate)}
                   </Typography>
                 </Grid>
-                <Grid item xs={6}>
+                <Grid item xs={12} sm={6}>
                   <Typography variant="body2" color="text.secondary">
                     Termin płatności
                   </Typography>
@@ -392,7 +495,7 @@ const InvoiceDetails = () => {
                     {formatDate(invoice.dueDate)}
                   </Typography>
                 </Grid>
-                <Grid item xs={6}>
+                <Grid item xs={12} sm={6}>
                   <Typography variant="body2" color="text.secondary">
                     Metoda płatności
                   </Typography>
@@ -400,7 +503,7 @@ const InvoiceDetails = () => {
                     {invoice.paymentMethod}
                   </Typography>
                 </Grid>
-                <Grid item xs={6}>
+                <Grid item xs={12} sm={6}>
                   <Typography variant="body2" color="text.secondary">
                     Status płatności
                   </Typography>
@@ -409,7 +512,7 @@ const InvoiceDetails = () => {
                   </Typography>
                 </Grid>
                 {invoice.paymentDate && (
-                  <Grid item xs={6}>
+                  <Grid item xs={12} sm={6}>
                     <Typography variant="body2" color="text.secondary">
                       Data płatności
                     </Typography>
@@ -429,25 +532,25 @@ const InvoiceDetails = () => {
               </Typography>
               <Grid container spacing={3}>
                 <Grid item xs={12} sm={6}>
-                  <Card variant="outlined">
-                    <CardContent>
+                  <Card variant="outlined" sx={{ height: '100%' }}>
+                    <CardContent sx={{ p: 2 }}>
                       <Typography variant="subtitle2" gutterBottom>
                         Adres do faktury
                       </Typography>
-                      <Typography variant="body2">
-                        {invoice.billingAddress || 'Nie podano adresu do faktury'}
+                      <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                        {invoice.billingAddress || invoice.customer?.billingAddress || invoice.customer?.address || 'Nie podano adresu do faktury'}
                       </Typography>
                     </CardContent>
                   </Card>
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <Card variant="outlined">
-                    <CardContent>
+                  <Card variant="outlined" sx={{ height: '100%' }}>
+                    <CardContent sx={{ p: 2 }}>
                       <Typography variant="subtitle2" gutterBottom>
                         Adres dostawy
                       </Typography>
-                      <Typography variant="body2">
-                        {invoice.shippingAddress || 'Nie podano adresu dostawy'}
+                      <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                        {invoice.shippingAddress || invoice.customer?.shippingAddress || invoice.customer?.address || 'Nie podano adresu dostawy'}
                       </Typography>
                     </CardContent>
                   </Card>
@@ -457,7 +560,8 @@ const InvoiceDetails = () => {
           </Grid>
           
           <Grid item xs={12} md={4}>
-            <Card variant="outlined" sx={{ height: '100%' }}>
+            {/* Sekcja Klient */}
+            <Card variant="outlined" sx={{ mb: 3 }}>
               <CardContent>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                   <Typography variant="h6">
@@ -472,17 +576,52 @@ const InvoiceDetails = () => {
                   </IconButton>
                 </Box>
                 
+                {/* Dodanie debugowania (tylko w trybie deweloperskim) */}
+                {process.env.NODE_ENV === 'development' && (
+                  <Box sx={{ mb: 2, p: 1, bgcolor: 'rgba(0,0,0,0.05)', borderRadius: 1 }}>
+                    <Typography variant="caption" component="pre" sx={{ whiteSpace: 'pre-wrap', fontSize: '0.7rem' }}>
+                      Dane klienta (debug): {JSON.stringify(invoice.customer, null, 2)}
+                    </Typography>
+                  </Box>
+                )}
+                
                 <Typography variant="body1" fontWeight="bold">
-                  {invoice.customer?.name}
+                  {invoice.customer?.name || 'Brak nazwy klienta'}
                 </Typography>
+                
+                {invoice.customer?.vatEu && (
+                  <Typography variant="body2" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                    VAT-EU: {invoice.customer.vatEu}
+                  </Typography>
+                )}
+                
                 {invoice.customer?.email && (
                   <Typography variant="body2" gutterBottom>
                     Email: {invoice.customer.email}
                   </Typography>
                 )}
+                
                 {invoice.customer?.phone && (
                   <Typography variant="body2" gutterBottom>
                     Telefon: {invoice.customer.phone}
+                  </Typography>
+                )}
+                
+                {invoice.customer?.address && (
+                  <Typography variant="body2" gutterBottom>
+                    Adres: {invoice.customer.address}
+                  </Typography>
+                )}
+                
+                {invoice.customer?.shippingAddress && (
+                  <Typography variant="body2" gutterBottom>
+                    Adres dostawy: {invoice.customer.shippingAddress}
+                  </Typography>
+                )}
+                
+                {invoice.customer?.billingAddress && (
+                  <Typography variant="body2" gutterBottom>
+                    Adres do faktury: {invoice.customer.billingAddress}
                   </Typography>
                 )}
                 
@@ -508,75 +647,124 @@ const InvoiceDetails = () => {
                     </Typography>
                   </>
                 )}
+              </CardContent>
+            </Card>
+            
+            {/* Sekcja Sprzedawca */}
+            <Card variant="outlined" sx={{ mb: 3 }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Sprzedawca
+                </Typography>
                 
-                <Divider sx={{ my: 2 }} />
-                
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="h6" gutterBottom>
-                    Akcje
+                <Typography variant="body1" fontWeight="bold" gutterBottom>
+                  {companyInfo.name}
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  {companyInfo.address}
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  {companyInfo.city}
+                </Typography>
+                <Box sx={{ mt: 1 }}>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    NIP: {companyInfo.nip}
                   </Typography>
-                  
-                  {invoice.status === 'issued' && (
-                    <Button
-                      fullWidth
-                      variant="outlined"
-                      startIcon={<EmailIcon />}
-                      onClick={() => handleUpdateStatus('sent')}
-                      sx={{ mb: 1 }}
-                    >
-                      Oznacz jako wysłaną
-                    </Button>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    REGON: {companyInfo.regon}
+                  </Typography>
+                </Box>
+                <Box sx={{ mt: 1 }}>
+                  {companyInfo.email && (
+                    <Typography variant="body2" sx={{ mb: 0.5 }}>
+                      Email: {companyInfo.email}
+                    </Typography>
                   )}
-                  
-                  {(invoice.status === 'issued' || invoice.status === 'sent') && (
-                    <Button
-                      fullWidth
-                      variant="outlined"
-                      color="success"
-                      startIcon={<PaymentIcon />}
-                      onClick={() => handleUpdateStatus('paid')}
-                      sx={{ mb: 1 }}
-                    >
-                      Oznacz jako opłaconą
-                    </Button>
-                  )}
-                  
-                  {invoice.status === 'draft' && (
-                    <Button
-                      fullWidth
-                      variant="outlined"
-                      color="error"
-                      startIcon={<DeleteIcon />}
-                      onClick={handleDeleteClick}
-                      sx={{ mb: 1 }}
-                    >
-                      Usuń fakturę
-                    </Button>
+                  {companyInfo.phone && (
+                    <Typography variant="body2" sx={{ mb: 0.5 }}>
+                      Telefon: {companyInfo.phone}
+                    </Typography>
                   )}
                 </Box>
+                <Box sx={{ mt: 1 }}>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    Bank: {companyInfo.bankName}
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    Numer konta: {companyInfo.bankAccount}
+                  </Typography>
+                </Box>
+              </CardContent>
+            </Card>
+            
+            {/* Sekcja Akcje */}
+            <Card variant="outlined">
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Akcje
+                </Typography>
+                
+                {invoice.status === 'issued' && (
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    startIcon={<EmailIcon />}
+                    onClick={() => handleUpdateStatus('sent')}
+                    sx={{ mb: 1 }}
+                  >
+                    Oznacz jako wysłaną
+                  </Button>
+                )}
+                
+                {(invoice.status === 'issued' || invoice.status === 'sent') && (
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    color="success"
+                    startIcon={<PaymentIcon />}
+                    onClick={() => handleUpdateStatus('paid')}
+                    sx={{ mb: 1 }}
+                  >
+                    Oznacz jako opłaconą
+                  </Button>
+                )}
+                
+                {invoice.status === 'draft' && (
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    color="error"
+                    startIcon={<DeleteIcon />}
+                    onClick={handleDeleteClick}
+                    sx={{ mb: 1 }}
+                  >
+                    Usuń fakturę
+                  </Button>
+                )}
               </CardContent>
             </Card>
           </Grid>
         </Grid>
       </Paper>
       
-      <Paper sx={{ p: 3, mb: 3 }}>
+      {/* Oddzielny Paper dla sekcji pozycji faktury */}
+      <Paper sx={{ p: 3, mb: 3, mt: 4, clear: 'both' }}>
         <Typography variant="h6" gutterBottom>
           Pozycje faktury
         </Typography>
         
-        <TableContainer>
-          <Table>
+        <TableContainer sx={{ overflowX: 'auto' }}>
+          <Table size="small">
             <TableHead>
               <TableRow>
-                <TableCell>Nazwa</TableCell>
-                <TableCell>Opis</TableCell>
-                <TableCell align="right">Ilość</TableCell>
-                <TableCell>J.m.</TableCell>
-                <TableCell align="right">Cena netto</TableCell>
-                <TableCell align="right">VAT</TableCell>
-                <TableCell align="right">Wartość netto</TableCell>
-                <TableCell align="right">Wartość brutto</TableCell>
+                <TableCell sx={{ minWidth: 140 }}>Nazwa</TableCell>
+                <TableCell sx={{ minWidth: 140 }}>Opis</TableCell>
+                <TableCell align="right" sx={{ width: 70 }}>Ilość</TableCell>
+                <TableCell sx={{ width: 60 }}>J.m.</TableCell>
+                <TableCell align="right" sx={{ width: 100 }}>Cena netto</TableCell>
+                <TableCell align="right" sx={{ width: 60 }}>VAT</TableCell>
+                <TableCell align="right" sx={{ width: 120 }}>Wart. netto</TableCell>
+                <TableCell align="right" sx={{ width: 120 }}>Wart. brutto</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -607,8 +795,8 @@ const InvoiceDetails = () => {
           </Table>
         </TableContainer>
         
-        <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-          <Grid container spacing={1} justifyContent="flex-end" sx={{ maxWidth: 400 }}>
+        <Box sx={{ mt: 4, display: 'flex', justifyContent: 'flex-end' }}>
+          <Grid container spacing={1} justifyContent="flex-end" sx={{ maxWidth: 300 }}>
             <Grid item xs={6}>
               <Typography variant="body1" fontWeight="bold" align="right">
                 Razem netto:

@@ -88,6 +88,7 @@ import InvoicesPage from './pages/Invoices/InvoicesPage';
 import InvoicesListPage from './pages/Invoices/InvoicesListPage';
 import InvoiceFormPage from './pages/Invoices/InvoiceFormPage';
 import InvoiceDetailsPage from './pages/Invoices/InvoiceDetailsPage';
+import CompanySettingsPage from './pages/Invoices/CompanySettingsPage';
 
 // CMR
 import CmrListPage from './pages/Inventory/Cmr/CmrListPage';
@@ -175,6 +176,7 @@ function App() {
               <Route path="/invoices/new" element={<PrivateLayout><InvoiceFormPage /></PrivateLayout>} />
               <Route path="/invoices/:invoiceId" element={<PrivateLayout><InvoiceDetailsPage /></PrivateLayout>} />
               <Route path="/invoices/:invoiceId/edit" element={<PrivateLayout><InvoiceFormPage /></PrivateLayout>} />
+              <Route path="/invoices/company-settings" element={<PrivateLayout><CompanySettingsPage /></PrivateLayout>} />
               
               {/* Purchase Orders Routes */}
               <Route path="/purchase-orders" element={<PrivateLayout><PurchaseOrdersPage /></PrivateLayout>} />

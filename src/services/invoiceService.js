@@ -121,10 +121,10 @@ export const getInvoiceById = async (invoiceId) => {
  */
 export const getInvoicesByCustomerId = async (customerId) => {
   try {
+    // Zapytanie bez sortowania, które wymaga złożonego indeksu
     const invoicesQuery = query(
       collection(db, INVOICES_COLLECTION),
-      where('customer.id', '==', customerId),
-      orderBy('issueDate', 'desc')
+      where('customer.id', '==', customerId)
     );
     
     const querySnapshot = await getDocs(invoicesQuery);
@@ -135,12 +135,19 @@ export const getInvoicesByCustomerId = async (customerId) => {
       invoices.push({
         id: doc.id,
         ...data,
-        issueDate: data.issueDate?.toDate(),
-        dueDate: data.dueDate?.toDate(),
-        paymentDate: data.paymentDate?.toDate(),
-        createdAt: data.createdAt?.toDate(),
-        updatedAt: data.updatedAt?.toDate()
+        issueDate: data.issueDate && typeof data.issueDate.toDate === 'function' ? data.issueDate.toDate() : data.issueDate,
+        dueDate: data.dueDate && typeof data.dueDate.toDate === 'function' ? data.dueDate.toDate() : data.dueDate,
+        paymentDate: data.paymentDate && typeof data.paymentDate.toDate === 'function' ? data.paymentDate.toDate() : data.paymentDate,
+        createdAt: data.createdAt && typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate() : data.createdAt,
+        updatedAt: data.updatedAt && typeof data.updatedAt.toDate === 'function' ? data.updatedAt.toDate() : data.updatedAt
       });
+    });
+    
+    // Sortowanie po stronie klienta (od najnowszych do najstarszych)
+    invoices.sort((a, b) => {
+      const dateA = a.issueDate instanceof Date ? a.issueDate : new Date(a.issueDate || 0);
+      const dateB = b.issueDate instanceof Date ? b.issueDate : new Date(b.issueDate || 0);
+      return dateB - dateA;
     });
     
     return invoices;
@@ -388,7 +395,19 @@ export const DEFAULT_INVOICE = {
     email: '',
     phone: '',
     billingAddress: '',
-    shippingAddress: ''
+    shippingAddress: '',
+    vatEu: ''
+  },
+  seller: {
+    name: '',
+    address: '',
+    city: '',
+    nip: '',
+    regon: '',
+    email: '',
+    phone: '',
+    bankName: '',
+    bankAccount: ''
   },
   orderId: null,
   orderNumber: null,
