@@ -23,7 +23,12 @@ import {
   TableBody,
   TableRow,
   TableCell,
-  Alert
+  Alert,
+  Stack,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -36,12 +41,18 @@ import {
   Save as SaveIcon,
   Check as CheckIcon,
   Cancel as CancelIcon,
-  Inventory as InventoryIcon
+  Inventory as InventoryIcon,
+  Warning as WarningIcon,
+  Receipt as ReceiptIcon,
+  Add as AddIcon,
+  SaveAlt as SaveAltIcon,
+  Info as InfoIcon
 } from '@mui/icons-material';
 import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory } from '../../services/productionService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
+import { PRODUCTION_TASK_STATUSES, TIME_INTERVALS } from '../../utils/constants';
 
 const TaskDetailsPage = () => {
   const { id } = useParams();
@@ -400,7 +411,7 @@ const TaskDetailsPage = () => {
       }
 
       if (isNaN(time) || time < 0) {
-        setProductionError('Nieprawidłowy czas');
+        setProductionError('Nieprawidłowy przedział czasowy');
         return;
       }
 
@@ -835,14 +846,21 @@ const TaskDetailsPage = () => {
             }}
           />
           
-          <TextField
-            label="Czas produkcji (minuty)"
-            type="number"
-            value={timeSpent}
-            onChange={(e) => setTimeSpent(e.target.value)}
-            fullWidth
-            margin="dense"
-          />
+          <FormControl fullWidth margin="dense">
+            <InputLabel id="time-interval-label">Przedział czasowy produkcji</InputLabel>
+            <Select
+              labelId="time-interval-label"
+              value={timeSpent}
+              onChange={(e) => setTimeSpent(e.target.value)}
+              label="Przedział czasowy produkcji"
+            >
+              {TIME_INTERVALS.map((interval) => (
+                <MenuItem key={interval.value} value={interval.value}>
+                  {interval.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setStopProductionDialogOpen(false)}>

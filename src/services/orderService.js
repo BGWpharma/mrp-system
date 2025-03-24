@@ -250,10 +250,20 @@ export const getCustomerOrders = async (customerId) => {
     
     const orders = [];
     querySnapshot.forEach((doc) => {
-      orders.push({
+      const data = doc.data();
+      
+      // Konwertuj daty z Timestamp na Date
+      const orderWithDates = {
         id: doc.id,
-        ...doc.data()
-      });
+        ...data,
+        orderDate: data.orderDate ? data.orderDate.toDate() : null,
+        expectedDeliveryDate: data.expectedDeliveryDate ? data.expectedDeliveryDate.toDate() : null,
+        deliveryDate: data.deliveryDate ? data.deliveryDate.toDate() : null,
+        createdAt: data.createdAt ? data.createdAt.toDate() : null,
+        updatedAt: data.updatedAt ? data.updatedAt.toDate() : null
+      };
+      
+      orders.push(orderWithDates);
     });
     
     return orders;

@@ -322,3 +322,13 @@ export const DEFAULT_CRM_VALUES = {
     assignedTo: ''
   }
 };
+
+// Przedziały czasowe dla zadań produkcyjnych (w minutach)
+export const TIME_INTERVALS = [
+  { label: 'Do 30 minut', value: 30 },
+  { label: '30-60 minut', value: 60 },
+  { label: '1-2 godziny', value: 120 },
+  { label: '2-4 godziny', value: 240 },
+  { label: '4-8 godzin', value: 480 },
+  { label: 'Powyżej 8 godzin', value: 600 }
+];

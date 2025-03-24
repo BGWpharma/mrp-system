@@ -46,10 +46,20 @@ import { getInvoicesByCustomerId } from '../../services/invoiceService';
 const formatDate = (dateValue) => {
   if (!dateValue) return '-';
   try {
-    const date = typeof dateValue === 'string' ? new Date(dateValue) : dateValue.toDate();
+    let date;
+    if (typeof dateValue === 'object' && dateValue.toDate) {
+      date = dateValue.toDate(); // Firestore Timestamp
+    } else if (typeof dateValue === 'string') {
+      date = new Date(dateValue);
+    } else if (dateValue instanceof Date) {
+      date = dateValue;
+    } else {
+      return String(dateValue);
+    }
+    
     return format(date, 'dd.MM.yyyy', { locale: pl });
   } catch (error) {
-    console.error('Błąd formatowania daty:', error);
+    console.error('Błąd formatowania daty:', error, dateValue);
     return String(dateValue);
   }
 };
@@ -57,7 +67,17 @@ const formatDate = (dateValue) => {
 // Funkcja formatująca kwotę
 const formatCurrency = (amount, currency = 'PLN') => {
   if (amount === undefined || amount === null) return '-';
-  return `${Number(amount).toFixed(2)} ${currency}`;
+  
+  try {
+    // Upewnij się, że amount jest liczbą
+    const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+    if (isNaN(numericAmount)) return '-';
+    
+    return `${Number(numericAmount).toFixed(2)} ${currency}`;
+  } catch (error) {
+    console.error('Błąd formatowania kwoty:', error, amount);
+    return String(amount);
+  }
 };
 
 // Komponent CustomerDetail
@@ -443,9 +463,9 @@ const CustomerDetail = () => {
                       {orders.map((order) => (
                         <TableRow key={order.id}>
                           <TableCell>{order.orderNumber || `#${order.id.substring(0, 8).toUpperCase()}`}</TableCell>
-                          <TableCell>{formatDate(order.orderDate)}</TableCell>
+                          <TableCell>{order.orderDate ? formatDate(order.orderDate) : '-'}</TableCell>
                           <TableCell>{renderOrderStatus(order.status)}</TableCell>
-                          <TableCell align="right">{formatCurrency(order.totalValue, 'PLN')}</TableCell>
+                          <TableCell align="right">{formatCurrency(order.totalValue || order.total, 'PLN')}</TableCell>
                           <TableCell align="right">
                             <Button
                               size="small"
@@ -506,8 +526,8 @@ const CustomerDetail = () => {
                       {invoices.map((invoice) => (
                         <TableRow key={invoice.id}>
                           <TableCell>{invoice.number}</TableCell>
-                          <TableCell>{formatDate(invoice.issueDate)}</TableCell>
-                          <TableCell>{formatDate(invoice.dueDate)}</TableCell>
+                          <TableCell>{invoice.issueDate ? formatDate(invoice.issueDate) : '-'}</TableCell>
+                          <TableCell>{invoice.dueDate ? formatDate(invoice.dueDate) : '-'}</TableCell>
                           <TableCell>{renderInvoiceStatus(invoice.status)}</TableCell>
                           <TableCell align="right">{formatCurrency(invoice.total, invoice.currency)}</TableCell>
                           <TableCell align="right">

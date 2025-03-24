@@ -27,7 +27,9 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
-  Alert
+  Alert,
+  Grid,
+  Divider
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -39,7 +41,10 @@ import {
   CheckCircle as CompleteIcon,
   Inventory as InventoryIcon,
   Check as CheckIcon,
-  Info as InfoIcon
+  Info as InfoIcon,
+  Visibility as ViewIcon,
+  Done as DoneIcon,
+  Cancel as CancelIcon
 } from '@mui/icons-material';
 import { getAllTasks, updateTaskStatus, deleteTask, addTaskProductToInventory, stopProduction } from '../../services/productionService';
 import { useAuth } from '../../hooks/useAuth';
@@ -47,6 +52,7 @@ import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
 import { useTheme } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
+import { TIME_INTERVALS } from '../../utils/constants';
 
 const TaskList = () => {
   const [tasks, setTasks] = useState([]);
@@ -479,14 +485,21 @@ const TaskList = () => {
             }}
           />
           
-          <TextField
-            label="Czas produkcji (minuty)"
-            type="number"
-            value={timeSpent}
-            onChange={(e) => setTimeSpent(e.target.value)}
-            fullWidth
-            margin="dense"
-          />
+          <FormControl fullWidth margin="dense">
+            <InputLabel id="time-interval-label">Przedział czasowy produkcji</InputLabel>
+            <Select
+              labelId="time-interval-label"
+              value={timeSpent}
+              onChange={(e) => setTimeSpent(e.target.value)}
+              label="Przedział czasowy produkcji"
+            >
+              {TIME_INTERVALS.map((interval) => (
+                <MenuItem key={interval.value} value={interval.value}>
+                  {interval.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setStopProductionDialogOpen(false)}>

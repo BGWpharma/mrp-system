@@ -22,7 +22,9 @@ import {
   DialogTitle,
   DialogContent,
   DialogContentText,
-  DialogActions
+  DialogActions,
+  Snackbar,
+  Alert
 } from '@mui/material';
 import { 
   ArrowBack as ArrowBackIcon,
@@ -45,12 +47,15 @@ import { formatCurrency } from '../../utils/formatters';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { format } from 'date-fns';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const InvoiceDetails = () => {
   const { invoiceId } = useParams();
   const [invoice, setInvoice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [pdfGenerating, setPdfGenerating] = useState(false);
   
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -144,6 +149,131 @@ const InvoiceDetails = () => {
     );
   };
   
+  // Funkcja generująca i pobierająca PDF faktury
+  const handleDownloadPdf = () => {
+    if (!invoice) return;
+    
+    setPdfGenerating(true);
+    
+    try {
+      // Utwórz nowy dokument PDF
+      const doc = new jsPDF();
+      
+      // Dodaj nagłówek
+      doc.setFontSize(20);
+      doc.text('Faktura', 105, 15, { align: 'center' });
+      doc.setFontSize(12);
+      doc.text(`Nr: ${invoice.number}`, 105, 22, { align: 'center' });
+      
+      // Dodaj informacje o sprzedawcy i nabywcy
+      doc.setFontSize(10);
+      doc.text('Sprzedawca:', 14, 35);
+      doc.text('Twoja Firma Sp. z o.o.', 14, 40);
+      doc.text('ul. Przykładowa 123', 14, 45);
+      doc.text('00-000 Miasto', 14, 50);
+      doc.text('NIP: 123-456-78-90', 14, 55);
+      
+      doc.text('Nabywca:', 120, 35);
+      doc.text(`${invoice.customer.name}`, 120, 40);
+      doc.text(`${invoice.billingAddress || '-'}`, 120, 45);
+      const customerEmail = invoice.customer.email ? `Email: ${invoice.customer.email}` : '';
+      const customerPhone = invoice.customer.phone ? `Tel: ${invoice.customer.phone}` : '';
+      if (customerEmail) doc.text(customerEmail, 120, 50);
+      if (customerPhone) doc.text(customerPhone, 120, 55);
+      
+      // Dodaj informacje o dacie i płatności
+      doc.text(`Data wystawienia: ${formatDate(invoice.issueDate)}`, 14, 70);
+      doc.text(`Termin płatności: ${formatDate(invoice.dueDate)}`, 14, 75);
+      doc.text(`Metoda płatności: ${invoice.paymentMethod}`, 14, 80);
+      
+      // Przygotuj dane dla tabeli pozycji faktury
+      const tableColumn = ["Lp.", "Nazwa", "Ilość", "J.m.", "Cena netto", "VAT", "Wartość netto", "Wartość brutto"];
+      const tableRows = [];
+      
+      invoice.items.forEach((item, index) => {
+        const quantity = Number(item.quantity) || 0;
+        const price = Number(item.price) || 0;
+        const vat = Number(item.vat) || 23;
+        
+        const netValue = quantity * price;
+        const vatValue = netValue * (vat / 100);
+        const grossValue = netValue + vatValue;
+        
+        const itemData = [
+          index + 1,
+          item.name,
+          quantity,
+          item.unit,
+          `${price.toFixed(2)} zł`,
+          `${vat}%`,
+          `${netValue.toFixed(2)} zł`,
+          `${grossValue.toFixed(2)} zł`
+        ];
+        
+        tableRows.push(itemData);
+      });
+      
+      // Dodaj tabelę pozycji faktury - użyj autoTable jako funkcji
+      autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        startY: 90,
+        theme: 'grid',
+        styles: { fontSize: 8 },
+        columnStyles: {
+          0: { cellWidth: 10 },
+          4: { halign: 'right' },
+          5: { halign: 'right' },
+          6: { halign: 'right' },
+          7: { halign: 'right' }
+        },
+        headStyles: { fillColor: [41, 128, 185], textColor: 255 }
+      });
+      
+      // Oblicz sumy
+      const totalNetto = invoice.items.reduce((sum, item) => {
+        const quantity = Number(item.quantity) || 0;
+        const price = Number(item.price) || 0;
+        return sum + (quantity * price);
+      }, 0);
+      
+      const totalVat = invoice.items.reduce((sum, item) => {
+        const quantity = Number(item.quantity) || 0;
+        const price = Number(item.price) || 0;
+        const vat = Number(item.vat) || 23;
+        return sum + (quantity * price * (vat / 100));
+      }, 0);
+      
+      const totalBrutto = totalNetto + totalVat;
+      
+      // Dodaj podsumowanie - użyj doc.lastAutoTable.finalY
+      const finalY = doc.lastAutoTable.finalY + 10;
+      doc.text('Podsumowanie:', 130, finalY);
+      doc.text(`Razem netto: ${totalNetto.toFixed(2)} zł`, 130, finalY + 5);
+      doc.text(`Razem VAT: ${totalVat.toFixed(2)} zł`, 130, finalY + 10);
+      doc.text(`Razem brutto: ${totalBrutto.toFixed(2)} zł`, 130, finalY + 15);
+      
+      // Dodaj uwagi, jeśli istnieją
+      if (invoice.notes) {
+        doc.text('Uwagi:', 14, finalY + 30);
+        doc.text(invoice.notes, 14, finalY + 35);
+      }
+      
+      // Dodaj stopkę
+      const pageHeight = doc.internal.pageSize.height;
+      doc.text('Dokument wygenerowany elektronicznie.', 105, pageHeight - 15, { align: 'center' });
+      
+      // Pobierz plik PDF
+      doc.save(`Faktura_${invoice.number}.pdf`);
+      showSuccess('Faktura została pobrana w formacie PDF');
+    } catch (error) {
+      console.error('Błąd podczas generowania PDF:', error);
+      showError('Nie udało się wygenerować pliku PDF');
+    } finally {
+      setPdfGenerating(false);
+    }
+  };
+  
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
@@ -204,9 +334,10 @@ const InvoiceDetails = () => {
           <Button
             variant="outlined"
             startIcon={<DownloadIcon />}
-            disabled={invoice.status === 'draft'}
+            disabled={invoice.status === 'draft' || pdfGenerating}
+            onClick={handleDownloadPdf}
           >
-            Pobierz PDF
+            {pdfGenerating ? 'Generowanie...' : 'Pobierz PDF'}
           </Button>
           {invoice.status === 'draft' && (
             <Button
@@ -450,18 +581,23 @@ const InvoiceDetails = () => {
             </TableHead>
             <TableBody>
               {invoice.items.map((item, index) => {
-                const netValue = item.quantity * item.price;
-                const vatValue = netValue * ((item.vat || 23) / 100);
+                // Upewnij się, że quantity i price są liczbami
+                const quantity = Number(item.quantity) || 0;
+                const price = Number(item.price) || 0;
+                const vat = Number(item.vat) || 23;
+                
+                const netValue = quantity * price;
+                const vatValue = netValue * (vat / 100);
                 const grossValue = netValue + vatValue;
                 
                 return (
                   <TableRow key={index}>
                     <TableCell>{item.name}</TableCell>
                     <TableCell>{item.description || '-'}</TableCell>
-                    <TableCell align="right">{item.quantity}</TableCell>
+                    <TableCell align="right">{quantity}</TableCell>
                     <TableCell>{item.unit}</TableCell>
-                    <TableCell align="right">{item.price.toFixed(2)} zł</TableCell>
-                    <TableCell align="right">{item.vat || 23}%</TableCell>
+                    <TableCell align="right">{price.toFixed(2)} zł</TableCell>
+                    <TableCell align="right">{vat}%</TableCell>
                     <TableCell align="right">{netValue.toFixed(2)} zł</TableCell>
                     <TableCell align="right">{grossValue.toFixed(2)} zł</TableCell>
                   </TableRow>
@@ -480,7 +616,11 @@ const InvoiceDetails = () => {
             </Grid>
             <Grid item xs={6}>
               <Typography variant="body1" fontWeight="bold" align="right">
-                {invoice.items.reduce((sum, item) => sum + (item.quantity * item.price), 0).toFixed(2)} zł
+                {invoice.items.reduce((sum, item) => {
+                  const quantity = Number(item.quantity) || 0;
+                  const price = Number(item.price) || 0;
+                  return sum + (quantity * price);
+                }, 0).toFixed(2)} zł
               </Typography>
             </Grid>
             <Grid item xs={6}>
@@ -490,7 +630,12 @@ const InvoiceDetails = () => {
             </Grid>
             <Grid item xs={6}>
               <Typography variant="body1" fontWeight="bold" align="right">
-                {invoice.items.reduce((sum, item) => sum + (item.quantity * item.price * ((item.vat || 23) / 100)), 0).toFixed(2)} zł
+                {invoice.items.reduce((sum, item) => {
+                  const quantity = Number(item.quantity) || 0;
+                  const price = Number(item.price) || 0;
+                  const vat = Number(item.vat) || 23;
+                  return sum + (quantity * price * (vat / 100));
+                }, 0).toFixed(2)} zł
               </Typography>
             </Grid>
             <Grid item xs={6}>
@@ -500,7 +645,12 @@ const InvoiceDetails = () => {
             </Grid>
             <Grid item xs={6}>
               <Typography variant="h6" fontWeight="bold" align="right" color="primary">
-                {invoice.items.reduce((sum, item) => sum + (item.quantity * item.price * (1 + (item.vat || 23) / 100)), 0).toFixed(2)} zł
+                {invoice.items.reduce((sum, item) => {
+                  const quantity = Number(item.quantity) || 0;
+                  const price = Number(item.price) || 0;
+                  const vat = Number(item.vat) || 23;
+                  return sum + (quantity * price * (1 + vat / 100));
+                }, 0).toFixed(2)} zł
               </Typography>
             </Grid>
           </Grid>
