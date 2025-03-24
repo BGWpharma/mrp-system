@@ -765,7 +765,7 @@ import {
   };
 
   // Bookowanie produktu na zadanie produkcyjne
-  export const bookInventoryForTask = async (itemId, quantity, taskId, userId) => {
+  export const bookInventoryForTask = async (itemId, quantity, taskId, userId, reservationMethod = 'expiry') => {
     try {
       // Sprawdź, czy pozycja magazynowa istnieje
       let item;
@@ -806,6 +806,73 @@ import {
         });
       }
       
+      console.log(`Rezerwacja materiału, metoda: ${reservationMethod}`);
+      
+      // Pobierz partie dla tego materiału
+      const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
+      const q = query(
+        batchesRef, 
+        where('itemId', '==', itemId),
+        where('quantity', '>', 0)
+      );
+      
+      const batchesSnapshot = await getDocs(q);
+      const batches = batchesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // Sortuj partie według wybranej metody
+      if (reservationMethod === 'fifo') {
+        // FIFO - sortuj według daty przyjęcia (najstarsze pierwsze)
+        batches.sort((a, b) => {
+          const dateA = a.receivedDate ? new Date(a.receivedDate) : new Date(0);
+          const dateB = b.receivedDate ? new Date(b.receivedDate) : new Date(0);
+          return dateA - dateB;
+        });
+      } else {
+        // Domyślnie: według daty ważności (najkrótszy termin pierwszy)
+        batches.sort((a, b) => {
+          // Jeśli nie ma daty ważności, traktuj jako najdalszą datę
+          const dateA = a.expiryDate ? new Date(a.expiryDate) : new Date(9999, 11, 31);
+          const dateB = b.expiryDate ? new Date(b.expiryDate) : new Date(9999, 11, 31);
+          return dateA - dateB;
+        });
+      }
+      
+      // Zapisz informacje o zarezerwowanych partiach
+      const reservedBatches = [];
+      let remainingQuantity = quantity;
+      
+      for (const batch of batches) {
+        if (remainingQuantity <= 0) break;
+        
+        const quantityFromBatch = Math.min(batch.quantity, remainingQuantity);
+        remainingQuantity -= quantityFromBatch;
+        
+        reservedBatches.push({
+          batchId: batch.id,
+          quantity: quantityFromBatch,
+          batchNumber: batch.batchNumber || batch.lotNumber || 'Bez numeru'
+        });
+      }
+      
+      // Zapisz informacje o zarezerwowanych partiach w zadaniu
+      const taskRef = doc(db, 'productionTasks', taskId);
+      const taskDoc = await getDoc(taskRef);
+      
+      if (taskDoc.exists()) {
+        const taskData = taskDoc.data();
+        const materialBatches = taskData.materialBatches || {};
+        
+        materialBatches[itemId] = reservedBatches;
+        
+        await updateDoc(taskRef, {
+          materialBatches,
+          updatedAt: serverTimestamp()
+        });
+      }
+      
       // Dodaj wpis w transakcjach
       const transactionRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
       await addDoc(transactionRef, {
@@ -815,23 +882,24 @@ import {
         type: 'booking',
         reason: 'Zadanie produkcyjne',
         referenceId: taskId,
-        notes: `Zarezerwowano na zadanie produkcyjne ID: ${taskId}`,
+        notes: `Zarezerwowano na zadanie produkcyjne ID: ${taskId} (metoda: ${reservationMethod})`,
         createdAt: serverTimestamp(),
         createdBy: userId
       });
       
       // Emituj zdarzenie o zmianie stanu magazynu
       const event = new CustomEvent('inventory-updated', { 
-        detail: { itemId, action: 'booked', quantity }
+        detail: { itemId, action: 'booking', quantity }
       });
       window.dispatchEvent(event);
       
       return {
         success: true,
-        message: `Zarezerwowano ${quantity} ${item.unit} produktu ${item.name} na zadanie produkcyjne`
+        message: `Zarezerwowano ${quantity} ${item.unit} produktu ${item.name}`,
+        reservedBatches
       };
     } catch (error) {
-      console.error('Błąd podczas bookowania produktu:', error);
+      console.error('Błąd podczas rezerwowania materiału:', error);
       throw error;
     }
   };

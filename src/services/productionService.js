@@ -26,7 +26,8 @@ import {
     getAllInventoryItems,
     bookInventoryForTask,
     cancelBooking,
-    addInventoryItem
+    addInventoryItem,
+    getInventoryBatches
   } from './inventoryService';
   
   const PRODUCTION_TASKS_COLLECTION = 'productionTasks';
@@ -54,47 +55,106 @@ import {
       startDateTime = new Date(startDate);
       endDateTime = new Date(endDate);
       
+      console.log('Konwersja dat w getTasksByDateRange:', 
+        'startDate:', startDate, '→', startDateTime, 
+        'endDate:', endDate, '→', endDateTime);
+      
       // Sprawdzenie, czy daty są poprawne
       if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) {
+        console.error('Nieprawidłowy format daty:', startDate, endDate);
         throw new Error('Nieprawidłowy format daty');
       }
       
-      // Konwersja na Timestamp dla Firestore
-      const startTimestamp = Timestamp.fromDate(startDateTime);
-      const endTimestamp = Timestamp.fromDate(endDateTime);
-      
-      // Pobierz zadania, które zaczynają się w zakresie dat
-      // lub kończą się w zakresie dat
-      // lub obejmują cały zakres dat (zaczynają się przed i kończą po)
+      // Pobierz wszystkie zadania bez filtrowania na poziomie zapytania
       const q = query(
         tasksRef,
-        where('scheduledDate', '<=', endTimestamp),
         orderBy('scheduledDate', 'asc')
       );
       
+      console.log('Wykonywanie zapytania do bazy danych...');
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs
-        .map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }))
-        .filter(task => {
-          // Sprawdź, czy zadanie kończy się po dacie początkowej zakresu
-          const taskEndDate = task.endDate 
-            ? (task.endDate instanceof Timestamp ? task.endDate.toDate() : new Date(task.endDate))
-            : (task.scheduledDate instanceof Timestamp ? new Date(task.scheduledDate.toDate().getTime() + 60 * 60 * 1000) : new Date(new Date(task.scheduledDate).getTime() + 60 * 60 * 1000));
-          
-          return taskEndDate >= startDateTime;
-        });
-    } catch (error) {
-      console.error('Error parsing dates:', error);
-      // W przypadku błędu zwróć wszystkie zadania
-      const q = query(tasksRef, orderBy('scheduledDate', 'asc'));
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
+      console.log(`Pobrano ${querySnapshot.docs.length} zadań przed filtrowaniem`);
+      
+      const allTasks = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
+      
+      console.log('Wszystkie zadania przed filtrowaniem:', allTasks);
+      
+      // Filtrujemy po stronie klienta, aby uwzględnić wszystkie możliwe przypadki
+      const filteredTasks = allTasks.filter(task => {
+        // Konwertuj daty zadania
+        let taskStartDate, taskEndDate;
+        
+        // Obsługa daty rozpoczęcia
+        if (task.scheduledDate) {
+          if (task.scheduledDate instanceof Timestamp) {
+            taskStartDate = task.scheduledDate.toDate();
+          } else if (typeof task.scheduledDate === 'string') {
+            taskStartDate = new Date(task.scheduledDate);
+          } else if (task.scheduledDate instanceof Date) {
+            taskStartDate = task.scheduledDate;
+          } else {
+            console.warn(`Nieprawidłowy format daty rozpoczęcia dla zadania ${task.id}:`, task.scheduledDate);
+            taskStartDate = new Date(); // Domyślna data
+          }
+        } else {
+          console.warn(`Brak daty rozpoczęcia dla zadania ${task.id}`);
+          taskStartDate = new Date(); // Domyślna data
+        }
+        
+        // Obsługa daty zakończenia
+        if (task.endDate) {
+          if (task.endDate instanceof Timestamp) {
+            taskEndDate = task.endDate.toDate();
+          } else if (typeof task.endDate === 'string') {
+            taskEndDate = new Date(task.endDate);
+          } else if (task.endDate instanceof Date) {
+            taskEndDate = task.endDate;
+          } else {
+            console.warn(`Nieprawidłowy format daty zakończenia dla zadania ${task.id}:`, task.endDate);
+            // Jeśli data zakończenia jest nieprawidłowa, ustaw ją na 1 godzinę po dacie rozpoczęcia
+            taskEndDate = new Date(taskStartDate.getTime() + 60 * 60 * 1000);
+          }
+        } else {
+          // Jeśli nie ma daty zakończenia, ustaw na 1 godzinę po dacie rozpoczęcia
+          taskEndDate = new Date(taskStartDate.getTime() + 60 * 60 * 1000);
+        }
+        
+        // Sprawdź, czy zadanie mieści się w wybranym zakresie dat
+        // Zadanie powinno zostać uwzględnione, jeśli:
+        // - jego początek lub koniec znajduje się w zakresie dat
+        // - lub obejmuje cały zakres dat (zaczyna się przed i kończy po zakresie)
+        const startsBeforeRangeEnds = taskStartDate <= endDateTime;
+        const endsAfterRangeStarts = taskEndDate >= startDateTime;
+        
+        const isVisible = startsBeforeRangeEnds && endsAfterRangeStarts;
+        
+        console.log('Sprawdzanie widoczności zadania:', task.id, task.name, 
+          'startDate:', taskStartDate, 
+          'endDate:', taskEndDate,
+          'startDateTime:', startDateTime,
+          'endDateTime:', endDateTime,
+          'Widoczne?', isVisible);
+        
+        return isVisible;
+      });
+      
+      console.log(`Po filtrowaniu pozostało ${filteredTasks.length} zadań`);
+      return filteredTasks;
+    } catch (error) {
+      console.error('Error parsing dates:', error);
+      // W przypadku błędu zwróć wszystkie zadania
+      console.log('Błąd podczas przetwarzania dat, pobieranie wszystkich zadań...');
+      const q = query(tasksRef, orderBy('scheduledDate', 'asc'));
+      const querySnapshot = await getDocs(q);
+      const allTasks = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      console.log(`Pobrano ${allTasks.length} zadań (awaryjnie)`);
+      return allTasks;
     }
   };
   
@@ -144,6 +204,9 @@ import {
       const missingMaterials = []; // Lista materiałów, których nie ma w magazynie
       
       if (taskWithMeta.materials && taskWithMeta.materials.length > 0) {
+        // Określ metodę rezerwacji (domyślnie według daty ważności)
+        const reservationMethod = taskWithMeta.reservationMethod || 'expiry';
+        
         for (const material of taskWithMeta.materials) {
           try {
             // Sprawdź, czy materiał jest oznaczony jako brakujący
@@ -154,11 +217,11 @@ import {
               continue;
             }
             
-            // Sprawdź dostępność i zarezerwuj materiał
+            // Sprawdź dostępność i zarezerwuj materiał z określoną metodą rezerwacji
             if (material.inventoryItemId) {
-              await bookInventoryForTask(material.inventoryItemId, material.quantity, docRef.id, userId);
+              await bookInventoryForTask(material.inventoryItemId, material.quantity, docRef.id, userId, reservationMethod);
             } else if (material.id) {
-              await bookInventoryForTask(material.id, material.quantity, docRef.id, userId);
+              await bookInventoryForTask(material.id, material.quantity, docRef.id, userId, reservationMethod);
             }
           } catch (error) {
             console.error(`Błąd przy rezerwacji materiału ${material.name}:`, error);
@@ -1270,6 +1333,28 @@ import {
     if (isCompleted) {
       updates.completionDate = serverTimestamp();
       updates.readyForInventory = true; // Oznaczamy jako gotowe do dodania do magazynu, ale nie dodajemy automatycznie
+      
+      // Jeśli zadanie jest zakończone, anuluj rezerwacje materiałów
+      if (task.materials && task.materials.length > 0) {
+        for (const material of task.materials) {
+          try {
+            // Pobierz ID materiału (może być przechowywany jako id lub inventoryItemId)
+            const materialId = material.id || material.inventoryItemId;
+            
+            if (!materialId) {
+              console.warn(`Materiał ${material.name} nie ma poprawnego ID, pomijam anulowanie rezerwacji`);
+              continue;
+            }
+            
+            // Anuluj rezerwację materiału
+            await cancelBooking(materialId, material.quantity, taskId, userId);
+            console.log(`Anulowano rezerwację ${material.quantity} ${material.unit || 'szt.'} materiału ${material.name} po zakończeniu zadania`);
+          } catch (error) {
+            console.error(`Błąd przy anulowaniu rezerwacji materiału ${material.name}:`, error);
+            // Kontynuuj anulowanie rezerwacji pozostałych materiałów mimo błędu
+          }
+        }
+      }
     }
     
     await updateDoc(taskRef, updates);

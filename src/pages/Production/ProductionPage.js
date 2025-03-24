@@ -1,41 +1,30 @@
 // src/pages/Production/ProductionPage.js
-import React, { useState, useEffect } from 'react';
-import { Container, Box, ToggleButtonGroup, ToggleButton, Tooltip, Tabs, Tab, Typography, Button } from '@mui/material';
-import { ViewList as ListIcon, CalendarMonth as CalendarIcon, ListAlt as ListAltIcon, BarChart as ReportIcon, ShoppingBasket as ForecastIcon, Add as AddIcon } from '@mui/icons-material';
+import React, { useState } from 'react';
+import { Container, Typography, Box, Tabs, Tab, Button } from '@mui/material';
+import {
+  FormatListBulleted as ListIcon,
+  CalendarMonth as CalendarIcon,
+  Assessment as ReportIcon,
+  TrendingUp as ForecastIcon,
+  ViewModule as GridIcon,
+  ViewList as ViewListIcon
+} from '@mui/icons-material';
 import TaskList from '../../components/production/TaskList';
 import ProductionCalendar from '../../components/production/ProductionCalendar';
-import { Link, useNavigate } from 'react-router-dom';
+import ProductionReportPage from './ProductionReportPage';
+import ForecastPage from './ForecastPage';
 
 const ProductionPage = () => {
-  const [viewMode, setViewMode] = useState('list');
   const [activeTab, setActiveTab] = useState(0);
-  const navigate = useNavigate();
+  const [viewMode, setViewMode] = useState('list');
   
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
-    
-    switch (newValue) {
-      case 0: // Zadania MO
-        setViewMode('list');
-        break;
-      case 1: // Kalendarz
-        setViewMode('calendar');
-        break;
-      case 2: // Raporty
-        navigate('/production/reports');
-        break;
-      case 3: // Prognoza zapotrzebowania
-        navigate('/production/forecast');
-        break;
-      default:
-        setViewMode('list');
-    }
   };
   
-  // Po nawigacji na stronę resetujemy zakładkę do listy lub kalendarza
-  useEffect(() => {
-    setActiveTab(viewMode === 'list' ? 0 : 1);
-  }, [viewMode]);
+  const handleViewModeChange = () => {
+    setViewMode(viewMode === 'list' ? 'calendar' : 'list');
+  };
   
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -58,15 +47,10 @@ const ProductionPage = () => {
         <Tab icon={<ForecastIcon />} label="Prognoza zapotrzebowania" iconPosition="start" />
       </Tabs>
       
-      {(activeTab === 0 || activeTab === 1) && (
-        <>
-          {viewMode === 'list' ? (
-            <TaskList />
-          ) : (
-            <ProductionCalendar />
-          )}
-        </>
-      )}
+      {activeTab === 0 && <TaskList />}
+      {activeTab === 1 && <ProductionCalendar />}
+      {activeTab === 2 && <ProductionReportPage />}
+      {activeTab === 3 && <ForecastPage />}
     </Container>
   );
 };

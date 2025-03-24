@@ -60,9 +60,11 @@ const CreateFromOrderPage = () => {
   const [taskForm, setTaskForm] = useState({
     name: '',
     scheduledDate: '',
+    endDate: '',
     priority: 'Normalny',
     description: '',
-    status: 'Zaplanowane'
+    status: 'Zaplanowane',
+    reservationMethod: 'expiry' // 'expiry' - wg daty ważności, 'fifo' - FIFO
   });
   
   useEffect(() => {
@@ -164,9 +166,11 @@ const CreateFromOrderPage = () => {
       setTaskForm({
         name: `Produkcja z zamówienia #${orderData.orderNumber || orderId.substring(0, 8)}`,
         scheduledDate: new Date().toISOString().split('T')[0],
+        endDate: new Date().toISOString().split('T')[0],
         priority: 'Normalny',
         description: `Zadanie utworzone na podstawie zamówienia klienta ${orderData.customer?.name || '(brak danych)'}`,
-        status: 'Zaplanowane'
+        status: 'Zaplanowane',
+        reservationMethod: 'expiry'
       });
       
       // Domyślnie zaznacz wszystkie elementy zamówienia
@@ -422,6 +426,16 @@ const CreateFromOrderPage = () => {
                       margin="normal"
                       InputLabelProps={{ shrink: true }}
                     />
+                    <TextField
+                      name="endDate"
+                      label="Data zakończenia"
+                      type="date"
+                      value={taskForm.endDate}
+                      onChange={handleTaskFormChange}
+                      fullWidth
+                      margin="normal"
+                      InputLabelProps={{ shrink: true }}
+                    />
                     <FormControl fullWidth margin="normal">
                       <InputLabel>Priorytet</InputLabel>
                       <Select
@@ -434,6 +448,18 @@ const CreateFromOrderPage = () => {
                         <MenuItem value="Normalny">Normalny</MenuItem>
                         <MenuItem value="Wysoki">Wysoki</MenuItem>
                         <MenuItem value="Pilny">Pilny</MenuItem>
+                      </Select>
+                    </FormControl>
+                    <FormControl fullWidth margin="normal">
+                      <InputLabel>Metoda rezerwacji materiałów</InputLabel>
+                      <Select
+                        name="reservationMethod"
+                        value={taskForm.reservationMethod}
+                        onChange={handleTaskFormChange}
+                        label="Metoda rezerwacji materiałów"
+                      >
+                        <MenuItem value="expiry">Według daty ważności (najkrótszy termin)</MenuItem>
+                        <MenuItem value="fifo">FIFO (pierwsze weszło, pierwsze wyszło)</MenuItem>
                       </Select>
                     </FormControl>
                   </Grid>

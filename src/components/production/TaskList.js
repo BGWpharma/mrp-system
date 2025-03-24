@@ -21,7 +21,13 @@ import {
   MenuItem,
   Container,
   Tooltip,
-  CircularProgress
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Alert
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -35,7 +41,7 @@ import {
   Check as CheckIcon,
   Info as InfoIcon
 } from '@mui/icons-material';
-import { getAllTasks, updateTaskStatus, deleteTask, addTaskProductToInventory } from '../../services/productionService';
+import { getAllTasks, updateTaskStatus, deleteTask, addTaskProductToInventory, stopProduction } from '../../services/productionService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
@@ -52,6 +58,11 @@ const TaskList = () => {
   const { showSuccess, showError } = useNotification();
   const theme = useTheme();
   const navigate = useNavigate();
+  const [stopProductionDialogOpen, setStopProductionDialogOpen] = useState(false);
+  const [currentTaskId, setCurrentTaskId] = useState(null);
+  const [completedQuantity, setCompletedQuantity] = useState('');
+  const [timeSpent, setTimeSpent] = useState('');
+  const [productionError, setProductionError] = useState(null);
 
   // Pobierz zadania przy montowaniu komponentu
   useEffect(() => {
@@ -130,6 +141,53 @@ const TaskList = () => {
       showError('Błąd podczas dodawania produktu do magazynu: ' + error.message);
       console.error('Error adding product to inventory:', error);
     }
+  };
+
+  const handleStopProduction = async () => {
+    try {
+      setProductionError(null);
+      
+      if (!completedQuantity || !timeSpent) {
+        setProductionError('Wypełnij wszystkie pola');
+        return;
+      }
+
+      const quantity = parseFloat(completedQuantity);
+      const time = parseFloat(timeSpent);
+
+      if (isNaN(quantity) || quantity < 0) {
+        setProductionError('Nieprawidłowa ilość');
+        return;
+      }
+
+      if (isNaN(time) || time < 0) {
+        setProductionError('Nieprawidłowy czas');
+        return;
+      }
+
+      const result = await stopProduction(currentTaskId, quantity, time, currentUser.uid);
+      
+      setStopProductionDialogOpen(false);
+      showSuccess(result.isCompleted ? 
+        'Produkcja zakończona. Zadanie zostało ukończone.' : 
+        'Sesja produkcyjna zapisana. Możesz kontynuować produkcję później.'
+      );
+      
+      // Resetuj stan formularza
+      setCompletedQuantity('');
+      setTimeSpent('');
+      setCurrentTaskId(null);
+      
+      // Odśwież listę zadań
+      fetchTasks();
+    } catch (error) {
+      showError('Błąd podczas zatrzymywania produkcji: ' + error.message);
+    }
+  };
+
+  const openStopProductionDialog = (taskId) => {
+    setCurrentTaskId(taskId);
+    setStopProductionDialogOpen(true);
   };
 
   const getStatusColor = (status) => {
@@ -222,8 +280,8 @@ const TaskList = () => {
             </IconButton>
             <IconButton 
               color="error" 
-              onClick={() => handleStatusChange(task.id, 'Anulowane')}
-              title="Anuluj produkcję"
+              onClick={() => openStopProductionDialog(task.id)}
+              title="Zatrzymaj produkcję"
             >
               <StopIcon />
             </IconButton>
@@ -320,9 +378,9 @@ const TaskList = () => {
                 <TableCell>Produkt</TableCell>
                 <TableCell>Ilość</TableCell>
                 <TableCell>Data rozpoczęcia</TableCell>
+                <TableCell>Planowana data zakończenia</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Koszt</TableCell>
-                <TableCell>Magazyn</TableCell>
                 <TableCell align="right">Akcje</TableCell>
               </TableRow>
             </TableHead>
@@ -343,6 +401,9 @@ const TaskList = () => {
                     {task.scheduledDate ? formatDate(task.scheduledDate) : 'Nie określono'}
                   </TableCell>
                   <TableCell>
+                    {task.endDate ? formatDate(task.endDate) : 'Nie określono'}
+                  </TableCell>
+                  <TableCell>
                     <Chip 
                       label={task.status} 
                       color={getStatusColor(task.status)} 
@@ -355,9 +416,6 @@ const TaskList = () => {
                     ) : (
                       '-'
                     )}
-                  </TableCell>
-                  <TableCell>
-                    {getInventoryStatus(task)}
                   </TableCell>
                   <TableCell align="right">
                     {getStatusActions(task)}
@@ -391,6 +449,54 @@ const TaskList = () => {
           </Table>
         </TableContainer>
       )}
+
+      {/* Dialog zatrzymania produkcji */}
+      <Dialog
+        open={stopProductionDialogOpen}
+        onClose={() => setStopProductionDialogOpen(false)}
+      >
+        <DialogTitle>Zatrzymaj produkcję</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Wprowadź informacje o zakończonej sesji produkcyjnej
+          </DialogContentText>
+          
+          {productionError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {productionError}
+            </Alert>
+          )}
+
+          <TextField
+            label="Wyprodukowana ilość"
+            type="number"
+            value={completedQuantity}
+            onChange={(e) => setCompletedQuantity(e.target.value)}
+            fullWidth
+            margin="dense"
+            InputProps={{
+              endAdornment: <Typography variant="body2">szt.</Typography>
+            }}
+          />
+          
+          <TextField
+            label="Czas produkcji (minuty)"
+            type="number"
+            value={timeSpent}
+            onChange={(e) => setTimeSpent(e.target.value)}
+            fullWidth
+            margin="dense"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStopProductionDialogOpen(false)}>
+            Anuluj
+          </Button>
+          <Button onClick={handleStopProduction} variant="contained">
+            Zatwierdź
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };
