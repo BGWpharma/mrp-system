@@ -40,6 +40,7 @@ import { useAuth } from '../../hooks/useAuth';
 import CustomerForm from './CustomerForm';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
+import { getInvoicesByCustomerId } from '../../services/invoiceService';
 
 // Funkcja formatująca datę
 const formatDate = (dateValue) => {
@@ -125,34 +126,10 @@ const CustomerDetail = () => {
   const fetchInvoices = async () => {
     try {
       setInvoicesLoading(true);
-      // Tutaj będzie kod do pobierania faktur klienta, gdy zaimplementujesz odpowiedni serwis
-      // const customerInvoices = await getInvoicesByCustomerId(customerId);
-      // setInvoices(customerInvoices);
-      
-      // Tymczasowe dane przykładowe
-      setTimeout(() => {
-        setInvoices([
-          { 
-            id: '1', 
-            number: 'FV/2023/001', 
-            date: new Date().toISOString(), 
-            dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), 
-            status: 'paid', 
-            total: 1250.00, 
-            currency: 'PLN' 
-          },
-          { 
-            id: '2', 
-            number: 'FV/2023/002', 
-            date: new Date().toISOString(), 
-            dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), 
-            status: 'unpaid', 
-            total: 3450.00, 
-            currency: 'PLN' 
-          }
-        ]);
-        setInvoicesLoading(false);
-      }, 500);
+      // Pobierz faktury klienta z nowego serwisu
+      const customerInvoices = await getInvoicesByCustomerId(customerId);
+      setInvoices(customerInvoices);
+      setInvoicesLoading(false);
     } catch (error) {
       console.error('Błąd podczas pobierania faktur:', error);
       showError('Nie udało się pobrać faktur klienta');
@@ -186,9 +163,9 @@ const CustomerDetail = () => {
     navigate('/orders/new', { state: { customerId } });
   };
   
-  // Przejdź do tworzenia nowej faktury dla klienta
+  // Przejdź do formularza tworzenia faktury dla wybranego klienta
   const handleCreateInvoice = () => {
-    navigate('/invoices/new', { state: { customerId } });
+    navigate(`/invoices/new?customerId=${customerId}`);
   };
   
   // Renderowanie statusu zamówienia
@@ -529,7 +506,7 @@ const CustomerDetail = () => {
                       {invoices.map((invoice) => (
                         <TableRow key={invoice.id}>
                           <TableCell>{invoice.number}</TableCell>
-                          <TableCell>{formatDate(invoice.date)}</TableCell>
+                          <TableCell>{formatDate(invoice.issueDate)}</TableCell>
                           <TableCell>{formatDate(invoice.dueDate)}</TableCell>
                           <TableCell>{renderInvoiceStatus(invoice.status)}</TableCell>
                           <TableCell align="right">{formatCurrency(invoice.total, invoice.currency)}</TableCell>

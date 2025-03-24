@@ -85,6 +85,9 @@ import WarehousesList from './components/inventory/WarehousesList';
 
 // Invoices
 import InvoicesPage from './pages/Invoices/InvoicesPage';
+import InvoicesListPage from './pages/Invoices/InvoicesListPage';
+import InvoiceFormPage from './pages/Invoices/InvoiceFormPage';
+import InvoiceDetailsPage from './pages/Invoices/InvoiceDetailsPage';
 
 // CMR
 import CmrListPage from './pages/Inventory/Cmr/CmrListPage';
@@ -168,7 +171,10 @@ function App() {
               <Route path="/orders/:orderId" element={<PrivateLayout><OrderDetails /></PrivateLayout>} />
               
               {/* Invoices Routes */}
-              <Route path="/invoices" element={<PrivateLayout><InvoicesPage /></PrivateLayout>} />
+              <Route path="/invoices" element={<PrivateLayout><InvoicesListPage /></PrivateLayout>} />
+              <Route path="/invoices/new" element={<PrivateLayout><InvoiceFormPage /></PrivateLayout>} />
+              <Route path="/invoices/:invoiceId" element={<PrivateLayout><InvoiceDetailsPage /></PrivateLayout>} />
+              <Route path="/invoices/:invoiceId/edit" element={<PrivateLayout><InvoiceFormPage /></PrivateLayout>} />
               
               {/* Purchase Orders Routes */}
               <Route path="/purchase-orders" element={<PrivateLayout><PurchaseOrdersPage /></PrivateLayout>} />
