@@ -60,7 +60,7 @@ const TaskForm = ({ taskId }) => {
   const [recipe, setRecipe] = useState(null);
   const [inventoryProducts, setInventoryProducts] = useState([]);
   const { currentUser } = useAuth();
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showError, showWarning } = useNotification();
   const navigate = useNavigate();
   
   const [taskData, setTaskData] = useState({
@@ -512,7 +512,9 @@ const TaskForm = ({ taskId }) => {
       // Przygotuj listę materiałów do zadania, ale bez faktycznej rezerwacji
       const materialsForTask = [];
       const tempBookedIngredients = []; // Tylko do pokazania, bez faktycznej rezerwacji
+      const missingIngredients = []; // Lista składników, których nie ma w magazynie
       let hasErrors = false;
+      let hasWarnings = false;
       
       // Dla każdego składnika z receptury
       for (const ingredient of recipe.ingredients) {
@@ -538,58 +540,75 @@ const TaskForm = ({ taskId }) => {
         }
         
         try {
-          // Sprawdź dostępność, ale nie rezerwuj faktycznie
-          const item = await getInventoryItemById(ingredient.id);
-          
-          // Tylko sprawdź, czy jest wystarczająca ilość
-          if (item.quantity < requiredQuantity) {
-            hasErrors = true;
-            showError(`Niewystarczająca ilość składnika ${ingredient.name} w magazynie. Dostępne: ${item.quantity} ${item.unit}, wymagane: ${requiredQuantity.toFixed(2)} ${item.unit}`);
-          }
-          
-          // Dodaj do listy materiałów do zadania
-          materialsForTask.push({
-            id: ingredient.id,
-            name: ingredient.name,
-            quantity: requiredQuantity,
-            unit: ingredient.unit || item.unit,
-            category: ingredient.category || item.category
-          });
-          
-          // Pobierz batche (partie) składnika zgodnie z wybraną metodą
-          let batches = [];
-          if (reservationMethod === 'expiry') {
-            try {
-              batches = await getProductsWithEarliestExpiry(ingredient.id, requiredQuantity);
-            } catch (error) {
-              console.warn(`Nie można pobrać partii według daty ważności dla ${ingredient.name}:`, error);
-              showError(`Nie udało się wyszukać partii według daty ważności dla ${ingredient.name}. Sprawdź czy są dostępne partie.`);
+          // Sprawdź czy składnik istnieje w magazynie
+          try {
+            const item = await getInventoryItemById(ingredient.id);
+            
+            // Dodaj do listy materiałów do zadania
+            materialsForTask.push({
+              id: ingredient.id,
+              name: ingredient.name,
+              quantity: requiredQuantity,
+              unit: ingredient.unit || item.unit,
+              category: ingredient.category || item.category
+            });
+            
+            // Tylko sprawdź, czy jest wystarczająca ilość
+            if (item.quantity < requiredQuantity) {
+              hasWarnings = true;
+              showError(`Niewystarczająca ilość składnika ${ingredient.name} w magazynie. Dostępne: ${item.quantity} ${item.unit}, wymagane: ${requiredQuantity.toFixed(2)} ${item.unit}`);
             }
-          } else {
+            
+            // Pobierz batche (partie) składnika zgodnie z wybraną metodą
+            let batches = [];
             try {
-              batches = await getProductsFIFO(ingredient.id, requiredQuantity);
+              if (reservationMethod === 'expiry') {
+                batches = await getProductsWithEarliestExpiry(ingredient.id, requiredQuantity);
+              } else {
+                batches = await getProductsFIFO(ingredient.id, requiredQuantity);
+              }
             } catch (error) {
-              console.warn(`Nie można pobrać partii metodą FIFO dla ${ingredient.name}:`, error);
-              showError(`Nie udało się wyszukać partii metodą FIFO dla ${ingredient.name}. Sprawdź czy są dostępne partie.`);
+              console.warn(`Nie można pobrać partii dla ${ingredient.name}:`, error);
             }
+            
+            // Dodaj do listy zarezerwowanych składników (tylko do pokazania)
+            tempBookedIngredients.push({
+              id: ingredient.id,
+              name: ingredient.name,
+              quantity: requiredQuantity,
+              unit: item.unit,
+              batches: batches.map(b => ({
+                ...b,
+                selectedQuantity: b.selectedQuantity || b.quantity
+              }))
+            });
+            
+          } catch (error) {
+            // Składnik nie istnieje w magazynie, dodajemy do listy brakujących
+            console.warn(`Składnik ${ingredient.name} (ID: ${ingredient.id}) nie istnieje w magazynie:`, error);
+            missingIngredients.push({
+              name: ingredient.name,
+              id: ingredient.id,
+              quantity: requiredQuantity,
+              unit: ingredient.unit || 'szt.'
+            });
+            
+            // Mimo to dodaj do listy materiałów, ale oznacz jako brakujący
+            materialsForTask.push({
+              id: ingredient.id,
+              name: ingredient.name,
+              quantity: requiredQuantity,
+              unit: ingredient.unit || 'szt.',
+              category: ingredient.category || 'Surowce',
+              missing: true  // Oznacz jako brakujący
+            });
+            
+            hasWarnings = true;
           }
-          
-          // Dodaj do listy zarezerwowanych składników (tylko do pokazania)
-          tempBookedIngredients.push({
-            id: ingredient.id,
-            name: ingredient.name,
-            quantity: requiredQuantity,
-            unit: item.unit,
-            batches: batches.map(b => ({
-              ...b,
-              selectedQuantity: b.selectedQuantity || b.quantity
-            }))
-          });
-          
         } catch (error) {
           hasErrors = true;
           const errorMessage = error.message || 'Nieznany błąd';
-          showError(`Nie udało się sprawdzić dostępności składnika ${ingredient.name}: ${errorMessage}`);
+          showError(`Błąd przy sprawdzaniu składnika ${ingredient.name}: ${errorMessage}`);
           console.error(`Błąd przy sprawdzaniu składnika ${ingredient.name}:`, error);
         }
       }
@@ -605,13 +624,23 @@ const TaskForm = ({ taskId }) => {
         setBookedIngredients(tempBookedIngredients);
         setShowBookingDetails(true);
         
+        if (missingIngredients.length > 0) {
+          showWarning(`Uwaga: ${missingIngredients.length} składnik(ów) nie istnieje w magazynie. Dodaj je do magazynu przed rozpoczęciem produkcji.`);
+          // Wyświetl listę brakujących składników
+          missingIngredients.forEach(ingredient => {
+            showWarning(`Brakujący składnik: ${ingredient.name}, potrzeba: ${ingredient.quantity} ${ingredient.unit}`);
+          });
+        }
+        
         if (hasErrors) {
           showError('Niektóre składniki mogą być niedostępne. Sprawdź komunikaty powyżej.');
+        } else if (hasWarnings) {
+          showWarning('Zadanie zostało zaplanowane, ale niektóre składniki są niedostępne lub brakujące. Zadanie można zapisać, ale rezerwacja materiałów może być niepełna.');
         } else {
           showSuccess('Zaplanowano wszystkie materiały na zadanie produkcyjne. Materiały zostaną zarezerwowane po zapisaniu zadania.');
         }
       } else {
-        showError('Nie udało się zaplanować żadnego materiału. Sprawdź dostępność w magazynie.');
+        showError('Nie udało się zaplanować żadnego materiału. Sprawdź dane receptury i dostępność w magazynie.');
       }
     } catch (error) {
       const errorMessage = error.message || 'Nieznany błąd';

@@ -303,25 +303,11 @@ const CreateFromOrderPage = () => {
         };
         
         // Utwórz zadanie produkcyjne
+        // Uwaga: funkcja createTask automatycznie rezerwuje materiały dla zadania
         const newTask = await createTask(taskData, currentUser.uid);
         
         // Dodaj zadanie do zamówienia
         await addProductionTaskToOrder(selectedOrder.id, newTask);
-        
-        // Dodatkowa rezerwacja materiałów po utworzeniu zadania
-        if (materials && materials.length > 0) {
-          try {
-            // Zarezerwuj materiały dla utworzonego zadania
-            const reservationResult = await reserveMaterialsForTask(newTask.id, materials, 'fifo');
-            if (reservationResult.success) {
-              console.log(`Zarezerwowano materiały dla zadania produkcyjnego ${newTask.id}`);
-            } else {
-              console.warn(`Częściowa rezerwacja materiałów dla zadania ${newTask.id}:`, reservationResult.errors);
-            }
-          } catch (reservationError) {
-            console.error(`Błąd podczas rezerwacji materiałów dla zadania ${newTask.id}:`, reservationError);
-          }
-        }
       }
       
       showSuccess('Zadania produkcyjne zostały utworzone i powiązane z zamówieniem');

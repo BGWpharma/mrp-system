@@ -28,21 +28,27 @@ import {
   DialogTitle,
   IconButton,
   Tooltip,
-  Alert
+  Alert,
+  CircularProgress
 } from '@mui/material';
 import {
   Edit as EditIcon,
   ArrowBack as ArrowBackIcon,
+  Delete as DeleteIcon,
   History as HistoryIcon,
   Print as PrintIcon,
   Compare as CompareIcon,
-  RestoreFromTrash as RestoreIcon
+  Restore as RestoreIcon,
+  Add as AddIcon
 } from '@mui/icons-material';
-import { getRecipeById, getRecipeVersions, getRecipeVersion, restoreRecipeVersion } from '../../services/recipeService';
+import { getRecipeById, getRecipeVersions, getRecipeVersion, restoreRecipeVersion, deleteRecipe, updateRecipe } from '../../services/recipeService';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
 import { useAuth } from '../../hooks/useAuth';
 import RecipeVersionComparison from '../../components/recipes/RecipeVersionComparison';
+import { createInventoryItem, getAllInventoryItems } from '../../services/inventoryService';
+import { db } from '../../services/firebase/config';
+import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 
 // TabPanel component for recipe detail tabs
 function TabPanel(props) {
@@ -68,7 +74,7 @@ function TabPanel(props) {
 const RecipeDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { showError, showSuccess } = useNotification();
+  const { showError, showSuccess, showWarning, showInfo } = useNotification();
   const { currentUser } = useAuth();
   const [recipe, setRecipe] = useState(null);
   const [versions, setVersions] = useState([]);
@@ -79,6 +85,7 @@ const RecipeDetailsPage = () => {
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
   const [versionToRestore, setVersionToRestore] = useState(null);
   const [restoringVersion, setRestoringVersion] = useState(false);
+  const [linking, setLinking] = useState(false);
 
   useEffect(() => {
     const fetchRecipeData = async () => {
@@ -163,6 +170,105 @@ const RecipeDetailsPage = () => {
     }
   };
 
+  // Funkcja do linkowania składników receptury z magazynem
+  const linkIngredientsWithInventory = async (resetLinks = false) => {
+    if (!recipe || !recipe.ingredients || recipe.ingredients.length === 0) {
+      showWarning('Receptura nie zawiera składników do powiązania');
+      return;
+    }
+    
+    try {
+      setLinking(true);
+      let linkedCount = 0;
+      let notFoundCount = 0;
+      let resetCount = 0;
+      
+      // Pobierz wszystkie składniki z magazynu
+      const allInventoryItems = await getAllInventoryItems();
+      
+      // Kopia składników do aktualizacji
+      const updatedIngredients = [...recipe.ingredients];
+      
+      // Jeśli resetujemy powiązania, usuń wszystkie ID składników
+      if (resetLinks) {
+        updatedIngredients.forEach((ingredient, index) => {
+          if (ingredient.id) {
+            updatedIngredients[index] = {
+              ...ingredient,
+              id: null // Usuwamy ID
+            };
+            resetCount++;
+          }
+        });
+        
+        if (resetCount > 0) {
+          showInfo(`Usunięto powiązania dla ${resetCount} składników`);
+          
+          // Zaktualizuj recepturę w stanie lokalnym i w bazie danych
+          const updatedRecipe = {
+            ...recipe,
+            ingredients: updatedIngredients
+          };
+          setRecipe(updatedRecipe);
+          
+          await updateRecipe(id, updatedRecipe, currentUser.uid);
+        }
+      }
+      
+      // Przeszukaj wszystkie niezlinkowane składniki
+      for (let i = 0; i < updatedIngredients.length; i++) {
+        const ingredient = updatedIngredients[i];
+        
+        if (!ingredient.id && ingredient.name) {
+          // Znajdź w magazynie składnik o takiej samej nazwie
+          const matchingItem = allInventoryItems.find(
+            item => item.name.toLowerCase() === ingredient.name.toLowerCase()
+          );
+          
+          if (matchingItem) {
+            // Zaktualizuj składnik z ID z magazynu
+            updatedIngredients[i] = {
+              ...ingredient,
+              id: matchingItem.id,
+              unit: ingredient.unit || matchingItem.unit
+            };
+            linkedCount++;
+          } else {
+            notFoundCount++;
+          }
+        }
+      }
+      
+      if (linkedCount > 0) {
+        // Zaktualizuj recepturę w stanie lokalnym
+        const updatedRecipe = {
+          ...recipe,
+          ingredients: updatedIngredients
+        };
+        setRecipe(updatedRecipe);
+        
+        // Zapisz zmiany w bazie danych
+        await updateRecipe(id, updatedRecipe, currentUser.uid);
+        
+        showSuccess(`Powiązano ${linkedCount} składników z magazynem`);
+      }
+      
+      if (notFoundCount > 0) {
+        showWarning(`Dla ${notFoundCount} składników nie znaleziono odpowiedników w magazynie`);
+      }
+      
+      if (linkedCount === 0 && notFoundCount === 0 && !resetLinks) {
+        showInfo('Wszystkie składniki są już powiązane z magazynem lub nie można znaleźć dopasowań');
+      }
+      
+    } catch (error) {
+      showError('Błąd podczas linkowania składników: ' + error.message);
+      console.error('Error linking ingredients:', error);
+    } finally {
+      setLinking(false);
+    }
+  };
+
   if (loading) {
     return <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>Ładowanie receptury...</Container>;
   }
@@ -213,6 +319,26 @@ const RecipeDetailsPage = () => {
             startIcon={<EditIcon />}
           >
             Edytuj
+          </Button>
+          
+          <Button
+            startIcon={<AddIcon />}
+            color="secondary"
+            onClick={() => linkIngredientsWithInventory(false)}
+            disabled={linking}
+            sx={{ ml: 2 }}
+          >
+            {linking ? 'Powiązywanie...' : 'Powiąż składniki'}
+          </Button>
+          
+          <Button
+            startIcon={<RestoreIcon />}
+            color="warning"
+            onClick={() => linkIngredientsWithInventory(true)}
+            disabled={linking}
+            sx={{ ml: 2 }}
+          >
+            Resetuj powiązania
           </Button>
         </Box>
       </Box>

@@ -41,7 +41,12 @@ import {
   AssessmentOutlined as QualityReportsIcon,
   Inventory2 as WaybillIcon,
   Receipt as InvoicesIcon,
-  Add as AddIcon
+  Add as AddIcon,
+  ContactPhone as CRMIcon,
+  Contacts as ContactsIcon,
+  Phone as CallIcon,
+  Email as EmailIcon,
+  EventNote as MeetingIcon
 } from '@mui/icons-material';
 import { getExpiringBatches, getExpiredBatches } from '../../services/inventoryService';
 
@@ -97,6 +102,7 @@ const Sidebar = () => {
   const [openOrders, setOpenOrders] = useState(location.pathname.startsWith('/orders') || location.pathname.startsWith('/customers'));
   const [openInventory, setOpenInventory] = useState(location.pathname.startsWith('/inventory') || location.pathname.startsWith('/purchase-orders'));
   const [openCustomers, setOpenCustomers] = useState(location.pathname.startsWith('/customers') || location.pathname.startsWith('/orders'));
+  const [openCRM, setOpenCRM] = useState(location.pathname.startsWith('/crm'));
   const [expiringItemsCount, setExpiringItemsCount] = useState(0);
   
   useEffect(() => {
@@ -142,9 +148,24 @@ const Sidebar = () => {
     setOpenCustomers(!openCustomers);
   };
   
+  const handleCRMClick = () => {
+    setOpenCRM(!openCRM);
+  };
+  
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
     { text: 'Analityka', icon: <AnalyticsIcon />, path: '/analytics' },
+    { text: 'CRM',
+      icon: <CRMIcon />,
+      path: '/crm',
+      hasSubmenu: true,
+      children: [
+        { text: 'Dashboard', icon: <DashboardIcon />, path: '/crm' },
+        { text: 'Kontakty', icon: <ContactsIcon />, path: '/crm/contacts' },
+        { text: 'Interakcje', icon: <CallIcon />, path: '/crm/interactions' },
+        { text: 'Szanse sprzedaży', icon: <SuppliersIcon />, path: '/crm/opportunities' },
+      ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
+    },
     { text: 'Klienci',
       icon: <CustomersIcon />,
       path: '/customers',
@@ -242,7 +263,8 @@ const Sidebar = () => {
                 onClick={item.text === 'Produkcja' ? handleProductionClick : 
                          item.text === 'Zamówienia' ? handleOrdersClick : 
                          item.text === 'Magazyn' ? handleInventoryClick :
-                         item.text === 'Klienci' ? handleCustomersClick : () => {}} 
+                         item.text === 'Klienci' ? handleCustomersClick :
+                         item.text === 'CRM' ? handleCRMClick : () => {}} 
                 selected={isActive(item.path)}
               >
                 <Tooltip title={item.text} placement="right" arrow>
@@ -266,13 +288,15 @@ const Sidebar = () => {
                 {(item.text === 'Produkcja' && openProduction) || 
                  (item.text === 'Zamówienia' && openOrders) ||
                  (item.text === 'Magazyn' && openInventory) ||
-                 (item.text === 'Klienci' && openCustomers) ? <ExpandLess /> : <ExpandMore />}
+                 (item.text === 'Klienci' && openCustomers) ||
+                 (item.text === 'CRM' && openCRM) ? <ExpandLess /> : <ExpandMore />}
               </StyledListItemButton>
               <Collapse 
                 in={item.text === 'Produkcja' ? openProduction : 
                      item.text === 'Zamówienia' ? openOrders : 
                      item.text === 'Magazyn' ? openInventory :
-                     item.text === 'Klienci' ? openCustomers : false} 
+                     item.text === 'Klienci' ? openCustomers :
+                     item.text === 'CRM' ? openCRM : false} 
                 timeout="auto" 
                 unmountOnExit
               >

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
   Container, Typography, Paper, Button, Box, Chip, Grid, Divider, 
   Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
@@ -10,7 +10,9 @@ import {
   Edit as EditIcon, 
   Delete as DeleteIcon, 
   Print as PrintIcon,
-  Article as ArticleIcon
+  Article as ArticleIcon,
+  Inventory as InventoryIcon,
+  ArrowBack as ArrowBackIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -26,45 +28,51 @@ import { useNotification } from '../../hooks/useNotification';
 import { useReactToPrint } from 'react-to-print';
 
 const PurchaseOrderDetails = ({ orderId }) => {
-  const [purchaseOrder, setPurchaseOrder] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
-  const [newStatus, setNewStatus] = useState('');
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
+  const [loading, setLoading] = useState(true);
+  const [purchaseOrder, setPurchaseOrder] = useState(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [newStatus, setNewStatus] = useState('');
+  const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
+  const [itemToReceive, setItemToReceive] = useState(null);
+  
   const printRef = useRef();
   
-  // Funkcja do drukowania lub eksportu do PDF
   const handlePrint = useReactToPrint({
     content: () => printRef.current,
-    documentTitle: `Zamówienie ${purchaseOrder?.number}`,
   });
   
   useEffect(() => {
     const fetchPurchaseOrder = async () => {
       try {
-        // Sprawdź, czy ID jest zdefiniowane
-        if (!orderId) {
-          throw new Error('Brak ID zamówienia');
-        }
-        
-        setLoading(true);
         const data = await getPurchaseOrderById(orderId);
         setPurchaseOrder(data);
-        setLoading(false);
       } catch (error) {
-        console.error('Błąd podczas pobierania zamówienia:', error);
-        showError('Nie udało się pobrać danych zamówienia');
+        showError('Błąd podczas pobierania danych zamówienia: ' + error.message);
+      } finally {
         setLoading(false);
-        // Przekieruj do listy zamówień, jeśli nie znaleziono zamówienia
-        navigate('/purchase-orders');
       }
     };
     
-    fetchPurchaseOrder();
-  }, [orderId, navigate, showError]);
+    if (orderId) {
+      fetchPurchaseOrder();
+    }
+  }, [orderId, showError]);
+  
+  if (loading) {
+    return <Typography>Ładowanie szczegółów zamówienia...</Typography>;
+  }
+  
+  if (!purchaseOrder) {
+    return <Typography>Nie znaleziono zamówienia</Typography>;
+  }
+  
+  const handleEditClick = () => {
+    navigate(`/purchase-orders/${orderId}/edit`);
+  };
   
   const handleDeleteClick = () => {
     setDeleteDialogOpen(true);
@@ -73,14 +81,12 @@ const PurchaseOrderDetails = ({ orderId }) => {
   const handleDeleteConfirm = async () => {
     try {
       await deletePurchaseOrder(orderId);
-      setDeleteDialogOpen(false);
       showSuccess('Zamówienie zostało usunięte');
       navigate('/purchase-orders');
     } catch (error) {
-      console.error('Błąd podczas usuwania zamówienia:', error);
-      showError('Nie udało się usunąć zamówienia');
-      setDeleteDialogOpen(false);
+      showError('Błąd podczas usuwania zamówienia: ' + error.message);
     }
+    setDeleteDialogOpen(false);
   };
   
   const handleStatusClick = () => {
@@ -106,6 +112,26 @@ const PurchaseOrderDetails = ({ orderId }) => {
     }
   };
   
+  const handleReceiveClick = (item) => {
+    setItemToReceive(item);
+    setReceiveDialogOpen(true);
+  };
+  
+  const handleReceiveItem = () => {
+    if (!itemToReceive || !itemToReceive.inventoryItemId) {
+      showError('Ten produkt nie jest powiązany z pozycją magazynową');
+      setReceiveDialogOpen(false);
+      return;
+    }
+    
+    // Upewnij się, że cena jednostkowa jest liczbą
+    const unitPrice = Number(itemToReceive.unitPrice || 0);
+    
+    // Przekieruj do strony przyjęcia towaru z parametrami
+    navigate(`/inventory/${itemToReceive.inventoryItemId}/receive?poNumber=${purchaseOrder.number}&quantity=${itemToReceive.quantity}&unitPrice=${unitPrice}`);
+    setReceiveDialogOpen(false);
+  };
+  
   const getStatusChip = (status) => {
     const statusConfig = {
       [PURCHASE_ORDER_STATUSES.DRAFT]: { color: 'default', label: translateStatus(status) },
@@ -129,84 +155,64 @@ const PurchaseOrderDetails = ({ orderId }) => {
     );
   };
   
-  // Funkcja formatująca datę
-  const formatDate = (dateString) => {
-    if (!dateString) return '-';
-    try {
-      return format(new Date(dateString), 'dd.MM.yyyy', { locale: pl });
-    } catch (error) {
-      console.error('Błąd formatowania daty:', error);
-      return dateString;
-    }
+  const formatDate = (dateIsoString) => {
+    if (!dateIsoString) return 'Nie określono';
+    const date = new Date(dateIsoString);
+    return format(date, 'dd MMMM yyyy', { locale: pl });
   };
   
-  // Funkcja formatująca adres dostawcy
   const formatAddress = (address) => {
-    if (!address) return '';
-    return `${address.name ? address.name + ', ' : ''}${address.street}, ${address.postalCode} ${address.city}, ${address.country}`;
+    if (!address) return 'Brak adresu';
+    return `${address.street || ''}, ${address.postalCode || ''} ${address.city || ''}, ${address.country || ''}`;
   };
   
-  // Pobierz główny adres dostawcy
   const getSupplierMainAddress = (supplier) => {
     if (!supplier || !supplier.addresses || supplier.addresses.length === 0) {
       return null;
     }
     
-    return supplier.addresses.find(a => a.isMain) || supplier.addresses[0];
+    const mainAddress = supplier.addresses.find(addr => addr.isMain);
+    return mainAddress || supplier.addresses[0];
   };
   
-  if (loading) {
-    return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Typography>Ładowanie danych zamówienia...</Typography>
-      </Container>
-    );
-  }
-  
-  if (!purchaseOrder) {
-    return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Typography>Nie znaleziono zamówienia</Typography>
-      </Container>
-    );
-  }
+  // Sprawdza, czy zamówienie jest w stanie, w którym można przyjąć towary do magazynu
+  const canReceiveItems = purchaseOrder.status === PURCHASE_ORDER_STATUSES.DELIVERED;
   
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5">
-          Zamówienie Zakupu: {purchaseOrder.number}
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            variant="outlined"
-            startIcon={<PrintIcon />}
+    <Box>
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between' }}>
+        <Button 
+          variant="outlined" 
+          startIcon={<ArrowBackIcon />} 
+          onClick={() => navigate('/purchase-orders')}
+        >
+          Powrót do listy
+        </Button>
+        <Box>
+          <Button 
+            variant="outlined" 
+            startIcon={<PrintIcon />} 
             onClick={handlePrint}
+            sx={{ mr: 1 }}
           >
             Drukuj
           </Button>
-          
-          {purchaseOrder.status === PURCHASE_ORDER_STATUSES.DRAFT && (
-            <Button
-              variant="outlined"
-              color="secondary"
-              startIcon={<EditIcon />}
-              onClick={() => navigate(`/purchase-orders/${orderId}/edit`)}
-            >
-              Edytuj
-            </Button>
-          )}
-          
-          {purchaseOrder.status === PURCHASE_ORDER_STATUSES.DRAFT && (
-            <Button
-              variant="outlined"
-              color="error"
-              startIcon={<DeleteIcon />}
-              onClick={handleDeleteClick}
-            >
-              Usuń
-            </Button>
-          )}
+          <Button 
+            variant="outlined" 
+            startIcon={<EditIcon />} 
+            onClick={handleEditClick}
+            sx={{ mr: 1 }}
+          >
+            Edytuj
+          </Button>
+          <Button 
+            variant="outlined" 
+            color="error" 
+            startIcon={<DeleteIcon />} 
+            onClick={handleDeleteClick}
+          >
+            Usuń
+          </Button>
         </Box>
       </Box>
       
@@ -242,16 +248,24 @@ const PurchaseOrderDetails = ({ orderId }) => {
             <Typography variant="subtitle1" gutterBottom>Dostawca</Typography>
             {purchaseOrder.supplier ? (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                <Typography variant="body1">{purchaseOrder.supplier.name}</Typography>
-                <Typography variant="body2">
-                  Osoba kontaktowa: {purchaseOrder.supplier.contactPerson || '-'}
+                <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                  {purchaseOrder.supplier.name}
                 </Typography>
-                <Typography variant="body2">
-                  E-mail: {purchaseOrder.supplier.email || '-'}
-                </Typography>
-                <Typography variant="body2">
-                  Telefon: {purchaseOrder.supplier.phone || '-'}
-                </Typography>
+                {purchaseOrder.supplier.contactPerson && (
+                  <Typography variant="body2">
+                    Kontakt: {purchaseOrder.supplier.contactPerson}
+                  </Typography>
+                )}
+                {purchaseOrder.supplier.email && (
+                  <Typography variant="body2">
+                    Email: {purchaseOrder.supplier.email}
+                  </Typography>
+                )}
+                {purchaseOrder.supplier.phone && (
+                  <Typography variant="body2">
+                    Telefon: {purchaseOrder.supplier.phone}
+                  </Typography>
+                )}
                 {getSupplierMainAddress(purchaseOrder.supplier) && (
                   <Typography variant="body2">
                     Adres: {formatAddress(getSupplierMainAddress(purchaseOrder.supplier))}
@@ -259,22 +273,22 @@ const PurchaseOrderDetails = ({ orderId }) => {
                 )}
               </Box>
             ) : (
-              <Typography variant="body2">Brak danych dostawcy</Typography>
+              <Typography variant="body2" color="textSecondary">
+                Brak danych dostawcy
+              </Typography>
             )}
           </Grid>
         </Grid>
-        
-        <Divider sx={{ my: 3 }} />
-        
-        <Grid container spacing={3}>
-          <Grid item xs={12}>
-            <Typography variant="subtitle1" gutterBottom>Adres dostawy</Typography>
-            <Typography variant="body1">{purchaseOrder.deliveryAddress || '-'}</Typography>
-          </Grid>
-        </Grid>
-        
-        <Divider sx={{ my: 3 }} />
-        
+      </Paper>
+      
+      {purchaseOrder.deliveryAddress && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Typography variant="subtitle1" gutterBottom>Adres dostawy</Typography>
+          <Typography variant="body1">{purchaseOrder.deliveryAddress}</Typography>
+        </Paper>
+      )}
+      
+      <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="subtitle1" gutterBottom>Zamawiane produkty</Typography>
         <TableContainer>
           <Table size="small">
@@ -285,6 +299,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                 <TableCell>Jednostka</TableCell>
                 <TableCell align="right">Cena jedn.</TableCell>
                 <TableCell align="right">Wartość</TableCell>
+                {canReceiveItems && <TableCell align="right">Akcje</TableCell>}
               </TableRow>
             </TableHead>
             <TableBody>
@@ -303,33 +318,130 @@ const PurchaseOrderDetails = ({ orderId }) => {
                       ? `${item.totalPrice.toFixed(2)} ${purchaseOrder.currency}`
                       : `${item.totalPrice || 0} ${purchaseOrder.currency}`}
                   </TableCell>
+                  {canReceiveItems && (
+                    <TableCell align="right">
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        size="small"
+                        startIcon={<InventoryIcon />}
+                        onClick={() => handleReceiveClick(item)}
+                        disabled={!item.inventoryItemId}
+                      >
+                        Przyjmij
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
+              
               <TableRow>
-                <TableCell colSpan={4} align="right">
-                  <Typography variant="body1" fontWeight="bold">Razem:</Typography>
+                <TableCell colSpan={canReceiveItems ? 4 : 3} align="right" sx={{ fontWeight: 'bold' }}>
+                  Razem:
                 </TableCell>
-                <TableCell align="right">
-                  <Typography variant="body1" fontWeight="bold">
-                    {typeof purchaseOrder.totalValue === 'number'
-                      ? `${purchaseOrder.totalValue.toFixed(2)} ${purchaseOrder.currency}`
-                      : `${purchaseOrder.totalValue || 0} ${purchaseOrder.currency}`}
-                  </Typography>
+                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                  {purchaseOrder.totalValue.toFixed(2)} {purchaseOrder.currency}
                 </TableCell>
+                {canReceiveItems && <TableCell />}
               </TableRow>
             </TableBody>
           </Table>
         </TableContainer>
-        
-        {purchaseOrder.notes && (
-          <Box sx={{ mt: 3 }}>
-            <Typography variant="subtitle1" gutterBottom>Uwagi</Typography>
-            <Typography variant="body2">{purchaseOrder.notes}</Typography>
-          </Box>
-        )}
       </Paper>
       
-      {/* Sekcja ukryta, widoczna tylko podczas drukowania */}
+      {purchaseOrder.notes && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Typography variant="subtitle1" gutterBottom>Uwagi</Typography>
+          <Typography variant="body2">{purchaseOrder.notes}</Typography>
+        </Paper>
+      )}
+      
+      {/* Dialog potwierdzenia usunięcia */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+      >
+        <DialogTitle>Potwierdź usunięcie</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Czy na pewno chcesz usunąć to zamówienie zakupowe? Ta operacja jest nieodwracalna.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)}>Anuluj</Button>
+          <Button onClick={handleDeleteConfirm} color="error">Usuń</Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Dialog zmiany statusu */}
+      <Dialog
+        open={statusDialogOpen}
+        onClose={() => setStatusDialogOpen(false)}
+      >
+        <DialogTitle>Zmień status zamówienia</DialogTitle>
+        <DialogContent>
+          <FormControl fullWidth sx={{ mt: 2 }}>
+            <InputLabel>Status</InputLabel>
+            <Select
+              value={newStatus}
+              onChange={(e) => setNewStatus(e.target.value)}
+              label="Status"
+            >
+              {Object.values(PURCHASE_ORDER_STATUSES).map((status) => (
+                <MenuItem key={status} value={status}>
+                  {translateStatus(status)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStatusDialogOpen(false)}>Anuluj</Button>
+          <Button onClick={handleStatusUpdate} color="primary">Zapisz</Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Dialog przyjęcia towaru */}
+      <Dialog
+        open={receiveDialogOpen}
+        onClose={() => setReceiveDialogOpen(false)}
+      >
+        <DialogTitle>Przyjmij towar do magazynu</DialogTitle>
+        <DialogContent>
+          {itemToReceive && (
+            <>
+              <DialogContentText>
+                Czy chcesz przyjąć do magazynu następujący produkt:
+              </DialogContentText>
+              <Box sx={{ mt: 2, mb: 2 }}>
+                <Typography variant="subtitle1">{itemToReceive.name}</Typography>
+                <Typography>
+                  Ilość: {itemToReceive.quantity} {itemToReceive.unit}
+                </Typography>
+                <Typography>
+                  Cena jednostkowa: {Number(itemToReceive.unitPrice || 0).toFixed(2)} {purchaseOrder.currency}
+                </Typography>
+              </Box>
+              {!itemToReceive.inventoryItemId && (
+                <DialogContentText color="error">
+                  Ten produkt nie jest powiązany z pozycją magazynową. Najpierw dodaj go do magazynu.
+                </DialogContentText>
+              )}
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReceiveDialogOpen(false)}>Anuluj</Button>
+          <Button 
+            onClick={handleReceiveItem} 
+            color="primary"
+            disabled={!itemToReceive || !itemToReceive.inventoryItemId}
+          >
+            Przejdź do przyjęcia
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
       <Box sx={{ display: 'none' }}>
         <Box ref={printRef} sx={{ p: 4 }}>
           <Typography variant="h5" align="center" gutterBottom>
@@ -367,7 +479,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
             </Grid>
           </Grid>
           
-          <Typography variant="subtitle1" gutterBottom>Zamawiane produkty</Typography>
+          
           <TableContainer>
             <Table size="small">
               <TableHead>
@@ -397,16 +509,13 @@ const PurchaseOrderDetails = ({ orderId }) => {
                     </TableCell>
                   </TableRow>
                 ))}
+                
                 <TableRow>
-                  <TableCell colSpan={4} align="right">
-                    <Typography variant="body1" fontWeight="bold">Razem:</Typography>
+                  <TableCell colSpan={3} align="right" sx={{ fontWeight: 'bold' }}>
+                    Łącznie:
                   </TableCell>
-                  <TableCell align="right">
-                    <Typography variant="body1" fontWeight="bold">
-                      {typeof purchaseOrder.totalValue === 'number'
-                        ? `${purchaseOrder.totalValue.toFixed(2)} ${purchaseOrder.currency}`
-                        : `${purchaseOrder.totalValue || 0} ${purchaseOrder.currency}`}
-                    </Typography>
+                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                    {purchaseOrder.totalValue.toFixed(2)} {purchaseOrder.currency}
                   </TableCell>
                 </TableRow>
               </TableBody>
@@ -420,69 +529,25 @@ const PurchaseOrderDetails = ({ orderId }) => {
             </Box>
           )}
           
-          <Box sx={{ mt: 5, display: 'flex', justifyContent: 'space-between' }}>
-            <Box sx={{ width: '40%', borderTop: '1px solid black', pt: 1, textAlign: 'center' }}>
-              <Typography variant="body2">Osoba zamawiająca</Typography>
-            </Box>
-            <Box sx={{ width: '40%', borderTop: '1px solid black', pt: 1, textAlign: 'center' }}>
-              <Typography variant="body2">Akceptacja</Typography>
-            </Box>
+          <Box sx={{ mt: 4, mb: 2 }}>
+            <Typography variant="body2" gutterBottom>Data wydruku: {format(new Date(), 'dd.MM.yyyy HH:mm', { locale: pl })}</Typography>
           </Box>
+          
+          <Divider sx={{ mb: 2 }} />
+          
+          <Grid container spacing={2}>
+            <Grid item xs={6}>
+              <Typography variant="body2">Podpis zamawiającego:</Typography>
+              <Box sx={{ mt: 4, borderTop: '1px solid #aaa', width: '80%' }} />
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="body2">Podpis dostawcy:</Typography>
+              <Box sx={{ mt: 4, borderTop: '1px solid #aaa', width: '80%' }} />
+            </Grid>
+          </Grid>
         </Box>
       </Box>
-      
-      {/* Dialog potwierdzenia usunięcia */}
-      <Dialog
-        open={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
-      >
-        <DialogTitle>Potwierdzenie usunięcia</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Czy na pewno chcesz usunąć zamówienie zakupowe {purchaseOrder.number}? Tej operacji nie można cofnąć.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>Anuluj</Button>
-          <Button onClick={handleDeleteConfirm} color="error" autoFocus>
-            Usuń
-          </Button>
-        </DialogActions>
-      </Dialog>
-      
-      {/* Dialog zmiany statusu */}
-      <Dialog
-        open={statusDialogOpen}
-        onClose={() => setStatusDialogOpen(false)}
-      >
-        <DialogTitle>Zmiana statusu zamówienia</DialogTitle>
-        <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
-            Zmień status zamówienia zakupowego {purchaseOrder.number}:
-          </DialogContentText>
-          <FormControl fullWidth>
-            <InputLabel>Status</InputLabel>
-            <Select
-              value={newStatus}
-              onChange={(e) => setNewStatus(e.target.value)}
-              label="Status"
-            >
-              {Object.values(PURCHASE_ORDER_STATUSES).map((status) => (
-                <MenuItem key={status} value={status}>
-                  {translateStatus(status)}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setStatusDialogOpen(false)}>Anuluj</Button>
-          <Button onClick={handleStatusUpdate} color="primary">
-            Zapisz
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Container>
+    </Box>
   );
 };
 

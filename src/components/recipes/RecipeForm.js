@@ -48,12 +48,14 @@ import { getAllInventoryItems, getIngredientPrices, createInventoryItem, getAllW
 import { calculateRecipeTotalCost } from '../../utils/costCalculator';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { collection, query, where, limit, getDocs } from 'firebase/firestore';
+import { db } from '../../services/firebase/config';
 
 const DEFAULT_INGREDIENT = { name: '', quantity: '', unit: 'g', allergens: [] };
 
 const RecipeForm = ({ recipeId }) => {
   const { currentUser } = useAuth();
-  const { showSuccess, showError, showWarning } = useNotification();
+  const { showSuccess, showError, showWarning, showInfo } = useNotification();
   const navigate = useNavigate();
   const location = useLocation();
   const [loading, setLoading] = useState(!!recipeId);
@@ -445,6 +447,129 @@ const RecipeForm = ({ recipeId }) => {
     );
   };
 
+  // Funkcja do aktualizacji ID składnika w recepturze po dodaniu go do magazynu
+  const updateIngredientId = (ingredientName, newId) => {
+    // Znajdź wszystkie składniki o podanej nazwie, które nie mają jeszcze ID
+    const updatedIngredients = recipeData.ingredients.map(ingredient => {
+      if (ingredient.name === ingredientName && !ingredient.id) {
+        return {
+          ...ingredient,
+          id: newId
+        };
+      }
+      return ingredient;
+    });
+    
+    // Zaktualizuj recepturę
+    setRecipeData(prev => ({
+      ...prev,
+      ingredients: updatedIngredients
+    }));
+    
+    showSuccess(`Powiązano składnik "${ingredientName}" z pozycją magazynową`);
+  };
+  
+  // Funkcja do wyszukiwania i linkowania składników z magazynem
+  const linkIngredientWithInventory = async (ingredient) => {
+    if (!ingredient || !ingredient.name || ingredient.id) return;
+    
+    try {
+      // Wyszukaj składnik w magazynie po nazwie
+      const inventoryRef = collection(db, 'inventory');
+      const q = query(
+        inventoryRef,
+        where('name', '==', ingredient.name),
+        limit(1)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        const item = { 
+          id: querySnapshot.docs[0].id, 
+          ...querySnapshot.docs[0].data() 
+        };
+        updateIngredientId(ingredient.name, item.id);
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Błąd podczas wyszukiwania składnika:', error);
+      return false;
+    }
+  };
+  
+  // Funkcja do linkowania wszystkich składników z magazynem
+  const linkAllIngredientsWithInventory = async (resetLinks = false) => {
+    if (!recipeData.ingredients || recipeData.ingredients.length === 0) {
+      showWarning('Receptura nie zawiera składników');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      let linkedCount = 0;
+      let notFoundCount = 0;
+      let resetCount = 0;
+      
+      // Przygotuj kopię składników do modyfikacji
+      const updatedIngredients = [...recipeData.ingredients];
+      
+      // Jeśli resetujemy powiązania, usuń wszystkie ID składników
+      if (resetLinks) {
+        updatedIngredients.forEach((ingredient, index) => {
+          if (ingredient.id) {
+            updatedIngredients[index] = {
+              ...ingredient,
+              id: null // Usuwamy ID
+            };
+            resetCount++;
+          }
+        });
+        
+        // Aktualizuj stan receptury z usuniętymi powiązaniami
+        setRecipeData(prev => ({
+          ...prev,
+          ingredients: updatedIngredients
+        }));
+        
+        if (resetCount > 0) {
+          showInfo(`Usunięto powiązania dla ${resetCount} składników`);
+        }
+      }
+      
+      // Przeszukaj wszystkie niezlinkowane składniki
+      for (const [index, ingredient] of updatedIngredients.entries()) {
+        if (!ingredient.id && ingredient.name) {
+          const linked = await linkIngredientWithInventory(ingredient);
+          if (linked) {
+            linkedCount++;
+          } else {
+            notFoundCount++;
+          }
+        }
+      }
+      
+      if (linkedCount > 0) {
+        showSuccess(`Powiązano ${linkedCount} składników z magazynem`);
+      }
+      
+      if (notFoundCount > 0) {
+        showWarning(`Dla ${notFoundCount} składników nie znaleziono odpowiedników w magazynie`);
+      }
+      
+      if (linkedCount === 0 && notFoundCount === 0 && !resetLinks) {
+        showInfo('Wszystkie składniki są już powiązane z magazynem lub nie można znaleźć dopasowań');
+      }
+    } catch (error) {
+      showError('Błąd podczas linkowania składników: ' + error.message);
+      console.error('Error linking ingredients:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (loading) {
     return <div>Ładowanie receptury...</div>;
   }
@@ -570,8 +695,39 @@ const RecipeForm = ({ recipeId }) => {
       </Paper>
 
       <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>
+        <Typography variant="subtitle1" gutterBottom>
           Składniki
+          <Button 
+            size="small"
+            onClick={addIngredient}
+            sx={{ ml: 2 }}
+          >
+            Dodaj składnik
+          </Button>
+          <Button 
+            size="small"
+            color="secondary"
+            onClick={handleAddInventoryItem}
+            sx={{ ml: 1 }}
+          >
+            Z magazynu
+          </Button>
+          <Button 
+            size="small"
+            color="primary"
+            onClick={() => linkAllIngredientsWithInventory(false)}
+            sx={{ ml: 1 }}
+          >
+            Powiąż z magazynem
+          </Button>
+          <Button 
+            size="small"
+            color="warning"
+            onClick={() => linkAllIngredientsWithInventory(true)}
+            sx={{ ml: 1 }}
+          >
+            Resetuj powiązania
+          </Button>
         </Typography>
         
         {/* Dodajemy wybór składników z magazynu */}
@@ -707,15 +863,6 @@ const RecipeForm = ({ recipeId }) => {
             Brak składników. Dodaj składniki z magazynu lub ręcznie.
           </Typography>
         )}
-        
-        <Button
-          variant="outlined"
-          startIcon={<AddIcon />}
-          onClick={addIngredient}
-          sx={{ mt: 2 }}
-        >
-          Dodaj składnik ręcznie
-        </Button>
       </Paper>
 
       <Paper sx={{ p: 3 }}>

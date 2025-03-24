@@ -141,9 +141,19 @@ import {
       const docRef = await addDoc(collection(db, PRODUCTION_TASKS_COLLECTION), taskWithMeta);
       
       // Teraz, gdy zadanie zostało utworzone, zarezerwuj materiały
+      const missingMaterials = []; // Lista materiałów, których nie ma w magazynie
+      
       if (taskWithMeta.materials && taskWithMeta.materials.length > 0) {
         for (const material of taskWithMeta.materials) {
           try {
+            // Sprawdź, czy materiał jest oznaczony jako brakujący
+            if (material.missing) {
+              // Pomijamy rezerwację dla brakujących materiałów
+              missingMaterials.push(material.name);
+              console.log(`Pomijam rezerwację brakującego materiału: ${material.name}`);
+              continue;
+            }
+            
             // Sprawdź dostępność i zarezerwuj materiał
             if (material.inventoryItemId) {
               await bookInventoryForTask(material.inventoryItemId, material.quantity, docRef.id, userId);
@@ -157,9 +167,19 @@ import {
         }
       }
       
+      // Jeśli były brakujące materiały, dodaj informację do zadania
+      if (missingMaterials.length > 0) {
+        // Aktualizuj zadanie z informacją o brakujących materiałach
+        await updateDoc(doc(db, PRODUCTION_TASKS_COLLECTION, docRef.id), {
+          missingMaterials,
+          updatedAt: serverTimestamp()
+        });
+      }
+      
       return {
         id: docRef.id,
-        ...taskWithMeta
+        ...taskWithMeta,
+        missingMaterials
       };
     } catch (error) {
       console.error('Error creating task:', error);
@@ -224,8 +244,9 @@ import {
             updates.status = 'Potwierdzenie zużycia';
             console.log(`Zadanie ${taskId} wymaga potwierdzenia zużycia, zmieniono status na "Potwierdzenie zużycia"`);
           } else {
-            // Jeśli zadanie ma potwierdzenie zużycia materiałów lub nie ma materiałów, dodajemy produkty do magazynu od razu
-            await addTaskProductToInventory(taskId, userId);
+            // Jeśli zadanie ma potwierdzenie zużycia materiałów lub nie ma materiałów,
+            // oznaczamy je jako gotowe do dodania, ale nie dodajemy automatycznie
+            console.log(`Zadanie ${taskId} oznaczono jako gotowe do dodania do magazynu`);
           }
         }
       }
@@ -401,6 +422,13 @@ import {
           const doc = querySnapshot.docs[0];
           inventoryItemId = doc.id;
           inventoryItem = doc.data();
+          
+          // Zaktualizuj zadanie z informacją o znalezionym produkcie magazynowym
+          await updateDoc(taskRef, {
+            inventoryProductId: inventoryItemId,
+            updatedAt: serverTimestamp(),
+            updatedBy: userId
+          });
         } else {
           // Produkt nie istnieje, utwórz nowy
           const newItemRef = doc(collection(db, 'inventory'));
@@ -423,6 +451,13 @@ import {
           
           await setDoc(newItemRef, newItem);
           inventoryItem = newItem;
+          
+          // Zaktualizuj zadanie z informacją o nowo utworzonym produkcie magazynowym
+          await updateDoc(taskRef, {
+            inventoryProductId: inventoryItemId,
+            updatedAt: serverTimestamp(),
+            updatedBy: userId
+          });
         }
       }
       
@@ -1100,14 +1135,13 @@ import {
       
       await updateDoc(taskRef, updates);
       
-      // Jeśli zadanie ma produkt i jest gotowe do dodania do magazynu, dodaj produkt do magazynu
-      if (task.productName && task.readyForInventory) {
-        try {
-          await addTaskProductToInventory(taskId, task.createdBy || 'system');
-        } catch (error) {
-          console.error(`Błąd podczas dodawania produktu do magazynu: ${error.message}`);
-          // Kontynuuj mimo błędu, zużycie materiałów zostało już potwierdzone
-        }
+      // Jeśli zadanie ma produkt i jest gotowe do dodania do magazynu, nie dodajemy automatycznie
+      // Użytkownik musi sam kliknąć przycisk "Dodaj produkt do magazynu"
+      if (task.productName) {
+        // Upewniamy się, że zadanie jest oznaczone jako gotowe do dodania do magazynu
+        await updateDoc(taskRef, {
+          readyForInventory: true
+        });
       }
       
       return { success: true, message: 'Zużycie materiałów potwierdzone i stany magazynowe zaktualizowane' };
@@ -1235,7 +1269,7 @@ import {
     // Jeśli zadanie jest zakończone, dodaj dodatkowe pola
     if (isCompleted) {
       updates.completionDate = serverTimestamp();
-      updates.readyForInventory = true; // Dodajemy flagę gotowości do dodania do magazynu
+      updates.readyForInventory = true; // Oznaczamy jako gotowe do dodania do magazynu, ale nie dodajemy automatycznie
     }
     
     await updateDoc(taskRef, updates);

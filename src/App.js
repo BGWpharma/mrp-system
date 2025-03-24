@@ -88,6 +88,18 @@ import CmrCreatePage from './pages/Inventory/Cmr/CmrCreatePage';
 import CmrDetailsPage from './pages/Inventory/Cmr/CmrDetailsPage';
 import CmrEditPage from './pages/Inventory/Cmr/CmrEditPage';
 
+// CRM
+import CRMDashboardPage from './pages/CRM/CRMDashboardPage';
+import ContactsPage from './pages/CRM/ContactsPage';
+import ContactFormPage from './pages/CRM/ContactFormPage';
+import ContactDetailsPage from './pages/CRM/ContactDetailsPage';
+import InteractionsPage from './pages/CRM/InteractionsPage';
+import InteractionFormPage from './pages/CRM/InteractionFormPage';
+import InteractionDetailsPage from './pages/CRM/InteractionDetailsPage';
+import OpportunitiesPage from './pages/CRM/OpportunitiesPage';
+import OpportunityFormPage from './pages/CRM/OpportunityFormPage';
+import OpportunityDetailsPage from './pages/CRM/OpportunityDetailsPage';
+
 function App() {
   return (
     <Router>
@@ -172,6 +184,21 @@ function App() {
               
               {/* Analytics Routes */}
               <Route path="/analytics" element={<PrivateLayout><AnalyticsDashboard /></PrivateLayout>} />
+              
+              {/* CRM Routes */}
+              <Route path="/crm" element={<PrivateLayout><CRMDashboardPage /></PrivateLayout>} />
+              <Route path="/crm/contacts" element={<PrivateLayout><ContactsPage /></PrivateLayout>} />
+              <Route path="/crm/contacts/new" element={<PrivateLayout><ContactFormPage /></PrivateLayout>} />
+              <Route path="/crm/contacts/:contactId" element={<PrivateLayout><ContactDetailsPage /></PrivateLayout>} />
+              <Route path="/crm/contacts/:contactId/edit" element={<PrivateLayout><ContactFormPage /></PrivateLayout>} />
+              <Route path="/crm/interactions" element={<PrivateLayout><InteractionsPage /></PrivateLayout>} />
+              <Route path="/crm/interactions/new" element={<PrivateLayout><InteractionFormPage /></PrivateLayout>} />
+              <Route path="/crm/interactions/:interactionId" element={<PrivateLayout><InteractionDetailsPage /></PrivateLayout>} />
+              <Route path="/crm/interactions/:interactionId/edit" element={<PrivateLayout><InteractionFormPage /></PrivateLayout>} />
+              <Route path="/crm/opportunities" element={<PrivateLayout><OpportunitiesPage /></PrivateLayout>} />
+              <Route path="/crm/opportunities/new" element={<PrivateLayout><OpportunityFormPage /></PrivateLayout>} />
+              <Route path="/crm/opportunities/:opportunityId" element={<PrivateLayout><OpportunityDetailsPage /></PrivateLayout>} />
+              <Route path="/crm/opportunities/:opportunityId/edit" element={<PrivateLayout><OpportunityFormPage /></PrivateLayout>} />
               
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

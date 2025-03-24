@@ -66,6 +66,10 @@ const TaskDetailsPage = () => {
   const [productionHistory, setProductionHistory] = useState([]);
   const [productionError, setProductionError] = useState(null);
 
+  const [deleteDialog, setDeleteDialog] = useState(false);
+  const [quantity, setQuantity] = useState(0);
+  const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
+
   useEffect(() => {
     const fetchTask = async () => {
       try {
@@ -318,21 +322,38 @@ const TaskDetailsPage = () => {
     }
   };
 
+  // Funkcja otwierająca dialog przyjęcia do magazynu
+  const handleReceiveClick = () => {
+    setReceiveDialogOpen(true);
+  };
+  
   // Funkcja obsługująca dodanie produktu do magazynu
-  const handleAddToInventory = async () => {
+  const handleReceiveItem = async () => {
     try {
       setLoading(true);
-      await addTaskProductToInventory(id, currentUser.uid);
+      setReceiveDialogOpen(false);
       
-      setAlert({
-        open: true,
-        severity: 'success',
-        message: 'Produkt został pomyślnie dodany do magazynu'
-      });
-      
-      // Odśwież dane zadania
-      const updatedTask = await getTaskById(id);
-      setTask(updatedTask);
+      // Jeśli produkt jest powiązany z pozycją w magazynie, przenieś do formularza przyjęcia
+      if (task.inventoryProductId) {
+        // Przekieruj do strony przyjęcia towaru z parametrami
+        const unitPrice = task.costs && task.quantity ? 
+          Number(task.costs.totalCost / task.quantity) : 0;
+          
+        navigate(`/inventory/${task.inventoryProductId}/receive?poNumber=PROD-${id.substring(0, 6)}&quantity=${task.quantity}&unitPrice=${unitPrice}&reason=production`);
+      } else {
+        // Jeśli nie ma powiązanej pozycji magazynowej, użyj standardowej funkcji
+        await addTaskProductToInventory(id, currentUser.uid);
+        
+        setAlert({
+          open: true,
+          severity: 'success',
+          message: 'Produkt został pomyślnie dodany do magazynu'
+        });
+        
+        // Odśwież dane zadania
+        const updatedTask = await getTaskById(id);
+        setTask(updatedTask);
+      }
     } catch (error) {
       console.error('Błąd podczas dodawania produktu do magazynu:', error);
       setAlert({
@@ -343,6 +364,11 @@ const TaskDetailsPage = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Funkcja obsługująca dodanie produktu do magazynu
+  const handleAddToInventory = () => {
+    handleReceiveClick();
   };
 
   const handleStartProduction = async () => {
@@ -460,7 +486,7 @@ const TaskDetailsPage = () => {
           variant="outlined" 
           color="error" 
           startIcon={<DeleteIcon />}
-          onClick={handleDelete}
+          onClick={() => setDeleteDialog(true)}
         >
           Usuń
         </Button>
@@ -824,6 +850,57 @@ const TaskDetailsPage = () => {
           </Button>
           <Button onClick={handleStopProduction} variant="contained">
             Zatwierdź
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Okno dialogowe usuwania */}
+      <Dialog open={deleteDialog} onClose={() => setDeleteDialog(false)}>
+        <DialogTitle>Potwierdź usunięcie</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Czy na pewno chcesz usunąć to zadanie produkcyjne? Ta operacja jest nieodwracalna.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialog(false)}>Anuluj</Button>
+          <Button onClick={handleDelete} color="error">Usuń</Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Dialog przyjęcia produktu do magazynu */}
+      <Dialog
+        open={receiveDialogOpen}
+        onClose={() => setReceiveDialogOpen(false)}
+      >
+        <DialogTitle>Przyjmij produkt do magazynu</DialogTitle>
+        <DialogContent>
+          {task && (
+            <>
+              <DialogContentText>
+                Czy chcesz przyjąć do magazynu następujący produkt:
+              </DialogContentText>
+              <Box sx={{ mt: 2, mb: 2 }}>
+                <Typography variant="subtitle1">{task.productName}</Typography>
+                <Typography>
+                  Ilość: {task.quantity} {task.unit || 'szt.'}
+                </Typography>
+                {task.costs && (
+                  <Typography>
+                    Koszt jednostkowy: {Number(task.costs.totalCost / task.quantity).toFixed(2)} PLN
+                  </Typography>
+                )}
+              </Box>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReceiveDialogOpen(false)}>Anuluj</Button>
+          <Button 
+            onClick={handleReceiveItem} 
+            color="primary"
+          >
+            {task && task.inventoryProductId ? 'Przejdź do przyjęcia' : 'Dodaj do magazynu'}
           </Button>
         </DialogActions>
       </Dialog>

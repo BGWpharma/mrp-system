@@ -39,7 +39,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { Timestamp } from 'firebase/firestore';
 
-const InventoryTransactionForm = ({ itemId, transactionType }) => {
+const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -85,6 +85,26 @@ const InventoryTransactionForm = ({ itemId, transactionType }) => {
         setItem(fetchedItem);
         setWarehouses(warehousesList);
         
+        // Zastosuj początkoweowe dane, jeśli zostały przekazane
+        if (initialData) {
+          setTransactionData(prev => ({
+            ...prev,
+            quantity: initialData.quantity || prev.quantity,
+            reason: initialData.reason || prev.reason,
+            reference: initialData.reference || prev.reference,
+            notes: initialData.notes || prev.notes,
+            unitPrice: initialData.unitPrice ? Number(initialData.unitPrice) : prev.unitPrice,
+            // Wykorzystujemy pierwszy magazyn jako domyślny, jeśli nie ma ustawionego
+            warehouseId: prev.warehouseId || (warehousesList.length > 0 ? warehousesList[0].id : '')
+          }));
+        } else if (warehousesList.length > 0) {
+          // Ustaw domyślny magazyn, jeśli nie ma initialData
+          setTransactionData(prev => ({
+            ...prev,
+            warehouseId: prev.warehouseId || warehousesList[0].id
+          }));
+        }
+        
         // Pobierz partie dla wydania
         if (!isReceive && transactionData.warehouseId) {
           const fetchedBatches = await getItemBatches(itemId, transactionData.warehouseId);
@@ -100,7 +120,7 @@ const InventoryTransactionForm = ({ itemId, transactionType }) => {
     };
     
     fetchData();
-  }, [itemId, navigate, showError, isReceive, transactionData.warehouseId]);
+  }, [itemId, navigate, showError, isReceive, transactionData.warehouseId, initialData]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

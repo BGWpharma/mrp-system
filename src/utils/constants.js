@@ -168,3 +168,157 @@ export const RECIPE_STATUSES = {
     messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
     appId: process.env.REACT_APP_FIREBASE_APP_ID
   };
+
+// Stałe CRM
+export const CRM_CONTACT_TYPES = {
+  CUSTOMER: 'Klient',
+  LEAD: 'Lead',
+  PROSPECT: 'Potencjalny klient',
+  SUPPLIER: 'Dostawca',
+  PARTNER: 'Partner',
+  OTHER: 'Inny'
+};
+
+export const INTERACTION_TYPES = {
+  CALL: 'Rozmowa telefoniczna',
+  MEETING: 'Spotkanie',
+  EMAIL: 'E-mail',
+  NOTE: 'Notatka',
+  TASK: 'Zadanie',
+  OTHER: 'Inne'
+};
+
+export const INTERACTION_STATUSES = {
+  PLANNED: 'Zaplanowane',
+  COMPLETED: 'Zakończone',
+  CANCELLED: 'Anulowane'
+};
+
+export const LEAD_STATUSES = {
+  NEW: 'Nowy',
+  CONTACTED: 'Nawiązano kontakt',
+  QUALIFIED: 'Zakwalifikowany',
+  UNQUALIFIED: 'Niezakwalifikowany',
+  CONVERTED: 'Przekształcony w klienta'
+};
+
+export const LEAD_SOURCES = {
+  WEBSITE: 'Strona internetowa',
+  REFERRAL: 'Polecenie',
+  SOCIAL_MEDIA: 'Media społecznościowe',
+  TRADE_SHOW: 'Targi',
+  COLD_CALL: 'Zimny telefon',
+  EMAIL_CAMPAIGN: 'Kampania e-mail',
+  OTHER: 'Inne'
+};
+
+export const OPPORTUNITY_STAGES = {
+  PROSPECTING: 'Poszukiwanie',
+  QUALIFICATION: 'Kwalifikacja',
+  NEEDS_ANALYSIS: 'Analiza potrzeb',
+  VALUE_PROPOSITION: 'Propozycja wartości',
+  NEGOTIATION: 'Negocjacje',
+  CLOSED_WON: 'Zamknięte wygrane',
+  CLOSED_LOST: 'Zamknięte przegrane'
+};
+
+export const CAMPAIGN_TYPES = {
+  EMAIL: 'E-mail',
+  SOCIAL_MEDIA: 'Media społecznościowe',
+  TELEMARKETING: 'Telemarketing',
+  EVENT: 'Wydarzenie',
+  WEBINAR: 'Webinar',
+  DIRECT_MAIL: 'Poczta bezpośrednia',
+  OTHER: 'Inne'
+};
+
+export const CAMPAIGN_STATUSES = {
+  PLANNED: 'Planowana',
+  ACTIVE: 'Aktywna',
+  COMPLETED: 'Zakończona',
+  CANCELLED: 'Anulowana'
+};
+
+// Domyślne wartości dla formularzy CRM
+export const DEFAULT_CRM_VALUES = {
+  // Kontakt
+  NEW_CONTACT: {
+    type: CRM_CONTACT_TYPES.CUSTOMER,
+    firstName: '',
+    lastName: '',
+    company: '',
+    position: '',
+    email: '',
+    phone: '',
+    mobile: '',
+    address: {
+      street: '',
+      city: '',
+      postalCode: '',
+      country: 'Polska'
+    },
+    notes: '',
+    tags: []
+  },
+  
+  // Interakcja
+  NEW_INTERACTION: {
+    type: INTERACTION_TYPES.CALL,
+    subject: '',
+    date: new Date().toISOString(),
+    duration: 30, // w minutach
+    notes: '',
+    status: INTERACTION_STATUSES.PLANNED,
+    contactId: '',
+    contactName: '',
+    assignedTo: '',
+    reminderDate: null
+  },
+  
+  // Lead
+  NEW_LEAD: {
+    firstName: '',
+    lastName: '',
+    company: '',
+    position: '',
+    email: '',
+    phone: '',
+    source: LEAD_SOURCES.WEBSITE,
+    status: LEAD_STATUSES.NEW,
+    estimatedValue: 0,
+    notes: '',
+    assignedTo: '',
+    tags: []
+  },
+  
+  // Szansa sprzedaży
+  NEW_OPPORTUNITY: {
+    name: '',
+    contactId: '',
+    contactName: '',
+    stage: OPPORTUNITY_STAGES.PROSPECTING,
+    amount: 0,
+    probability: 0,
+    expectedCloseDate: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString(),
+    notes: '',
+    assignedTo: '',
+    products: [],
+    relatedCampaignId: ''
+  },
+  
+  // Kampania
+  NEW_CAMPAIGN: {
+    name: '',
+    type: CAMPAIGN_TYPES.EMAIL,
+    status: CAMPAIGN_STATUSES.PLANNED,
+    startDate: new Date().toISOString(),
+    endDate: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString(),
+    budget: 0,
+    expectedRevenue: 0,
+    description: '',
+    objectives: '',
+    targetAudience: '',
+    success_metrics: [],
+    assignedTo: ''
+  }
+};
