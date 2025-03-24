@@ -37,6 +37,10 @@ import InventoryHistoryPage from './pages/Inventory/InventoryHistoryPage';
 import ExpiryDatesPage from './pages/Inventory/ExpiryDatesPage';
 import BatchesPage from './pages/Inventory/BatchesPage';
 import BatchEditPage from './pages/Inventory/BatchEditPage';
+import StocktakingPage from './pages/Inventory/StocktakingPage';
+import StocktakingFormPage from './pages/Inventory/StocktakingFormPage';
+import StocktakingDetailsPage from './pages/Inventory/StocktakingDetailsPage';
+import StocktakingReportPage from './pages/Inventory/StocktakingReportPage';
 
 // Quality
 import QualityPage from './pages/Quality/QualityPage';
@@ -140,6 +144,11 @@ function App() {
               <Route path="/inventory/:id/issue" element={<PrivateLayout><IssueInventoryPage /></PrivateLayout>} />
               <Route path="/inventory/:id/history" element={<PrivateLayout><InventoryHistoryPage /></PrivateLayout>} />
               <Route path="/inventory/expiry-dates" element={<PrivateLayout><ExpiryDatesPage /></PrivateLayout>} />
+              <Route path="/inventory/stocktaking" element={<PrivateLayout><StocktakingPage /></PrivateLayout>} />
+              <Route path="/inventory/stocktaking/new" element={<PrivateLayout><StocktakingFormPage /></PrivateLayout>} />
+              <Route path="/inventory/stocktaking/:id" element={<PrivateLayout><StocktakingDetailsPage /></PrivateLayout>} />
+              <Route path="/inventory/stocktaking/:id/edit" element={<PrivateLayout><StocktakingFormPage /></PrivateLayout>} />
+              <Route path="/inventory/stocktaking/:id/report" element={<PrivateLayout><StocktakingReportPage /></PrivateLayout>} />
               
               {/* CMR Routes */}
               <Route path="/inventory/cmr" element={<PrivateLayout><CmrListPage /></PrivateLayout>} />

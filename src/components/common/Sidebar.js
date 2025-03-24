@@ -46,7 +46,8 @@ import {
   Contacts as ContactsIcon,
   Phone as CallIcon,
   Email as EmailIcon,
-  EventNote as MeetingIcon
+  EventNote as MeetingIcon,
+  ListAlt as ListAltIcon
 } from '@mui/icons-material';
 import { getExpiringBatches, getExpiredBatches } from '../../services/inventoryService';
 
@@ -185,9 +186,10 @@ const Sidebar = () => {
       children: [
         { text: 'CMR', icon: <WaybillIcon />, path: '/inventory/cmr' },
         { text: 'Dostawcy', icon: <SuppliersIcon />, path: '/suppliers' },
+        { text: 'Inwentaryzacja', icon: <ListAltIcon />, path: '/inventory/stocktaking' },
         { text: 'Stan magazynowy', icon: <InventoryIcon />, path: '/inventory' },
-        { text: 'Zamówienia komponentów', icon: <PurchaseOrdersIcon />, path: '/purchase-orders' },
         { text: 'Terminy ważności', icon: <CalendarIcon />, path: '/inventory/expiry-dates' },
+        { text: 'Zamówienia komponentów', icon: <PurchaseOrdersIcon />, path: '/purchase-orders' },
       ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
     },
     { text: 'Produkcja',

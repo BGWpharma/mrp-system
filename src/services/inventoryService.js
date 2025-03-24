@@ -1242,3 +1242,423 @@ import {
       throw error;
     }
   };
+
+  // ------ ZARZĄDZANIE INWENTARYZACJĄ ------
+  
+  const STOCKTAKING_COLLECTION = 'stocktaking';
+  const STOCKTAKING_ITEMS_COLLECTION = 'stocktakingItems';
+  
+  // Pobieranie wszystkich inwentaryzacji
+  export const getAllStocktakings = async () => {
+    try {
+      const stocktakingRef = collection(db, STOCKTAKING_COLLECTION);
+      const q = query(stocktakingRef, orderBy('createdAt', 'desc'));
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Błąd podczas pobierania inwentaryzacji:', error);
+      throw error;
+    }
+  };
+  
+  // Pobieranie inwentaryzacji po ID
+  export const getStocktakingById = async (stocktakingId) => {
+    try {
+      const docRef = doc(db, STOCKTAKING_COLLECTION, stocktakingId);
+      const docSnap = await getDoc(docRef);
+      
+      if (!docSnap.exists()) {
+        throw new Error('Inwentaryzacja nie istnieje');
+      }
+      
+      return {
+        id: docSnap.id,
+        ...docSnap.data()
+      };
+    } catch (error) {
+      console.error('Błąd podczas pobierania inwentaryzacji:', error);
+      throw error;
+    }
+  };
+  
+  // Tworzenie nowej inwentaryzacji
+  export const createStocktaking = async (stocktakingData, userId) => {
+    try {
+      const stocktakingWithMeta = {
+        ...stocktakingData,
+        status: 'Otwarta',
+        createdBy: userId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        completedAt: null
+      };
+      
+      const docRef = await addDoc(collection(db, STOCKTAKING_COLLECTION), stocktakingWithMeta);
+      
+      return {
+        id: docRef.id,
+        ...stocktakingWithMeta
+      };
+    } catch (error) {
+      console.error('Błąd podczas tworzenia inwentaryzacji:', error);
+      throw error;
+    }
+  };
+  
+  // Aktualizacja inwentaryzacji
+  export const updateStocktaking = async (stocktakingId, stocktakingData, userId) => {
+    try {
+      const stocktakingRef = doc(db, STOCKTAKING_COLLECTION, stocktakingId);
+      
+      // Pobierz aktualne dane
+      const currentStocktaking = await getStocktakingById(stocktakingId);
+      
+      // Sprawdź, czy inwentaryzacja nie jest już zakończona
+      if (currentStocktaking.status === 'Zakończona' && stocktakingData.status !== 'Zakończona') {
+        throw new Error('Nie można modyfikować zakończonej inwentaryzacji');
+      }
+      
+      const updatedData = {
+        ...stocktakingData,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      };
+      
+      // Jeśli status jest zmieniany na "Zakończona", dodaj datę zakończenia
+      if (stocktakingData.status === 'Zakończona' && currentStocktaking.status !== 'Zakończona') {
+        updatedData.completedAt = serverTimestamp();
+      }
+      
+      await updateDoc(stocktakingRef, updatedData);
+      
+      return {
+        id: stocktakingId,
+        ...updatedData
+      };
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji inwentaryzacji:', error);
+      throw error;
+    }
+  };
+  
+  // Pobieranie elementów inwentaryzacji
+  export const getStocktakingItems = async (stocktakingId) => {
+    try {
+      const itemsRef = collection(db, STOCKTAKING_ITEMS_COLLECTION);
+      const q = query(itemsRef, where('stocktakingId', '==', stocktakingId));
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Błąd podczas pobierania elementów inwentaryzacji:', error);
+      throw error;
+    }
+  };
+  
+  // Dodawanie pozycji do inwentaryzacji
+  export const addItemToStocktaking = async (stocktakingId, itemData, userId) => {
+    try {
+      // Pobierz informacje o inwentaryzacji
+      const stocktaking = await getStocktakingById(stocktakingId);
+      
+      // Sprawdź, czy inwentaryzacja nie jest już zakończona
+      if (stocktaking.status === 'Zakończona') {
+        throw new Error('Nie można dodawać pozycji do zakończonej inwentaryzacji');
+      }
+      
+      // Pobierz aktualne dane produktu z magazynu
+      const inventoryItem = await getInventoryItemById(itemData.inventoryItemId);
+      
+      const stocktakingItem = {
+        stocktakingId,
+        inventoryItemId: itemData.inventoryItemId,
+        name: inventoryItem.name,
+        category: inventoryItem.category,
+        unit: inventoryItem.unit,
+        location: inventoryItem.location,
+        systemQuantity: inventoryItem.quantity || 0,
+        countedQuantity: itemData.countedQuantity || 0,
+        discrepancy: (itemData.countedQuantity || 0) - (inventoryItem.quantity || 0),
+        notes: itemData.notes || '',
+        status: 'Dodano',
+        createdBy: userId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+      
+      const docRef = await addDoc(collection(db, STOCKTAKING_ITEMS_COLLECTION), stocktakingItem);
+      
+      return {
+        id: docRef.id,
+        ...stocktakingItem
+      };
+    } catch (error) {
+      console.error('Błąd podczas dodawania pozycji do inwentaryzacji:', error);
+      throw error;
+    }
+  };
+  
+  // Aktualizacja pozycji inwentaryzacji
+  export const updateStocktakingItem = async (itemId, itemData, userId) => {
+    try {
+      const itemRef = doc(db, STOCKTAKING_ITEMS_COLLECTION, itemId);
+      
+      // Pobierz aktualny element
+      const docSnap = await getDoc(itemRef);
+      if (!docSnap.exists()) {
+        throw new Error('Element inwentaryzacji nie istnieje');
+      }
+      
+      const currentItem = docSnap.data();
+      
+      // Pobierz informacje o inwentaryzacji
+      const stocktaking = await getStocktakingById(currentItem.stocktakingId);
+      
+      // Sprawdź, czy inwentaryzacja nie jest już zakończona
+      if (stocktaking.status === 'Zakończona') {
+        throw new Error('Nie można modyfikować elementów zakończonej inwentaryzacji');
+      }
+      
+      // Oblicz nową rozbieżność
+      const discrepancy = (itemData.countedQuantity || 0) - currentItem.systemQuantity;
+      
+      const updatedItem = {
+        ...itemData,
+        discrepancy,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      };
+      
+      await updateDoc(itemRef, updatedItem);
+      
+      return {
+        id: itemId,
+        ...currentItem,
+        ...updatedItem
+      };
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji elementu inwentaryzacji:', error);
+      throw error;
+    }
+  };
+  
+  // Usuwanie pozycji inwentaryzacji
+  export const deleteStocktakingItem = async (itemId) => {
+    try {
+      // Pobierz element przed usunięciem
+      const itemRef = doc(db, STOCKTAKING_ITEMS_COLLECTION, itemId);
+      const docSnap = await getDoc(itemRef);
+      
+      if (!docSnap.exists()) {
+        throw new Error('Element inwentaryzacji nie istnieje');
+      }
+      
+      const item = docSnap.data();
+      
+      // Pobierz informacje o inwentaryzacji
+      const stocktaking = await getStocktakingById(item.stocktakingId);
+      
+      // Sprawdź, czy inwentaryzacja nie jest już zakończona
+      if (stocktaking.status === 'Zakończona') {
+        throw new Error('Nie można usuwać elementów zakończonej inwentaryzacji');
+      }
+      
+      await deleteDoc(itemRef);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Błąd podczas usuwania elementu inwentaryzacji:', error);
+      throw error;
+    }
+  };
+  
+  // Zakończenie inwentaryzacji i aktualizacja stanów magazynowych
+  export const completeStocktaking = async (stocktakingId, adjustInventory = true, userId) => {
+    try {
+      // Pobierz informacje o inwentaryzacji
+      const stocktaking = await getStocktakingById(stocktakingId);
+      
+      // Sprawdź, czy inwentaryzacja nie jest już zakończona
+      if (stocktaking.status === 'Zakończona') {
+        throw new Error('Inwentaryzacja jest już zakończona');
+      }
+      
+      // Pobierz wszystkie elementy inwentaryzacji
+      const items = await getStocktakingItems(stocktakingId);
+      
+      // Jeśli mamy dostosować stany magazynowe
+      if (adjustInventory) {
+        for (const item of items) {
+          const inventoryItemRef = doc(db, INVENTORY_COLLECTION, item.inventoryItemId);
+          
+          // Pobierz aktualny stan
+          const inventoryItem = await getInventoryItemById(item.inventoryItemId);
+          
+          // Aktualizuj stan magazynowy
+          const adjustment = item.countedQuantity - inventoryItem.quantity;
+          
+          await updateDoc(inventoryItemRef, {
+            quantity: item.countedQuantity,
+            updatedAt: serverTimestamp(),
+            updatedBy: userId
+          });
+          
+          // Dodaj transakcję korygującą
+          const transactionData = {
+            itemId: item.inventoryItemId,
+            itemName: item.name,
+            type: adjustment > 0 ? 'adjustment-add' : 'adjustment-remove',
+            quantity: Math.abs(adjustment),
+            date: serverTimestamp(),
+            reason: 'Korekta z inwentaryzacji',
+            reference: `Inwentaryzacja #${stocktakingId}`,
+            notes: item.notes || 'Korekta stanu po inwentaryzacji',
+            createdBy: userId,
+            createdAt: serverTimestamp()
+          };
+          
+          await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
+          
+          // Aktualizuj status elementu inwentaryzacji
+          const itemRef = doc(db, STOCKTAKING_ITEMS_COLLECTION, item.id);
+          await updateDoc(itemRef, {
+            status: 'Skorygowano',
+            updatedAt: serverTimestamp(),
+            updatedBy: userId
+          });
+        }
+      }
+      
+      // Zaktualizuj status inwentaryzacji
+      const stocktakingRef = doc(db, STOCKTAKING_COLLECTION, stocktakingId);
+      await updateDoc(stocktakingRef, {
+        status: 'Zakończona',
+        completedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      });
+      
+      return {
+        success: true,
+        message: adjustInventory 
+          ? 'Inwentaryzacja zakończona i stany magazynowe zaktualizowane' 
+          : 'Inwentaryzacja zakończona bez aktualizacji stanów magazynowych'
+      };
+    } catch (error) {
+      console.error('Błąd podczas kończenia inwentaryzacji:', error);
+      throw error;
+    }
+  };
+  
+  // Generowanie raportu różnic z inwentaryzacji
+  export const generateStocktakingReport = async (stocktakingId) => {
+    try {
+      // Pobierz informacje o inwentaryzacji
+      const stocktaking = await getStocktakingById(stocktakingId);
+      
+      // Pobierz wszystkie elementy inwentaryzacji
+      const items = await getStocktakingItems(stocktakingId);
+      
+      // Oblicz statystyki
+      const totalItems = items.length;
+      const itemsWithDiscrepancy = items.filter(item => item.discrepancy !== 0).length;
+      const positiveDiscrepancies = items.filter(item => item.discrepancy > 0);
+      const negativeDiscrepancies = items.filter(item => item.discrepancy < 0);
+      
+      const totalPositiveDiscrepancy = positiveDiscrepancies.reduce((sum, item) => sum + item.discrepancy, 0);
+      const totalNegativeDiscrepancy = negativeDiscrepancies.reduce((sum, item) => sum + item.discrepancy, 0);
+      
+      // Dane raportu
+      const reportData = {
+        id: stocktakingId,
+        stocktaking,
+        items,
+        stats: {
+          totalItems,
+          itemsWithDiscrepancy,
+          itemsWithPositiveDiscrepancy: positiveDiscrepancies.length,
+          itemsWithNegativeDiscrepancy: negativeDiscrepancies.length,
+          totalPositiveDiscrepancy,
+          totalNegativeDiscrepancy,
+          totalDiscrepancy: totalPositiveDiscrepancy + totalNegativeDiscrepancy
+        }
+      };
+      
+      // Użyj jsPDF do wygenerowania pliku PDF
+      const { jsPDF } = await import('jspdf');
+      const autoTable = (await import('jspdf-autotable')).default;
+      
+      const doc = new jsPDF();
+      
+      // Nagłówek
+      doc.setFontSize(18);
+      doc.text('Raport inwentaryzacji', 14, 20);
+      
+      doc.setFontSize(12);
+      doc.text(`Nazwa: ${stocktaking.name}`, 14, 30);
+      doc.text(`Status: ${stocktaking.status}`, 14, 38);
+      doc.text(`Lokalizacja: ${stocktaking.location || 'Wszystkie lokalizacje'}`, 14, 46);
+      
+      // Data wygenerowania
+      const currentDate = new Date();
+      const formattedDate = `${currentDate.getDate()}.${currentDate.getMonth() + 1}.${currentDate.getFullYear()}`;
+      doc.text(`Wygenerowano: ${formattedDate}`, 14, 54);
+      
+      // Statystyki
+      doc.setFontSize(14);
+      doc.text('Podsumowanie', 14, 68);
+      
+      doc.setFontSize(10);
+      doc.text(`Łączna liczba produktów: ${totalItems}`, 14, 78);
+      doc.text(`Produkty zgodne: ${totalItems - itemsWithDiscrepancy}`, 14, 85);
+      doc.text(`Produkty z różnicami: ${itemsWithDiscrepancy}`, 14, 92);
+      doc.text(`Nadwyżki: ${positiveDiscrepancies.length}`, 14, 99);
+      doc.text(`Braki: ${negativeDiscrepancies.length}`, 14, 106);
+      
+      // Tabela produktów
+      const tableData = items.map(item => [
+        item.name,
+        item.category || '',
+        item.systemQuantity ? item.systemQuantity.toString() : '0',
+        item.countedQuantity ? item.countedQuantity.toString() : '0',
+        item.discrepancy ? item.discrepancy.toString() : '0',
+        item.notes || ''
+      ]);
+      
+      autoTable(doc, {
+        startY: 120,
+        head: [['Nazwa produktu', 'Kategoria', 'Stan systemowy', 'Stan policzony', 'Różnica', 'Uwagi']],
+        body: tableData,
+        headStyles: { fillColor: [66, 139, 202] },
+        alternateRowStyles: { fillColor: [241, 245, 249] },
+        margin: { top: 120 },
+      });
+      
+      // Stopka
+      const pageCount = doc.internal.getNumberOfPages();
+      for(let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(10);
+        doc.text(
+          `Strona ${i} z ${pageCount}`,
+          doc.internal.pageSize.width / 2,
+          doc.internal.pageSize.height - 10,
+          { align: 'center' }
+        );
+      }
+      
+      // Zwróć plik PDF jako Blob
+      const pdfBlob = doc.output('blob');
+      return pdfBlob;
+    } catch (error) {
+      console.error('Błąd podczas generowania raportu inwentaryzacji:', error);
+      throw error;
+    }
+  };
