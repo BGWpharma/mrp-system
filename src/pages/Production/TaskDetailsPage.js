@@ -53,6 +53,10 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
 import { PRODUCTION_TASK_STATUSES, TIME_INTERVALS } from '../../utils/constants';
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { pl } from 'date-fns/locale';
 
 const TaskDetailsPage = () => {
   const { id } = useParams();
@@ -81,60 +85,67 @@ const TaskDetailsPage = () => {
   const [quantity, setQuantity] = useState(0);
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
 
-  useEffect(() => {
-    const fetchTask = async () => {
-      try {
-        setLoading(true);
-        const fetchedTask = await getTaskById(id);
-        setTask(fetchedTask);
+  const [productionStartTime, setProductionStartTime] = useState(new Date());
+  const [productionEndTime, setProductionEndTime] = useState(new Date());
+
+  // Funkcja do pobierania danych zadania
+  const fetchTask = async () => {
+    try {
+      setLoading(true);
+      const fetchedTask = await getTaskById(id);
+      setTask(fetchedTask);
+      
+      // Przygotuj materiały do wyświetlenia
+      if (fetchedTask?.materials?.length > 0) {
+        // Użyj wartości quantity z materiałów - to jest całkowite zapotrzebowanie
+        const materialsList = fetchedTask.materials.map(material => ({
+          ...material,
+          // Nie tworzymy plannedQuantity, bo używamy bezpośrednio wartości quantity,
+          // która reprezentuje całkowite zapotrzebowanie
+        }));
         
-        // Przygotuj materiały do wyświetlenia
-        if (fetchedTask?.materials?.length > 0) {
-          // Użyj wartości quantity z materiałów - to jest całkowite zapotrzebowanie
-          const materialsList = fetchedTask.materials.map(material => ({
-            ...material,
-            // Nie tworzymy plannedQuantity, bo używamy bezpośrednio wartości quantity,
-            // która reprezentuje całkowite zapotrzebowanie
-          }));
+        setMaterials(materialsList);
+        
+        // Inicjalizacja rzeczywistych ilości
+        const quantities = {};
+        materialsList.forEach(material => {
+          const actualQuantity = fetchedTask.actualMaterialUsage && fetchedTask.actualMaterialUsage[material.id] !== undefined
+            ? fetchedTask.actualMaterialUsage[material.id]
+            : material.quantity; // Używamy bezpośrednio wartości quantity jako domyślnej
           
-          setMaterials(materialsList);
-          
-          // Inicjalizacja rzeczywistych ilości
-          const quantities = {};
-          materialsList.forEach(material => {
-            const actualQuantity = fetchedTask.actualMaterialUsage && fetchedTask.actualMaterialUsage[material.id] !== undefined
-              ? fetchedTask.actualMaterialUsage[material.id]
-              : material.quantity; // Używamy bezpośrednio wartości quantity jako domyślnej
-            
-            quantities[material.id] = actualQuantity;
-          });
-          
-          setMaterialQuantities(quantities);
-        }
-      } catch (error) {
-        showError('Błąd podczas pobierania zadania: ' + error.message);
-        console.error('Error fetching task:', error);
-        navigate('/production');
-      } finally {
-        setLoading(false);
+          quantities[material.id] = actualQuantity;
+        });
+        
+        setMaterialQuantities(quantities);
       }
-    };
-    
+    } catch (error) {
+      showError('Błąd podczas pobierania zadania: ' + error.message);
+      console.error('Error fetching task:', error);
+      navigate('/production');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Funkcja do pobierania historii produkcji
+  const fetchProductionHistory = async () => {
+    if (!task || !task.id) {
+      return; // Zabezpieczenie przed błędami null/undefined
+    }
+    try {
+      const history = await getProductionHistory(task.id);
+      setProductionHistory(history || []);
+    } catch (error) {
+      console.error('Błąd podczas pobierania historii produkcji:', error);
+      setProductionHistory([]);
+    }
+  };
+  
+  useEffect(() => {
     fetchTask();
   }, [id, navigate, showError]);
 
   useEffect(() => {
-    const fetchProductionHistory = async () => {
-      if (task?.id) {
-        try {
-          const history = await getProductionHistory(task.id);
-          setProductionHistory(history);
-        } catch (error) {
-          console.error('Błąd podczas pobierania historii produkcji:', error);
-        }
-      }
-    };
-
     fetchProductionHistory();
   }, [task?.id]);
 
@@ -349,8 +360,11 @@ const TaskDetailsPage = () => {
         // Przekieruj do strony przyjęcia towaru z parametrami
         const unitPrice = task.costs && task.quantity ? 
           Number(task.costs.totalCost / task.quantity) : 0;
+        
+        // Generujemy LOT na podstawie numeru zadania produkcyjnego (MO)
+        const lotNumber = task.moNumber ? `LOT-${task.moNumber}` : `LOT-PROD-${id.substring(0, 6)}`;
           
-        navigate(`/inventory/${task.inventoryProductId}/receive?poNumber=PROD-${id.substring(0, 6)}&quantity=${task.quantity}&unitPrice=${unitPrice}&reason=production`);
+        navigate(`/inventory/${task.inventoryProductId}/receive?poNumber=PROD-${id.substring(0, 6)}&quantity=${task.quantity}&unitPrice=${unitPrice}&reason=production&lotNumber=${lotNumber}&source=production&sourceId=${id}`);
       } else {
         // Jeśli nie ma powiązanej pozycji magazynowej, użyj standardowej funkcji
         await addTaskProductToInventory(id, currentUser.uid);
@@ -358,7 +372,7 @@ const TaskDetailsPage = () => {
         setAlert({
           open: true,
           severity: 'success',
-          message: 'Produkt został pomyślnie dodany do magazynu'
+          message: 'Produkt został pomyślnie dodany do magazynu jako partia'
         });
         
         // Odśwież dane zadania
@@ -397,25 +411,48 @@ const TaskDetailsPage = () => {
     try {
       setProductionError(null);
       
-      if (!completedQuantity || !timeSpent) {
-        setProductionError('Wypełnij wszystkie pola');
+      if (!completedQuantity) {
+        setProductionError('Podaj wyprodukowaną ilość');
         return;
       }
 
       const quantity = parseFloat(completedQuantity);
-      const time = parseFloat(timeSpent);
-
+      
       if (isNaN(quantity) || quantity < 0) {
         setProductionError('Nieprawidłowa ilość');
         return;
       }
-
-      if (isNaN(time) || time < 0) {
-        setProductionError('Nieprawidłowy przedział czasowy');
+      
+      if (!productionStartTime || !productionEndTime) {
+        setProductionError('Podaj przedział czasowy produkcji');
+        return;
+      }
+      
+      if (productionEndTime < productionStartTime) {
+        setProductionError('Czas zakończenia nie może być wcześniejszy niż czas rozpoczęcia');
+        return;
+      }
+      
+      // Oblicz czas trwania w minutach
+      const durationMs = productionEndTime.getTime() - productionStartTime.getTime();
+      const durationMinutes = Math.round(durationMs / (1000 * 60));
+      
+      if (durationMinutes <= 0) {
+        setProductionError('Przedział czasowy musi być dłuższy niż 0 minut');
         return;
       }
 
-      const result = await stopProduction(id, quantity, time, currentUser.uid);
+      // Przekazujemy czas trwania w minutach oraz daty rozpoczęcia i zakończenia
+      const result = await stopProduction(
+        id, 
+        quantity, 
+        durationMinutes, 
+        currentUser.uid, 
+        {
+          startTime: productionStartTime.toISOString(),
+          endTime: productionEndTime.toISOString()
+        }
+      );
       
       setStopProductionDialogOpen(false);
       showSuccess(result.isCompleted ? 
@@ -423,14 +460,18 @@ const TaskDetailsPage = () => {
         'Sesja produkcyjna zapisana. Możesz kontynuować produkcję później.'
       );
       
-      const updatedTask = await getTaskById(id);
-      setTask(updatedTask);
+      // Resetuj stan formularza
+      setCompletedQuantity('');
+      setProductionStartTime(new Date());
+      setProductionEndTime(new Date());
       
-      // Odśwież historię produkcji
-      const history = await getProductionHistory(id);
-      setProductionHistory(history);
+      // Odśwież dane
+      await fetchTask();
+      // Po zaktualizowaniu zadania, odśwież także historię produkcji
+      await fetchProductionHistory();
     } catch (error) {
       showError('Błąd podczas zatrzymywania produkcji: ' + error.message);
+      console.error('Error stopping production:', error);
     }
   };
 
@@ -606,7 +647,7 @@ const TaskDetailsPage = () => {
             onClick={handleAddToInventory}
             sx={{ ml: 1 }}
           >
-            Dodaj produkt do magazynu
+            Dodaj produkt jako partię
           </Button>
         )}
       </Box>
@@ -821,6 +862,8 @@ const TaskDetailsPage = () => {
       <Dialog
         open={stopProductionDialogOpen}
         onClose={() => setStopProductionDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
       >
         <DialogTitle>Zatrzymaj produkcję</DialogTitle>
         <DialogContent>
@@ -846,21 +889,49 @@ const TaskDetailsPage = () => {
             }}
           />
           
-          <FormControl fullWidth margin="dense">
-            <InputLabel id="time-interval-label">Przedział czasowy produkcji</InputLabel>
-            <Select
-              labelId="time-interval-label"
-              value={timeSpent}
-              onChange={(e) => setTimeSpent(e.target.value)}
-              label="Przedział czasowy produkcji"
-            >
-              {TIME_INTERVALS.map((interval) => (
-                <MenuItem key={interval.value} value={interval.value}>
-                  {interval.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, my: 2 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Przedział czasowy produkcji:
+              </Typography>
+              
+              <DateTimePicker
+                label="Czas rozpoczęcia"
+                value={productionStartTime}
+                onChange={(newValue) => setProductionStartTime(newValue)}
+                ampm={false}
+                format="dd-MM-yyyy HH:mm"
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    margin: 'dense',
+                    variant: 'outlined'
+                  }
+                }}
+              />
+              
+              <DateTimePicker
+                label="Czas zakończenia"
+                value={productionEndTime}
+                onChange={(newValue) => setProductionEndTime(newValue)}
+                ampm={false}
+                format="dd-MM-yyyy HH:mm"
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    margin: 'dense',
+                    variant: 'outlined'
+                  }
+                }}
+              />
+              
+              {productionStartTime && productionEndTime && (
+                <Typography variant="body2" color="textSecondary">
+                  Czas trwania: {Math.round((productionEndTime.getTime() - productionStartTime.getTime()) / (1000 * 60))} minut
+                </Typography>
+              )}
+            </Box>
+          </LocalizationProvider>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setStopProductionDialogOpen(false)}>
@@ -890,13 +961,15 @@ const TaskDetailsPage = () => {
       <Dialog
         open={receiveDialogOpen}
         onClose={() => setReceiveDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
       >
         <DialogTitle>Przyjmij produkt do magazynu</DialogTitle>
         <DialogContent>
           {task && (
             <>
               <DialogContentText>
-                Czy chcesz przyjąć do magazynu następujący produkt:
+                Produkt zostanie przyjęty do magazynu jako nowa partia (LOT) przypisana do pozycji {task.productName}.
               </DialogContentText>
               <Box sx={{ mt: 2, mb: 2 }}>
                 <Typography variant="subtitle1">{task.productName}</Typography>
@@ -908,7 +981,15 @@ const TaskDetailsPage = () => {
                     Koszt jednostkowy: {Number(task.costs.totalCost / task.quantity).toFixed(2)} PLN
                   </Typography>
                 )}
+                <Typography variant="body2" color="primary" sx={{ mt: 1 }}>
+                  {task.moNumber ? 
+                    `Numer partii (LOT): LOT-${task.moNumber}` : 
+                    `Numer partii (LOT): LOT-PROD-${id.substring(0, 6)}`}
+                </Typography>
               </Box>
+              <Alert severity="info" sx={{ mt: 2 }}>
+                Przyjęcie produktu z produkcji utworzy nową partię w magazynie, zwiększając stan magazynowy wybranego produktu.
+              </Alert>
             </>
           )}
         </DialogContent>
@@ -917,8 +998,9 @@ const TaskDetailsPage = () => {
           <Button 
             onClick={handleReceiveItem} 
             color="primary"
+            variant="contained"
           >
-            {task && task.inventoryProductId ? 'Przejdź do przyjęcia' : 'Dodaj do magazynu'}
+            {task && task.inventoryProductId ? 'Przyjmij jako partię' : 'Dodaj do magazynu'}
           </Button>
         </DialogActions>
       </Dialog>

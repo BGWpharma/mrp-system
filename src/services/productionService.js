@@ -528,8 +528,10 @@ import {
         }
       }
       
-      // Wygeneruj numer LOT
-      const lotNumber = await generateLOTNumber();
+      // Wygeneruj numer LOT bazując na numerze zadania produkcyjnego (MO)
+      const lotNumber = taskData.moNumber ? 
+        `LOT-${taskData.moNumber}` : 
+        `LOT-PROD-${taskId.substring(0, 6)}`;
       
       // Dodaj partię do magazynu
       const batchRef = doc(collection(db, 'inventoryBatches'));
@@ -538,13 +540,13 @@ import {
         itemName: taskData.productName,
         quantity: taskData.quantity,
         initialQuantity: taskData.quantity,
-        batchNumber: `PROD-${taskId.substring(0, 6)}`,
+        batchNumber: lotNumber,
         receivedDate: serverTimestamp(),
         expiryDate: null, // Można dodać logikę określania daty ważności
         lotNumber: lotNumber,
         source: 'Produkcja',
         sourceId: taskId,
-        notes: `Partia z zadania produkcyjnego: ${taskData.name}`,
+        notes: `Partia z zadania produkcyjnego: ${taskData.name || ''}${taskData.moNumber ? ' (MO: ' + taskData.moNumber + ')' : ''}`,
         unitPrice: taskData.costs ? (taskData.costs.totalCost / taskData.quantity) : 0,
         createdAt: serverTimestamp(),
         createdBy: userId
@@ -1317,7 +1319,7 @@ import {
   };
 
   // Zatrzymanie produkcji
-  export const stopProduction = async (taskId, completedQuantity, timeSpent, userId) => {
+  export const stopProduction = async (taskId, completedQuantity, timeSpent, userId, timeInfo = null) => {
     const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
     const taskDoc = await getDoc(taskRef);
     const task = taskDoc.data();
@@ -1325,10 +1327,11 @@ import {
     // Pobierz aktualną sesję produkcyjną
     const productionSessions = task.productionSessions || [];
     
-    // Dodaj nową sesję używając zwykłej daty
+    // Dodaj nową sesję
     const newSession = {
-      startDate: task.startDate,
-      endDate: new Date().toISOString(),
+      // Jeśli przekazano timeInfo, użyj dokładnych dat, w przeciwnym razie użyj poprzedniej logiki
+      startDate: timeInfo?.startTime || task.startDate,
+      endDate: timeInfo?.endTime || new Date().toISOString(),
       completedQuantity,
       timeSpent, // w minutach
       createdBy: userId

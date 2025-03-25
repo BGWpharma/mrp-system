@@ -53,6 +53,10 @@ import { formatDate } from '../../utils/formatters';
 import { useTheme } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
 import { TIME_INTERVALS } from '../../utils/constants';
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { pl } from 'date-fns/locale';
 
 const TaskList = () => {
   const [tasks, setTasks] = useState([]);
@@ -69,6 +73,8 @@ const TaskList = () => {
   const [completedQuantity, setCompletedQuantity] = useState('');
   const [timeSpent, setTimeSpent] = useState('');
   const [productionError, setProductionError] = useState(null);
+  const [productionStartTime, setProductionStartTime] = useState(new Date());
+  const [productionEndTime, setProductionEndTime] = useState(new Date());
 
   // Pobierz zadania przy montowaniu komponentu
   useEffect(() => {
@@ -140,7 +146,7 @@ const TaskList = () => {
   const handleAddToInventory = async (id) => {
     try {
       await addTaskProductToInventory(id, currentUser.uid);
-      showSuccess('Produkt został dodany do magazynu jako partia');
+      showSuccess('Produkt został dodany do magazynu jako nowa partia (LOT)');
       // Odśwież listę zadań
       fetchTasks();
     } catch (error) {
@@ -153,25 +159,48 @@ const TaskList = () => {
     try {
       setProductionError(null);
       
-      if (!completedQuantity || !timeSpent) {
-        setProductionError('Wypełnij wszystkie pola');
+      if (!completedQuantity) {
+        setProductionError('Podaj wyprodukowaną ilość');
         return;
       }
 
       const quantity = parseFloat(completedQuantity);
-      const time = parseFloat(timeSpent);
-
+      
       if (isNaN(quantity) || quantity < 0) {
         setProductionError('Nieprawidłowa ilość');
         return;
       }
-
-      if (isNaN(time) || time < 0) {
-        setProductionError('Nieprawidłowy czas');
+      
+      if (!productionStartTime || !productionEndTime) {
+        setProductionError('Podaj przedział czasowy produkcji');
+        return;
+      }
+      
+      if (productionEndTime < productionStartTime) {
+        setProductionError('Czas zakończenia nie może być wcześniejszy niż czas rozpoczęcia');
+        return;
+      }
+      
+      // Oblicz czas trwania w minutach
+      const durationMs = productionEndTime.getTime() - productionStartTime.getTime();
+      const durationMinutes = Math.round(durationMs / (1000 * 60));
+      
+      if (durationMinutes <= 0) {
+        setProductionError('Przedział czasowy musi być dłuższy niż 0 minut');
         return;
       }
 
-      const result = await stopProduction(currentTaskId, quantity, time, currentUser.uid);
+      // Przekazujemy czas trwania w minutach oraz daty rozpoczęcia i zakończenia
+      const result = await stopProduction(
+        currentTaskId, 
+        quantity, 
+        durationMinutes, 
+        currentUser.uid,
+        {
+          startTime: productionStartTime.toISOString(),
+          endTime: productionEndTime.toISOString()
+        }
+      );
       
       setStopProductionDialogOpen(false);
       showSuccess(result.isCompleted ? 
@@ -181,13 +210,15 @@ const TaskList = () => {
       
       // Resetuj stan formularza
       setCompletedQuantity('');
-      setTimeSpent('');
+      setProductionStartTime(new Date());
+      setProductionEndTime(new Date());
       setCurrentTaskId(null);
       
       // Odśwież listę zadań
       fetchTasks();
     } catch (error) {
       showError('Błąd podczas zatrzymywania produkcji: ' + error.message);
+      console.error('Error stopping production:', error);
     }
   };
 
@@ -216,9 +247,9 @@ const TaskList = () => {
 
     if (task.inventoryUpdated) {
       return (
-        <Tooltip title={`Produkt dodany do magazynu jako partia (ID: ${task.inventoryItemId})`}>
+        <Tooltip title={`Produkt dodany do magazynu jako partia LOT (${task.inventoryBatchId?.substring(0, 6) || ''})`}>
           <Chip 
-            label="Dodano do magazynu" 
+            label="Dodano jako partia" 
             color="success" 
             size="small" 
             variant="outlined"
@@ -227,7 +258,7 @@ const TaskList = () => {
       );
     } else if (task.readyForInventory) {
       return (
-        <Tooltip title="Gotowy do dodania do magazynu">
+        <Tooltip title="Gotowy do dodania do magazynu jako partia">
           <Chip 
             label="Gotowy do dodania" 
             color="info" 
@@ -460,6 +491,8 @@ const TaskList = () => {
       <Dialog
         open={stopProductionDialogOpen}
         onClose={() => setStopProductionDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
       >
         <DialogTitle>Zatrzymaj produkcję</DialogTitle>
         <DialogContent>
@@ -485,21 +518,49 @@ const TaskList = () => {
             }}
           />
           
-          <FormControl fullWidth margin="dense">
-            <InputLabel id="time-interval-label">Przedział czasowy produkcji</InputLabel>
-            <Select
-              labelId="time-interval-label"
-              value={timeSpent}
-              onChange={(e) => setTimeSpent(e.target.value)}
-              label="Przedział czasowy produkcji"
-            >
-              {TIME_INTERVALS.map((interval) => (
-                <MenuItem key={interval.value} value={interval.value}>
-                  {interval.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, my: 2 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Przedział czasowy produkcji:
+              </Typography>
+              
+              <DateTimePicker
+                label="Czas rozpoczęcia"
+                value={productionStartTime}
+                onChange={(newValue) => setProductionStartTime(newValue)}
+                ampm={false}
+                format="dd-MM-yyyy HH:mm"
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    margin: 'dense',
+                    variant: 'outlined'
+                  }
+                }}
+              />
+              
+              <DateTimePicker
+                label="Czas zakończenia"
+                value={productionEndTime}
+                onChange={(newValue) => setProductionEndTime(newValue)}
+                ampm={false}
+                format="dd-MM-yyyy HH:mm"
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    margin: 'dense',
+                    variant: 'outlined'
+                  }
+                }}
+              />
+              
+              {productionStartTime && productionEndTime && (
+                <Typography variant="body2" color="textSecondary">
+                  Czas trwania: {Math.round((productionEndTime.getTime() - productionStartTime.getTime()) / (1000 * 60))} minut
+                </Typography>
+              )}
+            </Box>
+          </LocalizationProvider>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setStopProductionDialogOpen(false)}>

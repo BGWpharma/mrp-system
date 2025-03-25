@@ -57,6 +57,9 @@ const PurchaseOrderForm = ({ orderId }) => {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setLoading(true);
+        console.log("Pobieranie danych formularza PO, ID:", currentOrderId);
+        
         // Pobierz dostawców
         const suppliersData = await getAllSuppliers();
         setSuppliers(suppliersData);
@@ -71,14 +74,27 @@ const PurchaseOrderForm = ({ orderId }) => {
         
         // Jeśli edytujemy istniejące zamówienie, pobierz jego dane
         if (currentOrderId && currentOrderId !== 'new') {
+          console.log("Pobieranie danych istniejącego zamówienia:", currentOrderId);
           const poDetails = await getPurchaseOrderById(currentOrderId);
+          console.log("Pobrane dane zamówienia:", poDetails);
           
           // Użyj formatDateForInput do formatowania dat
           const formattedOrderDate = poDetails.orderDate ? formatDateForInput(poDetails.orderDate) : formatDateForInput(new Date());
           const formattedDeliveryDate = poDetails.expectedDeliveryDate ? formatDateForInput(poDetails.expectedDeliveryDate) : '';
           
+          // Pobierz obiekty supplier z tablicy wszystkich dostawców
+          let matchedSupplier = null;
+          if (poDetails.supplier) {
+            matchedSupplier = poDetails.supplier;
+          } else if (poDetails.supplierId) {
+            matchedSupplier = suppliersData.find(s => s.id === poDetails.supplierId);
+          }
+          
+          console.log("Dopasowany dostawca:", matchedSupplier);
+          
           setPoData({
             ...poDetails,
+            supplier: matchedSupplier,
             orderDate: formattedOrderDate,
             expectedDeliveryDate: formattedDeliveryDate,
             vatRate: poDetails.vatRate || 23,
@@ -89,13 +105,13 @@ const PurchaseOrderForm = ({ orderId }) => {
         setLoading(false);
       } catch (error) {
         console.error('Błąd podczas pobierania danych:', error);
-        showError('Nie udało się pobrać danych');
+        showError('Nie udało się pobrać danych: ' + error.message);
         setLoading(false);
       }
     };
     
     fetchData();
-  }, [currentOrderId]);
+  }, [currentOrderId, showError]);
   
   // Aktualizacja całkowitej wartości zamówienia (netto i brutto)
   useEffect(() => {
@@ -116,11 +132,26 @@ const PurchaseOrderForm = ({ orderId }) => {
   };
   
   const handleDateChange = (name, date) => {
+    console.log(`Zmiana daty ${name}:`, date);
+    
     if (date) {
-      // Użyj funkcji formatDateForInput aby poprawnie sformatować datę
-      const formattedDate = formatDateForInput(date);
-      setPoData(prev => ({ ...prev, [name]: formattedDate }));
+      try {
+        // Upewnij się, że data jest poprawnym obiektem Date
+        const validDate = date instanceof Date && !isNaN(date) ? date : new Date(date);
+        console.log(`Poprawna data ${name}:`, validDate);
+        
+        // Użyj funkcji formatDateForInput aby poprawnie sformatować datę
+        const formattedDate = formatDateForInput(validDate);
+        console.log(`Sformatowana data ${name}:`, formattedDate);
+        
+        setPoData(prev => ({ ...prev, [name]: formattedDate }));
+      } catch (error) {
+        console.error(`Błąd podczas formatowania daty ${name}:`, error);
+        // W przypadku błędu, ustaw pustą datę
+        setPoData(prev => ({ ...prev, [name]: '' }));
+      }
     } else {
+      console.log(`Usunięcie daty ${name}`);
       setPoData(prev => ({ ...prev, [name]: '' }));
     }
   };
@@ -221,6 +252,7 @@ const PurchaseOrderForm = ({ orderId }) => {
     
     try {
       setSaving(true);
+      console.log("Zapisywanie zamówienia, dane:", poData);
       
       // Dodajemy dane użytkownika
       const orderData = {
@@ -231,18 +263,22 @@ const PurchaseOrderForm = ({ orderId }) => {
       
       let result;
       if (currentOrderId && currentOrderId !== 'new') {
+        console.log("Aktualizacja istniejącego zamówienia:", currentOrderId);
         result = await updatePurchaseOrder(currentOrderId, orderData);
         showSuccess('Zamówienie komponentów zostało zaktualizowane');
       } else {
+        console.log("Tworzenie nowego zamówienia");
         result = await createPurchaseOrder(orderData);
         showSuccess('Zamówienie komponentów zostało utworzone');
       }
+      
+      console.log("Wynik zapisu:", result);
       
       setSaving(false);
       navigate(`/purchase-orders/${result.id}`);
     } catch (error) {
       console.error('Błąd podczas zapisywania zamówienia:', error);
-      showError('Nie udało się zapisać zamówienia');
+      showError('Nie udało się zapisać zamówienia: ' + error.message);
       setSaving(false);
     }
   };

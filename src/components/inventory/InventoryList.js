@@ -51,8 +51,9 @@ import {
   Warehouse as WarehouseIcon,
   QrCode as QrCodeIcon,
   MoreVert as MoreVertIcon,
+  DeleteForever as DeleteForeverIcon,
 } from '@mui/icons-material';
-import { getAllInventoryItems, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, getItemBatches, updateReservation, updateReservationTasks } from '../../services/inventoryService';
+import { getAllInventoryItems, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, getItemBatches, updateReservation, updateReservationTasks, cleanupDeletedTaskReservations } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
 import { toast } from 'react-hot-toast';
@@ -105,6 +106,7 @@ const InventoryList = () => {
     batchId: ''
   });
   const [updatingTasks, setUpdatingTasks] = useState(false);
+  const [cleaningReservations, setCleaningReservations] = useState(false);
 
   // Pobierz wszystkie pozycje przy montowaniu komponentu
   useEffect(() => {
@@ -233,13 +235,40 @@ const InventoryList = () => {
       const transactions = await getItemTransactions(item.id);
       
       // Filtruj tylko transakcje rezerwacji (typ 'booking')
-      const bookingTransactions = transactions.filter(
+      let bookingTransactions = transactions.filter(
         transaction => transaction.type === 'booking'
       );
       
+      // Lista zadań do sprawdzenia
+      const taskIds = bookingTransactions
+        .filter(transaction => transaction.referenceId)
+        .map(transaction => transaction.referenceId);
+      
+      // Unikalny zestaw ID zadań do sprawdzenia
+      const uniqueTaskIds = [...new Set(taskIds)];
+      
+      // Sprawdź, które zadania istnieją
+      const existingTasksMap = {};
+      for (const taskId of uniqueTaskIds) {
+        try {
+          const taskRef = doc(db, 'productionTasks', taskId);
+          const taskDoc = await getDoc(taskRef);
+          existingTasksMap[taskId] = taskDoc.exists();
+        } catch (error) {
+          console.error(`Błąd podczas sprawdzania zadania ${taskId}:`, error);
+          existingTasksMap[taskId] = false;
+        }
+      }
+      
+      // Filtruj rezerwacje - usuń te, których zadania nie istnieją
+      bookingTransactions = bookingTransactions.filter(transaction => {
+        if (!transaction.referenceId) return true; // Zachowaj rezerwacje bez zadania
+        return existingTasksMap[transaction.referenceId] !== false; // Zachowaj tylko te z istniejącymi zadaniami
+      });
+      
       // Sprawdź, czy są rezerwacje bez numerów MO
       const reservationsWithoutTasks = bookingTransactions.filter(
-        transaction => !transaction.taskNumber && transaction.referenceId
+        transaction => !transaction.taskNumber && transaction.referenceId && existingTasksMap[transaction.referenceId]
       );
       
       // Jeśli są rezerwacje bez numerów MO, próbuj je uzupełnić automatycznie
@@ -586,6 +615,34 @@ const InventoryList = () => {
     }
   };
 
+  // Funkcja do czyszczenia rezerwacji z usuniętych zadań
+  const handleCleanupDeletedTaskReservations = async () => {
+    if (!window.confirm('Czy na pewno chcesz usunąć wszystkie rezerwacje dla usuniętych zadań produkcyjnych? Ta operacja jest nieodwracalna.')) {
+      return;
+    }
+    
+    setCleaningReservations(true);
+    try {
+      const result = await cleanupDeletedTaskReservations();
+      
+      if (result.count > 0) {
+        showSuccess(`Usunięto ${result.count} rezerwacji z usuniętych zadań produkcyjnych.`);
+      } else {
+        showSuccess('Nie znaleziono rezerwacji do wyczyszczenia.');
+      }
+      
+      // Odśwież dane po aktualizacji
+      if (selectedItem) {
+        await fetchReservations(selectedItem);
+      }
+    } catch (error) {
+      console.error('Błąd podczas czyszczenia rezerwacji:', error);
+      showError('Wystąpił błąd podczas czyszczenia rezerwacji');
+    } finally {
+      setCleaningReservations(false);
+    }
+  };
+
   if (loading) {
     return <div>Ładowanie pozycji magazynowych...</div>;
   }
@@ -856,6 +913,16 @@ const InventoryList = () => {
                 startIcon={updatingTasks ? <CircularProgress size={20} /> : <HistoryIcon />}
               >
                 {updatingTasks ? 'Aktualizowanie...' : 'Aktualizuj dane zadań'}
+              </Button>
+              <Button 
+                variant="outlined" 
+                color="error" 
+                size="small"
+                onClick={handleCleanupDeletedTaskReservations}
+                disabled={cleaningReservations}
+                startIcon={cleaningReservations ? <CircularProgress size={20} /> : <DeleteForeverIcon />}
+              >
+                {cleaningReservations ? 'Czyszczenie...' : 'Usuń rezerwacje usuniętych MO'}
               </Button>
             </Box>
           </Box>

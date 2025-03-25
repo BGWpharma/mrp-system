@@ -2200,6 +2200,7 @@ import {
       
       const updated = [];
       const notUpdated = [];
+      const deletedTasks = [];
       
       // Dla każdej rezerwacji
       for (const transaction of transactions) {
@@ -2246,11 +2247,11 @@ import {
                 });
               }
             } else {
-              console.log(`Nie znaleziono zadania o ID: ${transaction.referenceId}`);
-              notUpdated.push({
+              console.log(`Nie znaleziono zadania o ID: ${transaction.referenceId} - zadanie zostało usunięte`);
+              deletedTasks.push({
                 id: transaction.id,
                 itemName: transaction.itemName,
-                reason: 'Zadanie nie istnieje'
+                referenceId: transaction.referenceId
               });
             }
           } catch (error) {
@@ -2262,8 +2263,25 @@ import {
             });
           }
         } else if (transaction.taskNumber) {
-          // Rezerwacja ma już numer zadania
-          console.log(`Rezerwacja ${transaction.id} ma już przypisany numer zadania: ${transaction.taskNumber}`);
+          // Rezerwacja ma już numer zadania, ale sprawdźmy czy zadanie nadal istnieje
+          if (transaction.referenceId) {
+            try {
+              const taskRef = doc(db, 'productionTasks', transaction.referenceId);
+              const taskDoc = await getDoc(taskRef);
+              
+              if (!taskDoc.exists()) {
+                // Zadanie zostało usunięte
+                console.log(`Zadanie ${transaction.referenceId} dla rezerwacji ${transaction.id} zostało usunięte`);
+                deletedTasks.push({
+                  id: transaction.id,
+                  itemName: transaction.itemName,
+                  referenceId: transaction.referenceId
+                });
+              }
+            } catch (error) {
+              console.error(`Błąd podczas sprawdzania zadania ${transaction.referenceId}:`, error);
+            }
+          }
         } else {
           console.log(`Rezerwacja ${transaction.id} nie ma ID referencyjnego zadania`);
           notUpdated.push({
@@ -2274,14 +2292,101 @@ import {
         }
       }
       
-      console.log(`Zaktualizowano ${updated.length} rezerwacji, nie zaktualizowano ${notUpdated.length}`);
+      console.log(`Zaktualizowano ${updated.length} rezerwacji, nie zaktualizowano ${notUpdated.length}, znaleziono ${deletedTasks.length} rezerwacji z usuniętymi zadaniami`);
       
       return {
         updated,
-        notUpdated
+        notUpdated,
+        deletedTasks
       };
     } catch (error) {
       console.error('Błąd podczas aktualizacji zadań w rezerwacjach:', error);
       throw error;
+    }
+  };
+
+  // Funkcja do usuwania rezerwacji z usuniętych zadań
+  export const cleanupDeletedTaskReservations = async () => {
+    try {
+      console.log('Rozpoczynam czyszczenie rezerwacji z usuniętych zadań...');
+      
+      // Najpierw sprawdź, które zadania zostały usunięte
+      const result = await updateReservationTasks();
+      
+      if (result.deletedTasks.length === 0) {
+        console.log('Nie znaleziono rezerwacji z usuniętych zadań');
+        return { success: true, message: 'Brak rezerwacji do wyczyszczenia', count: 0 };
+      }
+      
+      const deletedReservations = [];
+      const errors = [];
+      
+      // Dla każdej rezerwacji z usuniętym zadaniem
+      for (const reservation of result.deletedTasks) {
+        try {
+          // Pobierz dane rezerwacji
+          const reservationRef = doc(db, INVENTORY_TRANSACTIONS_COLLECTION, reservation.id);
+          const reservationDoc = await getDoc(reservationRef);
+          
+          if (reservationDoc.exists()) {
+            const reservationData = reservationDoc.data();
+            
+            // Pobierz informacje o produkcie
+            const itemId = reservationData.itemId;
+            const quantity = reservationData.quantity;
+            
+            if (itemId) {
+              // Zaktualizuj stan magazynowy - zmniejsz ilość zarezerwowaną
+              const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
+              const itemDoc = await getDoc(itemRef);
+              
+              if (itemDoc.exists()) {
+                const itemData = itemDoc.data();
+                const bookedQuantity = itemData.bookedQuantity || 0;
+                
+                // Oblicz nową wartość bookedQuantity (nie może być ujemna)
+                const newBookedQuantity = Math.max(0, bookedQuantity - quantity);
+                
+                // Aktualizuj pozycję magazynową
+                await updateDoc(itemRef, {
+                  bookedQuantity: newBookedQuantity,
+                  updatedAt: serverTimestamp()
+                });
+                
+                console.log(`Zaktualizowano bookedQuantity dla ${itemId}: ${bookedQuantity} -> ${newBookedQuantity}`);
+              }
+            }
+            
+            // Usuń rezerwację
+            await deleteDoc(reservationRef);
+            
+            console.log(`Usunięto rezerwację ${reservation.id} dla usuniętego zadania ${reservationData.referenceId}`);
+            deletedReservations.push(reservation);
+          }
+        } catch (error) {
+          console.error(`Błąd podczas usuwania rezerwacji ${reservation.id}:`, error);
+          errors.push({
+            id: reservation.id,
+            error: error.message
+          });
+        }
+      }
+      
+      // Emituj zdarzenie o zmianie stanu magazynu
+      const event = new CustomEvent('inventory-updated', { 
+        detail: { action: 'cleanup-reservations' }
+      });
+      window.dispatchEvent(event);
+      
+      return {
+        success: true,
+        message: `Usunięto ${deletedReservations.length} rezerwacji z usuniętych zadań`,
+        count: deletedReservations.length,
+        deletedReservations,
+        errors
+      };
+    } catch (error) {
+      console.error('Błąd podczas czyszczenia rezerwacji:', error);
+      throw new Error(`Błąd podczas czyszczenia rezerwacji: ${error.message}`);
     }
   };

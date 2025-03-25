@@ -68,6 +68,7 @@ export const getPurchaseOrderById = async (id) => {
     }
     
     const poData = purchaseOrderDoc.data();
+    console.log("Dane PO z bazy:", poData);
     
     // Pobierz dane dostawcy, jeśli zamówienie ma referencję do dostawcy
     let supplierData = null;
@@ -78,16 +79,58 @@ export const getPurchaseOrderById = async (id) => {
       }
     }
     
-    return {
+    // Bezpieczna konwersja dat - obsługuje zarówno Timestamp, jak i stringi ISO
+    const safeConvertDate = (dateField) => {
+      if (!dateField) return null;
+      
+      try {
+        // Jeśli to Timestamp z Firebase
+        if (dateField.toDate && typeof dateField.toDate === 'function') {
+          return dateField.toDate().toISOString();
+        }
+        
+        // Jeśli to już string ISO
+        if (typeof dateField === 'string') {
+          return new Date(dateField).toISOString();
+        }
+        
+        // Jeśli to obiekt Date
+        if (dateField instanceof Date) {
+          return dateField.toISOString();
+        }
+        
+        // Inne przypadki - spróbuj skonwertować
+        return new Date(dateField).toISOString();
+      } catch (error) {
+        console.error("Błąd podczas konwersji daty:", error);
+        return new Date().toISOString(); // Domyślnie bieżąca data
+      }
+    };
+    
+    // Pastewniamy, że wszystkie pola są poprawnie przekształcone
+    const result = {
       id: purchaseOrderDoc.id,
       ...poData,
+      number: poData.number || '',
       supplier: supplierData,
-      // Konwersja Timestamp na ISO string (dla kompatybilności z istniejącym kodem)
-      orderDate: poData.orderDate ? poData.orderDate.toDate().toISOString() : null,
-      expectedDeliveryDate: poData.expectedDeliveryDate ? poData.expectedDeliveryDate.toDate().toISOString() : null,
-      createdAt: poData.createdAt ? poData.createdAt.toDate().toISOString() : null,
-      updatedAt: poData.updatedAt ? poData.updatedAt.toDate().toISOString() : null
+      items: poData.items || [],
+      totalValue: poData.totalValue || 0,
+      totalGross: poData.totalGross || 0,
+      vatRate: poData.vatRate || 23,
+      currency: poData.currency || 'PLN',
+      targetWarehouseId: poData.targetWarehouseId || '',
+      deliveryAddress: poData.deliveryAddress || '',
+      notes: poData.notes || '',
+      status: poData.status || 'draft',
+      // Bezpieczna konwersja dat
+      orderDate: safeConvertDate(poData.orderDate),
+      expectedDeliveryDate: safeConvertDate(poData.expectedDeliveryDate),
+      createdAt: safeConvertDate(poData.createdAt),
+      updatedAt: safeConvertDate(poData.updatedAt)
     };
+    
+    console.log("Pobrane PO (po konwersji):", result);
+    return result;
   } catch (error) {
     console.error(`Błąd podczas pobierania zamówienia zakupowego o ID ${id}:`, error);
     throw error;
@@ -162,6 +205,8 @@ export const createPurchaseOrder = async (purchaseOrderData) => {
 
 export const updatePurchaseOrder = async (id, purchaseOrderData) => {
   try {
+    console.log("Aktualizacja zamówienia - dane wejściowe:", purchaseOrderData);
+    
     const purchaseOrderRef = doc(db, PURCHASE_ORDERS_COLLECTION, id);
     
     // Sprawdź, czy zamówienie istnieje
@@ -170,16 +215,24 @@ export const updatePurchaseOrder = async (id, purchaseOrderData) => {
       throw new Error(`Nie znaleziono zamówienia zakupowego o ID ${id}`);
     }
     
-    // Przygotuj dane do aktualizacji
+    const existingData = docSnap.data();
+    
     // Zapisujemy tylko ID dostawcy, a nie cały obiekt
     const supplierId = purchaseOrderData.supplier?.id;
     
+    // Zachowujemy numer zamówienia z oryginalnego dokumentu
+    const number = existingData.number;
+    
     const updates = {
+      number: number, // Zachowaj oryginalny numer zamówienia
       supplierId: supplierId,
       items: purchaseOrderData.items || [],
       totalValue: purchaseOrderData.totalValue || 0,
+      totalGross: purchaseOrderData.totalGross || 0,
+      vatRate: purchaseOrderData.vatRate || 23,
       currency: purchaseOrderData.currency || 'PLN',
       status: purchaseOrderData.status || 'draft',
+      targetWarehouseId: purchaseOrderData.targetWarehouseId || '',
       orderDate: purchaseOrderData.orderDate ? new Date(purchaseOrderData.orderDate) : new Date(),
       expectedDeliveryDate: purchaseOrderData.expectedDeliveryDate ? new Date(purchaseOrderData.expectedDeliveryDate) : null,
       deliveryAddress: purchaseOrderData.deliveryAddress || '',
@@ -187,6 +240,8 @@ export const updatePurchaseOrder = async (id, purchaseOrderData) => {
       updatedBy: purchaseOrderData.updatedBy || null,
       updatedAt: serverTimestamp()
     };
+    
+    console.log("Dane do zaktualizowania:", updates);
     
     // Aktualizuj zamówienie w bazie danych
     await updateDoc(purchaseOrderRef, updates);
@@ -200,9 +255,10 @@ export const updatePurchaseOrder = async (id, purchaseOrderData) => {
       }
     }
     
-    return {
+    // Przygotuj dane wynikowe z zachowaniem wszystkich pól
+    const result = {
       id: id,
-      ...docSnap.data(),
+      ...existingData,
       ...updates,
       supplier: supplierData,
       // Konwersja Date na ISO string (dla kompatybilności z istniejącym kodem)
@@ -210,6 +266,9 @@ export const updatePurchaseOrder = async (id, purchaseOrderData) => {
       expectedDeliveryDate: updates.expectedDeliveryDate ? updates.expectedDeliveryDate.toISOString() : null,
       updatedAt: new Date().toISOString() // Ponieważ serverTimestamp() nie zwraca rzeczywistej wartości od razu
     };
+    
+    console.log("Zaktualizowane PO - wynik:", result);
+    return result;
   } catch (error) {
     console.error(`Błąd podczas aktualizacji zamówienia zakupowego o ID ${id}:`, error);
     throw error;
