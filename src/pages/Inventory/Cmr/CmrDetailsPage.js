@@ -267,6 +267,12 @@ const CmrDetailsPage = () => {
                   </Typography>
                   <Typography variant="body2">
                     {cmrData.senderAddress}
+                    {cmrData.senderPostalCode && cmrData.senderCity && (
+                      <>, {cmrData.senderPostalCode} {cmrData.senderCity}</>
+                    )}
+                    {cmrData.senderCountry && (
+                      <>, {cmrData.senderCountry}</>
+                    )}
                   </Typography>
                 </Grid>
                 <Grid item xs={12}>
@@ -278,6 +284,12 @@ const CmrDetailsPage = () => {
                   </Typography>
                   <Typography variant="body2">
                     {cmrData.recipientAddress}
+                    {cmrData.recipientPostalCode && cmrData.recipientCity && (
+                      <>, {cmrData.recipientPostalCode} {cmrData.recipientCity}</>
+                    )}
+                    {cmrData.recipientCountry && (
+                      <>, {cmrData.recipientCountry}</>
+                    )}
                   </Typography>
                 </Grid>
                 <Grid item xs={12}>
@@ -289,6 +301,194 @@ const CmrDetailsPage = () => {
                   </Typography>
                   <Typography variant="body2">
                     {cmrData.carrierAddress}
+                    {cmrData.carrierPostalCode && cmrData.carrierCity && (
+                      <>, {cmrData.carrierPostalCode} {cmrData.carrierCity}</>
+                    )}
+                    {cmrData.carrierCountry && (
+                      <>, {cmrData.carrierCountry}</>
+                    )}
+                  </Typography>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        {/* Miejsce załadunku i rozładunku */}
+        <Grid item xs={12}>
+          <Card>
+            <CardHeader 
+              title="Miejsce załadunku i rozładunku" 
+              titleTypographyProps={{ variant: 'h6' }}
+            />
+            <Divider />
+            <CardContent>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Miejsce załadunku
+                  </Typography>
+                  <Typography variant="body1">
+                    {cmrData.loadingPlace || '-'}
+                  </Typography>
+                  
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                    Data załadunku
+                  </Typography>
+                  <Typography variant="body1">
+                    {formatDate(cmrData.loadingDate)}
+                  </Typography>
+                </Grid>
+                
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Miejsce dostawy
+                  </Typography>
+                  <Typography variant="body1">
+                    {cmrData.deliveryPlace || '-'}
+                  </Typography>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        {/* Dokumenty i instrukcje */}
+        <Grid item xs={12}>
+          <Card>
+            <CardHeader 
+              title="Dokumenty i instrukcje" 
+              titleTypographyProps={{ variant: 'h6' }}
+            />
+            <Divider />
+            <CardContent>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Załączone dokumenty
+                  </Typography>
+                  <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+                    {cmrData.attachedDocuments || '-'}
+                  </Typography>
+                </Grid>
+                
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Instrukcje nadawcy
+                  </Typography>
+                  <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+                    {cmrData.instructionsFromSender || '-'}
+                  </Typography>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        {/* Informacje o pojeździe */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardHeader 
+              title="Informacje o pojeździe" 
+              titleTypographyProps={{ variant: 'h6' }}
+            />
+            <Divider />
+            <CardContent>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Numer rejestracyjny pojazdu
+                  </Typography>
+                  <Typography variant="body1">
+                    {cmrData.vehicleInfo?.vehicleRegistration || '-'}
+                  </Typography>
+                </Grid>
+                
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Numer rejestracyjny naczepy
+                  </Typography>
+                  <Typography variant="body1">
+                    {cmrData.vehicleInfo?.trailerRegistration || '-'}
+                  </Typography>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        {/* Opłaty i płatności */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardHeader 
+              title="Opłaty i ustalenia szczególne" 
+              titleTypographyProps={{ variant: 'h6' }}
+            />
+            <Divider />
+            <CardContent>
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Przewoźne
+                  </Typography>
+                  <Typography variant="body1">
+                    {cmrData.freight || '-'}
+                  </Typography>
+                </Grid>
+                
+                <Grid item xs={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Koszty dodatkowe
+                  </Typography>
+                  <Typography variant="body1">
+                    {cmrData.carriage || '-'}
+                  </Typography>
+                </Grid>
+                
+                <Grid item xs={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Bonifikaty
+                  </Typography>
+                  <Typography variant="body1">
+                    {cmrData.discounts || '-'}
+                  </Typography>
+                </Grid>
+                
+                <Grid item xs={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Saldo
+                  </Typography>
+                  <Typography variant="body1">
+                    {cmrData.balance || '-'}
+                  </Typography>
+                </Grid>
+                
+                <Grid item xs={12} sx={{ mt: 2 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Płatność
+                  </Typography>
+                  <Typography variant="body1">
+                    {cmrData.paymentMethod === 'sender' ? 'Płaci nadawca' : 
+                     cmrData.paymentMethod === 'recipient' ? 'Płaci odbiorca' : 
+                     'Inny sposób płatności'}
+                  </Typography>
+                </Grid>
+                
+                <Grid item xs={12} sx={{ mt: 2 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Ustalenia szczególne
+                  </Typography>
+                  <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+                    {cmrData.specialAgreements || '-'}
+                  </Typography>
+                </Grid>
+                
+                <Grid item xs={12} sx={{ mt: 2 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Zastrzeżenia i uwagi przewoźnika
+                  </Typography>
+                  <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+                    {cmrData.reservations || '-'}
                   </Typography>
                 </Grid>
               </Grid>

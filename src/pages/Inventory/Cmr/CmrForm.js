@@ -40,12 +40,56 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
     deliveryDate: null,
     status: CMR_STATUSES.DRAFT,
     transportType: TRANSPORT_TYPES.ROAD,
+    
+    // Dane nadawcy
     sender: '',
     senderAddress: '',
+    senderPostalCode: '',
+    senderCity: '',
+    senderCountry: '',
+    
+    // Dane odbiorcy
     recipient: '',
     recipientAddress: '',
+    recipientPostalCode: '',
+    recipientCity: '',
+    recipientCountry: '',
+    
+    // Dane przewoźnika
     carrier: '',
     carrierAddress: '',
+    carrierPostalCode: '',
+    carrierCity: '',
+    carrierCountry: '',
+    
+    // Miejsce załadunku i rozładunku
+    loadingPlace: '',
+    loadingDate: null,
+    deliveryPlace: '',
+    
+    // Dane dotyczące przesyłki
+    attachedDocuments: '',
+    instructionsFromSender: '',
+    
+    // Opłaty
+    freight: '',
+    carriage: '',
+    discounts: '',
+    balance: '',
+    specialAgreements: '',
+    
+    // Płatność
+    paymentMethod: 'sender', // sender, recipient, other
+    
+    // Dane pojazdu
+    vehicleInfo: {
+      vehicleRegistration: '',
+      trailerRegistration: '',
+    },
+    
+    // Rezerwacje
+    reservations: '',
+    
     items: [{ ...emptyItem }],
     notes: ''
   };
@@ -133,8 +177,15 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
     if (!formData.carrier) errors.carrier = 'Przewoźnik jest wymagany';
     if (!formData.carrierAddress) errors.carrierAddress = 'Adres przewoźnika jest wymagany';
     
+    // Walidacja miejsca załadunku i rozładunku
+    if (!formData.loadingPlace) errors.loadingPlace = 'Miejsce załadunku jest wymagane';
+    if (!formData.deliveryPlace) errors.deliveryPlace = 'Miejsce rozładunku jest wymagane';
+    
     // Walidacja dat
     if (!formData.issueDate) errors.issueDate = 'Data wystawienia jest wymagana';
+    
+    // Walidacja informacji o pojeździe
+    if (!formData.vehicleInfo?.vehicleRegistration) errors['vehicleInfo.vehicleRegistration'] = 'Numer rejestracyjny pojazdu jest wymagany';
     
     // Walidacja przedmiotów
     const itemErrors = [];
@@ -280,10 +331,38 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
                     onChange={handleChange}
                     fullWidth
                     margin="normal"
-                    multiline
-                    rows={2}
                     error={!!formErrors.senderAddress}
                     helperText={formErrors.senderAddress}
+                  />
+                  <Grid container spacing={2}>
+                    <Grid item xs={6}>
+                      <TextField
+                        label="Kod pocztowy"
+                        name="senderPostalCode"
+                        value={formData.senderPostalCode}
+                        onChange={handleChange}
+                        fullWidth
+                        margin="normal"
+                      />
+                    </Grid>
+                    <Grid item xs={6}>
+                      <TextField
+                        label="Miasto"
+                        name="senderCity"
+                        value={formData.senderCity}
+                        onChange={handleChange}
+                        fullWidth
+                        margin="normal"
+                      />
+                    </Grid>
+                  </Grid>
+                  <TextField
+                    label="Kraj"
+                    name="senderCountry"
+                    value={formData.senderCountry}
+                    onChange={handleChange}
+                    fullWidth
+                    margin="normal"
                   />
                 </Grid>
                 
@@ -309,10 +388,38 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
                     onChange={handleChange}
                     fullWidth
                     margin="normal"
-                    multiline
-                    rows={2}
                     error={!!formErrors.recipientAddress}
                     helperText={formErrors.recipientAddress}
+                  />
+                  <Grid container spacing={2}>
+                    <Grid item xs={6}>
+                      <TextField
+                        label="Kod pocztowy"
+                        name="recipientPostalCode"
+                        value={formData.recipientPostalCode}
+                        onChange={handleChange}
+                        fullWidth
+                        margin="normal"
+                      />
+                    </Grid>
+                    <Grid item xs={6}>
+                      <TextField
+                        label="Miasto"
+                        name="recipientCity"
+                        value={formData.recipientCity}
+                        onChange={handleChange}
+                        fullWidth
+                        margin="normal"
+                      />
+                    </Grid>
+                  </Grid>
+                  <TextField
+                    label="Kraj"
+                    name="recipientCountry"
+                    value={formData.recipientCountry}
+                    onChange={handleChange}
+                    fullWidth
+                    margin="normal"
                   />
                 </Grid>
                 
@@ -338,10 +445,186 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
                     onChange={handleChange}
                     fullWidth
                     margin="normal"
-                    multiline
-                    rows={2}
                     error={!!formErrors.carrierAddress}
                     helperText={formErrors.carrierAddress}
+                  />
+                  <Grid container spacing={2}>
+                    <Grid item xs={6}>
+                      <TextField
+                        label="Kod pocztowy"
+                        name="carrierPostalCode"
+                        value={formData.carrierPostalCode}
+                        onChange={handleChange}
+                        fullWidth
+                        margin="normal"
+                      />
+                    </Grid>
+                    <Grid item xs={6}>
+                      <TextField
+                        label="Miasto"
+                        name="carrierCity"
+                        value={formData.carrierCity}
+                        onChange={handleChange}
+                        fullWidth
+                        margin="normal"
+                      />
+                    </Grid>
+                  </Grid>
+                  <TextField
+                    label="Kraj"
+                    name="carrierCountry"
+                    value={formData.carrierCountry}
+                    onChange={handleChange}
+                    fullWidth
+                    margin="normal"
+                  />
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        {/* Miejsce załadunku i rozładunku */}
+        <Grid item xs={12}>
+          <Card>
+            <CardHeader 
+              title="Miejsce załadunku i rozładunku" 
+              titleTypographyProps={{ variant: 'h6' }}
+            />
+            <Divider />
+            <CardContent>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Miejsce i data załadunku
+                  </Typography>
+                  <TextField
+                    label="Miejsce załadunku"
+                    name="loadingPlace"
+                    value={formData.loadingPlace}
+                    onChange={handleChange}
+                    fullWidth
+                    margin="normal"
+                  />
+                  <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                    <DatePicker
+                      label="Data załadunku"
+                      value={formData.loadingDate}
+                      onChange={(date) => handleDateChange('loadingDate', date)}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          fullWidth
+                          margin="normal"
+                        />
+                      )}
+                    />
+                  </LocalizationProvider>
+                </Grid>
+                
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Miejsce przeznaczenia przesyłki
+                  </Typography>
+                  <TextField
+                    label="Miejsce dostawy"
+                    name="deliveryPlace"
+                    value={formData.deliveryPlace}
+                    onChange={handleChange}
+                    fullWidth
+                    margin="normal"
+                  />
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        {/* Dokumenty i instrukcje */}
+        <Grid item xs={12}>
+          <Card>
+            <CardHeader 
+              title="Dokumenty i instrukcje" 
+              titleTypographyProps={{ variant: 'h6' }}
+            />
+            <Divider />
+            <CardContent>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Załączone dokumenty"
+                    name="attachedDocuments"
+                    value={formData.attachedDocuments}
+                    onChange={handleChange}
+                    fullWidth
+                    multiline
+                    rows={3}
+                    helperText="Wymień wszystkie dokumenty załączone do listu przewozowego"
+                  />
+                </Grid>
+                
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Instrukcje nadawcy"
+                    name="instructionsFromSender"
+                    value={formData.instructionsFromSender}
+                    onChange={handleChange}
+                    fullWidth
+                    multiline
+                    rows={3}
+                    helperText="Specjalne instrukcje od nadawcy"
+                  />
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        {/* Informacje o pojeździe */}
+        <Grid item xs={12}>
+          <Card>
+            <CardHeader 
+              title="Informacje o pojeździe" 
+              titleTypographyProps={{ variant: 'h6' }}
+            />
+            <Divider />
+            <CardContent>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Numer rejestracyjny pojazdu"
+                    name="vehicleInfo.vehicleRegistration"
+                    value={formData.vehicleInfo.vehicleRegistration}
+                    onChange={(e) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        vehicleInfo: {
+                          ...prev.vehicleInfo,
+                          vehicleRegistration: e.target.value
+                        }
+                      }));
+                    }}
+                    fullWidth
+                    margin="normal"
+                  />
+                </Grid>
+                
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Numer rejestracyjny naczepy"
+                    name="vehicleInfo.trailerRegistration"
+                    value={formData.vehicleInfo.trailerRegistration}
+                    onChange={(e) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        vehicleInfo: {
+                          ...prev.vehicleInfo,
+                          trailerRegistration: e.target.value
+                        }
+                      }));
+                    }}
+                    fullWidth
+                    margin="normal"
                   />
                 </Grid>
               </Grid>
@@ -454,6 +737,106 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
                   </Grid>
                 </Box>
               ))}
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        {/* Opłaty i płatności */}
+        <Grid item xs={12}>
+          <Card>
+            <CardHeader 
+              title="Opłaty i ustalenia szczególne" 
+              titleTypographyProps={{ variant: 'h6' }}
+            />
+            <Divider />
+            <CardContent>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6} md={3}>
+                  <TextField
+                    label="Przewoźne"
+                    name="freight"
+                    value={formData.freight}
+                    onChange={handleChange}
+                    fullWidth
+                    margin="normal"
+                  />
+                </Grid>
+                
+                <Grid item xs={12} sm={6} md={3}>
+                  <TextField
+                    label="Koszty dodatkowe"
+                    name="carriage"
+                    value={formData.carriage}
+                    onChange={handleChange}
+                    fullWidth
+                    margin="normal"
+                  />
+                </Grid>
+                
+                <Grid item xs={12} sm={6} md={3}>
+                  <TextField
+                    label="Bonifikaty"
+                    name="discounts"
+                    value={formData.discounts}
+                    onChange={handleChange}
+                    fullWidth
+                    margin="normal"
+                  />
+                </Grid>
+                
+                <Grid item xs={12} sm={6} md={3}>
+                  <TextField
+                    label="Saldo"
+                    name="balance"
+                    value={formData.balance}
+                    onChange={handleChange}
+                    fullWidth
+                    margin="normal"
+                  />
+                </Grid>
+                
+                <Grid item xs={12}>
+                  <FormControl fullWidth margin="normal">
+                    <InputLabel>Płatność</InputLabel>
+                    <Select
+                      name="paymentMethod"
+                      value={formData.paymentMethod}
+                      onChange={handleChange}
+                      label="Płatność"
+                    >
+                      <MenuItem value="sender">Płaci nadawca</MenuItem>
+                      <MenuItem value="recipient">Płaci odbiorca</MenuItem>
+                      <MenuItem value="other">Inny sposób płatności</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                
+                <Grid item xs={12}>
+                  <TextField
+                    label="Ustalenia szczególne"
+                    name="specialAgreements"
+                    value={formData.specialAgreements}
+                    onChange={handleChange}
+                    fullWidth
+                    multiline
+                    rows={3}
+                    margin="normal"
+                  />
+                </Grid>
+                
+                <Grid item xs={12}>
+                  <TextField
+                    label="Zastrzeżenia i uwagi przewoźnika"
+                    name="reservations"
+                    value={formData.reservations}
+                    onChange={handleChange}
+                    fullWidth
+                    multiline
+                    rows={3}
+                    margin="normal"
+                  />
+                </Grid>
+              </Grid>
             </CardContent>
           </Card>
         </Grid>

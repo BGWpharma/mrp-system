@@ -86,6 +86,7 @@ export const getCmrDocumentById = async (cmrId) => {
       ...cmrData,
       issueDate: cmrData.issueDate ? cmrData.issueDate.toDate() : null,
       deliveryDate: cmrData.deliveryDate ? cmrData.deliveryDate.toDate() : null,
+      loadingDate: cmrData.loadingDate ? cmrData.loadingDate.toDate() : null,
       createdAt: cmrData.createdAt ? cmrData.createdAt.toDate() : null,
       updatedAt: cmrData.updatedAt ? cmrData.updatedAt.toDate() : null,
       items
@@ -104,6 +105,7 @@ export const createCmrDocument = async (cmrData, userId) => {
       ...cmrData,
       issueDate: cmrData.issueDate ? Timestamp.fromDate(new Date(cmrData.issueDate)) : null,
       deliveryDate: cmrData.deliveryDate ? Timestamp.fromDate(new Date(cmrData.deliveryDate)) : null,
+      loadingDate: cmrData.loadingDate ? Timestamp.fromDate(new Date(cmrData.loadingDate)) : null,
       status: cmrData.status || CMR_STATUSES.DRAFT,
       cmrNumber: cmrData.cmrNumber || generateCmrNumber(),
       createdAt: serverTimestamp(),
@@ -152,6 +154,7 @@ export const updateCmrDocument = async (cmrId, cmrData, userId) => {
       ...cmrData,
       issueDate: cmrData.issueDate ? Timestamp.fromDate(new Date(cmrData.issueDate)) : null,
       deliveryDate: cmrData.deliveryDate ? Timestamp.fromDate(new Date(cmrData.deliveryDate)) : null,
+      loadingDate: cmrData.loadingDate ? Timestamp.fromDate(new Date(cmrData.loadingDate)) : null,
       updatedAt: serverTimestamp(),
       updatedBy: userId
     };
