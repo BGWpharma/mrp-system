@@ -246,8 +246,8 @@ const InvoiceDetails = () => {
         { header: 'J.m.', dataKey: 'jm' },
         { header: 'Cena netto', dataKey: 'cena' },
         { header: 'VAT', dataKey: 'vat' },
-        { header: 'Wartość netto', dataKey: 'netto' },
-        { header: 'Wartość brutto', dataKey: 'brutto' }
+        { header: 'Wartość', dataKey: 'netto' },
+        { header: 'Wartość', dataKey: 'brutto' }
       ];
       
       // Dane do tabeli
@@ -276,7 +276,11 @@ const InvoiceDetails = () => {
       
       // Dodaj tabelę pozycji faktury
       autoTable(doc, {
-        head: [tableColumn.map(col => col.header)],
+        head: [tableColumn.map((col, index) => {
+          if (index === 6) return 'Wartość\nnetto';
+          if (index === 7) return 'Wartość\nbrutto';
+          return col.header;
+        })],
         body: tableRows.map(row => [
           row.lp,
           row.nazwa,
@@ -353,7 +357,7 @@ const InvoiceDetails = () => {
       doc.text(`Razem netto: ${totalNetto.toFixed(2)} zł`, 140, finalY + 6);
       doc.text(`Razem VAT: ${totalVat.toFixed(2)} zł`, 140, finalY + 12);
       doc.setFont('Roboto', 'bold');
-      doc.text(`Razem brutto: ${totalBrutto.toFixed(2)} zł`, 140, finalY + 18);
+      doc.text(`R a z e m   b r u t t o: ${totalBrutto.toFixed(2)} zł`, 140, finalY + 18, { charSpace: 0 });
       doc.setFont('Roboto', 'normal');
       
       // Dodaj uwagi, jeśli istnieją
@@ -575,15 +579,6 @@ const InvoiceDetails = () => {
                     <PersonIcon />
                   </IconButton>
                 </Box>
-                
-                {/* Dodanie debugowania (tylko w trybie deweloperskim) */}
-                {process.env.NODE_ENV === 'development' && (
-                  <Box sx={{ mb: 2, p: 1, bgcolor: 'rgba(0,0,0,0.05)', borderRadius: 1 }}>
-                    <Typography variant="caption" component="pre" sx={{ whiteSpace: 'pre-wrap', fontSize: '0.7rem' }}>
-                      Dane klienta (debug): {JSON.stringify(invoice.customer, null, 2)}
-                    </Typography>
-                  </Box>
-                )}
                 
                 <Typography variant="body1" fontWeight="bold">
                   {invoice.customer?.name || 'Brak nazwy klienta'}
