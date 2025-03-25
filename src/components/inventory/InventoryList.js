@@ -52,13 +52,19 @@ import {
   QrCode as QrCodeIcon,
   MoreVert as MoreVertIcon,
 } from '@mui/icons-material';
-import { getAllInventoryItems, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, getItemBatches } from '../../services/inventoryService';
+import { getAllInventoryItems, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, getItemBatches, updateReservation, updateReservationTasks } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
 import { toast } from 'react-hot-toast';
 import { exportToCSV } from '../../utils/exportUtils';
 import { useAuth } from '../../hooks/useAuth';
 import LabelDialog from './LabelDialog';
+import EditReservationDialog from './EditReservationDialog';
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../services/firebase/config';
+
+// Definicje stałych (takie same jak w inventoryService.js)
+const INVENTORY_TRANSACTIONS_COLLECTION = 'inventoryTransactions';
 
 const InventoryList = () => {
   const [inventoryItems, setInventoryItems] = useState([]);
@@ -92,6 +98,13 @@ const InventoryList = () => {
   const [selectedItemBatches, setSelectedItemBatches] = useState([]);
   const [loadingBatches, setLoadingBatches] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
+  const [editingReservation, setEditingReservation] = useState(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    quantity: '',
+    batchId: ''
+  });
+  const [updatingTasks, setUpdatingTasks] = useState(false);
 
   // Pobierz wszystkie pozycje przy montowaniu komponentu
   useEffect(() => {
@@ -223,6 +236,56 @@ const InventoryList = () => {
       const bookingTransactions = transactions.filter(
         transaction => transaction.type === 'booking'
       );
+      
+      // Sprawdź, czy są rezerwacje bez numerów MO
+      const reservationsWithoutTasks = bookingTransactions.filter(
+        transaction => !transaction.taskNumber && transaction.referenceId
+      );
+      
+      // Jeśli są rezerwacje bez numerów MO, próbuj je uzupełnić automatycznie
+      if (reservationsWithoutTasks.length > 0) {
+        console.log(`Znaleziono ${reservationsWithoutTasks.length} rezerwacji bez numerów MO. Próbuję zaktualizować...`);
+        
+        // Aktualizuj rezerwacje bez numerów MO
+        for (const reservation of reservationsWithoutTasks) {
+          try {
+            const taskRef = doc(db, 'productionTasks', reservation.referenceId);
+            const taskDoc = await getDoc(taskRef);
+            
+            if (taskDoc.exists()) {
+              const taskData = taskDoc.data();
+              const taskName = taskData.name || '';
+              // Sprawdź zarówno pole moNumber jak i number (moNumber jest nowszym polem)
+              const taskNumber = taskData.moNumber || taskData.number || '';
+              const clientName = taskData.clientName || '';
+              const clientId = taskData.clientId || '';
+              
+              // Sprawdź, czy zadanie ma numer MO
+              if (taskNumber) {
+                // Zaktualizuj rezerwację
+                const transactionRef = doc(db, INVENTORY_TRANSACTIONS_COLLECTION, reservation.id);
+                await updateDoc(transactionRef, {
+                  taskName,
+                  taskNumber,
+                  clientName,
+                  clientId,
+                  updatedAt: serverTimestamp()
+                });
+                
+                // Zaktualizuj lokalnie
+                reservation.taskName = taskName;
+                reservation.taskNumber = taskNumber;
+                reservation.clientName = clientName;
+                reservation.clientId = clientId;
+                
+                console.log(`Automatycznie zaktualizowano rezerwację ${reservation.id} - przypisano MO: ${taskNumber}`);
+              }
+            }
+          } catch (error) {
+            console.error(`Błąd podczas aktualizacji rezerwacji ${reservation.id}:`, error);
+          }
+        }
+      }
       
       setReservations(bookingTransactions);
       
@@ -454,6 +517,73 @@ const InventoryList = () => {
   const handleMenuClose = () => {
     setAnchorEl(null);
     setSelectedItem(null);
+  };
+
+  // Funkcja do otwierania dialogu edycji rezerwacji
+  const handleEditReservation = async (reservation) => {
+    setEditingReservation(reservation);
+    setEditDialogOpen(true);
+    
+    try {
+      setLoadingBatches(true);
+      const batches = await getItemBatches(selectedItem.id);
+      setSelectedItemBatches(batches);
+      
+      setEditForm({
+        quantity: reservation.quantity,
+        batchId: reservation.batchId || ''
+      });
+    } catch (error) {
+      console.error('Błąd podczas pobierania partii:', error);
+      showError('Nie udało się pobrać listy partii');
+    } finally {
+      setLoadingBatches(false);
+    }
+  };
+
+  // Funkcja do zapisywania zmian w rezerwacji
+  const handleSaveReservation = async () => {
+    try {
+      await updateReservation(
+        editingReservation.id,
+        selectedItem.id,
+        Number(editForm.quantity),
+        editForm.batchId,
+        currentUser.uid
+      );
+      
+      showSuccess('Rezerwacja została zaktualizowana');
+      setEditDialogOpen(false);
+      // Odśwież dane
+      await fetchReservations(selectedItem);
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji rezerwacji:', error);
+      showError(error.message);
+    }
+  };
+
+  // Funkcja do aktualizacji informacji o zadaniach w rezerwacjach
+  const handleUpdateReservationTasks = async () => {
+    if (!window.confirm('Czy na pewno chcesz zaktualizować dane zadań we wszystkich rezerwacjach? To może zająć dłuższą chwilę.')) {
+      return;
+    }
+    
+    setUpdatingTasks(true);
+    try {
+      const result = await updateReservationTasks();
+      
+      showSuccess(`Zaktualizowano ${result.updated.length} rezerwacji. ${result.notUpdated.length} rezerwacji nie ma przypisanych zadań.`);
+      
+      // Odśwież dane po aktualizacji
+      if (selectedItem) {
+        await fetchReservations(selectedItem);
+      }
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji rezerwacji:', error);
+      showError('Wystąpił błąd podczas aktualizacji rezerwacji');
+    } finally {
+      setUpdatingTasks(false);
+    }
   };
 
   if (loading) {
@@ -704,152 +834,119 @@ const InventoryList = () => {
         fullWidth
       >
         <DialogTitle>
-          Rezerwacje dla: {selectedItem?.name}
+          Rezerwacje dla {selectedItem?.name}
         </DialogTitle>
         <DialogContent>
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-              <CircularProgress />
-            </Box>
-          ) : (
-            <>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, mt: 1 }}>
-                <Typography variant="subtitle1">
-                  Łączna ilość zarezerwowana: {reservations.reduce((sum, res) => sum + res.quantity, 0)} {selectedItem?.unit}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, mt: 1 }}>
+            <Typography variant="subtitle1">
+              Łączna ilość zarezerwowana: {reservations.reduce((sum, res) => sum + res.quantity, 0)} {selectedItem?.unit}
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              {reservations.filter(r => !r.taskNumber && r.referenceId).length > 0 && (
+                <Typography variant="body2" sx={{ color: 'warning.main' }}>
+                  Niektóre rezerwacje nie mają przypisanych numerów MO.
                 </Typography>
-                <Box sx={{ display: 'flex', gap: 2 }}>
-                  <FormControl variant="outlined" size="small">
-                    <InputLabel id="reservation-filter-label">Filtr</InputLabel>
-                    <Select
-                      labelId="reservation-filter-label"
-                      value={reservationFilter}
-                      onChange={handleFilterChange}
-                      label="Filtr"
-                    >
-                      <MenuItem value="all">Wszystkie</MenuItem>
-                      <MenuItem value="active">Aktywne</MenuItem>
-                      <MenuItem value="fulfilled">Zrealizowane</MenuItem>
-                    </Select>
-                  </FormControl>
-                  <Button 
-                    variant="outlined" 
-                    size="small" 
-                    startIcon={<GetAppIcon />}
-                    onClick={handleExportReservations}
-                    disabled={filteredReservations.length === 0}
-                  >
-                    Eksportuj
-                  </Button>
-                </Box>
-              </Box>
-              
-              {filteredReservations.length === 0 ? (
-                <Typography variant="body1" sx={{ p: 2 }}>
-                  Brak rezerwacji dla tego produktu.
-                </Typography>
-              ) : (
-                <TableContainer component={Paper} sx={{ mt: 2 }}>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>
-                          <TableSortLabel
-                            active={sortField === 'createdAt'}
-                            direction={sortField === 'createdAt' ? sortOrder : 'asc'}
-                            onClick={() => handleSort('createdAt')}
-                          >
-                            Data
-                          </TableSortLabel>
-                        </TableCell>
-                        <TableCell>Typ</TableCell>
-                        <TableCell align="right">
-                          <TableSortLabel
-                            active={sortField === 'quantity'}
-                            direction={sortField === 'quantity' ? sortOrder : 'asc'}
-                            onClick={() => handleSort('quantity')}
-                          >
-                            Ilość
-                          </TableSortLabel>
-                        </TableCell>
-                        <TableCell>
-                          <TableSortLabel
-                            active={sortField === 'taskName'}
-                            direction={sortField === 'taskName' ? sortOrder : 'asc'}
-                            onClick={() => handleSort('taskName')}
-                          >
-                            Zadanie
-                          </TableSortLabel>
-                        </TableCell>
-                        <TableCell>
-                          <TableSortLabel
-                            active={sortField === 'clientName'}
-                            direction={sortField === 'clientName' ? sortOrder : 'asc'}
-                            onClick={() => handleSort('clientName')}
-                          >
-                            Klient
-                          </TableSortLabel>
-                        </TableCell>
-                        <TableCell>Status</TableCell>
-                        <TableCell>Notatki</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {filteredReservations.map((reservation) => (
-                        <TableRow key={reservation.id}>
-                          <TableCell>
-                            {formatDate(reservation.createdAt)}
-                          </TableCell>
-                          <TableCell>
-                            <Chip 
-                              label={reservation.type === 'booking' ? 'Rezerwacja' : 'Anulowanie'} 
-                              color={reservation.type === 'booking' ? 'primary' : 'error'} 
-                              size="small" 
-                            />
-                          </TableCell>
-                          <TableCell align="right">
-                            {reservation.quantity} {selectedItem?.unit}
-                          </TableCell>
-                          <TableCell>
-                            {reservation.taskId ? (
-                              <Link 
-                                component={RouterLink} 
-                                to={`/tasks/${reservation.taskId}`}
-                                underline="hover"
-                              >
-                                {reservation.taskName || reservation.taskId}
-                              </Link>
-                            ) : (
-                              <Typography variant="body2" color="text.secondary">
-                                Brak zadania
-                              </Typography>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {reservation.clientName || 'Brak klienta'}
-                          </TableCell>
-                          <TableCell>
-                            <Chip 
-                              label={reservation.fulfilled ? 'Zrealizowana' : 'Aktywna'} 
-                              color={reservation.fulfilled ? 'success' : 'warning'} 
-                              size="small" 
-                            />
-                          </TableCell>
-                          <TableCell>
-                            {reservation.notes || '-'}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
               )}
-            </>
-          )}
+              <Button 
+                variant="outlined" 
+                color="primary" 
+                size="small"
+                onClick={handleUpdateReservationTasks}
+                disabled={updatingTasks}
+                startIcon={updatingTasks ? <CircularProgress size={20} /> : <HistoryIcon />}
+              >
+                {updatingTasks ? 'Aktualizowanie...' : 'Aktualizuj dane zadań'}
+              </Button>
+            </Box>
+          </Box>
+          
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Data</TableCell>
+                  <TableCell>Użytkownik</TableCell>
+                  <TableCell>Ilość</TableCell>
+                  <TableCell>Partia</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Zadanie</TableCell>
+                  <TableCell>Akcje</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filteredReservations.map((reservation) => (
+                  <TableRow key={reservation.id}>
+                    <TableCell>{formatDate(reservation.createdAt)}</TableCell>
+                    <TableCell>{reservation.userName}</TableCell>
+                    <TableCell>{reservation.quantity} {selectedItem?.unit}</TableCell>
+                    <TableCell>{reservation.batchNumber || '-'}</TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={reservation.fulfilled ? 'Zrealizowana' : 'Aktywna'} 
+                        color={reservation.fulfilled ? 'success' : 'primary'} 
+                        size="small" 
+                      />
+                    </TableCell>
+                    <TableCell>
+                      {reservation.taskNumber ? (
+                        <Link 
+                          component={RouterLink} 
+                          to={`/tasks/${reservation.taskId}`}
+                          underline="hover"
+                          sx={{ display: 'flex', alignItems: 'center' }}
+                        >
+                          <Chip 
+                            label={`MO: ${reservation.taskNumber}`}
+                            color="secondary"
+                            size="small" 
+                            variant="outlined"
+                            sx={{ mr: 1 }}
+                          />
+                          {reservation.taskName && (
+                            <Tooltip title={reservation.taskName}>
+                              <Box component="span" sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
+                                {reservation.taskName.substring(0, 15)}
+                                {reservation.taskName.length > 15 ? '...' : ''}
+                              </Box>
+                            </Tooltip>
+                          )}
+                        </Link>
+                      ) : (
+                        'Brak zadania'
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {!reservation.fulfilled && (
+                        <IconButton
+                          size="small"
+                          onClick={() => handleEditReservation(reservation)}
+                          title="Edytuj rezerwację"
+                        >
+                          <EditIcon />
+                        </IconButton>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseReservationDialog}>Zamknij</Button>
         </DialogActions>
       </Dialog>
+
+      <EditReservationDialog
+        open={editDialogOpen}
+        onClose={() => setEditDialogOpen(false)}
+        onSave={handleSaveReservation}
+        editForm={editForm}
+        setEditForm={setEditForm}
+        selectedItem={selectedItem}
+        selectedItemBatches={selectedItemBatches}
+        loadingBatches={loadingBatches}
+      />
 
       {/* Dialog do dodawania/edycji magazynu */}
       <Dialog open={openWarehouseDialog} onClose={handleCloseWarehouseDialog} maxWidth="sm" fullWidth>

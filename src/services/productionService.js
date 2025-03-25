@@ -198,6 +198,8 @@ import {
         taskWithMeta.endDate = endDate;
       }
       
+      // Zapisz zadanie w bazie danych
+      console.log(`Tworzenie zadania z numerem MO: ${moNumber}`);
       const docRef = await addDoc(collection(db, PRODUCTION_TASKS_COLLECTION), taskWithMeta);
       
       // Teraz, gdy zadanie zostało utworzone, zarezerwuj materiały
@@ -218,10 +220,12 @@ import {
             }
             
             // Sprawdź dostępność i zarezerwuj materiał z określoną metodą rezerwacji
-            if (material.inventoryItemId) {
-              await bookInventoryForTask(material.inventoryItemId, material.quantity, docRef.id, userId, reservationMethod);
-            } else if (material.id) {
-              await bookInventoryForTask(material.id, material.quantity, docRef.id, userId, reservationMethod);
+            const materialId = material.inventoryItemId || material.id;
+            if (materialId) {
+              console.log(`Rezerwacja materiału ${material.name} dla zadania MO: ${moNumber}`);
+              await bookInventoryForTask(materialId, material.quantity, docRef.id, userId, reservationMethod);
+            } else {
+              console.warn(`Materiał ${material.name} nie ma przypisanego ID pozycji magazynowej, pomijam rezerwację`);
             }
           } catch (error) {
             console.error(`Błąd przy rezerwacji materiału ${material.name}:`, error);
@@ -1224,6 +1228,17 @@ import {
         return { success: true, message: 'Brak materiałów do zarezerwowania' };
       }
       
+      // Pobierz dane zadania, aby mieć dostęp do numeru MO
+      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+      const taskDoc = await getDoc(taskRef);
+      
+      if (!taskDoc.exists()) {
+        throw new Error(`Zadanie o ID ${taskId} nie istnieje`);
+      }
+      
+      const taskData = taskDoc.data();
+      const userId = getCurrentUserId();
+      
       const errors = [];
       const reservedItems = [];
       
@@ -1240,7 +1255,14 @@ import {
           await getInventoryItemById(material.inventoryItemId);
           
           // Zarezerwuj materiał w magazynie
-          const result = await bookInventoryForTask(material.inventoryItemId, material.quantity, taskId, getCurrentUserId());
+          const result = await bookInventoryForTask(
+            material.inventoryItemId, 
+            material.quantity, 
+            taskId, 
+            userId, 
+            reservationMethod
+          );
+          
           reservedItems.push({
             itemId: material.inventoryItemId,
             name: material.name,

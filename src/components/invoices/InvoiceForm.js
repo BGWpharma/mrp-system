@@ -176,6 +176,17 @@ const InvoiceForm = ({ invoiceId }) => {
 
   const handleItemChange = (index, field, value) => {
     const updatedItems = [...invoice.items];
+    
+    // Upewnij się, że wartość VAT jest liczbą
+    if (field === 'vat') {
+      value = parseInt(value) || 0;
+    }
+    
+    // Upewnij się, że quantity i price są liczbami
+    if (field === 'quantity' || field === 'price') {
+      value = parseFloat(value) || 0;
+    }
+    
     updatedItems[index] = {
       ...updatedItems[index],
       [field]: value
@@ -490,6 +501,23 @@ const InvoiceForm = ({ invoiceId }) => {
                   </Select>
                 </FormControl>
               </Grid>
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>Waluta</InputLabel>
+                  <Select
+                    name="currency"
+                    value={invoice.currency || 'PLN'}
+                    onChange={handleChange}
+                    label="Waluta"
+                  >
+                    <MenuItem value="PLN">PLN - Polski złoty</MenuItem>
+                    <MenuItem value="EUR">EUR - Euro</MenuItem>
+                    <MenuItem value="USD">USD - Dolar amerykański</MenuItem>
+                    <MenuItem value="GBP">GBP - Funt brytyjski</MenuItem>
+                    <MenuItem value="CHF">CHF - Frank szwajcarski</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
             </Grid>
           </Grid>
           <Grid item xs={12} md={6}>
@@ -658,12 +686,12 @@ const InvoiceForm = ({ invoiceId }) => {
               </Grid>
               <Grid item xs={6} sm={3}>
                 <Typography variant="body1" fontWeight="bold">
-                  Wartość netto: {(item.quantity * item.price).toFixed(2)} zł
+                  Wartość netto: {(item.quantity * item.price).toFixed(2)} {invoice.currency || 'zł'}
                 </Typography>
               </Grid>
               <Grid item xs={6} sm={3}>
                 <Typography variant="body1" fontWeight="bold">
-                  Wartość brutto: {(item.quantity * item.price * (1 + (item.vat || 23) / 100)).toFixed(2)} zł
+                  Wartość brutto: {(item.quantity * item.price * (1 + (item.vat || 23) / 100)).toFixed(2)} {invoice.currency || 'zł'}
                 </Typography>
               </Grid>
               <Grid item xs={12} sm={6} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -685,13 +713,27 @@ const InvoiceForm = ({ invoiceId }) => {
         <Grid container spacing={2} justifyContent="flex-end">
           <Grid item xs={12} sm={6} md={4}>
             <Typography variant="body1" fontWeight="bold">
-              Razem netto: {invoice.items.reduce((sum, item) => sum + (item.quantity * item.price), 0).toFixed(2)} zł
+              Razem netto: {invoice.items.reduce((sum, item) => {
+                const quantity = Number(item.quantity) || 0;
+                const price = Number(item.price) || 0;
+                return sum + (quantity * price);
+              }, 0).toFixed(2)} {invoice.currency || 'zł'}
             </Typography>
             <Typography variant="body1" fontWeight="bold">
-              Razem VAT: {invoice.items.reduce((sum, item) => sum + (item.quantity * item.price * ((item.vat || 23) / 100)), 0).toFixed(2)} zł
+              Razem VAT: {invoice.items.reduce((sum, item) => {
+                const quantity = Number(item.quantity) || 0;
+                const price = Number(item.price) || 0;
+                const vat = Number(item.vat) || 0;
+                return sum + (quantity * price * (vat / 100));
+              }, 0).toFixed(2)} {invoice.currency || 'zł'}
             </Typography>
             <Typography variant="h6" fontWeight="bold" color="primary">
-              Razem brutto: {invoice.items.reduce((sum, item) => sum + (item.quantity * item.price * (1 + (item.vat || 23) / 100)), 0).toFixed(2)} zł
+              Razem brutto: {invoice.items.reduce((sum, item) => {
+                const quantity = Number(item.quantity) || 0;
+                const price = Number(item.price) || 0;
+                const vat = Number(item.vat) || 0;
+                return sum + (quantity * price * (1 + vat / 100));
+              }, 0).toFixed(2)} {invoice.currency || 'zł'}
             </Typography>
           </Grid>
         </Grid>

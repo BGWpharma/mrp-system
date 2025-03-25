@@ -591,13 +591,80 @@ import {
       );
       
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || new Date()
-      }));
+      
+      // Pobierz wszystkie transakcje
+      const transactions = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt ? data.createdAt.toDate() : null
+        };
+      });
+      
+      // Uzupełnij informacje o zadaniach produkcyjnych dla transakcji rezerwacji
+      for (const transaction of transactions) {
+        if ((transaction.type === 'booking' || transaction.type === 'booking_cancel') && transaction.referenceId) {
+          // Sprawdź, czy już mamy dane zadania w transakcji
+          if (!transaction.taskNumber && !transaction.taskName) {
+            try {
+              const taskRef = doc(db, 'productionTasks', transaction.referenceId);
+              const taskDoc = await getDoc(taskRef);
+              
+              if (taskDoc.exists()) {
+                const taskData = taskDoc.data();
+                transaction.taskName = taskData.name || '';
+                transaction.taskNumber = taskData.number || '';
+                transaction.clientName = taskData.clientName || '';
+                transaction.clientId = taskData.clientId || '';
+                
+                // Zaktualizuj transakcję, aby zapisać te dane na przyszłość
+                await updateDoc(doc(transactionsRef, transaction.id), {
+                  taskName: transaction.taskName,
+                  taskNumber: transaction.taskNumber,
+                  clientName: transaction.clientName,
+                  clientId: transaction.clientId
+                });
+              }
+            } catch (error) {
+              console.error('Błąd podczas pobierania danych zadania:', error);
+              // Kontynuuj, nawet jeśli nie udało się pobrać danych zadania
+            }
+          }
+          
+          // Sprawdź, czy mamy informacje o partii dla rezerwacji
+          if (!transaction.batchId && transaction.type === 'booking') {
+            try {
+              // Znajdź partie dla tego zadania w danych zadania
+              const taskRef = doc(db, 'productionTasks', transaction.referenceId);
+              const taskDoc = await getDoc(taskRef);
+              
+              if (taskDoc.exists()) {
+                const taskData = taskDoc.data();
+                const materialBatches = taskData.materialBatches || {};
+                
+                if (materialBatches[itemId] && materialBatches[itemId].length > 0) {
+                  const firstBatch = materialBatches[itemId][0];
+                  transaction.batchId = firstBatch.batchId;
+                  transaction.batchNumber = firstBatch.batchNumber;
+                  
+                  // Zaktualizuj transakcję, aby zapisać informacje o partii
+                  await updateDoc(doc(transactionsRef, transaction.id), {
+                    batchId: transaction.batchId,
+                    batchNumber: transaction.batchNumber
+                  });
+                }
+              }
+            } catch (error) {
+              console.error('Błąd podczas pobierania danych o partiach:', error);
+            }
+          }
+        }
+      }
+      
+      return transactions;
     } catch (error) {
-      console.error('Error getting item transactions:', error);
+      console.error('Error fetching item transactions:', error);
       throw error;
     }
   };
@@ -787,6 +854,29 @@ import {
         throw new Error(`Niewystarczająca ilość produktu w magazynie. Dostępne: ${item.quantity} ${item.unit}`);
       }
       
+      // Pobierz dane zadania produkcyjnego na początku funkcji
+      const taskRef = doc(db, 'productionTasks', taskId);
+      const taskDoc = await getDoc(taskRef);
+      
+      let taskData = {};
+      let taskName = '';
+      let taskNumber = '';
+      let clientName = '';
+      let clientId = '';
+      
+      if (taskDoc.exists()) {
+        taskData = taskDoc.data();
+        taskName = taskData.name || '';
+        taskNumber = taskData.number || '';
+        clientName = taskData.clientName || '';
+        clientId = taskData.clientId || '';
+      } else {
+        console.warn(`Zadanie produkcyjne o ID ${taskId} nie istnieje`);
+      }
+      
+      // Zapisz log dla diagnostyki
+      console.log(`Rezerwacja dla zadania: MO=${taskNumber}, nazwa=${taskName}`);
+      
       // Aktualizuj pole bookedQuantity w produkcie
       const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
       
@@ -843,12 +933,20 @@ import {
       // Zapisz informacje o zarezerwowanych partiach
       const reservedBatches = [];
       let remainingQuantity = quantity;
+      let selectedBatchId = '';
+      let selectedBatchNumber = '';
       
       for (const batch of batches) {
         if (remainingQuantity <= 0) break;
         
         const quantityFromBatch = Math.min(batch.quantity, remainingQuantity);
         remainingQuantity -= quantityFromBatch;
+        
+        // Zachowaj informacje o pierwszej partii do rezerwacji
+        if (!selectedBatchId) {
+          selectedBatchId = batch.id;
+          selectedBatchNumber = batch.batchNumber || batch.lotNumber || 'Bez numeru';
+        }
         
         reservedBatches.push({
           batchId: batch.id,
@@ -857,12 +955,8 @@ import {
         });
       }
       
-      // Zapisz informacje o zarezerwowanych partiach w zadaniu
-      const taskRef = doc(db, 'productionTasks', taskId);
-      const taskDoc = await getDoc(taskRef);
-      
+      // Zapisz informacje o partiach w zadaniu produkcyjnym
       if (taskDoc.exists()) {
-        const taskData = taskDoc.data();
         const materialBatches = taskData.materialBatches || {};
         
         materialBatches[itemId] = reservedBatches;
@@ -873,19 +967,34 @@ import {
         });
       }
       
+      // Utwórz nazwę użytkownika (jeśli dostępna)
+      const userName = userId || 'System';
+      
       // Dodaj wpis w transakcjach
       const transactionRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
-      await addDoc(transactionRef, {
+      const transactionData = {
         itemId,
         itemName: item.name,
         quantity,
         type: 'booking',
         reason: 'Zadanie produkcyjne',
         referenceId: taskId,
-        notes: `Zarezerwowano na zadanie produkcyjne ID: ${taskId} (metoda: ${reservationMethod})`,
+        taskId: taskId,
+        taskName: taskName,
+        taskNumber: taskNumber,
+        clientName: clientName,
+        clientId: clientId,
+        notes: `Zarezerwowano na zadanie produkcyjne MO: ${taskNumber || taskId} (metoda: ${reservationMethod})`,
+        batchId: selectedBatchId,
+        batchNumber: selectedBatchNumber,
+        userName: userName,
         createdAt: serverTimestamp(),
         createdBy: userId
-      });
+      };
+      
+      console.log('Tworzenie rezerwacji z danymi:', { taskNumber, taskName });
+      
+      await addDoc(transactionRef, transactionData);
       
       // Emituj zdarzenie o zmianie stanu magazynu
       const event = new CustomEvent('inventory-updated', { 
@@ -923,6 +1032,25 @@ import {
         updatedBy: userId
       });
       
+      // Pobierz dane zadania produkcyjnego
+      let taskNumber = '';
+      let taskName = '';
+      let clientName = '';
+      let clientId = '';
+      
+      if (taskId) {
+        const taskRef = doc(db, 'productionTasks', taskId);
+        const taskDoc = await getDoc(taskRef);
+        
+        if (taskDoc.exists()) {
+          const taskData = taskDoc.data();
+          taskName = taskData.name || '';
+          taskNumber = taskData.number || '';
+          clientName = taskData.clientName || '';
+          clientId = taskData.clientId || '';
+        }
+      }
+      
       // Dodaj wpis w transakcjach
       const transactionRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
       await addDoc(transactionRef, {
@@ -932,7 +1060,12 @@ import {
         type: 'booking_cancel',
         reason: 'Anulowanie rezerwacji',
         referenceId: taskId,
-        notes: `Anulowano rezerwację dla zadania produkcyjnego ID: ${taskId}`,
+        taskId: taskId,
+        taskName: taskName,
+        taskNumber: taskNumber,
+        clientName: clientName,
+        clientId: clientId,
+        notes: `Anulowano rezerwację dla zadania produkcyjnego MO: ${taskNumber || taskId}`,
         createdAt: serverTimestamp(),
         createdBy: userId
       });
@@ -1900,6 +2033,255 @@ import {
       return pdfBlob;
     } catch (error) {
       console.error('Błąd podczas generowania raportu inwentaryzacji:', error);
+      throw error;
+    }
+  };
+
+  // Aktualizacja rezerwacji produktu
+  export const updateReservation = async (reservationId, itemId, newQuantity, newBatchId, userId) => {
+    try {
+      // Pobierz aktualną rezerwację
+      const reservationRef = doc(db, INVENTORY_TRANSACTIONS_COLLECTION, reservationId);
+      const reservationDoc = await getDoc(reservationRef);
+      
+      if (!reservationDoc.exists()) {
+        throw new Error('Rezerwacja nie istnieje');
+      }
+      
+      const reservation = reservationDoc.data();
+      const oldQuantity = reservation.quantity;
+      
+      // Pobierz aktualny stan produktu
+      const item = await getInventoryItemById(itemId);
+      
+      // Oblicz różnicę w ilości
+      const quantityDiff = newQuantity - oldQuantity;
+      
+      // Sprawdź, czy jest wystarczająca ilość produktu dla zwiększenia rezerwacji
+      if (quantityDiff > 0 && item.quantity - item.bookedQuantity < quantityDiff) {
+        throw new Error(`Niewystarczająca ilość produktu w magazynie. Dostępne: ${item.quantity - item.bookedQuantity} ${item.unit}`);
+      }
+      
+      // Aktualizuj pole bookedQuantity w produkcie
+      const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
+      await updateDoc(itemRef, {
+        bookedQuantity: increment(quantityDiff),
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      });
+      
+      // Pobierz informacje o wybranej partii, jeśli została zmieniona
+      let batchNumber = reservation.batchNumber || '';
+      if (newBatchId && newBatchId !== reservation.batchId) {
+        try {
+          const batchRef = doc(db, INVENTORY_BATCHES_COLLECTION, newBatchId);
+          const batchDoc = await getDoc(batchRef);
+          if (batchDoc.exists()) {
+            const batchData = batchDoc.data();
+            batchNumber = batchData.lotNumber || batchData.batchNumber || 'Bez numeru';
+          }
+        } catch (error) {
+          console.error('Błąd podczas pobierania informacji o partii:', error);
+        }
+      }
+      
+      // Jeśli zmieniono partię, zaktualizuj informacje o partiach w zadaniu
+      if ((newBatchId !== reservation.batchId || quantityDiff !== 0) && reservation.referenceId) {
+        const taskRef = doc(db, 'productionTasks', reservation.referenceId);
+        const taskDoc = await getDoc(taskRef);
+        
+        if (taskDoc.exists()) {
+          const taskData = taskDoc.data();
+          const materialBatches = taskData.materialBatches || {};
+          
+          // Zaktualizuj lub dodaj informacje o partii w zadaniu
+          if (materialBatches[itemId]) {
+            // Jeśli wybrano konkretną partię dla rezerwacji
+            if (newBatchId) {
+              // Sprawdź, czy ta partia już istnieje w liście
+              const existingBatchIndex = materialBatches[itemId].findIndex(b => b.batchId === newBatchId);
+              
+              if (existingBatchIndex >= 0) {
+                // Aktualizuj istniejącą partię
+                materialBatches[itemId][existingBatchIndex].quantity = newQuantity;
+              } else {
+                // Dodaj nową partię i usuń poprzednią
+                materialBatches[itemId] = [{
+                  batchId: newBatchId,
+                  quantity: newQuantity,
+                  batchNumber: batchNumber
+                }];
+              }
+            } else {
+              // Jeśli nie wybrano konkretnej partii, aktualizuj tylko ilość w pierwszej partii
+              if (materialBatches[itemId].length > 0) {
+                materialBatches[itemId][0].quantity = newQuantity;
+              }
+            }
+            
+            await updateDoc(taskRef, {
+              materialBatches,
+              updatedAt: serverTimestamp()
+            });
+          }
+        }
+      }
+      
+      // Pobierz aktualne dane zadania (dla pewności, że mamy najnowsze)
+      let taskName = reservation.taskName || '';
+      let taskNumber = reservation.taskNumber || '';
+      let clientName = reservation.clientName || '';
+      let clientId = reservation.clientId || '';
+      
+      if (reservation.referenceId) {
+        try {
+          const taskRef = doc(db, 'productionTasks', reservation.referenceId);
+          const taskDoc = await getDoc(taskRef);
+          
+          if (taskDoc.exists()) {
+            const taskData = taskDoc.data();
+            taskName = taskData.name || '';
+            taskNumber = taskData.number || '';
+            clientName = taskData.clientName || '';
+            clientId = taskData.clientId || '';
+          }
+        } catch (error) {
+          console.error('Błąd podczas pobierania danych zadania:', error);
+        }
+      }
+      
+      // Aktualizuj rezerwację
+      await updateDoc(reservationRef, {
+        quantity: newQuantity,
+        batchId: newBatchId || null,
+        batchNumber: newBatchId ? batchNumber : null,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId,
+        taskName,
+        taskNumber,
+        clientName,
+        clientId,
+        notes: `Zaktualizowano rezerwację. Zmieniono ilość z ${oldQuantity} na ${newQuantity}${newBatchId !== reservation.batchId ? ' i zmieniono partię' : ''}`
+      });
+      
+      // Emituj zdarzenie o zmianie stanu magazynu
+      const event = new CustomEvent('inventory-updated', { 
+        detail: { itemId, action: 'reservation_update', quantity: quantityDiff }
+      });
+      window.dispatchEvent(event);
+      
+      return {
+        success: true,
+        message: `Zaktualizowano rezerwację. Nowa ilość: ${newQuantity} ${item.unit}`
+      };
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji rezerwacji:', error);
+      throw error;
+    }
+  };
+
+  // Funkcja do aktualizacji informacji o zadaniach w rezerwacjach - można uruchomić ręcznie dla istniejących rezerwacji
+  export const updateReservationTasks = async () => {
+    try {
+      // Pobierz wszystkie transakcje typu booking
+      const transactionsRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
+      const q = query(
+        transactionsRef,
+        where('type', '==', 'booking')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const transactions = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      console.log(`Znaleziono ${transactions.length} rezerwacji do sprawdzenia`);
+      
+      const updated = [];
+      const notUpdated = [];
+      
+      // Dla każdej rezerwacji
+      for (const transaction of transactions) {
+        if (!transaction.taskNumber && transaction.referenceId) {
+          try {
+            console.log(`Sprawdzanie zadania dla rezerwacji ${transaction.id}`);
+            
+            // Pobierz zadanie produkcyjne
+            const taskRef = doc(db, 'productionTasks', transaction.referenceId);
+            const taskDoc = await getDoc(taskRef);
+            
+            if (taskDoc.exists()) {
+              const taskData = taskDoc.data();
+              // Sprawdź zarówno pole number jak i moNumber (moNumber jest nowszym polem)
+              const taskNumber = taskData.moNumber || taskData.number || '';
+              const taskName = taskData.name || '';
+              const clientName = taskData.clientName || '';
+              const clientId = taskData.clientId || '';
+              
+              // Jeśli zadanie ma numer MO, zaktualizuj rezerwację
+              if (taskNumber) {
+                console.log(`Aktualizacja rezerwacji ${transaction.id} - przypisywanie MO: ${taskNumber}`);
+                
+                const transactionRef = doc(db, INVENTORY_TRANSACTIONS_COLLECTION, transaction.id);
+                await updateDoc(transactionRef, {
+                  taskName,
+                  taskNumber,
+                  clientName,
+                  clientId,
+                  updatedAt: serverTimestamp()
+                });
+                
+                updated.push({
+                  id: transaction.id,
+                  itemName: transaction.itemName,
+                  moNumber: taskNumber
+                });
+              } else {
+                console.log(`Zadanie ${transaction.referenceId} nie ma numeru MO`);
+                notUpdated.push({
+                  id: transaction.id,
+                  itemName: transaction.itemName,
+                  reason: 'Brak numeru MO w zadaniu'
+                });
+              }
+            } else {
+              console.log(`Nie znaleziono zadania o ID: ${transaction.referenceId}`);
+              notUpdated.push({
+                id: transaction.id,
+                itemName: transaction.itemName,
+                reason: 'Zadanie nie istnieje'
+              });
+            }
+          } catch (error) {
+            console.error(`Błąd podczas aktualizacji rezerwacji ${transaction.id}:`, error);
+            notUpdated.push({
+              id: transaction.id,
+              itemName: transaction.itemName,
+              reason: `Błąd: ${error.message}`
+            });
+          }
+        } else if (transaction.taskNumber) {
+          // Rezerwacja ma już numer zadania
+          console.log(`Rezerwacja ${transaction.id} ma już przypisany numer zadania: ${transaction.taskNumber}`);
+        } else {
+          console.log(`Rezerwacja ${transaction.id} nie ma ID referencyjnego zadania`);
+          notUpdated.push({
+            id: transaction.id,
+            itemName: transaction.itemName,
+            reason: 'Brak ID referencyjnego zadania'
+          });
+        }
+      }
+      
+      console.log(`Zaktualizowano ${updated.length} rezerwacji, nie zaktualizowano ${notUpdated.length}`);
+      
+      return {
+        updated,
+        notUpdated
+      };
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji zadań w rezerwacjach:', error);
       throw error;
     }
   };

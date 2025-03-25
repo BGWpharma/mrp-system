@@ -399,6 +399,9 @@ const RecipeForm = ({ recipeId }) => {
         }
       }
       
+      // Znajdź wybrany magazyn dla lepszego komunikatu
+      const selectedWarehouse = warehouses.find(w => w.id === productData.warehouseId);
+      
       // Dane produktu do utworzenia
       const newProductData = {
         ...productData,
@@ -408,13 +411,19 @@ const RecipeForm = ({ recipeId }) => {
         unitPrice: unitCost > 0 ? unitCost : null,
         batchPrice: null,
         recipeId: recipeId, // Przypisujemy ID receptury
-        productionCost: unitCost > 0 ? unitCost : null
+        productionCost: unitCost > 0 ? unitCost : null,
+        // Dodajemy informacje o recepturze
+        recipeInfo: {
+          name: recipeData.name,
+          yield: recipeData.yield,
+          version: recipeData.version || 1
+        }
       };
       
       // Utwórz produkt w magazynie
       const createdProduct = await createInventoryItem(newProductData, currentUser.uid);
       
-      showSuccess(`Produkt "${createdProduct.name}" został dodany do magazynu`);
+      showSuccess(`Produkt "${createdProduct.name}" został pomyślnie dodany do magazynu "${selectedWarehouse?.name || 'wybranym'}"`);
       setCreateProductDialogOpen(false);
       
       // Odśwież listę składników, aby nowo utworzony produkt był widoczny
@@ -882,15 +891,32 @@ const RecipeForm = ({ recipeId }) => {
       {/* Sekcja kalkulacji kosztów */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6">Kalkulacja kosztów</Typography>
-          <Button
-            variant="outlined"
-            startIcon={<CalculateIcon />}
-            onClick={handleCalculateCosts}
-            disabled={calculatingCosts || !recipeData.ingredients.length}
-          >
-            {calculatingCosts ? 'Obliczanie...' : 'Oblicz koszty'}
-          </Button>
+          <Typography variant="subtitle1">Kalkulacja kosztów</Typography>
+          <Box>
+            <Button 
+              variant="outlined" 
+              color="primary" 
+              onClick={handleCalculateCosts}
+              startIcon={<CalculateIcon />}
+              disabled={calculatingCosts}
+            >
+              {calculatingCosts ? 'Obliczanie...' : 'Oblicz koszty'}
+            </Button>
+            
+            {recipeId && (
+              <Button
+                variant="outlined"
+                color="primary"
+                startIcon={<ProductIcon />}
+                onClick={() => setCreateProductDialogOpen(true)}
+                sx={{ ml: 2 }}
+                disabled={!costCalculation}
+                title={!costCalculation ? 'Najpierw oblicz koszty receptury' : 'Dodaj produkt do magazynu'}
+              >
+                Dodaj do magazynu
+              </Button>
+            )}
+          </Box>
         </Box>
         
         {costCalculation && (
@@ -967,77 +993,47 @@ const RecipeForm = ({ recipeId }) => {
         )}
       </Paper>
 
-      {/* Dialog tworzenia produktu w magazynie */}
-      <Dialog open={createProductDialogOpen} onClose={() => setCreateProductDialogOpen(false)} maxWidth="md" fullWidth>
+      {/* Dialog dodawania produktu do magazynu */}
+      <Dialog 
+        open={createProductDialogOpen} 
+        onClose={() => setCreateProductDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
         <DialogTitle>Dodaj produkt do magazynu</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
-            Utwórz nowy produkt gotowy w magazynie na podstawie tej receptury. 
-            Produkt będzie miał przypisaną recepturę i koszt produkcji.
+            Uzupełnij poniższe dane, aby dodać produkt z receptury do magazynu. 
+            Koszt produkcji zostanie obliczony na podstawie kosztów składników.
           </DialogContentText>
           
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12} md={6}>
               <TextField
-                label="Nazwa produktu"
                 name="name"
+                label="Nazwa produktu"
                 value={productData.name}
                 onChange={handleProductDataChange}
                 fullWidth
                 required
-                margin="normal"
+                error={!productData.name}
+                helperText={!productData.name ? 'Nazwa jest wymagana' : ''}
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                label="Kategoria"
-                name="category"
-                value={productData.category}
-                onChange={handleProductDataChange}
-                fullWidth
-                margin="normal"
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                label="Opis"
-                name="description"
-                value={productData.description}
-                onChange={handleProductDataChange}
-                fullWidth
-                multiline
-                rows={2}
-                margin="normal"
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth margin="normal">
-                <InputLabel>Jednostka</InputLabel>
+            
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth required>
+                <InputLabel id="warehouse-select-label">Magazyn</InputLabel>
                 <Select
-                  name="unit"
-                  value={productData.unit}
-                  onChange={handleProductDataChange}
-                  label="Jednostka"
-                >
-                  <MenuItem value="szt.">szt.</MenuItem>
-                  <MenuItem value="g">g</MenuItem>
-                  <MenuItem value="kg">kg</MenuItem>
-                  <MenuItem value="ml">ml</MenuItem>
-                  <MenuItem value="l">l</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth margin="normal">
-                <InputLabel>Magazyn</InputLabel>
-                <Select
+                  labelId="warehouse-select-label"
+                  id="warehouse-select"
                   name="warehouseId"
                   value={productData.warehouseId}
                   onChange={handleProductDataChange}
                   label="Magazyn"
-                  required
+                  error={!productData.warehouseId}
                 >
-                  {warehouses.map(warehouse => (
+                  {warehouses.map((warehouse) => (
                     <MenuItem key={warehouse.id} value={warehouse.id}>
                       {warehouse.name}
                     </MenuItem>
@@ -1045,65 +1041,109 @@ const RecipeForm = ({ recipeId }) => {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={4}>
+            
+            <Grid item xs={12}>
               <TextField
-                label="Ilość początkowa"
+                name="description"
+                label="Opis produktu"
+                value={productData.description}
+                onChange={handleProductDataChange}
+                fullWidth
+                multiline
+                rows={2}
+              />
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
+              <TextField
+                name="category"
+                label="Kategoria"
+                value={productData.category}
+                onChange={handleProductDataChange}
+                fullWidth
+              />
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth>
+                <InputLabel id="unit-select-label">Jednostka</InputLabel>
+                <Select
+                  labelId="unit-select-label"
+                  id="unit-select"
+                  name="unit"
+                  value={productData.unit}
+                  onChange={handleProductDataChange}
+                  label="Jednostka"
+                >
+                  <MenuItem value="szt.">sztuka</MenuItem>
+                  <MenuItem value="kg">kilogram</MenuItem>
+                  <MenuItem value="g">gram</MenuItem>
+                  <MenuItem value="l">litr</MenuItem>
+                  <MenuItem value="ml">mililitr</MenuItem>
+                  <MenuItem value="m">metr</MenuItem>
+                  <MenuItem value="cm">centymetr</MenuItem>
+                  <MenuItem value="op.">opakowanie</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            
+            <Grid item xs={12} md={4}>
+              <TextField
                 name="quantity"
+                label="Ilość początkowa"
                 type="number"
                 value={productData.quantity}
                 onChange={handleProductDataChange}
                 fullWidth
-                margin="normal"
-                inputProps={{ min: 0 }}
+                inputProps={{ min: 0, step: 0.01 }}
               />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            
+            <Grid item xs={12} md={4}>
               <TextField
-                label="Minimalny stan magazynowy"
                 name="minStockLevel"
+                label="Minimalny poziom"
                 type="number"
                 value={productData.minStockLevel}
                 onChange={handleProductDataChange}
                 fullWidth
-                margin="normal"
-                inputProps={{ min: 0 }}
+                inputProps={{ min: 0, step: 0.01 }}
               />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            
+            <Grid item xs={12} md={4}>
               <TextField
-                label="Maksymalny stan magazynowy"
                 name="maxStockLevel"
+                label="Optymalny poziom"
                 type="number"
                 value={productData.maxStockLevel}
                 onChange={handleProductDataChange}
                 fullWidth
-                margin="normal"
-                inputProps={{ min: 0 }}
+                inputProps={{ min: 0, step: 0.01 }}
               />
             </Grid>
+            
             {costCalculation && (
               <Grid item xs={12}>
-                <Typography variant="subtitle2" color="primary">
-                  Koszt wytworzenia produktu: {costCalculation.unitCost.toFixed(2)} zł / {costCalculation.yieldUnit}
-                </Typography>
-                <Typography variant="caption">
-                  Ta wartość zostanie zapisana jako koszt produkcji i cena jednostkowa produktu.
-                </Typography>
+                <Box sx={{ p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
+                  <Typography variant="body2" color="info.contrastText">
+                    Koszt produkcji jednej sztuki: {costCalculation.unitCost.toFixed(2)} zł
+                  </Typography>
+                </Box>
               </Grid>
             )}
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCreateProductDialogOpen(false)}>
-            Anuluj
-          </Button>
+          <Button onClick={() => setCreateProductDialogOpen(false)}>Anuluj</Button>
           <Button 
             onClick={handleCreateProduct} 
             variant="contained" 
             color="primary"
             disabled={creatingProduct || !productData.name || !productData.warehouseId}
+            startIcon={creatingProduct ? <CircularProgress size={20} /> : <ProductIcon />}
           >
-            {creatingProduct ? <CircularProgress size={24} /> : 'Utwórz produkt'}
+            {creatingProduct ? 'Zapisywanie...' : 'Dodaj do magazynu'}
           </Button>
         </DialogActions>
       </Dialog>

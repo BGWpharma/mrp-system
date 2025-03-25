@@ -324,7 +324,7 @@ const InvoiceDetails = () => {
                 if (row.cells[colIndex]) {
                   const cell = row.cells[colIndex];
                   if (cell.text) {
-                    cell.text = `${cell.text} zł`;
+                    cell.text = `${cell.text} ${invoice.currency}`;
                   }
                 }
               });
@@ -354,10 +354,10 @@ const InvoiceDetails = () => {
       doc.setFont('Roboto', 'bold');
       doc.text('Podsumowanie:', 140, finalY);
       doc.setFont('Roboto', 'normal');
-      doc.text(`Razem netto: ${totalNetto.toFixed(2)} zł`, 140, finalY + 6);
-      doc.text(`Razem VAT: ${totalVat.toFixed(2)} zł`, 140, finalY + 12);
+      doc.text(`Razem netto: ${totalNetto.toFixed(2)} ${invoice.currency}`, 140, finalY + 6);
+      doc.text(`Razem VAT: ${totalVat.toFixed(2)} ${invoice.currency}`, 140, finalY + 12);
       doc.setFont('Roboto', 'bold');
-      doc.text(`R a z e m   b r u t t o: ${totalBrutto.toFixed(2)} zł`, 140, finalY + 18, { charSpace: 0 });
+      doc.text(`Razem brutto: ${totalBrutto.toFixed(2)} ${invoice.currency}`, 140, finalY + 18);
       doc.setFont('Roboto', 'normal');
       
       // Dodaj uwagi, jeśli istnieją
@@ -779,10 +779,10 @@ const InvoiceDetails = () => {
                     <TableCell>{item.description || '-'}</TableCell>
                     <TableCell align="right">{quantity}</TableCell>
                     <TableCell>{item.unit}</TableCell>
-                    <TableCell align="right">{price.toFixed(2)} zł</TableCell>
+                    <TableCell align="right">{price.toFixed(2)} {invoice.currency}</TableCell>
                     <TableCell align="right">{vat}%</TableCell>
-                    <TableCell align="right">{netValue.toFixed(2)} zł</TableCell>
-                    <TableCell align="right">{grossValue.toFixed(2)} zł</TableCell>
+                    <TableCell align="right">{netValue.toFixed(2)} {invoice.currency}</TableCell>
+                    <TableCell align="right">{grossValue.toFixed(2)} {invoice.currency}</TableCell>
                   </TableRow>
                 );
               })}
@@ -803,7 +803,7 @@ const InvoiceDetails = () => {
                   const quantity = Number(item.quantity) || 0;
                   const price = Number(item.price) || 0;
                   return sum + (quantity * price);
-                }, 0).toFixed(2)} zł
+                }, 0).toFixed(2)} {invoice.currency}
               </Typography>
             </Grid>
             <Grid item xs={6}>
@@ -818,7 +818,7 @@ const InvoiceDetails = () => {
                   const price = Number(item.price) || 0;
                   const vat = Number(item.vat) || 23;
                   return sum + (quantity * price * (vat / 100));
-                }, 0).toFixed(2)} zł
+                }, 0).toFixed(2)} {invoice.currency}
               </Typography>
             </Grid>
             <Grid item xs={6}>
@@ -833,7 +833,7 @@ const InvoiceDetails = () => {
                   const price = Number(item.price) || 0;
                   const vat = Number(item.vat) || 23;
                   return sum + (quantity * price * (1 + vat / 100));
-                }, 0).toFixed(2)} zł
+                }, 0).toFixed(2)} {invoice.currency}
               </Typography>
             </Grid>
           </Grid>
