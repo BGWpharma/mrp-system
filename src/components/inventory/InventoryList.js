@@ -958,7 +958,7 @@ const InventoryList = () => {
                       {reservation.taskNumber ? (
                         <Link 
                           component={RouterLink} 
-                          to={`/tasks/${reservation.taskId}`}
+                          to={`/production/tasks/${reservation.taskId}`}
                           underline="hover"
                           sx={{ display: 'flex', alignItems: 'center' }}
                         >

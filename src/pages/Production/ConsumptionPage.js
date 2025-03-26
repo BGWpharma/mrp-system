@@ -22,7 +22,10 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  DialogContentText
+  DialogContentText,
+  Chip,
+  Tooltip,
+  Collapse
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -32,7 +35,9 @@ import {
   Add as AddIcon,
   Done as ConfirmIcon,
   Check as CheckIcon,
-  Cancel as CancelIcon
+  Cancel as CancelIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon
 } from '@mui/icons-material';
 import {
   getTaskById,
@@ -48,7 +53,7 @@ const ConsumptionPage = () => {
   const { taskId } = useParams();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showError, showInfo } = useNotification();
   
   const [loading, setLoading] = useState(true);
   const [task, setTask] = useState(null);
@@ -57,6 +62,7 @@ const ConsumptionPage = () => {
   const [materialQuantities, setMaterialQuantities] = useState({});
   const [confirmationDialogOpen, setConfirmationDialogOpen] = useState(false);
   const [errors, setErrors] = useState({});
+  const [expandedMaterials, setExpandedMaterials] = useState({});
   
   // Pobieranie danych zadania
   useEffect(() => {
@@ -144,13 +150,35 @@ const ConsumptionPage = () => {
         return;
       }
       
-      await updateActualMaterialUsage(taskId, materialQuantities);
-      showSuccess('Zużycie materiałów zaktualizowane');
+      setLoading(true);
+
+      // Zbierz wszystkie faktyczne ilości
+      const updatedQuantities = {};
+      
+      Object.keys(materialQuantities).forEach(materialId => {
+        const value = materialQuantities[materialId];
+        updatedQuantities[materialId] = value === '' ? 0 : parseFloat(value);
+      });
+      
+      // Zapisz zmiany
+      const result = await updateActualMaterialUsage(taskId, updatedQuantities);
+      
+      showSuccess(result.message || 'Zużycie materiałów zaktualizowane.');
+      
+      // Jeśli zużycie było wcześniej potwierdzone, wyświetl dodatkowe powiadomienie
+      if (result.message && result.message.includes('Poprzednie potwierdzenie zużycia zostało anulowane')) {
+        setTimeout(() => {
+          showInfo('Poprzednie potwierdzenie zużycia zostało anulowane z powodu zmiany ilości. Proszę ponownie potwierdzić zużycie materiałów.');
+        }, 1000);
+      }
+      
       setEditMode(false);
       fetchTaskData(); // Odśwież dane
     } catch (error) {
       console.error('Błąd podczas zapisywania zmian:', error);
-      showError('Nie udało się zaktualizować zużycia materiałów');
+      showError('Nie udało się zapisać zmian: ' + error.message);
+    } finally {
+      setLoading(false);
     }
   };
   
@@ -177,6 +205,13 @@ const ConsumptionPage = () => {
     } catch (e) {
       return dateString;
     }
+  };
+  
+  const handleToggleMaterialExpand = (materialId) => {
+    setExpandedMaterials(prev => ({
+      ...prev,
+      [materialId]: !prev[materialId]
+    }));
   };
   
   if (loading) {
@@ -293,6 +328,12 @@ const ConsumptionPage = () => {
         Materiały
       </Typography>
       
+      <Alert severity="info" sx={{ mb: 3 }}>
+        Zużycie materiałów realizowane jest z konkretnych partii (LOT) przypisanych do zadania. 
+        Kliknij ikonę rozwijania przy danym materiale, aby zobaczyć szczegóły przypisanych partii.
+        Po potwierdzeniu zużycia, stany magazynowe zostaną zaktualizowane dla konkretnych partii, a nie dla ogólnej pozycji magazynowej.
+      </Alert>
+      
       <TableContainer component={Paper}>
         <Table size="small">
           <TableHead>
@@ -302,12 +343,13 @@ const ConsumptionPage = () => {
               <TableCell align="right">Planowana ilość</TableCell>
               <TableCell align="right">Rzeczywiste zużycie</TableCell>
               <TableCell align="right">Różnica</TableCell>
+              <TableCell align="right">Partie (LOT)</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {materials.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} align="center">Brak materiałów przypisanych do tego zadania</TableCell>
+                <TableCell colSpan={6} align="center">Brak materiałów przypisanych do tego zadania</TableCell>
               </TableRow>
             ) : (
               materials.map((material) => {
@@ -324,40 +366,98 @@ const ConsumptionPage = () => {
                   differenceDisplay = '-';
                 }
                 
+                // Sprawdź, czy materiał ma przypisane partie
+                const hasBatches = task.materialBatches && task.materialBatches[material.id] && 
+                  task.materialBatches[material.id].length > 0;
+                
+                const isExpanded = Boolean(expandedMaterials[material.id]);
+                
                 return (
-                  <TableRow key={material.id}>
-                    <TableCell>{material.name}</TableCell>
-                    <TableCell>{material.category || '-'}</TableCell>
-                    <TableCell align="right">{plannedQuantity} {material.unit}</TableCell>
-                    <TableCell align="right">
-                      {editMode ? (
-                        <TextField
-                          type="number"
-                          size="small"
-                          value={actualQuantity === '' ? '' : actualQuantity || 0}
-                          onChange={(e) => handleQuantityChange(material.id, e.target.value)}
-                          InputProps={{
-                            endAdornment: material.unit
-                          }}
-                          error={Boolean(errors[material.id])}
-                          helperText={errors[material.id]}
-                          sx={{ width: '150px' }}
-                        />
-                      ) : (
-                        `${actualQuantity === '' ? '-' : actualQuantity} ${material.unit}`
-                      )}
-                    </TableCell>
-                    <TableCell 
-                      align="right" 
-                      sx={{ 
-                        color: !isNaN(actualQuantity) && actualQuantity !== '' && difference !== 0
-                          ? difference < 0 ? 'success.main' : 'error.main'
-                          : 'text.primary'
-                      }}
-                    >
-                      {differenceDisplay}
-                    </TableCell>
-                  </TableRow>
+                  <React.Fragment key={material.id}>
+                    <TableRow>
+                      <TableCell>{material.name}</TableCell>
+                      <TableCell>{material.category || '-'}</TableCell>
+                      <TableCell align="right">{plannedQuantity} {material.unit}</TableCell>
+                      <TableCell align="right">
+                        {editMode ? (
+                          <TextField
+                            type="number"
+                            size="small"
+                            value={actualQuantity === '' ? '' : actualQuantity || 0}
+                            onChange={(e) => handleQuantityChange(material.id, e.target.value)}
+                            InputProps={{
+                              endAdornment: material.unit
+                            }}
+                            error={Boolean(errors[material.id])}
+                            helperText={errors[material.id]}
+                            sx={{ width: '150px' }}
+                          />
+                        ) : (
+                          `${actualQuantity === '' ? '-' : actualQuantity} ${material.unit}`
+                        )}
+                      </TableCell>
+                      <TableCell 
+                        align="right" 
+                        sx={{ 
+                          color: !isNaN(actualQuantity) && actualQuantity !== '' && difference !== 0
+                            ? difference < 0 ? 'success.main' : 'error.main'
+                            : 'text.primary'
+                        }}
+                      >
+                        {differenceDisplay}
+                      </TableCell>
+                      <TableCell align="right">
+                        {hasBatches ? (
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                            <Typography variant="body2" sx={{ mr: 1 }}>
+                              {task.materialBatches[material.id].length} {task.materialBatches[material.id].length === 1 ? 'partia' : 'partie'}
+                            </Typography>
+                            <IconButton 
+                              size="small" 
+                              onClick={() => handleToggleMaterialExpand(material.id)}
+                            >
+                              {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                            </IconButton>
+                          </Box>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            Brak przypisanych partii
+                          </Typography>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                    
+                    {/* Rozwijane szczegóły partii (LOT) */}
+                    {hasBatches && (
+                      <TableRow>
+                        <TableCell colSpan={6} sx={{ p: 0, borderBottom: 0 }}>
+                          <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                            <Box sx={{ p: 2, backgroundColor: '#f5f5f5' }}>
+                              <Typography variant="subtitle2" gutterBottom>
+                                Przypisane partie materiału
+                              </Typography>
+                              <Table size="small">
+                                <TableHead>
+                                  <TableRow>
+                                    <TableCell>Numer partii</TableCell>
+                                    <TableCell align="right">Ilość</TableCell>
+                                  </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                  {task.materialBatches[material.id].map((batch, index) => (
+                                    <TableRow key={index}>
+                                      <TableCell>{batch.batchNumber}</TableCell>
+                                      <TableCell align="right">{batch.quantity} {material.unit}</TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </Box>
+                          </Collapse>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </React.Fragment>
                 );
               })
             )}
@@ -373,7 +473,7 @@ const ConsumptionPage = () => {
         <DialogTitle>Potwierdź zużycie materiałów</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Czy na pewno chcesz potwierdzić zużycie materiałów? Ta operacja zaktualizuje stany magazynowe i nie będzie można jej cofnąć.
+            Czy na pewno chcesz potwierdzić zużycie materiałów? Ta operacja spowoduje zmniejszenie ilości w konkretnych partiach (LOT) materiałów przypisanych do tego zadania i zaktualizuje stany magazynowe. Operacji tej nie będzie można cofnąć.
           </DialogContentText>
         </DialogContent>
         <DialogActions>

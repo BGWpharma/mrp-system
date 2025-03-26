@@ -62,7 +62,7 @@ const TaskDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showError, showInfo } = useNotification();
   const [task, setTask] = useState(null);
   const [loading, setLoading] = useState(true);
   const [alert, setAlert] = useState({ open: false, severity: 'success', message: '' });
@@ -232,8 +232,16 @@ const TaskDetailsPage = () => {
         return;
       }
       
-      await updateActualMaterialUsage(id, materialQuantities);
-      showSuccess('Zużycie materiałów zaktualizowane');
+      const result = await updateActualMaterialUsage(id, materialQuantities);
+      showSuccess(result.message || 'Zużycie materiałów zaktualizowane');
+      
+      // Jeśli zużycie było wcześniej potwierdzone, wyświetl dodatkowe powiadomienie
+      if (result.message && result.message.includes('Poprzednie potwierdzenie zużycia zostało anulowane')) {
+        setTimeout(() => {
+          showInfo('Poprzednie potwierdzenie zużycia zostało anulowane z powodu zmiany ilości. Proszę ponownie potwierdzić zużycie materiałów.');
+        }, 1000);
+      }
+      
       setEditMode(false);
       
       // Odśwież dane zadania
@@ -251,7 +259,7 @@ const TaskDetailsPage = () => {
       }
     } catch (error) {
       console.error('Błąd podczas zapisywania zmian:', error);
-      showError('Nie udało się zaktualizować zużycia materiałów');
+      showError('Nie udało się zaktualizować zużycia materiałów: ' + error.message);
     }
   };
   
@@ -514,6 +522,14 @@ const TaskDetailsPage = () => {
         <Typography variant="h5">
           Szczegóły zadania produkcyjnego
         </Typography>
+        {(task.moNumber || task.number) && (
+          <Chip
+            label={`MO: ${task.moNumber || task.number}`}
+            color="secondary"
+            size="small"
+            sx={{ ml: 2 }}
+          />
+        )}
         <Box sx={{ flexGrow: 1 }} />
         <Button 
           variant="outlined" 
@@ -556,6 +572,18 @@ const TaskDetailsPage = () => {
             <Typography variant="h6" gutterBottom>
               {task.name}
             </Typography>
+            {(task.moNumber || task.number) && (
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <Typography variant="body1" sx={{ mr: 1 }}>
+                  Numer MO:
+                </Typography>
+                <Chip
+                  label={task.moNumber || task.number}
+                  color="secondary"
+                  variant="outlined"
+                />
+              </Box>
+            )}
             <Typography variant="body1" gutterBottom>
               Produkt: {task.productName}
             </Typography>

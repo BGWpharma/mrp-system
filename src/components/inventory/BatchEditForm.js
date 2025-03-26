@@ -32,7 +32,8 @@ const BatchEditForm = () => {
     lotNumber: '',
     expiryDate: null,
     notes: '',
-    unitPrice: ''
+    unitPrice: '',
+    quantity: ''
   });
 
   useEffect(() => {
@@ -62,7 +63,8 @@ const BatchEditForm = () => {
           lotNumber: batch.lotNumber || '',
           expiryDate: batch.expiryDate ? new Date(batch.expiryDate) : null,
           notes: batch.notes || '',
-          unitPrice: batch.unitPrice || ''
+          unitPrice: batch.unitPrice || '',
+          quantity: batch.quantity || 0
         });
       } catch (error) {
         showError('Błąd podczas pobierania danych: ' + error.message);
@@ -95,13 +97,22 @@ const BatchEditForm = () => {
         throw new Error('Cena jednostkowa musi być liczbą');
       }
       
+      if (batchData.quantity && isNaN(parseFloat(batchData.quantity))) {
+        throw new Error('Ilość musi być liczbą');
+      }
+      
+      if (parseFloat(batchData.quantity) < 0) {
+        throw new Error('Ilość nie może być ujemna');
+      }
+      
       // Przygotuj dane do aktualizacji
       const updateData = {
         batchNumber: batchData.batchNumber,
         lotNumber: batchData.lotNumber,
         expiryDate: batchData.expiryDate,
         notes: batchData.notes,
-        unitPrice: batchData.unitPrice ? parseFloat(batchData.unitPrice) : 0
+        unitPrice: batchData.unitPrice ? parseFloat(batchData.unitPrice) : 0,
+        quantity: batchData.quantity ? parseFloat(batchData.quantity) : 0
       };
       
       // Aktualizuj partię
@@ -197,6 +208,21 @@ const BatchEditForm = () => {
                 margin="normal"
                 InputProps={{
                   startAdornment: <InputAdornment position="start">zł</InputAdornment>,
+                  inputProps: { min: 0, step: 0.01 }
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Ilość"
+                name="quantity"
+                type="number"
+                value={batchData.quantity}
+                onChange={handleChange}
+                margin="normal"
+                InputProps={{
+                  endAdornment: <InputAdornment position="end">{item?.unit || 'szt.'}</InputAdornment>,
                   inputProps: { min: 0, step: 0.01 }
                 }}
               />

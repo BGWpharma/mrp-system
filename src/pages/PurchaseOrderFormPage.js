@@ -11,7 +11,7 @@ const PurchaseOrderFormPage = () => {
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ mb: 3 }}>
         <Typography variant="h5">
-          {isNew ? 'Nowe Zamówienie Komponentów' : 'Edycja Zamówienia Komponentów'}
+          {isNew ? 'Utwórz Zamówienie Komponentów' : 'Edycja Zamówienia Komponentów'}
         </Typography>
       </Box>
       <PurchaseOrderForm />

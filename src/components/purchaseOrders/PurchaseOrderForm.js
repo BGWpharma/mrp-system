@@ -299,7 +299,7 @@ const PurchaseOrderForm = ({ orderId }) => {
     <Container>
       <Box sx={{ mb: 3 }}>
         <Typography variant="h5">
-          {currentOrderId === 'new' ? 'Nowe Zamówienie Komponentów' : 'Edytuj Zamówienie Komponentów'}
+          {currentOrderId === 'new' ? 'Utwórz Zamówienie Komponentów' : 'Edytuj Zamówienie Komponentów'}
         </Typography>
       </Box>
       
@@ -403,11 +403,11 @@ const PurchaseOrderForm = ({ orderId }) => {
               </LocalizationProvider>
             </Grid>
             
-            {/* Adres dostawy */}
+            {/* Adres dostawcy */}
             <Grid item xs={12}>
               <TextField
                 name="deliveryAddress"
-                label="Adres dostawy"
+                label="Adres dostawcy"
                 value={poData.deliveryAddress}
                 onChange={handleChange}
                 fullWidth
@@ -415,7 +415,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                 rows={3}
                 helperText={poData.supplier && poData.supplier.addresses && poData.supplier.addresses.length > 0 
                   ? 'Możesz wybrać z adresów dostawcy:' 
-                  : 'Wprowadź adres dostawy'
+                  : 'Wprowadź adres dostawcy'
                 }
               />
               

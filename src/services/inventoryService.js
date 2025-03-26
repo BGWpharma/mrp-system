@@ -12,7 +12,8 @@ import {
     orderBy,
     serverTimestamp,
     increment,
-    Timestamp
+    Timestamp,
+    setDoc
   } from 'firebase/firestore';
   import { db } from './firebase/config';
   import { generateLOTNumber } from '../utils/numberGenerators';
@@ -370,16 +371,6 @@ import {
       // Pobierz bieżącą pozycję
       const currentItem = await getInventoryItemById(itemId);
       
-      // Aktualizuj stan
-      const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
-      await updateDoc(itemRef, {
-        quantity: increment(Number(quantity)),
-        updatedAt: serverTimestamp(),
-        updatedBy: userId,
-        // Aktualizujemy cenę jednostkową w pozycji magazynowej, jeśli została podana
-        ...(transactionData.unitPrice !== undefined && { unitPrice: transactionData.unitPrice })
-      });
-      
       // Dodaj transakcję
       const transaction = {
         itemId,
@@ -387,8 +378,7 @@ import {
         type: 'RECEIVE',
         quantity: Number(quantity),
         previousQuantity: currentItem.quantity,
-        newQuantity: currentItem.quantity + Number(quantity),
-        warehouseId: transactionData.warehouseId, // Dodajemy warehouseId do transakcji
+        warehouseId: transactionData.warehouseId,
         ...transactionData,
         transactionDate: serverTimestamp(),
         createdBy: userId
@@ -396,35 +386,15 @@ import {
       
       const transactionRef = await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transaction);
       
-      // Jeśli podano datę ważności, dodaj partię
-      if (transactionData.expiryDate) {
-        // Wygeneruj numer LOT jeśli nie podano
-        const generatedLotNumber = await generateLOTNumber();
-        
-        // Użyj podanego numeru partii/LOT lub wygenerowanego
-        const batchLotNumber = transactionData.batchNumber || transactionData.lotNumber || generatedLotNumber;
-        
-        const batch = {
-          itemId,
-          itemName: currentItem.name,
-          transactionId: transactionRef.id,
-          quantity: Number(quantity),
-          initialQuantity: Number(quantity),
-          batchNumber: batchLotNumber, // Używamy jednego numeru dla partii/LOT
-          lotNumber: batchLotNumber, // Ten sam numer dla spójności danych
-          warehouseId: transactionData.warehouseId, // Zawsze dodajemy warehouseId
-          expiryDate: transactionData.expiryDate,
-          receivedDate: serverTimestamp(),
-          notes: transactionData.batchNotes || '',
-          unitPrice: transactionData.unitPrice || 0, // Dodajemy cenę jednostkową do partii
-          createdBy: userId
-        };
-        
-        await addDoc(collection(db, INVENTORY_BATCHES_COLLECTION), batch);
-      } else {
-        // Nawet jeśli nie podano daty ważności, tworzymy partię
-        const generatedLotNumber = await generateLOTNumber();
-        
+      // Generuj numer partii, jeśli nie został podany
+      let generatedLotNumber = transactionData.lotNumber || transactionData.batchNumber;
+      
+      if (!generatedLotNumber) {
+        generatedLotNumber = await generateLOTNumber();
+      }
+      
+      // Dodaj partię
+      if (transactionData.addBatch !== false) {
         const batch = {
           itemId,
           itemName: currentItem.name,
@@ -435,6 +405,7 @@ import {
           lotNumber: generatedLotNumber,
           warehouseId: transactionData.warehouseId, // Zawsze dodajemy warehouseId
           receivedDate: serverTimestamp(),
+          expiryDate: transactionData.expiryDate || null,
           notes: transactionData.batchNotes || '',
           unitPrice: transactionData.unitPrice || 0,
           createdBy: userId
@@ -443,9 +414,28 @@ import {
         await addDoc(collection(db, INVENTORY_BATCHES_COLLECTION), batch);
       }
       
+      // Zamiast bezpośrednio aktualizować ilość, przelicz ją na podstawie partii
+      await recalculateItemQuantity(itemId);
+      
+      // Aktualizuj tylko pole unitPrice w głównej pozycji magazynowej, jeśli podano
+      if (transactionData.unitPrice !== undefined) {
+        const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
+        await updateDoc(itemRef, {
+          unitPrice: transactionData.unitPrice,
+          updatedAt: serverTimestamp(),
+          updatedBy: userId
+        });
+      }
+      
+      // Emituj zdarzenie o zmianie stanu magazynu
+      const event = new CustomEvent('inventory-updated', { 
+        detail: { itemId, action: 'receive', quantity: Number(quantity) }
+      });
+      window.dispatchEvent(event);
+      
       return {
         id: itemId,
-        quantity: currentItem.quantity + Number(quantity)
+        quantity: await getInventoryItemById(itemId).then(item => item.quantity)
       };
     } catch (error) {
       console.error('Error receiving inventory:', error);
@@ -474,14 +464,6 @@ import {
       throw new Error(`Niewystarczająca ilość towaru w magazynie. Dostępne: ${availableQuantity}`);
     }
     
-    // Aktualizuj stan głównej pozycji
-    const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
-    await updateDoc(itemRef, {
-      quantity: increment(-Number(quantity)),
-      updatedAt: serverTimestamp(),
-      updatedBy: userId
-    });
-    
     // Dodaj transakcję
     const transaction = {
       itemId,
@@ -489,8 +471,7 @@ import {
       type: 'ISSUE',
       quantity: Number(quantity),
       previousQuantity: currentItem.quantity,
-      newQuantity: currentItem.quantity - Number(quantity),
-      warehouseId: transactionData.warehouseId, // Dodajemy warehouseId do transakcji
+      warehouseId: transactionData.warehouseId,
       ...transactionData,
       transactionDate: serverTimestamp(),
       createdBy: userId
@@ -536,20 +517,30 @@ import {
       for (const batch of sortedBatches) {
         if (remainingQuantity <= 0) break;
         
-        const quantityToDeduct = Math.min(batch.quantity, remainingQuantity);
-        remainingQuantity -= quantityToDeduct;
+        const quantityFromBatch = Math.min(batch.quantity, remainingQuantity);
+        remainingQuantity -= quantityFromBatch;
         
+        // Aktualizuj ilość w partii
         const batchRef = doc(db, INVENTORY_BATCHES_COLLECTION, batch.id);
         await updateDoc(batchRef, {
-          quantity: increment(-quantityToDeduct),
+          quantity: increment(-quantityFromBatch),
           updatedAt: serverTimestamp()
         });
       }
     }
+
+    // Przelicz i zaktualizuj ilość głównej pozycji na podstawie partii
+    await recalculateItemQuantity(itemId);
+    
+    // Emituj zdarzenie o zmianie stanu magazynu
+    const event = new CustomEvent('inventory-updated', { 
+      detail: { itemId, action: 'issue', quantity: Number(quantity) }
+    });
+    window.dispatchEvent(event);
     
     return {
-      id: itemId,
-      quantity: currentItem.quantity - Number(quantity)
+      success: true,
+      message: `Wydano ${quantity} ${currentItem.unit} produktu ${currentItem.name}`
     };
   };
 
@@ -804,6 +795,11 @@ import {
       }
       
       const currentBatch = batchDoc.data();
+      const itemId = currentBatch.itemId;
+      
+      // Sprawdź, czy zmieniono ilość
+      const quantityChanged = batchData.quantity !== undefined && 
+        currentBatch.quantity !== batchData.quantity;
       
       // Przygotuj dane do aktualizacji
       const updateData = {
@@ -819,6 +815,34 @@ import {
       
       // Aktualizuj partię
       await updateDoc(batchRef, updateData);
+      
+      // Jeśli zmieniono ilość, zaktualizuj główną pozycję magazynową
+      if (quantityChanged && itemId) {
+        // Dodaj wpis w historii transakcji
+        if (currentBatch.quantity !== batchData.quantity) {
+          const transactionType = currentBatch.quantity < batchData.quantity ? 'adjustment_add' : 'adjustment_remove';
+          const qtyDiff = Math.abs(currentBatch.quantity - batchData.quantity);
+          
+          const transactionRef = doc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION));
+          await setDoc(transactionRef, {
+            itemId,
+            itemName: currentBatch.itemName,
+            type: transactionType,
+            quantity: qtyDiff,
+            date: serverTimestamp(),
+            reason: 'Korekta ilości partii',
+            reference: `Partia: ${currentBatch.batchNumber || currentBatch.lotNumber || batchId}`,
+            notes: `Ręczna korekta ilości partii z ${currentBatch.quantity} na ${batchData.quantity}`,
+            batchId: batchId,
+            batchNumber: currentBatch.batchNumber || currentBatch.lotNumber || 'Bez numeru',
+            createdBy: userId,
+            createdAt: serverTimestamp()
+          });
+        }
+        
+        // Przelicz ilość całkowitą w pozycji magazynowej
+        await recalculateItemQuantity(itemId);
+      }
       
       return {
         id: batchId,
@@ -849,9 +873,13 @@ import {
         throw error;
       }
       
+      // Pobierz partie dla tego materiału i oblicz dostępną ilość
+      const allBatches = await getItemBatches(itemId);
+      const availableQuantity = allBatches.reduce((sum, batch) => sum + (batch.quantity || 0), 0);
+      
       // Sprawdź, czy jest wystarczająca ilość produktu
-      if (item.quantity < quantity) {
-        throw new Error(`Niewystarczająca ilość produktu w magazynie. Dostępne: ${item.quantity} ${item.unit}`);
+      if (availableQuantity < quantity) {
+        throw new Error(`Niewystarczająca ilość produktu w magazynie. Dostępne: ${availableQuantity} ${item.unit}`);
       }
       
       // Pobierz dane zadania produkcyjnego na początku funkcji
@@ -1431,6 +1459,10 @@ import {
       
       await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
       
+      // Przelicz i zaktualizuj ilość głównej pozycji na podstawie partii
+      // (nie jest to konieczne przy transferze między magazynami, ale zapewniamy spójność danych)
+      await recalculateItemQuantity(itemId);
+      
       return {
         success: true,
         sourceWarehouseId,
@@ -1762,103 +1794,117 @@ import {
       
       // Jeśli mamy dostosować stany magazynowe
       if (adjustInventory) {
+        // Grupuj elementy według inventoryItemId, aby przeliczać ilości tylko raz na produkt
+        const itemsByProduct = {};
+        
+        // Grupowanie elementów po produktach
         for (const item of items) {
-          // Jeśli to inwentaryzacja LOTu/partii
-          if (item.batchId) {
-            const batchRef = doc(db, INVENTORY_BATCHES_COLLECTION, item.batchId);
-            
-            // Pobierz aktualny stan partii
-            const batchDoc = await getDoc(batchRef);
-            if (!batchDoc.exists()) {
-              console.error(`Partia ${item.batchId} nie istnieje`);
-              continue;
+          const productId = item.inventoryItemId;
+          if (!itemsByProduct[productId]) {
+            itemsByProduct[productId] = [];
+          }
+          itemsByProduct[productId].push(item);
+        }
+        
+        // Aktualizujemy stany dla każdego produktu
+        for (const productId in itemsByProduct) {
+          const productItems = itemsByProduct[productId];
+          let needsRecalculation = false;
+          
+          // Dla każdego elementu inwentaryzacji danego produktu
+          for (const item of productItems) {
+            // Jeśli to inwentaryzacja LOTu/partii
+            if (item.batchId) {
+              needsRecalculation = true;
+              const batchRef = doc(db, INVENTORY_BATCHES_COLLECTION, item.batchId);
+              
+              // Pobierz aktualny stan partii
+              const batchDoc = await getDoc(batchRef);
+              if (!batchDoc.exists()) {
+                console.error(`Partia ${item.batchId} nie istnieje`);
+                continue;
+              }
+              
+              const batchData = batchDoc.data();
+              
+              // Aktualizuj stan partii
+              await updateDoc(batchRef, {
+                quantity: item.countedQuantity,
+                updatedAt: serverTimestamp(),
+                updatedBy: userId
+              });
+              
+              // Oblicz różnicę dla tej partii
+              const adjustment = item.countedQuantity - batchData.quantity;
+              
+              // Dodaj transakcję korygującą
+              const transactionData = {
+                itemId: item.inventoryItemId,
+                itemName: item.name,
+                type: adjustment > 0 ? 'adjustment-add' : 'adjustment-remove',
+                quantity: Math.abs(adjustment),
+                date: serverTimestamp(),
+                reason: 'Korekta z inwentaryzacji',
+                reference: `Inwentaryzacja #${stocktakingId}`,
+                notes: `Korekta stanu partii ${item.lotNumber || item.batchNumber} po inwentaryzacji. ${item.notes || ''}`,
+                warehouseId: item.location || batchData.warehouseId, // Dodajemy identyfikator magazynu
+                batchId: item.batchId, // Dodajemy ID partii
+                lotNumber: item.lotNumber || batchData.lotNumber, // Dodajemy numer LOT
+                unitPrice: item.unitPrice || batchData.unitPrice, // Dodajemy cenę jednostkową
+                differenceValue: item.differenceValue || (adjustment * (item.unitPrice || batchData.unitPrice || 0)), // Dodajemy wartość różnicy
+                createdBy: userId,
+                createdAt: serverTimestamp()
+              };
+              
+              await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
+            } else {
+              // Oryginalna logika dla pozycji magazynowych
+              const inventoryItemRef = doc(db, INVENTORY_COLLECTION, item.inventoryItemId);
+              
+              // Pobierz aktualny stan
+              const inventoryItem = await getInventoryItemById(item.inventoryItemId);
+              
+              // Aktualizuj stan magazynowy
+              const adjustment = item.countedQuantity - inventoryItem.quantity;
+              
+              await updateDoc(inventoryItemRef, {
+                quantity: item.countedQuantity,
+                updatedAt: serverTimestamp(),
+                updatedBy: userId
+              });
+              
+              // Dodaj transakcję korygującą
+              const transactionData = {
+                itemId: item.inventoryItemId,
+                itemName: item.name,
+                type: adjustment > 0 ? 'adjustment-add' : 'adjustment-remove',
+                quantity: Math.abs(adjustment),
+                date: serverTimestamp(),
+                reason: 'Korekta z inwentaryzacji',
+                reference: `Inwentaryzacja #${stocktakingId}`,
+                notes: item.notes || 'Korekta stanu po inwentaryzacji',
+                unitPrice: item.unitPrice || inventoryItem.unitPrice || 0, // Dodajemy cenę jednostkową
+                differenceValue: item.differenceValue || (adjustment * (item.unitPrice || inventoryItem.unitPrice || 0)), // Dodajemy wartość różnicy
+                createdBy: userId,
+                createdAt: serverTimestamp()
+              };
+              
+              await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
             }
             
-            const batchData = batchDoc.data();
-            
-            // Aktualizuj stan partii
-            await updateDoc(batchRef, {
-              quantity: item.countedQuantity,
+            // Aktualizuj status elementu inwentaryzacji
+            const itemRef = doc(db, STOCKTAKING_ITEMS_COLLECTION, item.id);
+            await updateDoc(itemRef, {
+              status: 'Skorygowano',
               updatedAt: serverTimestamp(),
               updatedBy: userId
             });
-            
-            // Aktualizuj również łączny stan produktu
-            const inventoryItemRef = doc(db, INVENTORY_COLLECTION, item.inventoryItemId);
-            const inventoryItem = await getInventoryItemById(item.inventoryItemId);
-            
-            // Oblicz różnicę dla tej partii
-            const adjustment = item.countedQuantity - batchData.quantity;
-            
-            // Zaktualizuj stan łączny produktu
-            await updateDoc(inventoryItemRef, {
-              quantity: increment(adjustment),
-              updatedAt: serverTimestamp(),
-              updatedBy: userId
-            });
-            
-            // Dodaj transakcję korygującą
-            const transactionData = {
-              itemId: item.inventoryItemId,
-              itemName: item.name,
-              type: adjustment > 0 ? 'adjustment-add' : 'adjustment-remove',
-              quantity: Math.abs(adjustment),
-              date: serverTimestamp(),
-              reason: 'Korekta z inwentaryzacji',
-              reference: `Inwentaryzacja #${stocktakingId}`,
-              notes: `Korekta stanu partii ${item.lotNumber || item.batchNumber} po inwentaryzacji. ${item.notes || ''}`,
-              warehouseId: item.location || batchData.warehouseId, // Dodajemy identyfikator magazynu
-              batchId: item.batchId, // Dodajemy ID partii
-              lotNumber: item.lotNumber || batchData.lotNumber, // Dodajemy numer LOT
-              unitPrice: item.unitPrice || batchData.unitPrice, // Dodajemy cenę jednostkową
-              differenceValue: item.differenceValue || (adjustment * (item.unitPrice || batchData.unitPrice || 0)), // Dodajemy wartość różnicy
-              createdBy: userId,
-              createdAt: serverTimestamp()
-            };
-            
-            await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
-          } else {
-            // Oryginalna logika dla pozycji magazynowych
-            const inventoryItemRef = doc(db, INVENTORY_COLLECTION, item.inventoryItemId);
-            
-            // Pobierz aktualny stan
-            const inventoryItem = await getInventoryItemById(item.inventoryItemId);
-            
-            // Aktualizuj stan magazynowy
-            const adjustment = item.countedQuantity - inventoryItem.quantity;
-            
-            await updateDoc(inventoryItemRef, {
-              quantity: item.countedQuantity,
-              updatedAt: serverTimestamp(),
-              updatedBy: userId
-            });
-            
-            // Dodaj transakcję korygującą
-            const transactionData = {
-              itemId: item.inventoryItemId,
-              itemName: item.name,
-              type: adjustment > 0 ? 'adjustment-add' : 'adjustment-remove',
-              quantity: Math.abs(adjustment),
-              date: serverTimestamp(),
-              reason: 'Korekta z inwentaryzacji',
-              reference: `Inwentaryzacja #${stocktakingId}`,
-              notes: item.notes || 'Korekta stanu po inwentaryzacji',
-              unitPrice: item.unitPrice || inventoryItem.unitPrice || 0, // Dodajemy cenę jednostkową
-              differenceValue: item.differenceValue || (adjustment * (item.unitPrice || inventoryItem.unitPrice || 0)), // Dodajemy wartość różnicy
-              createdBy: userId,
-              createdAt: serverTimestamp()
-            };
-            
-            await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
           }
           
-          // Aktualizuj status elementu inwentaryzacji
-          const itemRef = doc(db, STOCKTAKING_ITEMS_COLLECTION, item.id);
-          await updateDoc(itemRef, {
-            status: 'Skorygowano',
-            updatedAt: serverTimestamp(),
-            updatedBy: userId
-          });
+          // Jeśli były aktualizowane partie, przelicz łączną ilość produktu
+          if (needsRecalculation) {
+            await recalculateItemQuantity(productId);
+          }
         }
       }
       
@@ -2388,5 +2434,82 @@ import {
     } catch (error) {
       console.error('Błąd podczas czyszczenia rezerwacji:', error);
       throw new Error(`Błąd podczas czyszczenia rezerwacji: ${error.message}`);
+    }
+  };
+
+  // Funkcja do przeliczania i aktualizacji ilości pozycji magazynowej na podstawie sum partii
+  export const recalculateItemQuantity = async (itemId) => {
+    try {
+      console.log(`Przeliczanie ilości dla pozycji ${itemId} na podstawie partii...`);
+      
+      // Pobierz wszystkie partie dla danej pozycji
+      const batches = await getItemBatches(itemId);
+      
+      // Oblicz sumę ilości ze wszystkich partii
+      const totalQuantity = batches.reduce((sum, batch) => sum + (Number(batch.quantity) || 0), 0);
+      
+      console.log(`Suma ilości z partii: ${totalQuantity}`);
+      
+      // Zaktualizuj stan głównej pozycji magazynowej
+      const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
+      await updateDoc(itemRef, {
+        quantity: totalQuantity,
+        lastUpdated: new Date().toISOString()
+      });
+      
+      console.log(`Zaktualizowano ilość pozycji ${itemId} na ${totalQuantity}`);
+      
+      return totalQuantity;
+    } catch (error) {
+      console.error(`Błąd podczas przeliczania ilości dla pozycji ${itemId}:`, error);
+      throw error;
+    }
+  };
+
+  // Funkcja do przeliczania ilości wszystkich pozycji magazynowych na podstawie partii
+  export const recalculateAllInventoryQuantities = async () => {
+    try {
+      console.log('Rozpoczynam przeliczanie ilości wszystkich pozycji w magazynie...');
+      
+      // Pobierz wszystkie pozycje magazynowe
+      const inventoryItems = await getAllInventoryItems();
+      
+      const results = {
+        success: 0,
+        failed: 0,
+        items: []
+      };
+      
+      // Dla każdej pozycji przelicz ilość na podstawie partii
+      for (const item of inventoryItems) {
+        try {
+          const newQuantity = await recalculateItemQuantity(item.id);
+          
+          results.success++;
+          results.items.push({
+            id: item.id,
+            name: item.name,
+            oldQuantity: item.quantity,
+            newQuantity: newQuantity,
+            difference: newQuantity - item.quantity
+          });
+          
+          console.log(`Zaktualizowano ilość dla "${item.name}" z ${item.quantity} na ${newQuantity}`);
+        } catch (error) {
+          console.error(`Błąd podczas przeliczania ilości dla pozycji ${item.name} (${item.id}):`, error);
+          results.failed++;
+          results.items.push({
+            id: item.id,
+            name: item.name,
+            error: error.message
+          });
+        }
+      }
+      
+      console.log(`Zakończono przeliczanie ilości. Sukces: ${results.success}, Błędy: ${results.failed}`);
+      return results;
+    } catch (error) {
+      console.error('Błąd podczas przeliczania wszystkich ilości:', error);
+      throw error;
     }
   };

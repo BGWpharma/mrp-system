@@ -27,7 +27,8 @@ import {
     bookInventoryForTask,
     cancelBooking,
     addInventoryItem,
-    getInventoryBatches
+    getInventoryBatches,
+    recalculateItemQuantity
   } from './inventoryService';
   
   const PRODUCTION_TASKS_COLLECTION = 'productionTasks';
@@ -555,12 +556,7 @@ import {
       await setDoc(batchRef, batchData);
       
       // Zaktualizuj ilość w magazynie
-      const itemRef = doc(db, 'inventory', inventoryItemId);
-      await updateDoc(itemRef, {
-        quantity: increment(taskData.quantity),
-        updatedAt: serverTimestamp(),
-        updatedBy: userId
-      });
+      await recalculateItemQuantity(inventoryItemId);
       
       // Dodaj transakcję do historii
       const transactionRef = doc(collection(db, 'inventoryTransactions'));
@@ -1028,13 +1024,69 @@ import {
         ...taskSnapshot.data()
       };
       
-      // Aktualizacja tylko faktycznego zużycia
-      await updateDoc(taskRef, {
+      // Sprawdź, czy zużycie zostało wcześniej potwierdzone
+      const wasConfirmedBefore = task.materialConsumptionConfirmed === true;
+      
+      // Jeśli zużycie było już potwierdzone, musimy najpierw anulować poprzednie zużycie
+      if (wasConfirmedBefore) {
+        console.log(`Zużycie materiałów dla zadania ${taskId} było już potwierdzone. Anulowanie poprzedniego zużycia...`);
+        
+        // Pobierz poprzednio zużyte partie
+        const usedBatches = task.usedBatches || {};
+        
+        // Dla każdego materiału, przywróć ilości do partii
+        for (const materialId in usedBatches) {
+          const batches = usedBatches[materialId];
+          
+          for (const batchAssignment of batches) {
+            // Przywróć ilość do partii
+            const batchRef = doc(db, 'inventoryBatches', batchAssignment.batchId);
+            await updateDoc(batchRef, {
+              quantity: increment(batchAssignment.quantity),
+              updatedAt: serverTimestamp()
+            });
+            
+            // Dodaj transakcję dla przywrócenia ilości
+            const transactionRef = doc(collection(db, 'inventoryTransactions'));
+            await setDoc(transactionRef, {
+              itemId: materialId,
+              itemName: task.materials.find(m => m.id === materialId)?.name || 'Nieznany materiał',
+              type: 'adjustment_add',
+              quantity: batchAssignment.quantity,
+              date: serverTimestamp(),
+              reason: 'Korekta zużycia w produkcji',
+              reference: `Zadanie: ${task.name || taskId}`,
+              batchId: batchAssignment.batchId,
+              batchNumber: batchAssignment.batchNumber,
+              notes: `Korekta zużycia materiału w zadaniu produkcyjnym: ${task.name || taskId}`,
+              createdAt: serverTimestamp()
+            });
+          }
+          
+          // Przelicz ilość dla danego materiału
+          await recalculateItemQuantity(materialId);
+        }
+      }
+      
+      // Aktualizacja faktycznego zużycia i zresetowanie potwierdzenia
+      const updates = {
         actualMaterialUsage: materialUsage,
         materialConsumptionConfirmed: false // Resetuje potwierdzenie zużycia
-      });
+      };
       
-      return { success: true, message: 'Zużycie materiałów zaktualizowane' };
+      // Aktualizuj pole usedBatches tylko jeśli trzeba
+      if (wasConfirmedBefore) {
+        updates.usedBatches = {}; // Wyczyść informacje o zużytych partiach, jeśli były potwierdzone
+      }
+      
+      await updateDoc(taskRef, updates);
+      
+      return { 
+        success: true, 
+        message: wasConfirmedBefore 
+          ? 'Zużycie materiałów zaktualizowane. Poprzednie potwierdzenie zużycia zostało anulowane. Proszę ponownie potwierdzić zużycie.'
+          : 'Zużycie materiałów zaktualizowane'
+      };
     } catch (error) {
       console.error('Błąd podczas aktualizacji zużycia materiałów:', error);
       throw error;
@@ -1064,16 +1116,28 @@ import {
       const materials = task.materials || [];
       const actualUsage = task.actualMaterialUsage || {};
       
+      console.log("Aktualne zużycie materiałów:", actualUsage);
+      
       // Dla każdego materiału, zaktualizuj stan magazynowy
       for (const material of materials) {
         const materialId = material.id;
+        
+        // Użyj skorygowanej ilości, jeśli została podana, w przeciwnym razie użyj planowanej ilości
         let consumedQuantity = actualUsage[materialId] !== undefined 
-          ? actualUsage[materialId] 
-          : material.quantity;
+          ? parseFloat(actualUsage[materialId]) 
+          : parseFloat(material.quantity);
+        
+        console.log(`Materiał ${material.name}: planowana ilość = ${material.quantity}, skorygowana ilość = ${consumedQuantity}`);
         
         // Sprawdź, czy consumedQuantity jest dodatnią liczbą
         if (isNaN(consumedQuantity) || consumedQuantity < 0) {
           throw new Error(`Zużycie materiału "${material.name}" jest nieprawidłowe (${consumedQuantity}). Musi być liczbą większą lub równą 0.`);
+        }
+        
+        // Jeśli skorygowana ilość wynosi 0, pomijamy aktualizację partii dla tego materiału
+        if (consumedQuantity === 0) {
+          console.log(`Pomijam aktualizację partii dla materiału ${material.name} - zużycie wynosi 0`);
+          continue;
         }
         
         // Pobierz aktualny stan magazynowy
@@ -1091,9 +1155,32 @@ import {
           
           // Sprawdź, czy zadanie ma przypisane konkretne partie dla tego materiału
           if (task.materialBatches && task.materialBatches[materialId]) {
-            assignedBatches = task.materialBatches[materialId];
+            // Musimy dostosować ilości w przypisanych partiach do skorygowanej ilości
+            const originalBatches = task.materialBatches[materialId];
+            const originalTotal = originalBatches.reduce((sum, batch) => sum + batch.quantity, 0);
+            
+            // Jeśli mamy przypisane partie i skorygowana ilość różni się od oryginalnej,
+            // musimy proporcjonalnie dostosować ilości w partiach
+            if (originalTotal > 0 && consumedQuantity !== originalTotal) {
+              const ratio = consumedQuantity / originalTotal;
+              
+              // Proporcjonalnie dostosuj ilości w partiach
+              assignedBatches = originalBatches.map(batch => ({
+                ...batch,
+                quantity: Math.round((batch.quantity * ratio) * 100) / 100 // Zaokrąglij do 2 miejsc po przecinku
+              }));
+              
+              console.log(`Dostosowano ilości w przypisanych partiach dla ${material.name}. Współczynnik: ${ratio}`);
+              console.log('Oryginalne partie:', originalBatches);
+              console.log('Dostosowane partie:', assignedBatches);
+            } else {
+              // Użyj oryginalnych przypisanych partii
+              assignedBatches = originalBatches;
+            }
           } else {
             // Jeśli nie ma przypisanych partii, pobierz dostępne partie według FEFO
+            console.log(`Przypisywanie partii dla materiału ${material.name} według FEFO`);
+            
             const batchesRef = collection(db, 'inventoryBatches');
             const q = query(
               batchesRef, 
@@ -1113,7 +1200,9 @@ import {
                 return dateA - dateB;
               });
             
-            // Przypisz partie automatycznie według FEFO
+            console.log(`Znaleziono ${availableBatches.length} dostępnych partii dla materiału ${material.name}`);
+            
+            // Przypisz partie automatycznie według FEFO - użyj skorygowanej ilości
             let remainingQuantity = consumedQuantity;
             
             for (const batch of availableBatches) {
@@ -1127,17 +1216,30 @@ import {
                 quantity: quantityFromBatch,
                 batchNumber: batch.batchNumber || batch.lotNumber || 'Bez numeru'
               });
+              
+              console.log(`Przypisano ${quantityFromBatch} z partii ${batch.batchNumber || batch.lotNumber || batch.id}`);
             }
             
             // Jeśli nie udało się przypisać wszystkich wymaganych ilości
             if (remainingQuantity > 0) {
-              throw new Error(`Nie można znaleźć wystarczającej ilości partii dla materiału "${material.name}"`);
+              throw new Error(`Nie można znaleźć wystarczającej ilości partii dla materiału "${material.name}". Brakuje ${remainingQuantity} ${inventoryItem.unit || 'szt.'}`);
             }
           }
+          
+          console.log(`Przypisane partie dla materiału ${material.name}:`, assignedBatches);
           
           // 2. Odejmij ilości z przypisanych partii
           for (const batchAssignment of assignedBatches) {
             const batchRef = doc(db, 'inventoryBatches', batchAssignment.batchId);
+            
+            // Sprawdź, czy ilość do odjęcia jest większa od zera
+            if (batchAssignment.quantity <= 0) {
+              console.log(`Pomijam aktualizację partii ${batchAssignment.batchId} - ilość do odjęcia wynosi ${batchAssignment.quantity}`);
+              continue;
+            }
+            
+            console.log(`Aktualizacja partii ${batchAssignment.batchId} - odejmowanie ${batchAssignment.quantity}`);
+            
             await updateDoc(batchRef, {
               quantity: increment(-batchAssignment.quantity),
               updatedAt: serverTimestamp()
@@ -1160,11 +1262,10 @@ import {
             });
           }
           
-          // 3. Aktualizuj ogólny stan magazynowy
-          await updateDoc(inventoryRef, {
-            quantity: increment(-consumedQuantity),
-            lastUpdated: new Date().toISOString()
-          });
+          // 3. Aktualizacja głównej pozycji magazynowej jest nadal potrzebna dla spójności danych,
+          // ale teraz jest ona tylko konsekwencją zmian na poziomie partii, a nie oddzielną operacją
+          // Pomaga to utrzymać zgodność sumy ilości partii z główną pozycją magazynową
+          await recalculateItemQuantity(materialId);
           
           // 4. Zapisz informacje o wykorzystanych partiach w zadaniu
           if (!task.usedBatches) task.usedBatches = {};

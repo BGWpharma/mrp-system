@@ -12,7 +12,8 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  FormHelperText
+  FormHelperText,
+  Alert
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -37,14 +38,11 @@ const InventoryItemForm = ({ itemId }) => {
     name: '',
     description: '',
     category: '',
-    quantity: 0,
     unit: 'szt.',
     location: '',
     minStock: '',
     maxStock: '',
-    supplierInfo: '',
-    notes: '',
-    bookedQuantity: 0
+    supplierInfo: ''
   });
 
   useEffect(() => {
@@ -52,7 +50,9 @@ const InventoryItemForm = ({ itemId }) => {
       const fetchItem = async () => {
         try {
           const item = await getInventoryItemById(itemId);
-          setItemData(item);
+          // Usuwamy pola, które nie chcemy edytować bezpośrednio
+          const { quantity, bookedQuantity, notes, ...restItem } = item;
+          setItemData(restItem);
         } catch (error) {
           showError('Błąd podczas pobierania pozycji: ' + error.message);
           console.error('Error fetching inventory item:', error);
@@ -120,6 +120,13 @@ const InventoryItemForm = ({ itemId }) => {
         </Button>
       </Box>
 
+      {!itemId && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          Ilość pozycji magazynowej będzie automatycznie obliczana na podstawie sumy ilości w partiach (LOT).
+          Aby dodać partie, utwórz najpierw pozycję, a następnie dodaj partie poprzez przyjęcie towaru.
+        </Alert>
+      )}
+
       <Paper sx={{ p: 3 }}>
         <Grid container spacing={3}>
           <Grid item xs={12} sm={6}>
@@ -165,45 +172,10 @@ const InventoryItemForm = ({ itemId }) => {
           <Grid item xs={12} sm={6}>
             <TextField
               fullWidth
-              label="Ilość"
-              name="quantity"
-              type="number"
-              value={itemData.quantity || ''}
-              onChange={handleChange}
-              inputProps={{ min: 0, step: 0.01 }}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label="Ilość zarezerwowana"
-              name="bookedQuantity"
-              type="number"
-              value={itemData.bookedQuantity || 0}
-              InputProps={{
-                readOnly: true,
-              }}
-              helperText="Ilość zarezerwowana na zadania produkcyjne"
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label="Ilość dostępna"
-              type="number"
-              value={(itemData.quantity || 0) - (itemData.bookedQuantity || 0)}
-              InputProps={{
-                readOnly: true,
-              }}
-              helperText="Ilość całkowita minus zarezerwowana"
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label="Jednostka"
+              required
+              label="Jednostka miary"
               name="unit"
-              value={itemData.unit || ''}
+              value={itemData.unit || 'szt.'}
               onChange={handleChange}
             />
           </Grid>
@@ -246,17 +218,6 @@ const InventoryItemForm = ({ itemId }) => {
               name="supplierInfo"
               value={itemData.supplierInfo || ''}
               onChange={handleChange}
-            />
-          </Grid>
-          <Grid item xs={12}>
-            <TextField
-              fullWidth
-              label="Uwagi"
-              name="notes"
-              value={itemData.notes || ''}
-              onChange={handleChange}
-              multiline
-              rows={3}
             />
           </Grid>
         </Grid>
