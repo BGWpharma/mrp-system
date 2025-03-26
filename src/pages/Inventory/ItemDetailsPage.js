@@ -357,6 +357,14 @@ const ItemDetailsPage = () => {
                       <TableCell component="th">Dostawca</TableCell>
                       <TableCell>{item.supplierInfo || 'Nie określono'}</TableCell>
                     </TableRow>
+                    <TableRow>
+                      <TableCell component="th">Grupa pakowania</TableCell>
+                      <TableCell>{item.packingGroup || 'Nie określono'}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell component="th">Ilość kartonów na paletę</TableCell>
+                      <TableCell>{item.boxesPerPallet ? `${item.boxesPerPallet} szt.` : 'Nie określono'}</TableCell>
+                    </TableRow>
                   </TableBody>
                 </Table>
               </TableContainer>

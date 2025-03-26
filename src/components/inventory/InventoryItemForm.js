@@ -42,7 +42,9 @@ const InventoryItemForm = ({ itemId }) => {
     location: '',
     minStock: '',
     maxStock: '',
-    supplierInfo: ''
+    supplierInfo: '',
+    packingGroup: '',
+    boxesPerPallet: ''
   });
 
   useEffect(() => {
@@ -218,6 +220,28 @@ const InventoryItemForm = ({ itemId }) => {
               name="supplierInfo"
               value={itemData.supplierInfo || ''}
               onChange={handleChange}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              label="Grupa pakowania"
+              name="packingGroup"
+              value={itemData.packingGroup || ''}
+              onChange={handleChange}
+              helperText="Grupa pakowania produktu"
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              label="Ilość kartonów na paletę"
+              name="boxesPerPallet"
+              type="number"
+              value={itemData.boxesPerPallet || ''}
+              onChange={handleChange}
+              inputProps={{ min: 0, step: 1 }}
+              helperText="Ilość kartonów, które mieszczą się na jednej palecie"
             />
           </Grid>
         </Grid>

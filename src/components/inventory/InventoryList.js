@@ -736,6 +736,25 @@ const InventoryList = () => {
                         <TableCell>
                           <Typography variant="body1">{item.name}</Typography>
                           <Typography variant="body2" color="textSecondary">{item.description}</Typography>
+                          {(item.packingGroup || item.boxesPerPallet) && (
+                            <Box sx={{ mt: 0.5 }}>
+                              {item.packingGroup && (
+                                <Chip
+                                  size="small"
+                                  label={`PG: ${item.packingGroup}`}
+                                  color="default"
+                                  sx={{ mr: 0.5 }}
+                                />
+                              )}
+                              {item.boxesPerPallet && (
+                                <Chip
+                                  size="small"
+                                  label={`${item.boxesPerPallet} kartonów/paletę`}
+                                  color="info"
+                                />
+                              )}
+                            </Box>
+                          )}
                         </TableCell>
                         <TableCell>{item.category}</TableCell>
                         <TableCell>
