@@ -1,5 +1,5 @@
 // src/App.js
-import React from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
@@ -228,13 +228,19 @@ function App() {
 
 // PrivateLayout component to wrap authenticated routes
 function PrivateLayout({ children }) {
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  const handleSidebarToggle = (collapsed) => {
+    setIsSidebarCollapsed(collapsed);
+  };
+
   return (
     <PrivateRoute>
       <div className="layout">
         <Navbar />
         <div className="content-container">
-          <Sidebar />
-          <main className="main-content">
+          <Sidebar onToggle={handleSidebarToggle} />
+          <main className={`main-content ${isSidebarCollapsed ? 'sidebar-collapsed' : 'sidebar-expanded'}`}>
             {children}
           </main>
         </div>

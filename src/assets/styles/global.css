@@ -26,27 +26,44 @@ a {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    overflow-x: hidden;
 }
 
 .layout {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    overflow-x: hidden;
 }
 
 .content-container {
     display: flex;
     flex: 1;
+    gap: 0;
+    position: relative;
+    overflow-x: hidden;
 }
 
 .main-content {
     flex: 1;
-    padding: 24px;
-    margin-left: 240px;
-    /* Szerokość Sidebar */
+    padding: 20px;
+    transition: margin-left 0.3s ease, width 0.3s ease;
     min-height: calc(100vh - 64px);
     /* Wysokość - navbar */
     background-color: #111827;
+    box-sizing: border-box;
+}
+
+/* Klasa dla zwiniętego sidebar */
+.sidebar-collapsed .main-content {
+    margin-left: 60px;
+    width: calc(100% - 60px);
+}
+
+/* Klasa dla rozwiniętego sidebar */
+.sidebar-expanded .main-content {
+    margin-left: 200px;
+    width: calc(100% - 200px);
 }
 
 /* Dashboard cards */

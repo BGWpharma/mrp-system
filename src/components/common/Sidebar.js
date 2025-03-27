@@ -16,7 +16,8 @@ import {
   styled,
   Avatar,
   Tooltip,
-  Badge
+  Badge,
+  IconButton
 } from '@mui/material';
 import { 
   Dashboard as DashboardIcon, 
@@ -47,15 +48,18 @@ import {
   Phone as CallIcon,
   Email as EmailIcon,
   EventNote as MeetingIcon,
-  ListAlt as ListAltIcon
+  ListAlt as ListAltIcon,
+  ChevronLeft as ChevronLeftIcon,
+  Menu as MenuIcon,
+  LocalShipping as ShippingIcon
 } from '@mui/icons-material';
 import { getExpiringBatches, getExpiredBatches } from '../../services/inventoryService';
 
 // Styled components
 const StyledListItemButton = styled(ListItemButton)(({ theme }) => ({
   borderRadius: theme.shape.borderRadius,
-  margin: '4px 8px',
-  padding: '8px 12px',
+  margin: '2px 4px',
+  padding: '6px 8px',
   '&.Mui-selected': {
     backgroundColor: alpha(theme.palette.primary.main, 0.15),
     '&:hover': {
@@ -72,8 +76,8 @@ const StyledListItemButton = styled(ListItemButton)(({ theme }) => ({
 
 const StyledListItem = styled(ListItem)(({ theme }) => ({
   borderRadius: theme.shape.borderRadius,
-  margin: '4px 8px',
-  padding: '8px 12px',
+  margin: '2px 4px',
+  padding: '6px 8px',
   '&.Mui-selected': {
     backgroundColor: alpha(theme.palette.primary.main, 0.15),
     '&:hover': {
@@ -96,15 +100,32 @@ const StyledBadge = styled(Badge)(({ theme }) => ({
   },
 }));
 
-const Sidebar = () => {
+const Sidebar = ({ onToggle }) => {
   const location = useLocation();
-  const drawerWidth = 240;
-  const [openProduction, setOpenProduction] = useState(location.pathname.startsWith('/production'));
-  const [openOrders, setOpenOrders] = useState(location.pathname.startsWith('/orders') || location.pathname.startsWith('/customers'));
-  const [openInventory, setOpenInventory] = useState(location.pathname.startsWith('/inventory') || location.pathname.startsWith('/purchase-orders'));
-  const [openCustomers, setOpenCustomers] = useState(location.pathname.startsWith('/customers') || location.pathname.startsWith('/orders'));
-  const [openCRM, setOpenCRM] = useState(location.pathname.startsWith('/crm'));
+  const [drawerWidth, setDrawerWidth] = useState(200);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(true);
+  const [openSubmenu, setOpenSubmenu] = useState('');
   const [expiringItemsCount, setExpiringItemsCount] = useState(0);
+  
+  // Wywołujemy callback onToggle przy zmianie stanu sidebara
+  useEffect(() => {
+    if (onToggle) {
+      onToggle(!isDrawerOpen);
+    }
+  }, [isDrawerOpen, onToggle]);
+  
+  useEffect(() => {
+    // Ustawia początkowy stan submenu na podstawie aktualnej ścieżki
+    if (location.pathname.startsWith('/production')) {
+      setOpenSubmenu('Produkcja');
+    } else if (location.pathname.startsWith('/orders') || location.pathname.startsWith('/customers')) {
+      setOpenSubmenu('Sprzedaż');
+    } else if (location.pathname.startsWith('/inventory') || location.pathname.startsWith('/purchase-orders')) {
+      setOpenSubmenu('Magazyn');
+    } else if (location.pathname.startsWith('/crm')) {
+      setOpenSubmenu('CRM');
+    }
+  }, [location.pathname]);
   
   useEffect(() => {
     const fetchExpiringProducts = async () => {
@@ -133,24 +154,20 @@ const Sidebar = () => {
     return location.pathname.startsWith(path);
   };
   
-  const handleProductionClick = () => {
-    setOpenProduction(!openProduction);
-  };
-  
-  const handleOrdersClick = () => {
-    setOpenOrders(!openOrders);
+  const handleSubmenuClick = (menuTitle) => {
+    // Jeśli kliknięto w otwarte submenu, zamykamy je
+    if (openSubmenu === menuTitle) {
+      setOpenSubmenu('');
+    } else {
+      // W przeciwnym razie zamykamy aktualne i otwieramy nowe
+      setOpenSubmenu(menuTitle);
+    }
   };
 
-  const handleInventoryClick = () => {
-    setOpenInventory(!openInventory);
-  };
-  
-  const handleCustomersClick = () => {
-    setOpenCustomers(!openCustomers);
-  };
-  
-  const handleCRMClick = () => {
-    setOpenCRM(!openCRM);
+  const toggleDrawer = () => {
+    setIsDrawerOpen(!isDrawerOpen);
+    // Dostosuj szerokość sidebara w zależności od stanu
+    setDrawerWidth(isDrawerOpen ? 60 : 200);
   };
   
   const menuItems = [
@@ -167,13 +184,13 @@ const Sidebar = () => {
         { text: 'Szanse sprzedaży', icon: <SuppliersIcon />, path: '/crm/opportunities' },
       ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
     },
-    { text: 'Klienci',
+    { text: 'Sprzedaż',
       icon: <CustomersIcon />,
       path: '/customers',
       hasSubmenu: true,
       children: [
         { text: 'Faktury', icon: <InvoicesIcon />, path: '/invoices' },
-        { text: 'Lista klientów', icon: <CustomersIcon />, path: '/customers' },
+        { text: 'Klienci', icon: <CustomersIcon />, path: '/customers' },
         { text: 'Nowe zadanie produkcyjne', icon: <AddIcon />, path: '/production/create-from-order' },
         { text: 'Zamówienia', icon: <OrdersIcon />, path: '/orders' },
       ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
@@ -184,10 +201,10 @@ const Sidebar = () => {
       badge: expiringItemsCount > 0 ? expiringItemsCount : null,
       hasSubmenu: true,
       children: [
-        { text: 'CMR', icon: <WaybillIcon />, path: '/inventory/cmr' },
+        { text: 'CMR', icon: <ShippingIcon />, path: '/inventory/cmr' },
         { text: 'Dostawcy', icon: <SuppliersIcon />, path: '/suppliers' },
-        { text: 'Inwentaryzacja', icon: <ListAltIcon />, path: '/inventory/stocktaking' },
-        { text: 'Stan magazynowy', icon: <InventoryIcon />, path: '/inventory' },
+        { text: 'Inwentaryzacja', icon: <QualityReportsIcon />, path: '/inventory/stocktaking' },
+        { text: 'Stan magazynowy', icon: <WarehouseIcon />, path: '/inventory' },
         { text: 'Terminy ważności', icon: <CalendarIcon />, path: '/inventory/expiry-dates' },
         { text: 'Zamówienia komponentów', icon: <PurchaseOrdersIcon />, path: '/purchase-orders' },
       ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
@@ -198,19 +215,21 @@ const Sidebar = () => {
       hasSubmenu: true,
       children: [
         { text: 'Kalendarz', icon: <CalendarIcon />, path: '/production/calendar' },
+        { text: 'Receptury', icon: <RecipesIcon />, path: '/recipes' },
         { text: 'Zadania MO', icon: <ListIcon />, path: '/production' },
         { text: 'Prognoza zapotrzebowania', icon: <ForecastIcon />, path: '/production/forecast' },
       ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
-    },
-    { text: 'Receptury', icon: <RecipesIcon />, path: '/recipes' },
+    }
   ].sort((a, b) => a.text.localeCompare(b.text, 'pl'));
 
   return (
     <Drawer
       variant="permanent"
+      open={isDrawerOpen}
       sx={{
         width: drawerWidth,
         flexShrink: 0,
+        transition: 'width 0.3s ease',
         '& .MuiDrawer-paper': {
           width: drawerWidth,
           boxSizing: 'border-box',
@@ -218,55 +237,91 @@ const Sidebar = () => {
           border: 'none',
           backgroundImage: 'none',
           boxShadow: '4px 0 8px rgba(0, 0, 0, 0.1)',
+          overflowX: 'hidden',
+          transition: 'width 0.3s ease',
         },
       }}
     >
       <Box 
         sx={{ 
-          p: 2.5, 
+          p: 1.8, 
           display: 'flex', 
           alignItems: 'center',
-          justifyContent: 'flex-start',
-          mb: 1
+          justifyContent: 'space-between',
+          mb: 0.5
         }}
       >
-        <Avatar 
-          sx={{ 
-            width: 32, 
-            height: 32, 
-            bgcolor: 'primary.main',
-            backgroundImage: 'linear-gradient(135deg, #1976d2 30%, #42a5f5 90%)',
-            mr: 1.5,
-            boxShadow: '0 2px 6px rgba(0, 0, 0, 0.15)'
-          }}
-        >
-          M
-        </Avatar>
-        <Typography 
-          variant="h6" 
-          component="div" 
-          sx={{ 
-            fontWeight: 'bold',
-            fontSize: '1.1rem'
-          }}
-        >
-          Widgets
-        </Typography>
+        {isDrawerOpen && (
+          <>
+            <Avatar 
+              sx={{ 
+                width: 28, 
+                height: 28, 
+                bgcolor: 'primary.main',
+                backgroundImage: 'linear-gradient(135deg, #1976d2 30%, #42a5f5 90%)',
+                mr: 1.5,
+                boxShadow: '0 2px 6px rgba(0, 0, 0, 0.15)'
+              }}
+            >
+              M
+            </Avatar>
+            <Typography 
+              variant="h6" 
+              component="div" 
+              sx={{ 
+                flexGrow: 1,
+                fontWeight: 'bold',
+                fontSize: '1rem'
+              }}
+            >
+              Widgets
+            </Typography>
+          </>
+        )}
+        <IconButton onClick={toggleDrawer} size="small" sx={{ color: 'white' }}>
+          {isDrawerOpen ? <ChevronLeftIcon /> : <MenuIcon />}
+        </IconButton>
       </Box>
+
       <Divider sx={{ 
         borderColor: 'rgba(255, 255, 255, 0.08)',
-        mb: 1 
+        mb: 0.5 
       }} />
-      <List component="nav" sx={{ p: 1 }}>
+
+      <List 
+        component="nav" 
+        sx={{ 
+          p: 0.5,
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          maxHeight: 'calc(100vh - 80px)',
+          scrollbarWidth: 'thin',
+          msOverflowStyle: 'none',
+          '&::-webkit-scrollbar': {
+            width: '6px',
+            display: 'block',
+          },
+          '&::-webkit-scrollbar-track': {
+            background: 'rgba(0, 0, 0, 0.1)',
+            borderRadius: '3px',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            background: 'rgba(255, 255, 255, 0.15)',
+            borderRadius: '3px',
+          },
+          '&::-webkit-scrollbar-thumb:hover': {
+            background: 'rgba(255, 255, 255, 0.25)',
+          },
+          '&::-webkit-scrollbar:horizontal': {
+            display: 'none',
+          },
+        }}
+      >
         {menuItems.map((item) => (
           item.children ? (
             <React.Fragment key={item.text}>
               <StyledListItemButton 
-                onClick={item.text === 'Produkcja' ? handleProductionClick : 
-                         item.text === 'Zamówienia' ? handleOrdersClick : 
-                         item.text === 'Magazyn' ? handleInventoryClick :
-                         item.text === 'Klienci' ? handleCustomersClick :
-                         item.text === 'CRM' ? handleCRMClick : () => {}} 
+                onClick={() => handleSubmenuClick(item.text)} 
                 selected={isActive(item.path)}
               >
                 <Tooltip title={item.text} placement="right" arrow>
@@ -280,29 +335,30 @@ const Sidebar = () => {
                     )}
                   </ListItemIcon>
                 </Tooltip>
-                <ListItemText 
-                  primary={item.text} 
-                  primaryTypographyProps={{ 
-                    fontSize: '0.875rem',
-                    fontWeight: isActive(item.path) ? 'medium' : 'normal'
-                  }} 
-                />
-                {(item.text === 'Produkcja' && openProduction) || 
-                 (item.text === 'Zamówienia' && openOrders) ||
-                 (item.text === 'Magazyn' && openInventory) ||
-                 (item.text === 'Klienci' && openCustomers) ||
-                 (item.text === 'CRM' && openCRM) ? <ExpandLess /> : <ExpandMore />}
+                {isDrawerOpen && (
+                  <>
+                    <ListItemText 
+                      primary={item.text} 
+                      primaryTypographyProps={{ 
+                        fontSize: '0.875rem',
+                        fontWeight: isActive(item.path) ? 'medium' : 'normal'
+                      }} 
+                    />
+                    {openSubmenu === item.text ? <ExpandLess /> : <ExpandMore />}
+                  </>
+                )}
               </StyledListItemButton>
               <Collapse 
-                in={item.text === 'Produkcja' ? openProduction : 
-                     item.text === 'Zamówienia' ? openOrders : 
-                     item.text === 'Magazyn' ? openInventory :
-                     item.text === 'Klienci' ? openCustomers :
-                     item.text === 'CRM' ? openCRM : false} 
+                in={openSubmenu === item.text} 
                 timeout="auto" 
                 unmountOnExit
               >
-                <List component="div" disablePadding>
+                <List component="div" disablePadding sx={{ 
+                  overflowX: 'hidden',
+                  '&::-webkit-scrollbar:horizontal': {
+                    display: 'none',
+                  }
+                }}>
                   {item.children.map((subItem) => (
                     <StyledListItem
                       component={subItem.path ? Link : 'div'}
@@ -310,20 +366,22 @@ const Sidebar = () => {
                       to={subItem.path}
                       onClick={subItem.onClick}
                       selected={subItem.path ? location.pathname === subItem.path : false}
-                      sx={{ pl: 4 }}
+                      sx={{ pl: isDrawerOpen ? 4 : 2 }}
                     >
                       <Tooltip title={subItem.text} placement="right" arrow>
                         <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>
                           {subItem.icon}
                         </ListItemIcon>
                       </Tooltip>
-                      <ListItemText 
-                        primary={subItem.text} 
-                        primaryTypographyProps={{ 
-                          fontSize: '0.875rem',
-                          fontWeight: subItem.path && location.pathname === subItem.path ? 'medium' : 'normal'
-                        }} 
-                      />
+                      {isDrawerOpen && (
+                        <ListItemText 
+                          primary={subItem.text} 
+                          primaryTypographyProps={{ 
+                            fontSize: '0.875rem',
+                            fontWeight: subItem.path && location.pathname === subItem.path ? 'medium' : 'normal'
+                          }} 
+                        />
+                      )}
                     </StyledListItem>
                   ))}
                 </List>
@@ -347,15 +405,17 @@ const Sidebar = () => {
                   )}
                 </ListItemIcon>
               </Tooltip>
-              <ListItemText 
-                primary={item.text} 
-                primaryTypographyProps={{ 
-                  fontSize: '0.875rem',
-                  fontWeight: item.path === '/' 
-                    ? location.pathname === '/' ? 'medium' : 'normal'
-                    : isActive(item.path) ? 'medium' : 'normal'
-                }} 
-              />
+              {isDrawerOpen && (
+                <ListItemText 
+                  primary={item.text} 
+                  primaryTypographyProps={{ 
+                    fontSize: '0.875rem',
+                    fontWeight: item.path === '/' 
+                      ? location.pathname === '/' ? 'medium' : 'normal'
+                      : isActive(item.path) ? 'medium' : 'normal'
+                  }} 
+                />
+              )}
             </StyledListItem>
           )
         ))}
