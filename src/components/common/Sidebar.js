@@ -43,8 +43,6 @@ import {
   Inventory2 as WaybillIcon,
   Receipt as InvoicesIcon,
   Add as AddIcon,
-  ContactPhone as CRMIcon,
-  Contacts as ContactsIcon,
   Phone as CallIcon,
   Email as EmailIcon,
   EventNote as MeetingIcon,
@@ -122,8 +120,6 @@ const Sidebar = ({ onToggle }) => {
       setOpenSubmenu('Sprzedaż');
     } else if (location.pathname.startsWith('/inventory') || location.pathname.startsWith('/purchase-orders')) {
       setOpenSubmenu('Magazyn');
-    } else if (location.pathname.startsWith('/crm')) {
-      setOpenSubmenu('CRM');
     }
   }, [location.pathname]);
   
@@ -173,17 +169,6 @@ const Sidebar = ({ onToggle }) => {
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
     { text: 'Analityka', icon: <AnalyticsIcon />, path: '/analytics' },
-    { text: 'CRM',
-      icon: <CRMIcon />,
-      path: '/crm',
-      hasSubmenu: true,
-      children: [
-        { text: 'Dashboard', icon: <DashboardIcon />, path: '/crm' },
-        { text: 'Kontakty', icon: <ContactsIcon />, path: '/crm/contacts' },
-        { text: 'Interakcje', icon: <CallIcon />, path: '/crm/interactions' },
-        { text: 'Szanse sprzedaży', icon: <SuppliersIcon />, path: '/crm/opportunities' },
-      ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
-    },
     { text: 'Sprzedaż',
       icon: <CustomersIcon />,
       path: '/customers',
@@ -203,6 +188,7 @@ const Sidebar = ({ onToggle }) => {
       children: [
         { text: 'CMR', icon: <ShippingIcon />, path: '/inventory/cmr' },
         { text: 'Dostawcy', icon: <SuppliersIcon />, path: '/suppliers' },
+        { text: 'Interakcje zakupowe', icon: <CallIcon />, path: '/crm/interactions' },
         { text: 'Inwentaryzacja', icon: <QualityReportsIcon />, path: '/inventory/stocktaking' },
         { text: 'Stan magazynowy', icon: <WarehouseIcon />, path: '/inventory' },
         { text: 'Terminy ważności', icon: <CalendarIcon />, path: '/inventory/expiry-dates' },

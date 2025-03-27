@@ -208,7 +208,7 @@ const InteractionsPage = () => {
     <Container maxWidth="xl">
       <Box mt={4} mb={4} display="flex" justifyContent="space-between" alignItems="center">
         <Typography variant="h4" component="h1">
-          Interakcje
+          Interakcje zakupowe
         </Typography>
         <Button 
           variant="contained" 

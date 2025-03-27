@@ -79,14 +79,14 @@ const CRMDashboardPage = () => {
         const allContacts = await getAllContacts();
         setContacts(allContacts);
         
-        // Pobierz ostatnie interakcje z wszystkich kontaktów
+        // Pobierz ostatnie interakcje zakupowe z wszystkich kontaktów
         let interactions = [];
         for (const contact of allContacts.slice(0, 5)) { // Ogranicz do 5 kontaktów dla wydajności
           const contactInteractions = await getContactInteractions(contact.id);
           interactions = [...interactions, ...contactInteractions];
         }
         
-        // Posortuj interakcje po dacie (od najnowszych) i weź 5 najnowszych
+        // Posortuj interakcje zakupowe po dacie (od najnowszych) i weź 5 najnowszych
         interactions.sort((a, b) => new Date(b.date) - new Date(a.date));
         setRecentInteractions(interactions.slice(0, 5));
         
@@ -107,7 +107,7 @@ const CRMDashboardPage = () => {
           return contact.createdAt && new Date(contact.createdAt.seconds * 1000) >= firstDayOfMonth;
         }).length;
         
-        // Nadchodzące interakcje
+        // Nadchodzące interakcje zakupowe
         const upcomingInteractions = interactions.filter(interaction => {
           return interaction.date && new Date(interaction.date) > now && interaction.status !== 'Anulowane';
         }).length;
@@ -313,7 +313,7 @@ const CRMDashboardPage = () => {
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
             icon={<CallMadeIcon />}
-            title="Nadchodzące interakcje"
+            title="Nadchodzące interakcje zakupowe"
             value={stats.upcomingInteractions}
             loading={statsLoading}
             color="info"
@@ -343,7 +343,7 @@ const CRMDashboardPage = () => {
         <Grid item xs={12} md={6}>
           <Card sx={{ height: '100%' }}>
             <CardHeader 
-              title="Ostatnie interakcje" 
+              title="Ostatnie interakcje zakupowe" 
               action={
                 <Button 
                   component={Link} 

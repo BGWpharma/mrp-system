@@ -74,7 +74,7 @@ const ContactDetailsPage = () => {
       const contactData = await getContactById(contactId);
       setContact(contactData);
       
-      // Pobierz interakcje związane z kontaktem
+      // Pobierz interakcje zakupowe związane z kontaktem
       const contactInteractions = await getContactInteractions(contactId);
       setInteractions(contactInteractions);
       
@@ -419,13 +419,13 @@ const ContactDetailsPage = () => {
                 onChange={handleTabChange} 
                 aria-label="contact tabs"
               >
-                <Tab label="Interakcje" id="tab-0" />
+                <Tab label="Interakcje zakupowe" id="tab-0" />
                 <Tab label="Zadania" id="tab-1" />
                 <Tab label="Szanse sprzedaży" id="tab-2" />
               </Tabs>
             </Box>
             
-            {/* Tab Interakcje */}
+            {/* Tab Interakcje zakupowe */}
             <Box role="tabpanel" hidden={tabValue !== 0}>
               {tabValue === 0 && (
                 <Box sx={{ p: 3 }}>
@@ -558,7 +558,7 @@ const ContactDetailsPage = () => {
         <DialogContent>
           <DialogContentText>
             Czy na pewno chcesz usunąć kontakt {getFullName()}?
-            Tej operacji nie można cofnąć. Wszystkie powiązane dane, takie jak interakcje, również zostaną usunięte.
+            Tej operacji nie można cofnąć. Wszystkie powiązane dane, takie jak interakcje zakupowe, również zostaną usunięte.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
