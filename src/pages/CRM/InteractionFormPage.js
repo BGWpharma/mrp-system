@@ -26,16 +26,18 @@ import {
   Phone as CallIcon,
   Email as EmailIcon,
   EventNote as MeetingIcon,
-  Note as NoteIcon
+  Note as NoteIcon,
+  LocationOn as LocationIcon,
+  Person as PersonIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import {
   createInteraction,
   updateInteraction,
-  getInteractionById,
-  getAllContacts
+  getInteractionById
 } from '../../services/crmService';
+import { getAllSuppliers } from '../../services/purchaseOrderService';
 import { INTERACTION_TYPES, INTERACTION_STATUSES } from '../../utils/constants';
 
 const InteractionFormPage = () => {
@@ -59,8 +61,8 @@ const InteractionFormPage = () => {
   };
 
   const [formData, setFormData] = useState(initialFormState);
-  const [contacts, setContacts] = useState([]);
-  const [selectedContact, setSelectedContact] = useState(null);
+  const [suppliers, setSuppliers] = useState([]);
+  const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
@@ -72,28 +74,28 @@ const InteractionFormPage = () => {
   const isEditMode = Boolean(interactionId);
 
   useEffect(() => {
-    fetchContacts();
+    fetchSuppliers();
     if (isEditMode) {
       fetchInteractionData();
     }
   }, [interactionId]);
 
-  const fetchContacts = async () => {
+  const fetchSuppliers = async () => {
     try {
       setLoading(true);
-      const contactsData = await getAllContacts();
-      setContacts(contactsData);
+      const suppliersData = await getAllSuppliers();
+      setSuppliers(suppliersData);
 
-      // Jeśli przekazano contactId z query params, znajdź i ustaw wybrany kontakt
+      // Jeśli przekazano contactId z query params, znajdź i ustaw wybranego dostawcę
       if (contactIdFromQuery) {
-        const contact = contactsData.find(c => c.id === contactIdFromQuery);
-        if (contact) {
-          setSelectedContact(contact);
+        const supplier = suppliersData.find(s => s.id === contactIdFromQuery);
+        if (supplier) {
+          setSelectedSupplier(supplier);
         }
       }
     } catch (error) {
-      console.error('Błąd podczas pobierania kontaktów:', error);
-      showError('Nie udało się pobrać listy kontaktów: ' + error.message);
+      console.error('Błąd podczas pobierania dostawców:', error);
+      showError('Nie udało się pobrać listy dostawców: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -121,11 +123,11 @@ const InteractionFormPage = () => {
         date
       });
 
-      // Znajdź i ustaw wybrany kontakt
+      // Znajdź i ustaw wybranego dostawcę
       if (interactionData.contactId) {
-        const contact = contacts.find(c => c.id === interactionData.contactId);
-        if (contact) {
-          setSelectedContact(contact);
+        const supplier = suppliers.find(s => s.id === interactionData.contactId);
+        if (supplier) {
+          setSelectedSupplier(supplier);
         }
       }
     } catch (error) {
@@ -140,7 +142,7 @@ const InteractionFormPage = () => {
     const newErrors = {};
 
     if (!formData.contactId) {
-      newErrors.contactId = 'Kontakt jest wymagany';
+      newErrors.contactId = 'Dostawca jest wymagany';
     }
 
     if (!formData.type) {
@@ -197,7 +199,7 @@ const InteractionFormPage = () => {
   };
 
   const handleContactChange = (event, newValue) => {
-    setSelectedContact(newValue);
+    setSelectedSupplier(newValue);
     setFormData({
       ...formData,
       contactId: newValue ? newValue.id : ''
@@ -222,35 +224,30 @@ const InteractionFormPage = () => {
     try {
       setIsSubmitting(true);
 
-      // Przygotuj dane do zapisania
+      if (!currentUser) {
+        throw new Error('Użytkownik nie jest zalogowany');
+      }
+
+      // Przygotuj dane do zapisania, upewniając się że wszystkie pola są zdefiniowane
       const interactionData = {
-        ...formData
+        contactId: formData.contactId,
+        type: formData.type,
+        subject: formData.subject,
+        date: formData.date,
+        status: formData.status,
+        notes: formData.notes || '',
       };
 
       if (isEditMode) {
         // Aktualizacja istniejącej interakcji
-        interactionData.updatedBy = currentUser.uid;
-        interactionData.updatedAt = new Date();
-        
-        await updateInteraction(interactionId, interactionData);
+        await updateInteraction(interactionId, interactionData, currentUser.uid);
         showSuccess('Interakcja została zaktualizowana');
-        navigate(`/crm/interactions/${interactionId}`);
+        navigate('/inventory/interactions');
       } else {
         // Tworzenie nowej interakcji
-        interactionData.createdBy = currentUser.uid;
-        interactionData.createdAt = new Date();
-        interactionData.updatedBy = currentUser.uid;
-        interactionData.updatedAt = new Date();
-        
-        const newInteractionId = await createInteraction(interactionData);
+        const newInteractionId = await createInteraction(interactionData, currentUser.uid);
         showSuccess('Interakcja została utworzona');
-        
-        // Jeśli interakcja została utworzona z kontekstu kontaktu, wróć do szczegółów kontaktu
-        if (contactIdFromQuery) {
-          navigate(`/crm/contacts/${contactIdFromQuery}`);
-        } else {
-          navigate(`/crm/interactions/${newInteractionId}`);
-        }
+        navigate('/inventory/interactions');
       }
     } catch (error) {
       console.error('Błąd podczas zapisywania interakcji:', error);
@@ -325,37 +322,23 @@ const InteractionFormPage = () => {
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
                 <Autocomplete
-                  id="contactId"
-                  options={contacts}
-                  value={selectedContact}
+                  id="contact-select"
+                  options={suppliers}
+                  value={selectedSupplier}
                   onChange={handleContactChange}
-                  isOptionEqualToValue={(option, value) => option.id === value.id}
-                  getOptionLabel={(option) => {
-                    const name = `${option.firstName || ''} ${option.lastName || ''}`.trim();
-                    return name ? name : option.company || 'Bez nazwy';
-                  }}
-                  renderOption={(props, option) => (
-                    <li {...props}>
-                      <Box>
-                        {`${option.firstName || ''} ${option.lastName || ''}`.trim() || 'Bez nazwy'}
-                        {option.company && (
-                          <Typography variant="body2" color="textSecondary">
-                            {option.company}
-                          </Typography>
-                        )}
-                      </Box>
-                    </li>
-                  )}
+                  getOptionLabel={(option) => option.name || ''}
                   renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Kontakt"
+                    <TextField 
+                      {...params} 
+                      label="Dostawca" 
+                      variant="outlined" 
+                      required
                       error={Boolean(errors.contactId)}
                       helperText={errors.contactId}
-                      required
+                      fullWidth
                     />
                   )}
-                  disabled={isSubmitting || Boolean(contactIdFromQuery)}
+                  disabled={isSubmitting || loading}
                 />
               </Grid>
 
@@ -401,6 +384,55 @@ const InteractionFormPage = () => {
                   {errors.type && <FormHelperText>{errors.type}</FormHelperText>}
                 </FormControl>
               </Grid>
+
+              {selectedSupplier && (
+                <Grid item xs={12}>
+                  <Paper variant="outlined" sx={{ p: 2, mb: 2, bgcolor: 'background.paper' }}>
+                    <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                      Informacje o dostawcy:
+                    </Typography>
+                    <Grid container spacing={2}>
+                      {selectedSupplier.phone && (
+                        <Grid item xs={12} sm={4}>
+                          <Box display="flex" alignItems="center">
+                            <CallIcon fontSize="small" color="primary" sx={{ mr: 1 }} />
+                            <Typography variant="body2">{selectedSupplier.phone}</Typography>
+                          </Box>
+                        </Grid>
+                      )}
+                      {selectedSupplier.email && (
+                        <Grid item xs={12} sm={4}>
+                          <Box display="flex" alignItems="center">
+                            <EmailIcon fontSize="small" color="primary" sx={{ mr: 1 }} />
+                            <Typography variant="body2">{selectedSupplier.email}</Typography>
+                          </Box>
+                        </Grid>
+                      )}
+                      {selectedSupplier.addresses && selectedSupplier.addresses.length > 0 && (
+                        <Grid item xs={12} sm={4}>
+                          <Box display="flex" alignItems="flex-start">
+                            <LocationIcon fontSize="small" color="primary" sx={{ mr: 1, mt: 0.3 }} />
+                            <Typography variant="body2">
+                              {(() => {
+                                const mainAddress = selectedSupplier.addresses.find(a => a.isMain) || selectedSupplier.addresses[0];
+                                return `${mainAddress.street}, ${mainAddress.postalCode} ${mainAddress.city}`;
+                              })()}
+                            </Typography>
+                          </Box>
+                        </Grid>
+                      )}
+                      {selectedSupplier.contactPerson && (
+                        <Grid item xs={12} sm={4}>
+                          <Box display="flex" alignItems="center">
+                            <PersonIcon fontSize="small" color="primary" sx={{ mr: 1 }} />
+                            <Typography variant="body2">{selectedSupplier.contactPerson}</Typography>
+                          </Box>
+                        </Grid>
+                      )}
+                    </Grid>
+                  </Paper>
+                </Grid>
+              )}
 
               <Grid item xs={12}>
                 <TextField

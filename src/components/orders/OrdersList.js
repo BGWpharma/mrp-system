@@ -312,7 +312,7 @@ const OrdersList = () => {
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4" component="h1">
-          Zamówienia
+          Zamówienia klientów
         </Typography>
         <Box sx={{ display: 'flex', gap: 2 }}>
           <Button
@@ -521,7 +521,7 @@ const OrdersList = () => {
                             </Typography>
                           </TableCell>
                           <TableCell>
-                            {order.orderDate ? formatDate(order.orderDate) : '-'}
+                            {order.orderDate ? formatDate(order.orderDate, false) : '-'}
                           </TableCell>
                           <TableCell>{formatCurrency(order.totalValue || 0)}</TableCell>
                           <TableCell>

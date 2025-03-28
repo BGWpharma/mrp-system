@@ -91,7 +91,7 @@ const TaskForm = ({ taskId }) => {
   const [showBookingDetails, setShowBookingDetails] = useState(false);
   
   // Dodaj stan dla metody rezerwacji
-  const [reservationMethod, setReservationMethod] = useState('expiry'); // 'expiry' lub 'fifo'
+  const [reservationMethod, setReservationMethod] = useState('fifo'); // 'expiry' lub 'fifo'
 
   const [recipeYieldError, setRecipeYieldError] = useState(false);
 
@@ -768,10 +768,8 @@ const TaskForm = ({ taskId }) => {
                     label="Jednostka"
                   >
                     <MenuItem value="szt.">szt.</MenuItem>
-                    <MenuItem value="g">g</MenuItem>
                     <MenuItem value="kg">kg</MenuItem>
-                    <MenuItem value="ml">ml</MenuItem>
-                    <MenuItem value="l">l</MenuItem>
+                    <MenuItem value="caps">caps</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
@@ -780,7 +778,12 @@ const TaskForm = ({ taskId }) => {
                   label="Data rozpoczęcia"
                   value={taskData.scheduledDate}
                   onChange={handleDateChange}
-                  renderInput={(params) => <TextField {...params} fullWidth required />}
+                  slotProps={{
+                    textField: {
+                      fullWidth: true,
+                      required: true
+                    }
+                  }}
                 />
               </Grid>
               <Grid item xs={6}>
@@ -789,7 +792,12 @@ const TaskForm = ({ taskId }) => {
                   value={taskData.endDate}
                   onChange={handleEndDateChange}
                   minDate={taskData.scheduledDate}
-                  renderInput={(params) => <TextField {...params} fullWidth required />}
+                  slotProps={{
+                    textField: {
+                      fullWidth: true,
+                      required: true
+                    }
+                  }}
                 />
               </Grid>
               <Grid item xs={6}>
@@ -912,14 +920,14 @@ const TaskForm = ({ taskId }) => {
                 onChange={(e) => setReservationMethod(e.target.value)}
               >
                 <FormControlLabel 
-                  value="expiry" 
-                  control={<Radio />} 
-                  label="Według daty ważności (najkrótszej)" 
-                />
-                <FormControlLabel 
                   value="fifo" 
                   control={<Radio />} 
                   label="FIFO (First In, First Out)" 
+                />
+                <FormControlLabel 
+                  value="expiry" 
+                  control={<Radio />} 
+                  label="Według daty ważności (najkrótszej)" 
                 />
               </RadioGroup>
             </FormControl>

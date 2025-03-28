@@ -45,7 +45,7 @@ const CreateFromOrderPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser } = useAuth();
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showError, showInfo } = useNotification();
   
   const [orders, setOrders] = useState([]);
   const [selectedOrderId, setSelectedOrderId] = useState(location.state?.orderId || '');
@@ -55,16 +55,17 @@ const CreateFromOrderPage = () => {
   const [orderLoading, setOrderLoading] = useState(false);
   const [creatingTask, setCreatingTask] = useState(false);
   const [recipes, setRecipes] = useState([]);
+  const [existingTasks, setExistingTasks] = useState([]);
   
   // Formularz nowego zadania
   const [taskForm, setTaskForm] = useState({
     name: '',
-    scheduledDate: '',
-    endDate: '',
+    scheduledDate: new Date().toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0],
     priority: 'Normalny',
     description: '',
     status: 'Zaplanowane',
-    reservationMethod: 'expiry' // 'expiry' - wg daty ważności, 'fifo' - FIFO
+    reservationMethod: 'fifo' // 'expiry' - wg daty ważności, 'fifo' - FIFO
   });
   
   useEffect(() => {
@@ -131,6 +132,26 @@ const CreateFromOrderPage = () => {
     return materials;
   };
   
+  // Funkcja do normalizacji jednostek - konwertuje wszystkie jednostki do jednej z trzech dozwolonych
+  const normalizeUnit = (unit) => {
+    if (!unit) return 'szt.'; // Domyślna jednostka
+    
+    // Normalizacja jednostek do dozwolonych wartości
+    const unitLower = unit.toLowerCase();
+    
+    // Mapowanie jednostek do trzech dozwolonych
+    if (unitLower.includes('szt') || unitLower.includes('pc') || unitLower === 'pcs' || unitLower === 'piece') {
+      return 'szt.';
+    } else if (unitLower.includes('kg') || unitLower.includes('kilo')) {
+      return 'kg';
+    } else if (unitLower.includes('cap') || unitLower === 'capsule' || unitLower === 'capsules') {
+      return 'caps';
+    }
+    
+    // Domyślnie zwracamy sztuki
+    return 'szt.';
+  };
+  
   const fetchOrders = async () => {
     try {
       setLoading(true);
@@ -162,6 +183,16 @@ const CreateFromOrderPage = () => {
       const orderData = await getOrderById(orderId);
       setSelectedOrder(orderData);
       
+      // Sprawdź, czy zamówienie ma już utworzone zadania produkcyjne
+      if (orderData.productionTasks && orderData.productionTasks.length > 0) {
+        showInfo(`Uwaga: Dla tego zamówienia utworzono już ${orderData.productionTasks.length} zadań produkcyjnych. Tworzenie dodatkowych może prowadzić do duplikacji.`);
+        // Zapisz istniejące zadania do wyświetlenia w UI
+        setExistingTasks(orderData.productionTasks);
+      } else {
+        // Wyczyść listę istniejących zadań, jeśli wybrano nowe zamówienie bez zadań
+        setExistingTasks([]);
+      }
+      
       // Ustaw początkowe wartości dla formularza zadania
       setTaskForm({
         name: `Produkcja z zamówienia #${orderData.orderNumber || orderId.substring(0, 8)}`,
@@ -170,7 +201,7 @@ const CreateFromOrderPage = () => {
         priority: 'Normalny',
         description: `Zadanie utworzone na podstawie zamówienia klienta ${orderData.customer?.name || '(brak danych)'}`,
         status: 'Zaplanowane',
-        reservationMethod: 'expiry'
+        reservationMethod: 'fifo'
       });
       
       // Domyślnie zaznacz wszystkie elementy zamówienia
@@ -178,7 +209,8 @@ const CreateFromOrderPage = () => {
         setSelectedItems(orderData.items.map((item, index) => ({
           ...item,
           itemId: index, // Dodajemy unikalny identyfikator
-          selected: true
+          selected: true,
+          unit: normalizeUnit(item.unit) // Normalizacja jednostek do dopuszczalnych wartości
         })));
       }
     } catch (error) {
@@ -242,6 +274,9 @@ const CreateFromOrderPage = () => {
       
       // Dla każdego wybranego produktu z zamówienia, tworzymy zadanie produkcyjne
       for (const item of selectedProductItems) {
+        // Znormalizuj jednostkę do jednej z trzech dozwolonych
+        const normalizedUnit = normalizeUnit(item.unit);
+        
         // Znajdź recepturę dla produktu
         const recipe = findRecipeForProduct(item.name);
         
@@ -249,6 +284,13 @@ const CreateFromOrderPage = () => {
         const materials = recipe 
           ? createMaterialsFromRecipe(recipe, item.quantity)
           : [];
+        
+        // Normalizuj jednostki materiałów
+        if (materials.length > 0) {
+          materials.forEach(material => {
+            material.unit = normalizedUnit;
+          });
+        }
         
         // Jeśli znaleziono recepturę, dodaj odniesienie do niej i oblicz koszty
         const recipeData = recipe 
@@ -263,7 +305,7 @@ const CreateFromOrderPage = () => {
             // Przygotuj dane zadania dla kalkulatora kosztów
             const taskForCostCalc = {
               quantity: item.quantity,
-              unit: item.unit || 'szt.'
+              unit: normalizedUnit
             };
             
             // Pobierz ID składników z receptury
@@ -297,7 +339,7 @@ const CreateFromOrderPage = () => {
           ...taskForm,
           productName: item.name,
           quantity: item.quantity,
-          unit: item.unit || 'szt.',
+          unit: normalizedUnit,
           customer: selectedOrder.customer,
           orderId: selectedOrder.id,
           orderNumber: selectedOrder.orderNumber || selectedOrder.id.substring(0, 8),
@@ -385,6 +427,31 @@ const CreateFromOrderPage = () => {
               <>
                 <Divider sx={{ my: 3 }} />
                 
+                {existingTasks.length > 0 && (
+                  <Alert 
+                    severity="warning" 
+                    sx={{ mb: 3 }}
+                    action={
+                      <Button 
+                        color="inherit" 
+                        size="small" 
+                        onClick={() => navigate('/production')}
+                      >
+                        Zobacz zadania
+                      </Button>
+                    }
+                  >
+                    Uwaga: Dla tego zamówienia utworzono już {existingTasks.length} zadań produkcyjnych:
+                    <Box component="ul" sx={{ mt: 1, pl: 2 }}>
+                      {existingTasks.map((task, index) => (
+                        <Box component="li" key={index}>
+                          {task.moNumber || 'Zadanie'}: {task.productName || 'Produkt'} - {task.quantity} {task.unit || 'szt.'} ({task.status || 'brak statusu'})
+                        </Box>
+                      ))}
+                    </Box>
+                  </Alert>
+                )}
+                
                 <Grid container spacing={3} sx={{ mb: 3 }}>
                   <Grid item xs={12} md={6}>
                     <Typography variant="subtitle1" gutterBottom>
@@ -408,6 +475,7 @@ const CreateFromOrderPage = () => {
                     <Typography variant="subtitle1" gutterBottom>
                       Dane zadania produkcyjnego:
                     </Typography>
+                    
                     <TextField
                       name="name"
                       label="Nazwa zadania"
@@ -416,26 +484,38 @@ const CreateFromOrderPage = () => {
                       fullWidth
                       margin="normal"
                     />
-                    <TextField
-                      name="scheduledDate"
-                      label="Data rozpoczęcia"
-                      type="date"
-                      value={taskForm.scheduledDate}
-                      onChange={handleTaskFormChange}
-                      fullWidth
-                      margin="normal"
-                      InputLabelProps={{ shrink: true }}
-                    />
-                    <TextField
-                      name="endDate"
-                      label="Data zakończenia"
-                      type="date"
-                      value={taskForm.endDate}
-                      onChange={handleTaskFormChange}
-                      fullWidth
-                      margin="normal"
-                      InputLabelProps={{ shrink: true }}
-                    />
+                    
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          name="scheduledDate"
+                          label="Data rozpoczęcia"
+                          type="date"
+                          value={taskForm.scheduledDate}
+                          onChange={handleTaskFormChange}
+                          fullWidth
+                          margin="normal"
+                          InputLabelProps={{
+                            shrink: true,
+                          }}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          name="endDate"
+                          label="Planowana data zakończenia"
+                          type="date"
+                          value={taskForm.endDate}
+                          onChange={handleTaskFormChange}
+                          fullWidth
+                          margin="normal"
+                          InputLabelProps={{
+                            shrink: true,
+                          }}
+                        />
+                      </Grid>
+                    </Grid>
+                    
                     <FormControl fullWidth margin="normal">
                       <InputLabel>Priorytet</InputLabel>
                       <Select
@@ -458,8 +538,8 @@ const CreateFromOrderPage = () => {
                         onChange={handleTaskFormChange}
                         label="Metoda rezerwacji materiałów"
                       >
-                        <MenuItem value="expiry">Według daty ważności (najkrótszy termin)</MenuItem>
                         <MenuItem value="fifo">FIFO (pierwsze weszło, pierwsze wyszło)</MenuItem>
+                        <MenuItem value="expiry">Według daty ważności (najkrótszy termin)</MenuItem>
                       </Select>
                     </FormControl>
                   </Grid>
@@ -535,7 +615,7 @@ const CreateFromOrderPage = () => {
                 {orders.length > 0 ? (
                   'Wybierz zamówienie z listy, aby utworzyć zadanie produkcyjne.'
                 ) : (
-                  'Nie znaleziono żadnych zamówień. Utwórz i potwierdź zamówienia w sekcji Zamówienia.'
+                  'Nie znaleziono żadnych zamówień. Utwórz i potwierdź zamówienia w sekcji Zamówienia klientów.'
                 )}
               </Alert>
             )}

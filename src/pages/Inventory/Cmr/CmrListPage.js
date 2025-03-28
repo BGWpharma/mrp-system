@@ -14,7 +14,12 @@ import {
   Chip,
   IconButton,
   CircularProgress,
-  Alert
+  Alert,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -24,7 +29,8 @@ import { useNotification } from '../../../hooks/useNotification';
 import { 
   getAllCmrDocuments, 
   CMR_STATUSES,
-  TRANSPORT_TYPES
+  TRANSPORT_TYPES,
+  deleteCmrDocument
 } from '../../../services/cmrService';
 
 // Ikony
@@ -42,6 +48,8 @@ const CmrListPage = () => {
   
   const [loading, setLoading] = useState(true);
   const [cmrDocuments, setCmrDocuments] = useState([]);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [documentToDelete, setDocumentToDelete] = useState(null);
   
   useEffect(() => {
     fetchCmrDocuments();
@@ -61,7 +69,7 @@ const CmrListPage = () => {
   };
   
   const handleCreateCmr = () => {
-    navigate('/inventory/cmr/create');
+    navigate('/inventory/cmr/new');
   };
   
   const handleEditCmr = (id) => {
@@ -70,6 +78,31 @@ const CmrListPage = () => {
   
   const handleViewCmr = (id) => {
     navigate(`/inventory/cmr/${id}`);
+  };
+  
+  const handleDeleteClick = (document) => {
+    setDocumentToDelete(document);
+    setDeleteDialogOpen(true);
+  };
+  
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
+    setDocumentToDelete(null);
+  };
+  
+  const handleDeleteConfirm = async () => {
+    if (!documentToDelete) return;
+    
+    try {
+      await deleteCmrDocument(documentToDelete.id);
+      showSuccess(`Dokument CMR ${documentToDelete.cmrNumber} został usunięty`);
+      setDeleteDialogOpen(false);
+      setDocumentToDelete(null);
+      fetchCmrDocuments(); // Odśwież listę
+    } catch (error) {
+      console.error('Błąd podczas usuwania dokumentu CMR:', error);
+      showError('Nie udało się usunąć dokumentu CMR');
+    }
   };
   
   const formatDate = (date) => {
@@ -172,6 +205,17 @@ const CmrListPage = () => {
                         <EditIcon fontSize="small" />
                       </IconButton>
                     )}
+                    
+                    {cmr.status === CMR_STATUSES.DRAFT && (
+                      <IconButton
+                        size="small"
+                        onClick={() => handleDeleteClick(cmr)}
+                        title="Usuń"
+                        color="error"
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -179,6 +223,28 @@ const CmrListPage = () => {
           </Table>
         </TableContainer>
       )}
+      
+      {/* Dialog potwierdzenia usunięcia */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={handleDeleteCancel}
+      >
+        <DialogTitle>Potwierdzenie usunięcia</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Czy na pewno chcesz usunąć dokument CMR {documentToDelete?.cmrNumber}?
+            Ta operacja jest nieodwracalna.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleDeleteCancel} color="primary">
+            Anuluj
+          </Button>
+          <Button onClick={handleDeleteConfirm} color="error" variant="contained">
+            Usuń
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

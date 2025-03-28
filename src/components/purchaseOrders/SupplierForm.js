@@ -9,14 +9,14 @@ import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  LocationOn as LocationIcon
+  LocationOn as LocationIcon,
+  ArrowBack as ArrowBackIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { getSupplierById, createSupplier, updateSupplier } from '../../services/purchaseOrderService';
 
-const SupplierForm = () => {
-  const { supplierId } = useParams();
+const SupplierForm = ({ viewOnly = false, supplierId }) => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -71,12 +71,14 @@ const SupplierForm = () => {
   }, [supplierId]);
   
   const handleChange = (e) => {
+    if (viewOnly) return;
     const { name, value } = e.target;
     setSupplierData(prev => ({ ...prev, [name]: value }));
   };
   
   // Funkcje do zarządzania adresami
   const openAddressDialog = (index = -1) => {
+    if (viewOnly) return;
     if (index >= 0) {
       // Edycja istniejącego adresu
       setEditingAddressIndex(index);
@@ -144,6 +146,7 @@ const SupplierForm = () => {
   };
   
   const handleDeleteAddress = (index) => {
+    if (viewOnly) return;
     if (!window.confirm('Czy na pewno chcesz usunąć ten adres?')) {
       return;
     }
@@ -207,9 +210,15 @@ const SupplierForm = () => {
   return (
     <Container>
       <Box sx={{ mb: 3 }}>
-        <Typography variant="h5">
-          {supplierId ? 'Edytuj Dostawcę' : 'Nowy Dostawca'}
-        </Typography>
+        {viewOnly && (
+          <Button
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate('/suppliers')}
+            sx={{ mb: 2 }}
+          >
+            Powrót do listy
+          </Button>
+        )}
       </Box>
       
       <Paper sx={{ p: 3 }}>
@@ -224,6 +233,10 @@ const SupplierForm = () => {
                 onChange={handleChange}
                 fullWidth
                 required
+                disabled={viewOnly}
+                InputProps={{
+                  readOnly: viewOnly
+                }}
               />
             </Grid>
             
@@ -235,6 +248,10 @@ const SupplierForm = () => {
                 value={supplierData.contactPerson}
                 onChange={handleChange}
                 fullWidth
+                disabled={viewOnly}
+                InputProps={{
+                  readOnly: viewOnly
+                }}
               />
             </Grid>
             
@@ -247,6 +264,10 @@ const SupplierForm = () => {
                 value={supplierData.email}
                 onChange={handleChange}
                 fullWidth
+                disabled={viewOnly}
+                InputProps={{
+                  readOnly: viewOnly
+                }}
               />
             </Grid>
             
@@ -258,6 +279,10 @@ const SupplierForm = () => {
                 value={supplierData.phone}
                 onChange={handleChange}
                 fullWidth
+                disabled={viewOnly}
+                InputProps={{
+                  readOnly: viewOnly
+                }}
               />
             </Grid>
             
@@ -269,67 +294,26 @@ const SupplierForm = () => {
                 value={supplierData.taxId}
                 onChange={handleChange}
                 fullWidth
+                disabled={viewOnly}
+                InputProps={{
+                  readOnly: viewOnly
+                }}
               />
             </Grid>
             
-            {/* VAT-EU */}
+            {/* VAT EU */}
             <Grid item xs={12} md={6}>
               <TextField
                 name="vatEu"
-                label="VAT-EU"
-                value={supplierData.vatEu}
+                label="VAT EU"
+                value={supplierData.vatEu || ''}
                 onChange={handleChange}
                 fullWidth
+                disabled={viewOnly}
+                InputProps={{
+                  readOnly: viewOnly
+                }}
               />
-            </Grid>
-            
-            {/* Adresy */}
-            <Grid item xs={12}>
-              <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="h6">Adresy</Typography>
-                <Button 
-                  variant="contained" 
-                  color="primary" 
-                  startIcon={<AddIcon />}
-                  onClick={() => openAddressDialog()}
-                >
-                  Dodaj adres
-                </Button>
-              </Box>
-              
-              {supplierData.addresses.length === 0 ? (
-                <Typography variant="body2" color="textSecondary" sx={{ my: 2 }}>
-                  Brak dodanych adresów. Kliknij "Dodaj adres", aby dodać pierwszy adres.
-                </Typography>
-              ) : (
-                <Grid container spacing={2}>
-                  {supplierData.addresses.map((address, index) => (
-                    <Grid item xs={12} md={6} key={address.id}>
-                      <Card variant="outlined">
-                        <CardHeader 
-                          title={address.name}
-                          subheader={address.isMain ? 'Adres główny' : ''}
-                          action={
-                            <Box>
-                              <IconButton onClick={() => openAddressDialog(index)} size="small">
-                                <EditIcon fontSize="small" />
-                              </IconButton>
-                              <IconButton onClick={() => handleDeleteAddress(index)} size="small">
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            </Box>
-                          }
-                        />
-                        <CardContent>
-                          <Typography variant="body2">{address.street}</Typography>
-                          <Typography variant="body2">{address.postalCode} {address.city}</Typography>
-                          <Typography variant="body2">{address.country}</Typography>
-                        </CardContent>
-                      </Card>
-                    </Grid>
-                  ))}
-                </Grid>
-              )}
             </Grid>
             
             {/* Uwagi */}
@@ -337,45 +321,101 @@ const SupplierForm = () => {
               <TextField
                 name="notes"
                 label="Uwagi"
-                value={supplierData.notes}
+                value={supplierData.notes || ''}
                 onChange={handleChange}
                 fullWidth
                 multiline
-                rows={3}
+                rows={4}
+                disabled={viewOnly}
+                InputProps={{
+                  readOnly: viewOnly
+                }}
               />
             </Grid>
+            
+            {/* Adresy */}
+            <Grid item xs={12}>
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                <Typography variant="h6">Adresy</Typography>
+                {!viewOnly && (
+                  <Button
+                    startIcon={<AddIcon />}
+                    onClick={() => openAddressDialog()}
+                    variant="outlined"
+                  >
+                    Dodaj adres
+                  </Button>
+                )}
+              </Box>
+              
+              {supplierData.addresses.length === 0 ? (
+                <Typography variant="body2" color="textSecondary">
+                  Brak adresów
+                </Typography>
+              ) : (
+                <List>
+                  {supplierData.addresses.map((address, index) => (
+                    <Card key={address.id || index} sx={{ mb: 1 }}>
+                      <CardContent>
+                        <Box display="flex" justifyContent="space-between" alignItems="center">
+                          <Box>
+                            <Typography variant="h6">
+                              {address.name} {address.isMain && " (główny)"}
+                            </Typography>
+                            <Typography variant="body1">
+                              {address.street}, {address.postalCode} {address.city}
+                            </Typography>
+                            <Typography variant="body2" color="textSecondary">
+                              {address.country}
+                            </Typography>
+                          </Box>
+                          {!viewOnly && (
+                            <Box>
+                              <IconButton color="primary" onClick={() => openAddressDialog(index)}>
+                                <EditIcon />
+                              </IconButton>
+                              <IconButton color="error" onClick={() => handleDeleteAddress(index)}>
+                                <DeleteIcon />
+                              </IconButton>
+                            </Box>
+                          )}
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </List>
+              )}
+            </Grid>
+            
+            {/* Przyciski */}
+            <Grid item xs={12}>
+              <Divider sx={{ my: 2 }} />
+              <Box display="flex" justifyContent="flex-end" gap={2}>
+                <Button
+                  variant="outlined"
+                  onClick={() => navigate('/suppliers')}
+                >
+                  {viewOnly ? 'Powrót' : 'Anuluj'}
+                </Button>
+                
+                {!viewOnly && (
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    color="primary"
+                    disabled={saving}
+                  >
+                    {supplierId ? 'Aktualizuj' : 'Zapisz'}
+                  </Button>
+                )}
+              </Box>
+            </Grid>
           </Grid>
-          
-          <Divider sx={{ my: 3 }} />
-          
-          {/* Przyciski */}
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
-            <Button
-              variant="outlined"
-              onClick={() => navigate('/suppliers')}
-              disabled={saving}
-            >
-              Anuluj
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              color="primary"
-              disabled={saving}
-            >
-              {saving ? 'Zapisywanie...' : 'Zapisz'}
-            </Button>
-          </Box>
         </form>
       </Paper>
       
-      {/* Dialog do dodawania/edycji adresu */}
-      <Dialog 
-        open={addressDialogOpen} 
-        onClose={() => setAddressDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
+      {/* Dialog dodawania/edycji adresu */}
+      <Dialog open={addressDialogOpen} onClose={() => setAddressDialogOpen(false)}>
         <DialogTitle>
           {editingAddressIndex >= 0 ? 'Edytuj adres' : 'Dodaj nowy adres'}
         </DialogTitle>
@@ -384,12 +424,11 @@ const SupplierForm = () => {
             <Grid item xs={12}>
               <TextField
                 name="name"
-                label="Nazwa adresu"
+                label="Nazwa adresu (np. Siedziba, Magazyn)"
                 value={addressFormData.name}
                 onChange={handleAddressChange}
                 fullWidth
                 required
-                placeholder="np. Siedziba główna, Magazyn, itp."
               />
             </Grid>
             <Grid item xs={12}>
@@ -402,7 +441,7 @@ const SupplierForm = () => {
                 required
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12} md={7}>
               <TextField
                 name="city"
                 label="Miasto"
@@ -412,7 +451,7 @@ const SupplierForm = () => {
                 required
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12} md={5}>
               <TextField
                 name="postalCode"
                 label="Kod pocztowy"
@@ -441,18 +480,16 @@ const SupplierForm = () => {
                     onChange={handleAddressChange}
                   />
                 }
-                label="Adres główny"
+                label="Główny adres"
               />
             </Grid>
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setAddressDialogOpen(false)}>Anuluj</Button>
-          <Button 
-            onClick={handleSaveAddress} 
-            variant="contained" 
-            color="primary"
-          >
+          <Button onClick={() => setAddressDialogOpen(false)}>
+            Anuluj
+          </Button>
+          <Button onClick={handleSaveAddress} color="primary">
             Zapisz
           </Button>
         </DialogActions>

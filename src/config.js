@@ -35,7 +35,7 @@ export const DEFAULT_CURRENCY = 'PLN';
 export const CURRENCY_OPTIONS = ['PLN', 'EUR', 'USD', 'GBP'];
 
 // Konfiguracja jednostek miary
-export const UNIT_OPTIONS = ['kg', 'g', 'l', 'ml', 'szt', 'opak'];
+export const UNIT_OPTIONS = ['kg', 'szt.', 'caps'];
 
 // Konfiguracja statusów zamówień
 export const ORDER_STATUSES = {

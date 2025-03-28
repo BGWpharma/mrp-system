@@ -16,7 +16,7 @@ import { db } from '../services/firebase/config';
 
 // Stałe kolekcji
 export const CONTACTS_COLLECTION = 'crmContacts';
-export const INTERACTIONS_COLLECTION = 'crmInteractions';
+export const INTERACTIONS_COLLECTION = 'purchaseInteractions';
 export const CAMPAIGNS_COLLECTION = 'crmCampaigns';
 export const LEADS_COLLECTION = 'crmLeads';
 export const OPPORTUNITIES_COLLECTION = 'crmOpportunities';

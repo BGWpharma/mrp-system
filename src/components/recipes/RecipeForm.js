@@ -664,10 +664,8 @@ const RecipeForm = ({ recipeId }) => {
                 label="Jednostka"
               >
                 <MenuItem value="szt.">szt.</MenuItem>
-                <MenuItem value="g">g</MenuItem>
                 <MenuItem value="kg">kg</MenuItem>
-                <MenuItem value="ml">ml</MenuItem>
-                <MenuItem value="l">l</MenuItem>
+                <MenuItem value="caps">caps</MenuItem>
               </Select>
             </FormControl>
           </Grid>
@@ -1077,12 +1075,7 @@ const RecipeForm = ({ recipeId }) => {
                 >
                   <MenuItem value="szt.">sztuka</MenuItem>
                   <MenuItem value="kg">kilogram</MenuItem>
-                  <MenuItem value="g">gram</MenuItem>
-                  <MenuItem value="l">litr</MenuItem>
-                  <MenuItem value="ml">mililitr</MenuItem>
-                  <MenuItem value="m">metr</MenuItem>
-                  <MenuItem value="cm">centymetr</MenuItem>
-                  <MenuItem value="op.">opakowanie</MenuItem>
+                  <MenuItem value="caps">caps</MenuItem>
                 </Select>
               </FormControl>
             </Grid>

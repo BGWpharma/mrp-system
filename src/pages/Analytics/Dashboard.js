@@ -25,7 +25,7 @@ import {
   CardHeader,
   CardContent
 } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { useTheme as useMuiTheme } from '@mui/material/styles';
 import { 
   Refresh as RefreshIcon,
   Settings as SettingsIcon,
@@ -42,12 +42,14 @@ import SalesChart from './components/SalesChart';
 import InventoryChart from './components/InventoryChart';
 import ProductionChart from './components/ProductionChart';
 import QualityChart from './components/QualityChart';
+import { useTheme } from '../../contexts/ThemeContext';
 
 // Komponent siatki responsywnej
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
 const Dashboard = () => {
-  const theme = useTheme();
+  const muiTheme = useMuiTheme();
+  const { mode } = useTheme();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [kpiData, setKpiData] = useState(null);
@@ -297,7 +299,7 @@ const Dashboard = () => {
     return (
       <Container>
         <Box mt={4}>
-          <Paper sx={{ p: 3, backgroundColor: theme.palette.error.light }}>
+          <Paper sx={{ p: 3, backgroundColor: muiTheme.palette.error.light }}>
             <Typography variant="h6" color="error">
               {error}
             </Typography>

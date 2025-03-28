@@ -52,6 +52,7 @@ import {
   LocalShipping as ShippingIcon
 } from '@mui/icons-material';
 import { getExpiringBatches, getExpiredBatches } from '../../services/inventoryService';
+import { useTheme } from '../../contexts/ThemeContext';
 
 // Styled components
 const StyledListItemButton = styled(ListItemButton)(({ theme }) => ({
@@ -100,6 +101,7 @@ const StyledBadge = styled(Badge)(({ theme }) => ({
 
 const Sidebar = ({ onToggle }) => {
   const location = useLocation();
+  const { mode } = useTheme();
   const [drawerWidth, setDrawerWidth] = useState(200);
   const [isDrawerOpen, setIsDrawerOpen] = useState(true);
   const [openSubmenu, setOpenSubmenu] = useState('');
@@ -177,7 +179,7 @@ const Sidebar = ({ onToggle }) => {
         { text: 'Faktury', icon: <InvoicesIcon />, path: '/invoices' },
         { text: 'Klienci', icon: <CustomersIcon />, path: '/customers' },
         { text: 'Nowe zadanie produkcyjne', icon: <AddIcon />, path: '/production/create-from-order' },
-        { text: 'Zamówienia', icon: <OrdersIcon />, path: '/orders' },
+        { text: 'Zamówienia klientów', icon: <OrdersIcon />, path: '/orders' },
       ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
     },
     { text: 'Magazyn', 
@@ -202,7 +204,7 @@ const Sidebar = ({ onToggle }) => {
       children: [
         { text: 'Kalendarz', icon: <CalendarIcon />, path: '/production/calendar' },
         { text: 'Receptury', icon: <RecipesIcon />, path: '/recipes' },
-        { text: 'Zadania MO', icon: <ListIcon />, path: '/production' },
+        { text: 'Lista zadań produkcyjnych', icon: <ListIcon />, path: '/production' },
         { text: 'Prognoza zapotrzebowania', icon: <ForecastIcon />, path: '/production/forecast' },
       ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
     }
@@ -211,98 +213,57 @@ const Sidebar = ({ onToggle }) => {
   return (
     <Drawer
       variant="permanent"
-      open={isDrawerOpen}
+      anchor="left"
+      open={true}
       sx={{
         width: drawerWidth,
         flexShrink: 0,
-        transition: 'width 0.3s ease',
         '& .MuiDrawer-paper': {
           width: drawerWidth,
           boxSizing: 'border-box',
-          backgroundColor: '#182136',
-          border: 'none',
-          backgroundImage: 'none',
-          boxShadow: '4px 0 8px rgba(0, 0, 0, 0.1)',
+          transition: 'width 225ms cubic-bezier(0.4, 0, 0.6, 1) 0ms',
           overflowX: 'hidden',
-          transition: 'width 0.3s ease',
+          backgroundColor: mode === 'dark' ? '#182136' : '#ffffff',
+          borderRight: '1px solid',
+          borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.08)',
         },
       }}
     >
-      <Box 
-        sx={{ 
-          p: 1.8, 
-          display: 'flex', 
-          alignItems: 'center',
+      <Box
+        sx={{
+          display: 'flex',
           justifyContent: 'space-between',
-          mb: 0.5
+          alignItems: 'center',
+          p: 1.5,
+          borderBottom: '1px solid',
+          borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.08)',
         }}
       >
         {isDrawerOpen && (
-          <>
-            <Avatar 
-              sx={{ 
-                width: 28, 
-                height: 28, 
-                bgcolor: 'primary.main',
-                backgroundImage: 'linear-gradient(135deg, #1976d2 30%, #42a5f5 90%)',
-                mr: 1.5,
-                boxShadow: '0 2px 6px rgba(0, 0, 0, 0.15)'
-              }}
-            >
-              M
-            </Avatar>
-            <Typography 
-              variant="h6" 
-              component="div" 
-              sx={{ 
-                flexGrow: 1,
-                fontWeight: 'bold',
-                fontSize: '1rem'
-              }}
-            >
-              Widgets
-            </Typography>
-          </>
+          <Typography
+            variant="subtitle1"
+            component="div"
+            sx={{
+              fontWeight: 'bold',
+              fontSize: '0.875rem',
+              color: mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)',
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              ml: 1,
+            }}
+          >
+            Menu
+          </Typography>
         )}
-        <IconButton onClick={toggleDrawer} size="small" sx={{ color: 'white' }}>
+        <IconButton 
+          onClick={toggleDrawer}
+          sx={{ p: 0.5, color: mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }}
+        >
           {isDrawerOpen ? <ChevronLeftIcon /> : <MenuIcon />}
         </IconButton>
       </Box>
 
-      <Divider sx={{ 
-        borderColor: 'rgba(255, 255, 255, 0.08)',
-        mb: 0.5 
-      }} />
-
-      <List 
-        component="nav" 
-        sx={{ 
-          p: 0.5,
-          overflowY: 'auto',
-          overflowX: 'hidden',
-          maxHeight: 'calc(100vh - 80px)',
-          scrollbarWidth: 'thin',
-          msOverflowStyle: 'none',
-          '&::-webkit-scrollbar': {
-            width: '6px',
-            display: 'block',
-          },
-          '&::-webkit-scrollbar-track': {
-            background: 'rgba(0, 0, 0, 0.1)',
-            borderRadius: '3px',
-          },
-          '&::-webkit-scrollbar-thumb': {
-            background: 'rgba(255, 255, 255, 0.15)',
-            borderRadius: '3px',
-          },
-          '&::-webkit-scrollbar-thumb:hover': {
-            background: 'rgba(255, 255, 255, 0.25)',
-          },
-          '&::-webkit-scrollbar:horizontal': {
-            display: 'none',
-          },
-        }}
-      >
+      <List sx={{ pt: 1 }}>
         {menuItems.map((item) => (
           item.children ? (
             <React.Fragment key={item.text}>

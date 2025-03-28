@@ -50,7 +50,8 @@ import { getAllTasks, updateTaskStatus, deleteTask, addTaskProductToInventory, s
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
-import { useTheme } from '@mui/material/styles';
+import { useTheme as useMuiTheme } from '@mui/material/styles';
+import { useTheme } from '../../contexts/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import { TIME_INTERVALS } from '../../utils/constants';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
@@ -66,7 +67,8 @@ const TaskList = () => {
   const [loading, setLoading] = useState(true);
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
-  const theme = useTheme();
+  const muiTheme = useMuiTheme();
+  const { mode } = useTheme();
   const navigate = useNavigate();
   const [stopProductionDialogOpen, setStopProductionDialogOpen] = useState(false);
   const [currentTaskId, setCurrentTaskId] = useState(null);
@@ -362,15 +364,6 @@ const TaskList = () => {
     <Container>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5">Zadania produkcyjne</Typography>
-        <Button 
-          variant="contained" 
-          color="primary" 
-          component={Link} 
-          to="/production/new-task"
-          startIcon={<AddIcon />}
-        >
-          Nowe zadanie
-        </Button>
       </Box>
 
       <Box sx={{ display: 'flex', mb: 3, gap: 2 }}>
@@ -435,10 +428,10 @@ const TaskList = () => {
                     {task.quantity} {task.unit}
                   </TableCell>
                   <TableCell>
-                    {task.scheduledDate ? formatDate(task.scheduledDate) : 'Nie określono'}
+                    {task.scheduledDate ? formatDate(task.scheduledDate, { timeStyle: undefined }) : 'Nie określono'}
                   </TableCell>
                   <TableCell>
-                    {task.endDate ? formatDate(task.endDate) : 'Nie określono'}
+                    {task.endDate ? formatDate(task.endDate, { timeStyle: undefined }) : 'Nie określono'}
                   </TableCell>
                   <TableCell>
                     <Chip 

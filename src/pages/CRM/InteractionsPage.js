@@ -36,7 +36,8 @@ import {
   Note as NoteIcon
 } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
-import { getAllInteractions, getContactById, deleteInteraction } from '../../services/crmService';
+import { getAllInteractions, deleteInteraction } from '../../services/crmService';
+import { getAllSuppliers } from '../../services/purchaseOrderService';
 import { useNotification } from '../../hooks/useNotification';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -49,7 +50,8 @@ const InteractionsPage = () => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
-  const [contactNames, setContactNames] = useState({});
+  const [supplierNames, setSupplierNames] = useState({});
+  const [suppliers, setSuppliers] = useState([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [interactionToDelete, setInteractionToDelete] = useState(null);
   
@@ -71,12 +73,12 @@ const InteractionsPage = () => {
             interaction.notes?.toLowerCase().includes(lowercasedSearch) ||
             interaction.type.toLowerCase().includes(lowercasedSearch) ||
             interaction.status.toLowerCase().includes(lowercasedSearch) ||
-            contactNames[interaction.contactId]?.toLowerCase().includes(lowercasedSearch)
+            supplierNames[interaction.contactId]?.toLowerCase().includes(lowercasedSearch)
           );
         })
       );
     }
-  }, [searchTerm, interactions, contactNames]);
+  }, [searchTerm, interactions, supplierNames]);
   
   const fetchInteractions = async () => {
     try {
@@ -84,26 +86,17 @@ const InteractionsPage = () => {
       const allInteractions = await getAllInteractions();
       setInteractions(allInteractions);
       
-      // Pobieramy nazwy kontaktów
-      const uniqueContactIds = [...new Set(allInteractions.map(i => i.contactId))];
-      const contactNamesObj = {};
+      // Pobieramy dane dostawców
+      const suppliersData = await getAllSuppliers();
+      setSuppliers(suppliersData);
       
-      await Promise.all(
-        uniqueContactIds.map(async (contactId) => {
-          try {
-            const contact = await getContactById(contactId);
-            if (contact) {
-              contactNamesObj[contactId] = `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || 
-                contact.company || 'Nieznany kontakt';
-            }
-          } catch (error) {
-            console.error(`Błąd podczas pobierania kontaktu ${contactId}:`, error);
-            contactNamesObj[contactId] = 'Nieznany kontakt';
-          }
-        })
-      );
+      // Tworzymy mapę nazw dostawców
+      const supplierNamesObj = {};
+      suppliersData.forEach(supplier => {
+        supplierNamesObj[supplier.id] = supplier.name || 'Nieznany dostawca';
+      });
       
-      setContactNames(contactNamesObj);
+      setSupplierNames(supplierNamesObj);
     } catch (error) {
       console.error('Błąd podczas pobierania interakcji:', error);
       showError('Nie udało się pobrać interakcji: ' + error.message);
@@ -215,7 +208,7 @@ const InteractionsPage = () => {
           color="primary" 
           startIcon={<AddIcon />}
           component={Link}
-          to="/crm/interactions/new"
+          to="/inventory/interactions/new"
         >
           Nowa interakcja
         </Button>
@@ -259,11 +252,14 @@ const InteractionsPage = () => {
             <TableHead>
               <TableRow>
                 <TableCell width="5%">Typ</TableCell>
-                <TableCell width="25%">Temat</TableCell>
-                <TableCell width="15%">Data</TableCell>
-                <TableCell width="20%">Kontakt</TableCell>
-                <TableCell width="15%">Status</TableCell>
-                <TableCell width="20%" align="right">Akcje</TableCell>
+                <TableCell width="15%">Temat</TableCell>
+                <TableCell width="10%">Data</TableCell>
+                <TableCell width="12%">Dostawca</TableCell>
+                <TableCell width="10%">Telefon</TableCell>
+                <TableCell width="15%">Email</TableCell>
+                <TableCell width="13%">Adres</TableCell>
+                <TableCell width="10%">Status</TableCell>
+                <TableCell width="10%" align="right">Akcje</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -280,7 +276,7 @@ const InteractionsPage = () => {
                     </TableCell>
                     <TableCell>
                       <Link 
-                        to={`/crm/interactions/${interaction.id}`}
+                        to={`/inventory/interactions/${interaction.id}`}
                         style={{ textDecoration: 'none', color: 'inherit', fontWeight: 'bold' }}
                       >
                         {interaction.subject}
@@ -303,11 +299,27 @@ const InteractionsPage = () => {
                     <TableCell>{formatDate(interaction.date)}</TableCell>
                     <TableCell>
                       <Link 
-                        to={`/crm/contacts/${interaction.contactId}`}
+                        to={`/suppliers/${interaction.contactId}`}
                         style={{ textDecoration: 'none', color: 'primary.main' }}
                       >
-                        {contactNames[interaction.contactId] || 'Nieznany kontakt'}
+                        {supplierNames[interaction.contactId] || 'Nieznany dostawca'}
                       </Link>
+                    </TableCell>
+                    <TableCell>
+                      {suppliers.find(s => s.id === interaction.contactId)?.phone || '-'}
+                    </TableCell>
+                    <TableCell>
+                      {suppliers.find(s => s.id === interaction.contactId)?.email || '-'}
+                    </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const supplier = suppliers.find(s => s.id === interaction.contactId);
+                        if (supplier?.addresses?.length > 0) {
+                          const mainAddress = supplier.addresses.find(a => a.isMain) || supplier.addresses[0];
+                          return mainAddress.city || '-';
+                        }
+                        return '-';
+                      })()}
                     </TableCell>
                     <TableCell>
                       <Chip 
@@ -318,12 +330,12 @@ const InteractionsPage = () => {
                       />
                     </TableCell>
                     <TableCell align="right">
-                      <Box>
+                      <Box display="flex" justifyContent="flex-end">
                         <Tooltip title="Edytuj">
                           <IconButton 
                             size="small"
                             component={Link}
-                            to={`/crm/interactions/${interaction.id}/edit`}
+                            to={`/inventory/interactions/${interaction.id}/edit`}
                           >
                             <EditIcon fontSize="small" />
                           </IconButton>
@@ -351,7 +363,7 @@ const InteractionsPage = () => {
                       variant="contained" 
                       startIcon={<AddIcon />}
                       component={Link}
-                      to="/crm/interactions/new"
+                      to="/inventory/interactions/new"
                       sx={{ mt: 2 }}
                     >
                       Dodaj pierwszą interakcję

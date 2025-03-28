@@ -1,5 +1,6 @@
 import React from 'react';
-import { useTheme } from '@mui/material/styles';
+import { useTheme as useMuiTheme } from '@mui/material/styles';
+import { useTheme } from '../../../contexts/ThemeContext';
 import { 
   Box, 
   Typography, 
@@ -41,7 +42,8 @@ const COLORS = ['#00C49F', '#FF8042', '#0088FE', '#FFBB28'];
  * @param {Object} props.sx Dodatkowe style
  */
 const QualityChart = ({ title, data, sx }) => {
-  const theme = useTheme();
+  const muiTheme = useMuiTheme();
+  const { mode } = useTheme();
   
   // Jeśli brak danych, wyświetl informację
   if (!data || data.length === 0) {
@@ -76,8 +78,8 @@ const QualityChart = ({ title, data, sx }) => {
     if (qualityRates.length === 0) {
       // Domyślne dane
       return [
-        { name: 'Pozytywne testy', value: 95, fill: theme.palette.success.main },
-        { name: 'Negatywne testy', value: 5, fill: theme.palette.error.main }
+        { name: 'Pozytywne testy', value: 95, fill: muiTheme.palette.success.main },
+        { name: 'Negatywne testy', value: 5, fill: muiTheme.palette.error.main }
       ];
     }
     
@@ -105,9 +107,9 @@ const QualityChart = ({ title, data, sx }) => {
   
   // Kolorowanie paska postępu
   const getProgressColor = (value) => {
-    if (value >= 90) return theme.palette.success.main;
-    if (value >= 70) return theme.palette.warning.main;
-    return theme.palette.error.main;
+    if (value >= 90) return muiTheme.palette.success.main;
+    if (value >= 70) return muiTheme.palette.warning.main;
+    return muiTheme.palette.error.main;
   };
   
   // Pozyskaj dane do różnych wykresów
@@ -149,7 +151,7 @@ const QualityChart = ({ title, data, sx }) => {
               sx={{ 
                 height: 8, 
                 borderRadius: 5,
-                backgroundColor: theme.palette.grey[200],
+                backgroundColor: muiTheme.palette.grey[200],
                 '& .MuiLinearProgress-bar': {
                   backgroundColor: getProgressColor(passRate)
                 }
@@ -185,8 +187,8 @@ const QualityChart = ({ title, data, sx }) => {
                     fill={entry.fill || (
                       entry.name.toLowerCase().includes('pozytywne') || 
                       entry.name.toLowerCase().includes('pass')
-                        ? theme.palette.success.main
-                        : theme.palette.error.main
+                        ? muiTheme.palette.success.main
+                        : muiTheme.palette.error.main
                     )} 
                   />
                 ))}

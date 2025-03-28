@@ -27,16 +27,7 @@ export const RECIPE_STATUSES = {
   };
   
   // Jednostki miary
-  export const UNITS_OF_MEASURE = {
-    PIECE: 'szt.',
-    GRAM: 'g',
-    KILOGRAM: 'kg',
-    MILLILITER: 'ml',
-    LITER: 'l',
-    PACKAGE: 'opak.',
-    TABLESPOON: 'łyżka',
-    TEASPOON: 'łyżeczka'
-  };
+  export const UNITS_OF_MEASURE = ['szt.', 'kg', 'caps'];
   
   // Kategorie testów jakościowych
   export const QUALITY_TEST_CATEGORIES = {
@@ -99,12 +90,12 @@ export const RECIPE_STATUSES = {
       name: '',
       description: '',
       instructions: '',
-      yield: { quantity: '', unit: UNITS_OF_MEASURE.PIECE },
+      yield: { quantity: '', unit: UNITS_OF_MEASURE[0] },
       prepTime: '',
       ingredients: [{
         name: '',
         quantity: '',
-        unit: UNITS_OF_MEASURE.GRAM
+        unit: UNITS_OF_MEASURE[1]
       }],
       allergens: [],
       notes: '',
@@ -118,7 +109,7 @@ export const RECIPE_STATUSES = {
       recipeId: '',
       productName: '',
       quantity: '',
-      unit: UNITS_OF_MEASURE.PIECE,
+      unit: UNITS_OF_MEASURE[0],
       scheduledDate: new Date(),
       estimatedDuration: '',
       priority: PRODUCTION_TASK_PRIORITIES.NORMAL,
@@ -132,7 +123,7 @@ export const RECIPE_STATUSES = {
       description: '',
       category: '',
       quantity: 0,
-      unit: UNITS_OF_MEASURE.PIECE,
+      unit: UNITS_OF_MEASURE[0],
       location: '',
       minStock: '',
       maxStock: '',

@@ -179,7 +179,12 @@ const InventoryItemForm = ({ itemId }) => {
               name="unit"
               value={itemData.unit || 'szt.'}
               onChange={handleChange}
-            />
+              select
+            >
+              <MenuItem value="szt.">szt.</MenuItem>
+              <MenuItem value="kg">kg</MenuItem>
+              <MenuItem value="caps">caps</MenuItem>
+            </TextField>
           </Grid>
           <Grid item xs={12} sm={6}>
             <TextField

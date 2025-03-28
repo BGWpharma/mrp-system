@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { useTheme } from './contexts/ThemeContext';
 
 // Pages
 import Login from './pages/Auth/Login';
@@ -156,7 +157,7 @@ function App() {
               
               {/* CMR Routes */}
               <Route path="/inventory/cmr" element={<PrivateLayout><CmrListPage /></PrivateLayout>} />
-              <Route path="/inventory/cmr/create" element={<PrivateLayout><CmrCreatePage /></PrivateLayout>} />
+              <Route path="/inventory/cmr/new" element={<PrivateLayout><CmrCreatePage /></PrivateLayout>} />
               <Route path="/inventory/cmr/:id" element={<PrivateLayout><CmrDetailsPage /></PrivateLayout>} />
               <Route path="/inventory/cmr/:id/edit" element={<PrivateLayout><CmrEditPage /></PrivateLayout>} />
               
@@ -188,6 +189,8 @@ function App() {
               <Route path="/suppliers" element={<PrivateLayout><SuppliersPage /></PrivateLayout>} />
               <Route path="/suppliers/new" element={<PrivateLayout><SupplierFormPage /></PrivateLayout>} />
               <Route path="/suppliers/:id/edit" element={<PrivateLayout><SupplierFormPage /></PrivateLayout>} />
+              <Route path="/suppliers/:id/view" element={<PrivateLayout><SupplierFormPage viewOnly={true} /></PrivateLayout>} />
+              <Route path="/suppliers/:id" element={<PrivateLayout><SupplierFormPage viewOnly={true} /></PrivateLayout>} />
               
               {/* Logistics Routes */}
               <Route path="/logistics/waybill" element={<PrivateLayout><WaybillListPage /></PrivateLayout>} />
@@ -217,6 +220,12 @@ function App() {
               <Route path="/crm/opportunities/:opportunityId" element={<PrivateLayout><OpportunityDetailsPage /></PrivateLayout>} />
               <Route path="/crm/opportunities/:opportunityId/edit" element={<PrivateLayout><OpportunityFormPage /></PrivateLayout>} />
               
+              {/* Interakcje zakupowe w sekcji Magazyn */}
+              <Route path="/inventory/interactions" element={<PrivateLayout><InteractionsPage /></PrivateLayout>} />
+              <Route path="/inventory/interactions/new" element={<PrivateLayout><InteractionFormPage /></PrivateLayout>} />
+              <Route path="/inventory/interactions/:interactionId" element={<PrivateLayout><InteractionDetailsPage /></PrivateLayout>} />
+              <Route path="/inventory/interactions/:interactionId/edit" element={<PrivateLayout><InteractionFormPage /></PrivateLayout>} />
+              
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>
@@ -229,6 +238,7 @@ function App() {
 // PrivateLayout component to wrap authenticated routes
 function PrivateLayout({ children }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const { mode } = useTheme();
 
   const handleSidebarToggle = (collapsed) => {
     setIsSidebarCollapsed(collapsed);
@@ -236,7 +246,10 @@ function PrivateLayout({ children }) {
 
   return (
     <PrivateRoute>
-      <div className="layout">
+      <div className="layout" style={{ 
+        backgroundColor: mode === 'dark' ? '#111827' : '#f5f5f5', 
+        color: mode === 'dark' ? 'white' : 'rgba(0, 0, 0, 0.87)'
+      }}>
         <Navbar />
         <div className="content-container">
           <Sidebar onToggle={handleSidebarToggle} />

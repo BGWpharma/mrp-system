@@ -354,7 +354,7 @@ const Dashboard = () => {
           <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
             <CardContent sx={{ textAlign: 'center', p: 3 }}>
               <OrdersIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
-              <Typography variant="h6">Zamówienia</Typography>
+              <Typography variant="h6">Zamówienia klientów</Typography>
               <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
                 {orderStats?.total || 0} zamówień ({formatCurrency(orderStats?.totalValue || 0)})
               </Typography>

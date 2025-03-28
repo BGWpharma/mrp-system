@@ -1,5 +1,6 @@
 import React from 'react';
-import { useTheme } from '@mui/material/styles';
+import { useTheme as useMuiTheme } from '@mui/material/styles';
+import { useTheme } from '../../../contexts/ThemeContext';
 import { 
   Box, 
   Typography, 
@@ -34,7 +35,8 @@ import { formatCurrency, formatPercent } from '../../../utils/formatUtils';
  * @param {Object} props.sx Dodatkowe style
  */
 const ProductionChart = ({ title, data, chartType = 'bar', sx }) => {
-  const theme = useTheme();
+  const muiTheme = useMuiTheme();
+  const { mode } = useTheme();
   
   // Jeśli brak danych, wyświetl informację
   if (!data || data.length === 0) {
@@ -125,15 +127,15 @@ const ProductionChart = ({ title, data, chartType = 'bar', sx }) => {
             <XAxis 
               dataKey="date" 
               tickFormatter={formatDate}
-              tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
-              axisLine={{ stroke: theme.palette.divider }}
-              tickLine={{ stroke: theme.palette.divider }}
+              tick={{ fill: muiTheme.palette.text.secondary, fontSize: 12 }}
+              axisLine={{ stroke: muiTheme.palette.divider }}
+              tickLine={{ stroke: muiTheme.palette.divider }}
             />
             <YAxis 
               tickFormatter={(value) => `${value}%`}
-              tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
-              axisLine={{ stroke: theme.palette.divider }}
-              tickLine={{ stroke: theme.palette.divider }}
+              tick={{ fill: muiTheme.palette.text.secondary, fontSize: 12 }}
+              axisLine={{ stroke: muiTheme.palette.divider }}
+              tickLine={{ stroke: muiTheme.palette.divider }}
             />
             <Tooltip 
               formatter={(value) => `${value}%`}
@@ -144,7 +146,7 @@ const ProductionChart = ({ title, data, chartType = 'bar', sx }) => {
             />
             <Bar 
               dataKey="efficiency" 
-              fill={theme.palette.primary.main} 
+              fill={muiTheme.palette.primary.main} 
               radius={[4, 4, 0, 0]} 
             />
           </BarChart>

@@ -236,18 +236,18 @@ const OrderDetails = () => {
             </Box>
             <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
               <EventNoteIcon sx={{ mr: 1 }} fontSize="small" />
-              Data zamówienia: {formatTimestamp(order.orderDate)}
+              Data zamówienia: {formatTimestamp(order.orderDate, true)}
             </Typography>
             {order.expectedDeliveryDate && (
               <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <ScheduleIcon sx={{ mr: 1 }} fontSize="small" />
-                Oczekiwana dostawa: {formatTimestamp(order.expectedDeliveryDate)}
+                Oczekiwana dostawa: {formatTimestamp(order.expectedDeliveryDate, true)}
               </Typography>
             )}
             {order.deliveryDate && (
               <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center' }}>
                 <LocalShippingIcon sx={{ mr: 1 }} fontSize="small" />
-                Dostarczone: {formatTimestamp(order.deliveryDate)}
+                Dostarczone: {formatTimestamp(order.deliveryDate, true)}
               </Typography>
             )}
           </Grid>
