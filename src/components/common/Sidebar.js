@@ -178,6 +178,7 @@ const Sidebar = ({ onToggle }) => {
       children: [
         { text: 'Faktury', icon: <InvoicesIcon />, path: '/invoices' },
         { text: 'Klienci', icon: <CustomersIcon />, path: '/customers' },
+        { text: 'Listy cenowe', icon: <ListAltIcon />, path: '/sales/price-lists' },
         { text: 'Nowe zadanie produkcyjne', icon: <AddIcon />, path: '/production/create-from-order' },
         { text: 'Zamówienia klientów', icon: <OrdersIcon />, path: '/orders' },
       ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))

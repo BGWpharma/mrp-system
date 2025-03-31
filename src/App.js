@@ -109,6 +109,11 @@ import OpportunitiesPage from './pages/CRM/OpportunitiesPage';
 import OpportunityFormPage from './pages/CRM/OpportunityFormPage';
 import OpportunityDetailsPage from './pages/CRM/OpportunityDetailsPage';
 
+// Price Lists - nowy moduł listy cenowej
+import PriceListsPage from './pages/Sales/PriceLists/PriceListsPage';
+import PriceListFormPage from './pages/Sales/PriceLists/PriceListFormPage';
+import PriceListDetailsPage from './pages/Sales/PriceLists/PriceListDetailsPage';
+
 function App() {
   return (
     <Router>
@@ -171,6 +176,12 @@ function App() {
               <Route path="/orders/new" element={<PrivateLayout><OrderForm /></PrivateLayout>} />
               <Route path="/orders/edit/:orderId" element={<PrivateLayout><EditOrderWrapper /></PrivateLayout>} />
               <Route path="/orders/:orderId" element={<PrivateLayout><OrderDetails /></PrivateLayout>} />
+              
+              {/* Price Lists Routes - nowy moduł */}
+              <Route path="/sales/price-lists" element={<PrivateLayout><PriceListsPage /></PrivateLayout>} />
+              <Route path="/sales/price-lists/new" element={<PrivateLayout><PriceListFormPage /></PrivateLayout>} />
+              <Route path="/sales/price-lists/:id" element={<PrivateLayout><PriceListDetailsPage /></PrivateLayout>} />
+              <Route path="/sales/price-lists/:id/edit" element={<PrivateLayout><PriceListFormPage /></PrivateLayout>} />
               
               {/* Invoices Routes */}
               <Route path="/invoices" element={<PrivateLayout><InvoicesListPage /></PrivateLayout>} />
