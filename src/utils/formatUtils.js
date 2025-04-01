@@ -1,10 +1,10 @@
 /**
- * Formatuje wartość liczbową jako walutę (PLN)
+ * Formatuje wartość liczbową jako walutę (EUR)
  * @param {number} value - wartość do sformatowania
- * @param {string} currency - symbol waluty (domyślnie PLN)
+ * @param {string} currency - symbol waluty (domyślnie EUR)
  * @returns {string} sformatowana wartość walutowa
  */
-export const formatCurrency = (value, currency = 'PLN') => {
+export const formatCurrency = (value, currency = 'EUR') => {
   const formatter = new Intl.NumberFormat('pl-PL', {
     style: 'currency',
     currency,

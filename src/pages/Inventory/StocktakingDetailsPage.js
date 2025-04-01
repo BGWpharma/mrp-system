@@ -604,11 +604,11 @@ const StocktakingDetailsPage = () => {
                         />
                       </TableCell>
                       <TableCell align="right">
-                        {item.unitPrice ? `${item.unitPrice.toFixed(2)} PLN` : '-'}
+                        {item.unitPrice ? `${item.unitPrice.toFixed(2)} EUR` : '-'}
                       </TableCell>
                       <TableCell align="right">
                         {item.unitPrice 
-                          ? `${((Number(countedQuantity) - item.systemQuantity) * item.unitPrice).toFixed(2)} PLN` 
+                          ? `${((Number(countedQuantity) - item.systemQuantity) * item.unitPrice).toFixed(2)} EUR` 
                           : '-'
                         }
                       </TableCell>
@@ -651,13 +651,13 @@ const StocktakingDetailsPage = () => {
                         />
                       </TableCell>
                       <TableCell align="right">
-                        {item.unitPrice ? `${item.unitPrice.toFixed(2)} PLN` : '-'}
+                        {item.unitPrice ? `${item.unitPrice.toFixed(2)} EUR` : '-'}
                       </TableCell>
                       <TableCell align="right">
                         {item.differenceValue !== undefined 
-                          ? `${item.differenceValue.toFixed(2)} PLN`
+                          ? `${item.differenceValue.toFixed(2)} EUR`
                           : item.unitPrice && item.discrepancy
-                            ? `${(item.discrepancy * item.unitPrice).toFixed(2)} PLN`
+                            ? `${(item.discrepancy * item.unitPrice).toFixed(2)} EUR`
                             : '-'
                         }
                       </TableCell>
@@ -758,7 +758,7 @@ const StocktakingDetailsPage = () => {
                             <Typography variant="body2" color="textSecondary">
                               Ilość: {batch.quantity} {selectedItem.unit} 
                               {batch.expiryDate && ` | Data ważności: ${new Date(batch.expiryDate).toLocaleDateString('pl-PL')}`}
-                              {batch.unitPrice > 0 && ` | Cena: ${batch.unitPrice.toFixed(2)} PLN`}
+                              {batch.unitPrice > 0 && ` | Cena: ${batch.unitPrice.toFixed(2)} EUR`}
                             </Typography>
                           </Grid>
                         </Grid>
@@ -772,7 +772,7 @@ const StocktakingDetailsPage = () => {
             {/* Wyświetl informację o cenie jednostkowej dla wybranej partii */}
             {isLotMode && selectedBatch && selectedBatch.unitPrice > 0 && (
               <Alert severity="info" sx={{ mt: 1, mb: 1 }}>
-                Cena jednostkowa partii: {selectedBatch.unitPrice.toFixed(2)} PLN
+                Cena jednostkowa partii: {selectedBatch.unitPrice.toFixed(2)} EUR
               </Alert>
             )}
             
@@ -794,7 +794,7 @@ const StocktakingDetailsPage = () => {
                 sx={{ mt: 1, mb: 1 }}
               >
                 Różnica: {Number(countedQuantity) - selectedBatch.quantity} {selectedItem?.unit}
-                {selectedBatch.unitPrice > 0 && ` | Wartość różnicy: ${((Number(countedQuantity) - selectedBatch.quantity) * selectedBatch.unitPrice).toFixed(2)} PLN`}
+                {selectedBatch.unitPrice > 0 && ` | Wartość różnicy: ${((Number(countedQuantity) - selectedBatch.quantity) * selectedBatch.unitPrice).toFixed(2)} EUR`}
               </Alert>
             )}
             

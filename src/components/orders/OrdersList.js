@@ -521,7 +521,11 @@ const OrdersList = () => {
                             </Typography>
                           </TableCell>
                           <TableCell>
-                            {order.orderDate ? formatDate(order.orderDate, false) : '-'}
+                            {order.orderDate ? (
+                              typeof order.orderDate === 'object' && typeof order.orderDate.toDate === 'function' 
+                                ? formatDate(order.orderDate.toDate(), false)
+                                : formatDate(order.orderDate, false)
+                            ) : '-'}
                           </TableCell>
                           <TableCell>{formatCurrency(order.totalValue || 0)}</TableCell>
                           <TableCell>

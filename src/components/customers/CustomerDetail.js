@@ -47,7 +47,7 @@ const formatDate = (dateValue) => {
   if (!dateValue) return '-';
   try {
     let date;
-    if (typeof dateValue === 'object' && dateValue.toDate) {
+    if (typeof dateValue === 'object' && typeof dateValue.toDate === 'function') {
       date = dateValue.toDate(); // Firestore Timestamp
     } else if (typeof dateValue === 'string') {
       date = new Date(dateValue);
@@ -57,27 +57,27 @@ const formatDate = (dateValue) => {
       return String(dateValue);
     }
     
+    // Sprawdź czy data jest prawidłowa
+    if (isNaN(date.getTime())) {
+      console.warn('Nieprawidłowy format daty w CustomerDetail:', dateValue);
+      return '-';
+    }
+    
     return format(date, 'dd.MM.yyyy', { locale: pl });
   } catch (error) {
-    console.error('Błąd formatowania daty:', error, dateValue);
-    return String(dateValue);
+    console.error('Błąd formatowania daty w CustomerDetail:', error, dateValue);
+    return '-';
   }
 };
 
 // Funkcja formatująca kwotę
-const formatCurrency = (amount, currency = 'PLN') => {
-  if (amount === undefined || amount === null) return '-';
-  
-  try {
-    // Upewnij się, że amount jest liczbą
-    const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
-    if (isNaN(numericAmount)) return '-';
-    
-    return `${Number(numericAmount).toFixed(2)} ${currency}`;
-  } catch (error) {
-    console.error('Błąd formatowania kwoty:', error, amount);
-    return String(amount);
-  }
+const formatCurrency = (amount, currency = 'EUR') => {
+  return new Intl.NumberFormat('pl-PL', { 
+    style: 'currency', 
+    currency: currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(amount || 0);
 };
 
 // Komponent CustomerDetail

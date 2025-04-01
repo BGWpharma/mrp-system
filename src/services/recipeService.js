@@ -29,6 +29,42 @@ import {
     }));
   };
   
+  // Pobieranie receptur dla konkretnego klienta
+  export const getRecipesByCustomer = async (customerId) => {
+    console.log('getRecipesByCustomer - customerId:', customerId);
+    
+    if (!customerId) {
+      // Jeśli nie podano ID klienta, zwróć wszystkie receptury
+      console.log('Brak ID klienta, zwracam wszystkie receptury');
+      return getAllRecipes();
+    }
+
+    console.log('Tworzę zapytanie dla klienta:', customerId);
+    const recipesRef = collection(db, RECIPES_COLLECTION);
+    const q = query(
+      recipesRef, 
+      where('customerId', '==', customerId),
+      orderBy('updatedAt', 'desc')
+    );
+    
+    try {
+      console.log('Wykonuję zapytanie do Firestore');
+      const querySnapshot = await getDocs(q);
+      console.log('Otrzymano dokumentów:', querySnapshot.docs.length);
+      
+      const results = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      console.log('Wyniki zapytania:', results.length);
+      return results;
+    } catch (error) {
+      console.error('Błąd podczas pobierania receptur dla klienta:', error);
+      throw error;
+    }
+  };
+  
   // Pobieranie receptury po ID
   export const getRecipeById = async (recipeId) => {
     const docRef = doc(db, RECIPES_COLLECTION, recipeId);
@@ -46,13 +82,10 @@ import {
   
   // Tworzenie nowej receptury
   export const createRecipe = async (recipeData, userId) => {
-    // Upewnij się, że wydajność jest zapisana jako liczba
+    // Upewnij się, że wydajność jest zawsze ustawiona na 1
     const processedRecipeData = {
       ...recipeData,
-      yield: recipeData.yield ? {
-        ...recipeData.yield,
-        quantity: parseFloat(recipeData.yield.quantity) || 0
-      } : { quantity: 1, unit: 'szt.' }
+      yield: { quantity: 1, unit: 'szt.' }
     };
     
     const recipeWithMeta = {
@@ -60,7 +93,8 @@ import {
       createdBy: userId,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      version: 1
+      version: 1,
+      customerId: recipeData.customerId || null
     };
     
     // Dodaj recepturę do głównej kolekcji
@@ -83,47 +117,58 @@ import {
   
   // Aktualizacja receptury (tworzy nową wersję)
   export const updateRecipe = async (recipeId, recipeData, userId) => {
-    // Upewnij się, że wydajność jest zapisana jako liczba
-    const processedRecipeData = {
-      ...recipeData,
-      yield: recipeData.yield ? {
-        ...recipeData.yield,
-        quantity: parseFloat(recipeData.yield.quantity) || 0
-      } : { quantity: 1, unit: 'szt.' }
-    };
-    
-    const recipeRef = doc(db, RECIPES_COLLECTION, recipeId);
-    
-    // Pobierz aktualną wersję
-    const currentRecipe = await getRecipeById(recipeId);
-    const newVersion = (currentRecipe.version || 0) + 1;
-    
-    const updatedRecipe = {
-      ...processedRecipeData,
-      updatedAt: serverTimestamp(),
-      updatedBy: userId,
-      version: newVersion
-    };
-    
-    // Aktualizuj główny dokument
-    await updateDoc(recipeRef, updatedRecipe);
-    
-    // Zapisz nową wersję w kolekcji wersji
-    await addDoc(collection(db, RECIPE_VERSIONS_COLLECTION), {
-      recipeId,
-      version: newVersion,
-      data: {
+    try {
+      // Pobierz aktualną wersję
+      const recipeRef = doc(db, RECIPES_COLLECTION, recipeId);
+      const recipeSnapshot = await getDoc(recipeRef);
+      
+      if (!recipeSnapshot.exists()) {
+        throw new Error('Receptura nie istnieje');
+      }
+      
+      const currentRecipe = {
+        id: recipeSnapshot.id,
+        ...recipeSnapshot.data()
+      };
+      
+      // Zwiększ numer wersji
+      const newVersion = (currentRecipe.version || 0) + 1;
+      
+      // Upewnij się, że wydajność jest zawsze ustawiona na 1
+      const processedRecipeData = {
+        ...recipeData,
+        yield: { quantity: 1, unit: 'szt.' }
+      };
+      
+      // Przygotuj dane do aktualizacji
+      const updateData = {
         ...processedRecipeData,
-        version: newVersion
-      },
-      createdBy: userId,
-      createdAt: serverTimestamp()
-    });
-    
-    return {
-      id: recipeId,
-      ...updatedRecipe
-    };
+        version: newVersion,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId,
+        customerId: recipeData.customerId !== undefined ? recipeData.customerId : (currentRecipe.customerId || null)
+      };
+      
+      // Aktualizuj dokument
+      await updateDoc(recipeRef, updateData);
+      
+      // Zapisz nową wersję w kolekcji wersji
+      await addDoc(collection(db, RECIPE_VERSIONS_COLLECTION), {
+        recipeId,
+        version: newVersion,
+        data: updateData,
+        createdBy: userId,
+        createdAt: serverTimestamp()
+      });
+      
+      return {
+        id: recipeId,
+        ...updateData
+      };
+    } catch (error) {
+      console.error('Error updating recipe:', error);
+      throw error;
+    }
   };
   
   // Pobieranie historii wersji receptury
@@ -242,11 +287,8 @@ import {
         throw new Error('Receptura nie istnieje');
       }
       
-      // Napraw wydajność
-      const fixedYield = recipe.yield ? {
-        ...recipe.yield,
-        quantity: parseFloat(recipe.yield.quantity) || 1
-      } : { quantity: 1, unit: 'szt.' };
+      // Napraw wydajność - zawsze ustaw na 1
+      const fixedYield = { quantity: 1, unit: 'szt.' };
       
       // Aktualizuj recepturę
       const recipeRef = doc(db, RECIPES_COLLECTION, recipeId);

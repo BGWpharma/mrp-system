@@ -106,11 +106,6 @@ const AddPriceListItemDialog = ({ open, onClose, priceListId, onItemAdded }) => 
       return;
     }
     
-    if (typeof formData.minQuantity !== 'number' || formData.minQuantity < 1) {
-      showNotification('Minimalna ilość musi być liczbą dodatnią', 'error');
-      return;
-    }
-    
     try {
       setLoading(true);
       const itemId = await addPriceListItem(priceListId, formData, currentUser.uid);
@@ -148,7 +143,7 @@ const AddPriceListItemDialog = ({ open, onClose, priceListId, onItemAdded }) => 
               />
             </Grid>
             
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
                 label="Cena"
@@ -161,7 +156,7 @@ const AddPriceListItemDialog = ({ open, onClose, priceListId, onItemAdded }) => 
               />
             </Grid>
             
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
                 label="Jednostka"
@@ -176,19 +171,6 @@ const AddPriceListItemDialog = ({ open, onClose, priceListId, onItemAdded }) => 
                   </MenuItem>
                 ))}
               </TextField>
-            </Grid>
-            
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                label="Minimalna ilość"
-                name="minQuantity"
-                type="number"
-                value={formData.minQuantity}
-                onChange={handleInputChange}
-                required
-                inputProps={{ min: 1, step: 1 }}
-              />
             </Grid>
             
             <Grid item xs={12}>

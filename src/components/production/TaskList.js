@@ -442,7 +442,7 @@ const TaskList = () => {
                   </TableCell>
                   <TableCell>
                     {task.costs ? (
-                      task.costs.totalCost.toLocaleString('pl-PL') + ' zł'
+                      task.costs.totalCost.toLocaleString('pl-PL') + ' EUR'
                     ) : (
                       '-'
                     )}

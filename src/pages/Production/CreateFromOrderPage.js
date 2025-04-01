@@ -234,6 +234,33 @@ const CreateFromOrderPage = () => {
   
   const handleTaskFormChange = (e) => {
     const { name, value } = e.target;
+    
+    // Specjalna obsługa dla pól daty
+    if (name === 'scheduledDate' || name === 'endDate') {
+      console.log(`Zmiana daty ${name}:`, value);
+      
+      // Sprawdź czy wartość jest niepusta
+      if (value) {
+        try {
+          // Konwersja do prawidłowego formatu ISO
+          const dateObj = new Date(value);
+          if (!isNaN(dateObj.getTime())) {
+            const formattedDate = dateObj.toISOString().split('T')[0];
+            console.log(`Sformatowana data ${name}:`, formattedDate);
+            
+            setTaskForm(prev => ({
+              ...prev,
+              [name]: formattedDate
+            }));
+            return;
+          }
+        } catch (error) {
+          console.error(`Błąd podczas formatowania daty ${name}:`, error);
+        }
+      }
+    }
+    
+    // Standardowa obsługa dla pozostałych pól
     setTaskForm(prev => ({
       ...prev,
       [name]: value
@@ -498,6 +525,14 @@ const CreateFromOrderPage = () => {
                           InputLabelProps={{
                             shrink: true,
                           }}
+                          sx={{ 
+                            backgroundColor: '#fff',
+                            '& .MuiOutlinedInput-root': {
+                              '&:hover fieldset': {
+                                borderColor: 'primary.main',
+                              },
+                            },
+                          }}
                         />
                       </Grid>
                       <Grid item xs={12} sm={6}>
@@ -511,6 +546,14 @@ const CreateFromOrderPage = () => {
                           margin="normal"
                           InputLabelProps={{
                             shrink: true,
+                          }}
+                          sx={{ 
+                            backgroundColor: '#fff',
+                            '& .MuiOutlinedInput-root': {
+                              '&:hover fieldset': {
+                                borderColor: 'primary.main',
+                              },
+                            },
                           }}
                         />
                       </Grid>

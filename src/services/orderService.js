@@ -114,9 +114,38 @@ export const createOrder = async (orderData, userId) => {
     // Wygeneruj numer CO
     const orderNumber = await generateCONumber();
     
+    // Oblicz łączną wartość zamówienia, jeśli nie została obliczona
+    let totalValue = orderData.totalValue;
+    if (!totalValue && orderData.items && orderData.items.length > 0) {
+      totalValue = orderData.items.reduce((sum, item) => {
+        return sum + (item.quantity * item.price || 0);
+      }, 0);
+      
+      // Dodaj koszt wysyłki, jeśli istnieje
+      if (orderData.shippingCost) {
+        totalValue += parseFloat(orderData.shippingCost) || 0;
+      }
+    }
+    
+    // Upewnij się, że data zamówienia jest poprawna
+    let orderDate = orderData.orderDate;
+    if (!orderDate) {
+      orderDate = new Date();
+    } else if (typeof orderDate === 'string') {
+      // Jeśli data jest stringiem, spróbuj sparsować
+      orderDate = new Date(orderDate);
+      // Jeśli parsowanie nie działa, użyj bieżącej daty
+      if (isNaN(orderDate.getTime())) {
+        console.warn('Nieprawidłowa data zamówienia. Używam bieżącej daty.');
+        orderDate = new Date();
+      }
+    }
+    
     const orderWithMeta = {
       ...orderData,
       orderNumber,
+      totalValue: totalValue || 0,
+      orderDate: orderDate,
       productionTasks: [], // Inicjalizacja pustej listy zadań produkcyjnych
       status: orderData.status || 'Nowe',
       createdBy: userId,

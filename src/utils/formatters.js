@@ -11,22 +11,49 @@ export const formatDate = (date, options = {}) => {
     if (!date) return '—';
     
     // Obsługa timestampu Firestore
-    if (date && typeof date === 'object' && 'toDate' in date) {
+    if (date && typeof date === 'object' && typeof date.toDate === 'function') {
       date = date.toDate();
     }
     
     try {
+      // Obsługa stringa
+      if (typeof date === 'string') {
+        // Sprawdź czy jest to format ISO
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(date) || 
+            /^\d{4}-\d{2}-\d{2}/.test(date)) {
+          date = new Date(date);
+        } else {
+          // Spróbuj wyodrębnić datę z potencjalnie nieprawidłowego formatu
+          const parts = date.split(/[./-]/);
+          if (parts.length >= 3) {
+            // Zakładamy format DD.MM.YYYY lub YYYY-MM-DD
+            const year = parts[2].length === 4 ? parts[2] : parts[0];
+            const month = parts[1] - 1; // Miesiące w JS są 0-based
+            const day = parts[2].length === 4 ? parts[0] : parts[2];
+            date = new Date(year, month, day);
+          } else {
+            date = new Date(date);
+          }
+        }
+      }
+      
       const dateObj = new Date(date);
+      
+      // Sprawdź czy data jest prawidłowa
+      if (isNaN(dateObj.getTime())) {
+        console.warn('Nieprawidłowy format daty:', date);
+        return String(date);
+      }
       
       const defaultOptions = {
         dateStyle: 'medium',
-        timeStyle: 'short',
         ...options
       };
       
+      // Użyj DateTimeFormat tylko jeśli data jest poprawna
       return new Intl.DateTimeFormat('pl-PL', defaultOptions).format(dateObj);
     } catch (error) {
-      console.error('Error formatting date:', error);
+      console.error('Error formatting date:', error, date);
       return String(date);
     }
   };
@@ -35,11 +62,21 @@ export const formatDate = (date, options = {}) => {
    * Formatuje liczbę jako walutę
    * 
    * @param {number} amount - Kwota do sformatowania
-   * @param {string} currency - Kod waluty (domyślnie PLN)
+   * @param {string} currency - Kod waluty (domyślnie EUR)
    * @returns {string} Sformatowana kwota
    */
-  export const formatCurrency = (amount, currency = 'PLN') => {
+  export const formatCurrency = (amount, currency = 'EUR') => {
     if (amount === undefined || amount === null) return '—';
+    
+    // Upewnij się, że amount jest liczbą
+    if (typeof amount === 'string') {
+      amount = parseFloat(amount);
+    }
+    
+    if (isNaN(amount)) {
+      console.warn('Nieprawidłowa wartość kwoty:', amount);
+      return '—';
+    }
     
     try {
       return new Intl.NumberFormat('pl-PL', {

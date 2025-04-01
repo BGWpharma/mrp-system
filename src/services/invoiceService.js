@@ -213,7 +213,7 @@ export const createInvoiceFromOrder = async (orderId, invoiceData, userId) => {
       shippingAddress: orderData.shippingAddress || orderData.customer.address,
       billingAddress: orderData.customer.billingAddress || orderData.customer.address,
       total: orderData.total || calculateInvoiceTotal(orderData.items),
-      currency: 'PLN',
+      currency: 'EUR',
       status: 'draft',
       paymentMethod: orderData.paymentMethod || 'Przelew',
       paymentStatus: 'unpaid',
@@ -434,5 +434,5 @@ export const DEFAULT_INVOICE = {
   vatRate: 23,
   total: 0,
   totalVat: 0,
-  currency: 'PLN'
+  currency: 'EUR'
 }; 

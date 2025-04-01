@@ -506,12 +506,12 @@ const InvoiceForm = ({ invoiceId }) => {
                   <InputLabel>Waluta</InputLabel>
                   <Select
                     name="currency"
-                    value={invoice.currency || 'PLN'}
+                    value={invoice.currency || 'EUR'}
                     onChange={handleChange}
                     label="Waluta"
                   >
-                    <MenuItem value="PLN">PLN - Polski złoty</MenuItem>
                     <MenuItem value="EUR">EUR - Euro</MenuItem>
+                    <MenuItem value="PLN">PLN - Polski złoty</MenuItem>
                     <MenuItem value="USD">USD - Dolar amerykański</MenuItem>
                     <MenuItem value="GBP">GBP - Funt brytyjski</MenuItem>
                     <MenuItem value="CHF">CHF - Frank szwajcarski</MenuItem>

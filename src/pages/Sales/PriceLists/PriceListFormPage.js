@@ -69,7 +69,15 @@ const PriceListFormPage = () => {
     try {
       setInitialLoading(true);
       const priceList = await getPriceListById(id);
-      setFormData(priceList);
+      
+      // Konwertuj daty z Timestamp na Date
+      const formattedPriceList = {
+        ...priceList,
+        validFrom: priceList.validFrom ? priceList.validFrom.toDate() : null,
+        validTo: priceList.validTo ? priceList.validTo.toDate() : null
+      };
+      
+      setFormData(formattedPriceList);
       
       // Znajdź wybranego klienta
       const customer = customers.find(c => c.id === priceList.customerId);
@@ -219,6 +227,12 @@ const PriceListFormPage = () => {
                     value={formData.validFrom}
                     onChange={(date) => handleDateChange('validFrom', date)}
                     renderInput={(params) => <TextField {...params} fullWidth />}
+                    slotProps={{
+                      textField: {
+                        fullWidth: true,
+                        variant: 'outlined'
+                      }
+                    }}
                   />
                 </LocalizationProvider>
               </Grid>
@@ -230,6 +244,12 @@ const PriceListFormPage = () => {
                     value={formData.validTo}
                     onChange={(date) => handleDateChange('validTo', date)}
                     renderInput={(params) => <TextField {...params} fullWidth />}
+                    slotProps={{
+                      textField: {
+                        fullWidth: true,
+                        variant: 'outlined'
+                      }
+                    }}
                   />
                 </LocalizationProvider>
               </Grid>

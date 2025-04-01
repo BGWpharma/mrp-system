@@ -272,7 +272,7 @@ export const DEFAULT_PRICE_LIST = {
   description: '',
   validFrom: null,
   validTo: null,
-  currency: 'PLN',
+  currency: 'EUR',
   isActive: true
 };
 
@@ -284,6 +284,68 @@ export const DEFAULT_PRICE_LIST_ITEM = {
   productName: '',
   price: 0,
   unit: 'szt.',
-  minQuantity: 1,
   notes: ''
+};
+
+/**
+ * Pobiera cenę produktu dla klienta na podstawie jego aktywnych list cenowych
+ * @param {string} customerId - ID klienta
+ * @param {string} productId - ID produktu
+ * @returns {Promise<number|null>} - Cena produktu lub null jeśli nie znaleziono
+ */
+export const getPriceForCustomerProduct = async (customerId, productId) => {
+  try {
+    // Pobierz aktywne listy cenowe klienta
+    const priceListsQuery = query(
+      collection(db, PRICE_LISTS_COLLECTION),
+      where('customerId', '==', customerId),
+      where('isActive', '==', true)
+    );
+    
+    const querySnapshot = await getDocs(priceListsQuery);
+    
+    if (querySnapshot.empty) {
+      return null; // Brak aktywnych list cenowych
+    }
+    
+    const priceListIds = [];
+    querySnapshot.forEach((doc) => {
+      priceListIds.push(doc.id);
+    });
+    
+    // Pobierz ceny produktu z aktywnych list cenowych
+    const priceItemsQuery = query(
+      collection(db, PRICE_LIST_ITEMS_COLLECTION),
+      where('priceListId', 'in', priceListIds),
+      where('productId', '==', productId)
+    );
+    
+    const priceItemsSnapshot = await getDocs(priceItemsQuery);
+    
+    if (priceItemsSnapshot.empty) {
+      return null; // Brak cen dla tego produktu
+    }
+    
+    // Jeśli jest więcej niż jedna cena, wybierz najnowszą
+    let latestPriceItem = null;
+    let latestTimestamp = null;
+    
+    priceItemsSnapshot.forEach((doc) => {
+      const data = doc.data();
+      const createdAt = data.createdAt?.toDate?.() || null;
+      
+      if (!latestTimestamp || (createdAt && createdAt > latestTimestamp)) {
+        latestPriceItem = {
+          id: doc.id,
+          ...data
+        };
+        latestTimestamp = createdAt;
+      }
+    });
+    
+    return latestPriceItem ? latestPriceItem.price : null;
+  } catch (error) {
+    console.error('Błąd podczas pobierania ceny produktu dla klienta:', error);
+    return null;
+  }
 }; 

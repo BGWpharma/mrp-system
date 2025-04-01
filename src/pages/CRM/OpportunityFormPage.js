@@ -307,7 +307,7 @@ const OpportunityFormPage = () => {
             
             <Grid item xs={12} md={6}>
               <TextField
-                label="Wartość (PLN)"
+                label="Wartość (EUR)"
                 name="amount"
                 type="number"
                 value={formData.amount}
@@ -315,7 +315,7 @@ const OpportunityFormPage = () => {
                 fullWidth
                 variant="outlined"
                 InputProps={{
-                  startAdornment: <InputAdornment position="start">PLN</InputAdornment>,
+                  startAdornment: <InputAdornment position="start">EUR</InputAdornment>,
                 }}
                 error={!!errors.amount}
                 helperText={errors.amount}

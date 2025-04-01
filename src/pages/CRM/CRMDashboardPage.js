@@ -181,7 +181,7 @@ const CRMDashboardPage = () => {
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('pl-PL', { 
       style: 'currency', 
-      currency: 'PLN',
+      currency: 'EUR',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
     }).format(value);

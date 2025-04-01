@@ -200,14 +200,14 @@ const BatchEditForm = () => {
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Cena jednostkowa (zł)"
+                label="Cena jednostkowa (EUR)"
                 name="unitPrice"
                 type="number"
                 value={batchData.unitPrice}
                 onChange={handleChange}
                 margin="normal"
                 InputProps={{
-                  startAdornment: <InputAdornment position="start">zł</InputAdornment>,
+                  startAdornment: <InputAdornment position="start">EUR</InputAdornment>,
                   inputProps: { min: 0, step: 0.01 }
                 }}
               />

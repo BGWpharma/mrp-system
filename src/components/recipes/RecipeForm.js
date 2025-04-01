@@ -50,8 +50,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
-
-const DEFAULT_INGREDIENT = { name: '', quantity: '', unit: 'g', allergens: [] };
+import { getAllCustomers } from '../../services/customerService';
 
 const RecipeForm = ({ recipeId }) => {
   const { currentUser } = useAuth();
@@ -64,12 +63,13 @@ const RecipeForm = ({ recipeId }) => {
   const [recipeData, setRecipeData] = useState({
     name: '',
     description: '',
-    yield: { quantity: '', unit: 'szt.' },
+    yield: { quantity: 1, unit: 'szt.' },
     prepTime: '',
-    ingredients: [{ ...DEFAULT_INGREDIENT }],
+    ingredients: [],
     allergens: [],
     notes: '',
-    status: 'Robocza'
+    status: 'Robocza',
+    customerId: ''
   });
 
   // Dodajemy stan dla kalkulacji kosztów
@@ -96,6 +96,10 @@ const RecipeForm = ({ recipeId }) => {
     quantity: 0,
     recipeId: ''
   });
+
+  // Dodajemy stan dla listy klientów
+  const [customers, setCustomers] = useState([]);
+  const [loadingCustomers, setLoadingCustomers] = useState(false);
 
   useEffect(() => {
     if (recipeId) {
@@ -159,9 +163,24 @@ const RecipeForm = ({ recipeId }) => {
         console.error('Błąd podczas pobierania magazynów:', error);
       }
     };
+
+    // Pobierz listę klientów
+    const fetchCustomers = async () => {
+      try {
+        setLoadingCustomers(true);
+        const customersData = await getAllCustomers();
+        setCustomers(customersData);
+      } catch (error) {
+        console.error('Błąd podczas pobierania klientów:', error);
+        showError('Nie udało się pobrać listy klientów');
+      } finally {
+        setLoadingCustomers(false);
+      }
+    };
     
     fetchInventoryItems();
     fetchWarehouses();
+    fetchCustomers();
   }, [recipeId, showError, location.state]);
 
   const handleSubmit = async (e) => {
@@ -192,13 +211,25 @@ const RecipeForm = ({ recipeId }) => {
 
   const handleYieldChange = (e) => {
     const { name, value } = e.target;
-    setRecipeData(prev => ({
-      ...prev,
-      yield: {
-        ...prev.yield,
-        [name]: name === 'quantity' ? parseFloat(value) || '' : value
-      }
-    }));
+    
+    // Zawsze ustawiamy quantity na 1, niezależnie od wprowadzonej wartości
+    if (name === 'quantity') {
+      setRecipeData(prev => ({
+        ...prev,
+        yield: {
+          ...prev.yield,
+          quantity: 1
+        }
+      }));
+    } else {
+      setRecipeData(prev => ({
+        ...prev,
+        yield: {
+          ...prev.yield,
+          [name]: value
+        }
+      }));
+    }
   };
 
   const handleIngredientChange = (index, field, value) => {
@@ -217,7 +248,7 @@ const RecipeForm = ({ recipeId }) => {
   const addIngredient = () => {
     setRecipeData(prev => ({
       ...prev,
-      ingredients: [...prev.ingredients, { ...DEFAULT_INGREDIENT }]
+      ingredients: [...prev.ingredients, { name: '', quantity: '', unit: 'g', allergens: [] }]
     }));
   };
 
@@ -610,17 +641,44 @@ const RecipeForm = ({ recipeId }) => {
       </Box>
 
       <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" gutterBottom>Dane podstawowe</Typography>
         <Grid container spacing={3}>
-          <Grid item xs={12}>
+          <Grid item xs={12} sm={6}>
             <TextField
+              fullWidth
               required
-              label="Nazwa receptury"
               name="name"
+              label="Nazwa receptury"
               value={recipeData.name}
               onChange={handleChange}
-              fullWidth
+              error={!recipeData.name}
+              helperText={!recipeData.name ? 'Nazwa jest wymagana' : ''}
             />
           </Grid>
+          
+          <Grid item xs={12} sm={6}>
+            <FormControl fullWidth>
+              <InputLabel id="customer-select-label">Klient (opcjonalnie)</InputLabel>
+              <Select
+                labelId="customer-select-label"
+                name="customerId"
+                value={recipeData.customerId}
+                onChange={handleChange}
+                label="Klient (opcjonalnie)"
+                displayEmpty
+              >
+                <MenuItem value="">
+                  <em>Brak - receptura ogólna</em>
+                </MenuItem>
+                {customers.map((customer) => (
+                  <MenuItem key={customer.id} value={customer.id}>
+                    {customer.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          
           <Grid item xs={12}>
             <TextField
               label="Opis"
@@ -632,7 +690,7 @@ const RecipeForm = ({ recipeId }) => {
               rows={2}
             />
           </Grid>
-          <Grid item xs={6}>
+          <Grid item xs={12}>
             <TextField
               label="Czas przygotowania (min)"
               name="prepTime"
@@ -642,35 +700,21 @@ const RecipeForm = ({ recipeId }) => {
               fullWidth
             />
           </Grid>
-          <Grid item xs={3}>
-            <TextField
-              required
-              label="Wydajność"
-              name="quantity"
-              type="number"
-              value={recipeData.yield.quantity}
-              onChange={handleYieldChange}
-              fullWidth
-              inputProps={{ min: 0 }}
-            />
-          </Grid>
-          <Grid item xs={3}>
-            <FormControl fullWidth>
-              <InputLabel>Jednostka</InputLabel>
-              <Select
-                name="unit"
-                value={recipeData.yield.unit}
-                onChange={handleYieldChange}
-                label="Jednostka"
-              >
-                <MenuItem value="szt.">szt.</MenuItem>
-                <MenuItem value="kg">kg</MenuItem>
-                <MenuItem value="caps">caps</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
+          
+          {/* Ukrywamy pola wydajności, dodajemy ukryte pole input */}
+          <input 
+            type="hidden" 
+            name="yield.quantity" 
+            value="1" 
+          />
+          <input 
+            type="hidden" 
+            name="yield.unit" 
+            value="szt." 
+          />
+          
           {recipeId && (
-            <Grid item xs={6}>
+            <Grid item xs={12}>
               <Button 
                 variant="outlined" 
                 color="secondary" 
@@ -737,7 +781,6 @@ const RecipeForm = ({ recipeId }) => {
           </Button>
         </Typography>
         
-        {/* Dodajemy wybór składników z magazynu */}
         <Box sx={{ mb: 2 }}>
           <Autocomplete
             options={inventoryItems}
@@ -803,7 +846,7 @@ const RecipeForm = ({ recipeId }) => {
                         variant="standard"
                         value={ingredient.name}
                         onChange={(e) => handleIngredientChange(index, 'name', e.target.value)}
-                        disabled={!!ingredient.id} // Blokujemy edycję nazwy dla składników z magazynu
+                        disabled={!!ingredient.id}
                       />
                     </TableCell>
                     <TableCell>
@@ -821,7 +864,7 @@ const RecipeForm = ({ recipeId }) => {
                         variant="standard"
                         value={ingredient.unit}
                         onChange={(e) => handleIngredientChange(index, 'unit', e.target.value)}
-                        disabled={!!ingredient.id} // Blokujemy edycję jednostki dla składników z magazynu
+                        disabled={!!ingredient.id}
                       />
                     </TableCell>
                     <TableCell>
@@ -886,7 +929,6 @@ const RecipeForm = ({ recipeId }) => {
         />
       </Paper>
 
-      {/* Sekcja kalkulacji kosztów */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="subtitle1">Kalkulacja kosztów</Typography>
@@ -991,7 +1033,6 @@ const RecipeForm = ({ recipeId }) => {
         )}
       </Paper>
 
-      {/* Dialog dodawania produktu do magazynu */}
       <Dialog 
         open={createProductDialogOpen} 
         onClose={() => setCreateProductDialogOpen(false)}
@@ -1120,7 +1161,7 @@ const RecipeForm = ({ recipeId }) => {
               <Grid item xs={12}>
                 <Box sx={{ p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
                   <Typography variant="body2" color="info.contrastText">
-                    Koszt produkcji jednej sztuki: {costCalculation.unitCost.toFixed(2)} zł
+                    Koszt produkcji jednej sztuki: {costCalculation.unitCost.toFixed(2)} EUR
                   </Typography>
                 </Box>
               </Grid>

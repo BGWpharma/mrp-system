@@ -441,7 +441,7 @@ const BatchesPage = () => {
                           {batch.quantity} {item.unit}
                         </TableCell>
                         <TableCell>
-                          {batch.unitPrice ? `${batch.unitPrice.toFixed(2)} zł` : '-'}
+                          {batch.unitPrice ? `${batch.unitPrice.toFixed(2)} EUR` : '-'}
                         </TableCell>
                         <TableCell>
                           <Chip 

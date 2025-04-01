@@ -44,7 +44,7 @@ const PurchaseOrderForm = ({ orderId }) => {
     items: [],
     totalValue: 0,
     totalGross: 0,
-    currency: 'PLN',
+    currency: 'EUR',
     vatRate: 23, // Domyślna stawka VAT 23%
     targetWarehouseId: '', // Nowe pole dla magazynu docelowego
     orderDate: formatDateForInput(new Date()),
@@ -354,8 +354,8 @@ const PurchaseOrderForm = ({ orderId }) => {
                   onChange={handleChange}
                   label="Waluta"
                 >
-                  <MenuItem value="PLN">PLN</MenuItem>
                   <MenuItem value="EUR">EUR</MenuItem>
+                  <MenuItem value="PLN">PLN</MenuItem>
                   <MenuItem value="USD">USD</MenuItem>
                 </Select>
               </FormControl>

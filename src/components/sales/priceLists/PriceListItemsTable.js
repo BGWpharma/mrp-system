@@ -130,7 +130,6 @@ const PriceListItemsTable = ({ priceListId, readOnly = false }) => {
                 <TableCell>Nazwa produktu</TableCell>
                 <TableCell>Cena</TableCell>
                 <TableCell>Jednostka</TableCell>
-                <TableCell>Min. ilość</TableCell>
                 <TableCell>Uwagi</TableCell>
                 {!readOnly && <TableCell align="right">Akcje</TableCell>}
               </TableRow>
@@ -140,9 +139,8 @@ const PriceListItemsTable = ({ priceListId, readOnly = false }) => {
                 items.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell>{item.productName}</TableCell>
-                    <TableCell>{item.price.toFixed(2)} {item.currency || 'PLN'}</TableCell>
+                    <TableCell>{item.price.toFixed(2)} {item.currency || 'EUR'}</TableCell>
                     <TableCell>{item.unit}</TableCell>
-                    <TableCell>{item.minQuantity}</TableCell>
                     <TableCell>{item.notes || '-'}</TableCell>
                     {!readOnly && (
                       <TableCell align="right">
@@ -169,7 +167,7 @@ const PriceListItemsTable = ({ priceListId, readOnly = false }) => {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={readOnly ? 5 : 6} align="center">
+                  <TableCell colSpan={readOnly ? 4 : 5} align="center">
                     Brak produktów w tej liście cenowej.
                     {!readOnly && ' Kliknij "Dodaj produkt", aby dodać pierwszy element.'}
                   </TableCell>

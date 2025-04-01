@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -27,7 +27,9 @@ import {
   DialogContent,
   DialogActions,
   DialogContentText,
-  Autocomplete
+  Autocomplete,
+  Container,
+  Chip
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -39,8 +41,13 @@ import {
   EventNote as EventNoteIcon,
   Calculate as CalculateIcon,
   Upload as UploadIcon,
-  DownloadRounded as DownloadIcon
+  DownloadRounded as DownloadIcon,
+  Cancel as CancelIcon,
+  Info as InfoIcon
 } from '@mui/icons-material';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
+import { pl } from 'date-fns/locale';
 import { 
   createOrder, 
   updateOrder, 
@@ -50,24 +57,41 @@ import {
   DEFAULT_ORDER 
 } from '../../services/orderService';
 import { getAllInventoryItems, getIngredientPrices } from '../../services/inventoryService';
-import { getAllCustomers } from '../../services/customerService';
+import { getAllCustomers, createCustomer } from '../../services/customerService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatCurrency } from '../../utils/formatUtils';
 import { formatDateForInput } from '../../utils/dateUtils';
-import { createCustomer } from '../../services/customerService';
 import { storage } from '../../services/firebase/config';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import CustomerForm from '../customers/CustomerForm';
+import { getPriceForCustomerProduct } from '../../services/priceListService';
+
+const DEFAULT_ITEM = {
+  id: '',
+  name: '',
+  quantity: 1,
+  unit: 'szt.',
+  price: 0,
+  margin: 0,
+  basePrice: 0,
+  fromPriceList: false
+};
 
 const OrderForm = ({ orderId }) => {
   const [loading, setLoading] = useState(!!orderId);
   const [saving, setSaving] = useState(false);
-  const [orderData, setOrderData] = useState({...DEFAULT_ORDER});
+  const [orderData, setOrderData] = useState({
+    ...DEFAULT_ORDER,
+    items: [{ ...DEFAULT_ITEM }]
+  });
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
   const [validationErrors, setValidationErrors] = useState({});
   const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const { id } = useParams();
+  const currentOrderId = id || orderId;
 
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -77,6 +101,7 @@ const OrderForm = ({ orderId }) => {
   // Dodajemy stan dla kalkulacji kosztów
   const [costCalculation, setCostCalculation] = useState(null);
   const [calculatingCosts, setCalculatingCosts] = useState(false);
+  const [loadingPrices, setLoadingPrices] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -206,32 +231,131 @@ const OrderForm = ({ orderId }) => {
     }
   };
 
-  const handleCustomerChange = (e, selectedCustomer) => {
-    if (selectedCustomer) {
+  const handleCustomerChange = async (event, newCustomer) => {
+    if (newCustomer) {
       setOrderData(prev => ({
         ...prev,
         customer: {
-          id: selectedCustomer.id,
-          name: selectedCustomer.name,
-          email: selectedCustomer.email || '',
-          phone: selectedCustomer.phone || '',
-          address: selectedCustomer.address || '',
-          shippingAddress: selectedCustomer.shippingAddress || ''
-        }
+          id: newCustomer.id,
+          name: newCustomer.name,
+          email: newCustomer.email || '',
+          phone: newCustomer.phone || '',
+          address: newCustomer.address || '',
+          shippingAddress: newCustomer.shippingAddress || newCustomer.address || ''
+        },
+        shippingAddress: newCustomer.shippingAddress || newCustomer.address || ''
       }));
       
-      // Wyczyść błąd walidacji
-      if (validationErrors.customerName) {
-        const updatedErrors = { ...validationErrors };
-        delete updatedErrors.customerName;
-        setValidationErrors(updatedErrors);
+      // Jeśli mamy produkty w zamówieniu, próbujemy pobrać ich ceny z listy cenowej klienta
+      if (orderData.items.length > 0 && newCustomer.id) {
+        await fetchPricesFromPriceList(newCustomer.id);
       }
     } else {
-      // Jeśli użytkownik wyczyścił pole, ustaw puste dane klienta
       setOrderData(prev => ({
         ...prev,
-        customer: { ...DEFAULT_ORDER.customer }
+        customer: { ...DEFAULT_ORDER.customer },
+        shippingAddress: ''
       }));
+    }
+  };
+  
+  // Funkcja pobierająca ceny z listy cenowej klienta
+  const fetchPricesFromPriceList = async (customerId) => {
+    if (!customerId) return;
+    
+    try {
+      setLoadingPrices(true);
+      
+      // Nie aktualizuj produktów, które nie mają ID produktu
+      const updatedItems = [...orderData.items].map(item => {
+        if (!item.id) return item;
+        
+        // Utworzenie kopii elementu, aby nie modyfikować bezpośrednio
+        return { ...item };
+      });
+      
+      // Równolegle pobierz ceny dla wszystkich produktów
+      const pricePromises = updatedItems
+        .filter(item => item.id) // Filtruj tylko elementy z ID produktu
+        .map(async (item) => {
+          const priceFromList = await getPriceForCustomerProduct(customerId, item.id);
+          return { itemId: item.id, price: priceFromList };
+        });
+      
+      const prices = await Promise.all(pricePromises);
+      
+      // Aktualizuj ceny tylko dla produktów, które znaleziono w liście cenowej
+      updatedItems.forEach(item => {
+        if (!item.id) return;
+        
+        const priceData = prices.find(p => p.itemId === item.id);
+        if (priceData && priceData.price !== null) {
+          item.basePrice = priceData.price;
+          item.price = priceData.price * (1 + (item.margin || 0) / 100);
+          item.fromPriceList = true;
+        } else {
+          item.fromPriceList = false;
+        }
+      });
+      
+      setOrderData(prev => ({
+        ...prev,
+        items: updatedItems
+      }));
+      
+      // Pokaż informację, jeśli znaleziono ceny
+      const foundPrices = updatedItems.filter(item => item.fromPriceList).length;
+      if (foundPrices > 0) {
+        showSuccess(`Pobrano ceny z listy cenowej klienta dla ${foundPrices} produktów`);
+      }
+      
+    } catch (error) {
+      console.error('Błąd podczas pobierania cen z listy cenowej:', error);
+      // Opcjonalnie: setError('Nie udało się pobrać cen z listy cenowej');
+    } finally {
+      setLoadingPrices(false);
+    }
+  };
+
+  const handleProductSelect = async (index, selectedProduct) => {
+    if (selectedProduct) {
+      const updatedItems = [...orderData.items];
+      
+      // Podstawowa cena produktu
+      let basePrice = selectedProduct.price || 0;
+      let finalPrice = basePrice;
+      let fromPriceList = false;
+      
+      // Jeśli mamy ID klienta, spróbuj pobrać cenę z listy cenowej
+      if (orderData.customer && orderData.customer.id) {
+        const priceFromList = await getPriceForCustomerProduct(orderData.customer.id, selectedProduct.id);
+        if (priceFromList !== null) {
+          basePrice = priceFromList;
+          finalPrice = basePrice * (1 + (updatedItems[index].margin || 0) / 100);
+          fromPriceList = true;
+        }
+      }
+      
+      updatedItems[index] = {
+        ...updatedItems[index],
+        id: selectedProduct.id,
+        name: selectedProduct.name,
+        basePrice: basePrice,
+        price: finalPrice,
+        unit: selectedProduct.unit || 'szt.',
+        fromPriceList: fromPriceList
+      };
+      
+      setOrderData(prev => ({
+        ...prev,
+        items: updatedItems
+      }));
+      
+      // Wyczyść błędy walidacji dla tego produktu
+      const updatedErrors = { ...validationErrors };
+      delete updatedErrors[`item_${index}_name`];
+      delete updatedErrors[`item_${index}_price`];
+      setValidationErrors(updatedErrors);
     }
   };
 
@@ -300,10 +424,45 @@ const OrderForm = ({ orderId }) => {
 
   const handleItemChange = (index, field, value) => {
     const updatedItems = [...orderData.items];
-    updatedItems[index] = {
-      ...updatedItems[index],
-      [field]: value
-    };
+    
+    // Jeśli zmieniamy cenę bazową, oznacza to że użytkownik ręcznie ją edytuje,
+    // więc produkt nie pochodzi z listy cenowej
+    if (field === 'basePrice') {
+      updatedItems[index] = {
+        ...updatedItems[index],
+        [field]: value,
+        fromPriceList: false // Użytkownik zmienił cenę ręcznie, więc nie pochodzi z listy cenowej
+      };
+      
+      // Jeśli jest ustawiona marża, to przeliczamy cenę końcową
+      if (updatedItems[index].margin) {
+        updatedItems[index].price = value * (1 + updatedItems[index].margin / 100);
+      } else {
+        // Jeśli nie ma marży, cena końcowa = cena bazowa
+        updatedItems[index].price = value;
+      }
+    } else if (field === 'margin') {
+      // Jeśli zmieniono marżę, przelicz cenę końcową na podstawie ceny bazowej
+      const basePrice = updatedItems[index].basePrice || 0;
+      updatedItems[index] = {
+        ...updatedItems[index],
+        [field]: value,
+        price: basePrice * (1 + value / 100)
+      };
+    } else if (field === 'price') {
+      // Jeśli użytkownik zmienia cenę końcową ręcznie, to produkt nie pochodzi z listy cenowej
+      updatedItems[index] = {
+        ...updatedItems[index],
+        [field]: value,
+        fromPriceList: false
+      };
+    } else {
+      // Dla innych pól po prostu aktualizujemy wartość
+      updatedItems[index] = {
+        ...updatedItems[index],
+        [field]: value
+      };
+    }
     
     setOrderData(prev => ({
       ...prev,
@@ -318,34 +477,10 @@ const OrderForm = ({ orderId }) => {
     }
   };
 
-  const handleProductSelect = (index, selectedProduct) => {
-    if (selectedProduct) {
-      const updatedItems = [...orderData.items];
-      updatedItems[index] = {
-        ...updatedItems[index],
-        id: selectedProduct.id,
-        name: selectedProduct.name,
-        price: selectedProduct.price || 0,
-        unit: selectedProduct.unit || 'szt.'
-      };
-      
-      setOrderData(prev => ({
-        ...prev,
-        items: updatedItems
-      }));
-      
-      // Wyczyść błędy walidacji dla tego produktu
-      const updatedErrors = { ...validationErrors };
-      delete updatedErrors[`item_${index}_name`];
-      delete updatedErrors[`item_${index}_price`];
-      setValidationErrors(updatedErrors);
-    }
-  };
-
   const addItem = () => {
     setOrderData(prev => ({
       ...prev,
-      items: [...prev.items, { ...DEFAULT_ORDER.items[0] }]
+      items: [...prev.items, { ...DEFAULT_ITEM }]
     }));
   };
 
@@ -355,7 +490,7 @@ const OrderForm = ({ orderId }) => {
     
     // Zawsze musi być przynajmniej jeden produkt
     if (updatedItems.length === 0) {
-      updatedItems.push({ ...DEFAULT_ORDER.items[0] });
+      updatedItems.push({ ...DEFAULT_ITEM });
     }
     
     setOrderData(prev => ({
@@ -480,35 +615,58 @@ const OrderForm = ({ orderId }) => {
       }
       
       // Pobierz ceny produktów
-      const pricesMap = await getIngredientPrices(productIds);
+      const pricesMapResult = await getIngredientPrices(productIds);
+      console.log("Pobrane ceny składników:", pricesMapResult);
       
       // Oblicz koszty
       let totalCost = 0;
       let totalRevenue = 0;
       
       const itemsWithCosts = orderData.items.map(item => {
-        const productPrice = pricesMap[item.id] || 0;
-        const itemCost = productPrice * item.quantity;
-        const itemRevenue = item.price * item.quantity;
+        // Pobierz koszt jednostkowy produktu
+        let productPrice = 0;
+        
+        if (item.id && pricesMapResult[item.id]) {
+          // Najpierw sprawdź, czy mamy cenę z partii
+          if (pricesMapResult[item.id].batchPrice && pricesMapResult[item.id].batchPrice > 0) {
+            productPrice = pricesMapResult[item.id].batchPrice;
+          } 
+          // Jeśli nie ma ceny z partii, użyj ceny z pozycji magazynowej
+          else if (pricesMapResult[item.id].itemPrice && pricesMapResult[item.id].itemPrice > 0) {
+            productPrice = pricesMapResult[item.id].itemPrice;
+          }
+        }
+        
+        console.log(`Produkt ${item.name} (${item.id}): cena = ${productPrice}`);
+        
+        // Oblicz koszt całkowity i przychód
+        const itemCost = productPrice * parseFloat(item.quantity || 0);
+        const itemRevenue = parseFloat(item.price || 0) * parseFloat(item.quantity || 0);
         
         totalCost += itemCost;
         totalRevenue += itemRevenue;
+        
+        const itemProfit = itemRevenue - itemCost;
+        const itemMargin = itemRevenue > 0 ? ((itemRevenue - itemCost) / itemRevenue * 100) : 0;
         
         return {
           ...item,
           cost: itemCost,
           revenue: itemRevenue,
-          profit: itemRevenue - itemCost,
-          margin: itemCost > 0 ? ((itemRevenue - itemCost) / itemRevenue * 100) : 0
+          profit: itemProfit,
+          margin: itemMargin
         };
       });
+      
+      const totalProfit = totalRevenue - totalCost;
+      const profitMargin = totalRevenue > 0 ? ((totalRevenue - totalCost) / totalRevenue * 100) : 0;
       
       setCostCalculation({
         items: itemsWithCosts,
         totalCost: totalCost,
         totalRevenue: totalRevenue,
-        totalProfit: totalRevenue - totalCost,
-        profitMargin: totalRevenue > 0 ? ((totalRevenue - totalCost) / totalRevenue * 100) : 0
+        totalProfit: totalProfit,
+        profitMargin: profitMargin
       });
       
     } catch (error) {
@@ -687,12 +845,14 @@ const OrderForm = ({ orderId }) => {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell width="40%">Produkt</TableCell>
-                <TableCell width="15%">Ilość</TableCell>
-                <TableCell width="15%">Jednostka</TableCell>
-                <TableCell width="15%">Cena</TableCell>
+                <TableCell width="30%">Produkt</TableCell>
+                <TableCell width="10%">Ilość</TableCell>
+                <TableCell width="10%">Jednostka</TableCell>
+                <TableCell width="15%">Cena bazowa</TableCell>
+                <TableCell width="15%">Marża (%)</TableCell>
+                <TableCell width="15%">Cena końcowa</TableCell>
                 <TableCell width="15%">Wartość</TableCell>
-                <TableCell width="10%"></TableCell>
+                <TableCell width="5%"></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -735,12 +895,41 @@ const OrderForm = ({ orderId }) => {
                     />
                   </TableCell>
                   <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <TextField
+                        type="number"
+                        value={item.basePrice || 0}
+                        onChange={(e) => handleItemChange(index, 'basePrice', parseFloat(e.target.value))}
+                        InputProps={{
+                          startAdornment: <InputAdornment position="start">EUR</InputAdornment>,
+                          readOnly: item.fromPriceList, // Blokujemy edycję tylko jeśli cena pochodzi z listy cenowej
+                        }}
+                        inputProps={{ min: 0, step: 0.01 }}
+                        fullWidth
+                      />
+                      {item.fromPriceList && (
+                        <Tooltip title="Cena z listy cenowej klienta">
+                          <InfoIcon color="primary" fontSize="small" sx={{ ml: 1 }} />
+                        </Tooltip>
+                      )}
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    <TextField
+                      type="number"
+                      value={item.margin || 0}
+                      onChange={(e) => handleItemChange(index, 'margin', parseFloat(e.target.value))}
+                      inputProps={{ min: 0, step: 0.1 }}
+                      fullWidth
+                    />
+                  </TableCell>
+                  <TableCell>
                     <TextField
                       type="number"
                       value={item.price}
                       onChange={(e) => handleItemChange(index, 'price', e.target.value)}
                       InputProps={{
-                        startAdornment: <InputAdornment position="start">PLN</InputAdornment>,
+                        startAdornment: <InputAdornment position="start">EUR</InputAdornment>,
                       }}
                       inputProps={{ min: 0, step: 0.01 }}
                       fullWidth
@@ -829,7 +1018,7 @@ const OrderForm = ({ orderId }) => {
                 onChange={handleChange}
                 fullWidth
                 InputProps={{
-                  startAdornment: <InputAdornment position="start">PLN</InputAdornment>,
+                  startAdornment: <InputAdornment position="start">EUR</InputAdornment>,
                 }}
                 inputProps={{ min: 0, step: 0.01 }}
               />
@@ -942,17 +1131,17 @@ const OrderForm = ({ orderId }) => {
                 <Grid item xs={12} sm={6} md={3}>
                   <Typography variant="subtitle2">Koszt całkowity:</Typography>
                   <Typography variant="body1" fontWeight="medium">
-                    {(Number(costCalculation.totalCost) || 0).toFixed(2)} zł
+                    {(Number(costCalculation.totalCost) || 0).toFixed(2)} €
                   </Typography>
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
                   <Typography variant="subtitle2">Całkowity przychód:</Typography>
-                  <Typography variant="body1">{costCalculation.totalRevenue.toFixed(2)} zł</Typography>
+                  <Typography variant="body1">{costCalculation.totalRevenue.toFixed(2)} €</Typography>
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
                   <Typography variant="subtitle2">Zysk:</Typography>
                   <Typography variant="body1" fontWeight="bold" color={costCalculation.totalProfit >= 0 ? "success.main" : "error.main"}>
-                    {(Number(costCalculation.totalProfit) || 0).toFixed(2)} zł
+                    {(Number(costCalculation.totalProfit) || 0).toFixed(2)} €
                   </Typography>
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
@@ -992,12 +1181,12 @@ const OrderForm = ({ orderId }) => {
                             <tr key={index} style={{ borderBottom: '1px solid rgba(224, 224, 224, 0.5)' }}>
                               <td style={{ padding: '8px' }}>{product.name || item.name}</td>
                               <td style={{ padding: '8px', textAlign: 'right' }}>{item.quantity} {item.unit}</td>
-                              <td style={{ padding: '8px', textAlign: 'right' }}>{unitCost.toFixed(2)} zł</td>
-                              <td style={{ padding: '8px', textAlign: 'right' }}>{(Number(item.price) || 0).toFixed(2)} zł</td>
-                              <td style={{ padding: '8px', textAlign: 'right' }}>{(Number(item.cost) || 0).toFixed(2)} zł</td>
-                              <td style={{ padding: '8px', textAlign: 'right' }}>{(Number(item.revenue) || 0).toFixed(2)} zł</td>
+                              <td style={{ padding: '8px', textAlign: 'right' }}>{unitCost.toFixed(2)} €</td>
+                              <td style={{ padding: '8px', textAlign: 'right' }}>{(Number(item.price) || 0).toFixed(2)} €</td>
+                              <td style={{ padding: '8px', textAlign: 'right' }}>{(Number(item.cost) || 0).toFixed(2)} €</td>
+                              <td style={{ padding: '8px', textAlign: 'right' }}>{(Number(item.revenue) || 0).toFixed(2)} €</td>
                               <td style={{ padding: '8px', textAlign: 'right', color: item.profit >= 0 ? 'green' : 'red' }}>
-                                {(Number(item.profit) || 0).toFixed(2)} zł
+                                {(Number(item.profit) || 0).toFixed(2)} €
                               </td>
                               <td style={{ padding: '8px', textAlign: 'right', color: item.margin >= 0 ? 'green' : 'red' }}>
                                 {(Number(item.margin) || 0).toFixed(2)}%

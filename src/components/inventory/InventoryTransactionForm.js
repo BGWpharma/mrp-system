@@ -357,7 +357,7 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Cena jednostkowa (zł)"
+                label="Cena jednostkowa (EUR)"
                 name="unitPrice"
                 type="number"
                 value={transactionData.unitPrice}
