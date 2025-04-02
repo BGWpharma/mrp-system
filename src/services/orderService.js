@@ -88,20 +88,106 @@ export const getAllOrders = async (filters = null) => {
 /**
  * Pobiera zamówienie po ID
  */
-export const getOrderById = async (orderId) => {
+export const getOrderById = async (id) => {
   try {
-    const orderDoc = await getDoc(doc(db, ORDERS_COLLECTION, orderId));
+    const orderDoc = await getDoc(doc(db, ORDERS_COLLECTION, id));
     
     if (!orderDoc.exists()) {
-      throw new Error('Zamówienie nie zostało znalezione');
+      throw new Error(`Zamówienie o ID ${id} nie istnieje.`);
     }
     
-    return {
+    const orderData = orderDoc.data();
+    console.log("Pobrane dane zamówienia z bazy:", orderData);
+    
+    // Przygotuj dane zamówienia z poprawnymi strukturami dat
+    const processedOrder = {
       id: orderDoc.id,
-      ...orderDoc.data()
+      ...orderData,
+      orderDate: orderData.orderDate && orderData.orderDate.toDate ? orderData.orderDate.toDate() : orderData.orderDate,
+      expectedDeliveryDate: orderData.expectedDeliveryDate && orderData.expectedDeliveryDate.toDate ? 
+        orderData.expectedDeliveryDate.toDate() : orderData.expectedDeliveryDate,
+      deliveryDate: orderData.deliveryDate && orderData.deliveryDate.toDate ? 
+        orderData.deliveryDate.toDate() : orderData.deliveryDate
     };
+    
+    // Sprawdź i popraw dane powiązanych zamówień zakupu
+    if (processedOrder.linkedPurchaseOrders && Array.isArray(processedOrder.linkedPurchaseOrders)) {
+      console.log(`Przetwarzanie ${processedOrder.linkedPurchaseOrders.length} powiązanych zamówień zakupu`);
+      
+      // Zaktualizuj dane zamówień zakupu z poprawnymi wartościami
+      for (let i = 0; i < processedOrder.linkedPurchaseOrders.length; i++) {
+        const po = processedOrder.linkedPurchaseOrders[i];
+        
+        try {
+          // Upewnij się, że wartości liczbowe są liczbami
+          if (po.value !== undefined) {
+            po.value = parseFloat(po.value) || 0;
+          }
+          
+          if (po.vatRate !== undefined) {
+            po.vatRate = parseFloat(po.vatRate) || 23;
+          }
+          
+          if (po.totalGross !== undefined) {
+            po.totalGross = parseFloat(po.totalGross) || 0;
+          } else {
+            // Oblicz wartość brutto jeśli nie istnieje
+            const productsValue = parseFloat(po.value) || 0;
+            const vatRate = parseFloat(po.vatRate) || 23;
+            const vatValue = (productsValue * vatRate) / 100;
+            
+            // Obsługa różnych formatów dodatkowych kosztów
+            let additionalCosts = 0;
+            if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
+              additionalCosts = po.additionalCostsItems.reduce((sum, cost) => {
+                return sum + (parseFloat(cost.value) || 0);
+              }, 0);
+            } else {
+              additionalCosts = parseFloat(po.additionalCosts) || 0;
+            }
+            
+            // Oblicz i zapisz wartość brutto
+            po.totalGross = productsValue + vatValue + additionalCosts;
+            console.log(`Obliczona wartość brutto dla PO ${po.number}: ${po.totalGross}`);
+          }
+          
+          // Pobierz aktualne dane zamówienia zakupu (opcjonalnie)
+          if (po.id) {
+            try {
+              const { getPurchaseOrderById } = await import('./purchaseOrderService');
+              const freshPoData = await getPurchaseOrderById(po.id);
+              
+              // Aktualizuj tylko niektóre kluczowe pola, aby nie zastępować całej struktury
+              if (freshPoData) {
+                console.log(`Zaktualizowano dane PO ${po.number} z bazy danych`);
+                po.totalValue = freshPoData.totalValue;
+                po.totalGross = freshPoData.totalGross;
+                po.status = freshPoData.status;
+                po.vatRate = freshPoData.vatRate;
+                
+                // Aktualizuj dane o dodatkowych kosztach
+                if (freshPoData.additionalCostsItems) {
+                  po.additionalCostsItems = freshPoData.additionalCostsItems;
+                } else if (freshPoData.additionalCosts) {
+                  po.additionalCosts = freshPoData.additionalCosts;
+                }
+              }
+            } catch (error) {
+              console.warn(`Nie można pobrać świeżych danych PO ${po.id}: ${error.message}`);
+            }
+          }
+        } catch (error) {
+          console.warn(`Błąd przetwarzania PO ${po.number || po.id}: ${error.message}`);
+        }
+      }
+    } else {
+      processedOrder.linkedPurchaseOrders = [];
+    }
+    
+    console.log("Przetworzone dane zamówienia:", processedOrder);
+    return processedOrder;
   } catch (error) {
-    console.error('Błąd podczas pobierania zamówienia:', error);
+    console.error(`Błąd podczas pobierania zamówienia ${id}:`, error);
     throw error;
   }
 };

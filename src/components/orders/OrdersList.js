@@ -30,7 +30,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogContentText,
-  DialogActions
+  DialogActions,
+  Divider
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -48,7 +49,8 @@ import {
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
   Refresh as RefreshIcon,
-  People as CustomersIcon
+  People as CustomersIcon,
+  ShoppingCart as ShoppingCartIcon
 } from '@mui/icons-material';
 import { 
   getAllOrders, 
@@ -94,7 +96,79 @@ const OrdersList = () => {
     try {
       setLoading(true);
       const data = await getAllOrders();
-      setOrders(data);
+      
+      console.log("Pobrane zamówienia:", data);
+      
+      // Aktualizacja wartości całkowitej zamówienia uwzględniając PO
+      const updatedOrders = data.map(order => {
+        // Obliczenie wartości produktów
+        const subtotal = (order.items || []).reduce((sum, item) => {
+          const quantity = parseFloat(item.quantity) || 0;
+          const price = parseFloat(item.price) || 0;
+          return sum + (quantity * price);
+        }, 0);
+        
+        // Dodanie kosztów dostawy
+        const shippingCost = parseFloat(order.shippingCost) || 0;
+        
+        // Obliczenie wartości zamówień zakupu powiązanych
+        let poTotal = 0;
+        
+        if (order.linkedPurchaseOrders && order.linkedPurchaseOrders.length > 0) {
+          console.log(`Przetwarzam ${order.linkedPurchaseOrders.length} zamówień zakupu dla zamówienia ${order.id}`);
+          
+          poTotal = order.linkedPurchaseOrders.reduce((sum, po) => {
+            console.log("Przetwarzane PO:", po);
+            
+            // Jeśli zamówienie ma już wartość brutto, używamy jej
+            if (po.totalGross !== undefined && po.totalGross !== null) {
+              const value = parseFloat(po.totalGross);
+              console.log(`Używam istniejącej wartości brutto: ${value}`);
+              return sum + value;
+            }
+            
+            // W przeciwnym razie obliczamy wartość brutto
+            // Podstawowa wartość zamówienia zakupu (produkty)
+            const productsValue = parseFloat(po.value) || 0;
+            
+            // Stawka VAT i wartość podatku VAT (tylko od produktów)
+            const vatRate = parseFloat(po.vatRate) || 23;
+            const vatValue = (productsValue * vatRate) / 100;
+            
+            // Dodatkowe koszty w zamówieniu zakupu
+            let additionalCosts = 0;
+            if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
+              additionalCosts = po.additionalCostsItems.reduce((costsSum, cost) => {
+                return costsSum + (parseFloat(cost.value) || 0);
+              }, 0);
+            } else {
+              // Użyj starego pola additionalCosts jeśli nowa tablica nie istnieje
+              additionalCosts = parseFloat(po.additionalCosts) || 0;
+            }
+            
+            // Wartość brutto: produkty + VAT + dodatkowe koszty
+            const grossValue = productsValue + vatValue + additionalCosts;
+            console.log(`Obliczona wartość brutto PO: ${grossValue} (produkty: ${productsValue}, VAT: ${vatValue}, koszty: ${additionalCosts})`);
+            
+            return sum + grossValue;
+          }, 0);
+        }
+        
+        console.log(`Zamówienie ${order.id}: produkty=${subtotal}, dostawa=${shippingCost}, PO=${poTotal}`);
+        
+        // Łączna wartość zamówienia
+        const totalValue = subtotal + shippingCost + poTotal;
+        
+        return {
+          ...order,
+          totalValue: totalValue,
+          productsValue: subtotal,
+          purchaseOrdersValue: poTotal,
+          shippingCost: shippingCost
+        };
+      });
+      
+      setOrders(updatedOrders);
     } catch (error) {
       showError('Błąd podczas pobierania zamówień: ' + error.message);
       console.error('Error fetching orders:', error);
@@ -634,6 +708,206 @@ const OrdersList = () => {
                                         </TableBody>
                                       </Table>
                                     </TableContainer>
+                                  </Grid>
+
+                                  <Grid item xs={12}>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                      <Typography variant="subtitle2" gutterBottom>
+                                        Powiązane zamówienia zakupu:
+                                      </Typography>
+                                      <Button
+                                        size="small"
+                                        startIcon={<RefreshIcon />}
+                                        onClick={async () => {
+                                          try {
+                                            // Pobierz aktualne dane zamówienia z bazy danych
+                                            const { getOrderById } = await import('../../services/orderService');
+                                            const updatedOrder = await getOrderById(order.id);
+                                            
+                                            console.log("Pobrane dane zamówienia:", updatedOrder);
+                                            
+                                            // Przeliczamy wartość zamówień zakupu
+                                            const poTotal = (updatedOrder.linkedPurchaseOrders || []).reduce((sum, po) => {
+                                              console.log("PO do przeliczenia:", po);
+                                              
+                                              // Jeśli zamówienie ma już wartość brutto, używamy jej
+                                              if (po.totalGross !== undefined && po.totalGross !== null) {
+                                                const value = parseFloat(po.totalGross);
+                                                console.log(`Używam istniejącej wartości brutto: ${value}`);
+                                                return sum + value;
+                                              }
+                                              
+                                              // W przeciwnym razie obliczamy wartość brutto
+                                              const productsValue = parseFloat(po.value) || 0;
+                                              const vatRate = parseFloat(po.vatRate) || 23;
+                                              const vatValue = (productsValue * vatRate) / 100;
+                                              
+                                              // Sprawdzenie czy istnieją dodatkowe koszty w formie tablicy
+                                              let additionalCosts = 0;
+                                              if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
+                                                additionalCosts = po.additionalCostsItems.reduce((costsSum, cost) => {
+                                                  return costsSum + (parseFloat(cost.value) || 0);
+                                                }, 0);
+                                              } else {
+                                                // Użyj starego pola additionalCosts jeśli nowa tablica nie istnieje
+                                                additionalCosts = parseFloat(po.additionalCosts) || 0;
+                                              }
+                                              
+                                              const grossValue = productsValue + vatValue + additionalCosts;
+                                              console.log(`Obliczona wartość brutto: ${grossValue} (prod: ${productsValue}, vat: ${vatValue}, koszty: ${additionalCosts})`);
+                                              
+                                              return sum + grossValue;
+                                            }, 0);
+                                            
+                                            console.log(`Łączna wartość PO: ${poTotal}`);
+                                            
+                                            // Obliczamy wartość produktów
+                                            const subtotal = (order.items || []).reduce((sum, item) => {
+                                              const quantity = parseFloat(item.quantity) || 0;
+                                              const price = parseFloat(item.price) || 0;
+                                              return sum + (quantity * price);
+                                            }, 0);
+                                            
+                                            // Dodanie kosztów dostawy
+                                            const shippingCost = parseFloat(order.shippingCost) || 0;
+                                            
+                                            // Łączna wartość zamówienia
+                                            const totalValue = subtotal + shippingCost + poTotal;
+                                            
+                                            console.log(`Nowa łączna wartość zamówienia: ${totalValue}`);
+                                            
+                                            // Aktualizuj lokalny stan zamówień
+                                            setOrders(prev => prev.map(ord => 
+                                              ord.id === order.id 
+                                                ? {
+                                                    ...ord,
+                                                    linkedPurchaseOrders: updatedOrder.linkedPurchaseOrders || [],
+                                                    purchaseOrdersValue: poTotal,
+                                                    totalValue: totalValue
+                                                  }
+                                                : ord
+                                            ));
+                                            
+                                            showSuccess('Zaktualizowano dane zamówień zakupu');
+                                          } catch (error) {
+                                            console.error('Błąd podczas odświeżania powiązanych zamówień zakupu:', error);
+                                            showError('Nie udało się odświeżyć danych zamówień zakupu');
+                                          }
+                                        }}
+                                      >
+                                        Odśwież dane PO
+                                      </Button>
+                                    </Box>
+                                    {order.linkedPurchaseOrders && order.linkedPurchaseOrders.length > 0 ? (
+                                      <TableContainer component={Paper} variant="outlined">
+                                        <Table size="small">
+                                          <TableHead>
+                                            <TableRow sx={{ bgcolor: 'primary.light' }}>
+                                              <TableCell>Numer PO</TableCell>
+                                              <TableCell>Dostawca</TableCell>
+                                              <TableCell align="right">Wartość</TableCell>
+                                              <TableCell>Status</TableCell>
+                                              <TableCell></TableCell>
+                                            </TableRow>
+                                          </TableHead>
+                                          <TableBody>
+                                            {order.linkedPurchaseOrders.map((po, index) => (
+                                              <TableRow key={index} hover>
+                                                <TableCell>
+                                                  <Chip 
+                                                    label={po.number} 
+                                                    color="primary" 
+                                                    variant="outlined" 
+                                                    size="small"
+                                                    icon={<ShoppingCartIcon fontSize="small" />}
+                                                    sx={{ fontWeight: 'bold' }}
+                                                  />
+                                                </TableCell>
+                                                <TableCell>{po.supplier}</TableCell>
+                                                <TableCell align="right">
+                                                  {(() => {
+                                                    // Jeśli zamówienie ma już wartość brutto, używamy jej
+                                                    if (po.totalGross !== undefined && po.totalGross !== null) {
+                                                      return formatCurrency(parseFloat(po.totalGross));
+                                                    }
+                                                    
+                                                    // W przeciwnym razie obliczamy wartość brutto
+                                                    const productsValue = parseFloat(po.value) || 0;
+                                                    const vatRate = parseFloat(po.vatRate) || 23;
+                                                    const vatValue = (productsValue * vatRate) / 100;
+                                                    
+                                                    // Sprawdzenie różnych formatów dodatkowych kosztów
+                                                    let additionalCosts = 0;
+                                                    if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
+                                                      additionalCosts = po.additionalCostsItems.reduce((costsSum, cost) => {
+                                                        return costsSum + (parseFloat(cost.value) || 0);
+                                                      }, 0);
+                                                    } else {
+                                                      additionalCosts = parseFloat(po.additionalCosts) || 0;
+                                                    }
+                                                    
+                                                    // Wartość brutto: produkty + VAT + dodatkowe koszty
+                                                    const grossValue = productsValue + vatValue + additionalCosts;
+                                                    
+                                                    return formatCurrency(grossValue);
+                                                  })()}
+                                                </TableCell>
+                                                <TableCell>
+                                                  <Chip 
+                                                    label={po.status || "Robocze"} 
+                                                    color={
+                                                      po.status === 'completed' ? 'success' : 
+                                                      po.status === 'in_progress' ? 'warning' : 
+                                                      'default'
+                                                    }
+                                                    size="small"
+                                                  />
+                                                </TableCell>
+                                                <TableCell>
+                                                  <Button 
+                                                    size="small" 
+                                                    variant="contained"
+                                                    onClick={() => navigate(`/purchase-orders/${po.id}`)}
+                                                  >
+                                                    Szczegóły
+                                                  </Button>
+                                                </TableCell>
+                                              </TableRow>
+                                            ))}
+                                          </TableBody>
+                                        </Table>
+                                      </TableContainer>
+                                    ) : (
+                                      <Typography variant="body2" color="text.secondary">
+                                        Brak powiązanych zamówień zakupu.
+                                      </Typography>
+                                    )}
+                                  </Grid>
+
+                                  <Grid item xs={12}>
+                                    <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 1, border: '1px solid #eee', p: 2, borderRadius: 1 }}>
+                                      <Typography variant="subtitle1" fontWeight="bold">Podsumowanie wartości:</Typography>
+                                      <Grid container spacing={2}>
+                                        <Grid item xs={4}>
+                                          <Typography variant="body2">Wartość produktów:</Typography>
+                                          <Typography variant="h6">{formatCurrency(order.productsValue || 0)}</Typography>
+                                        </Grid>
+                                        <Grid item xs={4}>
+                                          <Typography variant="body2">Koszt dostawy:</Typography>
+                                          <Typography variant="h6">{formatCurrency(order.shippingCost || 0)}</Typography>
+                                        </Grid>
+                                        <Grid item xs={4}>
+                                          <Typography variant="body2">Wartość PO:</Typography>
+                                          <Typography variant="h6" color="warning.main">{formatCurrency(order.purchaseOrdersValue || 0)}</Typography>
+                                        </Grid>
+                                        <Grid item xs={12}>
+                                          <Divider sx={{ my: 1 }} />
+                                          <Typography variant="subtitle1" fontWeight="bold">
+                                            Łączna wartość: {formatCurrency(order.totalValue || 0)}
+                                          </Typography>
+                                        </Grid>
+                                      </Grid>
+                                    </Box>
                                   </Grid>
 
                                   <Grid item xs={12}>

@@ -284,18 +284,19 @@ export const DEFAULT_PRICE_LIST_ITEM = {
   productName: '',
   price: 0,
   unit: 'szt.',
-  notes: ''
+  notes: '',
+  isRecipe: false // Informacja czy element jest recepturą
 };
 
 /**
- * Pobiera cenę produktu dla klienta na podstawie jego aktywnych list cenowych
+ * Pobiera wszystkie aktywne listy cenowe dla klienta
  * @param {string} customerId - ID klienta
- * @param {string} productId - ID produktu
- * @returns {Promise<number|null>} - Cena produktu lub null jeśli nie znaleziono
+ * @returns {Promise<Array>} - Lista aktywnych list cenowych
  */
-export const getPriceForCustomerProduct = async (customerId, productId) => {
+export const getActivePriceListsByCustomer = async (customerId) => {
+  if (!customerId) return [];
+  
   try {
-    // Pobierz aktywne listy cenowe klienta
     const priceListsQuery = query(
       collection(db, PRICE_LISTS_COLLECTION),
       where('customerId', '==', customerId),
@@ -305,47 +306,68 @@ export const getPriceForCustomerProduct = async (customerId, productId) => {
     const querySnapshot = await getDocs(priceListsQuery);
     
     if (querySnapshot.empty) {
-      return null; // Brak aktywnych list cenowych
+      return []; // Brak aktywnych list cenowych
     }
     
-    const priceListIds = [];
+    const priceLists = [];
     querySnapshot.forEach((doc) => {
-      priceListIds.push(doc.id);
+      priceLists.push({
+        id: doc.id,
+        ...doc.data()
+      });
     });
     
-    // Pobierz ceny produktu z aktywnych list cenowych
-    const priceItemsQuery = query(
-      collection(db, PRICE_LIST_ITEMS_COLLECTION),
-      where('priceListId', 'in', priceListIds),
-      where('productId', '==', productId)
-    );
+    return priceLists;
+  } catch (error) {
+    console.error('Błąd podczas pobierania aktywnych list cenowych klienta:', error);
+    return [];
+  }
+};
+
+/**
+ * Pobiera cenę dla produktu danego klienta
+ * @param {string} customerId - ID klienta
+ * @param {string} productId - ID produktu
+ * @param {boolean} isRecipe - Czy produkt jest recepturą
+ * @returns {Promise<number|null>} - Cenę lub null jeśli nie znaleziono
+ */
+export const getPriceForCustomerProduct = async (customerId, productId, isRecipe = false) => {
+  if (!customerId || !productId) return null;
+  
+  try {
+    // Pobierz wszystkie aktywne listy cenowe dla klienta
+    const priceLists = await getActivePriceListsByCustomer(customerId);
     
-    const priceItemsSnapshot = await getDocs(priceItemsQuery);
+    if (priceLists.length === 0) return null;
     
-    if (priceItemsSnapshot.empty) {
-      return null; // Brak cen dla tego produktu
+    // Szukaj produktu w listach cenowych
+    let bestPrice = null;
+    let newestDate = null;
+    
+    for (const priceList of priceLists) {
+      // Pobierz wszystkie pozycje z listy cenowej
+      const items = await getPriceListItems(priceList.id);
+      
+      // Znajdź pozycję dla danego produktu, uwzględniając czy to receptura czy nie
+      const item = items.find(item => 
+        item.productId === productId && 
+        !!item.isRecipe === !!isRecipe
+      );
+      
+      if (item) {
+        const updatedAt = priceList.updatedAt ? new Date(priceList.updatedAt.seconds * 1000) : new Date(0);
+        
+        // Jeśli pierwsza znaleziona cena lub nowsza lista cenowa
+        if (bestPrice === null || (newestDate !== null && updatedAt > newestDate)) {
+          bestPrice = item.price;
+          newestDate = updatedAt;
+        }
+      }
     }
     
-    // Jeśli jest więcej niż jedna cena, wybierz najnowszą
-    let latestPriceItem = null;
-    let latestTimestamp = null;
-    
-    priceItemsSnapshot.forEach((doc) => {
-      const data = doc.data();
-      const createdAt = data.createdAt?.toDate?.() || null;
-      
-      if (!latestTimestamp || (createdAt && createdAt > latestTimestamp)) {
-        latestPriceItem = {
-          id: doc.id,
-          ...data
-        };
-        latestTimestamp = createdAt;
-      }
-    });
-    
-    return latestPriceItem ? latestPriceItem.price : null;
+    return bestPrice;
   } catch (error) {
-    console.error('Błąd podczas pobierania ceny produktu dla klienta:', error);
+    console.error('Błąd podczas pobierania ceny dla klienta:', error);
     return null;
   }
 }; 

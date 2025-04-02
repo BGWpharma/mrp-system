@@ -454,12 +454,117 @@ const OrderDetails = () => {
 
       {/* Uwagi */}
       {order.notes && (
-        <Paper sx={{ p: 3 }}>
+        <Paper sx={{ p: 3, mb: 3 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>Uwagi</Typography>
           <Divider sx={{ mb: 2 }} />
           <Typography variant="body1">
             {order.notes}
           </Typography>
+        </Paper>
+      )}
+      
+      {/* Powiązane zamówienia zakupu */}
+      {order.linkedPurchaseOrders && order.linkedPurchaseOrders.length > 0 && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>Powiązane zamówienia zakupu</Typography>
+          <Divider sx={{ mb: 2 }} />
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Numer zamówienia</TableCell>
+                <TableCell>Dostawca</TableCell>
+                <TableCell>Ilość pozycji</TableCell>
+                <TableCell align="right">Wartość brutto</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell align="right">Akcje</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {order.linkedPurchaseOrders.map((po, index) => (
+                <TableRow key={index}>
+                  <TableCell>
+                    <Chip 
+                      label={po.number} 
+                      color="primary" 
+                      variant="outlined" 
+                      size="small"
+                      sx={{ fontWeight: 'bold' }}
+                    />
+                  </TableCell>
+                  <TableCell>{po.supplier}</TableCell>
+                  <TableCell>{po.items}</TableCell>
+                  <TableCell align="right">
+                    {(() => {
+                      // Jeśli zamówienie ma już wartość brutto, używamy jej
+                      if (po.totalGross) {
+                        return formatCurrency(po.totalGross);
+                      }
+                      
+                      // W przeciwnym razie obliczamy wartość brutto
+                      const productsValue = parseFloat(po.value) || 0;
+                      const vatRate = parseFloat(po.vatRate) || 23;
+                      const vatValue = (productsValue * vatRate) / 100;
+                      const additionalCosts = parseFloat(po.additionalCosts) || 0;
+                      
+                      // Wartość brutto: produkty + VAT + dodatkowe koszty
+                      const grossValue = productsValue + vatValue + additionalCosts;
+                      
+                      return formatCurrency(grossValue);
+                    })()}
+                  </TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={po.status || "Robocze"} 
+                      color={
+                        po.status === 'completed' ? 'success' : 
+                        po.status === 'in_progress' ? 'warning' : 
+                        'default'
+                      }
+                      size="small"
+                    />
+                  </TableCell>
+                  <TableCell align="right">
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => navigate(`/purchase-orders/${po.id}`)}
+                    >
+                      Szczegóły
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+              
+              {/* Podsumowanie wartości */}
+              <TableRow>
+                <TableCell colSpan={3} align="right" sx={{ fontWeight: 'bold' }}>
+                  Łączna wartość brutto zamówień zakupu:
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                  {(() => {
+                    // Obliczanie łącznej wartości brutto wszystkich zamówień zakupu
+                    const totalGross = order.linkedPurchaseOrders.reduce((sum, po) => {
+                      // Jeśli zamówienie ma już wartość brutto, używamy jej
+                      if (po.totalGross) {
+                        return sum + parseFloat(po.totalGross);
+                      }
+                      
+                      // W przeciwnym razie obliczamy wartość brutto
+                      const productsValue = parseFloat(po.value) || 0;
+                      const vatRate = parseFloat(po.vatRate) || 23;
+                      const vatValue = (productsValue * vatRate) / 100;
+                      const additionalCosts = parseFloat(po.additionalCosts) || 0;
+                      
+                      return sum + productsValue + vatValue + additionalCosts;
+                    }, 0);
+                    
+                    return formatCurrency(totalGross);
+                  })()}
+                </TableCell>
+                <TableCell colSpan={2} />
+              </TableRow>
+            </TableBody>
+          </Table>
         </Paper>
       )}
 

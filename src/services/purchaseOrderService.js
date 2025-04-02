@@ -40,10 +40,38 @@ export const getAllPurchaseOrders = async () => {
         }
       }
       
+      // Upewnij się, że zamówienie ma poprawną wartość brutto (totalGross)
+      let totalGross = poData.totalGross;
+      
+      // Jeśli nie ma wartości brutto lub jest nieprawidłowa, oblicz ją
+      if (totalGross === undefined || totalGross === null) {
+        // Oblicz wartość produktów
+        const productsValue = typeof poData.items === 'object' && Array.isArray(poData.items)
+          ? poData.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0)
+          : (parseFloat(poData.totalValue) || 0);
+        
+        // Oblicz VAT (tylko od wartości produktów)
+        const vatRate = parseFloat(poData.vatRate) || 0;
+        const vatValue = (productsValue * vatRate) / 100;
+        
+        // Oblicz dodatkowe koszty
+        const additionalCosts = poData.additionalCostsItems && Array.isArray(poData.additionalCostsItems) 
+          ? poData.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
+          : (parseFloat(poData.additionalCosts) || 0);
+        
+        // Wartość brutto to suma: wartość netto produktów + VAT + dodatkowe koszty
+        totalGross = productsValue + vatValue + additionalCosts;
+        
+        console.log(`Obliczono wartość brutto dla PO ${poData.number}: ${totalGross}`);
+      } else {
+        totalGross = parseFloat(totalGross) || 0;
+      }
+      
       purchaseOrders.push({
         id: docRef.id,
         ...poData,
         supplier: supplierData,
+        totalGross: totalGross,
         // Konwersja Timestamp na ISO string (dla kompatybilności z istniejącym kodem)
         orderDate: poData.orderDate ? poData.orderDate.toDate().toISOString() : null,
         expectedDeliveryDate: poData.expectedDeliveryDate ? poData.expectedDeliveryDate.toDate().toISOString() : null,
@@ -137,48 +165,99 @@ export const getPurchaseOrderById = async (id) => {
   }
 };
 
-export const createPurchaseOrder = async (purchaseOrderData) => {
+// Funkcja do generowania numerów zamówień
+export const generateOrderNumber = async (prefix) => {
   try {
+    const now = new Date();
+    const year = now.getFullYear();
+    
+    // Pobierz listę zamówień z tego roku, aby ustalić numer
+    const q = query(
+      collection(db, PURCHASE_ORDERS_COLLECTION),
+      where('number', '>=', `${prefix}-${year}-`),
+      where('number', '<=', `${prefix}-${year}-9999`)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const ordersCount = querySnapshot.size;
+    const orderNumber = `${prefix}-${year}-${(ordersCount + 1).toString().padStart(4, '0')}`;
+    
+    return orderNumber;
+  } catch (error) {
+    console.error('Błąd podczas generowania numeru zamówienia:', error);
+    throw error;
+  }
+};
+
+export const createPurchaseOrder = async (purchaseOrderData, userId) => {
+  try {
+    const { 
+      supplier, 
+      items = [], 
+      currency = 'EUR', 
+      vatRate = 23, 
+      additionalCostsItems = [], 
+      additionalCosts = 0,
+      status = 'draft', 
+      targetWarehouseId,
+      orderDate = new Date(),
+      expectedDeliveryDate,
+      deliveryAddress = '',
+      notes = ''
+    } = purchaseOrderData;
+
     // Generuj numer zamówienia
-    const poNumberPrefix = 'PO-' + new Date().getFullYear() + '-';
-    const qPo = query(collection(db, PURCHASE_ORDERS_COLLECTION), where('number', '>=', poNumberPrefix), where('number', '<', poNumberPrefix + '999'));
-    const existingPOs = await getDocs(qPo);
+    const number = await generateOrderNumber('PO');
     
-    let highestNumber = 0;
-    existingPOs.forEach(doc => {
-      const poNumber = doc.data().number;
-      const numberPart = poNumber.split('-')[2];
-      const numValue = parseInt(numberPart, 10);
-      if (!isNaN(numValue) && numValue > highestNumber) {
-        highestNumber = numValue;
-      }
-    });
+    // Obliczamy wartość zamówienia
+    const totalValue = items.reduce((sum, item) => {
+      const itemPrice = parseFloat(item.totalPrice) || 0;
+      return sum + itemPrice;
+    }, 0);
     
-    const newNumberSuffix = String(highestNumber + 1).padStart(3, '0');
-    const poNumber = poNumberPrefix + newNumberSuffix;
+    // Obliczamy wartość VAT (tylko od produktów)
+    const vatValue = (totalValue * vatRate) / 100;
     
-    // Przygotuj dane zamówienia do zapisania
+    // Obliczamy dodatkowe koszty
+    const additionalCostsTotal = additionalCostsItems && Array.isArray(additionalCostsItems) 
+      ? additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
+      : (parseFloat(additionalCosts) || 0);
+    
+    // Obliczamy wartość brutto: wartość netto produktów + VAT + dodatkowe koszty
+    const totalGross = totalValue + vatValue + additionalCostsTotal;
+    
     // Zapisujemy tylko ID dostawcy, a nie cały obiekt
-    const supplierId = purchaseOrderData.supplier?.id;
+    const supplierId = supplier.id;
     
+    // Przygotuj obiekt zamówienia zakupowego
     const newPurchaseOrder = {
-      number: poNumber,
-      supplierId: supplierId,
-      items: purchaseOrderData.items || [],
-      totalValue: purchaseOrderData.totalValue || 0,
-      currency: purchaseOrderData.currency || 'EUR',
-      status: purchaseOrderData.status || 'draft',
-      orderDate: purchaseOrderData.orderDate ? new Date(purchaseOrderData.orderDate) : new Date(),
-      expectedDeliveryDate: purchaseOrderData.expectedDeliveryDate ? new Date(purchaseOrderData.expectedDeliveryDate) : null,
-      deliveryAddress: purchaseOrderData.deliveryAddress || '',
-      notes: purchaseOrderData.notes || '',
-      createdBy: purchaseOrderData.createdBy || null,
+      number,
+      supplierId,
+      items,
+      totalValue,
+      totalGross, // Dodajemy wartość brutto
+      additionalCostsItems,
+      vatRate,
+      currency,
+      status,
+      targetWarehouseId,
+      orderDate: typeof orderDate === 'string' ? new Date(orderDate) : orderDate,
+      expectedDeliveryDate: expectedDeliveryDate ? (typeof expectedDeliveryDate === 'string' ? new Date(expectedDeliveryDate) : expectedDeliveryDate) : null,
+      deliveryAddress,
+      notes,
+      createdBy: userId,
+      updatedBy: userId,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
     
-    // Zapisz zamówienie w bazie danych
+    console.log("Dane do zapisania:", newPurchaseOrder);
+    
+    // Dodaj nowe zamówienie do kolekcji
     const docRef = await addDoc(collection(db, PURCHASE_ORDERS_COLLECTION), newPurchaseOrder);
+    const id = docRef.id;
+    
+    console.log(`Utworzono zamówienie z ID: ${id}`);
     
     // Pobierz dane dostawcy dla zwrócenia pełnego obiektu zamówienia
     let supplierData = null;
@@ -189,14 +268,18 @@ export const createPurchaseOrder = async (purchaseOrderData) => {
       }
     }
     
-    return {
-      id: docRef.id,
+    // Przygotuj dane wynikowe
+    const result = {
+      id: id,
       ...newPurchaseOrder,
       supplier: supplierData,
-      // Konwersja Date na ISO string (dla kompatybilności z istniejącym kodem)
       orderDate: newPurchaseOrder.orderDate.toISOString(),
-      expectedDeliveryDate: newPurchaseOrder.expectedDeliveryDate ? newPurchaseOrder.expectedDeliveryDate.toISOString() : null
+      expectedDeliveryDate: newPurchaseOrder.expectedDeliveryDate ? newPurchaseOrder.expectedDeliveryDate.toISOString() : null,
+      createdAt: new Date().toISOString() // Ponieważ serverTimestamp() nie zwraca rzeczywistej wartości od razu
     };
+    
+    console.log("Nowe PO - wynik:", result);
+    return result;
   } catch (error) {
     console.error('Błąd podczas tworzenia zamówienia zakupowego:', error);
     throw error;
@@ -223,13 +306,31 @@ export const updatePurchaseOrder = async (id, purchaseOrderData) => {
     // Zachowujemy numer zamówienia z oryginalnego dokumentu
     const number = existingData.number;
     
+    // Obliczamy wartość netto produktów
+    const productsValue = purchaseOrderData.items && Array.isArray(purchaseOrderData.items)
+      ? purchaseOrderData.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0)
+      : (purchaseOrderData.totalValue || 0);
+    
+    // Obliczamy wartość VAT (tylko od produktów)
+    const vatRate = purchaseOrderData.vatRate || 23;
+    const vatValue = (productsValue * vatRate) / 100;
+    
+    // Obliczamy dodatkowe koszty
+    const additionalCosts = purchaseOrderData.additionalCostsItems && Array.isArray(purchaseOrderData.additionalCostsItems) 
+      ? purchaseOrderData.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
+      : (parseFloat(purchaseOrderData.additionalCosts) || 0);
+    
+    // Obliczamy wartość brutto: wartość netto produktów + VAT + dodatkowe koszty
+    const totalGross = productsValue + vatValue + additionalCosts;
+    
     const updates = {
       number: number, // Zachowaj oryginalny numer zamówienia
       supplierId: supplierId,
       items: purchaseOrderData.items || [],
-      totalValue: purchaseOrderData.totalValue || 0,
-      totalGross: purchaseOrderData.totalGross || 0,
-      vatRate: purchaseOrderData.vatRate || 23,
+      totalValue: productsValue,
+      totalGross: totalGross,
+      additionalCostsItems: purchaseOrderData.additionalCostsItems || [],
+      vatRate: vatRate,
       currency: purchaseOrderData.currency || 'EUR',
       status: purchaseOrderData.status || 'draft',
       targetWarehouseId: purchaseOrderData.targetWarehouseId || '',
@@ -338,127 +439,6 @@ export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, user
   }
 };
 
-// Funkcje do obsługi dostawców
-export const getAllSuppliers = async () => {
-  try {
-    const q = query(
-      collection(db, SUPPLIERS_COLLECTION), 
-      orderBy('name', 'asc')
-    );
-    
-    const querySnapshot = await getDocs(q);
-    const suppliers = [];
-    
-    querySnapshot.forEach(doc => {
-      suppliers.push({
-        id: doc.id,
-        ...doc.data()
-      });
-    });
-    
-    return suppliers;
-  } catch (error) {
-    console.error('Błąd podczas pobierania dostawców:', error);
-    throw error;
-  }
-};
-
-export const getSupplierById = async (id) => {
-  try {
-    const supplierDoc = await getDoc(doc(db, SUPPLIERS_COLLECTION, id));
-    
-    if (!supplierDoc.exists()) {
-      throw new Error(`Nie znaleziono dostawcy o ID ${id}`);
-    }
-    
-    return {
-      id: supplierDoc.id,
-      ...supplierDoc.data()
-    };
-  } catch (error) {
-    console.error(`Błąd podczas pobierania dostawcy o ID ${id}:`, error);
-    throw error;
-  }
-};
-
-export const createSupplier = async (supplierData, userId) => {
-  try {
-    const newSupplier = {
-      ...supplierData,
-      createdBy: userId,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    };
-    
-    const docRef = await addDoc(collection(db, SUPPLIERS_COLLECTION), newSupplier);
-    
-    return {
-      id: docRef.id,
-      ...newSupplier
-    };
-  } catch (error) {
-    console.error('Błąd podczas tworzenia dostawcy:', error);
-    throw error;
-  }
-};
-
-export const updateSupplier = async (id, supplierData, userId) => {
-  try {
-    const supplierRef = doc(db, SUPPLIERS_COLLECTION, id);
-    
-    // Sprawdź, czy dostawca istnieje
-    const docSnap = await getDoc(supplierRef);
-    if (!docSnap.exists()) {
-      throw new Error(`Nie znaleziono dostawcy o ID ${id}`);
-    }
-    
-    const updates = {
-      ...supplierData,
-      updatedBy: userId,
-      updatedAt: serverTimestamp()
-    };
-    
-    await updateDoc(supplierRef, updates);
-    
-    return {
-      id: id,
-      ...docSnap.data(),
-      ...updates
-    };
-  } catch (error) {
-    console.error(`Błąd podczas aktualizacji dostawcy o ID ${id}:`, error);
-    throw error;
-  }
-};
-
-export const deleteSupplier = async (id) => {
-  try {
-    const supplierRef = doc(db, SUPPLIERS_COLLECTION, id);
-    
-    // Sprawdź, czy dostawca istnieje
-    const docSnap = await getDoc(supplierRef);
-    if (!docSnap.exists()) {
-      throw new Error(`Nie znaleziono dostawcy o ID ${id}`);
-    }
-    
-    // Sprawdź, czy dostawca jest używany w zamówieniach
-    const q = query(collection(db, PURCHASE_ORDERS_COLLECTION), where('supplierId', '==', id));
-    const poSnapshot = await getDocs(q);
-    
-    if (!poSnapshot.empty) {
-      throw new Error(`Nie można usunąć dostawcy, ponieważ jest używany w zamówieniach`);
-    }
-    
-    // Usuń dostawcę z bazy danych
-    await deleteDoc(supplierRef);
-    
-    return { id };
-  } catch (error) {
-    console.error(`Błąd podczas usuwania dostawcy o ID ${id}:`, error);
-    throw error;
-  }
-};
-
 // Funkcje pomocnicze
 export const getPurchaseOrdersByStatus = async (status) => {
   try {
@@ -540,16 +520,6 @@ export const getPurchaseOrdersBySupplier = async (supplierId) => {
     return purchaseOrders;
   } catch (error) {
     console.error(`Błąd podczas pobierania zamówień zakupowych dla dostawcy o ID ${supplierId}:`, error);
-    throw error;
-  }
-};
-
-export const getSuppliersByItem = async (itemId) => {
-  try {
-    // Pobierz wszystkich dostawców - w przyszłości można dodać powiązanie między przedmiotami a dostawcami
-    return getAllSuppliers();
-  } catch (error) {
-    console.error(`Błąd podczas pobierania dostawców dla przedmiotu o ID ${itemId}:`, error);
     throw error;
   }
 };

@@ -22,6 +22,9 @@ import {
   const INVENTORY_TRANSACTIONS_COLLECTION = 'inventoryTransactions';
   const INVENTORY_BATCHES_COLLECTION = 'inventoryBatches';
   const WAREHOUSES_COLLECTION = 'warehouses';
+  const INVENTORY_STOCKTAKING_COLLECTION = 'stocktaking';
+  const INVENTORY_STOCKTAKING_ITEMS_COLLECTION = 'stocktakingItems';
+  const INVENTORY_SUPPLIER_PRICES_COLLECTION = 'inventorySupplierPrices';
   
   // ------ ZARZĄDZANIE MAGAZYNAMI ------
   
@@ -1478,13 +1481,10 @@ import {
 
   // ------ ZARZĄDZANIE INWENTARYZACJĄ ------
   
-  const STOCKTAKING_COLLECTION = 'stocktaking';
-  const STOCKTAKING_ITEMS_COLLECTION = 'stocktakingItems';
-  
   // Pobieranie wszystkich inwentaryzacji
   export const getAllStocktakings = async () => {
     try {
-      const stocktakingRef = collection(db, STOCKTAKING_COLLECTION);
+      const stocktakingRef = collection(db, INVENTORY_STOCKTAKING_COLLECTION);
       const q = query(stocktakingRef, orderBy('createdAt', 'desc'));
       
       const querySnapshot = await getDocs(q);
@@ -1501,7 +1501,7 @@ import {
   // Pobieranie inwentaryzacji po ID
   export const getStocktakingById = async (stocktakingId) => {
     try {
-      const docRef = doc(db, STOCKTAKING_COLLECTION, stocktakingId);
+      const docRef = doc(db, INVENTORY_STOCKTAKING_COLLECTION, stocktakingId);
       const docSnap = await getDoc(docRef);
       
       if (!docSnap.exists()) {
@@ -1530,7 +1530,7 @@ import {
         completedAt: null
       };
       
-      const docRef = await addDoc(collection(db, STOCKTAKING_COLLECTION), stocktakingWithMeta);
+      const docRef = await addDoc(collection(db, INVENTORY_STOCKTAKING_COLLECTION), stocktakingWithMeta);
       
       return {
         id: docRef.id,
@@ -1545,7 +1545,7 @@ import {
   // Aktualizacja inwentaryzacji
   export const updateStocktaking = async (stocktakingId, stocktakingData, userId) => {
     try {
-      const stocktakingRef = doc(db, STOCKTAKING_COLLECTION, stocktakingId);
+      const stocktakingRef = doc(db, INVENTORY_STOCKTAKING_COLLECTION, stocktakingId);
       
       // Pobierz aktualne dane
       const currentStocktaking = await getStocktakingById(stocktakingId);
@@ -1581,7 +1581,7 @@ import {
   // Pobieranie elementów inwentaryzacji
   export const getStocktakingItems = async (stocktakingId) => {
     try {
-      const itemsRef = collection(db, STOCKTAKING_ITEMS_COLLECTION);
+      const itemsRef = collection(db, INVENTORY_STOCKTAKING_ITEMS_COLLECTION);
       const q = query(itemsRef, where('stocktakingId', '==', stocktakingId));
       
       const querySnapshot = await getDocs(q);
@@ -1598,7 +1598,7 @@ import {
   // Pobieranie partii dla inwentaryzacji
   export const getStocktakingBatches = async (stocktakingId) => {
     try {
-      const itemsRef = collection(db, STOCKTAKING_ITEMS_COLLECTION);
+      const itemsRef = collection(db, INVENTORY_STOCKTAKING_ITEMS_COLLECTION);
       const q = query(itemsRef, where('stocktakingId', '==', stocktakingId));
       
       const querySnapshot = await getDocs(q);
@@ -1685,7 +1685,7 @@ import {
         };
       }
       
-      const docRef = await addDoc(collection(db, STOCKTAKING_ITEMS_COLLECTION), stocktakingItem);
+      const docRef = await addDoc(collection(db, INVENTORY_STOCKTAKING_ITEMS_COLLECTION), stocktakingItem);
       
       return {
         id: docRef.id,
@@ -1700,7 +1700,7 @@ import {
   // Aktualizacja pozycji inwentaryzacji
   export const updateStocktakingItem = async (itemId, itemData, userId) => {
     try {
-      const itemRef = doc(db, STOCKTAKING_ITEMS_COLLECTION, itemId);
+      const itemRef = doc(db, INVENTORY_STOCKTAKING_ITEMS_COLLECTION, itemId);
       
       // Pobierz aktualny element
       const docSnap = await getDoc(itemRef);
@@ -1752,7 +1752,7 @@ import {
   export const deleteStocktakingItem = async (itemId) => {
     try {
       // Pobierz element przed usunięciem
-      const itemRef = doc(db, STOCKTAKING_ITEMS_COLLECTION, itemId);
+      const itemRef = doc(db, INVENTORY_STOCKTAKING_ITEMS_COLLECTION, itemId);
       const docSnap = await getDoc(itemRef);
       
       if (!docSnap.exists()) {
@@ -1893,7 +1893,7 @@ import {
             }
             
             // Aktualizuj status elementu inwentaryzacji
-            const itemRef = doc(db, STOCKTAKING_ITEMS_COLLECTION, item.id);
+            const itemRef = doc(db, INVENTORY_STOCKTAKING_ITEMS_COLLECTION, item.id);
             await updateDoc(itemRef, {
               status: 'Skorygowano',
               updatedAt: serverTimestamp(),
@@ -1909,7 +1909,7 @@ import {
       }
       
       // Zaktualizuj status inwentaryzacji
-      const stocktakingRef = doc(db, STOCKTAKING_COLLECTION, stocktakingId);
+      const stocktakingRef = doc(db, INVENTORY_STOCKTAKING_COLLECTION, stocktakingId);
       await updateDoc(stocktakingRef, {
         status: 'Zakończona',
         completedAt: serverTimestamp(),
@@ -2511,5 +2511,250 @@ import {
     } catch (error) {
       console.error('Błąd podczas przeliczania wszystkich ilości:', error);
       throw error;
+    }
+  };
+
+  // ------ ZARZĄDZANIE CENAMI DOSTAWCÓW ------
+
+  /**
+   * Pobiera ceny dostawców dla pozycji magazynowej
+   * @param {string} itemId - ID pozycji magazynowej
+   * @returns {Promise<Array>} - Lista cen dostawców
+   */
+  export const getSupplierPrices = async (itemId) => {
+    try {
+      const supplierPricesRef = collection(db, INVENTORY_SUPPLIER_PRICES_COLLECTION);
+      const q = query(
+        supplierPricesRef, 
+        where('itemId', '==', itemId),
+        orderBy('price', 'asc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const supplierPrices = [];
+      
+      querySnapshot.forEach(doc => {
+        supplierPrices.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+      
+      return supplierPrices;
+    } catch (error) {
+      console.error('Błąd podczas pobierania cen dostawców:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Dodaje nową cenę dostawcy dla pozycji magazynowej
+   * @param {Object} supplierPriceData - Dane ceny dostawcy
+   * @param {string} userId - ID użytkownika
+   * @returns {Promise<Object>} - Dodana cena dostawcy
+   */
+  export const addSupplierPrice = async (supplierPriceData, userId) => {
+    try {
+      if (!supplierPriceData.itemId) {
+        throw new Error('ID pozycji magazynowej jest wymagane');
+      }
+      
+      if (!supplierPriceData.supplierId) {
+        throw new Error('ID dostawcy jest wymagane');
+      }
+      
+      if (typeof supplierPriceData.price !== 'number' || supplierPriceData.price < 0) {
+        throw new Error('Cena musi być liczbą nieujemną');
+      }
+      
+      // Sprawdź, czy taki dostawca już istnieje dla tej pozycji
+      const existingPricesRef = collection(db, INVENTORY_SUPPLIER_PRICES_COLLECTION);
+      const q = query(
+        existingPricesRef,
+        where('itemId', '==', supplierPriceData.itemId),
+        where('supplierId', '==', supplierPriceData.supplierId)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        throw new Error('Ten dostawca już ma przypisaną cenę do tej pozycji');
+      }
+      
+      const newSupplierPrice = {
+        ...supplierPriceData,
+        createdBy: userId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+      
+      const docRef = await addDoc(collection(db, INVENTORY_SUPPLIER_PRICES_COLLECTION), newSupplierPrice);
+      
+      return {
+        id: docRef.id,
+        ...newSupplierPrice
+      };
+    } catch (error) {
+      console.error('Błąd podczas dodawania ceny dostawcy:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Aktualizuje cenę dostawcy
+   * @param {string} priceId - ID ceny dostawcy
+   * @param {Object} supplierPriceData - Dane ceny dostawcy do aktualizacji
+   * @param {string} userId - ID użytkownika
+   * @returns {Promise<boolean>} - Wynik aktualizacji
+   */
+  export const updateSupplierPrice = async (priceId, supplierPriceData, userId) => {
+    try {
+      if (typeof supplierPriceData.price !== 'number' || supplierPriceData.price < 0) {
+        throw new Error('Cena musi być liczbą nieujemną');
+      }
+      
+      const updatedData = {
+        ...supplierPriceData,
+        updatedBy: userId,
+        updatedAt: serverTimestamp()
+      };
+      
+      await updateDoc(doc(db, INVENTORY_SUPPLIER_PRICES_COLLECTION, priceId), updatedData);
+      
+      return true;
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji ceny dostawcy:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Usuwa cenę dostawcy
+   * @param {string} priceId - ID ceny dostawcy
+   * @returns {Promise<boolean>} - Wynik usunięcia
+   */
+  export const deleteSupplierPrice = async (priceId) => {
+    try {
+      await deleteDoc(doc(db, INVENTORY_SUPPLIER_PRICES_COLLECTION, priceId));
+      return true;
+    } catch (error) {
+      console.error('Błąd podczas usuwania ceny dostawcy:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Pobiera cenę dostawcy dla pozycji magazynowej
+   * @param {string} itemId - ID pozycji magazynowej
+   * @param {string} supplierId - ID dostawcy
+   * @returns {Promise<Object|null>} - Cena dostawcy lub null jeśli nie znaleziono
+   */
+  export const getSupplierPriceForItem = async (itemId, supplierId) => {
+    try {
+      const supplierPricesRef = collection(db, INVENTORY_SUPPLIER_PRICES_COLLECTION);
+      const q = query(
+        supplierPricesRef,
+        where('itemId', '==', itemId),
+        where('supplierId', '==', supplierId)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        return null;
+      }
+      
+      const doc = querySnapshot.docs[0];
+      return {
+        id: doc.id,
+        ...doc.data()
+      };
+    } catch (error) {
+      console.error('Błąd podczas pobierania ceny dostawcy dla pozycji:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Znajduje najlepszą cenę dostawcy dla pozycji magazynowej
+   * @param {string} itemId - ID pozycji magazynowej
+   * @param {number} quantity - Ilość produktu
+   * @returns {Promise<Object|null>} - Najlepsza cena dostawcy lub null jeśli nie znaleziono
+   */
+  export const getBestSupplierPriceForItem = async (itemId, quantity = 1) => {
+    try {
+      const supplierPricesRef = collection(db, INVENTORY_SUPPLIER_PRICES_COLLECTION);
+      const q = query(
+        supplierPricesRef,
+        where('itemId', '==', itemId),
+        orderBy('price', 'asc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        return null;
+      }
+      
+      // Najpierw szukamy dostawców, którzy spełniają wymóg minimalnej ilości
+      const eligiblePrices = [];
+      querySnapshot.forEach(doc => {
+        const priceData = doc.data();
+        if (!priceData.minQuantity || quantity >= priceData.minQuantity) {
+          eligiblePrices.push({
+            id: doc.id,
+            ...priceData
+          });
+        }
+      });
+      
+      if (eligiblePrices.length === 0) {
+        // Jeśli nie ma dostawców spełniających wymóg minimalnej ilości,
+        // zwracamy po prostu najtańszego dostawcę
+        const cheapestPrice = querySnapshot.docs[0].data();
+        return {
+          id: querySnapshot.docs[0].id,
+          ...cheapestPrice
+        };
+      }
+      
+      // Zwracamy najtańszą cenę spośród kwalifikujących się dostawców
+      return eligiblePrices[0];
+    } catch (error) {
+      console.error('Błąd podczas pobierania najlepszej ceny dostawcy:', error);
+      return null;
+    }
+  };
+
+  /**
+   * Znajduje najlepsze ceny dostawców dla listy pozycji magazynowych
+   * @param {Array} items - Lista obiektów zawierających itemId i quantity
+   * @returns {Promise<Object>} - Mapa itemId -> najlepsza cena dostawcy
+   */
+  export const getBestSupplierPricesForItems = async (items) => {
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return {};
+    }
+    
+    try {
+      const result = {};
+      
+      // Dla każdej pozycji znajdź najlepszą cenę dostawcy
+      for (const item of items) {
+        if (item.itemId || item.id) {
+          const itemId = item.itemId || item.id;
+          const quantity = item.quantity || 1;
+          
+          const bestPrice = await getBestSupplierPriceForItem(itemId, quantity);
+          if (bestPrice) {
+            result[itemId] = bestPrice;
+          }
+        }
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Błąd podczas pobierania najlepszych cen dostawców:', error);
+      return {};
     }
   };

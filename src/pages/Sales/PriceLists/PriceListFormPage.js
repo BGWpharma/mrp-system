@@ -59,6 +59,12 @@ const PriceListFormPage = () => {
     try {
       const data = await getAllCustomers();
       setCustomers(data);
+      
+      // Jeśli jesteśmy w trybie edycji i mamy już załadowane dane listy cenowej
+      if (isEditMode && formData.customerId) {
+        const customer = data.find(c => c.id === formData.customerId);
+        setSelectedCustomer(customer || null);
+      }
     } catch (error) {
       console.error('Błąd podczas pobierania klientów:', error);
       showNotification('Błąd podczas pobierania klientów', 'error');
@@ -79,9 +85,11 @@ const PriceListFormPage = () => {
       
       setFormData(formattedPriceList);
       
-      // Znajdź wybranego klienta
-      const customer = customers.find(c => c.id === priceList.customerId);
-      setSelectedCustomer(customer || null);
+      // Znajdź wybranego klienta, ale tylko jeśli już mamy załadowanych klientów
+      if (customers.length > 0) {
+        const customer = customers.find(c => c.id === priceList.customerId);
+        setSelectedCustomer(customer || null);
+      }
     } catch (error) {
       console.error('Błąd podczas pobierania listy cenowej:', error);
       showNotification('Błąd podczas pobierania listy cenowej', 'error');

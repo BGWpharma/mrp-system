@@ -244,7 +244,34 @@ const PurchaseOrderList = () => {
                   <TableCell>{po.supplier?.name}</TableCell>
                   <TableCell>{po.orderDate ? new Date(po.orderDate).toLocaleDateString('pl-PL') : '-'}</TableCell>
                   <TableCell>{po.expectedDeliveryDate ? new Date(po.expectedDeliveryDate).toLocaleDateString('pl-PL') : '-'}</TableCell>
-                  <TableCell>{po.totalValue?.toFixed(2)} {po.currency}</TableCell>
+                  <TableCell>
+                    {(() => {
+                      // Najpierw sprawdź, czy zamówienie ma już obliczoną wartość brutto
+                      if (po.totalGross !== undefined && po.totalGross !== null) {
+                        return `${parseFloat(po.totalGross).toFixed(2)} ${po.currency}`;
+                      }
+                      
+                      // Jeśli nie, oblicz ją
+                      // Obliczanie całkowitej wartości brutto
+                      const productsValue = typeof po.items === 'object' && Array.isArray(po.items)
+                        ? po.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0)
+                        : (po.totalValue || 0);
+                      
+                      // Oblicz VAT (tylko od wartości produktów)
+                      const vatRate = po.vatRate || 0;
+                      const vatValue = (productsValue * vatRate) / 100;
+                      
+                      // Oblicz dodatkowe koszty
+                      const additionalCosts = po.additionalCostsItems && Array.isArray(po.additionalCostsItems) 
+                        ? po.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
+                        : (parseFloat(po.additionalCosts) || 0);
+                      
+                      // Wartość brutto to suma: wartość netto produktów + VAT + dodatkowe koszty
+                      const grossValue = productsValue + vatValue + additionalCosts;
+                      
+                      return `${grossValue.toFixed(2)} ${po.currency}`;
+                    })()}
+                  </TableCell>
                   <TableCell>
                     <Chip 
                       label={STATUS_TRANSLATIONS[po.status] || po.status} 

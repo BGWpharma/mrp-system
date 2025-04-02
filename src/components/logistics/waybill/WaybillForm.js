@@ -39,7 +39,7 @@ import {
 } from '../../../services/logisticsService';
 import { getAllInventoryItems } from '../../../services/inventoryService';
 import { getAllClients } from '../../../services/clientService';
-import { getAllSuppliers } from '../../../services/purchaseOrderService';
+import { getAllSuppliers } from '../../../services/supplierService';
 import { getAllWarehouses } from '../../../services/inventoryService';
 
 // Ikony

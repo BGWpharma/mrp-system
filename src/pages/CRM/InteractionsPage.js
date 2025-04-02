@@ -43,7 +43,7 @@ import {
 } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import { getAllInteractions, deleteInteraction, updateInteraction, getInteractionById } from '../../services/crmService';
-import { getAllSuppliers } from '../../services/purchaseOrderService';
+import { getAllSuppliers } from '../../services/supplierService';
 import { useNotification } from '../../hooks/useNotification';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';

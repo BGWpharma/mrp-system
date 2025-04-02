@@ -29,23 +29,26 @@ import {
   Add as AddIcon, 
   Check as CheckIcon, 
   Engineering as EngineeringIcon,
-  ShoppingCart as ShoppingCartIcon
+  ShoppingCart as ShoppingCartIcon,
+  AttachMoney as AttachMoneyIcon,
+  Calculate as CalculateIcon
 } from '@mui/icons-material';
-import { getAllOrders, getOrderById, addProductionTaskToOrder } from '../../services/orderService';
+import { getAllOrders, getOrderById, addProductionTaskToOrder, updateOrder } from '../../services/orderService';
 import { createTask, reserveMaterialsForTask } from '../../services/productionService';
-import { getAllRecipes, getRecipeById } from '../../services/recipeService';
+import { getAllRecipes, getRecipeById, getRecipesByCustomer } from '../../services/recipeService';
 import { getIngredientPrices, getInventoryItemById } from '../../services/inventoryService';
-import { calculateProductionTaskCost } from '../../utils/costCalculator';
+import { calculateManufacturingOrderCosts } from '../../utils/costCalculator';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/dateUtils';
 import { formatCurrency } from '../../utils/formatUtils';
+import { getPriceForCustomerProduct } from '../../services/priceListService';
 
 const CreateFromOrderPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser } = useAuth();
-  const { showSuccess, showError, showInfo } = useNotification();
+  const { showSuccess, showError, showInfo, showWarning } = useNotification();
   
   const [orders, setOrders] = useState([]);
   const [selectedOrderId, setSelectedOrderId] = useState(location.state?.orderId || '');
@@ -53,9 +56,11 @@ const CreateFromOrderPage = () => {
   const [selectedItems, setSelectedItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [orderLoading, setOrderLoading] = useState(false);
-  const [creatingTask, setCreatingTask] = useState(false);
+  const [creatingTasks, setCreatingTasks] = useState(false);
   const [recipes, setRecipes] = useState([]);
   const [existingTasks, setExistingTasks] = useState([]);
+  const [tasksCreated, setTasksCreated] = useState([]);
+  const [updatingPrices, setUpdatingPrices] = useState(false);
   
   // Formularz nowego zadania
   const [taskForm, setTaskForm] = useState({
@@ -294,7 +299,7 @@ const CreateFromOrderPage = () => {
     }
     
     try {
-      setCreatingTask(true);
+      setCreatingTasks(true);
       
       // Przygotuj dane zadania produkcyjnego
       const selectedProductItems = selectedItems.filter(item => item.selected);
@@ -345,16 +350,16 @@ const CreateFromOrderPage = () => {
               const pricesMap = await getIngredientPrices(ingredientIds);
               
               // Oblicz koszty
-              const costData = calculateProductionTaskCost(taskForCostCalc, recipe, pricesMap);
+              const costData = calculateManufacturingOrderCosts(taskForCostCalc, recipe, pricesMap);
               
               // Zapisz całkowity koszt produkcji (zamiast kosztu jednostkowego)
               costs = {
-                ingredientsCost: costData.ingredientsCost,
-                laborCost: costData.laborCost,
-                energyCost: costData.energyCost,
+                materialCost: costData.materialCost,
+                laborCost: costData.actualLaborCost,
+                machineCost: costData.machineCost,
                 overheadCost: costData.overheadCost,
                 unitCost: costData.unitCost,
-                totalCost: costData.taskTotalCost
+                totalCost: costData.totalProductionCost
               };
             }
           } catch (error) {
@@ -389,7 +394,7 @@ const CreateFromOrderPage = () => {
       showError('Błąd podczas tworzenia zadania produkcyjnego: ' + error.message);
       console.error('Error creating task:', error);
     } finally {
-      setCreatingTask(false);
+      setCreatingTasks(false);
     }
   };
   
@@ -399,6 +404,390 @@ const CreateFromOrderPage = () => {
   
   const areAllItemsSelected = selectedItems.length > 0 && selectedItems.every(item => item.selected);
   const someItemsSelected = selectedItems.some(item => item.selected);
+
+  // Inicjalizacja zadań produkcyjnych z wybranego zamówienia
+  const initializeTasksFromOrder = () => {
+    if (!selectedOrder || !selectedOrder.items || selectedOrder.items.length === 0) {
+      return;
+    }
+    
+    // Resetuj wcześniej wybrane elementy
+    setSelectedItems({});
+    
+    // Tworzymy nowy obiekt z zaznaczonymi elementami
+    const initialSelectedItems = {};
+    
+    // Dla każdego produktu w zamówieniu, który jest recepturą lub dla którego można znaleźć recepturę
+    selectedOrder.items.forEach(item => {
+      // Jeśli element jest oznaczony jako receptura, zawsze go dodaj
+      if (item.isRecipe) {
+        initialSelectedItems[item.id] = true;
+        return;
+      }
+      
+      // W przeciwnym razie spróbuj znaleźć recepturę dla produktu
+      const recipe = findRecipeForProduct(item.name);
+      if (recipe) {
+        // Znaleziono recepturę dla produktu, więc zaznacz go
+        initialSelectedItems[item.id] = true;
+      }
+    });
+    
+    setSelectedItems(initialSelectedItems);
+  };
+
+  // Obsługa wyboru zamówienia
+  const handleOrderSelect = async (_, order) => {
+    if (order) {
+      console.log('Wybrano zamówienie:', order);
+      setSelectedOrder(order);
+      
+      // Inicjalizuj zadania produkcyjne na podstawie wybranego zamówienia
+      initializeTasksFromOrder();
+      
+      // Pobierz receptury dla danego klienta, jeśli zamówienie ma przypisanego klienta
+      if (order.customer && order.customer.id) {
+        fetchRecipesForCustomer(order.customer.id);
+      } else {
+        // Jeśli nie ma klienta, pobierz wszystkie receptury
+        fetchRecipes();
+      }
+    } else {
+      setSelectedOrder(null);
+      setSelectedItems({});
+    }
+  };
+
+  // Funkcja tworząca zadania produkcyjne dla wybranych produktów
+  const createTasksFromSelectedProducts = async () => {
+    if (!selectedOrder) {
+      showError('Nie wybrano zamówienia');
+      return;
+    }
+    
+    const selectedKeys = Object.keys(selectedItems).filter(key => selectedItems[key]);
+    if (selectedKeys.length === 0) {
+      showError('Nie wybrano żadnych produktów do produkcji');
+      return;
+    }
+    
+    setCreatingTasks(true);
+    setTasksCreated([]);
+    
+    try {
+      for (const itemId of selectedKeys) {
+        // Znajdź produkt w zamówieniu
+        const item = selectedOrder.items.find(item => item.id === itemId);
+        if (!item) continue;
+        
+        let recipe = null;
+        
+        // Jeśli element jest recepturą, pobierz bezpośrednio recepturę z jej ID
+        if (item.isRecipe) {
+          try {
+            recipe = await getRecipeById(itemId);
+            console.log(`Pobrano recepturę bezpośrednio dla elementu ${item.name}:`, recipe);
+          } catch (recipeError) {
+            console.error(`Błąd podczas pobierania receptury dla ${item.name}:`, recipeError);
+            showError(`Nie udało się pobrać receptury dla ${item.name}`);
+            continue;
+          }
+        } 
+        // W przeciwnym razie spróbuj znaleźć recepturę na podstawie nazwy produktu
+        else {
+          recipe = findRecipeForProduct(item.name);
+          if (!recipe) {
+            console.log(`Nie znaleziono receptury dla produktu ${item.name}`);
+            showWarning(`Nie znaleziono receptury dla produktu ${item.name}. Zadanie zostanie utworzone bez receptury.`);
+          } else {
+            console.log(`Znaleziono recepturę dla produktu ${item.name}:`, recipe);
+          }
+        }
+        
+        let normalizedUnit = item.unit;
+        // Konwersja jednostek jeśli potrzebna
+        if (item.unit === 'kg' || item.unit === 'l') {
+          normalizedUnit = item.unit;
+        } else {
+          normalizedUnit = 'szt.';
+        }
+        
+        // Przygotuj materiały na podstawie receptury
+        let materials = [];
+        let recipeData = {};
+        let costs = {
+          materialCost: 0,
+          laborCost: 0,
+          machineCost: 0,
+          overheadCost: 0,
+          totalCost: 0,
+          unitCost: 0
+        };
+        
+        if (recipe) {
+          materials = createMaterialsFromRecipe(recipe, item.quantity);
+          
+          recipeData = {
+            recipeId: recipe.id,
+            recipeName: recipe.name,
+            recipeIngredients: recipe.ingredients || []
+          };
+        }
+        
+        if (recipe) {
+          try {
+            // Przygotuj dane zadania dla kalkulatora kosztów
+            const taskForCostCalc = {
+              quantity: item.quantity,
+              unit: normalizedUnit
+            };
+            
+            // Pobierz ID składników z receptury
+            const ingredientIds = recipe.ingredients
+              .filter(ing => ing.id)
+              .map(ing => ing.id);
+              
+            if (ingredientIds.length > 0) {
+              // Pobierz ceny składników
+              const pricesMap = await getIngredientPrices(ingredientIds);
+              
+              // Oblicz koszty
+              const costData = calculateManufacturingOrderCosts(taskForCostCalc, recipe, pricesMap);
+              
+              // Zapisz całkowity koszt produkcji (zamiast kosztu jednostkowego)
+              costs = {
+                materialCost: costData.materialCost,
+                laborCost: costData.actualLaborCost,
+                machineCost: costData.machineCost,
+                overheadCost: costData.overheadCost,
+                unitCost: costData.unitCost,
+                totalCost: costData.totalProductionCost
+              };
+            }
+          } catch (error) {
+            console.error('Błąd podczas obliczania kosztów:', error);
+          }
+        }
+        
+        const taskData = {
+          ...taskForm,
+          productName: item.name,
+          quantity: item.quantity,
+          unit: normalizedUnit,
+          customer: selectedOrder.customer,
+          orderId: selectedOrder.id,
+          orderNumber: selectedOrder.orderNumber || selectedOrder.id.substring(0, 8),
+          materials: materials,
+          costs: costs,
+          ...recipeData
+        };
+        
+        // Utwórz zadanie produkcyjne
+        // Uwaga: funkcja createTask automatycznie rezerwuje materiały dla zadania
+        const newTask = await createTask(taskData, currentUser.uid);
+        
+        if (newTask) {
+          // Dodaj zadanie do zamówienia
+          await addProductionTaskToOrder(selectedOrder.id, newTask);
+          
+          // Dodaj zadanie do listy utworzonych zadań
+          setTasksCreated(prev => [...prev, newTask]);
+        }
+      }
+      
+      // Pokaż sukces, jeśli utworzono przynajmniej jedno zadanie
+      if (tasksCreated.length > 0) {
+        showSuccess(`Utworzono ${tasksCreated.length} zadań produkcyjnych`);
+      }
+    } catch (error) {
+      console.error('Błąd podczas tworzenia zadań produkcyjnych:', error);
+      showError('Błąd podczas tworzenia zadań produkcyjnych: ' + error.message);
+    } finally {
+      setCreatingTasks(false);
+    }
+  };
+
+  // Pobieranie receptur dla określonego klienta
+  const fetchRecipesForCustomer = async (customerId) => {
+    try {
+      console.log('Pobieranie receptur dla klienta:', customerId);
+      const recipesData = await getRecipesByCustomer(customerId);
+      setRecipes(recipesData);
+      console.log('Pobrano receptur dla klienta:', recipesData.length);
+    } catch (error) {
+      console.error('Błąd podczas pobierania receptur dla klienta:', error);
+      showError('Nie udało się pobrać receptur dla klienta');
+      // W przypadku błędu - spróbuj pobrać wszystkie receptury
+      fetchRecipes();
+    }
+  };
+
+  // Nowa funkcja do aktualizacji cen produktów na podstawie listy cen dla receptur
+  const updatePricesFromPriceList = async () => {
+    if (!selectedOrder || !selectedOrder.items || selectedOrder.items.length === 0) {
+      showInfo('Zamówienie nie zawiera żadnych pozycji do aktualizacji cen');
+      return;
+    }
+
+    try {
+      setUpdatingPrices(true);
+      
+      const customerId = selectedOrder.customer?.id;
+      if (!customerId) {
+        showError('Zamówienie nie ma przypisanego klienta');
+        setUpdatingPrices(false);
+        return;
+      }
+      
+      let hasUpdates = false;
+      const updatedItems = [...selectedOrder.items];
+      
+      // Przeszukaj pozycje zamówienia
+      for (let i = 0; i < updatedItems.length; i++) {
+        const item = updatedItems[i];
+        
+        // Sprawdź czy pozycja jest recepturą
+        const isRecipe = item.itemType === 'recipe' || item.isRecipe;
+        let recipeId = isRecipe ? item.id : null;
+        
+        // Jeśli nie jest bezpośrednio recepturą, spróbuj znaleźć pasującą recepturę
+        if (!isRecipe) {
+          const matchingRecipe = findRecipeForProduct(item.name);
+          if (matchingRecipe) {
+            recipeId = matchingRecipe.id;
+          }
+        }
+        
+        // Jeśli mamy identyfikator receptury, pobierz cenę z listy cen
+        if (recipeId) {
+          const priceFromList = await getPriceForCustomerProduct(customerId, recipeId, true);
+          
+          if (priceFromList !== null && priceFromList !== undefined) {
+            console.log(`Znaleziono cenę ${priceFromList} dla produktu ${item.name} w liście cen`);
+            
+            // Aktualizuj cenę tylko jeśli jest różna
+            if (item.price !== priceFromList) {
+              updatedItems[i] = {
+                ...item,
+                price: priceFromList,
+                fromPriceList: true,
+                originalPrice: item.price  // Zapisz oryginalną cenę
+              };
+              hasUpdates = true;
+            }
+          }
+        }
+      }
+      
+      // Jeśli są zmiany, zaktualizuj zamówienie
+      if (hasUpdates) {
+        // Oblicz nową wartość całkowitą
+        const totalValue = updatedItems.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+        
+        // Utwórz nowy obiekt zamówienia z zaktualizowanymi pozycjami
+        const updatedOrder = {
+          ...selectedOrder,
+          items: updatedItems,
+          totalValue: totalValue
+        };
+        
+        // Zaktualizuj zamówienie w bazie danych
+        await updateOrder(selectedOrder.id, updatedOrder, currentUser.uid);
+        
+        // Zaktualizuj stan lokalny
+        setSelectedOrder(updatedOrder);
+        setSelectedItems(updatedItems.map((item, index) => ({
+          ...item,
+          itemId: index,
+          selected: true,
+          unit: normalizeUnit(item.unit)
+        })));
+        
+        showSuccess('Ceny produktów zostały zaktualizowane na podstawie listy cen');
+      } else {
+        showInfo('Nie znaleziono aktualizacji cen w listach cenowych');
+      }
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji cen:', error);
+      showError('Wystąpił błąd podczas aktualizacji cen: ' + error.message);
+    } finally {
+      setUpdatingPrices(false);
+    }
+  };
+
+  // Funkcja aktualizująca koszt zamówienia na podstawie kosztów produkcji
+  const updateOrderWithProductionCosts = async () => {
+    if (!selectedOrder) {
+      showError('Nie wybrano zamówienia');
+      return;
+    }
+    
+    try {
+      setUpdatingPrices(true);
+      
+      // Pobierz zadania produkcyjne powiązane z zamówieniem
+      const order = await getOrderById(selectedOrder.id);
+      
+      if (!order.productionTasks || order.productionTasks.length === 0) {
+        showInfo('Zamówienie nie ma powiązanych zadań produkcyjnych');
+        setUpdatingPrices(false);
+        return;
+      }
+      
+      // Utwórz mapę kosztów produkcji dla każdej pozycji zamówienia
+      const productionCostsMap = {};
+      
+      // Zbierz koszty produkcji z zadań produkcyjnych
+      for (const task of order.productionTasks) {
+        if (!task.costs) continue;
+        
+        // Znajdź odpowiadającą pozycję zamówienia
+        const matchingItem = order.items.find(item => 
+          item.name.toLowerCase() === task.productName.toLowerCase()
+        );
+        
+        if (matchingItem) {
+          // Jeśli już mamy koszt dla tej pozycji, dodaj do istniejącego
+          if (productionCostsMap[matchingItem.id]) {
+            productionCostsMap[matchingItem.id] += task.costs.totalCost || 0;
+          } else {
+            productionCostsMap[matchingItem.id] = task.costs.totalCost || 0;
+          }
+        }
+      }
+      
+      // Sprawdź czy zamówienie ma powiązane zamówienia zakupu
+      if (order.linkedPurchaseOrders && order.linkedPurchaseOrders.length > 0) {
+        // Dla każdej pozycji zamówienia dodajemy koszty materiałów z zamówień zakupu
+        order.linkedPurchaseOrders.forEach(po => {
+          // W tym miejscu możemy dodać logikę przypisywania kosztów PO do pozycji CO
+          // Na razie po prostu informujemy o powiązanych PO
+          console.log(`Zamówienie ma powiązane PO: ${po.number} o wartości ${po.value}`);
+        });
+      }
+      
+      // Dodaj informacje o kosztach produkcji do zamówienia
+      const updatedOrder = {
+        ...order,
+        productionCosts: productionCostsMap,
+        hasProductionCosts: true
+      };
+      
+      // Zaktualizuj zamówienie w bazie danych
+      await updateOrder(order.id, updatedOrder, currentUser.uid);
+      
+      showSuccess('Koszty produkcji zostały zaktualizowane w zamówieniu');
+      
+      // Odśwież dane zamówienia
+      fetchOrderDetails(order.id);
+      
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji kosztów produkcji:', error);
+      showError('Wystąpił błąd podczas aktualizacji kosztów produkcji: ' + error.message);
+    } finally {
+      setUpdatingPrices(false);
+    }
+  };
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -444,6 +833,28 @@ const CreateFromOrderPage = () => {
                   </Select>
                 </FormControl>
               </Grid>
+              
+              {selectedOrderId && (
+                <Grid item xs={12} md={6} sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                  <Button
+                    variant="outlined"
+                    onClick={updatePricesFromPriceList}
+                    disabled={updatingPrices || orderLoading}
+                    startIcon={<AttachMoneyIcon />}
+                  >
+                    {updatingPrices ? 'Aktualizowanie...' : 'Aktualizuj ceny z listy cen'}
+                  </Button>
+                  
+                  <Button
+                    variant="outlined"
+                    onClick={updateOrderWithProductionCosts}
+                    disabled={updatingPrices || orderLoading}
+                    startIcon={<CalculateIcon />}
+                  >
+                    {updatingPrices ? 'Aktualizowanie...' : 'Wlicz koszty produkcji do CO'}
+                  </Button>
+                </Grid>
+              )}
             </Grid>
             
             {orderLoading ? (
@@ -645,18 +1056,18 @@ const CreateFromOrderPage = () => {
                     variant="contained"
                     color="primary"
                     startIcon={<EngineeringIcon />}
-                    onClick={handleCreateTask}
-                    disabled={creatingTask || !someItemsSelected}
+                    onClick={createTasksFromSelectedProducts}
+                    disabled={creatingTasks || !someItemsSelected}
                     sx={{ mr: 2 }}
                   >
-                    {creatingTask ? <CircularProgress size={24} /> : 'Utwórz zadanie produkcyjne'}
+                    {creatingTasks ? <CircularProgress size={24} /> : 'Utwórz zadania produkcyjne'}
                   </Button>
                 </Box>
               </>
             ) : (
               <Alert severity="info" sx={{ mt: 2, mb: 2 }}>
                 {orders.length > 0 ? (
-                  'Wybierz zamówienie z listy, aby utworzyć zadanie produkcyjne.'
+                  'Wybierz zamówienie z listy, aby utworzyć zadania produkcyjne.'
                 ) : (
                   'Nie znaleziono żadnych zamówień. Utwórz i potwierdź zamówienia w sekcji Zamówienia klientów.'
                 )}

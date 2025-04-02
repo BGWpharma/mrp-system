@@ -6,7 +6,7 @@ import {
   DialogActions, DialogContent, DialogContentText, DialogTitle
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon } from '@mui/icons-material';
-import { getAllSuppliers, deleteSupplier } from '../../services/purchaseOrderService';
+import { getAllSuppliers, deleteSupplier } from '../../services/supplierService';
 import { useNotification } from '../../hooks/useNotification';
 
 const SuppliersList = () => {

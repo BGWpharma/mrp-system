@@ -14,7 +14,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import { getSupplierById, createSupplier, updateSupplier } from '../../services/purchaseOrderService';
+import { getSupplierById, createSupplier, updateSupplier } from '../../services/supplierService';
 
 const SupplierForm = ({ viewOnly = false, supplierId }) => {
   const navigate = useNavigate();

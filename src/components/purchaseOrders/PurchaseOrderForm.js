@@ -1,11 +1,37 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, { useState, useEffect, useContext } from 'react';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
-  Container, Typography, Paper, Box, TextField, Button, Grid, Autocomplete,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton,
-  FormControl, InputLabel, Select, MenuItem, Divider
+  Box,
+  Button,
+  TextField,
+  Grid,
+  Typography,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Autocomplete,
+  IconButton,
+  Divider,
+  Paper,
+  TableContainer,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  Alert,
+  CircularProgress,
+  Tooltip,
+  Container,
+  InputAdornment
 } from '@mui/material';
-import { Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
+import {
+  Add as AddIcon,
+  Delete as DeleteIcon,
+  FindReplace as SuggestIcon,
+  InfoOutlined as InfoIcon
+} from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { pl } from 'date-fns/locale';
@@ -15,29 +41,40 @@ import {
   createPurchaseOrder, 
   getPurchaseOrderById, 
   updatePurchaseOrder,
-  getAllSuppliers,
   PURCHASE_ORDER_STATUSES,
   translateStatus
 } from '../../services/purchaseOrderService';
-import { getAllInventoryItems, getAllWarehouses } from '../../services/inventoryService';
+import { 
+  getAllInventoryItems,
+  getAllWarehouses
+} from '../../services/inventoryService';
 import { CURRENCY_OPTIONS } from '../../config';
 import { formatCurrency } from '../../utils/formatUtils';
 import { formatDateForInput } from '../../utils/dateUtils';
+import { formatAddress } from '../../utils/addressUtils';
+import { 
+  getAllSuppliers,
+  getBestSupplierPriceForItem, 
+  getBestSupplierPricesForItems 
+} from '../../services/supplierService';
 
 const PurchaseOrderForm = ({ orderId }) => {
   const { poId } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showError, showInfo } = useNotification();
   
   // Używamy orderId z props, a jeśli nie istnieje, to poId z useParams()
   const currentOrderId = orderId || poId;
   
   const [loading, setLoading] = useState(!!currentOrderId && currentOrderId !== 'new');
   const [saving, setSaving] = useState(false);
+  const [loadingSupplierSuggestions, setLoadingSupplierSuggestions] = useState(false);
   const [suppliers, setSuppliers] = useState([]);
   const [inventoryItems, setInventoryItems] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
+  const [supplierSuggestions, setSupplierSuggestions] = useState({});
   
   const [poData, setPoData] = useState({
     number: '',
@@ -45,6 +82,7 @@ const PurchaseOrderForm = ({ orderId }) => {
     items: [],
     totalValue: 0,
     totalGross: 0,
+    additionalCostsItems: [], // Tablica obiektów z dodatkowymi kosztami
     currency: 'EUR',
     vatRate: 23, // Domyślna stawka VAT 23%
     targetWarehouseId: '', // Nowe pole dla magazynu docelowego
@@ -94,6 +132,18 @@ const PurchaseOrderForm = ({ orderId }) => {
           
           console.log("Dopasowany dostawca:", matchedSupplier);
           
+          // Konwersja ze starego formatu na nowy (jeśli istnieją tylko stare pola)
+          let additionalCostsItems = poDetails.additionalCostsItems || [];
+          
+          // Jeśli istnieje tylko stare pole additionalCosts, skonwertuj na nowy format
+          if (!poDetails.additionalCostsItems && (poDetails.additionalCosts > 0 || poDetails.additionalCostsDescription)) {
+            additionalCostsItems = [{
+              id: `cost-${Date.now()}`,
+              value: poDetails.additionalCosts || 0,
+              description: poDetails.additionalCostsDescription || 'Dodatkowe koszty'
+            }];
+          }
+          
           setPoData({
             ...poDetails,
             supplier: matchedSupplier,
@@ -102,7 +152,49 @@ const PurchaseOrderForm = ({ orderId }) => {
             vatRate: poDetails.vatRate || 23,
             targetWarehouseId: poDetails.targetWarehouseId || '',
             invoiceLink: poDetails.invoiceLink || '',
+            additionalCostsItems: additionalCostsItems
           });
+        } else if (location.state?.materialId) {
+          // Jeśli mamy materialId z parametrów stanu (z prognozy zapotrzebowania),
+          // dodaj od razu pozycję do zamówienia
+          const materialId = location.state.materialId;
+          const requiredQuantity = location.state.requiredQuantity || 1;
+          
+          const inventoryItem = itemsData.find(item => item.id === materialId);
+          if (inventoryItem) {
+            // Znajdź najlepszą cenę dostawcy dla tego materiału
+            const bestPrice = await getBestSupplierPriceForItem(materialId, requiredQuantity);
+            
+            // Znajdź dostawcę
+            let supplier = null;
+            if (bestPrice && bestPrice.supplierId) {
+              supplier = suppliersData.find(s => s.id === bestPrice.supplierId);
+            }
+            
+            // Przygotuj początkowy stan z wybranym dostawcą i materiałem
+            const initialItems = [{
+              id: `temp-${Date.now()}`,
+              inventoryItemId: materialId,
+              name: inventoryItem.name,
+              quantity: requiredQuantity,
+              unit: inventoryItem.unit || 'szt',
+              unitPrice: bestPrice ? bestPrice.price : 0,
+              totalPrice: bestPrice ? bestPrice.price * requiredQuantity : 0
+            }];
+            
+            setPoData(prev => ({
+              ...prev,
+              supplier: supplier,
+              items: initialItems,
+              deliveryAddress: supplier && supplier.addresses && supplier.addresses.length > 0
+                ? formatAddress(supplier.addresses.find(a => a.isMain) || supplier.addresses[0])
+                : ''
+            }));
+            
+            if (supplier) {
+              showInfo(`Znaleziono dostawcę ${supplier.name} z najlepszą ceną dla ${inventoryItem.name}.`);
+            }
+          }
         }
         
         setLoading(false);
@@ -114,20 +206,36 @@ const PurchaseOrderForm = ({ orderId }) => {
     };
     
     fetchData();
-  }, [currentOrderId, showError]);
+  }, [currentOrderId, showError, location.state]);
   
-  // Aktualizacja całkowitej wartości zamówienia (netto i brutto)
-  useEffect(() => {
-    const totalNet = poData.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
-    const vatRate = poData.vatRate / 100 || 0.23;
-    const totalGross = totalNet * (1 + vatRate);
+  // Funkcja do obliczania sumy
+  const calculateTotals = (items, additionalCosts = []) => {
+    const itemsTotal = items.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
+    const additionalCostsTotal = additionalCosts.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
+    const totalNet = itemsTotal + additionalCostsTotal;
     
-    setPoData(prev => ({ 
-      ...prev, 
-      totalValue: totalNet,
-      totalGross: totalGross 
+    // VAT naliczany tylko od wartości produktów, bez dodatkowych kosztów
+    const vatValue = (itemsTotal * (poData.vatRate || 0)) / 100;
+    // Wartość brutto to suma: wartość netto produktów + VAT + dodatkowe koszty
+    const totalGross = itemsTotal + vatValue + additionalCostsTotal;
+    
+    return {
+      itemsTotal,
+      additionalCostsTotal,
+      totalNet,
+      totalGross,
+    };
+  };
+
+  // Aktualizacja totali przy zmianie elementów
+  useEffect(() => {
+    const totals = calculateTotals(poData.items, poData.additionalCostsItems);
+    setPoData(prev => ({
+      ...prev,
+      totalValue: totals.totalNet,
+      totalGross: totals.totalGross
     }));
-  }, [poData.items, poData.vatRate]);
+  }, [poData.items, poData.additionalCostsItems, poData.vatRate]);
   
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -168,12 +276,6 @@ const PurchaseOrderForm = ({ orderId }) => {
         ? formatAddress(newValue.addresses.find(a => a.isMain) || newValue.addresses[0])
         : ''
     });
-  };
-  
-  // Funkcja formatująca adres
-  const formatAddress = (address) => {
-    if (!address) return '';
-    return `${address.name ? address.name + ', ' : ''}${address.street}, ${address.postalCode} ${address.city}, ${address.country}`;
   };
   
   const handleAddItem = () => {
@@ -232,62 +334,253 @@ const PurchaseOrderForm = ({ orderId }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!poData.supplier) {
-      showError('Wybierz dostawcę');
-      return;
-    }
-    
-    if (!poData.targetWarehouseId) {
-      showError('Wybierz magazyn docelowy');
-      return;
-    }
-    
-    if (poData.items.length === 0) {
-      showError('Dodaj przynajmniej jeden przedmiot do zamówienia');
-      return;
-    }
-    
-    const invalidItem = poData.items.find(item => !item.name || !item.quantity || !item.unitPrice);
-    if (invalidItem) {
-      showError('Uzupełnij wszystkie dane dla każdego przedmiotu');
+    if (!isFormValid()) {
+      showError('Formularz zawiera błędy. Sprawdź wprowadzone dane.');
       return;
     }
     
     try {
       setSaving(true);
-      console.log("Zapisywanie zamówienia, dane:", poData);
       
-      // Dodajemy dane użytkownika
+      // Przygotuj dane zamówienia
       const orderData = {
         ...poData,
-        createdBy: currentUser?.uid || null,
-        updatedBy: currentUser?.uid || null
+        totalValue: poData.totalValue,
+        totalGross: poData.totalGross,
+        updatedBy: currentUser.uid
       };
       
       let result;
+      
+      // Rozróżnienie między tworzeniem nowego zamówienia a aktualizacją istniejącego
       if (currentOrderId && currentOrderId !== 'new') {
-        console.log("Aktualizacja istniejącego zamówienia:", currentOrderId);
+        // Aktualizacja istniejącego zamówienia
         result = await updatePurchaseOrder(currentOrderId, orderData);
-        showSuccess('Zamówienie komponentów zostało zaktualizowane');
+        showSuccess('Zamówienie zakupu zostało zaktualizowane');
       } else {
-        console.log("Tworzenie nowego zamówienia");
-        result = await createPurchaseOrder(orderData);
-        showSuccess('Zamówienie komponentów zostało utworzone');
+        // Tworzenie nowego zamówienia
+        result = await createPurchaseOrder(orderData, currentUser.uid);
+        showSuccess('Zamówienie zakupu zostało utworzone');
       }
       
-      console.log("Wynik zapisu:", result);
-      
-      setSaving(false);
-      navigate(`/purchase-orders/${result.id}`);
+      // Przekieruj do listy zamówień
+      navigate('/purchase-orders');
     } catch (error) {
-      console.error('Błąd podczas zapisywania zamówienia:', error);
-      showError('Nie udało się zapisać zamówienia: ' + error.message);
+      console.error('Błąd podczas zapisywania zamówienia zakupu:', error);
+      showError('Wystąpił błąd: ' + error.message);
+    } finally {
       setSaving(false);
     }
   };
   
   const handleCancel = () => {
     navigate('/purchase-orders');
+  };
+  
+  // Funkcja do znajdowania najlepszych cen dostawców
+  const findBestSuppliers = async () => {
+    if (!poData.items || poData.items.length === 0) {
+      showInfo('Brak pozycji w zamówieniu');
+      return;
+    }
+    
+    try {
+      setLoadingSupplierSuggestions(true);
+      
+      // Przygotuj listę elementów do sprawdzenia
+      const itemsToCheck = poData.items
+        .filter(item => item.inventoryItemId)
+        .map(item => ({
+          itemId: item.inventoryItemId,
+          quantity: item.quantity
+        }));
+      
+      if (itemsToCheck.length === 0) {
+        showInfo('Brak pozycji magazynowych do sprawdzenia');
+        setLoadingSupplierSuggestions(false);
+        return;
+      }
+      
+      // Znajdź najlepsze ceny dostawców
+      const bestPrices = await getBestSupplierPricesForItems(itemsToCheck);
+      setSupplierSuggestions(bestPrices);
+      
+      let hasRecommendations = false;
+      
+      // Aktualizuj pozycje zamówienia z najlepszymi cenami
+      const updatedItems = poData.items.map(item => {
+        if (item.inventoryItemId && bestPrices[item.inventoryItemId]) {
+          const bestPrice = bestPrices[item.inventoryItemId];
+          
+          // Znajdź nazwę dostawcy
+          const supplier = suppliers.find(s => s.id === bestPrice.supplierId);
+          const supplierName = supplier ? supplier.name : 'Nieznany dostawca';
+          
+          // Jeśli najlepsza cena jest lepsza niż aktualna, zaznacz że mamy rekomendację
+          if (!item.supplierPrice || bestPrice.price < item.unitPrice) {
+            hasRecommendations = true;
+          }
+          
+          return {
+            ...item,
+            supplierPrice: bestPrice.price,
+            supplierId: bestPrice.supplierId,
+            supplierName: supplierName
+          };
+        }
+        return item;
+      });
+      
+      // Aktualizuj poData z zaktualizowanymi pozycjami
+      setPoData(prev => ({
+        ...prev,
+        items: updatedItems
+      }));
+      
+      if (hasRecommendations) {
+        showSuccess('Znaleziono najlepsze ceny dostawców dla pozycji zamówienia');
+      } else {
+        showInfo('Nie znaleziono lepszych cen niż aktualne');
+      }
+    } catch (error) {
+      console.error('Błąd podczas szukania najlepszych cen dostawców:', error);
+      showError('Błąd podczas szukania najlepszych cen dostawców');
+    } finally {
+      setLoadingSupplierSuggestions(false);
+    }
+  };
+  
+  // Funkcja do aktualizacji zamówienia z najlepszymi cenami
+  const applyBestSupplierPrices = () => {
+    if (!supplierSuggestions || Object.keys(supplierSuggestions).length === 0) {
+      showInfo('Brak sugestii dostawców do zastosowania');
+      return;
+    }
+    
+    // Aktualizuj pozycje zamówienia
+    const updatedItems = poData.items.map(item => {
+      if (item.inventoryItemId && supplierSuggestions[item.inventoryItemId]) {
+        const bestPrice = supplierSuggestions[item.inventoryItemId];
+        return {
+          ...item,
+          unitPrice: bestPrice.price,
+          totalPrice: bestPrice.price * item.quantity
+        };
+      }
+      return item;
+    });
+    
+    // Aktualizuj poData
+    setPoData(prev => ({
+      ...prev,
+      items: updatedItems
+    }));
+    
+    // Znajdź dostawcę z największą liczbą pozycji
+    const supplierCounts = {};
+    for (const itemId in supplierSuggestions) {
+      const supplierId = supplierSuggestions[itemId].supplierId;
+      supplierCounts[supplierId] = (supplierCounts[supplierId] || 0) + 1;
+    }
+    
+    // Znajdź dostawcę z największą liczbą pozycji
+    let bestSupplierId = null;
+    let maxCount = 0;
+    
+    for (const supplierId in supplierCounts) {
+      if (supplierCounts[supplierId] > maxCount) {
+        maxCount = supplierCounts[supplierId];
+        bestSupplierId = supplierId;
+      }
+    }
+    
+    // Jeśli nie mamy jeszcze wybranego dostawcy, ustaw dostawcę z największą liczbą pozycji
+    if (!poData.supplier && bestSupplierId) {
+      const supplier = suppliers.find(s => s.id === bestSupplierId);
+      if (supplier) {
+        setPoData(prev => ({
+          ...prev,
+          supplier: supplier,
+          deliveryAddress: supplier.addresses && supplier.addresses.length > 0
+            ? formatAddress(supplier.addresses.find(a => a.isMain) || supplier.addresses[0])
+            : ''
+        }));
+      }
+    }
+    
+    showSuccess('Zastosowano najlepsze ceny dostawców');
+  };
+  
+  // Dodaję funkcję isFormValid do sprawdzania poprawności formularza
+  const isFormValid = () => {
+    // Sprawdź czy wybrano dostawcę
+    if (!poData.supplier) {
+      showError('Wybierz dostawcę');
+      return false;
+    }
+    
+    // Sprawdź czy wybrano magazyn docelowy
+    if (!poData.targetWarehouseId) {
+      showError('Wybierz magazyn docelowy');
+      return false;
+    }
+    
+    // Sprawdź czy dodano przynajmniej jeden przedmiot
+    if (poData.items.length === 0) {
+      showError('Dodaj przynajmniej jeden przedmiot do zamówienia');
+      return false;
+    }
+    
+    // Sprawdź poprawność danych dla każdego przedmiotu
+    const invalidItem = poData.items.find(item => !item.name || !item.quantity || !item.unitPrice);
+    if (invalidItem) {
+      showError('Uzupełnij wszystkie dane dla każdego przedmiotu');
+      return false;
+    }
+    
+    return true;
+  };
+  
+  // Dodaję funkcję obsługi zmiany dodatkowych kosztów
+  const handleAdditionalCostsChange = (e) => {
+    const { name, value } = e.target;
+    const numericValue = name === 'additionalCostsItems' ? parseFloat(value) || 0 : value;
+    setPoData(prev => ({ ...prev, [name]: numericValue }));
+  };
+  
+  // Dodaję funkcję do dodawania nowej pozycji kosztów dodatkowych
+  const handleAddAdditionalCost = () => {
+    setPoData(prev => ({
+      ...prev,
+      additionalCostsItems: [
+        ...prev.additionalCostsItems,
+        {
+          id: `cost-${Date.now()}`,
+          value: 0,
+          description: ''
+        }
+      ]
+    }));
+  };
+  
+  // Funkcja obsługi zmiany dodatkowych kosztów
+  const handleAdditionalCostChange = (id, field, value) => {
+    const updatedCosts = poData.additionalCostsItems.map(item => {
+      if (item.id === id) {
+        return { ...item, [field]: field === 'value' ? parseFloat(value) || 0 : value };
+      }
+      return item;
+    });
+    
+    setPoData(prev => ({ ...prev, additionalCostsItems: updatedCosts }));
+  };
+  
+  // Funkcja usuwania pozycji dodatkowych kosztów
+  const handleRemoveAdditionalCost = (id) => {
+    setPoData(prev => ({
+      ...prev,
+      additionalCostsItems: prev.additionalCostsItems.filter(item => item.id !== id)
+    }));
   };
   
   if (loading) {
@@ -302,7 +595,7 @@ const PurchaseOrderForm = ({ orderId }) => {
     <Container>
       <Box sx={{ mb: 3 }}>
         <Typography variant="h5">
-          {currentOrderId === 'new' ? 'Utwórz Zamówienie Komponentów' : 'Edytuj Zamówienie Komponentów'}
+          {currentOrderId && currentOrderId !== 'new' ? 'Edycja Zamówienia Zakupu' : 'Utwórz Zamówienie Zakupu'}
         </Typography>
       </Box>
       
@@ -476,6 +769,87 @@ const PurchaseOrderForm = ({ orderId }) => {
                 helperText="Wprowadź link do faktury z Google Drive"
               />
             </Grid>
+            
+            {/* Dodatkowe koszty */}
+            <Grid item xs={12}>
+              <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="subtitle1">
+                  Dodatkowe koszty
+                </Typography>
+                <Button
+                  startIcon={<AddIcon />}
+                  onClick={handleAddAdditionalCost}
+                  variant="outlined"
+                  size="small"
+                >
+                  Dodaj koszt
+                </Button>
+              </Box>
+              
+              {poData.additionalCostsItems.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" sx={{ my: 2 }}>
+                  Brak dodatkowych kosztów. Kliknij "Dodaj koszt", aby dodać opłaty jak cła, transport, ubezpieczenie itp.
+                </Typography>
+              ) : (
+                <TableContainer component={Paper} sx={{ mb: 2 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Opis</TableCell>
+                        <TableCell align="right">Kwota</TableCell>
+                        <TableCell width="50px"></TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {poData.additionalCostsItems.map((cost) => (
+                        <TableRow key={cost.id}>
+                          <TableCell>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              value={cost.description}
+                              onChange={(e) => handleAdditionalCostChange(cost.id, 'description', e.target.value)}
+                              placeholder="Np. cła, transport, ubezpieczenie"
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            <TextField
+                              type="number"
+                              size="small"
+                              value={cost.value}
+                              onChange={(e) => handleAdditionalCostChange(cost.id, 'value', e.target.value)}
+                              InputProps={{ 
+                                inputProps: { min: 0, step: 0.01 },
+                                endAdornment: <InputAdornment position="end">{poData.currency}</InputAdornment>
+                              }}
+                              sx={{ width: 150 }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <IconButton
+                              size="small"
+                              onClick={() => handleRemoveAdditionalCost(cost.id)}
+                              color="error"
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      <TableRow>
+                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                          Suma:
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                          {poData.additionalCostsItems.reduce((sum, item) => sum + (parseFloat(item.value) || 0), 0).toFixed(2)} {poData.currency}
+                        </TableCell>
+                        <TableCell />
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </Grid>
           </Grid>
           
           <Divider sx={{ my: 3 }} />
@@ -485,16 +859,19 @@ const PurchaseOrderForm = ({ orderId }) => {
             <Typography variant="h6">Pozycje zamówienia</Typography>
           </Box>
           
-          <TableContainer component={Paper} variant="outlined" sx={{ mb: 3 }}>
+          <TableContainer component={Paper}>
             <Table>
               <TableHead>
                 <TableRow>
                   <TableCell>Produkt</TableCell>
                   <TableCell>Ilość</TableCell>
-                  <TableCell>Jednostka</TableCell>
+                  <TableCell>Jedn.</TableCell>
                   <TableCell>Cena jedn.</TableCell>
                   <TableCell>Wartość</TableCell>
-                  <TableCell>Akcje</TableCell>
+                  {Object.keys(supplierSuggestions).length > 0 && (
+                    <TableCell>Sugestia</TableCell>
+                  )}
+                  <TableCell></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -545,40 +922,114 @@ const PurchaseOrderForm = ({ orderId }) => {
                         sx={{ width: 100 }}
                       />
                     </TableCell>
-                    <TableCell>
-                      {item.totalPrice?.toFixed(2)} {poData.currency}
-                    </TableCell>
+                    <TableCell>{formatCurrency(item.totalPrice || 0)}</TableCell>
+                    {Object.keys(supplierSuggestions).length > 0 && (
+                      <TableCell>
+                        {item.inventoryItemId && supplierSuggestions[item.inventoryItemId] && (
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Typography variant="body2">
+                              {formatCurrency(supplierSuggestions[item.inventoryItemId].price)} 
+                            </Typography>
+                            {item.supplierName && (
+                              <Tooltip title={`Dostawca: ${item.supplierName}`}>
+                                <InfoIcon fontSize="small" sx={{ ml: 1, color: 'info.main' }} />
+                              </Tooltip>
+                            )}
+                          </Box>
+                        )}
+                      </TableCell>
+                    )}
                     <TableCell>
                       <IconButton
-                        color="error"
-                        onClick={() => handleRemoveItem(index)}
                         size="small"
+                        onClick={() => handleRemoveItem(index)}
+                        color="error"
                       >
                         <DeleteIcon />
                       </IconButton>
                     </TableCell>
                   </TableRow>
                 ))}
-                
-                {poData.items.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} align="center">
-                      Brak pozycji w zamówieniu
-                    </TableCell>
-                  </TableRow>
-                )}
               </TableBody>
             </Table>
           </TableContainer>
+          
+          <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
+            <Button
+              startIcon={<AddIcon />}
+              onClick={handleAddItem}
+              variant="outlined"
+            >
+              Dodaj pozycję
+            </Button>
+            
+            <Button
+              startIcon={<SuggestIcon />}
+              onClick={findBestSuppliers}
+              disabled={loadingSupplierSuggestions || poData.items.length === 0}
+              variant="outlined"
+              color="info"
+            >
+              {loadingSupplierSuggestions ? 'Szukanie...' : 'Znajdź najlepsze ceny'}
+            </Button>
+            
+            {Object.keys(supplierSuggestions).length > 0 && (
+              <Button
+                onClick={applyBestSupplierPrices}
+                variant="outlined"
+                color="success"
+              >
+                Zastosuj najlepsze ceny
+              </Button>
+            )}
+          </Box>
+          
+          {loadingSupplierSuggestions && (
+            <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
+              <CircularProgress size={20} />
+              <Typography variant="body2">Szukanie najlepszych cen dostawców...</Typography>
+            </Box>
+          )}
+          
+          {Object.keys(supplierSuggestions).length > 0 && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              Znaleziono sugestie cen dostawców dla {Object.keys(supplierSuggestions).length} pozycji.
+              Kliknij "Zastosuj najlepsze ceny", aby zaktualizować zamówienie.
+            </Alert>
+          )}
+          
+          <Box sx={{ my: 3 }}>
+            <Divider />
+          </Box>
           
           <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
             <Grid container spacing={2} justifyContent="flex-end">
               <Grid item xs={12} md={4}>
                 <Typography variant="subtitle1" gutterBottom>
-                  Wartość netto: <strong>{poData.totalValue.toFixed(2)} {poData.currency}</strong>
+                  Wartość produktów netto: <strong>{poData.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0).toFixed(2)} {poData.currency}</strong>
+                </Typography>
+                {poData.additionalCostsItems.length > 0 && (
+                  <>
+                    {poData.additionalCostsItems.map((cost, index) => (
+                      <Typography key={cost.id} variant="subtitle2" gutterBottom>
+                        {cost.description || `Dodatkowy koszt ${index+1}`}: <strong>{parseFloat(cost.value).toFixed(2)} {poData.currency}</strong>
+                      </Typography>
+                    ))}
+                    <Typography variant="subtitle1" gutterBottom>
+                      Suma dodatkowych kosztów: <strong>{poData.additionalCostsItems.reduce((sum, item) => sum + (parseFloat(item.value) || 0), 0).toFixed(2)} {poData.currency}</strong>
+                    </Typography>
+                  </>
+                )}
+                <Typography variant="subtitle1" gutterBottom>
+                  Wartość netto razem: <strong>{poData.totalValue.toFixed(2)} {poData.currency}</strong>
                 </Typography>
                 <Typography variant="subtitle1" gutterBottom>
                   Stawka VAT: <strong>{poData.vatRate}%</strong>
+                </Typography>
+                <Typography variant="subtitle1" gutterBottom>
+                  Wartość podatku VAT (tylko od produktów): <strong>
+                    {((poData.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0) * poData.vatRate) / 100).toFixed(2)} {poData.currency}
+                  </strong>
                 </Typography>
                 <Typography variant="h6" color="primary" gutterBottom>
                   Wartość brutto: <strong>{poData.totalGross.toFixed(2)} {poData.currency}</strong>
@@ -588,20 +1039,6 @@ const PurchaseOrderForm = ({ orderId }) => {
           </Box>
           
           <Box sx={{ mb: 3 }}>
-            <Button
-              variant="outlined"
-              startIcon={<AddIcon />}
-              onClick={handleAddItem}
-              sx={{ mt: 2 }}
-            >
-              Dodaj pozycję
-            </Button>
-          </Box>
-          
-          <Divider sx={{ my: 3 }} />
-          
-          {/* Przyciski */}
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
             <Button
               variant="outlined"
               onClick={handleCancel}

@@ -13,7 +13,8 @@ import {
   Select,
   MenuItem,
   FormHelperText,
-  Alert
+  Alert,
+  Divider
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -26,6 +27,7 @@ import {
 } from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import SupplierPricesList from './SupplierPricesList';
 
 const InventoryItemForm = ({ itemId }) => {
   const [loading, setLoading] = useState(!!itemId);
@@ -44,7 +46,8 @@ const InventoryItemForm = ({ itemId }) => {
     maxStock: '',
     supplierInfo: '',
     packingGroup: '',
-    boxesPerPallet: ''
+    boxesPerPallet: '',
+    currency: 'EUR'
   });
 
   useEffect(() => {
@@ -225,6 +228,7 @@ const InventoryItemForm = ({ itemId }) => {
               name="supplierInfo"
               value={itemData.supplierInfo || ''}
               onChange={handleChange}
+              helperText="Informacje ogólne o dostawcach (użyj sekcji poniżej, aby przypisać konkretne ceny)"
             />
           </Grid>
           <Grid item xs={12} sm={6}>
@@ -251,6 +255,14 @@ const InventoryItemForm = ({ itemId }) => {
           </Grid>
         </Grid>
       </Paper>
+
+      {/* Sekcja z cenami dostawców - wyświetlana tylko przy edycji istniejącej pozycji */}
+      {itemId && (
+        <Paper sx={{ p: 3, mt: 3 }}>
+          <Divider sx={{ mb: 3 }} />
+          <SupplierPricesList itemId={itemId} currency={itemData.currency || 'EUR'} />
+        </Paper>
+      )}
     </Box>
   );
 };

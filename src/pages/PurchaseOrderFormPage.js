@@ -11,10 +11,10 @@ const PurchaseOrderFormPage = () => {
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ mb: 3 }}>
         <Typography variant="h5">
-          {isNew ? 'Utwórz Zamówienie Komponentów' : 'Edycja Zamówienia Komponentów'}
+          {isNew ? 'Utwórz Zamówienie Zakupu' : 'Edycja Zamówienia Zakupu'}
         </Typography>
       </Box>
-      <PurchaseOrderForm />
+      <PurchaseOrderForm orderId={id} />
     </Container>
   );
 };

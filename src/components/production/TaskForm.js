@@ -48,8 +48,7 @@ import {
   getProductsFIFO,
   bookInventoryForTask
 } from '../../services/inventoryService';
-import { calculateProductionTaskCost } from '../../utils/costCalculator';
-import { calculateEstimatedProductionTime } from '../../utils/costCalculator';
+import { calculateManufacturingOrderCosts, calculateEstimatedProductionTime } from '../../utils/costCalculator';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 
@@ -428,12 +427,12 @@ const TaskForm = ({ taskId }) => {
       
       console.log('Otrzymana mapa cen:', pricesMap);
       
-      // Oblicz koszty
-      const costData = calculateProductionTaskCost(taskData, recipe, pricesMap);
+      // Oblicz koszty używając nowej funkcji zgodnej z MRPeasy
+      const costData = calculateManufacturingOrderCosts(taskData, recipe, pricesMap);
       setCostCalculation(costData);
       
       // Wyświetl informację o obliczonych kosztach
-      showSuccess(`Obliczono koszty produkcji: ${costData.taskTotalCost.toFixed(2)} PLN`);
+      showSuccess(`Obliczono koszty produkcji: ${costData.totalProductionCost.toFixed(2)} EUR`);
       
     } catch (error) {
       console.error('Błąd podczas kalkulacji kosztów:', error);
@@ -861,31 +860,31 @@ const TaskForm = ({ taskId }) => {
                     <Box>
                       <Grid container spacing={2}>
                         <Grid item xs={12} sm={6}>
-                          <Typography variant="subtitle1" fontWeight="bold">Koszty składników:</Typography>
-                          <Typography>{costCalculation.ingredientsCost.toFixed(2)} PLN</Typography>
+                          <Typography variant="subtitle1" fontWeight="bold">Koszty materiałów:</Typography>
+                          <Typography>{costCalculation.materialCost.toFixed(2)} EUR</Typography>
                         </Grid>
                         <Grid item xs={12} sm={6}>
-                          <Typography variant="subtitle1" fontWeight="bold">Koszty robocizny:</Typography>
-                          <Typography>{costCalculation.laborCost.toFixed(2)} PLN</Typography>
+                          <Typography variant="subtitle1" fontWeight="bold">Koszty pracy:</Typography>
+                          <Typography>{costCalculation.actualLaborCost.toFixed(2)} EUR</Typography>
                         </Grid>
                         <Grid item xs={12} sm={6}>
-                          <Typography variant="subtitle1" fontWeight="bold">Koszty energii:</Typography>
-                          <Typography>{costCalculation.energyCost.toFixed(2)} PLN</Typography>
+                          <Typography variant="subtitle1" fontWeight="bold">Koszty maszyn:</Typography>
+                          <Typography>{costCalculation.machineCost.toFixed(2)} EUR</Typography>
                         </Grid>
                         <Grid item xs={12} sm={6}>
                           <Typography variant="subtitle1" fontWeight="bold">Koszty pośrednie:</Typography>
-                          <Typography>{costCalculation.overheadCost.toFixed(2)} PLN</Typography>
+                          <Typography>{costCalculation.overheadCost.toFixed(2)} EUR</Typography>
                         </Grid>
                         <Grid item xs={12}>
                           <Divider sx={{ my: 1 }} />
                         </Grid>
                         <Grid item xs={12} sm={6}>
                           <Typography variant="subtitle1" fontWeight="bold">Koszt jednostkowy:</Typography>
-                          <Typography>{costCalculation.unitCost.toFixed(2)} PLN / {costCalculation.yieldUnit}</Typography>
+                          <Typography>{costCalculation.unitCost.toFixed(2)} EUR / {taskData.unit}</Typography>
                         </Grid>
                         <Grid item xs={12} sm={6}>
                           <Typography variant="subtitle1" fontWeight="bold">Całkowity koszt zadania:</Typography>
-                          <Typography variant="h6" color="primary">{costCalculation.taskTotalCost.toFixed(2)} PLN</Typography>
+                          <Typography variant="h6" color="primary">{costCalculation.totalProductionCost.toFixed(2)} EUR</Typography>
                         </Grid>
                       </Grid>
                     </Box>

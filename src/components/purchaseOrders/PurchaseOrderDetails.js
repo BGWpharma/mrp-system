@@ -287,12 +287,22 @@ const PurchaseOrderDetails = ({ orderId }) => {
                 <Typography variant="body1">{formatDate(purchaseOrder.expectedDeliveryDate)}</Typography>
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Typography variant="body2">Wartość zamówienia:</Typography>
+                <Typography variant="body2">Wartość:</Typography>
                 <Typography variant="body1">
-                  {typeof purchaseOrder.totalValue === 'number' 
-                    ? `${purchaseOrder.totalValue.toFixed(2)} ${purchaseOrder.currency}`
-                    : `0.00 ${purchaseOrder.currency}`
-                  }
+                  {(() => {
+                    // Obliczanie całkowitej wartości netto (produkty + dodatkowe koszty)
+                    const productsValue = typeof purchaseOrder.items === 'object' && Array.isArray(purchaseOrder.items)
+                      ? purchaseOrder.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0)
+                      : 0;
+                    
+                    const additionalCosts = purchaseOrder.additionalCostsItems && Array.isArray(purchaseOrder.additionalCostsItems) 
+                      ? purchaseOrder.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
+                      : (parseFloat(purchaseOrder.additionalCosts) || 0);
+                    
+                    const totalNetValue = productsValue + additionalCosts;
+                    
+                    return `${totalNetValue.toFixed(2)} ${purchaseOrder.currency}`;
+                  })()}
                 </Typography>
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -302,19 +312,43 @@ const PurchaseOrderDetails = ({ orderId }) => {
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                 <Typography variant="body2">Wartość podatku:</Typography>
                 <Typography variant="body1">
-                  {typeof purchaseOrder.totalValue === 'number' 
-                    ? `${((purchaseOrder.totalValue * (purchaseOrder.vatRate || 0)) / 100).toFixed(2)} ${purchaseOrder.currency}`
-                    : `0.00 ${purchaseOrder.currency}`
-                  }
+                  {(() => {
+                    // Podatek VAT naliczany tylko od wartości produktów, bez dodatkowych kosztów
+                    const productsValue = typeof purchaseOrder.items === 'object' && Array.isArray(purchaseOrder.items)
+                      ? purchaseOrder.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0)
+                      : 0;
+                    
+                    const vatRate = purchaseOrder.vatRate || 0;
+                    const vatValue = (productsValue * vatRate) / 100;
+                    
+                    return `${vatValue.toFixed(2)} ${purchaseOrder.currency}`;
+                  })()}
                 </Typography>
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                 <Typography variant="body2" fontWeight="bold">Wartość brutto:</Typography>
                 <Typography variant="body1" fontWeight="bold">
-                  {typeof purchaseOrder.totalValue === 'number'
-                    ? `${(purchaseOrder.totalGross || purchaseOrder.totalValue * (1 + (purchaseOrder.vatRate || 0) / 100)).toFixed(2)} ${purchaseOrder.currency}`
-                    : `0.00 ${purchaseOrder.currency}`
-                  }
+                  {(() => {
+                    // Obliczanie wartości brutto:
+                    // 1. Pobierz wartość produktów
+                    const productsValue = typeof purchaseOrder.items === 'object' && Array.isArray(purchaseOrder.items)
+                      ? purchaseOrder.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0)
+                      : 0;
+                    
+                    // 2. Oblicz VAT (tylko od wartości produktów)
+                    const vatRate = purchaseOrder.vatRate || 0;
+                    const vatValue = (productsValue * vatRate) / 100;
+                    
+                    // 3. Oblicz dodatkowe koszty
+                    const additionalCosts = purchaseOrder.additionalCostsItems && Array.isArray(purchaseOrder.additionalCostsItems) 
+                      ? purchaseOrder.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
+                      : (parseFloat(purchaseOrder.additionalCosts) || 0);
+                    
+                    // 4. Oblicz wartość brutto jako: wartość produktów + VAT + dodatkowe koszty
+                    const grossValue = productsValue + vatValue + additionalCosts;
+                    
+                    return `${grossValue.toFixed(2)} ${purchaseOrder.currency}`;
+                  })()}
                 </Typography>
               </Box>
             </Box>
@@ -412,26 +446,88 @@ const PurchaseOrderDetails = ({ orderId }) => {
               ))}
               
               <TableRow>
-                <TableCell colSpan={canReceiveItems ? 4 : 3} align="right" sx={{ fontWeight: 'bold' }}>
-                  Razem:
+                <TableCell colSpan={canReceiveItems ? 4 : 3} align="right">
+                  Wartość produktów:
                 </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                  {typeof purchaseOrder.totalValue === 'number'
-                    ? `${purchaseOrder.totalValue.toFixed(2)} ${purchaseOrder.currency}`
+                <TableCell align="right">
+                  {typeof purchaseOrder.items === 'object' && Array.isArray(purchaseOrder.items)
+                    ? `${purchaseOrder.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0).toFixed(2)} ${purchaseOrder.currency}`
                     : `0.00 ${purchaseOrder.currency}`
                   }
                 </TableCell>
                 {canReceiveItems && <TableCell />}
               </TableRow>
+              
+              {/* Dodatkowe koszty - pokazujemy tylko jeśli istnieją */}
+              {purchaseOrder.additionalCostsItems && purchaseOrder.additionalCostsItems.length > 0 ? (
+                <>
+                  {purchaseOrder.additionalCostsItems.map((cost, index) => (
+                    <TableRow key={cost.id || index}>
+                      <TableCell colSpan={canReceiveItems ? 4 : 3} align="right">
+                        {cost.description || `Dodatkowy koszt ${index+1}`}:
+                      </TableCell>
+                      <TableCell align="right">
+                        {`${parseFloat(cost.value).toFixed(2)} ${purchaseOrder.currency}`}
+                      </TableCell>
+                      {canReceiveItems && <TableCell />}
+                    </TableRow>
+                  ))}
+                </>
+              ) : purchaseOrder.additionalCosts > 0 && (
+                <TableRow>
+                  <TableCell colSpan={canReceiveItems ? 4 : 3} align="right">
+                    Dodatkowe koszty
+                    {purchaseOrder.additionalCostsDescription && (
+                      <Typography variant="caption" sx={{ ml: 1 }}>
+                        ({purchaseOrder.additionalCostsDescription})
+                      </Typography>
+                    )}:
+                  </TableCell>
+                  <TableCell align="right">
+                    {`${parseFloat(purchaseOrder.additionalCosts).toFixed(2)} ${purchaseOrder.currency}`}
+                  </TableCell>
+                  {canReceiveItems && <TableCell />}
+                </TableRow>
+              )}
+              
+              <TableRow>
+                <TableCell colSpan={canReceiveItems ? 4 : 3} align="right" sx={{ fontWeight: 'bold' }}>
+                  Wartość netto:
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                  {(() => {
+                    // Obliczanie całkowitej wartości netto (produkty + dodatkowe koszty)
+                    const productsValue = typeof purchaseOrder.items === 'object' && Array.isArray(purchaseOrder.items)
+                      ? purchaseOrder.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0)
+                      : 0;
+                    
+                    const additionalCosts = purchaseOrder.additionalCostsItems && Array.isArray(purchaseOrder.additionalCostsItems) 
+                      ? purchaseOrder.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
+                      : (parseFloat(purchaseOrder.additionalCosts) || 0);
+                    
+                    const totalNetValue = productsValue + additionalCosts;
+                    
+                    return `${totalNetValue.toFixed(2)} ${purchaseOrder.currency}`;
+                  })()}
+                </TableCell>
+                {canReceiveItems && <TableCell />}
+              </TableRow>
               <TableRow>
                 <TableCell colSpan={canReceiveItems ? 4 : 3} align="right">
-                  VAT {purchaseOrder.vatRate || 0}%:
+                  VAT {purchaseOrder.vatRate || 0}% (tylko od produktów):
                 </TableCell>
                 <TableCell align="right">
-                  {typeof purchaseOrder.totalValue === 'number'
-                    ? `${((purchaseOrder.totalValue * (purchaseOrder.vatRate || 0)) / 100).toFixed(2)} ${purchaseOrder.currency}`
-                    : `0.00 ${purchaseOrder.currency}`
-                  }
+                  {(() => {
+                    // Podatek VAT naliczany tylko od wartości produktów, bez dodatkowych kosztów
+                    const productsValue = typeof purchaseOrder.items === 'object' && Array.isArray(purchaseOrder.items)
+                      ? purchaseOrder.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0)
+                      : 0;
+                    
+                    const vatRate = purchaseOrder.vatRate || 0;
+                    const vatValue = (productsValue * vatRate) / 100;
+                    
+                    return `${vatValue.toFixed(2)} ${purchaseOrder.currency}`;
+                  })()}
                 </TableCell>
                 {canReceiveItems && <TableCell />}
               </TableRow>
@@ -440,10 +536,27 @@ const PurchaseOrderDetails = ({ orderId }) => {
                   Wartość brutto:
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                  {typeof purchaseOrder.totalValue === 'number'
-                    ? `${(purchaseOrder.totalGross || purchaseOrder.totalValue * (1 + (purchaseOrder.vatRate || 0) / 100)).toFixed(2)} ${purchaseOrder.currency}`
-                    : `0.00 ${purchaseOrder.currency}`
-                  }
+                  {(() => {
+                    // Obliczanie wartości brutto:
+                    // 1. Pobierz wartość produktów
+                    const productsValue = typeof purchaseOrder.items === 'object' && Array.isArray(purchaseOrder.items)
+                      ? purchaseOrder.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0)
+                      : 0;
+                    
+                    // 2. Oblicz VAT (tylko od wartości produktów)
+                    const vatRate = purchaseOrder.vatRate || 0;
+                    const vatValue = (productsValue * vatRate) / 100;
+                    
+                    // 3. Oblicz dodatkowe koszty
+                    const additionalCosts = purchaseOrder.additionalCostsItems && Array.isArray(purchaseOrder.additionalCostsItems) 
+                      ? purchaseOrder.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
+                      : (parseFloat(purchaseOrder.additionalCosts) || 0);
+                    
+                    // 4. Oblicz wartość brutto jako: wartość produktów + VAT + dodatkowe koszty
+                    const grossValue = productsValue + vatValue + additionalCosts;
+                    
+                    return `${grossValue.toFixed(2)} ${purchaseOrder.currency}`;
+                  })()}
                 </TableCell>
                 {canReceiveItems && <TableCell />}
               </TableRow>
@@ -606,13 +719,57 @@ const PurchaseOrderDetails = ({ orderId }) => {
               <Typography variant="body2">Data zamówienia: {formatDate(purchaseOrder.orderDate)}</Typography>
               <Typography variant="body2">Status: {translateStatus(purchaseOrder.status)}</Typography>
               <Typography variant="body2">Planowana data dostawy: {formatDate(purchaseOrder.expectedDeliveryDate)}</Typography>
-              <Typography variant="body2">Wartość netto: {typeof purchaseOrder.totalValue === 'number' ? `${purchaseOrder.totalValue.toFixed(2)} ${purchaseOrder.currency}` : `0.00 ${purchaseOrder.currency}`}</Typography>
+              <Typography variant="body2">
+                Wartość netto produktów: {(() => {
+                  const productsValue = typeof purchaseOrder.items === 'object' && Array.isArray(purchaseOrder.items)
+                    ? purchaseOrder.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0)
+                    : 0;
+                  return `${productsValue.toFixed(2)} ${purchaseOrder.currency}`;
+                })()}
+              </Typography>
+              {(purchaseOrder.additionalCostsItems && purchaseOrder.additionalCostsItems.length > 0) || purchaseOrder.additionalCosts > 0 ? (
+                <Typography variant="body2">
+                  Dodatkowe koszty: {(() => {
+                    const additionalCosts = purchaseOrder.additionalCostsItems && Array.isArray(purchaseOrder.additionalCostsItems) 
+                      ? purchaseOrder.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
+                      : (parseFloat(purchaseOrder.additionalCosts) || 0);
+                    return `${additionalCosts.toFixed(2)} ${purchaseOrder.currency}`;
+                  })()}
+                </Typography>
+              ) : null}
               <Typography variant="body2">Stawka VAT: {purchaseOrder.vatRate || 0}%</Typography>
               <Typography variant="body2">
-                Wartość podatku: {typeof purchaseOrder.totalValue === 'number' ? `${((purchaseOrder.totalValue * (purchaseOrder.vatRate || 0)) / 100).toFixed(2)} ${purchaseOrder.currency}` : `0.00 ${purchaseOrder.currency}`}
+                Wartość podatku (tylko od produktów): {(() => {
+                  // Podatek VAT naliczany tylko od wartości produktów, bez dodatkowych kosztów
+                  const productsValue = typeof purchaseOrder.items === 'object' && Array.isArray(purchaseOrder.items)
+                    ? purchaseOrder.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0)
+                    : 0;
+                  const vatRate = purchaseOrder.vatRate || 0;
+                  const vatValue = (productsValue * vatRate) / 100;
+                  return `${vatValue.toFixed(2)} ${purchaseOrder.currency}`;
+                })()}
               </Typography>
               <Typography variant="body2" fontWeight="bold">
-                Wartość brutto: {typeof purchaseOrder.totalValue === 'number' ? `${(purchaseOrder.totalGross || purchaseOrder.totalValue * (1 + (purchaseOrder.vatRate || 0) / 100)).toFixed(2)} ${purchaseOrder.currency}` : `0.00 ${purchaseOrder.currency}`}
+                Wartość brutto: {(() => {
+                  // Obliczanie wartości brutto:
+                  // 1. Pobierz wartość produktów
+                  const productsValue = typeof purchaseOrder.items === 'object' && Array.isArray(purchaseOrder.items)
+                    ? purchaseOrder.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0)
+                    : 0;
+                  
+                  // 2. Oblicz VAT (tylko od wartości produktów)
+                  const vatRate = purchaseOrder.vatRate || 0;
+                  const vatValue = (productsValue * vatRate) / 100;
+                  
+                  // 3. Oblicz dodatkowe koszty
+                  const additionalCosts = purchaseOrder.additionalCostsItems && Array.isArray(purchaseOrder.additionalCostsItems) 
+                    ? purchaseOrder.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
+                    : (parseFloat(purchaseOrder.additionalCosts) || 0);
+                  
+                  // 4. Oblicz wartość brutto jako: wartość produktów + VAT + dodatkowe koszty
+                  const grossValue = productsValue + vatValue + additionalCosts;
+                  return `${grossValue.toFixed(2)} ${purchaseOrder.currency}`;
+                })()}
               </Typography>
               {purchaseOrder.invoiceLink && (
                 <Typography variant="body2" sx={{ mt: 1 }}>
@@ -675,19 +832,79 @@ const PurchaseOrderDetails = ({ orderId }) => {
                 ))}
                 
                 <TableRow>
+                  <TableCell colSpan={3} align="right">
+                    Wartość produktów netto:
+                  </TableCell>
+                  <TableCell align="right">
+                    {typeof purchaseOrder.items === 'object' && Array.isArray(purchaseOrder.items)
+                      ? `${purchaseOrder.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0).toFixed(2)} ${purchaseOrder.currency}`
+                      : `0.00 ${purchaseOrder.currency}`
+                    }
+                  </TableCell>
+                </TableRow>
+
+                {/* Dodatkowe koszty w wydruku */}
+                {purchaseOrder.additionalCostsItems && purchaseOrder.additionalCostsItems.length > 0 ? (
+                  <>
+                    {purchaseOrder.additionalCostsItems.map((cost, index) => (
+                      <TableRow key={cost.id || index}>
+                        <TableCell colSpan={3} align="right">
+                          {cost.description || `Dodatkowy koszt ${index+1}`}:
+                        </TableCell>
+                        <TableCell align="right">
+                          {`${parseFloat(cost.value).toFixed(2)} ${purchaseOrder.currency}`}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </>
+                ) : purchaseOrder.additionalCosts > 0 && (
+                  <TableRow>
+                    <TableCell colSpan={3} align="right">
+                      Dodatkowe koszty{purchaseOrder.additionalCostsDescription ? ` (${purchaseOrder.additionalCostsDescription})` : ''}:
+                    </TableCell>
+                    <TableCell align="right">
+                      {`${parseFloat(purchaseOrder.additionalCosts).toFixed(2)} ${purchaseOrder.currency}`}
+                    </TableCell>
+                  </TableRow>
+                )}
+                
+                <TableRow>
                   <TableCell colSpan={3} align="right" sx={{ fontWeight: 'bold' }}>
                     Wartość netto:
                   </TableCell>
                   <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                    {typeof purchaseOrder.totalValue === 'number' ? `${purchaseOrder.totalValue.toFixed(2)} ${purchaseOrder.currency}` : `0.00 ${purchaseOrder.currency}`}
+                    {(() => {
+                      // Obliczanie całkowitej wartości netto (produkty + dodatkowe koszty)
+                      const productsValue = typeof purchaseOrder.items === 'object' && Array.isArray(purchaseOrder.items)
+                        ? purchaseOrder.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0)
+                        : 0;
+                      
+                      const additionalCosts = purchaseOrder.additionalCostsItems && Array.isArray(purchaseOrder.additionalCostsItems) 
+                        ? purchaseOrder.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
+                        : (parseFloat(purchaseOrder.additionalCosts) || 0);
+                      
+                      const totalNetValue = productsValue + additionalCosts;
+                      
+                      return `${totalNetValue.toFixed(2)} ${purchaseOrder.currency}`;
+                    })()}
                   </TableCell>
                 </TableRow>
                 <TableRow>
                   <TableCell colSpan={3} align="right">
-                    VAT {purchaseOrder.vatRate || 0}%:
+                    VAT {purchaseOrder.vatRate || 0}% (tylko od produktów):
                   </TableCell>
                   <TableCell align="right">
-                    {typeof purchaseOrder.totalValue === 'number' ? `${((purchaseOrder.totalValue * (purchaseOrder.vatRate || 0)) / 100).toFixed(2)} ${purchaseOrder.currency}` : `0.00 ${purchaseOrder.currency}`}
+                    {(() => {
+                      // Podatek VAT naliczany tylko od wartości produktów, bez dodatkowych kosztów
+                      const productsValue = typeof purchaseOrder.items === 'object' && Array.isArray(purchaseOrder.items)
+                        ? purchaseOrder.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0)
+                        : 0;
+                        
+                      const vatRate = purchaseOrder.vatRate || 0;
+                      const vatValue = (productsValue * vatRate) / 100;
+                      
+                      return `${vatValue.toFixed(2)} ${purchaseOrder.currency}`;
+                    })()}
                   </TableCell>
                 </TableRow>
                 <TableRow>
@@ -695,7 +912,27 @@ const PurchaseOrderDetails = ({ orderId }) => {
                     Wartość brutto:
                   </TableCell>
                   <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                    {typeof purchaseOrder.totalValue === 'number' ? `${(purchaseOrder.totalGross || purchaseOrder.totalValue * (1 + (purchaseOrder.vatRate || 0) / 100)).toFixed(2)} ${purchaseOrder.currency}` : `0.00 ${purchaseOrder.currency}`}
+                    {(() => {
+                      // Obliczanie wartości brutto:
+                      // 1. Pobierz wartość produktów
+                      const productsValue = typeof purchaseOrder.items === 'object' && Array.isArray(purchaseOrder.items)
+                        ? purchaseOrder.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0)
+                        : 0;
+                        
+                      // 2. Oblicz VAT (tylko od wartości produktów)
+                      const vatRate = purchaseOrder.vatRate || 0;
+                      const vatValue = (productsValue * vatRate) / 100;
+                      
+                      // 3. Oblicz dodatkowe koszty
+                      const additionalCosts = purchaseOrder.additionalCostsItems && Array.isArray(purchaseOrder.additionalCostsItems) 
+                        ? purchaseOrder.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
+                        : (parseFloat(purchaseOrder.additionalCosts) || 0);
+                        
+                      // 4. Oblicz wartość brutto jako: wartość produktów + VAT + dodatkowe koszty
+                      const grossValue = productsValue + vatValue + additionalCosts;
+                      
+                      return `${grossValue.toFixed(2)} ${purchaseOrder.currency}`;
+                    })()}
                   </TableCell>
                 </TableRow>
               </TableBody>

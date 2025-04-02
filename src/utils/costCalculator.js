@@ -1,23 +1,20 @@
 /**
  * Narzędzia do kalkulacji kosztów produkcji
  * 
- * Ten moduł zawiera funkcje do obliczania kosztów produkcji, w tym:
- * - Koszty składników
- * - Koszty robocizny
- * - Koszty energii
- * - Koszty pośrednie
- * - Całkowite koszty receptury
- * - Koszty zadania produkcyjnego
+ * Ten moduł zawiera funkcje do obliczania kosztów produkcji zgodnie z modelem MRPeasy:
+ * - Koszty materiałów dla zlecenia produkcyjnego
+ * - Koszty produkcyjne dla zlecenia produkcyjnego
+ * - Rentowność zamówień klientów
  */
 
 /**
- * Oblicza koszt składników na podstawie listy składników i mapy cen
+ * Oblicza koszt materiałów na podstawie listy składników i mapy cen
  * @param {Array} ingredients - Lista składników z ilościami
  * @param {Object} pricesMap - Mapa cen składników (id -> cena)
  * @param {Object} options - Opcje kalkulacji
- * @returns {Object} - Obiekt zawierający koszt składników i szczegóły
+ * @returns {Object} - Obiekt zawierający koszt materiałów i szczegóły
  */
-export const calculateIngredientsCost = (ingredients, pricesMap, options = {}) => {
+export const calculateMaterialsCost = (ingredients, pricesMap, options = {}) => {
   if (!ingredients || !Array.isArray(ingredients) || ingredients.length === 0) {
     return { totalCost: 0, details: [] };
   }
@@ -124,207 +121,151 @@ export const calculateIngredientsCost = (ingredients, pricesMap, options = {}) =
 };
 
 /**
- * Oblicza koszt robocizny na podstawie czasu przygotowania
- * @param {Number} preparationTime - Czas przygotowania w minutach
- * @param {Number} hourlyRate - Stawka godzinowa (domyślnie 50 EUR/h)
- * @returns {Number} - Koszt robocizny
- */
-export const calculateLaborCost = (preparationTime, hourlyRate = 50) => {
-  if (!preparationTime || isNaN(parseFloat(preparationTime))) {
-    return 0;
-  }
-
-  const hours = parseFloat(preparationTime) / 60;
-  return hours * hourlyRate;
-};
-
-/**
- * Oblicza koszt energii na podstawie czasu przygotowania
- * @param {Number} preparationTime - Czas przygotowania w minutach
- * @param {Number} energyRate - Stawka energii (domyślnie 15 EUR/h)
- * @returns {Number} - Koszt energii
- */
-export const calculateEnergyCost = (preparationTime, energyRate = 15) => {
-  if (!preparationTime || isNaN(parseFloat(preparationTime))) {
-    return 0;
-  }
-
-  const hours = parseFloat(preparationTime) / 60;
-  return hours * energyRate;
-};
-
-/**
- * Oblicza całkowity koszt receptury
+ * Model MRPeasy: Oblicza koszty produkcyjne dla zlecenia produkcyjnego
+ * @param {Object} manufacturingOrder - Obiekt zlecenia produkcyjnego
  * @param {Object} recipe - Obiekt receptury
- * @param {Object} pricesMap - Mapa cen składników (id -> cena)
+ * @param {Object} pricesMap - Mapa cen materiałów
+ * @param {Object} laborData - Dane o raportowanej pracy
  * @param {Object} options - Opcje kalkulacji
- * @returns {Object} - Obiekt zawierający szczegóły kosztów
+ * @returns {Object} - Szczegółowa kalkulacja kosztów
  */
-export const calculateRecipeTotalCost = (recipe, pricesMap, options = {}) => {
-  if (!recipe) {
-    return {
-      ingredientsCost: 0,
-      laborCost: 0,
-      energyCost: 0,
-      overheadCost: 0,
-      totalCost: 0,
-      unitCost: 0,
-      yieldQuantity: 0,
-      yieldUnit: 'szt.',
-      ingredientsDetails: []
-    };
-  }
-
-  // Opcje kalkulacji z wartościami domyślnymi
+export const calculateManufacturingOrderCosts = (manufacturingOrder, recipe, pricesMap, laborData = [], options = {}) => {
+  // Domyślne opcje
   const {
-    hourlyLaborRate = 50,
-    hourlyEnergyRate = 15,
-    overheadPercentage = 10
+    overheadRate = 10, // procent narzutu od kosztów bezpośrednich
+    machineHourlyRate = 25, // stawka godzinowa maszyny w EUR/h
   } = options;
-
-  // Sprawdź, czy recipe.ingredients istnieje
-  if (!recipe.ingredients || !Array.isArray(recipe.ingredients)) {
-    console.warn('Brak składników w recepturze lub nieprawidłowy format');
-    return {
-      ingredientsCost: 0,
-      laborCost: 0,
-      energyCost: 0,
-      overheadCost: 0,
-      totalCost: 0,
-      unitCost: 0,
-      yieldQuantity: 0,
-      yieldUnit: 'szt.',
-      ingredientsDetails: []
-    };
+  
+  // 1. Koszty materiałów
+  const materialCostResult = calculateMaterialsCost(recipe.ingredients, pricesMap);
+  
+  // 2. Koszty pracy (robocizny)
+  let plannedLaborCost = 0;
+  let actualLaborCost = 0;
+  
+  // Przewidywany czas pracy (w minutach)
+  const plannedWorkTime = parseFloat(recipe.prepTime || manufacturingOrder.estimatedDuration || 0);
+  
+  // Przelicz minuty na godziny
+  const plannedWorkHours = plannedWorkTime / 60;
+  
+  // Oblicz planowany koszt pracy na podstawie planowanego czasu
+  plannedLaborCost = plannedWorkHours * (options.laborHourlyRate || 50);
+  
+  // Jeśli mamy dane o faktycznej pracy, oblicz rzeczywisty koszt
+  if (laborData && laborData.length > 0) {
+    const totalActualMinutes = laborData.reduce((sum, record) => sum + (record.minutes || 0), 0);
+    const actualWorkHours = totalActualMinutes / 60;
+    actualLaborCost = actualWorkHours * (options.laborHourlyRate || 50);
+  } else {
+    // Jeśli nie ma danych o faktycznym czasie pracy, użyj planowanego
+    actualLaborCost = plannedLaborCost;
   }
-
-  // Oblicz koszt składników
-  const ingredientsCostResult = calculateIngredientsCost(recipe.ingredients, pricesMap);
-  const ingredientsCost = ingredientsCostResult.totalCost;
-
-  // Pobierz czas przygotowania i upewnij się, że jest liczbą
-  let prepTime = 0;
-  if (recipe.preparationTime) {
-    prepTime = parseFloat(recipe.preparationTime);
-    if (isNaN(prepTime) || prepTime < 0) {
-      console.warn('Nieprawidłowy czas przygotowania:', recipe.preparationTime);
-      prepTime = 0;
-    }
-  }
-
-  // Oblicz koszt robocizny
-  const laborCost = calculateLaborCost(prepTime, hourlyLaborRate);
-
-  // Oblicz koszt energii
-  const energyCost = calculateEnergyCost(prepTime, hourlyEnergyRate);
-
-  // Oblicz koszty pośrednie (narzut)
-  const directCosts = ingredientsCost + laborCost + energyCost;
-  const overheadCost = directCosts * (overheadPercentage / 100);
-
-  // Oblicz koszt całkowity
-  const totalCost = directCosts + overheadCost;
-
-  // Pobierz wydajność receptury i upewnij się, że jest liczbą
-  let yieldQuantity = 1;
-  if (recipe.yield) {
-    if (typeof recipe.yield === 'object' && recipe.yield.quantity) {
-      yieldQuantity = parseFloat(recipe.yield.quantity);
-    } else if (typeof recipe.yield === 'number') {
-      yieldQuantity = recipe.yield;
-    } else if (typeof recipe.yield === 'string') {
-      yieldQuantity = parseFloat(recipe.yield);
-    }
-  }
-
-  if (isNaN(yieldQuantity) || yieldQuantity <= 0) {
-    console.warn('Nieprawidłowa wydajność receptury:', recipe.yield);
-    yieldQuantity = 1; // Domyślna wartość, aby uniknąć dzielenia przez zero
-  }
-
-  // Oblicz koszt jednostkowy
-  const unitCost = totalCost / yieldQuantity;
-
+  
+  // 3. Koszty maszyn
+  // Szacowany czas pracy maszyn (taki sam jak czas pracy ludzi, jeśli nie określono inaczej)
+  const machineWorkHours = plannedWorkHours;
+  const machineCost = machineWorkHours * machineHourlyRate;
+  
+  // 4. Koszty bezpośrednie łącznie
+  const directCosts = materialCostResult.totalCost + actualLaborCost + machineCost;
+  
+  // 5. Koszty pośrednie (narzut)
+  const overheadCost = directCosts * (overheadRate / 100);
+  
+  // 6. Całkowity koszt produkcji
+  const totalProductionCost = directCosts + overheadCost;
+  
+  // 7. Koszt jednostkowy
+  const quantity = parseFloat(manufacturingOrder.quantity || 1);
+  const unitCost = quantity > 0 ? totalProductionCost / quantity : totalProductionCost;
+  
   return {
-    ingredientsCost,
-    laborCost,
-    energyCost,
+    materialCost: materialCostResult.totalCost,
+    materialDetails: materialCostResult.details,
+    plannedLaborCost,
+    actualLaborCost,
+    machineCost,
+    directCosts,
     overheadCost,
-    totalCost,
+    totalProductionCost,
+    quantity,
     unitCost,
-    yieldQuantity,
-    yieldUnit: recipe.yield && recipe.yield.unit ? recipe.yield.unit : 'szt.',
-    ingredientsDetails: ingredientsCostResult.details
+    plannedWorkTime,
+    actualWorkTime: laborData ? laborData.reduce((sum, record) => sum + (record.minutes || 0), 0) : plannedWorkTime,
   };
 };
 
 /**
- * Oblicza koszt zadania produkcyjnego na podstawie receptury
- * @param {Object} task - Obiekt zadania produkcyjnego
- * @param {Object} recipe - Obiekt receptury
- * @param {Object} pricesMap - Mapa cen składników (id -> cena)
- * @param {Object} options - Opcje kalkulacji
- * @returns {Object} - Obiekt zawierający szczegóły kosztów
+ * Model MRPeasy: Oblicza rentowność zamówienia klienta
+ * @param {Object} customerOrder - Obiekt zamówienia klienta
+ * @param {Object} productCostsMap - Mapa kosztów produktów (id -> koszt)
+ * @returns {Object} - Szczegółowa analiza rentowności
  */
-export const calculateProductionTaskCost = (task, recipe, pricesMap, options = {}) => {
-  if (!task || !recipe) {
+export const calculateCustomerOrderProfitability = (customerOrder, productCostsMap) => {
+  if (!customerOrder || !customerOrder.items || !Array.isArray(customerOrder.items)) {
     return {
-      ingredientsCost: 0,
-      laborCost: 0,
-      energyCost: 0,
-      overheadCost: 0,
+      totalRevenue: 0,
       totalCost: 0,
-      unitCost: 0,
-      taskQuantity: 0,
-      taskUnit: 'szt.',
-      taskTotalCost: 0
+      grossProfit: 0,
+      grossMargin: 0,
+      items: []
     };
   }
-
-  // Oblicz koszt receptury
-  const recipeCost = calculateRecipeTotalCost(recipe, pricesMap, options);
-
-  // Oblicz koszt zadania na podstawie ilości
-  const taskQuantity = parseFloat(task.quantity);
-  // Sprawdź, czy taskQuantity jest prawidłową liczbą
-  if (isNaN(taskQuantity) || taskQuantity <= 0) {
-    console.warn('Nieprawidłowa ilość zadania:', task.quantity);
-    return {
-      ...recipeCost,
-      taskQuantity: 0,
-      taskUnit: task.unit || (recipe.yield && recipe.yield.unit) || 'szt.',
-      taskTotalCost: 0
-    };
-  }
-
-  // Pobierz wydajność receptury i sprawdź, czy jest prawidłową liczbą
-  let recipeYield = 1;
-  if (recipe.yield) {
-    if (typeof recipe.yield === 'object' && recipe.yield.quantity) {
-      recipeYield = parseFloat(recipe.yield.quantity);
-    } else if (typeof recipe.yield === 'number') {
-      recipeYield = recipe.yield;
-    } else if (typeof recipe.yield === 'string') {
-      recipeYield = parseFloat(recipe.yield);
+  
+  let totalRevenue = 0;
+  let totalCost = 0;
+  const items = [];
+  
+  // Analizuj każdą pozycję zamówienia
+  customerOrder.items.forEach(item => {
+    const quantity = parseFloat(item.quantity || 0);
+    const price = parseFloat(item.price || 0);
+    
+    // Oblicz przychód z tej pozycji
+    const revenue = quantity * price;
+    totalRevenue += revenue;
+    
+    // Pobierz koszt jednostkowy produktu
+    let unitCost = 0;
+    if (item.id && productCostsMap && productCostsMap[item.id]) {
+      unitCost = parseFloat(productCostsMap[item.id]) || 0;
     }
-  }
-
-  if (isNaN(recipeYield) || recipeYield <= 0) {
-    console.warn('Nieprawidłowa wydajność receptury:', recipe.yield);
-    recipeYield = 1; // Domyślna wartość, aby uniknąć dzielenia przez zero
-  }
-
-  // Współczynnik skalowania (ile razy musimy wykonać recepturę)
-  const scaleFactor = taskQuantity / recipeYield;
-
-  // Całkowity koszt zadania
-  const taskTotalCost = recipeCost.totalCost * scaleFactor;
-
+    
+    // Oblicz koszt całkowity tej pozycji
+    const cost = quantity * unitCost;
+    totalCost += cost;
+    
+    // Oblicz zysk i marżę dla tej pozycji
+    const profit = revenue - cost;
+    const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
+    
+    // Dodaj szczegóły do listy pozycji
+    items.push({
+      ...item,
+      unitCost,
+      revenue,
+      cost,
+      profit,
+      margin
+    });
+  });
+  
+  // Dodaj koszty dostawy
+  const shippingCost = parseFloat(customerOrder.shippingCost || 0);
+  totalCost += shippingCost;
+  
+  // Oblicz całkowity zysk brutto i marżę
+  const grossProfit = totalRevenue - totalCost;
+  const grossMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+  
   return {
-    ...recipeCost,
-    taskQuantity,
-    taskUnit: task.unit || (recipe.yield && recipe.yield.unit) || 'szt.',
-    taskTotalCost
+    totalRevenue,
+    totalCost,
+    grossProfit,
+    grossMargin,
+    shippingCost,
+    items
   };
 };
 
@@ -341,16 +282,15 @@ export const calculateEstimatedProductionTime = (recipe, taskQuantity = 1) => {
 
   // Pobierz czas przygotowania z receptury
   let prepTime = 0;
-  if (recipe.preparationTime) {
-    prepTime = parseFloat(recipe.preparationTime);
+  if (recipe.preparationTime || recipe.prepTime) {
+    prepTime = parseFloat(recipe.preparationTime || recipe.prepTime);
     if (isNaN(prepTime) || prepTime < 0) {
-      console.warn('Nieprawidłowy czas przygotowania:', recipe.preparationTime);
+      console.warn('Nieprawidłowy czas przygotowania:', recipe.preparationTime || recipe.prepTime);
       prepTime = 0;
     }
   }
 
   // Oblicz szacowany czas na podstawie czasu przygotowania i ilości produktu
-  // Czas = Czas przygotowania * Ilość produktu
   const estimatedTime = prepTime * taskQuantity;
 
   return estimatedTime;

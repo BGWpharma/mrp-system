@@ -40,7 +40,7 @@ import {
 } from '@mui/icons-material';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { getInteractionById, deleteInteraction } from '../../services/crmService';
-import { getSupplierById } from '../../services/purchaseOrderService';
+import { getSupplierById } from '../../services/supplierService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { format } from 'date-fns';
