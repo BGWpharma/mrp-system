@@ -141,7 +141,7 @@ const RecipeList = () => {
       setLoading(false);
     }
   };
-  
+
   const filterRecipes = () => {
     let filtered = [...recipes];
     
@@ -216,17 +216,17 @@ const RecipeList = () => {
   // Renderowanie tabeli receptur
   const renderRecipesTable = (recipesToRender) => (
     <TableContainer component={Paper} variant="outlined">
-      <Table>
-        <TableHead>
-          <TableRow>
-            <TableCell>Nazwa</TableCell>
-            <TableCell>Opis</TableCell>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Nazwa</TableCell>
+                <TableCell>Opis</TableCell>
             <TableCell>Klient</TableCell>
-            <TableCell>Ostatnia aktualizacja</TableCell>
-            <TableCell align="right">Akcje</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
+                <TableCell>Ostatnia aktualizacja</TableCell>
+                <TableCell align="right">Akcje</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
           {recipesToRender.length === 0 ? (
             <TableRow>
               <TableCell colSpan={5} align="center">
@@ -250,13 +250,13 @@ const RecipeList = () => {
                   <TableCell>{recipe.description || '-'}</TableCell>
                   <TableCell>
                     {customer ? (
-                      <Chip 
+                    <Chip 
                         icon={<PersonIcon />} 
                         label={customer.name} 
-                        size="small" 
+                      size="small" 
                         variant="outlined" 
                         color="primary"
-                      />
+                    />
                     ) : (
                       <Chip label="Ogólna" size="small" variant="outlined" />
                     )}
@@ -265,36 +265,36 @@ const RecipeList = () => {
                   <TableCell align="right">
                     <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
                       <Tooltip title="Podgląd">
-                        <IconButton 
+                    <IconButton 
                           size="small" 
                           color="primary"
-                          component={Link} 
-                          to={`/recipes/${recipe.id}`}
-                        >
+                      component={Link} 
+                      to={`/recipes/${recipe.id}`}
+                    >
                           <ViewIcon fontSize="small" />
-                        </IconButton>
+                    </IconButton>
                       </Tooltip>
                       <Tooltip title="Edytuj">
-                        <IconButton 
+                    <IconButton 
                           size="small" 
                           color="primary"
-                          component={Link} 
-                          to={`/recipes/${recipe.id}/edit`}
-                        >
+                      component={Link} 
+                      to={`/recipes/${recipe.id}/edit`}
+                    >
                           <EditIcon fontSize="small" />
-                        </IconButton>
+                    </IconButton>
                       </Tooltip>
                       <Tooltip title="Usuń">
-                        <IconButton 
+                      <IconButton 
                           size="small" 
                           color="error"
                           onClick={() => handleDeleteRecipe(recipe.id)}
-                        >
+                      >
                           <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                      </IconButton>
+                    </Tooltip>
                       <Tooltip title="Dodaj do magazynu">
-                        <IconButton 
+                    <IconButton 
                           size="small" 
                           color="secondary"
                           component={Link}
@@ -302,7 +302,7 @@ const RecipeList = () => {
                           state={{ openProductDialog: true }}
                         >
                           <ProductIcon fontSize="small" />
-                        </IconButton>
+                    </IconButton>
                       </Tooltip>
                     </Box>
                   </TableCell>
@@ -310,9 +310,9 @@ const RecipeList = () => {
               );
             })
           )}
-        </TableBody>
-      </Table>
-    </TableContainer>
+            </TableBody>
+          </Table>
+        </TableContainer>
   );
   
   // Renderowanie widoku zgrupowanego wg klientów

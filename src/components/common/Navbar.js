@@ -1,6 +1,6 @@
 // src/components/common/Navbar.js
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   AppBar, 
   Toolbar, 
@@ -14,7 +14,13 @@ import {
   InputBase,
   alpha,
   styled,
-  Tooltip
+  Tooltip,
+  CircularProgress,
+  Paper,
+  List,
+  ListItem,
+  ListItemText,
+  Chip
 } from '@mui/material';
 import { 
   Notifications, 
@@ -29,6 +35,13 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../contexts/ThemeContext';
+import { 
+  getAllPurchaseOrders, 
+  getPurchaseOrderById 
+} from '../../services/purchaseOrderService';
+import { getAllOrders, getOrderById } from '../../services/orderService';
+import { getAllTasks } from '../../services/productionService';
+import NotificationsMenu from './NotificationsMenu';
 
 // Styled components
 const SearchIconWrapper = styled('div')(({ theme }) => ({
@@ -65,18 +78,18 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
   width: 'auto',
 }));
 
-const StyledBadge = styled(Badge)(({ theme }) => ({
-  '& .MuiBadge-badge': {
-    backgroundColor: '#f50057',
-    color: '#fff',
-  },
-}));
-
 const Navbar = () => {
   const { currentUser, logout } = useAuth();
   const { mode, toggleTheme } = useTheme();
   const [anchorEl, setAnchorEl] = useState(null);
   const [isTranslateVisible, setIsTranslateVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const navigate = useNavigate();
+  const searchTimeout = useRef(null);
+  const searchResultsRef = useRef(null);
   
   const handleMenu = (event) => {
     setAnchorEl(event.currentTarget);
@@ -183,6 +196,132 @@ const Navbar = () => {
     handleClose();
   };
 
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (searchResultsRef.current && !searchResultsRef.current.contains(event.target)) {
+        setIsSearchFocused(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const handleSearch = async (query) => {
+    if (query.trim() === '') {
+      setSearchResults([]);
+      return;
+    }
+    
+    setIsSearching(true);
+    
+    try {
+      // Pobierz dane z różnych źródeł
+      const [purchaseOrders, customerOrders, productionTasks] = await Promise.all([
+        getAllPurchaseOrders(),
+        getAllOrders(),
+        getAllTasks()
+      ]);
+      
+      const queryLower = query.toLowerCase();
+      
+      // Filtruj zamówienia zakupowe
+      const filteredPOs = purchaseOrders
+        .filter(po => 
+          po.number?.toLowerCase().includes(queryLower) || 
+          po.supplier?.name?.toLowerCase().includes(queryLower)
+        )
+        .map(po => ({
+          id: po.id,
+          number: po.number,
+          title: `PO: ${po.number} - ${po.supplier?.name || 'Dostawca nieznany'}`,
+          type: 'purchaseOrder',
+          date: po.orderDate || po.createdAt,
+          status: po.status
+        }));
+      
+      // Filtruj zamówienia klientów
+      const filteredCOs = customerOrders
+        .filter(co => 
+          co.orderNumber?.toLowerCase().includes(queryLower) || 
+          co.customer?.name?.toLowerCase().includes(queryLower)
+        )
+        .map(co => ({
+          id: co.id,
+          number: co.orderNumber,
+          title: `CO: ${co.orderNumber} - ${co.customer?.name || 'Klient nieznany'}`,
+          type: 'customerOrder',
+          date: co.orderDate || co.createdAt,
+          status: co.status
+        }));
+      
+      // Filtruj zadania produkcyjne
+      const filteredMOs = productionTasks
+        .filter(mo => 
+          mo.moNumber?.toLowerCase().includes(queryLower) || 
+          mo.name?.toLowerCase().includes(queryLower) ||
+          mo.productName?.toLowerCase().includes(queryLower)
+        )
+        .map(mo => ({
+          id: mo.id,
+          number: mo.moNumber,
+          title: `MO: ${mo.moNumber} - ${mo.productName || mo.name || 'Produkt nieznany'}`,
+          type: 'productionTask',
+          date: mo.scheduledDate || mo.createdAt,
+          status: mo.status
+        }));
+      
+      // Połącz wyniki i ogranicz liczbę
+      const combinedResults = [...filteredPOs, ...filteredCOs, ...filteredMOs]
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .slice(0, 10);
+      
+      setSearchResults(combinedResults);
+    } catch (error) {
+      console.error('Błąd podczas wyszukiwania:', error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+  
+  const handleSearchChange = (event) => {
+    const query = event.target.value;
+    setSearchQuery(query);
+    
+    // Anuluj poprzednie wyszukiwanie
+    if (searchTimeout.current) {
+      clearTimeout(searchTimeout.current);
+    }
+    
+    // Opóźnij wyszukiwanie, aby zmniejszyć obciążenie bazy danych
+    searchTimeout.current = setTimeout(() => {
+      handleSearch(query);
+    }, 300);
+  };
+  
+  const handleSearchFocus = () => {
+    setIsSearchFocused(true);
+    if (searchQuery.trim() !== '') {
+      handleSearch(searchQuery);
+    }
+  };
+  
+  const handleResultClick = (result) => {
+    setIsSearchFocused(false);
+    setSearchQuery('');
+    
+    // Nawiguj do odpowiedniego detalu
+    if (result.type === 'purchaseOrder') {
+      navigate(`/purchase-orders/${result.id}`);
+    } else if (result.type === 'customerOrder') {
+      navigate(`/orders/${result.id}`);
+    } else if (result.type === 'productionTask') {
+      navigate(`/production/tasks/${result.id}`);
+    }
+  };
+
   return (
     <AppBar 
       position="static" 
@@ -221,14 +360,86 @@ const Navbar = () => {
         </Box>
         
         {/* Search bar */}
-        <Box sx={{ position: 'relative', flexGrow: 1, maxWidth: 500, mx: 2 }}>
+        <Box sx={{ position: 'relative', flexGrow: 1, maxWidth: 500, mx: 2 }} ref={searchResultsRef}>
           <SearchIconWrapper>
             <SearchIcon />
           </SearchIconWrapper>
           <StyledInputBase
-            placeholder="Search…"
+            placeholder="Szukaj zamówień (PO, CO, MO)..."
             inputProps={{ 'aria-label': 'search' }}
+            value={searchQuery}
+            onChange={handleSearchChange}
+            onFocus={handleSearchFocus}
+            sx={{
+              width: '100%',
+              '& .MuiInputBase-input': {
+                paddingRight: isSearching ? '30px' : '8px',
+              }
+            }}
           />
+          {isSearching && (
+            <CircularProgress 
+              size={20} 
+              sx={{ 
+                position: 'absolute', 
+                right: 16, 
+                top: '50%', 
+                transform: 'translateY(-50%)',
+                color: theme => theme.palette.text.secondary
+              }} 
+            />
+          )}
+          
+          {/* Wyniki wyszukiwania */}
+          {isSearchFocused && searchResults.length > 0 && (
+            <Paper
+              sx={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                zIndex: 1000,
+                mt: 1,
+                maxHeight: '80vh',
+                overflow: 'auto',
+                boxShadow: 3,
+                bgcolor: mode === 'dark' ? '#1a2235' : '#ffffff',
+              }}
+            >
+              <List>
+                {searchResults.map((result) => (
+                  <ListItem 
+                    key={`${result.type}-${result.id}`} 
+                    button
+                    onClick={() => handleResultClick(result)}
+                    sx={{
+                      borderLeft: '4px solid',
+                      borderColor: () => {
+                        if (result.type === 'purchaseOrder') return '#3f51b5';
+                        if (result.type === 'customerOrder') return '#4caf50';
+                        if (result.type === 'productionTask') return '#ff9800';
+                        return 'transparent';
+                      }
+                    }}
+                  >
+                    <ListItemText 
+                      primary={result.title}
+                      secondary={
+                        <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Chip 
+                            label={result.status} 
+                            size="small" 
+                            sx={{ height: 20, fontSize: '0.7rem' }}
+                          />
+                          {result.date && new Date(result.date).toLocaleDateString()}
+                        </Typography>
+                      }
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            </Paper>
+          )}
         </Box>
         
         {/* Right side items */}
@@ -255,15 +466,7 @@ const Navbar = () => {
             </IconButton>
           </Tooltip>
           
-          <IconButton color="inherit" sx={{ ml: 1 }}>
-            <AppsIcon />
-          </IconButton>
-          
-          <IconButton color="inherit" sx={{ ml: 1 }}>
-            <StyledBadge badgeContent={3} max={99}>
-              <Notifications />
-            </StyledBadge>
-          </IconButton>
+          <NotificationsMenu />
           
           <IconButton 
             onClick={handleMenu} 

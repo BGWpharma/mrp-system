@@ -40,6 +40,7 @@ const PurchaseOrderForm = ({ orderId }) => {
   const [warehouses, setWarehouses] = useState([]);
   
   const [poData, setPoData] = useState({
+    number: '',
     supplier: null,
     items: [],
     totalValue: 0,
@@ -51,7 +52,8 @@ const PurchaseOrderForm = ({ orderId }) => {
     expectedDeliveryDate: '',
     deliveryAddress: '',
     notes: '',
-    status: PURCHASE_ORDER_STATUSES.DRAFT
+    status: PURCHASE_ORDER_STATUSES.DRAFT,
+    invoiceLink: '',
   });
   
   useEffect(() => {
@@ -98,7 +100,8 @@ const PurchaseOrderForm = ({ orderId }) => {
             orderDate: formattedOrderDate,
             expectedDeliveryDate: formattedDeliveryDate,
             vatRate: poDetails.vatRate || 23,
-            targetWarehouseId: poDetails.targetWarehouseId || ''
+            targetWarehouseId: poDetails.targetWarehouseId || '',
+            invoiceLink: poDetails.invoiceLink || '',
           });
         }
         
@@ -458,7 +461,19 @@ const PurchaseOrderForm = ({ orderId }) => {
                 onChange={handleChange}
                 fullWidth
                 multiline
-                rows={3}
+                rows={4}
+              />
+            </Grid>
+            
+            {/* Link do faktury */}
+            <Grid item xs={12}>
+              <TextField
+                label="Link do faktury (Google Drive)"
+                fullWidth
+                value={poData.invoiceLink || ''}
+                onChange={(e) => handleChange('invoiceLink', e.target.value)}
+                placeholder="https://drive.google.com/file/d/..."
+                helperText="Wprowadź link do faktury z Google Drive"
               />
             </Grid>
           </Grid>

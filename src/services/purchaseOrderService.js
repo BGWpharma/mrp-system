@@ -295,50 +295,45 @@ export const deletePurchaseOrder = async (id) => {
   }
 };
 
-export const updatePurchaseOrderStatus = async (id, status, userId) => {
+export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, userId) => {
   try {
-    const purchaseOrderRef = doc(db, PURCHASE_ORDERS_COLLECTION, id);
+    const poRef = doc(db, PURCHASE_ORDERS_COLLECTION, purchaseOrderId);
+    const poSnapshot = await getDoc(poRef);
     
-    // Sprawdź, czy zamówienie istnieje
-    const docSnap = await getDoc(purchaseOrderRef);
-    if (!docSnap.exists()) {
-      throw new Error(`Nie znaleziono zamówienia zakupowego o ID ${id}`);
+    if (!poSnapshot.exists()) {
+      throw new Error('Zamówienie zakupowe nie istnieje');
     }
     
-    // Aktualizuj status zamówienia
-    const updates = {
-      status: status,
+    const poData = poSnapshot.data();
+    const oldStatus = poData.status;
+    
+    // Aktualizuj tylko jeśli status faktycznie się zmienił
+    if (oldStatus !== newStatus) {
+      await updateDoc(poRef, {
+        status: newStatus,
       updatedBy: userId,
       updatedAt: serverTimestamp()
-    };
-    
-    await updateDoc(purchaseOrderRef, updates);
-    
-    // Zwróć zaktualizowane dane zamówienia
-    const updatedDoc = await getDoc(purchaseOrderRef);
-    const poData = updatedDoc.data();
-    
-    // Pobierz dane dostawcy
-    let supplierData = null;
-    if (poData.supplierId) {
-      const supplierDoc = await getDoc(doc(db, SUPPLIERS_COLLECTION, poData.supplierId));
-      if (supplierDoc.exists()) {
-        supplierData = { id: supplierDoc.id, ...supplierDoc.data() };
+      });
+      
+      // Jeśli zaimportowano usługę powiadomień, utwórz powiadomienie o zmianie statusu
+      try {
+        const { createStatusChangeNotification } = require('./notificationService');
+        await createStatusChangeNotification(
+          userId,
+          'purchaseOrder',
+          purchaseOrderId,
+          poData.number || purchaseOrderId.substring(0, 8),
+          oldStatus || 'Szkic',
+          newStatus
+        );
+      } catch (notificationError) {
+        console.warn('Nie udało się utworzyć powiadomienia:', notificationError);
       }
     }
     
-    return {
-      id: updatedDoc.id,
-      ...poData,
-      supplier: supplierData,
-      // Konwersja Timestamp na ISO string (dla kompatybilności z istniejącym kodem)
-      orderDate: poData.orderDate ? poData.orderDate.toDate().toISOString() : null,
-      expectedDeliveryDate: poData.expectedDeliveryDate ? poData.expectedDeliveryDate.toDate().toISOString() : null,
-      createdAt: poData.createdAt ? poData.createdAt.toDate().toISOString() : null,
-      updatedAt: poData.updatedAt ? poData.updatedAt.toDate().toISOString() : null
-    };
+    return { success: true, status: newStatus };
   } catch (error) {
-    console.error(`Błąd podczas aktualizacji statusu zamówienia zakupowego o ID ${id}:`, error);
+    console.error('Błąd podczas aktualizacji statusu zamówienia zakupowego:', error);
     throw error;
   }
 };

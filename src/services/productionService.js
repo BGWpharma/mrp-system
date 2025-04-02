@@ -294,6 +294,7 @@ import {
       }
       
       const task = taskSnapshot.data();
+      const oldStatus = task.status;
       const updates = { status: newStatus };
       
       if (newStatus === 'W trakcie') {
@@ -320,6 +321,24 @@ import {
       }
       
       await updateDoc(taskRef, updates);
+      
+      // Jeśli status faktycznie się zmienił, wyślij powiadomienie
+      if (oldStatus !== updates.status) {
+        // Jeśli zaimportowano usługę powiadomień, utwórz powiadomienie o zmianie statusu
+        try {
+          const { createStatusChangeNotification } = require('./notificationService');
+          await createStatusChangeNotification(
+            userId,
+            'productionTask',
+            taskId,
+            task.moNumber || task.name || taskId.substring(0, 8),
+            oldStatus || 'Nowe',
+            updates.status
+          );
+        } catch (notificationError) {
+          console.warn('Nie udało się utworzyć powiadomienia:', notificationError);
+        }
+      }
       
       return { success: true, message: `Status zadania zmieniony na ${updates.status}` };
     } catch (error) {

@@ -39,7 +39,8 @@ import {
   Add as AddIcon
 } from '@mui/icons-material';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { getInteractionById, getContactById, deleteInteraction } from '../../services/crmService';
+import { getInteractionById, deleteInteraction } from '../../services/crmService';
+import { getSupplierById } from '../../services/purchaseOrderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { format } from 'date-fns';
@@ -49,7 +50,7 @@ import { INTERACTION_TYPES, INTERACTION_STATUSES } from '../../utils/constants';
 const InteractionDetailsPage = () => {
   const { interactionId } = useParams();
   const [interaction, setInteraction] = useState(null);
-  const [contact, setContact] = useState(null);
+  const [supplier, setSupplier] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
@@ -68,8 +69,13 @@ const InteractionDetailsPage = () => {
       setInteraction(interactionData);
 
       if (interactionData.contactId) {
-        const contactData = await getContactById(interactionData.contactId);
-        setContact(contactData);
+        try {
+          const supplierData = await getSupplierById(interactionData.contactId);
+          setSupplier(supplierData);
+        } catch (error) {
+          console.error('Błąd podczas pobierania dostawcy:', error);
+          // Nie wyświetlaj błędu użytkownikowi - po prostu kontynuuj bez danych dostawcy
+        }
       }
     } catch (error) {
       console.error('Błąd podczas pobierania danych interakcji:', error);
@@ -88,12 +94,8 @@ const InteractionDetailsPage = () => {
       await deleteInteraction(interactionId);
       showSuccess('Interakcja została usunięta');
       
-      // Jeśli mamy dane kontaktu, przekieruj do jego szczegółów, w przeciwnym razie do listy interakcji
-      if (contact && contact.id) {
-        navigate(`/crm/contacts/${contact.id}`);
-      } else {
-        navigate('/crm/interactions');
-      }
+      // Przekieruj do listy interakcji
+      navigate('/inventory/interactions');
     } catch (error) {
       console.error('Błąd podczas usuwania interakcji:', error);
       showError('Nie udało się usunąć interakcji: ' + error.message);
@@ -192,10 +194,8 @@ const InteractionDetailsPage = () => {
   };
 
   const getContactName = () => {
-    if (!contact) return 'Nieznany kontakt';
-    
-    const fullName = `${contact.firstName || ''} ${contact.lastName || ''}`.trim();
-    return fullName || contact.company || 'Brak nazwy';
+    if (!supplier) return 'Nieznany dostawca';
+    return supplier.name || 'Brak nazwy';
   };
 
   if (loading) {
@@ -212,7 +212,7 @@ const InteractionDetailsPage = () => {
         <Box mt={4} mb={4} display="flex" alignItems="center">
           <Button 
             component={Link} 
-            to="/crm/interactions" 
+            to="/inventory/interactions" 
             startIcon={<ArrowBackIcon />}
             sx={{ mr: 2 }}
           >
@@ -229,7 +229,7 @@ const InteractionDetailsPage = () => {
           <Button 
             variant="contained" 
             component={Link}
-            to="/crm/interactions"
+            to="/inventory/interactions"
             sx={{ mt: 2 }}
           >
             Wróć do listy interakcji
@@ -245,7 +245,7 @@ const InteractionDetailsPage = () => {
         <Box display="flex" alignItems="center">
           <Button 
             component={Link} 
-            to="/crm/interactions" 
+            to="/inventory/interactions" 
             startIcon={<ArrowBackIcon />}
             sx={{ mr: 2 }}
           >
@@ -278,7 +278,7 @@ const InteractionDetailsPage = () => {
             color="primary" 
             startIcon={<EditIcon />} 
             component={Link}
-            to={`/crm/interactions/${interactionId}/edit`}
+            to={`/inventory/interactions/${interactionId}/edit`}
             sx={{ mr: 1 }}
           >
             Edytuj
@@ -331,12 +331,12 @@ const InteractionDetailsPage = () => {
                 </Grid>
                 <Grid item xs={12} md={6}>
                   <List disablePadding>
-                    <ListItem button component={Link} to={`/crm/contacts/${interaction.contactId}`}>
+                    <ListItem button component={Link} to={`/suppliers/${interaction.contactId}/view`}>
                       <ListItemIcon>
                         <PersonIcon />
                       </ListItemIcon>
                       <ListItemText 
-                        primary="Kontakt"
+                        primary="Dostawca"
                         secondary={getContactName()}
                       />
                     </ListItem>
@@ -374,10 +374,10 @@ const InteractionDetailsPage = () => {
             <Button 
               variant="outlined" 
               component={Link}
-              to={`/crm/interactions/new?contactId=${interaction.contactId}`}
+              to={`/inventory/interactions/new?contactId=${interaction.contactId}`}
               startIcon={<AddIcon />}
             >
-              Nowa interakcja z tym kontaktem
+              Nowa interakcja z tym dostawcą
             </Button>
           </Box>
         </Grid>
@@ -412,53 +412,55 @@ const InteractionDetailsPage = () => {
             </CardContent>
           </Card>
 
-          {contact && (
+          {supplier && (
             <Card sx={{ mt: 3 }}>
-              <CardHeader title="Kontakt" />
-              <Divider />
+              <CardHeader title="Dostawca" />
               <CardContent>
-                <Box>
-                  <Typography variant="h6">
-                    {getContactName()}
-                  </Typography>
-                  {contact.company && (
-                    <Typography variant="body2" color="textSecondary">
-                      {contact.company}
+                <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+                  <PersonIcon sx={{ mr: 2, fontSize: 40, color: 'primary.main' }} />
+                  <Box>
+                    <Typography variant="h6">
+                      {getContactName()}
                     </Typography>
-                  )}
-                  {contact.position && (
-                    <Typography variant="body2" color="textSecondary">
-                      {contact.position}
-                    </Typography>
-                  )}
+                    {supplier.company && (
+                      <Typography variant="body2" color="textSecondary">
+                        {supplier.company}
+                      </Typography>
+                    )}
+                    {supplier.position && (
+                      <Typography variant="body2" color="textSecondary">
+                        {supplier.position}
+                      </Typography>
+                    )}
+                  </Box>
                 </Box>
                 <Divider sx={{ my: 2 }} />
                 <List disablePadding dense>
-                  {contact.email && (
+                  {supplier.email && (
                     <ListItem disableGutters>
                       <ListItemIcon sx={{ minWidth: 30 }}>
                         <EmailIcon fontSize="small" />
                       </ListItemIcon>
-                      <ListItemText primary={contact.email} />
+                      <ListItemText primary={supplier.email} />
                     </ListItem>
                   )}
-                  {contact.phone && (
+                  {supplier.phone && (
                     <ListItem disableGutters>
                       <ListItemIcon sx={{ minWidth: 30 }}>
                         <CallIcon fontSize="small" />
                       </ListItemIcon>
-                      <ListItemText primary={contact.phone} />
+                      <ListItemText primary={supplier.phone} />
                     </ListItem>
                   )}
                 </List>
-                <Button 
-                  fullWidth 
+                <Button
+                  startIcon={<PersonIcon />}
                   variant="outlined"
                   component={Link}
-                  to={`/crm/contacts/${contact.id}`}
+                  to={`/suppliers/${supplier.id}/view`}
                   sx={{ mt: 2 }}
                 >
-                  Zobacz szczegóły kontaktu
+                  Przejdź do karty dostawcy
                 </Button>
               </CardContent>
             </Card>

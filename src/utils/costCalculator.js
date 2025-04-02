@@ -126,7 +126,7 @@ export const calculateIngredientsCost = (ingredients, pricesMap, options = {}) =
 /**
  * Oblicza koszt robocizny na podstawie czasu przygotowania
  * @param {Number} preparationTime - Czas przygotowania w minutach
- * @param {Number} hourlyRate - Stawka godzinowa (domyślnie 50 zł/h)
+ * @param {Number} hourlyRate - Stawka godzinowa (domyślnie 50 EUR/h)
  * @returns {Number} - Koszt robocizny
  */
 export const calculateLaborCost = (preparationTime, hourlyRate = 50) => {
@@ -141,7 +141,7 @@ export const calculateLaborCost = (preparationTime, hourlyRate = 50) => {
 /**
  * Oblicza koszt energii na podstawie czasu przygotowania
  * @param {Number} preparationTime - Czas przygotowania w minutach
- * @param {Number} energyRate - Stawka energii (domyślnie 15 zł/h)
+ * @param {Number} energyRate - Stawka energii (domyślnie 15 EUR/h)
  * @returns {Number} - Koszt energii
  */
 export const calculateEnergyCost = (preparationTime, energyRate = 15) => {

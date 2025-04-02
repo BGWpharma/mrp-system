@@ -3,9 +3,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   Container, Typography, Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Button, TextField, Box, Chip, IconButton, Dialog,
-  DialogActions, DialogContent, DialogContentText, DialogTitle, MenuItem, Select, FormControl, InputLabel
+  DialogActions, DialogContent, DialogContentText, DialogTitle, MenuItem, Select, FormControl, InputLabel, 
+  Tooltip
 } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon } from '@mui/icons-material';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, Description as DescriptionIcon } from '@mui/icons-material';
 import { getAllPurchaseOrders, deletePurchaseOrder, updatePurchaseOrderStatus } from '../../services/purchaseOrderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -196,11 +197,13 @@ const PurchaseOrderList = () => {
             label="Status"
           >
             <MenuItem value="all">Wszystkie</MenuItem>
-            <MenuItem value="draft">Szkic</MenuItem>
-            <MenuItem value="sent">Wysłane</MenuItem>
-            <MenuItem value="confirmed">Potwierdzone</MenuItem>
-            <MenuItem value="received">Otrzymane</MenuItem>
-            <MenuItem value="cancelled">Anulowane</MenuItem>
+            <MenuItem value={PURCHASE_ORDER_STATUSES.DRAFT}>{STATUS_TRANSLATIONS[PURCHASE_ORDER_STATUSES.DRAFT]}</MenuItem>
+            <MenuItem value={PURCHASE_ORDER_STATUSES.PENDING}>{STATUS_TRANSLATIONS[PURCHASE_ORDER_STATUSES.PENDING]}</MenuItem>
+            <MenuItem value={PURCHASE_ORDER_STATUSES.CONFIRMED}>{STATUS_TRANSLATIONS[PURCHASE_ORDER_STATUSES.CONFIRMED]}</MenuItem>
+            <MenuItem value={PURCHASE_ORDER_STATUSES.SHIPPED}>{STATUS_TRANSLATIONS[PURCHASE_ORDER_STATUSES.SHIPPED]}</MenuItem>
+            <MenuItem value={PURCHASE_ORDER_STATUSES.DELIVERED}>{STATUS_TRANSLATIONS[PURCHASE_ORDER_STATUSES.DELIVERED]}</MenuItem>
+            <MenuItem value={PURCHASE_ORDER_STATUSES.CANCELLED}>{STATUS_TRANSLATIONS[PURCHASE_ORDER_STATUSES.CANCELLED]}</MenuItem>
+            <MenuItem value={PURCHASE_ORDER_STATUSES.COMPLETED}>{STATUS_TRANSLATIONS[PURCHASE_ORDER_STATUSES.COMPLETED]}</MenuItem>
           </Select>
         </FormControl>
       </Box>
@@ -226,7 +229,18 @@ const PurchaseOrderList = () => {
             <TableBody>
               {filteredPOs.map((po) => (
                 <TableRow key={po.id}>
-                  <TableCell>{po.number}</TableCell>
+                  <TableCell>
+                    {po.number}
+                    {po.invoiceLink && (
+                      <Tooltip title="Faktura załączona">
+                        <DescriptionIcon 
+                          fontSize="small" 
+                          color="primary" 
+                          sx={{ ml: 1, verticalAlign: 'middle' }} 
+                        />
+                      </Tooltip>
+                    )}
+                  </TableCell>
                   <TableCell>{po.supplier?.name}</TableCell>
                   <TableCell>{po.orderDate ? new Date(po.orderDate).toLocaleDateString('pl-PL') : '-'}</TableCell>
                   <TableCell>{po.expectedDeliveryDate ? new Date(po.expectedDeliveryDate).toLocaleDateString('pl-PL') : '-'}</TableCell>
@@ -308,11 +322,11 @@ const PurchaseOrderList = () => {
               onChange={(e) => setNewStatus(e.target.value)}
               label="Status"
             >
-              <MenuItem value="draft">Szkic</MenuItem>
-              <MenuItem value="sent">Wysłane</MenuItem>
-              <MenuItem value="confirmed">Potwierdzone</MenuItem>
-              <MenuItem value="received">Otrzymane</MenuItem>
-              <MenuItem value="cancelled">Anulowane</MenuItem>
+              {Object.values(PURCHASE_ORDER_STATUSES).map((status) => (
+                <MenuItem key={status} value={status}>
+                  {STATUS_TRANSLATIONS[status] || status}
+                </MenuItem>
+              ))}
             </Select>
           </FormControl>
         </DialogContent>

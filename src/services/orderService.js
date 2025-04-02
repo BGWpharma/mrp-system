@@ -248,14 +248,40 @@ export const deleteOrder = async (orderId) => {
 export const updateOrderStatus = async (orderId, status, userId) => {
   try {
     const orderRef = doc(db, ORDERS_COLLECTION, orderId);
+    const orderSnapshot = await getDoc(orderRef);
     
-    await updateDoc(orderRef, {
-      status: status,
-      updatedBy: userId,
-      updatedAt: serverTimestamp(),
-      // Jeśli status to "Dostarczone", ustaw datę dostawy
-      ...(status === 'Dostarczone' ? { deliveryDate: serverTimestamp() } : {})
-    });
+    if (!orderSnapshot.exists()) {
+      throw new Error('Zamówienie nie istnieje');
+    }
+    
+    const orderData = orderSnapshot.data();
+    const oldStatus = orderData.status;
+    
+    // Aktualizuj dane zamówienia tylko jeśli status się zmienił
+    if (oldStatus !== status) {
+      await updateDoc(orderRef, {
+        status: status,
+        updatedBy: userId,
+        updatedAt: serverTimestamp(),
+        // Jeśli status to "Dostarczone", ustaw datę dostawy
+        ...(status === 'Dostarczone' ? { deliveryDate: serverTimestamp() } : {})
+      });
+      
+      // Jeśli zaimportowano usługę powiadomień, utwórz powiadomienie o zmianie statusu
+      try {
+        const { createStatusChangeNotification } = require('./notificationService');
+        await createStatusChangeNotification(
+          userId,
+          'order',
+          orderId,
+          orderData.orderNumber || orderId.substring(0, 8),
+          oldStatus || 'Nowy',
+          status
+        );
+      } catch (notificationError) {
+        console.warn('Nie udało się utworzyć powiadomienia:', notificationError);
+      }
+    }
     
     return true;
   } catch (error) {

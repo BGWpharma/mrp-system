@@ -22,7 +22,12 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
-  CircularProgress
+  CircularProgress,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Grid
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -33,15 +38,17 @@ import {
   Phone as CallIcon,
   Email as EmailIcon,
   EventNote as MeetingIcon,
-  Note as NoteIcon
+  Note as NoteIcon,
+  Visibility as ViewIcon
 } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
-import { getAllInteractions, deleteInteraction } from '../../services/crmService';
+import { getAllInteractions, deleteInteraction, updateInteraction, getInteractionById } from '../../services/crmService';
 import { getAllSuppliers } from '../../services/purchaseOrderService';
 import { useNotification } from '../../hooks/useNotification';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { INTERACTION_TYPES, INTERACTION_STATUSES } from '../../utils/constants';
+import { useAuth } from '../../hooks/useAuth';
 
 const InteractionsPage = () => {
   const [interactions, setInteractions] = useState([]);
@@ -53,9 +60,15 @@ const InteractionsPage = () => {
   const [supplierNames, setSupplierNames] = useState({});
   const [suppliers, setSuppliers] = useState([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [interactionToDelete, setInteractionToDelete] = useState(null);
+  const [interactionToEdit, setInteractionToEdit] = useState(null);
+  const [newStatus, setNewStatus] = useState('');
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [selectedInteraction, setSelectedInteraction] = useState(null);
   
   const { showSuccess, showError } = useNotification();
+  const { currentUser } = useAuth();
   
   useEffect(() => {
     fetchInteractions();
@@ -133,6 +146,7 @@ const InteractionsPage = () => {
       await deleteInteraction(interactionToDelete.id);
       showSuccess('Interakcja została usunięta');
       setInteractions(interactions.filter(i => i.id !== interactionToDelete.id));
+      setFilteredInteractions(filteredInteractions.filter(i => i.id !== interactionToDelete.id));
     } catch (error) {
       console.error('Błąd podczas usuwania interakcji:', error);
       showError('Nie udało się usunąć interakcji: ' + error.message);
@@ -187,6 +201,58 @@ const InteractionsPage = () => {
       default:
         return <NoteIcon />;
     }
+  };
+  
+  const handleStatusClick = (interaction) => {
+    setInteractionToEdit(interaction);
+    setNewStatus(interaction.status);
+    setStatusDialogOpen(true);
+  };
+  
+  const handleStatusUpdate = async () => {
+    if (!interactionToEdit || newStatus === interactionToEdit.status) {
+      setStatusDialogOpen(false);
+      return;
+    }
+    
+    try {
+      // Zapisz poprzedni status, aby móc zidentyfikować interakcję w tablicy
+      const previousId = interactionToEdit.id;
+      
+      await updateInteraction(interactionToEdit.id, {
+        ...interactionToEdit,
+        status: newStatus
+      }, currentUser?.uid);
+      
+      // Aktualizuj główną listę interakcji
+      const updatedInteractions = interactions.map(interaction => 
+        interaction.id === previousId 
+          ? { ...interaction, status: newStatus } 
+          : interaction
+      );
+      setInteractions(updatedInteractions);
+      
+      // Aktualizuj również przefiltrowaną listę interakcji
+      const updatedFilteredInteractions = filteredInteractions.map(interaction => 
+        interaction.id === previousId 
+          ? { ...interaction, status: newStatus } 
+          : interaction
+      );
+      setFilteredInteractions(updatedFilteredInteractions);
+      
+      showSuccess('Status interakcji został zaktualizowany');
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji statusu:', error);
+      showError('Nie udało się zaktualizować statusu interakcji: ' + error.message);
+    } finally {
+      setStatusDialogOpen(false);
+      setInteractionToEdit(null);
+    }
+  };
+  
+  const handleDetailsClick = (interaction) => {
+    setSelectedInteraction(interaction);
+    setDetailsDialogOpen(true);
   };
   
   if (loading) {
@@ -275,26 +341,34 @@ const InteractionsPage = () => {
                       </Tooltip>
                     </TableCell>
                     <TableCell>
-                      <Link 
-                        to={`/inventory/interactions/${interaction.id}`}
-                        style={{ textDecoration: 'none', color: 'inherit', fontWeight: 'bold' }}
-                      >
-                        {interaction.subject}
-                      </Link>
-                      {interaction.notes && (
-                        <Typography 
-                          variant="body2" 
-                          color="textSecondary"
-                          sx={{ 
-                            display: '-webkit-box',
-                            WebkitLineClamp: 1,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden'
+                      <Tooltip title="Kliknij, aby zobaczyć szczegóły">
+                        <Box 
+                          onClick={() => handleDetailsClick(interaction)}
+                          style={{ 
+                            cursor: 'pointer',
+                            textDecoration: 'none', 
+                            color: 'inherit' 
                           }}
                         >
-                          {interaction.notes}
-                        </Typography>
-                      )}
+                          <Typography variant="body1" component="span" sx={{ fontWeight: 'bold' }}>
+                            {interaction.subject}
+                          </Typography>
+                          {interaction.notes && (
+                            <Typography 
+                              variant="body2" 
+                              color="textSecondary"
+                              sx={{ 
+                                display: '-webkit-box',
+                                WebkitLineClamp: 1,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden'
+                              }}
+                            >
+                              {interaction.notes}
+                            </Typography>
+                          )}
+                        </Box>
+                      </Tooltip>
                     </TableCell>
                     <TableCell>{formatDate(interaction.date)}</TableCell>
                     <TableCell>
@@ -322,12 +396,16 @@ const InteractionsPage = () => {
                       })()}
                     </TableCell>
                     <TableCell>
-                      <Chip 
-                        label={interaction.status} 
-                        size="small" 
-                        color={getStatusColor(interaction.status)} 
-                        variant="outlined"
-                      />
+                      <Tooltip title="Kliknij, aby zobaczyć szczegóły lub edytować status">
+                        <Chip 
+                          label={interaction.status} 
+                          size="small" 
+                          color={getStatusColor(interaction.status)} 
+                          variant="outlined"
+                          onClick={() => handleStatusClick(interaction)}
+                          sx={{ cursor: 'pointer' }}
+                        />
+                      </Tooltip>
                     </TableCell>
                     <TableCell align="right">
                       <Box display="flex" justifyContent="flex-end">
@@ -338,6 +416,16 @@ const InteractionsPage = () => {
                             to={`/inventory/interactions/${interaction.id}/edit`}
                           >
                             <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Szczegóły">
+                          <IconButton 
+                            size="small"
+                            color="primary"
+                            component={Link}
+                            to={`/inventory/interactions/${interaction.id}`}
+                          >
+                            <ViewIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="Usuń">
@@ -410,6 +498,140 @@ const InteractionsPage = () => {
             Usuń
           </Button>
         </DialogActions>
+      </Dialog>
+
+      {/* Dialog zmiany statusu */}
+      <Dialog
+        open={statusDialogOpen}
+        onClose={() => setStatusDialogOpen(false)}
+      >
+        <DialogTitle>Zmień status interakcji</DialogTitle>
+        <DialogContent>
+          {interactionToEdit && (
+            <>
+              <DialogContentText>
+                Zmień status interakcji "{interactionToEdit.subject}"
+              </DialogContentText>
+              <FormControl fullWidth sx={{ mt: 2 }}>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  value={newStatus}
+                  onChange={(e) => setNewStatus(e.target.value)}
+                  label="Status"
+                >
+                  <MenuItem value={INTERACTION_STATUSES.PLANNED}>Zaplanowana</MenuItem>
+                  <MenuItem value={INTERACTION_STATUSES.IN_PROGRESS}>W trakcie</MenuItem>
+                  <MenuItem value={INTERACTION_STATUSES.COMPLETED}>Zakończona</MenuItem>
+                  <MenuItem value={INTERACTION_STATUSES.CANCELLED}>Anulowana</MenuItem>
+                </Select>
+              </FormControl>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStatusDialogOpen(false)}>Anuluj</Button>
+          <Button onClick={handleStatusUpdate} color="primary">Zapisz</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog szczegółów interakcji */}
+      <Dialog
+        open={detailsDialogOpen}
+        onClose={() => setDetailsDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          Szczegóły interakcji
+          <IconButton
+            aria-label="close"
+            onClick={() => setDetailsDialogOpen(false)}
+            sx={{
+              position: 'absolute',
+              right: 8,
+              top: 8,
+            }}
+          >
+            <ClearIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers>
+          {selectedInteraction && (
+            <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <Typography variant="h6">{selectedInteraction.subject}</Typography>
+                <Box display="flex" alignItems="center" mt={1}>
+                  {getInteractionIcon(selectedInteraction.type)}
+                  <Typography variant="body2" color="textSecondary" sx={{ ml: 1 }}>
+                    {selectedInteraction.type}
+                  </Typography>
+                </Box>
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle2">Data i godzina:</Typography>
+                <Typography variant="body1">{formatDate(selectedInteraction.date)}</Typography>
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle2">Status:</Typography>
+                <Chip 
+                  label={selectedInteraction.status} 
+                  size="small" 
+                  color={getStatusColor(selectedInteraction.status)}
+                  onClick={() => {
+                    setDetailsDialogOpen(false);
+                    handleStatusClick(selectedInteraction);
+                  }}
+                  sx={{ cursor: 'pointer' }}
+                />
+              </Grid>
+              
+              <Grid item xs={12}>
+                <Typography variant="subtitle2">Dostawca:</Typography>
+                <Typography variant="body1">
+                  {supplierNames[selectedInteraction.contactId] || 'Nieznany dostawca'}
+                </Typography>
+              </Grid>
+              
+              {selectedInteraction.notes && (
+                <Grid item xs={12}>
+                  <Typography variant="subtitle2">Notatki:</Typography>
+                  <Paper variant="outlined" sx={{ p: 2, mt: 1, bgcolor: 'background.default' }}>
+                    <Typography variant="body2" style={{ whiteSpace: 'pre-wrap' }}>
+                      {selectedInteraction.notes}
+                    </Typography>
+                  </Paper>
+                </Grid>
+              )}
+              
+              <Grid item xs={12} sx={{ mt: 2 }}>
+                <Box display="flex" justifyContent="flex-end" gap={1}>
+                  <Button 
+                    variant="outlined" 
+                    startIcon={<EditIcon />}
+                    component={Link}
+                    to={`/inventory/interactions/${selectedInteraction.id}/edit`}
+                    onClick={() => setDetailsDialogOpen(false)}
+                  >
+                    Edytuj
+                  </Button>
+                  <Button 
+                    variant="outlined" 
+                    color="error" 
+                    startIcon={<DeleteIcon />}
+                    onClick={() => {
+                      setDetailsDialogOpen(false);
+                      handleDeleteClick(selectedInteraction);
+                    }}
+                  >
+                    Usuń
+                  </Button>
+                </Box>
+              </Grid>
+            </Grid>
+          )}
+        </DialogContent>
       </Dialog>
     </Container>
   );

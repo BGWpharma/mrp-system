@@ -4,13 +4,14 @@ import {
   Container, Typography, Paper, Button, Box, Chip, Grid, Divider, 
   Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  FormControl, InputLabel, Select, MenuItem
+  FormControl, InputLabel, Select, MenuItem, TextField
 } from '@mui/material';
 import { 
   Edit as EditIcon, 
   Delete as DeleteIcon, 
   Print as PrintIcon,
   Article as ArticleIcon,
+  Description as DescriptionIcon,
   Inventory as InventoryIcon,
   ArrowBack as ArrowBackIcon
 } from '@mui/icons-material';
@@ -20,6 +21,7 @@ import {
   getPurchaseOrderById,
   deletePurchaseOrder,
   updatePurchaseOrderStatus,
+  updatePurchaseOrder,
   PURCHASE_ORDER_STATUSES,
   translateStatus
 } from '../../services/purchaseOrderService';
@@ -38,6 +40,8 @@ const PurchaseOrderDetails = ({ orderId }) => {
   const [newStatus, setNewStatus] = useState('');
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
   const [itemToReceive, setItemToReceive] = useState(null);
+  const [invoiceLinkDialogOpen, setInvoiceLinkDialogOpen] = useState(false);
+  const [invoiceLink, setInvoiceLink] = useState('');
   
   const printRef = useRef();
   
@@ -101,8 +105,13 @@ const PurchaseOrderDetails = ({ orderId }) => {
     }
     
     try {
-      const updatedPO = await updatePurchaseOrderStatus(orderId, newStatus, currentUser?.uid);
-      setPurchaseOrder(updatedPO);
+      // Aktualizacja statusu
+      await updatePurchaseOrderStatus(orderId, newStatus, currentUser?.uid);
+      
+      // Pobierz zaktualizowane dane zamówienia
+      const updatedData = await getPurchaseOrderById(orderId);
+      setPurchaseOrder(updatedData);
+      
       setStatusDialogOpen(false);
       showSuccess('Status zamówienia został zaktualizowany');
     } catch (error) {
@@ -125,11 +134,43 @@ const PurchaseOrderDetails = ({ orderId }) => {
     }
     
     // Upewnij się, że cena jednostkowa jest liczbą
-    const unitPrice = Number(itemToReceive.unitPrice || 0);
+    const unitPrice = typeof itemToReceive.unitPrice === 'number' 
+      ? itemToReceive.unitPrice 
+      : parseFloat(itemToReceive.unitPrice || 0);
     
     // Przekieruj do strony przyjęcia towaru z parametrami
     navigate(`/inventory/${itemToReceive.inventoryItemId}/receive?poNumber=${purchaseOrder.number}&quantity=${itemToReceive.quantity}&unitPrice=${unitPrice}`);
     setReceiveDialogOpen(false);
+  };
+  
+  const handleInvoiceLinkDialogOpen = () => {
+    setInvoiceLink(purchaseOrder.invoiceLink || '');
+    setInvoiceLinkDialogOpen(true);
+  };
+
+  const handleInvoiceLinkSave = async () => {
+    try {
+      // Przygotuj dane do aktualizacji
+      const updatedData = {
+        ...purchaseOrder,
+        invoiceLink: invoiceLink
+      };
+      
+      // Zaktualizuj zamówienie w bazie danych
+      await updatePurchaseOrder(orderId, updatedData);
+      
+      // Zaktualizuj lokalny stan
+      setPurchaseOrder({
+        ...purchaseOrder,
+        invoiceLink: invoiceLink
+      });
+      
+      setInvoiceLinkDialogOpen(false);
+      showSuccess('Link do faktury został zaktualizowany');
+    } catch (error) {
+      console.error('Błąd podczas zapisywania linku do faktury:', error);
+      showError('Nie udało się zapisać linku do faktury');
+    }
   };
   
   const getStatusChip = (status) => {
@@ -199,6 +240,14 @@ const PurchaseOrderDetails = ({ orderId }) => {
           </Button>
           <Button 
             variant="outlined" 
+            startIcon={<DescriptionIcon />} 
+            onClick={handleInvoiceLinkDialogOpen}
+            sx={{ mr: 1 }}
+          >
+            {purchaseOrder.invoiceLink ? 'Zmień link do faktury' : 'Dodaj link do faktury'}
+          </Button>
+          <Button 
+            variant="outlined" 
             startIcon={<EditIcon />} 
             onClick={handleEditClick}
             sx={{ mr: 1 }}
@@ -239,7 +288,34 @@ const PurchaseOrderDetails = ({ orderId }) => {
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                 <Typography variant="body2">Wartość zamówienia:</Typography>
-                <Typography variant="body1">{purchaseOrder.totalValue.toFixed(2)} {purchaseOrder.currency}</Typography>
+                <Typography variant="body1">
+                  {typeof purchaseOrder.totalValue === 'number' 
+                    ? `${purchaseOrder.totalValue.toFixed(2)} ${purchaseOrder.currency}`
+                    : `0.00 ${purchaseOrder.currency}`
+                  }
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Typography variant="body2">Stawka VAT:</Typography>
+                <Typography variant="body1">{purchaseOrder.vatRate || 0}%</Typography>
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Typography variant="body2">Wartość podatku:</Typography>
+                <Typography variant="body1">
+                  {typeof purchaseOrder.totalValue === 'number' 
+                    ? `${((purchaseOrder.totalValue * (purchaseOrder.vatRate || 0)) / 100).toFixed(2)} ${purchaseOrder.currency}`
+                    : `0.00 ${purchaseOrder.currency}`
+                  }
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Typography variant="body2" fontWeight="bold">Wartość brutto:</Typography>
+                <Typography variant="body1" fontWeight="bold">
+                  {typeof purchaseOrder.totalValue === 'number'
+                    ? `${(purchaseOrder.totalGross || purchaseOrder.totalValue * (1 + (purchaseOrder.vatRate || 0) / 100)).toFixed(2)} ${purchaseOrder.currency}`
+                    : `0.00 ${purchaseOrder.currency}`
+                  }
+                </Typography>
               </Box>
             </Box>
           </Grid>
@@ -340,7 +416,34 @@ const PurchaseOrderDetails = ({ orderId }) => {
                   Razem:
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                  {purchaseOrder.totalValue.toFixed(2)} {purchaseOrder.currency}
+                  {typeof purchaseOrder.totalValue === 'number'
+                    ? `${purchaseOrder.totalValue.toFixed(2)} ${purchaseOrder.currency}`
+                    : `0.00 ${purchaseOrder.currency}`
+                  }
+                </TableCell>
+                {canReceiveItems && <TableCell />}
+              </TableRow>
+              <TableRow>
+                <TableCell colSpan={canReceiveItems ? 4 : 3} align="right">
+                  VAT {purchaseOrder.vatRate || 0}%:
+                </TableCell>
+                <TableCell align="right">
+                  {typeof purchaseOrder.totalValue === 'number'
+                    ? `${((purchaseOrder.totalValue * (purchaseOrder.vatRate || 0)) / 100).toFixed(2)} ${purchaseOrder.currency}`
+                    : `0.00 ${purchaseOrder.currency}`
+                  }
+                </TableCell>
+                {canReceiveItems && <TableCell />}
+              </TableRow>
+              <TableRow>
+                <TableCell colSpan={canReceiveItems ? 4 : 3} align="right" sx={{ fontWeight: 'bold' }}>
+                  Wartość brutto:
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                  {typeof purchaseOrder.totalValue === 'number'
+                    ? `${(purchaseOrder.totalGross || purchaseOrder.totalValue * (1 + (purchaseOrder.vatRate || 0) / 100)).toFixed(2)} ${purchaseOrder.currency}`
+                    : `0.00 ${purchaseOrder.currency}`
+                  }
                 </TableCell>
                 {canReceiveItems && <TableCell />}
               </TableRow>
@@ -353,6 +456,25 @@ const PurchaseOrderDetails = ({ orderId }) => {
         <Paper sx={{ p: 3, mb: 3 }}>
           <Typography variant="subtitle1" gutterBottom>Uwagi</Typography>
           <Typography variant="body2">{purchaseOrder.notes}</Typography>
+        </Paper>
+      )}
+      
+      {purchaseOrder.invoiceLink && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Typography variant="subtitle1" gutterBottom>Faktura</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Typography variant="body2" sx={{ mr: 2 }}>Link do faktury:</Typography>
+            <Button 
+              variant="contained" 
+              color="primary" 
+              component="a" 
+              href={purchaseOrder.invoiceLink} 
+              target="_blank" 
+              rel="noopener noreferrer"
+            >
+              Otwórz fakturę
+            </Button>
+          </Box>
         </Paper>
       )}
       
@@ -442,6 +564,35 @@ const PurchaseOrderDetails = ({ orderId }) => {
         </DialogActions>
       </Dialog>
       
+      {/* Dialog wprowadzania linku do faktury */}
+      <Dialog
+        open={invoiceLinkDialogOpen}
+        onClose={() => setInvoiceLinkDialogOpen(false)}
+      >
+        <DialogTitle>{purchaseOrder.invoiceLink ? 'Edytuj link do faktury' : 'Dodaj link do faktury'}</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Wprowadź link do faktury z Google Drive:
+          </DialogContentText>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Link do faktury"
+            type="url"
+            fullWidth
+            variant="outlined"
+            value={invoiceLink}
+            onChange={(e) => setInvoiceLink(e.target.value)}
+            sx={{ mt: 2 }}
+            placeholder="https://drive.google.com/file/d/..."
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setInvoiceLinkDialogOpen(false)}>Anuluj</Button>
+          <Button onClick={handleInvoiceLinkSave} color="primary">Zapisz</Button>
+        </DialogActions>
+      </Dialog>
+      
       <Box sx={{ display: 'none' }}>
         <Box ref={printRef} sx={{ p: 4 }}>
           <Typography variant="h5" align="center" gutterBottom>
@@ -455,6 +606,19 @@ const PurchaseOrderDetails = ({ orderId }) => {
               <Typography variant="body2">Data zamówienia: {formatDate(purchaseOrder.orderDate)}</Typography>
               <Typography variant="body2">Status: {translateStatus(purchaseOrder.status)}</Typography>
               <Typography variant="body2">Planowana data dostawy: {formatDate(purchaseOrder.expectedDeliveryDate)}</Typography>
+              <Typography variant="body2">Wartość netto: {typeof purchaseOrder.totalValue === 'number' ? `${purchaseOrder.totalValue.toFixed(2)} ${purchaseOrder.currency}` : `0.00 ${purchaseOrder.currency}`}</Typography>
+              <Typography variant="body2">Stawka VAT: {purchaseOrder.vatRate || 0}%</Typography>
+              <Typography variant="body2">
+                Wartość podatku: {typeof purchaseOrder.totalValue === 'number' ? `${((purchaseOrder.totalValue * (purchaseOrder.vatRate || 0)) / 100).toFixed(2)} ${purchaseOrder.currency}` : `0.00 ${purchaseOrder.currency}`}
+              </Typography>
+              <Typography variant="body2" fontWeight="bold">
+                Wartość brutto: {typeof purchaseOrder.totalValue === 'number' ? `${(purchaseOrder.totalGross || purchaseOrder.totalValue * (1 + (purchaseOrder.vatRate || 0) / 100)).toFixed(2)} ${purchaseOrder.currency}` : `0.00 ${purchaseOrder.currency}`}
+              </Typography>
+              {purchaseOrder.invoiceLink && (
+                <Typography variant="body2" sx={{ mt: 1 }}>
+                  Faktura: <a href={purchaseOrder.invoiceLink} target="_blank" rel="noopener noreferrer">{purchaseOrder.invoiceLink}</a>
+                </Typography>
+              )}
             </Grid>
             <Grid item xs={6}>
               <Typography variant="subtitle1" gutterBottom>Dostawca</Typography>
@@ -512,10 +676,26 @@ const PurchaseOrderDetails = ({ orderId }) => {
                 
                 <TableRow>
                   <TableCell colSpan={3} align="right" sx={{ fontWeight: 'bold' }}>
-                    Łącznie:
+                    Wartość netto:
                   </TableCell>
                   <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                    {purchaseOrder.totalValue.toFixed(2)} {purchaseOrder.currency}
+                    {typeof purchaseOrder.totalValue === 'number' ? `${purchaseOrder.totalValue.toFixed(2)} ${purchaseOrder.currency}` : `0.00 ${purchaseOrder.currency}`}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell colSpan={3} align="right">
+                    VAT {purchaseOrder.vatRate || 0}%:
+                  </TableCell>
+                  <TableCell align="right">
+                    {typeof purchaseOrder.totalValue === 'number' ? `${((purchaseOrder.totalValue * (purchaseOrder.vatRate || 0)) / 100).toFixed(2)} ${purchaseOrder.currency}` : `0.00 ${purchaseOrder.currency}`}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell colSpan={3} align="right" sx={{ fontWeight: 'bold' }}>
+                    Wartość brutto:
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                    {typeof purchaseOrder.totalValue === 'number' ? `${(purchaseOrder.totalGross || purchaseOrder.totalValue * (1 + (purchaseOrder.vatRate || 0) / 100)).toFixed(2)} ${purchaseOrder.currency}` : `0.00 ${purchaseOrder.currency}`}
                   </TableCell>
                 </TableRow>
               </TableBody>

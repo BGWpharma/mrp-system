@@ -813,7 +813,7 @@ const RecipeForm = ({ recipeId }) => {
                   <Box>
                     <Typography variant="body1">{option.name}</Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {option.unitPrice ? `Cena: ${option.unitPrice.toFixed(2)} zł/${option.unit}` : 'Brak ceny jednostkowej'}
+                      {option.unitPrice ? `Cena: ${option.unitPrice.toFixed(2)} EUR/${option.unit}` : 'Brak ceny jednostkowej'}
                     </Typography>
                   </Box>
                 </li>
@@ -964,28 +964,28 @@ const RecipeForm = ({ recipeId }) => {
             <Grid container spacing={2} sx={{ mb: 2 }}>
               <Grid item xs={12} sm={4}>
                 <Typography variant="subtitle2">Koszt składników:</Typography>
-                <Typography variant="body1">{costCalculation.ingredientsCost.toFixed(2)} zł</Typography>
+                <Typography variant="body1">{costCalculation.ingredientsCost.toFixed(2)} EUR</Typography>
               </Grid>
               <Grid item xs={12} sm={4}>
                 <Typography variant="subtitle2">Koszt robocizny:</Typography>
-                <Typography variant="body1">{costCalculation.laborCost.toFixed(2)} zł</Typography>
+                <Typography variant="body1">{costCalculation.laborCost.toFixed(2)} EUR</Typography>
               </Grid>
               <Grid item xs={12} sm={4}>
                 <Typography variant="subtitle2">Koszt energii:</Typography>
-                <Typography variant="body1">{costCalculation.energyCost.toFixed(2)} zł</Typography>
+                <Typography variant="body1">{costCalculation.energyCost.toFixed(2)} EUR</Typography>
               </Grid>
               <Grid item xs={12} sm={4}>
                 <Typography variant="subtitle2">Koszty pośrednie:</Typography>
-                <Typography variant="body1">{costCalculation.overheadCost.toFixed(2)} zł</Typography>
+                <Typography variant="body1">{costCalculation.overheadCost.toFixed(2)} EUR</Typography>
               </Grid>
               <Grid item xs={12} sm={4}>
                 <Typography variant="subtitle2">Koszt całkowity:</Typography>
-                <Typography variant="body1" fontWeight="bold">{costCalculation.totalCost.toFixed(2)} zł</Typography>
+                <Typography variant="body1" fontWeight="bold">{costCalculation.totalCost.toFixed(2)} EUR</Typography>
               </Grid>
               <Grid item xs={12} sm={4}>
                 <Typography variant="subtitle2">Koszt jednostkowy:</Typography>
                 <Typography variant="body1" fontWeight="bold">
-                  {costCalculation.unitCost.toFixed(2)} zł / {costCalculation.yieldUnit}
+                  {costCalculation.unitCost.toFixed(2)} EUR / {costCalculation.yieldUnit}
                 </Typography>
               </Grid>
             </Grid>
@@ -1014,8 +1014,8 @@ const RecipeForm = ({ recipeId }) => {
                       <TableRow key={index}>
                         <TableCell>{detail.name}</TableCell>
                         <TableCell align="right">{detail.quantity} {detail.unit}</TableCell>
-                        <TableCell align="right">{detail.unitPrice.toFixed(2)} zł</TableCell>
-                        <TableCell align="right">{detail.cost.toFixed(2)} zł</TableCell>
+                        <TableCell align="right">{detail.unitPrice.toFixed(2)} EUR</TableCell>
+                        <TableCell align="right">{detail.cost.toFixed(2)} EUR</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
