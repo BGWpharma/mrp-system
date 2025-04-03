@@ -257,7 +257,34 @@ const OrderDetails = () => {
                 Łączna wartość:
               </Typography>
               <Typography variant="h4" align="right" color="primary.main" sx={{ fontWeight: 'bold' }}>
-                {formatCurrency(order.totalValue || 0)}
+                {(() => {
+                  // Oblicz wartość produktów
+                  const productsValue = order.items?.reduce((sum, item) => sum + (item.price * item.quantity), 0) || 0;
+                  
+                  // Koszt dostawy
+                  const shippingCost = parseFloat(order.shippingCost) || 0;
+                  
+                  // Oblicz sumę wartości brutto zamówień zakupu
+                  const poTotal = (order.linkedPurchaseOrders || []).reduce((sum, po) => {
+                    // Jeśli zamówienie ma wartość brutto, użyj jej
+                    if (po.totalGross !== undefined && po.totalGross !== null) {
+                      return sum + (parseFloat(po.totalGross) || 0);
+                    }
+                    
+                    // W przeciwnym razie oblicz wartość brutto
+                    const poValue = parseFloat(po.value) || 0;
+                    const vatRate = parseFloat(po.vatRate) || 23;
+                    const vatValue = (poValue * vatRate) / 100;
+                    const additionalCosts = parseFloat(po.additionalCosts) || 0;
+                    
+                    return sum + poValue + vatValue + additionalCosts;
+                  }, 0);
+                  
+                  // Łączna wartość
+                  const total = productsValue + shippingCost + poTotal;
+                  
+                  return formatCurrency(total);
+                })()}
               </Typography>
             </Box>
           </Grid>
@@ -377,13 +404,62 @@ const OrderDetails = () => {
                 {formatCurrency(order.shippingCost || 0)}
               </TableCell>
             </TableRow>
+            {(order.linkedPurchaseOrders && order.linkedPurchaseOrders.length > 0) && (
+              <TableRow>
+                <TableCell colSpan={2} />
+                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                  Wartość zamówień zakupu (brutto):
+                </TableCell>
+                <TableCell align="right">
+                  {formatCurrency((order.linkedPurchaseOrders || []).reduce((sum, po) => {
+                    // Jeśli zamówienie ma wartość brutto, użyj jej
+                    if (po.totalGross !== undefined && po.totalGross !== null) {
+                      return sum + (parseFloat(po.totalGross) || 0);
+                    }
+                    
+                    // W przeciwnym razie oblicz wartość brutto
+                    const poValue = parseFloat(po.value) || 0;
+                    const vatRate = parseFloat(po.vatRate) || 23;
+                    const vatValue = (poValue * vatRate) / 100;
+                    const additionalCosts = parseFloat(po.additionalCosts) || 0;
+                    
+                    return sum + poValue + vatValue + additionalCosts;
+                  }, 0))}
+                </TableCell>
+              </TableRow>
+            )}
             <TableRow>
               <TableCell colSpan={2} />
               <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                 Razem:
               </TableCell>
               <TableCell align="right" sx={{ fontWeight: 'bold', fontSize: '1.2rem' }}>
-                {formatCurrency(order.totalValue || 0)}
+                {(() => {
+                  // Oblicz wartość produktów
+                  const productsValue = order.items?.reduce((sum, item) => sum + (item.price * item.quantity), 0) || 0;
+                  
+                  // Koszt dostawy
+                  const shippingCost = parseFloat(order.shippingCost) || 0;
+                  
+                  // Oblicz sumę wartości brutto zamówień zakupu
+                  const poTotal = (order.linkedPurchaseOrders || []).reduce((sum, po) => {
+                    // Jeśli zamówienie ma wartość brutto, użyj jej
+                    if (po.totalGross !== undefined && po.totalGross !== null) {
+                      return sum + (parseFloat(po.totalGross) || 0);
+                    }
+                    
+                    // W przeciwnym razie oblicz wartość brutto
+                    const poValue = parseFloat(po.value) || 0;
+                    const vatRate = parseFloat(po.vatRate) || 23;
+                    const vatValue = (poValue * vatRate) / 100;
+                    const additionalCosts = parseFloat(po.additionalCosts) || 0;
+                    
+                    return sum + poValue + vatValue + additionalCosts;
+                  }, 0);
+                  
+                  // Łączna wartość
+                  return formatCurrency(productsValue + shippingCost + poTotal);
+                })()}
               </TableCell>
             </TableRow>
           </TableBody>

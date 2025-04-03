@@ -199,7 +199,7 @@ export const createPurchaseOrder = async (purchaseOrderData, userId) => {
       additionalCostsItems = [], 
       additionalCosts = 0,
       status = 'draft', 
-      targetWarehouseId,
+      targetWarehouseId = '',
       orderDate = new Date(),
       expectedDeliveryDate,
       deliveryAddress = '',
@@ -301,7 +301,17 @@ export const updatePurchaseOrder = async (id, purchaseOrderData) => {
     const existingData = docSnap.data();
     
     // Zapisujemy tylko ID dostawcy, a nie cały obiekt
-    const supplierId = purchaseOrderData.supplier?.id;
+    // Zabezpieczenie przed błędem undefined w supplierId
+    let supplierId = purchaseOrderData.supplier?.id;
+    if (supplierId === undefined && existingData.supplierId) {
+      // Jeśli supplierId nie istnieje w danych wejściowych, ale istnieje w bieżących danych, użyj istniejącego
+      supplierId = existingData.supplierId;
+      console.log(`Użyto istniejącego supplierId: ${supplierId}`);
+    } else if (supplierId === undefined) {
+      // Jeśli supplierId nie istnieje nigdzie, ustaw puste pole
+      supplierId = '';
+      console.log('Ustawiono pusty supplierId, ponieważ nie został podany');
+    }
     
     // Zachowujemy numer zamówienia z oryginalnego dokumentu
     const number = existingData.number;
@@ -325,7 +335,7 @@ export const updatePurchaseOrder = async (id, purchaseOrderData) => {
     
     const updates = {
       number: number, // Zachowaj oryginalny numer zamówienia
-      supplierId: supplierId,
+      supplierId: supplierId, // Użyj bezpiecznego, nienulowego pola
       items: purchaseOrderData.items || [],
       totalValue: productsValue,
       totalGross: totalGross,

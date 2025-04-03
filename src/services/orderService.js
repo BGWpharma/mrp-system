@@ -90,65 +90,44 @@ export const getAllOrders = async (filters = null) => {
  */
 export const getOrderById = async (id) => {
   try {
-    const orderDoc = await getDoc(doc(db, ORDERS_COLLECTION, id));
+    const orderRef = doc(db, ORDERS_COLLECTION, id);
+    const orderDoc = await getDoc(orderRef);
     
     if (!orderDoc.exists()) {
-      throw new Error(`Zamówienie o ID ${id} nie istnieje.`);
+      throw new Error('Zamówienie nie istnieje');
     }
     
     const orderData = orderDoc.data();
-    console.log("Pobrane dane zamówienia z bazy:", orderData);
     
-    // Przygotuj dane zamówienia z poprawnymi strukturami dat
+    // Konwertuj timestamp na obiekty Date
     const processedOrder = {
       id: orderDoc.id,
       ...orderData,
-      orderDate: orderData.orderDate && orderData.orderDate.toDate ? orderData.orderDate.toDate() : orderData.orderDate,
-      expectedDeliveryDate: orderData.expectedDeliveryDate && orderData.expectedDeliveryDate.toDate ? 
-        orderData.expectedDeliveryDate.toDate() : orderData.expectedDeliveryDate,
-      deliveryDate: orderData.deliveryDate && orderData.deliveryDate.toDate ? 
-        orderData.deliveryDate.toDate() : orderData.deliveryDate
+      orderDate: orderData.orderDate instanceof Timestamp ? orderData.orderDate.toDate() : new Date(orderData.orderDate),
+      expectedDeliveryDate: orderData.expectedDeliveryDate instanceof Timestamp 
+        ? orderData.expectedDeliveryDate.toDate() 
+        : orderData.expectedDeliveryDate ? new Date(orderData.expectedDeliveryDate) : null,
+      deliveryDate: orderData.deliveryDate instanceof Timestamp 
+        ? orderData.deliveryDate.toDate() 
+        : orderData.deliveryDate ? new Date(orderData.deliveryDate) : null,
     };
     
-    // Sprawdź i popraw dane powiązanych zamówień zakupu
-    if (processedOrder.linkedPurchaseOrders && Array.isArray(processedOrder.linkedPurchaseOrders)) {
-      console.log(`Przetwarzanie ${processedOrder.linkedPurchaseOrders.length} powiązanych zamówień zakupu`);
-      
-      // Zaktualizuj dane zamówień zakupu z poprawnymi wartościami
+    // Przetwarzanie zamówień zakupu powiązanych
+    if (processedOrder.linkedPurchaseOrders && processedOrder.linkedPurchaseOrders.length > 0) {
       for (let i = 0; i < processedOrder.linkedPurchaseOrders.length; i++) {
         const po = processedOrder.linkedPurchaseOrders[i];
         
         try {
-          // Upewnij się, że wartości liczbowe są liczbami
-          if (po.value !== undefined) {
-            po.value = parseFloat(po.value) || 0;
+          // Sprawdź, czy po jest faktycznie obiektem
+          if (!po || typeof po !== 'object') {
+            console.warn('Nieprawidłowy obiekt zamówienia zakupu:', po);
+            continue;
           }
           
-          if (po.vatRate !== undefined) {
-            po.vatRate = parseFloat(po.vatRate) || 23;
-          }
-          
-          if (po.totalGross !== undefined) {
-            po.totalGross = parseFloat(po.totalGross) || 0;
-          } else {
-            // Oblicz wartość brutto jeśli nie istnieje
-            const productsValue = parseFloat(po.value) || 0;
-            const vatRate = parseFloat(po.vatRate) || 23;
-            const vatValue = (productsValue * vatRate) / 100;
-            
-            // Obsługa różnych formatów dodatkowych kosztów
-            let additionalCosts = 0;
-            if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
-              additionalCosts = po.additionalCostsItems.reduce((sum, cost) => {
-                return sum + (parseFloat(cost.value) || 0);
-              }, 0);
-            } else {
-              additionalCosts = parseFloat(po.additionalCosts) || 0;
-            }
-            
-            // Oblicz i zapisz wartość brutto
-            po.totalGross = productsValue + vatValue + additionalCosts;
-            console.log(`Obliczona wartość brutto dla PO ${po.number}: ${po.totalGross}`);
+          // Jeśli nie ma id, nie możemy zaktualizować danych
+          if (!po.id) {
+            console.warn('Zamówienie zakupu bez ID:', po);
+            continue;
           }
           
           // Pobierz aktualne dane zamówienia zakupu (opcjonalnie)
@@ -183,6 +162,53 @@ export const getOrderById = async (id) => {
     } else {
       processedOrder.linkedPurchaseOrders = [];
     }
+    
+    // Oblicz łączną wartość zamówienia z uwzględnieniem wartości zamówień zakupu
+    let totalProductsValue = 0;
+    if (processedOrder.items && processedOrder.items.length > 0) {
+      totalProductsValue = processedOrder.items.reduce((sum, item) => {
+        const quantity = parseFloat(item.quantity) || 0;
+        const price = parseFloat(item.price) || 0;
+        return sum + (quantity * price);
+      }, 0);
+    }
+    
+    const shippingCost = parseFloat(processedOrder.shippingCost) || 0;
+    
+    // Oblicz wartość brutto zamówień zakupu
+    let poTotalGross = 0;
+    if (processedOrder.linkedPurchaseOrders && processedOrder.linkedPurchaseOrders.length > 0) {
+      poTotalGross = processedOrder.linkedPurchaseOrders.reduce((sum, po) => {
+        // Jeśli zamówienie ma już wartość brutto, używamy jej
+        if (po.totalGross !== undefined && po.totalGross !== null) {
+          const value = typeof po.totalGross === 'number' ? po.totalGross : parseFloat(po.totalGross) || 0;
+          return sum + value;
+        }
+        
+        // W przeciwnym razie obliczamy wartość brutto
+        const productsValue = parseFloat(po.totalValue || po.value) || 0;
+        const vatRate = parseFloat(po.vatRate) || 23;
+        const vatValue = (productsValue * vatRate) / 100;
+        
+        // Sprawdzenie czy istnieją dodatkowe koszty
+        let additionalCosts = 0;
+        if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
+          additionalCosts = po.additionalCostsItems.reduce((costsSum, cost) => {
+            return costsSum + (parseFloat(cost.value) || 0);
+          }, 0);
+        } else {
+          additionalCosts = parseFloat(po.additionalCosts) || 0;
+        }
+        
+        return sum + productsValue + vatValue + additionalCosts;
+      }, 0);
+    }
+    
+    // Aktualizacja łącznej wartości zamówienia
+    processedOrder.productsValue = totalProductsValue;
+    processedOrder.shippingCost = shippingCost;
+    processedOrder.purchaseOrdersValue = poTotalGross;
+    processedOrder.totalValue = totalProductsValue + shippingCost + poTotalGross;
     
     console.log("Przetworzone dane zamówienia:", processedOrder);
     return processedOrder;

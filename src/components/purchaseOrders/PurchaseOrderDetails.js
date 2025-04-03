@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { 
   Container, Typography, Paper, Button, Box, Chip, Grid, Divider, 
   Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
@@ -25,9 +25,11 @@ import {
   PURCHASE_ORDER_STATUSES,
   translateStatus
 } from '../../services/purchaseOrderService';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../hooks/useNotification';
 import { useReactToPrint } from 'react-to-print';
+import { db } from '../../services/firebase/config';
+import { updateDoc, doc } from 'firebase/firestore';
 
 const PurchaseOrderDetails = ({ orderId }) => {
   const navigate = useNavigate();
@@ -347,6 +349,23 @@ const PurchaseOrderDetails = ({ orderId }) => {
                     // 4. Oblicz wartość brutto jako: wartość produktów + VAT + dodatkowe koszty
                     const grossValue = productsValue + vatValue + additionalCosts;
                     
+                    // 5. Zapisz wartość brutto w bazie danych, jeśli się zmieniła
+                    if (purchaseOrder.totalGross !== grossValue) {
+                      // Aktualizacja w bazie danych
+                      (async () => {
+                        try {
+                          await updateDoc(doc(db, 'purchaseOrders', orderId), {
+                            totalGross: grossValue
+                          });
+                          console.log('Zaktualizowano wartość brutto PO:', grossValue);
+                        } catch (error) {
+                          console.error('Błąd podczas aktualizacji wartości brutto:', error);
+                        }
+                      })();
+                    }
+                    
+                    console.log(`PO ${purchaseOrder.number || orderId} - wartość brutto: ${grossValue} (produkty: ${productsValue}, VAT: ${vatValue}, koszty: ${additionalCosts})`);
+                    
                     return `${grossValue.toFixed(2)} ${purchaseOrder.currency}`;
                   })()}
                 </Typography>
@@ -554,6 +573,23 @@ const PurchaseOrderDetails = ({ orderId }) => {
                     
                     // 4. Oblicz wartość brutto jako: wartość produktów + VAT + dodatkowe koszty
                     const grossValue = productsValue + vatValue + additionalCosts;
+                    
+                    // 5. Zapisz wartość brutto w bazie danych, jeśli się zmieniła
+                    if (purchaseOrder.totalGross !== grossValue) {
+                      // Aktualizacja w bazie danych
+                      (async () => {
+                        try {
+                          await updateDoc(doc(db, 'purchaseOrders', orderId), {
+                            totalGross: grossValue
+                          });
+                          console.log('Zaktualizowano wartość brutto PO:', grossValue);
+                        } catch (error) {
+                          console.error('Błąd podczas aktualizacji wartości brutto:', error);
+                        }
+                      })();
+                    }
+                    
+                    console.log(`PO ${purchaseOrder.number || orderId} - wartość brutto: ${grossValue} (produkty: ${productsValue}, VAT: ${vatValue}, koszty: ${additionalCosts})`);
                     
                     return `${grossValue.toFixed(2)} ${purchaseOrder.currency}`;
                   })()}
@@ -768,6 +804,24 @@ const PurchaseOrderDetails = ({ orderId }) => {
                   
                   // 4. Oblicz wartość brutto jako: wartość produktów + VAT + dodatkowe koszty
                   const grossValue = productsValue + vatValue + additionalCosts;
+                  
+                  // 5. Zapisz wartość brutto w bazie danych, jeśli się zmieniła
+                  if (purchaseOrder.totalGross !== grossValue) {
+                    // Aktualizacja w bazie danych
+                    (async () => {
+                      try {
+                        await updateDoc(doc(db, 'purchaseOrders', orderId), {
+                          totalGross: grossValue
+                        });
+                        console.log('Zaktualizowano wartość brutto PO:', grossValue);
+                      } catch (error) {
+                        console.error('Błąd podczas aktualizacji wartości brutto:', error);
+                      }
+                    })();
+                  }
+                  
+                  console.log(`PO ${purchaseOrder.number || orderId} - wartość brutto: ${grossValue} (produkty: ${productsValue}, VAT: ${vatValue}, koszty: ${additionalCosts})`);
+                  
                   return `${grossValue.toFixed(2)} ${purchaseOrder.currency}`;
                 })()}
               </Typography>
@@ -930,6 +984,23 @@ const PurchaseOrderDetails = ({ orderId }) => {
                         
                       // 4. Oblicz wartość brutto jako: wartość produktów + VAT + dodatkowe koszty
                       const grossValue = productsValue + vatValue + additionalCosts;
+                      
+                      // 5. Zapisz wartość brutto w bazie danych, jeśli się zmieniła
+                      if (purchaseOrder.totalGross !== grossValue) {
+                        // Aktualizacja w bazie danych
+                        (async () => {
+                          try {
+                            await updateDoc(doc(db, 'purchaseOrders', orderId), {
+                              totalGross: grossValue
+                            });
+                            console.log('Zaktualizowano wartość brutto PO:', grossValue);
+                          } catch (error) {
+                            console.error('Błąd podczas aktualizacji wartości brutto:', error);
+                          }
+                        })();
+                      }
+                      
+                      console.log(`PO ${purchaseOrder.number || orderId} - wartość brutto: ${grossValue} (produkty: ${productsValue}, VAT: ${vatValue}, koszty: ${additionalCosts})`);
                       
                       return `${grossValue.toFixed(2)} ${purchaseOrder.currency}`;
                     })()}

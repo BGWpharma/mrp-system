@@ -331,43 +331,143 @@ const PurchaseOrderForm = ({ orderId }) => {
     setPoData(prev => ({ ...prev, items: updatedItems }));
   };
   
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  // Funkcja savePurchaseOrder do zapisu lub aktualizacji zamówienia
+  const savePurchaseOrder = async (orderData, orderId, userId) => {
+    try {
+      let result;
+      
+      // Obliczanie wartości brutto, która zostanie zapisana w bazie danych
+      const productsValue = orderData.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0);
+      const vatRate = parseFloat(orderData.vatRate) || 0;
+      const vatValue = (productsValue * vatRate) / 100;
+      
+      let additionalCosts = 0;
+      if (orderData.additionalCostsItems && Array.isArray(orderData.additionalCostsItems)) {
+        additionalCosts = orderData.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
+      } else {
+        additionalCosts = parseFloat(orderData.additionalCosts) || 0;
+      }
+      
+      // Wartość brutto: produkty + VAT + dodatkowe koszty
+      const grossValue = productsValue + vatValue + additionalCosts;
+      
+      // Dodaj wartość brutto do zapisywanych danych
+      orderData.totalGross = grossValue;
+      
+      console.log(`Zapisuję PO, wartość brutto: ${grossValue} (produkty: ${productsValue}, VAT: ${vatValue}, koszty: ${additionalCosts})`);
+      
+      // Rozróżnienie między tworzeniem nowego zamówienia a aktualizacją istniejącego
+      if (orderId && orderId !== 'new') {
+        // Aktualizacja istniejącego zamówienia
+        result = await updatePurchaseOrder(orderId, {
+          ...orderData,
+          updatedBy: userId
+        });
+        console.log('Zaktualizowano zamówienie zakupu:', result);
+      } else {
+        // Tworzenie nowego zamówienia
+        result = await createPurchaseOrder({
+          ...orderData,
+          createdBy: userId
+        }, userId);
+        console.log('Utworzono nowe zamówienie zakupu:', result);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Błąd podczas zapisywania zamówienia:', error);
+      throw error;
+    }
+  };
+  
+  // Funkcja validateForm do walidacji formularza
+  const validateForm = () => {
+    // Sprawdź czy wybrano dostawcę
+    if (!poData.supplier) {
+      showError('Wybierz dostawcę');
+      return false;
+    }
     
-    if (!isFormValid()) {
-      showError('Formularz zawiera błędy. Sprawdź wprowadzone dane.');
+    // Sprawdź czy wybrano magazyn docelowy
+    if (!poData.targetWarehouseId) {
+      showError('Wybierz magazyn docelowy');
+      return false;
+    }
+    
+    // Sprawdź czy dodano przynajmniej jeden przedmiot
+    if (poData.items.length === 0) {
+      showError('Dodaj przynajmniej jeden przedmiot do zamówienia');
+      return false;
+    }
+    
+    // Sprawdź poprawność danych dla każdego przedmiotu
+    const invalidItem = poData.items.find(item => !item.name || !item.quantity || !item.unitPrice);
+    if (invalidItem) {
+      showError('Uzupełnij wszystkie dane dla każdego przedmiotu');
+      return false;
+    }
+    
+    return true;
+  };
+  
+  const handleSubmit = async (e) => {
+    // Zapobiegaj domyślnemu zachowaniu formularza
+    if (e) e.preventDefault();
+    
+    // Sprawdź, czy formularz jest wypełniony poprawnie
+    if (!validateForm()) {
       return;
     }
     
+    // Pokazuj loader podczas zapisywania
+    setSaving(true);
+    
     try {
-      setSaving(true);
+      // Przygotuj dane zamówienia do zapisu
+      const { supplier, ...orderDataToSave } = poData;
       
-      // Przygotuj dane zamówienia
-      const orderData = {
-        ...poData,
-        totalValue: poData.totalValue,
-        totalGross: poData.totalGross,
-        updatedBy: currentUser.uid
+      // Ustaw ID dostawcy w danych zamówienia
+      const orderWithSupplierId = {
+        ...orderDataToSave,
+        supplierId: supplier?.id || null,
       };
       
-      let result;
+      // Oblicz wartość brutto (totalGross)
+      const productsValue = poData.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0);
+      const vatRate = parseFloat(poData.vatRate) || 23;
+      const vatValue = (productsValue * vatRate) / 100;
       
-      // Rozróżnienie między tworzeniem nowego zamówienia a aktualizacją istniejącego
-      if (currentOrderId && currentOrderId !== 'new') {
-        // Aktualizacja istniejącego zamówienia
-        result = await updatePurchaseOrder(currentOrderId, orderData);
-        showSuccess('Zamówienie zakupu zostało zaktualizowane');
+      const additionalCosts = poData.additionalCostsItems && Array.isArray(poData.additionalCostsItems) 
+        ? poData.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
+        : 0;
+      
+      const totalGross = productsValue + vatValue + additionalCosts;
+      
+      // Dodaj wartość brutto do zapisywanych danych
+      orderWithSupplierId.totalGross = totalGross;
+      
+      console.log("Dane zamówienia do zapisu:", orderWithSupplierId);
+      
+      // Zapisz zamówienie do bazy danych
+      await savePurchaseOrder(orderWithSupplierId, currentOrderId, currentUser.id);
+      console.log("Zapisane zamówienie:", orderWithSupplierId);
+      
+      // Powiadomienie o sukcesie
+      showSuccess('Zamówienie zakupu zostało zapisane!');
+      
+      // Przekieruj do widoku szczegółów zamówienia jeśli nie jesteśmy w trybie wyboru zamówienia
+      if (location.pathname.includes('/purchase-orders/')) {
+        navigate(`/purchase-orders/${orderWithSupplierId.id}`);
       } else {
-        // Tworzenie nowego zamówienia
-        result = await createPurchaseOrder(orderData, currentUser.uid);
-        showSuccess('Zamówienie zakupu zostało utworzone');
+        // W trybie wyboru zamówienia, wywołaj callback z wybranym zamówieniem
+        const onSelect = location.state?.onSelect;
+        if (typeof onSelect === 'function') {
+          onSelect(orderWithSupplierId);
+        }
       }
-      
-      // Przekieruj do listy zamówień
-      navigate('/purchase-orders');
     } catch (error) {
-      console.error('Błąd podczas zapisywania zamówienia zakupu:', error);
-      showError('Wystąpił błąd: ' + error.message);
+      console.error("Błąd podczas zapisywania zamówienia:", error);
+      showError(`Nie udało się zapisać zamówienia: ${error.message}`);
     } finally {
       setSaving(false);
     }
@@ -509,36 +609,6 @@ const PurchaseOrderForm = ({ orderId }) => {
     }
     
     showSuccess('Zastosowano najlepsze ceny dostawców');
-  };
-  
-  // Dodaję funkcję isFormValid do sprawdzania poprawności formularza
-  const isFormValid = () => {
-    // Sprawdź czy wybrano dostawcę
-    if (!poData.supplier) {
-      showError('Wybierz dostawcę');
-      return false;
-    }
-    
-    // Sprawdź czy wybrano magazyn docelowy
-    if (!poData.targetWarehouseId) {
-      showError('Wybierz magazyn docelowy');
-      return false;
-    }
-    
-    // Sprawdź czy dodano przynajmniej jeden przedmiot
-    if (poData.items.length === 0) {
-      showError('Dodaj przynajmniej jeden przedmiot do zamówienia');
-      return false;
-    }
-    
-    // Sprawdź poprawność danych dla każdego przedmiotu
-    const invalidItem = poData.items.find(item => !item.name || !item.quantity || !item.unitPrice);
-    if (invalidItem) {
-      showError('Uzupełnij wszystkie dane dla każdego przedmiotu');
-      return false;
-    }
-    
-    return true;
   };
   
   // Dodaję funkcję obsługi zmiany dodatkowych kosztów

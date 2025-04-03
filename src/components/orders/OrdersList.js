@@ -83,7 +83,7 @@ const OrdersList = () => {
   const [customersLoading, setCustomersLoading] = useState(false);
 
   const { currentUser } = useAuth();
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showError, showInfo } = useNotification();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -122,33 +122,37 @@ const OrdersList = () => {
             
             // Jeśli zamówienie ma już wartość brutto, używamy jej
             if (po.totalGross !== undefined && po.totalGross !== null) {
-              const value = parseFloat(po.totalGross);
-              console.log(`Używam istniejącej wartości brutto: ${value}`);
+              // Upewnij się, że wartość jest liczbą
+              const value = typeof po.totalGross === 'number' ? po.totalGross : parseFloat(po.totalGross) || 0;
+              console.log(`Używam istniejącej wartości brutto dla ${po.number || po.id}: ${value}`);
               return sum + value;
             }
             
+            console.log(`Brak wartości totalGross dla PO ${po.number || po.id}, obliczam ręcznie`);
+            
             // W przeciwnym razie obliczamy wartość brutto
             // Podstawowa wartość zamówienia zakupu (produkty)
-            const productsValue = parseFloat(po.value) || 0;
+            const productsValue = typeof po.value === 'number' ? po.value : parseFloat(po.value) || 0;
             
             // Stawka VAT i wartość podatku VAT (tylko od produktów)
-            const vatRate = parseFloat(po.vatRate) || 23;
+            const vatRate = typeof po.vatRate === 'number' ? po.vatRate : parseFloat(po.vatRate) || 23;
             const vatValue = (productsValue * vatRate) / 100;
             
             // Dodatkowe koszty w zamówieniu zakupu
             let additionalCosts = 0;
             if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
               additionalCosts = po.additionalCostsItems.reduce((costsSum, cost) => {
-                return costsSum + (parseFloat(cost.value) || 0);
+                const costValue = typeof cost.value === 'number' ? cost.value : parseFloat(cost.value) || 0;
+                return costsSum + costValue;
               }, 0);
             } else {
               // Użyj starego pola additionalCosts jeśli nowa tablica nie istnieje
-              additionalCosts = parseFloat(po.additionalCosts) || 0;
+              additionalCosts = typeof po.additionalCosts === 'number' ? po.additionalCosts : parseFloat(po.additionalCosts) || 0;
             }
             
             // Wartość brutto: produkty + VAT + dodatkowe koszty
             const grossValue = productsValue + vatValue + additionalCosts;
-            console.log(`Obliczona wartość brutto PO: ${grossValue} (produkty: ${productsValue}, VAT: ${vatValue}, koszty: ${additionalCosts})`);
+            console.log(`Obliczona wartość brutto PO ${po.number || po.id}: ${grossValue} (produkty: ${productsValue}, VAT: ${vatValue}, koszty: ${additionalCosts})`);
             
             return sum + grossValue;
           }, 0);
@@ -382,6 +386,233 @@ const OrdersList = () => {
     applyFilters();
   };
 
+  const handleRefreshOrder = async (order) => {
+    try {
+      // Import potrzebnych funkcji
+      const { getOrderById } = await import('../../services/orderService');
+      const { getPurchaseOrderById } = await import('../../services/purchaseOrderService');
+      
+      // Pobierz zaktualizowane dane zamówienia
+      const updatedOrder = await getOrderById(order.id);
+      console.log("Pobrane zaktualizowane dane zamówienia:", updatedOrder);
+      
+      // Inicjalizujemy wartość zamówień zakupu
+      let poTotal = 0;
+      
+      // Przetwarzamy powiązane PO, pobierając ich aktualne dane
+      if (updatedOrder.linkedPurchaseOrders && updatedOrder.linkedPurchaseOrders.length > 0) {
+        console.log(`Aktualizuję ${updatedOrder.linkedPurchaseOrders.length} powiązanych PO dla zamówienia ${order.id}`);
+        
+        // Pobierz aktualne dane każdego PO
+        const updatedPOs = await Promise.all(
+          updatedOrder.linkedPurchaseOrders.map(async (po) => {
+            if (!po.id) {
+              console.warn("Pominięto PO bez ID:", po);
+              return po;
+            }
+            
+            try {
+              // Pobierz najnowsze dane PO z bazy
+              const freshPO = await getPurchaseOrderById(po.id);
+              console.log(`Pobrano aktualne dane PO ${po.number}:`, freshPO);
+              
+              // Użyj zaktualizowanej wartości totalGross
+              if (freshPO.totalGross !== undefined && freshPO.totalGross !== null) {
+                const value = typeof freshPO.totalGross === 'number' ? freshPO.totalGross : parseFloat(freshPO.totalGross) || 0;
+                console.log(`Używam wartości totalGross z bazy dla ${freshPO.number}: ${value}`);
+                poTotal += value;
+                return { ...freshPO }; // Użyj wszystkich zaktualizowanych danych
+              } else {
+                console.warn(`PO ${freshPO.number || freshPO.id} nie ma wartości totalGross w bazie`);
+                
+                // W ostateczności oblicz wartość brutto
+                const productsValue = typeof freshPO.totalValue === 'number' ? freshPO.totalValue : parseFloat(freshPO.totalValue) || 0;
+                const vatRate = typeof freshPO.vatRate === 'number' ? freshPO.vatRate : parseFloat(freshPO.vatRate) || 23;
+                const vatValue = (productsValue * vatRate) / 100;
+                
+                let additionalCosts = 0;
+                if (freshPO.additionalCostsItems && Array.isArray(freshPO.additionalCostsItems)) {
+                  additionalCosts = freshPO.additionalCostsItems.reduce((costsSum, cost) => {
+                    const costValue = typeof cost.value === 'number' ? cost.value : parseFloat(cost.value) || 0;
+                    return costsSum + costValue;
+                  }, 0);
+                } else {
+                  additionalCosts = typeof freshPO.additionalCosts === 'number' ? freshPO.additionalCosts : parseFloat(freshPO.additionalCosts) || 0;
+                }
+                
+                const grossValue = productsValue + vatValue + additionalCosts;
+                console.log(`Obliczona wartość brutto PO ${freshPO.number}: ${grossValue}`);
+                poTotal += grossValue;
+                return { ...freshPO, totalGross: grossValue };
+              }
+            } catch (error) {
+              console.error(`Błąd podczas pobierania danych PO ${po.id}:`, error);
+              // Jeśli nie możemy pobrać danych, używamy aktualnych
+              const value = typeof po.totalGross === 'number' ? po.totalGross : parseFloat(po.totalGross) || 0;
+              poTotal += value;
+              return po;
+            }
+          })
+        );
+        
+        // Aktualizuj linkedPurchaseOrders na dane z zaktualizowanymi wartościami
+        updatedOrder.linkedPurchaseOrders = updatedPOs;
+      }
+      
+      // Obliczamy wartość produktów
+      const subtotal = (updatedOrder.items || []).reduce((sum, item) => {
+        const quantity = parseFloat(item.quantity) || 0;
+        const price = parseFloat(item.price) || 0;
+        return sum + (quantity * price);
+      }, 0);
+      
+      // Dodanie kosztów dostawy
+      const shippingCost = parseFloat(updatedOrder.shippingCost) || 0;
+      
+      // Łączna wartość zamówienia
+      const totalValue = subtotal + shippingCost + poTotal;
+      
+      console.log(`Zaktualizowane wartości zamówienia ${order.id}: produkty=${subtotal}, dostawa=${shippingCost}, PO=${poTotal}, razem=${totalValue}`);
+      
+      // Aktualizuj ten jeden element w tablicy zamówień
+      setOrders(prevOrders => prevOrders.map(o => {
+        if (o.id === order.id) {
+          return {
+            ...updatedOrder,
+            totalValue: totalValue,
+            productsValue: subtotal,
+            purchaseOrdersValue: poTotal,
+            shippingCost: shippingCost
+          };
+        }
+        return o;
+      }));
+      
+      showSuccess('Dane zamówienia zostały zaktualizowane');
+    } catch (error) {
+      console.error('Błąd podczas odświeżania danych zamówienia:', error);
+      showError('Nie udało się odświeżyć danych zamówienia');
+    }
+  };
+
+  const handleRefreshAll = async () => {
+    try {
+      setLoading(true);
+      showInfo('Trwa odświeżanie wszystkich danych...');
+      
+      // Import potrzebnych funkcji
+      const { getOrderById } = await import('../../services/orderService');
+      const { getPurchaseOrderById } = await import('../../services/purchaseOrderService');
+      
+      // Pobierz świeże dane z serwera
+      const freshData = await getAllOrders();
+      console.log("Pobrane świeże dane zamówień:", freshData);
+      
+      // Przelicz wartości dla każdego zamówienia z pełnym odświeżeniem PO
+      const updatedOrders = await Promise.all(freshData.map(async (order) => {
+        console.log(`Odświeżam dane zamówienia ${order.id}`);
+        
+        // Pobierz zaktualizowane pełne dane zamówienia
+        const updatedOrderData = await getOrderById(order.id);
+        console.log("Pobrane pełne dane zamówienia:", updatedOrderData);
+        
+        // Inicjalizujemy wartości
+        let poTotal = 0;
+        
+        // Pobieramy aktualne wersje wszystkich powiązanych PO bezpośrednio z bazy
+        if (updatedOrderData.linkedPurchaseOrders && updatedOrderData.linkedPurchaseOrders.length > 0) {
+          console.log(`Aktualizuję ${updatedOrderData.linkedPurchaseOrders.length} powiązanych PO dla zamówienia ${order.id}`);
+          
+          // Pobierz aktualne dane każdego PO
+          const updatedPOs = await Promise.all(
+            updatedOrderData.linkedPurchaseOrders.map(async (po) => {
+              if (!po.id) {
+                console.warn("Pominięto PO bez ID:", po);
+                return po;
+              }
+              
+              try {
+                // Pobierz najnowsze dane PO z bazy
+                const freshPO = await getPurchaseOrderById(po.id);
+                console.log(`Pobrano aktualne dane PO ${po.number}:`, freshPO);
+                
+                // Użyj zaktualizowanej wartości totalGross
+                if (freshPO.totalGross !== undefined && freshPO.totalGross !== null) {
+                  const value = typeof freshPO.totalGross === 'number' ? freshPO.totalGross : parseFloat(freshPO.totalGross) || 0;
+                  console.log(`Używam wartości totalGross z bazy dla ${freshPO.number}: ${value}`);
+                  poTotal += value;
+                  return { ...freshPO }; // Zwróć pełne zaktualizowane dane
+                } else {
+                  console.warn(`PO ${freshPO.number || freshPO.id} nie ma wartości totalGross w bazie`);
+                  
+                  // W ostateczności oblicz wartość brutto
+                  const productsValue = typeof freshPO.totalValue === 'number' ? freshPO.totalValue : parseFloat(freshPO.totalValue) || 0;
+                  const vatRate = typeof freshPO.vatRate === 'number' ? freshPO.vatRate : parseFloat(freshPO.vatRate) || 23;
+                  const vatValue = (productsValue * vatRate) / 100;
+                  
+                  let additionalCosts = 0;
+                  if (freshPO.additionalCostsItems && Array.isArray(freshPO.additionalCostsItems)) {
+                    additionalCosts = freshPO.additionalCostsItems.reduce((costsSum, cost) => {
+                      const costValue = typeof cost.value === 'number' ? cost.value : parseFloat(cost.value) || 0;
+                      return costsSum + costValue;
+                    }, 0);
+                  } else {
+                    additionalCosts = typeof freshPO.additionalCosts === 'number' ? freshPO.additionalCosts : parseFloat(freshPO.additionalCosts) || 0;
+                  }
+                  
+                  const grossValue = productsValue + vatValue + additionalCosts;
+                  console.log(`Obliczona wartość brutto PO ${freshPO.number}: ${grossValue}`);
+                  poTotal += grossValue;
+                  return { ...freshPO, totalGross: grossValue };
+                }
+              } catch (error) {
+                console.error(`Błąd podczas pobierania danych PO ${po.id}:`, error);
+                // Jeśli nie możemy pobrać danych, używamy aktualnych
+                const value = typeof po.totalGross === 'number' ? po.totalGross : parseFloat(po.totalGross) || 0;
+                poTotal += value;
+                return po;
+              }
+            })
+          );
+          
+          // Aktualizuj linkedPurchaseOrders na dane z zaktualizowanymi wartościami
+          updatedOrderData.linkedPurchaseOrders = updatedPOs;
+        }
+        
+        // Obliczamy wartość produktów
+        const subtotal = (updatedOrderData.items || []).reduce((sum, item) => {
+          const quantity = parseFloat(item.quantity) || 0;
+          const price = parseFloat(item.price) || 0;
+          return sum + (quantity * price);
+        }, 0);
+        
+        // Dodanie kosztów dostawy
+        const shippingCost = parseFloat(updatedOrderData.shippingCost) || 0;
+        
+        // Łączna wartość zamówienia
+        const totalValue = subtotal + shippingCost + poTotal;
+        
+        console.log(`Zaktualizowane wartości zamówienia ${order.id}: produkty=${subtotal}, dostawa=${shippingCost}, PO=${poTotal}, razem=${totalValue}`);
+        
+        return {
+          ...updatedOrderData,
+          totalValue: totalValue,
+          productsValue: subtotal,
+          purchaseOrdersValue: poTotal,
+          shippingCost: shippingCost
+        };
+      }));
+      
+      setOrders(updatedOrders);
+      showSuccess('Wszystkie dane zostały zaktualizowane');
+    } catch (error) {
+      console.error('Błąd podczas odświeżania danych zamówień:', error);
+      showError('Wystąpił błąd podczas odświeżania danych');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -445,7 +676,8 @@ const OrdersList = () => {
             <Button 
               variant="outlined" 
               startIcon={<RefreshIcon />}
-              onClick={fetchOrders}
+              onClick={handleRefreshAll}
+              disabled={loading}
             >
               Odśwież
             </Button>
@@ -595,13 +827,26 @@ const OrdersList = () => {
                             </Typography>
                           </TableCell>
                           <TableCell>
-                            {order.orderDate ? (
-                              typeof order.orderDate === 'object' && typeof order.orderDate.toDate === 'function' 
-                                ? formatDate(order.orderDate.toDate(), false)
-                                : formatDate(order.orderDate, false)
-                            ) : '-'}
+                            <Typography variant="body2" fontWeight="medium">
+                              {order.orderDate ? (
+                                typeof order.orderDate === 'object' && typeof order.orderDate.toDate === 'function' 
+                                  ? formatDate(order.orderDate.toDate(), false)
+                                  : formatDate(order.orderDate, false)
+                              ) : '-'}
+                            </Typography>
                           </TableCell>
-                          <TableCell>{formatCurrency(order.totalValue || 0)}</TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                              <Typography variant="body2" fontWeight="medium">
+                                {formatCurrency(order.totalValue || 0)}
+                              </Typography>
+                              {order.purchaseOrdersValue > 0 && (
+                                <Typography variant="caption" color="text.secondary">
+                                  (w tym PO: {formatCurrency(order.purchaseOrdersValue || 0)})
+                                </Typography>
+                              )}
+                            </Box>
+                          </TableCell>
                           <TableCell>
                             <Chip 
                               label={order.status} 
@@ -718,82 +963,7 @@ const OrdersList = () => {
                                       <Button
                                         size="small"
                                         startIcon={<RefreshIcon />}
-                                        onClick={async () => {
-                                          try {
-                                            // Pobierz aktualne dane zamówienia z bazy danych
-                                            const { getOrderById } = await import('../../services/orderService');
-                                            const updatedOrder = await getOrderById(order.id);
-                                            
-                                            console.log("Pobrane dane zamówienia:", updatedOrder);
-                                            
-                                            // Przeliczamy wartość zamówień zakupu
-                                            const poTotal = (updatedOrder.linkedPurchaseOrders || []).reduce((sum, po) => {
-                                              console.log("PO do przeliczenia:", po);
-                                              
-                                              // Jeśli zamówienie ma już wartość brutto, używamy jej
-                                              if (po.totalGross !== undefined && po.totalGross !== null) {
-                                                const value = parseFloat(po.totalGross);
-                                                console.log(`Używam istniejącej wartości brutto: ${value}`);
-                                                return sum + value;
-                                              }
-                                              
-                                              // W przeciwnym razie obliczamy wartość brutto
-                                              const productsValue = parseFloat(po.value) || 0;
-                                              const vatRate = parseFloat(po.vatRate) || 23;
-                                              const vatValue = (productsValue * vatRate) / 100;
-                                              
-                                              // Sprawdzenie czy istnieją dodatkowe koszty w formie tablicy
-                                              let additionalCosts = 0;
-                                              if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
-                                                additionalCosts = po.additionalCostsItems.reduce((costsSum, cost) => {
-                                                  return costsSum + (parseFloat(cost.value) || 0);
-                                                }, 0);
-                                              } else {
-                                                // Użyj starego pola additionalCosts jeśli nowa tablica nie istnieje
-                                                additionalCosts = parseFloat(po.additionalCosts) || 0;
-                                              }
-                                              
-                                              const grossValue = productsValue + vatValue + additionalCosts;
-                                              console.log(`Obliczona wartość brutto: ${grossValue} (prod: ${productsValue}, vat: ${vatValue}, koszty: ${additionalCosts})`);
-                                              
-                                              return sum + grossValue;
-                                            }, 0);
-                                            
-                                            console.log(`Łączna wartość PO: ${poTotal}`);
-                                            
-                                            // Obliczamy wartość produktów
-                                            const subtotal = (order.items || []).reduce((sum, item) => {
-                                              const quantity = parseFloat(item.quantity) || 0;
-                                              const price = parseFloat(item.price) || 0;
-                                              return sum + (quantity * price);
-                                            }, 0);
-                                            
-                                            // Dodanie kosztów dostawy
-                                            const shippingCost = parseFloat(order.shippingCost) || 0;
-                                            
-                                            // Łączna wartość zamówienia
-                                            const totalValue = subtotal + shippingCost + poTotal;
-                                            
-                                            console.log(`Nowa łączna wartość zamówienia: ${totalValue}`);
-                                            
-                                            // Aktualizuj lokalny stan zamówień
-                                            setOrders(prev => prev.map(ord => 
-                                              ord.id === order.id 
-                                                ? {
-                                                    ...ord,
-                                                    linkedPurchaseOrders: updatedOrder.linkedPurchaseOrders || [],
-                                                    purchaseOrdersValue: poTotal,
-                                                    totalValue: totalValue
-                                                  }
-                                                : ord
-                                            ));
-                                            
-                                            showSuccess('Zaktualizowano dane zamówień zakupu');
-                                          } catch (error) {
-                                            console.error('Błąd podczas odświeżania powiązanych zamówień zakupu:', error);
-                                            showError('Nie udało się odświeżyć danych zamówień zakupu');
-                                          }
-                                        }}
+                                        onClick={() => handleRefreshOrder(order)}
                                       >
                                         Odśwież dane PO
                                       </Button>
