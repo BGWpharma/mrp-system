@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -56,12 +56,14 @@ import {
   getAllOrders, 
   deleteOrder, 
   updateOrderStatus, 
-  ORDER_STATUSES 
+  getOrderById,
+  ORDER_STATUSES
 } from '../../services/orderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate, formatTimestamp, formatDateForInput } from '../../utils/dateUtils';
 import { formatCurrency } from '../../utils/formatUtils';
+import { getRecipeById } from '../../services/recipeService';
 
 const OrdersList = () => {
   const [orders, setOrders] = useState([]);
@@ -95,87 +97,152 @@ const OrdersList = () => {
   const fetchOrders = async () => {
     try {
       setLoading(true);
+      
       const data = await getAllOrders();
+      console.log("Pobrano zamówienia:", data);
       
-      console.log("Pobrane zamówienia:", data);
-      
-      // Aktualizacja wartości całkowitej zamówienia uwzględniając PO
-      const updatedOrders = data.map(order => {
-        // Obliczenie wartości produktów
-        const subtotal = (order.items || []).reduce((sum, item) => {
-          const quantity = parseFloat(item.quantity) || 0;
-          const price = parseFloat(item.price) || 0;
-          return sum + (quantity * price);
-        }, 0);
-        
-        // Dodanie kosztów dostawy
-        const shippingCost = parseFloat(order.shippingCost) || 0;
-        
-        // Obliczenie wartości zamówień zakupu powiązanych
-        let poTotal = 0;
-        
+      if (!data || !Array.isArray(data) || data.length === 0) {
+        setOrders([]);
+        setLoading(false);
+        return;
+      }
+
+      // Zaktualizuj wartości dla każdego zamówienia
+      const updatedOrders = await Promise.all(data.map(async (order) => {
+        // Jeśli zamówienie ma powiązane PO, pobierz pełne dane zamówienia i wszystkich PO
         if (order.linkedPurchaseOrders && order.linkedPurchaseOrders.length > 0) {
-          console.log(`Przetwarzam ${order.linkedPurchaseOrders.length} zamówień zakupu dla zamówienia ${order.id}`);
+          console.log(`Zamówienie ${order.id} ma powiązane PO, pobieranie pełnych danych...`);
           
-          poTotal = order.linkedPurchaseOrders.reduce((sum, po) => {
-            console.log("Przetwarzane PO:", po);
+          // Pobierz pełne dane zamówienia
+          const fullOrderData = await getOrderById(order.id);
+          console.log(`Pobrano pełne dane zamówienia ${order.id}`, fullOrderData);
+          
+          // Oblicz wartość PO
+          let poTotal = 0;
+          
+          if (fullOrderData.linkedPurchaseOrders && Array.isArray(fullOrderData.linkedPurchaseOrders)) {
+            // Dla każdego powiązanego PO, oblicz jego wartość brutto
+            poTotal = fullOrderData.linkedPurchaseOrders.reduce((sum, po) => {
+              console.log("Przetwarzanie PO:", po);
+              
+              // Jeśli zamówienie zakupu ma już obliczoną wartość brutto, używamy jej
+              if (po.totalGross !== undefined && po.totalGross !== null) {
+                const grossValue = typeof po.totalGross === 'number' ? po.totalGross : parseFloat(po.totalGross) || 0;
+                console.log(`Używam istniejącej wartości totalGross dla ${po.number}: ${grossValue}`);
+                return sum + grossValue;
+              }
+              
+              console.log(`Brak wartości totalGross dla PO ${po.number}, obliczam ręcznie`);
+              
+              // Wartość produktów
+              const productsValue = typeof po.value === 'number' ? po.value : parseFloat(po.value) || 0;
+              
+              // Stawka VAT i wartość podatku VAT
+              const vatRate = typeof po.vatRate === 'number' ? po.vatRate : parseFloat(po.vatRate) || 0;
+              const vatValue = (productsValue * vatRate) / 100;
+              
+              // Dodatkowe koszty
+              let additionalCosts = 0;
+              if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
+                additionalCosts = po.additionalCostsItems.reduce((costsSum, cost) => {
+                  const costValue = typeof cost.value === 'number' ? cost.value : parseFloat(cost.value) || 0;
+                  return costsSum + costValue;
+                }, 0);
+              } else {
+                additionalCosts = typeof po.additionalCosts === 'number' ? po.additionalCosts : parseFloat(po.additionalCosts) || 0;
+              }
+              
+              // Obliczanie wartości brutto zamówienia zakupu
+              const grossValue = productsValue + vatValue + additionalCosts;
+              console.log(`Obliczona wartość PO ${po.number}: ${grossValue}`);
+              
+              return sum + grossValue;
+            }, 0);
+          }
+          
+          // Obliczamy wartość produktów, sprawdzając czy nie ma aktualizacji cen na podstawie kosztu procesowego
+          const subtotal = await Promise.all((fullOrderData.items || []).map(async (item) => {
+            const quantity = parseFloat(item.quantity) || 0;
+            let price = parseFloat(item.price) || 0;
             
-            // Jeśli zamówienie ma już wartość brutto, używamy jej
-            if (po.totalGross !== undefined && po.totalGross !== null) {
-              // Upewnij się, że wartość jest liczbą
-              const value = typeof po.totalGross === 'number' ? po.totalGross : parseFloat(po.totalGross) || 0;
-              console.log(`Używam istniejącej wartości brutto dla ${po.number || po.id}: ${value}`);
-              return sum + value;
+            // Sprawdź, czy produkt jest recepturą bez ceny z listy cenowej
+            if ((item.isRecipe || item.itemType === 'recipe') && item.id && !item.fromPriceList && price === 0) {
+              try {
+                // Pobierz recepturę, aby sprawdzić koszt procesowy
+                const recipe = await getRecipeById(item.id);
+                if (recipe && recipe.processingCostPerUnit) {
+                  // Użyj kosztu procesowego jako ceny
+                  price = recipe.processingCostPerUnit;
+                  console.log(`Użyto kosztu procesowego ${price} EUR dla produktu ${item.name} w zamówieniu ${order.id}`);
+                }
+              } catch (error) {
+                console.error(`Błąd podczas pobierania receptury dla ${item.name}:`, error);
+              }
             }
             
-            console.log(`Brak wartości totalGross dla PO ${po.number || po.id}, obliczam ręcznie`);
+            return quantity * price;
+          })).then(values => values.reduce((sum, value) => sum + value, 0));
+          
+          // Dodanie kosztów dostawy
+          const shippingCost = parseFloat(fullOrderData.shippingCost) || 0;
+          
+          // Łączna wartość zamówienia
+          const totalValue = subtotal + shippingCost + poTotal;
+          
+          console.log(`Zaktualizowane wartości zamówienia ${order.id}: produkty=${subtotal}, dostawa=${shippingCost}, PO=${poTotal}, razem=${totalValue}`);
+          
+          return {
+            ...fullOrderData,
+            totalValue: totalValue,
+            productsValue: subtotal,
+            purchaseOrdersValue: poTotal,
+            shippingCost: shippingCost
+          };
+        } else {
+          // Jeśli zamówienie nie ma powiązanych PO, oblicz tylko wartość produktów
+          const subtotal = await Promise.all((order.items || []).map(async (item) => {
+            const quantity = parseFloat(item.quantity) || 0;
+            let price = parseFloat(item.price) || 0;
             
-            // W przeciwnym razie obliczamy wartość brutto
-            // Podstawowa wartość zamówienia zakupu (produkty)
-            const productsValue = typeof po.value === 'number' ? po.value : parseFloat(po.value) || 0;
-            
-            // Stawka VAT i wartość podatku VAT (tylko od produktów)
-            const vatRate = typeof po.vatRate === 'number' ? po.vatRate : parseFloat(po.vatRate) || 23;
-            const vatValue = (productsValue * vatRate) / 100;
-            
-            // Dodatkowe koszty w zamówieniu zakupu
-            let additionalCosts = 0;
-            if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
-              additionalCosts = po.additionalCostsItems.reduce((costsSum, cost) => {
-                const costValue = typeof cost.value === 'number' ? cost.value : parseFloat(cost.value) || 0;
-                return costsSum + costValue;
-              }, 0);
-            } else {
-              // Użyj starego pola additionalCosts jeśli nowa tablica nie istnieje
-              additionalCosts = typeof po.additionalCosts === 'number' ? po.additionalCosts : parseFloat(po.additionalCosts) || 0;
+            // Sprawdź, czy produkt jest recepturą bez ceny z listy cenowej
+            if ((item.isRecipe || item.itemType === 'recipe') && item.id && !item.fromPriceList && price === 0) {
+              try {
+                // Pobierz recepturę, aby sprawdzić koszt procesowy
+                const recipe = await getRecipeById(item.id);
+                if (recipe && recipe.processingCostPerUnit) {
+                  // Użyj kosztu procesowego jako ceny
+                  price = recipe.processingCostPerUnit;
+                  console.log(`Użyto kosztu procesowego ${price} EUR dla produktu ${item.name} w zamówieniu ${order.id}`);
+                }
+              } catch (error) {
+                console.error(`Błąd podczas pobierania receptury dla ${item.name}:`, error);
+              }
             }
             
-            // Wartość brutto: produkty + VAT + dodatkowe koszty
-            const grossValue = productsValue + vatValue + additionalCosts;
-            console.log(`Obliczona wartość brutto PO ${po.number || po.id}: ${grossValue} (produkty: ${productsValue}, VAT: ${vatValue}, koszty: ${additionalCosts})`);
-            
-            return sum + grossValue;
-          }, 0);
+            return quantity * price;
+          })).then(values => values.reduce((sum, value) => sum + value, 0));
+          
+          // Dodanie kosztów dostawy
+          const shippingCost = parseFloat(order.shippingCost) || 0;
+          
+          // Łączna wartość zamówienia
+          const totalValue = subtotal + shippingCost;
+          
+          console.log(`Zaktualizowane wartości zamówienia ${order.id}: produkty=${subtotal}, dostawa=${shippingCost}, PO=0, razem=${totalValue}`);
+          
+          return {
+            ...order,
+            totalValue: totalValue,
+            productsValue: subtotal,
+            purchaseOrdersValue: 0,
+            shippingCost: shippingCost
+          };
         }
-        
-        console.log(`Zamówienie ${order.id}: produkty=${subtotal}, dostawa=${shippingCost}, PO=${poTotal}`);
-        
-        // Łączna wartość zamówienia
-        const totalValue = subtotal + shippingCost + poTotal;
-        
-        return {
-          ...order,
-          totalValue: totalValue,
-          productsValue: subtotal,
-          purchaseOrdersValue: poTotal,
-          shippingCost: shippingCost
-        };
-      });
+      }));
       
       setOrders(updatedOrders);
     } catch (error) {
-      showError('Błąd podczas pobierania zamówień: ' + error.message);
-      console.error('Error fetching orders:', error);
+      console.error('Błąd podczas pobierania zamówień:', error);
     } finally {
       setLoading(false);
     }
@@ -308,12 +375,33 @@ const OrdersList = () => {
   };
 
   const handleStatusChangeClick = (order, newStatus) => {
-    setStatusChangeInfo({
-      orderId: order.id,
-      orderNumber: order.id.substring(0, 8).toUpperCase(),
-      currentStatus: order.status,
-      newStatus: newStatus
-    });
+    try {
+      if (!order || !order.id || typeof order.id !== 'string') {
+        console.error('Nieprawidłowy identyfikator zamówienia:', order);
+        showError('Nie można zmienić statusu - nieprawidłowy identyfikator zamówienia');
+        return;
+      }
+
+      // Konwertuj status zamówienia do string jeśli jest obiektem
+      const currentStatus = typeof order.status === 'object' 
+        ? JSON.stringify(order.status) 
+        : (order.status || 'Nieznany');
+      
+      // Konwertuj nowy status do string jeśli jest obiektem  
+      const statusValue = typeof newStatus === 'object'
+        ? JSON.stringify(newStatus)
+        : (newStatus || 'Nieznany');
+      
+      setStatusChangeInfo({
+        orderId: order.id,
+        orderNumber: order.orderNumber || order.id.substring(0, 8).toUpperCase(),
+        currentStatus: currentStatus,
+        newStatus: statusValue
+      });
+    } catch (error) {
+      console.error('Błąd podczas przygotowania zmiany statusu:', error);
+      showError('Wystąpił błąd podczas przygotowania zmiany statusu');
+    }
   };
 
   const handleConfirmStatusChange = async () => {
@@ -613,6 +701,44 @@ const OrdersList = () => {
     }
   };
 
+  // Dodajmy funkcję pomocniczą do bezpiecznego renderowania wartości
+  const safeRenderValue = (value) => {
+    if (value === null || value === undefined) {
+      return '-';
+    }
+    
+    if (typeof value === 'object') {
+      return JSON.stringify(value);
+    }
+    
+    return String(value);
+  };
+
+  // Funkcja do formatowania danych dostawcy
+  const formatSupplier = (supplier) => {
+    if (!supplier) return '-';
+    
+    if (typeof supplier === 'string') {
+      return supplier;
+    }
+    
+    if (typeof supplier === 'object') {
+      // Jeśli obiekt ma pole name, użyj go
+      if (supplier.name) {
+        return supplier.name;
+      }
+      
+      // W przeciwnym razie sformatuj cały obiekt
+      try {
+        return JSON.stringify(supplier).substring(0, 50) + (JSON.stringify(supplier).length > 50 ? '...' : '');
+      } catch (e) {
+        return 'Nieprawidłowe dane dostawcy';
+      }
+    }
+    
+    return String(supplier);
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -818,12 +944,14 @@ const OrdersList = () => {
                           </TableCell>
                           <TableCell>
                             <Typography variant="body2" fontWeight="medium">
-                              {order.customer?.name || 'Brak danych klienta'}
+                              {typeof order.customer === 'object' && order.customer !== null 
+                                ? (order.customer?.name || 'Brak danych klienta') 
+                                : String(order.customer) || 'Brak danych klienta'}
                             </Typography>
                           </TableCell>
                           <TableCell>
                             <Typography variant="body2" fontWeight="medium">
-                              #{order.orderNumber || order.id.substring(0, 8).toUpperCase()}
+                              #{order.orderNumber || (order.id && order.id.substring(0, 8).toUpperCase())}
                             </Typography>
                           </TableCell>
                           <TableCell>
@@ -897,26 +1025,38 @@ const OrdersList = () => {
                                   <Grid item xs={12} md={6}>
                                     <Typography variant="subtitle2">Kontakt:</Typography>
                                     <Typography variant="body2">
-                                      Email: {order.customer?.email || '-'}
+                                      Email: {typeof order.customer?.email === 'object' 
+                                        ? JSON.stringify(order.customer.email) 
+                                        : (order.customer?.email || '-')}
                                     </Typography>
                                     <Typography variant="body2">
-                                      Telefon: {order.customer?.phone || '-'}
+                                      Telefon: {typeof order.customer?.phone === 'object' 
+                                        ? JSON.stringify(order.customer.phone) 
+                                        : (order.customer?.phone || '-')}
                                     </Typography>
                                     <Typography variant="body2">
-                                      Adres: {order.customer?.address || '-'}
+                                      Adres: {typeof order.customer?.address === 'object' 
+                                        ? JSON.stringify(order.customer.address) 
+                                        : (order.customer?.address || '-')}
                                     </Typography>
                                   </Grid>
 
                                   <Grid item xs={12} md={6}>
                                     <Typography variant="subtitle2">Informacje o płatności:</Typography>
                                     <Typography variant="body2">
-                                      Metoda: {order.paymentMethod || '-'}
+                                      Metoda: {typeof order.paymentMethod === 'object'
+                                        ? JSON.stringify(order.paymentMethod)
+                                        : (order.paymentMethod || '-')}
                                     </Typography>
                                     <Typography variant="body2">
-                                      Status: {order.paymentStatus || '-'}
+                                      Status: {typeof order.paymentStatus === 'object'
+                                        ? JSON.stringify(order.paymentStatus)
+                                        : (order.paymentStatus || '-')}
                                     </Typography>
                                     <Typography variant="body2">
-                                      Dostawa: {order.shippingMethod || '-'} 
+                                      Dostawa: {typeof order.shippingMethod === 'object'
+                                        ? JSON.stringify(order.shippingMethod)
+                                        : (order.shippingMethod || '-')} 
                                       ({formatCurrency(order.shippingCost || 0)})
                                     </Typography>
                                   </Grid>
@@ -936,17 +1076,17 @@ const OrdersList = () => {
                                           </TableRow>
                                         </TableHead>
                                         <TableBody>
-                                          {order.items && order.items.map((item, index) => (
+                                          {order.items && Array.isArray(order.items) && order.items.map((item, index) => (
                                             <TableRow key={index}>
-                                              <TableCell>{item.name}</TableCell>
+                                              <TableCell>{typeof item.name === 'object' ? JSON.stringify(item.name) : (item.name || '-')}</TableCell>
                                               <TableCell align="right">
-                                                {item.quantity} {item.unit}
+                                                {item.quantity} {typeof item.unit === 'object' ? JSON.stringify(item.unit) : (item.unit || '')}
                                               </TableCell>
                                               <TableCell align="right">
-                                                {formatCurrency(item.price)}
+                                                {formatCurrency(parseFloat(item.price) || 0)}
                                               </TableCell>
                                               <TableCell align="right">
-                                                {formatCurrency(item.price * item.quantity)}
+                                                {formatCurrency((parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 0))}
                                               </TableCell>
                                             </TableRow>
                                           ))}
@@ -968,7 +1108,7 @@ const OrdersList = () => {
                                         Odśwież dane PO
                                       </Button>
                                     </Box>
-                                    {order.linkedPurchaseOrders && order.linkedPurchaseOrders.length > 0 ? (
+                                    {order.linkedPurchaseOrders && Array.isArray(order.linkedPurchaseOrders) && order.linkedPurchaseOrders.length > 0 ? (
                                       <TableContainer component={Paper} variant="outlined">
                                         <Table size="small">
                                           <TableHead>
@@ -985,7 +1125,7 @@ const OrdersList = () => {
                                               <TableRow key={index} hover>
                                                 <TableCell>
                                                   <Chip 
-                                                    label={po.number} 
+                                                    label={typeof po.number === 'object' ? JSON.stringify(po.number) : (po.number || '-')} 
                                                     color="primary" 
                                                     variant="outlined" 
                                                     size="small"
@@ -993,38 +1133,43 @@ const OrdersList = () => {
                                                     sx={{ fontWeight: 'bold' }}
                                                   />
                                                 </TableCell>
-                                                <TableCell>{po.supplier}</TableCell>
+                                                <TableCell>{formatSupplier(po.supplier)}</TableCell>
                                                 <TableCell align="right">
                                                   {(() => {
-                                                    // Jeśli zamówienie ma już wartość brutto, używamy jej
-                                                    if (po.totalGross !== undefined && po.totalGross !== null) {
-                                                      return formatCurrency(parseFloat(po.totalGross));
+                                                    try {
+                                                      // Jeśli zamówienie ma już wartość brutto, używamy jej
+                                                      if (po.totalGross !== undefined && po.totalGross !== null) {
+                                                        return formatCurrency(parseFloat(po.totalGross));
+                                                      }
+                                                      
+                                                      // W przeciwnym razie obliczamy wartość brutto
+                                                      const productsValue = parseFloat(po.value) || 0;
+                                                      const vatRate = parseFloat(po.vatRate) || 23;
+                                                      const vatValue = (productsValue * vatRate) / 100;
+                                                      
+                                                      // Sprawdzenie różnych formatów dodatkowych kosztów
+                                                      let additionalCosts = 0;
+                                                      if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
+                                                        additionalCosts = po.additionalCostsItems.reduce((costsSum, cost) => {
+                                                          return costsSum + (parseFloat(cost.value) || 0);
+                                                        }, 0);
+                                                      } else {
+                                                        additionalCosts = typeof po.additionalCosts === 'number' ? po.additionalCosts : parseFloat(po.additionalCosts) || 0;
+                                                      }
+                                                      
+                                                      // Wartość brutto: produkty + VAT + dodatkowe koszty
+                                                      const grossValue = productsValue + vatValue + additionalCosts;
+                                                      
+                                                      return formatCurrency(grossValue);
+                                                    } catch (error) {
+                                                      console.error("Błąd obliczenia wartości PO:", error);
+                                                      return formatCurrency(0);
                                                     }
-                                                    
-                                                    // W przeciwnym razie obliczamy wartość brutto
-                                                    const productsValue = parseFloat(po.value) || 0;
-                                                    const vatRate = parseFloat(po.vatRate) || 23;
-                                                    const vatValue = (productsValue * vatRate) / 100;
-                                                    
-                                                    // Sprawdzenie różnych formatów dodatkowych kosztów
-                                                    let additionalCosts = 0;
-                                                    if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
-                                                      additionalCosts = po.additionalCostsItems.reduce((costsSum, cost) => {
-                                                        return costsSum + (parseFloat(cost.value) || 0);
-                                                      }, 0);
-                                                    } else {
-                                                      additionalCosts = parseFloat(po.additionalCosts) || 0;
-                                                    }
-                                                    
-                                                    // Wartość brutto: produkty + VAT + dodatkowe koszty
-                                                    const grossValue = productsValue + vatValue + additionalCosts;
-                                                    
-                                                    return formatCurrency(grossValue);
                                                   })()}
                                                 </TableCell>
                                                 <TableCell>
                                                   <Chip 
-                                                    label={po.status || "Robocze"} 
+                                                    label={typeof po.status === 'object' ? JSON.stringify(po.status) : (po.status || "Robocze")} 
                                                     color={
                                                       po.status === 'completed' ? 'success' : 
                                                       po.status === 'in_progress' ? 'warning' : 
@@ -1037,7 +1182,8 @@ const OrdersList = () => {
                                                   <Button 
                                                     size="small" 
                                                     variant="contained"
-                                                    onClick={() => navigate(`/purchase-orders/${po.id}`)}
+                                                    onClick={() => typeof po.id === 'string' ? navigate(`/purchase-orders/${po.id}`) : null}
+                                                    disabled={typeof po.id !== 'string'}
                                                   >
                                                     Szczegóły
                                                   </Button>
@@ -1083,10 +1229,14 @@ const OrdersList = () => {
                                   <Grid item xs={12}>
                                     <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
                                       <Typography variant="subtitle2">Zmień status:</Typography>
-                                      {ORDER_STATUSES.map(status => (
-                                        order.status !== status.value && (
+                                      {ORDER_STATUSES.map(status => {
+                                        // Sprawdź czy order.status jest prymitywem, jeśli nie - konwertuj do stringa
+                                        const orderStatus = typeof order.status === 'object' ? JSON.stringify(order.status) : String(order.status || '');
+                                        const statusValue = typeof status.value === 'object' ? JSON.stringify(status.value) : String(status.value || '');
+                                        
+                                        return orderStatus !== statusValue && (
                                           <Button 
-                                            key={status.value}
+                                            key={statusValue}
                                             variant="outlined"
                                             size="small"
                                             onClick={() => handleStatusChangeClick(order, status.value)}
@@ -1094,8 +1244,8 @@ const OrdersList = () => {
                                           >
                                             {status.label}
                                           </Button>
-                                        )
-                                      ))}
+                                        );
+                                      })}
                                     </Box>
                                   </Grid>
                                 </Grid>
@@ -1135,8 +1285,10 @@ const OrdersList = () => {
           <DialogContentText>
             {orderToDelete && (
               <>
-                Zamówienie #{orderToDelete.id.substring(0, 8).toUpperCase()} 
-                złożone przez {orderToDelete.customer?.name || '(brak danych)'}
+                Zamówienie #{orderToDelete.id && orderToDelete.id.substring(0, 8).toUpperCase()} 
+                złożone przez {typeof orderToDelete.customer === 'object' && orderToDelete.customer !== null 
+                  ? (orderToDelete.customer.name || '(brak danych)') 
+                  : String(orderToDelete.customer) || '(brak danych)'}
                 {' '}o wartości {formatCurrency(orderToDelete.totalValue || 0)} 
                 zostanie trwale usunięte.
               </>

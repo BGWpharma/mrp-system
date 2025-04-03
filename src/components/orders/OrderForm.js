@@ -383,7 +383,8 @@ const OrderForm = ({ orderId }) => {
         name: selectedProduct.name,
         price: selectedProduct.price || 0,
         unit: selectedProduct.unit || 'szt.',
-        itemType: type
+        itemType: type,
+        isRecipe: true
       };
       
       setOrderData(prev => ({
@@ -417,6 +418,27 @@ const OrderForm = ({ orderId }) => {
               
               // Pokaż informację o użyciu ceny z listy cenowej
               showInfo(`Zastosowano cenę ${priceFromList} EUR z listy cenowej klienta`);
+            } else {
+              // Jeśli nie ma ceny w liście cenowej, sprawdź koszt procesowy receptury
+              const recipe = await getRecipeById(selectedProduct.id);
+              if (recipe && recipe.processingCostPerUnit) {
+                // Zaktualizuj cenę na podstawie kosztu procesowego
+                const itemsWithPrice = [...updatedItems];
+                itemsWithPrice[index] = {
+                  ...itemsWithPrice[index],
+                  price: recipe.processingCostPerUnit,
+                  fromPriceList: false,
+                  fromProcessingCost: true
+                };
+                
+                setOrderData(prev => ({
+                  ...prev,
+                  items: itemsWithPrice
+                }));
+                
+                // Pokaż informację o użyciu kosztu procesowego
+                showInfo(`Zastosowano koszt procesowy ${recipe.processingCostPerUnit} EUR z receptury`);
+              }
             }
           } catch (error) {
             console.error('Błąd podczas pobierania ceny z listy cenowej:', error);

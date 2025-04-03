@@ -420,11 +420,22 @@ export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, user
     
     // Aktualizuj tylko jeśli status faktycznie się zmienił
     if (oldStatus !== newStatus) {
-      await updateDoc(poRef, {
+      const updateFields = {
         status: newStatus,
-      updatedBy: userId,
-      updatedAt: serverTimestamp()
-      });
+        updatedBy: userId,
+        updatedAt: serverTimestamp()
+      };
+      
+      // Jeśli status zmieniany jest na "delivered" (dostarczone)
+      // dodaj pole z datą i godziną dostarczenia
+      if (newStatus === PURCHASE_ORDER_STATUSES.DELIVERED) {
+        const now = new Date();
+        updateFields.deliveredAt = serverTimestamp();
+        updateFields.deliveredBy = userId;
+        console.log(`Zamówienie ${purchaseOrderId} oznaczone jako dostarczone w dniu ${now.toLocaleDateString()} o godzinie ${now.toLocaleTimeString()}`);
+      }
+      
+      await updateDoc(poRef, updateFields);
       
       // Jeśli zaimportowano usługę powiadomień, utwórz powiadomienie o zmianie statusu
       try {

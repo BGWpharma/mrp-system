@@ -601,13 +601,6 @@ const PurchaseOrderDetails = ({ orderId }) => {
         </TableContainer>
       </Paper>
       
-      {purchaseOrder.notes && (
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Typography variant="subtitle1" gutterBottom>Uwagi</Typography>
-          <Typography variant="body2">{purchaseOrder.notes}</Typography>
-        </Paper>
-      )}
-      
       {purchaseOrder.invoiceLink && (
         <Paper sx={{ p: 3, mb: 3 }}>
           <Typography variant="subtitle1" gutterBottom>Faktura</Typography>
@@ -623,6 +616,22 @@ const PurchaseOrderDetails = ({ orderId }) => {
             >
               Otwórz fakturę
             </Button>
+          </Box>
+        </Paper>
+      )}
+      
+      {purchaseOrder.status === PURCHASE_ORDER_STATUSES.DELIVERED && purchaseOrder.deliveredAt && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Typography variant="subtitle1" gutterBottom>Informacje o dostawie</Typography>
+          <Box>
+            <Typography variant="body2">
+              Data i czas dostawy: {format(purchaseOrder.deliveredAt.toDate(), 'dd.MM.yyyy HH:mm', { locale: pl })}
+            </Typography>
+            {purchaseOrder.deliveredBy && (
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                Oznaczone jako dostarczone przez: {purchaseOrder.deliveredBy}
+              </Typography>
+            )}
           </Box>
         </Paper>
       )}
@@ -932,13 +941,13 @@ const PurchaseOrderDetails = ({ orderId }) => {
                       const productsValue = typeof purchaseOrder.items === 'object' && Array.isArray(purchaseOrder.items)
                         ? purchaseOrder.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0)
                         : 0;
-                      
+                        
                       const additionalCosts = purchaseOrder.additionalCostsItems && Array.isArray(purchaseOrder.additionalCostsItems) 
                         ? purchaseOrder.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
                         : (parseFloat(purchaseOrder.additionalCosts) || 0);
-                      
+                        
                       const totalNetValue = productsValue + additionalCosts;
-                      
+                        
                       return `${totalNetValue.toFixed(2)} ${purchaseOrder.currency}`;
                     })()}
                   </TableCell>
@@ -956,7 +965,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                         
                       const vatRate = purchaseOrder.vatRate || 0;
                       const vatValue = (productsValue * vatRate) / 100;
-                      
+                        
                       return `${vatValue.toFixed(2)} ${purchaseOrder.currency}`;
                     })()}
                   </TableCell>
@@ -976,7 +985,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                       // 2. Oblicz VAT (tylko od wartości produktów)
                       const vatRate = purchaseOrder.vatRate || 0;
                       const vatValue = (productsValue * vatRate) / 100;
-                      
+                        
                       // 3. Oblicz dodatkowe koszty
                       const additionalCosts = purchaseOrder.additionalCostsItems && Array.isArray(purchaseOrder.additionalCostsItems) 
                         ? purchaseOrder.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
@@ -984,7 +993,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                         
                       // 4. Oblicz wartość brutto jako: wartość produktów + VAT + dodatkowe koszty
                       const grossValue = productsValue + vatValue + additionalCosts;
-                      
+                        
                       // 5. Zapisz wartość brutto w bazie danych, jeśli się zmieniła
                       if (purchaseOrder.totalGross !== grossValue) {
                         // Aktualizacja w bazie danych
@@ -999,9 +1008,9 @@ const PurchaseOrderDetails = ({ orderId }) => {
                           }
                         })();
                       }
-                      
+                        
                       console.log(`PO ${purchaseOrder.number || orderId} - wartość brutto: ${grossValue} (produkty: ${productsValue}, VAT: ${vatValue}, koszty: ${additionalCosts})`);
-                      
+                        
                       return `${grossValue.toFixed(2)} ${purchaseOrder.currency}`;
                     })()}
                   </TableCell>
@@ -1014,6 +1023,15 @@ const PurchaseOrderDetails = ({ orderId }) => {
             <Box sx={{ mt: 3 }}>
               <Typography variant="subtitle1" gutterBottom>Uwagi</Typography>
               <Typography variant="body2">{purchaseOrder.notes}</Typography>
+            </Box>
+          )}
+          
+          {purchaseOrder.status === PURCHASE_ORDER_STATUSES.DELIVERED && purchaseOrder.deliveredAt && (
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="subtitle1" gutterBottom>Informacje o dostawie</Typography>
+              <Typography variant="body2">
+                Data i czas dostawy: {format(purchaseOrder.deliveredAt.toDate(), 'dd.MM.yyyy HH:mm', { locale: pl })}
+              </Typography>
             </Box>
           )}
           

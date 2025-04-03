@@ -85,7 +85,9 @@ import {
     // Upewnij się, że wydajność jest zawsze ustawiona na 1
     const processedRecipeData = {
       ...recipeData,
-      yield: { quantity: 1, unit: 'szt.' }
+      yield: { quantity: 1, unit: 'szt.' },
+      processingCostPerUnit: parseFloat(recipeData.processingCostPerUnit) || 0,
+      productionTimePerUnit: parseFloat(recipeData.productionTimePerUnit) || 0
     };
     
     const recipeWithMeta = {
@@ -137,7 +139,9 @@ import {
       // Upewnij się, że wydajność jest zawsze ustawiona na 1
       const processedRecipeData = {
         ...recipeData,
-        yield: { quantity: 1, unit: 'szt.' }
+        yield: { quantity: 1, unit: 'szt.' },
+        processingCostPerUnit: parseFloat(recipeData.processingCostPerUnit) || 0,
+        productionTimePerUnit: parseFloat(recipeData.productionTimePerUnit) || 0
       };
       
       // Przygotuj dane do aktualizacji

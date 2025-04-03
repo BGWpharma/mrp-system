@@ -68,7 +68,9 @@ const RecipeForm = ({ recipeId }) => {
     allergens: [],
     notes: '',
     status: 'Robocza',
-    customerId: ''
+    customerId: '',
+    processingCostPerUnit: 0,
+    productionTimePerUnit: 0
   });
 
   // Dodajemy stan dla składników z magazynu
@@ -598,6 +600,31 @@ const RecipeForm = ({ recipeId }) => {
               value={recipeData.prepTime || ''}
               onChange={handleChange}
               fullWidth
+            />
+          </Grid>
+          
+          <Grid item xs={12} sm={6}>
+            <TextField
+              label="Koszt procesowy na sztukę (EUR)"
+              name="processingCostPerUnit"
+              type="number"
+              InputProps={{ inputProps: { min: 0, step: 0.01 } }}
+              value={recipeData.processingCostPerUnit || 0}
+              onChange={handleChange}
+              fullWidth
+              helperText="Koszt procesowy lub robocizny na jedną sztukę produktu"
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              label="Czas produkcji na sztukę (min)"
+              name="productionTimePerUnit"
+              type="number"
+              InputProps={{ inputProps: { min: 0, step: 0.1 } }}
+              value={recipeData.productionTimePerUnit || 0}
+              onChange={handleChange}
+              fullWidth
+              helperText="Czas potrzebny na wyprodukowanie jednej sztuki produktu"
             />
           </Grid>
           

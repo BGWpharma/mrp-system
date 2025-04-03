@@ -399,6 +399,21 @@ import {
       // Poczekaj na usunięcie wszystkich transakcji
       await Promise.all(transactionDeletions);
       
+      // Sprawdź, czy zadanie jest powiązane z zamówieniem klienta
+      if (task.orderId) {
+        try {
+          // Importuj funkcję do usuwania zadania z zamówienia
+          const { removeProductionTaskFromOrder } = await import('./orderService');
+          
+          // Usuń zadanie z zamówienia
+          await removeProductionTaskFromOrder(task.orderId, taskId);
+          console.log(`Zadanie produkcyjne ${taskId} zostało usunięte z zamówienia ${task.orderId}`);
+        } catch (orderError) {
+          console.error(`Błąd podczas usuwania zadania ${taskId} z zamówienia ${task.orderId}:`, orderError);
+          // Kontynuuj usuwanie zadania mimo błędu
+        }
+      }
+      
       // Na końcu usuń samo zadanie
       await deleteDoc(taskRef);
       

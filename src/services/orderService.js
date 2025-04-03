@@ -543,8 +543,14 @@ const validateOrderData = (orderData) => {
  * Oblicza łączną wartość zamówienia
  */
 const calculateOrderTotal = (items) => {
+  if (!items || !Array.isArray(items)) {
+    return 0;
+  }
+  
   return items.reduce((sum, item) => {
-    return sum + (item.price * item.quantity);
+    const price = parseFloat(item.price) || 0;
+    const quantity = parseFloat(item.quantity) || 0;
+    return sum + (price * quantity);
   }, 0);
 };
 
@@ -639,6 +645,42 @@ export const addProductionTaskToOrder = async (orderId, taskData) => {
     return true;
   } catch (error) {
     console.error('Błąd podczas dodawania zadania produkcyjnego do zamówienia:', error);
+    throw error;
+  }
+};
+
+// Dodaj nową funkcję do usuwania zadania produkcyjnego z zamówienia
+export const removeProductionTaskFromOrder = async (orderId, taskId) => {
+  try {
+    const orderRef = doc(db, ORDERS_COLLECTION, orderId);
+    const orderDoc = await getDoc(orderRef);
+    
+    if (!orderDoc.exists()) {
+      throw new Error('Zamówienie nie istnieje');
+    }
+    
+    const order = orderDoc.data();
+    const productionTasks = order.productionTasks || [];
+    
+    // Filtrujemy listę zadań, usuwając to z podanym ID
+    const updatedTasks = productionTasks.filter(task => task.id !== taskId);
+    
+    // Jeśli nie znaleziono zadania, zwróć false
+    if (updatedTasks.length === productionTasks.length) {
+      console.warn(`Zadanie produkcyjne o ID ${taskId} nie zostało znalezione w zamówieniu ${orderId}`);
+      return false;
+    }
+    
+    // Zaktualizuj zamówienie
+    await updateDoc(orderRef, {
+      productionTasks: updatedTasks,
+      updatedAt: serverTimestamp()
+    });
+    
+    console.log(`Zadanie produkcyjne ${taskId} zostało usunięte z zamówienia ${orderId}`);
+    return true;
+  } catch (error) {
+    console.error('Błąd podczas usuwania zadania produkcyjnego z zamówienia:', error);
     throw error;
   }
 }; 

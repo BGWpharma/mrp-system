@@ -38,6 +38,8 @@ const RecipeVersionComparison = ({ currentVersion, previousVersion }) => {
       { key: 'name', label: 'Nazwa' },
       { key: 'description', label: 'Opis' },
       { key: 'prepTime', label: 'Czas przygotowania' },
+      { key: 'productionTimePerUnit', label: 'Czas/sztuka' },
+      { key: 'processingCostPerUnit', label: 'Koszt/sztuka' },
       { key: 'status', label: 'Status' },
       { key: 'notes', label: 'Notatki' }
     ];
@@ -47,10 +49,22 @@ const RecipeVersionComparison = ({ currentVersion, previousVersion }) => {
       const newValue = currentVersion.data[field.key];
 
       if (oldValue !== newValue) {
+        let formattedOldValue = oldValue || '(brak)';
+        let formattedNewValue = newValue || '(brak)';
+        
+        // Formatowanie specyficznych pól
+        if (field.key === 'prepTime' || field.key === 'productionTimePerUnit') {
+          formattedOldValue = oldValue ? `${oldValue} min` : '(brak)';
+          formattedNewValue = newValue ? `${newValue} min` : '(brak)';
+        } else if (field.key === 'processingCostPerUnit') {
+          formattedOldValue = oldValue ? `${parseFloat(oldValue).toFixed(2)} EUR` : '(brak)';
+          formattedNewValue = newValue ? `${parseFloat(newValue).toFixed(2)} EUR` : '(brak)';
+        }
+        
         basicDiffs.push({
           field: field.label,
-          oldValue: oldValue || '(brak)',
-          newValue: newValue || '(brak)'
+          oldValue: formattedOldValue,
+          newValue: formattedNewValue
         });
       }
     });
@@ -199,7 +213,8 @@ const RecipeVersionComparison = ({ currentVersion, previousVersion }) => {
                         backgroundColor: '#ffeeee',
                         maxWidth: 250,
                         overflow: 'hidden',
-                        textOverflow: 'ellipsis'
+                        textOverflow: 'ellipsis',
+                        color: '#000000'
                       }}
                     >
                       {diff.oldValue}
@@ -209,7 +224,8 @@ const RecipeVersionComparison = ({ currentVersion, previousVersion }) => {
                         backgroundColor: '#eeffee',
                         maxWidth: 250,
                         overflow: 'hidden',
-                        textOverflow: 'ellipsis'
+                        textOverflow: 'ellipsis',
+                        color: '#000000'
                       }}
                     >
                       {diff.newValue}
@@ -256,14 +272,16 @@ const RecipeVersionComparison = ({ currentVersion, previousVersion }) => {
                     </TableCell>
                     <TableCell 
                       sx={{ 
-                        backgroundColor: diff.type !== 'added' ? '#ffeeee' : 'inherit'
+                        backgroundColor: diff.type !== 'added' ? '#ffeeee' : 'inherit',
+                        color: diff.type !== 'added' ? '#000000' : 'inherit'
                       }}
                     >
                       {diff.oldValue}
                     </TableCell>
                     <TableCell 
                       sx={{ 
-                        backgroundColor: diff.type !== 'removed' ? '#eeffee' : 'inherit'
+                        backgroundColor: diff.type !== 'removed' ? '#eeffee' : 'inherit',
+                        color: diff.type !== 'removed' ? '#000000' : 'inherit'
                       }}
                     >
                       {diff.newValue}
@@ -299,7 +317,8 @@ const RecipeVersionComparison = ({ currentVersion, previousVersion }) => {
                         backgroundColor: '#ffeeee',
                         maxWidth: 250,
                         overflow: 'hidden',
-                        textOverflow: 'ellipsis'
+                        textOverflow: 'ellipsis',
+                        color: '#000000'
                       }}
                     >
                       {diff.oldValue}
@@ -309,7 +328,8 @@ const RecipeVersionComparison = ({ currentVersion, previousVersion }) => {
                         backgroundColor: '#eeffee',
                         maxWidth: 250,
                         overflow: 'hidden',
-                        textOverflow: 'ellipsis'
+                        textOverflow: 'ellipsis',
+                        color: '#000000'
                       }}
                     >
                       {diff.newValue}

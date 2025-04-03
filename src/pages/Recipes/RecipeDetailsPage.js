@@ -374,6 +374,16 @@ const RecipeDetailsPage = () => {
                 Wydajność: {recipe.yield.quantity} {recipe.yield.unit}
               </Typography>
             </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" color="text.secondary">
+                Czas/sztuka: {recipe.productionTimePerUnit ? `${recipe.productionTimePerUnit} min` : 'Nie określono'}
+              </Typography>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" color="text.secondary">
+                Koszt/sztuka: {recipe.processingCostPerUnit ? `${recipe.processingCostPerUnit.toFixed(2)} EUR` : 'Nie określono'}
+              </Typography>
+            </Grid>
           </Grid>
         </Box>
 

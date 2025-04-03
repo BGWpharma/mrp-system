@@ -66,7 +66,7 @@ const CreateFromOrderPage = () => {
   const [taskForm, setTaskForm] = useState({
     name: '',
     scheduledDate: new Date().toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0],
+    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Domyślnie za tydzień
     priority: 'Normalny',
     description: '',
     status: 'Zaplanowane',
@@ -186,32 +186,51 @@ const CreateFromOrderPage = () => {
     try {
       setOrderLoading(true);
       const orderData = await getOrderById(orderId);
-      setSelectedOrder(orderData);
+      
+      // Upewnij się, że wartość totalValue jest prawidłową liczbą
+      if (orderData.totalValue) {
+        orderData.totalValue = parseFloat(orderData.totalValue);
+      }
+      
+      // Weryfikacja i czyszczenie nieistniejących zadań produkcyjnych
+      const verifiedOrderData = await verifyProductionTasks(orderData);
+      
+      setSelectedOrder(verifiedOrderData);
+      
+      // Aktualizuj listę zamówień, aby odzwierciedlić aktualne dane
+      setOrders(prevOrders => 
+        prevOrders.map(order => 
+          order.id === verifiedOrderData.id ? {...order, totalValue: verifiedOrderData.totalValue} : order
+        )
+      );
       
       // Sprawdź, czy zamówienie ma już utworzone zadania produkcyjne
-      if (orderData.productionTasks && orderData.productionTasks.length > 0) {
-        showInfo(`Uwaga: Dla tego zamówienia utworzono już ${orderData.productionTasks.length} zadań produkcyjnych. Tworzenie dodatkowych może prowadzić do duplikacji.`);
+      if (verifiedOrderData.productionTasks && verifiedOrderData.productionTasks.length > 0) {
+        showInfo(`Uwaga: Dla tego zamówienia utworzono już ${verifiedOrderData.productionTasks.length} zadań produkcyjnych. Tworzenie dodatkowych może prowadzić do duplikacji.`);
         // Zapisz istniejące zadania do wyświetlenia w UI
-        setExistingTasks(orderData.productionTasks);
+        setExistingTasks(verifiedOrderData.productionTasks);
       } else {
         // Wyczyść listę istniejących zadań, jeśli wybrano nowe zamówienie bez zadań
         setExistingTasks([]);
       }
       
       // Ustaw początkowe wartości dla formularza zadania
+      const today = new Date().toISOString().split('T')[0];
+      const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      
       setTaskForm({
-        name: `Produkcja z zamówienia #${orderData.orderNumber || orderId.substring(0, 8)}`,
-        scheduledDate: new Date().toISOString().split('T')[0],
-        endDate: new Date().toISOString().split('T')[0],
+        name: `Produkcja z zamówienia #${verifiedOrderData.orderNumber || verifiedOrderData.id.substring(0, 8)}`,
+        scheduledDate: today,
+        endDate: nextWeek,
         priority: 'Normalny',
-        description: `Zadanie utworzone na podstawie zamówienia klienta ${orderData.customer?.name || '(brak danych)'}`,
+        description: `Zadanie utworzone na podstawie zamówienia klienta ${verifiedOrderData.customer?.name || '(brak danych)'}`,
         status: 'Zaplanowane',
         reservationMethod: 'fifo'
       });
       
       // Domyślnie zaznacz wszystkie elementy zamówienia
-      if (orderData.items && orderData.items.length > 0) {
-        setSelectedItems(orderData.items.map((item, index) => ({
+      if (verifiedOrderData.items && verifiedOrderData.items.length > 0) {
+        setSelectedItems(verifiedOrderData.items.map((item, index) => ({
           ...item,
           itemId: index, // Dodajemy unikalny identyfikator
           selected: true,
@@ -229,6 +248,9 @@ const CreateFromOrderPage = () => {
     const orderId = event.target.value;
     setSelectedOrderId(orderId);
     
+    // Zawsze czyść listę istniejących zadań przy zmianie zamówienia
+    setExistingTasks([]);
+    
     if (orderId) {
       fetchOrderDetails(orderId);
     } else {
@@ -240,32 +262,8 @@ const CreateFromOrderPage = () => {
   const handleTaskFormChange = (e) => {
     const { name, value } = e.target;
     
-    // Specjalna obsługa dla pól daty
-    if (name === 'scheduledDate' || name === 'endDate') {
-      console.log(`Zmiana daty ${name}:`, value);
-      
-      // Sprawdź czy wartość jest niepusta
-      if (value) {
-        try {
-          // Konwersja do prawidłowego formatu ISO
-          const dateObj = new Date(value);
-          if (!isNaN(dateObj.getTime())) {
-            const formattedDate = dateObj.toISOString().split('T')[0];
-            console.log(`Sformatowana data ${name}:`, formattedDate);
-            
-            setTaskForm(prev => ({
-              ...prev,
-              [name]: formattedDate
-            }));
-            return;
-          }
-        } catch (error) {
-          console.error(`Błąd podczas formatowania daty ${name}:`, error);
-        }
-      }
-    }
-    
-    // Standardowa obsługa dla pozostałych pól
+    // Standardowa obsługa dla wszystkich pól - usuwamy specjalną obsługę dat,
+    // która sprawiała problemy
     setTaskForm(prev => ({
       ...prev,
       [name]: value
@@ -273,20 +271,37 @@ const CreateFromOrderPage = () => {
   };
   
   const handleItemSelect = (itemId) => {
-    setSelectedItems(prev => 
-      prev.map(item => 
-        item.itemId === itemId 
-          ? { ...item, selected: !item.selected } 
-          : item
-      )
-    );
+    if (Array.isArray(selectedItems)) {
+      setSelectedItems(prev => 
+        prev.map(item => 
+          item.itemId === itemId 
+            ? { ...item, selected: !item.selected } 
+            : item
+        )
+      );
+    } else {
+      // Dla przypadku gdy selectedItems jest obiektem
+      setSelectedItems(prev => ({
+        ...prev,
+        [itemId]: !prev[itemId]
+      }));
+    }
   };
   
   const handleSelectAllItems = (event) => {
     const checked = event.target.checked;
-    setSelectedItems(prev => 
-      prev.map(item => ({ ...item, selected: checked }))
-    );
+    if (Array.isArray(selectedItems)) {
+      setSelectedItems(prev => 
+        prev.map(item => ({ ...item, selected: checked }))
+      );
+    } else {
+      // Dla przypadku gdy selectedItems jest obiektem
+      const updatedItems = {};
+      Object.keys(selectedItems).forEach(key => {
+        updatedItems[key] = checked;
+      });
+      setSelectedItems(updatedItems);
+    }
   };
   
   const handleCreateTask = async () => {
@@ -402,8 +417,13 @@ const CreateFromOrderPage = () => {
     navigate('/orders');
   };
   
-  const areAllItemsSelected = selectedItems.length > 0 && selectedItems.every(item => item.selected);
-  const someItemsSelected = selectedItems.some(item => item.selected);
+  const areAllItemsSelected = Array.isArray(selectedItems) 
+    ? selectedItems.length > 0 && selectedItems.every(item => item.selected)
+    : Object.keys(selectedItems).length > 0 && Object.values(selectedItems).every(Boolean);
+    
+  const someItemsSelected = Array.isArray(selectedItems)
+    ? selectedItems.some(item => item.selected)
+    : Object.keys(selectedItems).length > 0 && Object.values(selectedItems).some(Boolean);
 
   // Inicjalizacja zadań produkcyjnych z wybranego zamówienia
   const initializeTasksFromOrder = () => {
@@ -465,9 +485,39 @@ const CreateFromOrderPage = () => {
       return;
     }
     
-    const selectedKeys = Object.keys(selectedItems).filter(key => selectedItems[key]);
-    if (selectedKeys.length === 0) {
-      showError('Nie wybrano żadnych produktów do produkcji');
+    if (!selectedOrder.items || selectedOrder.items.length === 0) {
+      showError('Zamówienie nie zawiera żadnych produktów');
+      return;
+    }
+    
+    let selectedProductItems = [];
+    
+    // Obsługa różnych formatów selectedItems
+    if (Array.isArray(selectedItems)) {
+      selectedProductItems = selectedItems.filter(item => item.selected);
+      if (selectedProductItems.length === 0) {
+        showError('Nie wybrano żadnych produktów do produkcji');
+        return;
+      }
+    } else {
+      // Przypadek gdy selectedItems jest obiektem z kluczami ID
+      const selectedKeys = Object.keys(selectedItems).filter(key => selectedItems[key]);
+      if (selectedKeys.length === 0) {
+        showError('Nie wybrano żadnych produktów do produkcji');
+        return;
+      }
+      
+      // Znajdź odpowiednie produkty na podstawie ID
+      for (const itemId of selectedKeys) {
+        const item = selectedOrder.items.find(item => item.id === itemId);
+        if (item) {
+          selectedProductItems.push(item);
+        }
+      }
+    }
+    
+    if (selectedProductItems.length === 0) {
+      showError('Nie znaleziono wybranych produktów w zamówieniu');
       return;
     }
     
@@ -475,17 +525,13 @@ const CreateFromOrderPage = () => {
     setTasksCreated([]);
     
     try {
-      for (const itemId of selectedKeys) {
-        // Znajdź produkt w zamówieniu
-        const item = selectedOrder.items.find(item => item.id === itemId);
-        if (!item) continue;
-        
+      for (const item of selectedProductItems) {
         let recipe = null;
         
         // Jeśli element jest recepturą, pobierz bezpośrednio recepturę z jej ID
         if (item.isRecipe) {
           try {
-            recipe = await getRecipeById(itemId);
+            recipe = await getRecipeById(item.id);
             console.log(`Pobrano recepturę bezpośrednio dla elementu ${item.name}:`, recipe);
           } catch (recipeError) {
             console.error(`Błąd podczas pobierania receptury dla ${item.name}:`, recipeError);
@@ -524,6 +570,10 @@ const CreateFromOrderPage = () => {
           unitCost: 0
         };
         
+        // Ustaw cenę elementu na podstawie listy cen lub kosztu procesowego receptury
+        let itemPrice = item.price || 0;
+        let totalValue = (item.price || 0) * item.quantity;
+        
         if (recipe) {
           materials = createMaterialsFromRecipe(recipe, item.quantity);
           
@@ -532,6 +582,14 @@ const CreateFromOrderPage = () => {
             recipeName: recipe.name,
             recipeIngredients: recipe.ingredients || []
           };
+          
+          // Sprawdź, czy element ma cenę z listy cenowej
+          if (item.fromPriceList !== true && recipe.processingCostPerUnit) {
+            // Jeśli nie ma ceny z listy cenowej, a receptura ma koszt procesowy, użyj go
+            console.log(`Użycie kosztu procesowego ${recipe.processingCostPerUnit} EUR dla produktu ${item.name}`);
+            itemPrice = recipe.processingCostPerUnit;
+            totalValue = recipe.processingCostPerUnit * item.quantity;
+          }
         }
         
         if (recipe) {
@@ -569,17 +627,29 @@ const CreateFromOrderPage = () => {
           }
         }
         
+        // Utwórz nowe zadanie produkcyjne
         const taskData = {
-          ...taskForm,
+          name: taskForm.name || `Produkcja ${item.name}`,
+          status: taskForm.status || 'Zaplanowane',
+          priority: taskForm.priority || 'Normalny',
+          scheduledDate: taskForm.scheduledDate || new Date().toISOString().split('T')[0],
+          endDate: taskForm.endDate,
           productName: item.name,
           quantity: item.quantity,
           unit: normalizedUnit,
-          customer: selectedOrder.customer,
-          orderId: selectedOrder.id,
-          orderNumber: selectedOrder.orderNumber || selectedOrder.id.substring(0, 8),
           materials: materials,
+          description: taskForm.description || `Zadanie utworzone z zamówienia klienta #${selectedOrder.orderNumber || selectedOrder.id}`,
+          createdBy: currentUser.uid,
+          createdAt: new Date().toISOString(),
+          recipe: recipeData,
           costs: costs,
-          ...recipeData
+          itemPrice: itemPrice,
+          totalValue: totalValue,
+          orderId: selectedOrder.id, // Dodanie orderId do zadania
+          orderNumber: selectedOrder.orderNumber || selectedOrder.id,
+          customer: selectedOrder.customer || null,
+          isEssential: true,
+          reservationMethod: taskForm.reservationMethod || 'fifo'
         };
         
         // Utwórz zadanie produkcyjne
@@ -598,6 +668,12 @@ const CreateFromOrderPage = () => {
       // Pokaż sukces, jeśli utworzono przynajmniej jedno zadanie
       if (tasksCreated.length > 0) {
         showSuccess(`Utworzono ${tasksCreated.length} zadań produkcyjnych`);
+        
+        // Dodaj nowo utworzone zadania do listy istniejących zadań
+        setExistingTasks(prev => [...prev, ...tasksCreated]);
+        
+        // Odśwież szczegóły zamówienia, aby pokazać nowo utworzone zadania
+        fetchOrderDetails(selectedOrder.id);
       }
     } catch (error) {
       console.error('Błąd podczas tworzenia zadań produkcyjnych:', error);
@@ -682,7 +758,7 @@ const CreateFromOrderPage = () => {
       // Jeśli są zmiany, zaktualizuj zamówienie
       if (hasUpdates) {
         // Oblicz nową wartość całkowitą
-        const totalValue = updatedItems.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+        const totalValue = updatedItems.reduce((sum, item) => sum + (parseFloat(item.quantity) * parseFloat(item.price)), 0);
         
         // Utwórz nowy obiekt zamówienia z zaktualizowanymi pozycjami
         const updatedOrder = {
@@ -696,6 +772,14 @@ const CreateFromOrderPage = () => {
         
         // Zaktualizuj stan lokalny
         setSelectedOrder(updatedOrder);
+        
+        // Zaktualizuj również listę zamówień, aby odzwierciedlić zmiany
+        setOrders(prevOrders => 
+          prevOrders.map(order => 
+            order.id === updatedOrder.id ? {...order, totalValue: totalValue} : order
+          )
+        );
+        
         setSelectedItems(updatedItems.map((item, index) => ({
           ...item,
           itemId: index,
@@ -776,6 +860,13 @@ const CreateFromOrderPage = () => {
       // Zaktualizuj zamówienie w bazie danych
       await updateOrder(order.id, updatedOrder, currentUser.uid);
       
+      // Zaktualizuj również listę zamówień
+      setOrders(prevOrders => 
+        prevOrders.map(o => 
+          o.id === order.id ? {...o, hasProductionCosts: true} : o
+        )
+      );
+      
       showSuccess('Koszty produkcji zostały zaktualizowane w zamówieniu');
       
       // Odśwież dane zamówienia
@@ -786,6 +877,64 @@ const CreateFromOrderPage = () => {
       showError('Wystąpił błąd podczas aktualizacji kosztów produkcji: ' + error.message);
     } finally {
       setUpdatingPrices(false);
+    }
+  };
+
+  // Funkcja sprawdzająca czy zadania produkcyjne istnieją i usuwająca nieistniejące referencje
+  const verifyProductionTasks = async (orderData) => {
+    if (!orderData || !orderData.productionTasks || orderData.productionTasks.length === 0) {
+      return orderData;
+    }
+
+    try {
+      const { getTaskById, deleteTask } = await import('../../services/productionService');
+      const { removeProductionTaskFromOrder } = await import('../../services/orderService');
+      
+      const verifiedTasks = [];
+      const tasksToRemove = [];
+      
+      // Sprawdź każde zadanie produkcyjne
+      for (const task of orderData.productionTasks) {
+        try {
+          // Próba pobrania zadania z bazy
+          const taskExists = await getTaskById(task.id);
+          if (taskExists) {
+            verifiedTasks.push(task);
+          } else {
+            console.log(`Zadanie produkcyjne ${task.id} (${task.moNumber}) już nie istnieje.`);
+            tasksToRemove.push(task);
+          }
+        } catch (error) {
+          console.error(`Błąd podczas weryfikacji zadania ${task.id}:`, error);
+          tasksToRemove.push(task);
+        }
+      }
+      
+      // Jeśli znaleziono nieistniejące zadania, usuń ich referencje z zamówienia
+      if (tasksToRemove.length > 0) {
+        for (const task of tasksToRemove) {
+          try {
+            await removeProductionTaskFromOrder(orderData.id, task.id);
+            console.log(`Usunięto nieistniejące zadanie ${task.id} (${task.moNumber}) z zamówienia ${orderData.id}`);
+          } catch (error) {
+            console.error(`Błąd podczas usuwania referencji do zadania ${task.id}:`, error);
+          }
+        }
+        
+        // Zaktualizuj dane zamówienia lokalnie (bez pobierania z bazy)
+        const updatedOrder = {
+          ...orderData,
+          productionTasks: verifiedTasks
+        };
+        
+        showInfo(`Usunięto ${tasksToRemove.length} nieistniejących zadań produkcyjnych z zamówienia.`);
+        return updatedOrder;
+      }
+      
+      return orderData;
+    } catch (error) {
+      console.error('Błąd podczas weryfikacji zadań produkcyjnych:', error);
+      return orderData;
     }
   };
 
@@ -825,11 +974,16 @@ const CreateFromOrderPage = () => {
                     disabled={orderLoading}
                   >
                     <MenuItem value="">Wybierz zamówienie</MenuItem>
-                    {orders.map(order => (
-                      <MenuItem key={order.id} value={order.id}>
-                        #{order.orderNumber || order.id.substring(0, 8)} - {order.customer?.name || 'Brak danych klienta'} ({formatCurrency(order.totalValue || 0)})
-                      </MenuItem>
-                    ))}
+                    {orders.map(order => {
+                      // Zapewnienie, że totalValue jest liczbą
+                      const totalValue = parseFloat(order.totalValue) || 0;
+                      
+                      return (
+                        <MenuItem key={order.id} value={order.id}>
+                          #{order.orderNumber || order.id.substring(0, 8)} - {order.customer?.name || 'Brak danych klienta'} ({formatCurrency(totalValue)})
+                        </MenuItem>
+                      );
+                    })}
                   </Select>
                 </FormControl>
               </Grid>
@@ -936,14 +1090,6 @@ const CreateFromOrderPage = () => {
                           InputLabelProps={{
                             shrink: true,
                           }}
-                          sx={{ 
-                            backgroundColor: '#fff',
-                            '& .MuiOutlinedInput-root': {
-                              '&:hover fieldset': {
-                                borderColor: 'primary.main',
-                              },
-                            },
-                          }}
                         />
                       </Grid>
                       <Grid item xs={12} sm={6}>
@@ -957,14 +1103,6 @@ const CreateFromOrderPage = () => {
                           margin="normal"
                           InputLabelProps={{
                             shrink: true,
-                          }}
-                          sx={{ 
-                            backgroundColor: '#fff',
-                            '& .MuiOutlinedInput-root': {
-                              '&:hover fieldset': {
-                                borderColor: 'primary.main',
-                              },
-                            },
                           }}
                         />
                       </Grid>
@@ -1021,20 +1159,39 @@ const CreateFromOrderPage = () => {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {selectedItems.map((item) => (
-                        <TableRow key={item.itemId} hover>
-                          <TableCell padding="checkbox">
-                            <Checkbox
-                              checked={item.selected}
-                              onChange={() => handleItemSelect(item.itemId)}
-                            />
-                          </TableCell>
-                          <TableCell>{item.name}</TableCell>
-                          <TableCell align="right">{item.quantity} {item.unit || 'szt.'}</TableCell>
-                          <TableCell align="right">{formatCurrency(item.price)}</TableCell>
-                          <TableCell align="right">{formatCurrency(item.price * item.quantity)}</TableCell>
-                        </TableRow>
-                      ))}
+                      {Array.isArray(selectedItems) ? (
+                        // Gdy selectedItems jest tablicą obiektów
+                        selectedItems.map((item) => (
+                          <TableRow key={item.itemId} hover>
+                            <TableCell padding="checkbox">
+                              <Checkbox
+                                checked={item.selected}
+                                onChange={() => handleItemSelect(item.itemId)}
+                              />
+                            </TableCell>
+                            <TableCell>{item.name}</TableCell>
+                            <TableCell align="right">{item.quantity} {item.unit || 'szt.'}</TableCell>
+                            <TableCell align="right">{formatCurrency(item.price)}</TableCell>
+                            <TableCell align="right">{formatCurrency(item.price * item.quantity)}</TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        // Gdy selectedItems jest obiektem z kluczami ID
+                        selectedOrder?.items?.map((item) => (
+                          <TableRow key={item.id} hover>
+                            <TableCell padding="checkbox">
+                              <Checkbox
+                                checked={selectedItems[item.id] || false}
+                                onChange={() => handleItemSelect(item.id)}
+                              />
+                            </TableCell>
+                            <TableCell>{item.name}</TableCell>
+                            <TableCell align="right">{item.quantity} {item.unit || 'szt.'}</TableCell>
+                            <TableCell align="right">{formatCurrency(item.price)}</TableCell>
+                            <TableCell align="right">{formatCurrency(item.price * item.quantity)}</TableCell>
+                          </TableRow>
+                        ))
+                      )}
                     </TableBody>
                   </Table>
                 </TableContainer>
