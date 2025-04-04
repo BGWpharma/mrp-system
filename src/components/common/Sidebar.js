@@ -121,7 +121,9 @@ const Sidebar = ({ onToggle }) => {
     } else if (location.pathname.startsWith('/orders') || location.pathname.startsWith('/customers')) {
       setOpenSubmenu('Sprzedaż');
     } else if (location.pathname.startsWith('/inventory') || location.pathname.startsWith('/purchase-orders')) {
-      setOpenSubmenu('Magazyn');
+      setOpenSubmenu('Stany');
+    } else if (location.pathname === '/' || location.pathname.startsWith('/analytics')) {
+      setOpenSubmenu('Dashboard');
     }
   }, [location.pathname]);
   
@@ -169,8 +171,15 @@ const Sidebar = ({ onToggle }) => {
   };
   
   const menuItems = [
-    { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
-    { text: 'Analityka', icon: <AnalyticsIcon />, path: '/analytics' },
+    { text: 'Dashboard', 
+      icon: <DashboardIcon />, 
+      path: '/',
+      hasSubmenu: true,
+      children: [
+        { text: 'Główny', icon: <DashboardIcon />, path: '/' },
+        { text: 'Analityka', icon: <AnalyticsIcon />, path: '/analytics' },
+      ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
+    },
     { text: 'Sprzedaż',
       icon: <CustomersIcon />,
       path: '/customers',
@@ -183,7 +192,7 @@ const Sidebar = ({ onToggle }) => {
         { text: 'Zamówienia klientów', icon: <OrdersIcon />, path: '/orders' },
       ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
     },
-    { text: 'Magazyn', 
+    { text: 'Stany', 
       icon: <InventoryIcon />, 
       path: '/inventory', 
       badge: expiringItemsCount > 0 ? expiringItemsCount : null,
@@ -193,7 +202,7 @@ const Sidebar = ({ onToggle }) => {
         { text: 'Dostawcy', icon: <SuppliersIcon />, path: '/suppliers' },
         { text: 'Interakcje zakupowe', icon: <CallIcon />, path: '/crm/interactions' },
         { text: 'Inwentaryzacja', icon: <QualityReportsIcon />, path: '/inventory/stocktaking' },
-        { text: 'Stan magazynowy', icon: <WarehouseIcon />, path: '/inventory' },
+        { text: 'Stan', icon: <WarehouseIcon />, path: '/inventory' },
         { text: 'Terminy ważności', icon: <CalendarIcon />, path: '/inventory/expiry-dates' },
         { text: 'Zamówienia komponentów', icon: <PurchaseOrdersIcon />, path: '/purchase-orders' },
       ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
@@ -206,7 +215,6 @@ const Sidebar = ({ onToggle }) => {
         { text: 'Kalendarz', icon: <CalendarIcon />, path: '/production/calendar' },
         { text: 'Receptury', icon: <RecipesIcon />, path: '/recipes' },
         { text: 'Lista zadań produkcyjnych', icon: <ListIcon />, path: '/production' },
-        { text: 'Prognoza zapotrzebowania', icon: <ForecastIcon />, path: '/production/forecast' },
       ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
     }
   ].sort((a, b) => a.text.localeCompare(b.text, 'pl'));

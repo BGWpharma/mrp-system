@@ -41,6 +41,7 @@ import { getAllInventoryItems } from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatCurrency } from '../../utils/formatUtils';
+import { formatDateTime } from '../../utils/formatters';
 
 const ForecastPage = () => {
   const navigate = useNavigate();
@@ -133,9 +134,9 @@ const ForecastPage = () => {
         // Wyświetl informacje o datach dla każdego zadania
         console.log(`Zadanie ${task.id}: ${task.name}, data: ${taskDate}, status: ${task.status}`);
         
-        // Rozszerz filtrowanie, aby uwzględniało zadania "Zaplanowane" i "W trakcie"
+        // Rozszerz filtrowanie, aby uwzględniało zadania "Zaplanowane", "W trakcie" oraz "Wstrzymane"
         const isInDateRange = taskDate >= startDateTime && taskDate <= endDateTime;
-        const isValidStatus = task.status === 'Zaplanowane' || task.status === 'W trakcie';
+        const isValidStatus = task.status === 'Zaplanowane' || task.status === 'W trakcie' || task.status === 'Wstrzymane';
         
         return isInDateRange && isValidStatus;
       });
@@ -144,9 +145,11 @@ const ForecastPage = () => {
       if (filteredTasks.length === 0) {
         console.log('Brak zadań w wybranym zakresie dat, próbuję użyć wszystkich zaplanowanych zadań');
         
-        const allPlannedTasks = tasksData.filter(task => 
-          task.status === 'Zaplanowane' || task.status === 'W trakcie'
-        );
+        const allPlannedTasks = tasksData.filter(task => {
+          const isValidStatus = (task.status === 'Zaplanowane' || task.status === 'W trakcie' || task.status === 'Wstrzymane');
+          console.log(`Rozważam zadanie ${task.id}: status=${task.status}, isValidStatus=${isValidStatus}`);
+          return isValidStatus;
+        });
         
         if (allPlannedTasks.length > 0) {
           console.log(`Znaleziono ${allPlannedTasks.length} zaplanowanych zadań`);
@@ -180,8 +183,14 @@ const ForecastPage = () => {
       }
       
       console.log(`Po filtrowaniu pozostało ${filteredTasks.length} zadań`);
+      
+      // Używamy bezpośrednio przefiltrowanych zadań, bez dodatkowego wykluczania "Wstrzymane"
+      const finalFilteredTasks = filteredTasks;
+      
+      console.log(`Wszystkie zadania uwzględnione w prognozie: ${finalFilteredTasks.length}`);
+      
       filteredTasks.forEach(task => {
-        console.log(`Zadanie ${task.id} (${task.name || 'bez nazwy'}): ${task.materials?.length || 0} materiałów`);
+        console.log(`Zadanie ${task.id} (${task.name || 'bez nazwy'}): ${task.materials?.length || 0} materiałów, status: ${task.status}`);
         // Dodaj szczegółowe informacje o zadaniu
         if (task.materials && task.materials.length > 0) {
           console.log('Materiały w zadaniu:');
@@ -191,7 +200,7 @@ const ForecastPage = () => {
         }
       });
       
-      if (filteredTasks.length === 0) {
+      if (finalFilteredTasks.length === 0) {
         setForecastData([]);
         setCalculatingForecast(false);
         return;
@@ -217,7 +226,7 @@ const ForecastPage = () => {
         return material.quantity / taskQuantity;
       };
       
-      for (const task of filteredTasks) {
+      for (const task of finalFilteredTasks) {
         // Upewnij się, że zadanie ma materiały
         if (!task.materials || task.materials.length === 0) {
           console.log(`Zadanie ${task.id} (${task.name || 'bez nazwy'}) nie ma materiałów, pomijam`);
@@ -476,7 +485,7 @@ const ForecastPage = () => {
                         return '';
                       }
                       
-                      return ` (${formatDateDisplay(taskDate)})`;
+                      return ` (${formatDateTime(taskDate)})`;
                     } catch (error) {
                       console.error('Błąd formatowania daty:', error, task.scheduledDate);
                       return '';
@@ -766,7 +775,7 @@ const ForecastPage = () => {
                               return '-';
                             }
                             
-                            return formatDateDisplay(taskDate);
+                            return formatDateTime(taskDate);
                           } catch (error) {
                             console.error('Błąd formatowania daty zadania:', error, task.scheduledDate);
                             return '-';

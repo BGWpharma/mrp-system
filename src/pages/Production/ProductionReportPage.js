@@ -46,11 +46,18 @@ import {
   Article as ReportIcon,
   FormatListBulleted as ListIcon,
   Assessment as AssessmentIcon,
-  FileDownload as DownloadIcon
+  FileDownload as DownloadIcon,
+  NavigateBefore as PrevIcon,
+  NavigateNext as NextIcon,
+  ArrowDropDown as DropdownIcon
 } from '@mui/icons-material';
 import { getAllTasks } from '../../services/productionService';
 import { getAllOrders } from '../../services/orderService';
 import { getAllCustomers } from '../../services/customerService';
+import { getWorkstationById } from '../../services/workstationService';
+import { useAuth } from '../../hooks/useAuth';
+import { useNotification } from '../../hooks/useNotification';
+import { PRODUCTION_TASK_STATUSES } from '../../utils/constants';
 
 const ProductionReportPage = () => {
   const navigate = useNavigate();
@@ -65,6 +72,8 @@ const ProductionReportPage = () => {
   const [customerStats, setCustomerStats] = useState([]);
   const [timeStats, setTimeStats] = useState({ totalMinutes: 0, avgTaskTime: 0 });
   const [selectedCustomer, setSelectedCustomer] = useState('all');
+  const [workstationNames, setWorkstationNames] = useState({});
+  const { showError } = useNotification();
 
   // Kolory dla wykresów
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
@@ -78,6 +87,30 @@ const ProductionReportPage = () => {
       filterAndProcessData();
     }
   }, [tasks, orders, customers, startDate, endDate, selectedCustomer]);
+
+  useEffect(() => {
+    const fetchWorkstationNames = async () => {
+      const workstationData = {};
+      
+      for (const task of filteredTasks) {
+        if (task.workstationId && !workstationData[task.workstationId]) {
+          try {
+            const workstation = await getWorkstationById(task.workstationId);
+            workstationData[task.workstationId] = workstation.name;
+          } catch (error) {
+            console.error(`Błąd podczas pobierania stanowiska dla ID ${task.workstationId}:`, error);
+            workstationData[task.workstationId] = "Nieznane stanowisko";
+          }
+        }
+      }
+      
+      setWorkstationNames(workstationData);
+    };
+    
+    if (filteredTasks.length > 0) {
+      fetchWorkstationNames();
+    }
+  }, [filteredTasks]);
 
   const fetchData = async () => {
     try {
@@ -464,6 +497,7 @@ const ProductionReportPage = () => {
                   <TableCell>Nr MO</TableCell>
                   <TableCell>Produkt</TableCell>
                   <TableCell>Klient</TableCell>
+                  <TableCell>Stanowisko</TableCell>
                   <TableCell>Zaplanowana data</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell align="right">Czas pracy (min)</TableCell>
@@ -481,6 +515,12 @@ const ProductionReportPage = () => {
                     <TableCell>{task.moNumber}</TableCell>
                     <TableCell>{task.productName}</TableCell>
                     <TableCell>{getTaskCustomerName(task)}</TableCell>
+                    <TableCell>
+                      {task.workstationId 
+                        ? (workstationNames[task.workstationId] || "Ładowanie...") 
+                        : "Nie przypisano"
+                      }
+                    </TableCell>
                     <TableCell>
                       {task.scheduledDate 
                         ? format(

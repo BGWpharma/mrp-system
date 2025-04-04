@@ -22,7 +22,8 @@ import {
   FormControlLabel,
   Radio,
   Alert,
-  AlertTitle
+  AlertTitle,
+  Switch
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -51,6 +52,8 @@ import {
 import { calculateManufacturingOrderCosts, calculateEstimatedProductionTime } from '../../utils/costCalculator';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { formatCurrency } from '../../utils/formatters';
+import { getAllWorkstations } from '../../services/workstationService';
 
 const TaskForm = ({ taskId }) => {
   const [loading, setLoading] = useState(!!taskId);
@@ -62,6 +65,8 @@ const TaskForm = ({ taskId }) => {
   const { showSuccess, showError, showWarning } = useNotification();
   const navigate = useNavigate();
   
+  const [workstations, setWorkstations] = useState([]);
+  
   const [taskData, setTaskData] = useState({
     name: '',
     description: '',
@@ -72,10 +77,13 @@ const TaskForm = ({ taskId }) => {
     scheduledDate: new Date(),
     endDate: new Date(new Date().getTime() + 60 * 60 * 1000), // Domyślnie 1 godzina później
     estimatedDuration: '', // w minutach
+    productionTimePerUnit: '', // czas produkcji na jednostkę w minutach
     priority: 'Normalny',
     status: 'Zaplanowane',
     notes: '',
-    moNumber: ''
+    moNumber: '',
+    workstationId: '', // ID stanowiska produkcyjnego
+    autoReserveMaterials: true // domyślnie włączone automatyczne rezerwowanie materiałów
   });
 
   // Dodajemy stan dla kalkulacji kosztów
@@ -100,6 +108,7 @@ const TaskForm = ({ taskId }) => {
         setLoading(true);
         await fetchRecipes();
         await fetchInventoryProducts();
+        await fetchWorkstations(); // Pobierz stanowiska produkcyjne
         
         if (taskId && taskId !== 'new') {
           await fetchTask();
@@ -138,10 +147,35 @@ const TaskForm = ({ taskId }) => {
     }
   };
 
+  const fetchWorkstations = async () => {
+    try {
+      const workstationsData = await getAllWorkstations();
+      setWorkstations(workstationsData);
+    } catch (error) {
+      showError('Błąd podczas pobierania stanowisk produkcyjnych: ' + error.message);
+      console.error('Error fetching workstations:', error);
+    }
+  };
+
   const fetchTask = async () => {
     try {
       const task = await getTaskById(taskId);
-      setTaskData(task);
+      
+      // Konwertuj daty z Timestamp lub string na obiekty Date
+      const taskWithParsedDates = {
+        ...task,
+        scheduledDate: task.scheduledDate ? 
+          (task.scheduledDate instanceof Date ? task.scheduledDate :
+           task.scheduledDate.toDate ? task.scheduledDate.toDate() : 
+           new Date(task.scheduledDate)) : new Date(),
+        endDate: task.endDate ? 
+          (task.endDate instanceof Date ? task.endDate :
+           task.endDate.toDate ? task.endDate.toDate() : 
+           new Date(task.endDate)) : new Date(new Date().getTime() + 60 * 60 * 1000)
+      };
+      
+      console.log('Pobrane zadanie z przetworzonymi datami:', taskWithParsedDates);
+      setTaskData(taskWithParsedDates);
       
       // Jeśli zadanie ma powiązany produkt z magazynu, pobierz go
       if (task.inventoryProductId) {
@@ -178,8 +212,17 @@ const TaskForm = ({ taskId }) => {
         return;
       }
       
+      // Upewnij się, że daty są prawidłowymi obiektami Date
+      const formattedData = {
+        ...taskData,
+        scheduledDate: taskData.scheduledDate instanceof Date ? 
+          taskData.scheduledDate : new Date(taskData.scheduledDate),
+        endDate: taskData.endDate instanceof Date ? 
+          taskData.endDate : new Date(taskData.endDate)
+      };
+      
       // Przygotuj dane zadania z kosztami
-      let taskDataWithCosts = { ...taskData };
+      let taskDataWithCosts = { ...formattedData };
       if (costCalculation) {
         taskDataWithCosts = {
           ...taskDataWithCosts,
@@ -276,19 +319,29 @@ const TaskForm = ({ taskId }) => {
         }));
       }
       
+      // Ustawienie czasu produkcji na podstawie danych z receptury
+      let productionTimePerUnit = 0;
+      if (selectedRecipe.productionTimePerUnit) {
+        productionTimePerUnit = parseFloat(selectedRecipe.productionTimePerUnit);
+      } else if (selectedRecipe.preparationTime) {
+        // Jeśli brakuje productionTimePerUnit, ale jest preparationTime, użyj tego jako podstawy
+        productionTimePerUnit = parseFloat(selectedRecipe.preparationTime);
+      }
+      
       // Ustawienie szacowanego czasu trwania na podstawie czasu przygotowania z receptury
-      if (selectedRecipe.preparationTime) {
+      if (productionTimePerUnit > 0) {
         const quantity = taskData.quantity || 1;
-        const estimatedTime = calculateEstimatedProductionTime(selectedRecipe, quantity);
+        const estimatedTimeMinutes = productionTimePerUnit * quantity;
         setTaskData(prev => ({
           ...prev,
-          estimatedDuration: estimatedTime
+          productionTimePerUnit: productionTimePerUnit,
+          estimatedDuration: estimatedTimeMinutes
         }));
         
         // Zaktualizuj datę zakończenia na podstawie szacowanego czasu
         if (taskData.scheduledDate) {
           const startDate = new Date(taskData.scheduledDate);
-          const endDate = new Date(startDate.getTime() + (estimatedTime * 60 * 1000));
+          const endDate = new Date(startDate.getTime() + (estimatedTimeMinutes * 60 * 1000));
           setTaskData(prev => ({
             ...prev,
             endDate
@@ -303,17 +356,34 @@ const TaskForm = ({ taskId }) => {
   };
 
   const handleDateChange = (newDate) => {
-    setTaskData(prev => ({
-      ...prev,
-      scheduledDate: newDate
-    }));
+    setTaskData(prev => {
+      // Pobierz aktualny czas produkcji w minutach
+      const productionTimeMinutes = prev.estimatedDuration || 0;
+      
+      // Oblicz nową datę zakończenia na podstawie daty rozpoczęcia i czasu produkcji
+      const endDate = new Date(newDate.getTime() + (productionTimeMinutes * 60 * 1000));
+      
+      return {
+        ...prev,
+        scheduledDate: newDate,
+        endDate: endDate
+      };
+    });
   };
 
   const handleEndDateChange = (newDate) => {
-    setTaskData(prev => ({
-      ...prev,
-      endDate: newDate
-    }));
+    setTaskData(prev => {
+      // Oblicz czas trwania w minutach na podstawie różnicy między datą rozpoczęcia a zakończenia
+      const startDate = prev.scheduledDate || new Date();
+      const durationMs = newDate.getTime() - startDate.getTime();
+      const durationMinutes = Math.round(durationMs / (1000 * 60));
+      
+      return {
+        ...prev,
+        endDate: newDate,
+        estimatedDuration: durationMinutes > 0 ? durationMinutes : prev.estimatedDuration
+      };
+    });
   };
 
   const handleDurationChange = (e) => {
@@ -345,17 +415,22 @@ const TaskForm = ({ taskId }) => {
     
     // Aktualizuj materiały i czas produkcji na podstawie nowej ilości
     if (newQuantity !== '' && recipe) {
-      // Zaktualizuj szacowany czas produkcji
-      const estimatedTime = calculateEstimatedProductionTime(recipe, newQuantity);
+      // Pobierz czas produkcji na jednostkę
+      const productionTimePerUnit = taskData.productionTimePerUnit || 
+        (recipe.productionTimePerUnit ? parseFloat(recipe.productionTimePerUnit) : 0);
+      
+      // Oblicz całkowity czas produkcji w minutach
+      const estimatedTimeMinutes = productionTimePerUnit * newQuantity;
+      
       setTaskData(prev => ({
         ...prev,
-        estimatedDuration: estimatedTime
+        estimatedDuration: estimatedTimeMinutes
       }));
       
       // Zaktualizuj datę zakończenia
       if (taskData.scheduledDate) {
         const startDate = new Date(taskData.scheduledDate);
-        const endDate = new Date(startDate.getTime() + (estimatedTime * 60 * 1000));
+        const endDate = new Date(startDate.getTime() + (estimatedTimeMinutes * 60 * 1000));
         setTaskData(prev => ({
           ...prev,
           endDate
@@ -398,45 +473,53 @@ const TaskForm = ({ taskId }) => {
       // Pobierz szczegóły receptury
       const recipe = await getRecipeById(taskData.recipeId);
       
-      if (!recipe || !recipe.ingredients || recipe.ingredients.length === 0) {
-        showError('Receptura nie zawiera składników, nie można obliczyć kosztów');
+      // Sprawdź, czy receptura ma zdefiniowane składniki
+      if (!recipe.ingredients || recipe.ingredients.length === 0) {
+        showError('Receptura musi mieć zdefiniowane składniki, aby obliczyć koszty');
         setCalculatingCosts(false);
         return;
       }
       
       // Pobierz ID składników z receptury
       const ingredientIds = recipe.ingredients
-        .filter(ing => ing.id) // Tylko składniki z ID (z magazynu)
+        .filter(ing => ing.id)
         .map(ing => ing.id);
       
+      // Sprawdź, czy mamy jakiekolwiek składniki
       if (ingredientIds.length === 0) {
-        showError('Brak składników z magazynu w recepturze. Tylko składniki wybrane z magazynu mają przypisane ceny.');
+        showError('Receptura musi mieć prawidłowo zdefiniowane składniki, aby obliczyć koszty');
         setCalculatingCosts(false);
         return;
       }
       
-      // Informuj użytkownika, jeśli nie wszystkie składniki mają ceny
-      if (ingredientIds.length < recipe.ingredients.length) {
-        showError('Uwaga: Tylko składniki wybrane z magazynu mają przypisane ceny. Składniki dodane ręcznie nie będą uwzględnione w kalkulacji kosztów.');
-      }
-      
-      console.log('Pobieranie cen dla składników:', ingredientIds);
-      
       // Pobierz ceny składników
       const pricesMap = await getIngredientPrices(ingredientIds);
       
-      console.log('Otrzymana mapa cen:', pricesMap);
+      // Uaktualnij recepturę o czas produkcji z formularza, jeśli został zmieniony
+      if (taskData.productionTimePerUnit) {
+        recipe.productionTimePerUnit = parseFloat(taskData.productionTimePerUnit);
+      }
       
-      // Oblicz koszty używając nowej funkcji zgodnej z MRPeasy
-      const costData = calculateManufacturingOrderCosts(taskData, recipe, pricesMap);
+      // Skonfiguruj opcje kalkulacji
+      const options = {
+        overheadRate: recipe.overheadRate || 10, // domyślne narzuty 10%
+        // jeśli mamy productionTimePerUnit w taskData, użyj go zamiast wartości z receptury
+        productionTimePerUnit: taskData.productionTimePerUnit || recipe.productionTimePerUnit || 0
+      };
+      
+      // Oblicz koszty
+      const costData = calculateManufacturingOrderCosts({ 
+        ...taskData,
+        // Upewnij się, że przekazujemy aktualny czas produkcji
+        productionTimePerUnit: taskData.productionTimePerUnit || recipe.productionTimePerUnit || 0
+      }, recipe, pricesMap, [], options);
+      
+      // Ustaw obliczone koszty w stanie
       setCostCalculation(costData);
-      
-      // Wyświetl informację o obliczonych kosztach
-      showSuccess(`Obliczono koszty produkcji: ${costData.totalProductionCost.toFixed(2)} EUR`);
-      
+      showSuccess('Koszty zostały obliczone');
     } catch (error) {
-      console.error('Błąd podczas kalkulacji kosztów:', error);
-      showError('Nie udało się obliczyć kosztów: ' + error.message);
+      console.error('Błąd podczas obliczania kosztów:', error);
+      showError('Błąd podczas obliczania kosztów: ' + error.message);
     } finally {
       setCalculatingCosts(false);
     }
@@ -650,6 +733,44 @@ const TaskForm = ({ taskId }) => {
     }
   };
 
+  // Dodajemy pole do ustawiania czasu produkcji na jednostkę
+  const handleProductionTimePerUnitChange = (e) => {
+    const newProductionTime = e.target.value === '' ? '' : Number(e.target.value);
+    
+    setTaskData(prev => ({
+      ...prev,
+      productionTimePerUnit: newProductionTime
+    }));
+    
+    // Aktualizuj szacowany czas produkcji tylko jeśli mamy właściwą ilość
+    if (newProductionTime !== '' && taskData.quantity && taskData.quantity > 0) {
+      const estimatedTimeMinutes = newProductionTime * taskData.quantity;
+      
+      setTaskData(prev => ({
+        ...prev,
+        estimatedDuration: estimatedTimeMinutes
+      }));
+      
+      // Zaktualizuj datę zakończenia
+      if (taskData.scheduledDate) {
+        const startDate = new Date(taskData.scheduledDate);
+        const endDate = new Date(startDate.getTime() + (estimatedTimeMinutes * 60 * 1000));
+        setTaskData(prev => ({
+          ...prev,
+          endDate
+        }));
+      }
+    }
+  };
+  
+  // Obsługa zmiany opcji automatycznej rezerwacji materiałów
+  const handleAutoReserveMaterialsChange = (e) => {
+    setTaskData(prev => ({
+      ...prev,
+      autoReserveMaterials: e.target.checked
+    }));
+  };
+
   if (loading) {
     return <div>Ładowanie zadania...</div>;
   }
@@ -773,42 +894,46 @@ const TaskForm = ({ taskId }) => {
                 </FormControl>
               </Grid>
               <Grid item xs={6}>
-                <DateTimePicker
-                  label="Data rozpoczęcia"
-                  value={taskData.scheduledDate}
-                  onChange={handleDateChange}
-                  slotProps={{
-                    textField: {
-                      fullWidth: true,
-                      required: true
-                    }
-                  }}
-                />
+                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                  <DateTimePicker
+                    label="Data rozpoczęcia"
+                    value={taskData.scheduledDate}
+                    onChange={handleDateChange}
+                    slotProps={{
+                      textField: {
+                        fullWidth: true,
+                        required: true
+                      }
+                    }}
+                  />
+                </LocalizationProvider>
               </Grid>
               <Grid item xs={6}>
-                <DateTimePicker
-                  label="Data zakończenia"
-                  value={taskData.endDate}
-                  onChange={handleEndDateChange}
-                  minDate={taskData.scheduledDate}
-                  slotProps={{
-                    textField: {
-                      fullWidth: true,
-                      required: true
-                    }
-                  }}
-                />
+                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                  <DateTimePicker
+                    label="Data zakończenia"
+                    value={taskData.endDate}
+                    onChange={handleEndDateChange}
+                    minDate={taskData.scheduledDate}
+                    slotProps={{
+                      textField: {
+                        fullWidth: true,
+                        required: true
+                      }
+                    }}
+                  />
+                </LocalizationProvider>
               </Grid>
-              <Grid item xs={6}>
+              <Grid item xs={12} md={6}>
                 <TextField
-                  label="Szacowany czas trwania (min)"
-                  name="estimatedDuration"
-                  type="number"
-                  value={taskData.estimatedDuration || ''}
-                  onChange={handleDurationChange}
                   fullWidth
-                  inputProps={{ min: 0 }}
-                  helperText="Automatycznie aktualizuje datę zakończenia"
+                  label="Szacowany czas produkcji (min)"
+                  name="estimatedDuration"
+                  value={taskData.estimatedDuration}
+                  onChange={handleDurationChange}
+                  type="number"
+                  InputProps={{ inputProps: { min: 0 } }}
+                  helperText={`Całkowity szacowany czas produkcji (${(taskData.estimatedDuration / 60).toFixed(1)} godz.)`}
                 />
               </Grid>
               <Grid item xs={6}>
@@ -844,70 +969,104 @@ const TaskForm = ({ taskId }) => {
                   <FormHelperText>Status zadania produkcyjnego</FormHelperText>
                 </FormControl>
               </Grid>
-            </Grid>
-
-            {/* Sekcja kosztów produkcji */}
-            <Box sx={{ mt: 4, mb: 2 }}>
-              <Divider>
-                <Typography variant="h6">Koszty produkcji</Typography>
-              </Divider>
-            </Box>
-
-            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Czas produkcji na jednostkę (min)"
+                  name="productionTimePerUnit"
+                  value={taskData.productionTimePerUnit}
+                  onChange={handleProductionTimePerUnitChange}
+                  type="number"
+                  InputProps={{ inputProps: { min: 0, step: 0.1 } }}
+                  helperText="Czas produkcji dla 1 sztuki w minutach"
+                />
+              </Grid>
               <Grid item xs={12}>
-                <Paper sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
-                  {costCalculation ? (
-                    <Box>
-                      <Grid container spacing={2}>
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="subtitle1" fontWeight="bold">Koszty materiałów:</Typography>
-                          <Typography>{costCalculation.materialCost.toFixed(2)} EUR</Typography>
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="subtitle1" fontWeight="bold">Koszty pracy:</Typography>
-                          <Typography>{costCalculation.actualLaborCost.toFixed(2)} EUR</Typography>
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="subtitle1" fontWeight="bold">Koszty maszyn:</Typography>
-                          <Typography>{costCalculation.machineCost.toFixed(2)} EUR</Typography>
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="subtitle1" fontWeight="bold">Koszty pośrednie:</Typography>
-                          <Typography>{costCalculation.overheadCost.toFixed(2)} EUR</Typography>
-                        </Grid>
-                        <Grid item xs={12}>
-                          <Divider sx={{ my: 1 }} />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="subtitle1" fontWeight="bold">Koszt jednostkowy:</Typography>
-                          <Typography>{costCalculation.unitCost.toFixed(2)} EUR / {taskData.unit}</Typography>
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="subtitle1" fontWeight="bold">Całkowity koszt zadania:</Typography>
-                          <Typography variant="h6" color="primary">{costCalculation.totalProductionCost.toFixed(2)} EUR</Typography>
-                        </Grid>
-                      </Grid>
-                    </Box>
-                  ) : (
-                    <Box sx={{ textAlign: 'center', py: 2 }}>
-                      <Typography variant="body1" color="text.secondary">
-                        Wybierz recepturę i ilość, aby obliczyć koszty produkcji
-                      </Typography>
-                      <Button
-                        variant="outlined"
-                        color="primary"
-                        startIcon={<CalculateIcon />}
-                        onClick={handleCalculateCosts}
-                        disabled={!taskData.recipeId || calculatingCosts}
-                        sx={{ mr: 2 }}
-                      >
-                        {calculatingCosts ? 'Obliczanie...' : 'Oblicz koszty'}
-                      </Button>
-                    </Box>
-                  )}
-                </Paper>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={taskData.autoReserveMaterials}
+                      onChange={handleAutoReserveMaterialsChange}
+                      name="autoReserveMaterials"
+                      color="primary"
+                    />
+                  }
+                  label="Automatycznie zarezerwuj materiały"
+                />
+                <FormHelperText>
+                  Zaznacz, jeśli chcesz automatycznie zarezerwować materiały po utworzeniu zadania
+                </FormHelperText>
+              </Grid>
+              <Grid item xs={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Stanowisko produkcyjne</InputLabel>
+                  <Select
+                    name="workstationId"
+                    value={taskData.workstationId || ''}
+                    onChange={handleChange}
+                    label="Stanowisko produkcyjne"
+                  >
+                    <MenuItem value="">
+                      <em>Brak</em>
+                    </MenuItem>
+                    {workstations.map((workstation) => (
+                      <MenuItem key={workstation.id} value={workstation.id}>
+                        {workstation.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  <FormHelperText>Wybierz stanowisko produkcyjne dla tego zadania</FormHelperText>
+                </FormControl>
               </Grid>
             </Grid>
+
+            {/* Sekcja kosztów */}
+            {costCalculation && (
+              <Grid item xs={12}>
+                <Paper sx={{ p: 2, mt: 2 }}>
+                  <Typography variant="h6" gutterBottom>
+                    Koszty produkcji
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="subtitle2">Koszty materiałów:</Typography>
+                      <Typography variant="body1">{formatCurrency(costCalculation.materialCost, 'EUR')}</Typography>
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="subtitle2">Koszty robocizny:</Typography>
+                      <Typography variant="body1">{formatCurrency(costCalculation.actualLaborCost, 'EUR')}</Typography>
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="subtitle2">Koszty maszyn:</Typography>
+                      <Typography variant="body1">{formatCurrency(costCalculation.machineCost, 'EUR')}</Typography>
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="subtitle2">Koszty pośrednie (narzut):</Typography>
+                      <Typography variant="body1">{formatCurrency(costCalculation.overheadCost, 'EUR')}</Typography>
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="subtitle2">Czas pracy (min):</Typography>
+                      <Typography variant="body1">{costCalculation.plannedWorkTime || 0} min ({(costCalculation.plannedWorkTime / 60).toFixed(1)} godz.)</Typography>
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="subtitle2">Czas na sztukę:</Typography>
+                      <Typography variant="body1">{taskData.productionTimePerUnit || 0} min/szt.</Typography>
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Divider sx={{ my: 1 }} />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="subtitle2">Całkowity koszt produkcji:</Typography>
+                      <Typography variant="h6" color="primary">{formatCurrency(costCalculation.totalProductionCost, 'EUR')}</Typography>
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="subtitle2">Koszt jednostkowy:</Typography>
+                      <Typography variant="h6" color="primary">{formatCurrency(costCalculation.unitCost, 'EUR')}/szt.</Typography>
+                    </Grid>
+                  </Grid>
+                </Paper>
+              </Grid>
+            )}
 
             {/* Wybór metody rezerwacji */}
             <FormControl component="fieldset" sx={{ mb: 2, mt: 2 }}>
@@ -969,6 +1128,20 @@ const TaskForm = ({ taskId }) => {
                 ))}
               </Box>
             )}
+
+            {/* Przycisk do obliczania kosztów */}
+            <Grid item xs={12}>
+              <Button
+                variant="outlined"
+                color="primary"
+                startIcon={<CalculateIcon />}
+                onClick={handleCalculateCosts}
+                disabled={!taskData.recipeId || calculatingCosts || !taskData.quantity}
+                sx={{ mt: 2 }}
+              >
+                {calculatingCosts ? 'Obliczanie...' : 'Oblicz koszty'}
+              </Button>
+            </Grid>
 
             <Box sx={{ mt: 4, mb: 2 }}>
               <Divider>

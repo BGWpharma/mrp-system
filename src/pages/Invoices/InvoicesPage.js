@@ -12,21 +12,34 @@ import {
   List,
   ListItem,
   ListItemIcon,
-  ListItemText 
+  ListItemText,
+  Card,
+  CardContent,
+  CardActions
 } from '@mui/material';
 import { 
   ArrowBack as ArrowBackIcon,
   ReceiptOutlined as ReceiptIcon,
   AddCircleOutline as AddIcon,
   Download as DownloadIcon,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  Receipt as InvoiceIcon,
+  LocalShipping as DeliveryIcon,
+  Storefront as CustomerIcon,
+  AssignmentTurnedIn as OrderIcon,
+  Business as SupplierIcon,
+  ShoppingCart as PurchaseIcon
 } from '@mui/icons-material';
 
 const InvoicesPage = () => {
   const navigate = useNavigate();
 
   const handleBack = () => {
-    navigate('/customers');
+    navigate('/');
+  };
+
+  const navigateTo = (path) => {
+    navigate(path);
   };
 
   return (
@@ -37,26 +50,142 @@ const InvoicesPage = () => {
           startIcon={<ArrowBackIcon />}
           onClick={handleBack}
         >
-          Powrót do klientów
+          Powrót do pulpitu
         </Button>
-        <Typography variant="h5">Faktury</Typography>
+        <Typography variant="h5">System fakturowania</Typography>
         <Button
           variant="contained"
           color="primary"
           startIcon={<AddIcon />}
-          disabled={true}
+          onClick={() => navigate('/invoices/new')}
         >
           Nowa faktura
         </Button>
       </Box>
 
       <Paper sx={{ p: 4, mb: 3 }}>
-        <Alert severity="info" sx={{ mb: 3 }}>
-          Moduł faktur jest w trakcie implementacji. Wkrótce będziesz mógł tworzyć, przeglądać i zarządzać fakturami dla klientów.
-        </Alert>
-
         <Typography variant="h6" gutterBottom>
-          Planowane funkcjonalności modułu faktur:
+          Dostępne funkcje modułu faktur
+        </Typography>
+        
+        <Alert severity="info" sx={{ mb: 3 }}>
+          Moduł faktur został zaktualizowany i jest teraz zintegrowany z systemem zamówień klientów oraz zamówień zakupowych.
+        </Alert>
+        
+        <Divider sx={{ my: 2 }} />
+        
+        <Grid container spacing={3}>
+          {/* Karty z funkcjonalnościami */}
+          <Grid item xs={12} md={4}>
+            <Card sx={{ height: '100%' }}>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <InvoiceIcon color="primary" sx={{ mr: 1 }} />
+                  <Typography variant="h6">Faktury</Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Zarządzaj fakturami, przeglądaj historię i generuj raporty.
+                </Typography>
+                <List dense>
+                  <ListItem>
+                    <ListItemIcon><ReceiptIcon color="primary" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Faktury z zamówień klientów" />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemIcon><ReceiptIcon color="primary" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Faktury z zamówień zakupowych" />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemIcon><DownloadIcon color="primary" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Eksport do PDF" />
+                  </ListItem>
+                </List>
+              </CardContent>
+              <CardActions>
+                <Button size="small" onClick={() => navigateTo('/invoices/list')}>
+                  Przeglądaj faktury
+                </Button>
+                <Button size="small" onClick={() => navigateTo('/invoices/new')}>
+                  Utwórz fakturę
+                </Button>
+              </CardActions>
+            </Card>
+          </Grid>
+          
+          <Grid item xs={12} md={4}>
+            <Card sx={{ height: '100%' }}>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <OrderIcon color="primary" sx={{ mr: 1 }} />
+                  <Typography variant="h6">Zamówienia</Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Zarządzaj zamówieniami klientów i twórz faktury bezpośrednio z zamówień.
+                </Typography>
+                <List dense>
+                  <ListItem>
+                    <ListItemIcon><CustomerIcon color="primary" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Zamówienia klientów" />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemIcon><DeliveryIcon color="primary" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Śledzenie statusów" />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemIcon><ReceiptIcon color="primary" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Automatyczne fakturowanie" />
+                  </ListItem>
+                </List>
+              </CardContent>
+              <CardActions>
+                <Button size="small" onClick={() => navigateTo('/orders')}>
+                  Lista zamówień
+                </Button>
+              </CardActions>
+            </Card>
+          </Grid>
+          
+          <Grid item xs={12} md={4}>
+            <Card sx={{ height: '100%' }}>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <PurchaseIcon color="primary" sx={{ mr: 1 }} />
+                  <Typography variant="h6">Zamówienia zakupowe</Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Zarządzaj zamówieniami komponentów i materiałów od dostawców.
+                </Typography>
+                <List dense>
+                  <ListItem>
+                    <ListItemIcon><SupplierIcon color="primary" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Zarządzanie dostawcami" />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemIcon><PurchaseIcon color="primary" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Zamówienia zakupowe (PO)" />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemIcon><ReceiptIcon color="primary" fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Faktury zakupowe" />
+                  </ListItem>
+                </List>
+              </CardContent>
+              <CardActions>
+                <Button size="small" onClick={() => navigateTo('/purchase-orders')}>
+                  Zamówienia zakupowe
+                </Button>
+                <Button size="small" onClick={() => navigateTo('/suppliers')}>
+                  Dostawcy
+                </Button>
+              </CardActions>
+            </Card>
+          </Grid>
+        </Grid>
+      </Paper>
+      
+      <Paper sx={{ p: 4 }}>
+        <Typography variant="h6" gutterBottom>
+          Ustawienia i konfiguracja
         </Typography>
         
         <Divider sx={{ my: 2 }} />
@@ -64,25 +193,14 @@ const InvoicesPage = () => {
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
             <Paper elevation={0} sx={{ p: 2, bgcolor: 'background.default' }}>
-              <Typography variant="subtitle1" gutterBottom fontWeight="bold">
-                Podstawowe funkcje
-              </Typography>
               <List dense>
-                <ListItem>
-                  <ListItemIcon><ReceiptIcon color="primary" /></ListItemIcon>
-                  <ListItemText primary="Wystawianie faktur na podstawie zamówień" />
+                <ListItem button component={RouterLink} to="/invoices/company-settings">
+                  <ListItemIcon><SettingsIcon color="primary" /></ListItemIcon>
+                  <ListItemText primary="Dane firmy na fakturach" secondary="Ustaw dane swojej firmy, które będą używane na fakturach" />
                 </ListItem>
-                <ListItem>
-                  <ListItemIcon><ReceiptIcon color="primary" /></ListItemIcon>
-                  <ListItemText primary="Automatyczne numerowanie faktur" />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon><ReceiptIcon color="primary" /></ListItemIcon>
-                  <ListItemText primary="Generowanie faktur proforma i zaliczkowych" />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon><ReceiptIcon color="primary" /></ListItemIcon>
-                  <ListItemText primary="Zarządzanie terminami płatności" />
+                <ListItem button component={RouterLink} to="/customers">
+                  <ListItemIcon><CustomerIcon color="primary" /></ListItemIcon>
+                  <ListItemText primary="Zarządzanie klientami" secondary="Przeglądaj i edytuj bazę klientów" />
                 </ListItem>
               </List>
             </Paper>
@@ -90,29 +208,14 @@ const InvoicesPage = () => {
           
           <Grid item xs={12} md={6}>
             <Paper elevation={0} sx={{ p: 2, bgcolor: 'background.default' }}>
-              <Typography variant="subtitle1" gutterBottom fontWeight="bold">
-                Zaawansowane opcje
-              </Typography>
               <List dense>
-                <ListItem>
-                  <ListItemIcon><DownloadIcon color="primary" /></ListItemIcon>
-                  <ListItemText primary="Eksport faktur do PDF, XLS i innych formatów" />
-                </ListItem>
-                <ListItem>
+                <ListItem button component={RouterLink} to="/settings">
                   <ListItemIcon><SettingsIcon color="primary" /></ListItemIcon>
-                  <ListItemText primary="Dostosowanie szablonów faktur" />
+                  <ListItemText primary="Ustawienia ogólne" secondary="Konfiguracja systemu fakturowania" />
                 </ListItem>
-                <ListItem button component={RouterLink} to="/invoices/company-settings">
-                  <ListItemIcon><SettingsIcon color="primary" /></ListItemIcon>
-                  <ListItemText primary="Dane firmy na fakturach" />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon><SettingsIcon color="primary" /></ListItemIcon>
-                  <ListItemText primary="Integracja z systemami księgowymi" />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon><DownloadIcon color="primary" /></ListItemIcon>
-                  <ListItemText primary="Zbiorcze raporty i zestawienia" />
+                <ListItem button component={RouterLink} to="/invoices/templates">
+                  <ListItemIcon><ReceiptIcon color="primary" /></ListItemIcon>
+                  <ListItemText primary="Szablony faktur" secondary="Zarządzaj wyglądem i strukturą faktur" />
                 </ListItem>
               </List>
             </Paper>

@@ -203,22 +203,59 @@ export const createInvoiceFromOrder = async (orderId, invoiceData, userId) => {
     }
     
     const orderData = orderDoc.data();
+    const isCustomerOrder = orderData.type !== 'purchase';
     
     // Przygotuj podstawowe dane faktury na podstawie zamówienia
     const basicInvoiceData = {
       orderId: orderId,
-      customer: orderData.customer,
-      items: orderData.items,
       orderNumber: orderData.orderNumber,
-      shippingAddress: orderData.shippingAddress || orderData.customer.address,
-      billingAddress: orderData.customer.billingAddress || orderData.customer.address,
-      total: orderData.total || calculateInvoiceTotal(orderData.items),
-      currency: 'EUR',
+      currency: orderData.currency || 'EUR',
       status: 'draft',
       paymentMethod: orderData.paymentMethod || 'Przelew',
       paymentStatus: 'unpaid',
-      notes: invoiceData.notes || ''
+      notes: invoiceData.notes || '',
+      originalOrderType: orderData.type || 'customer',
     };
+    
+    // Dodatkowe dane zależnie od typu zamówienia
+    if (isCustomerOrder) {
+      // Zwykłe zamówienie klienta
+      basicInvoiceData.customer = orderData.customer;
+      basicInvoiceData.items = orderData.items;
+      basicInvoiceData.shippingAddress = orderData.shippingAddress || orderData.customer.address;
+      basicInvoiceData.billingAddress = orderData.customer.billingAddress || orderData.customer.address;
+      
+      // Oblicz wartość zamówienia klienta
+      const orderTotal = orderData.total || calculateOrderTotal(orderData);
+      basicInvoiceData.total = orderTotal;
+    } else {
+      // Zamówienie zakupowe (PO)
+      // Znajdujemy dostawcę i traktujemy go jako "klienta" faktury
+      basicInvoiceData.customer = {
+        id: orderData.supplierId || '',
+        name: orderData.supplier?.name || '',
+        email: orderData.supplier?.email || '',
+        phone: orderData.supplier?.phone || '',
+        address: orderData.supplier?.address || '',
+        vatEu: orderData.supplier?.vatEu || ''
+      };
+      
+      // Zamówienia zakupowe mają format items zgodny z fakturami
+      basicInvoiceData.items = orderData.items || [];
+      
+      // Dane adresowe
+      basicInvoiceData.shippingAddress = orderData.deliveryAddress || '';
+      basicInvoiceData.billingAddress = orderData.supplier?.address || '';
+      
+      // Oblicz wartość zamówienia zakupowego
+      const poTotal = orderData.totalGross || orderData.totalValue || calculatePurchaseOrderTotal(orderData);
+      basicInvoiceData.total = poTotal;
+      
+      // Dodatkowe informacje specyficzne dla zamówień zakupowych
+      basicInvoiceData.additionalCosts = orderData.additionalCosts || 0;
+      basicInvoiceData.additionalCostsItems = orderData.additionalCostsItems || [];
+      basicInvoiceData.invoiceType = 'purchase';
+    }
     
     // Połącz podstawowe dane z dodatkowymi danymi faktury
     const mergedInvoiceData = {
@@ -232,6 +269,47 @@ export const createInvoiceFromOrder = async (orderId, invoiceData, userId) => {
     console.error('Błąd podczas tworzenia faktury z zamówienia:', error);
     throw error;
   }
+};
+
+/**
+ * Oblicza całkowitą wartość zamówienia klienta
+ */
+const calculateOrderTotal = (orderData) => {
+  // Wartość produktów
+  const itemsTotal = Array.isArray(orderData.items) 
+    ? orderData.items.reduce((sum, item) => sum + ((parseFloat(item.price) || 0) * (parseInt(item.quantity) || 0)), 0)
+    : 0;
+  
+  // Wartość wysyłki
+  const shippingCost = parseFloat(orderData.shippingCost) || 0;
+  
+  // Wartość z powiązanych zamówień zakupowych
+  const purchaseOrdersTotal = Array.isArray(orderData.linkedPurchaseOrders)
+    ? orderData.linkedPurchaseOrders.reduce((sum, po) => sum + (parseFloat(po.totalGross) || 0), 0)
+    : 0;
+  
+  return itemsTotal + shippingCost + purchaseOrdersTotal;
+};
+
+/**
+ * Oblicza całkowitą wartość zamówienia zakupowego
+ */
+const calculatePurchaseOrderTotal = (orderData) => {
+  // Wartość produktów
+  const itemsTotal = Array.isArray(orderData.items) 
+    ? orderData.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0)
+    : 0;
+  
+  // Obliczanie VAT
+  const vatRate = parseFloat(orderData.vatRate) || 0;
+  const vatValue = (itemsTotal * vatRate) / 100;
+  
+  // Dodatkowe koszty
+  const additionalCosts = Array.isArray(orderData.additionalCostsItems)
+    ? orderData.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
+    : (parseFloat(orderData.additionalCosts) || 0);
+  
+  return itemsTotal + vatValue + additionalCosts;
 };
 
 /**

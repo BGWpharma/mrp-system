@@ -44,6 +44,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { pl } from 'date-fns/locale';
 import { format, subDays, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
+import { formatDateTime } from '../../utils/formatters';
 
 // Symulacja komponentu wykresu, później można zastąpić prawdziwą biblioteką
 const SimplePieChart = ({ data }) => {
@@ -272,8 +273,8 @@ const ReportsPage = () => {
                 <TableCell>{task.name}</TableCell>
                 <TableCell>{task.productName}</TableCell>
                 <TableCell align="right">{task.quantity} {task.unit}</TableCell>
-                <TableCell>{task.startDate ? formatDateDisplay(parseISO(task.startDate)) : '-'}</TableCell>
-                <TableCell>{task.completionDate ? formatDateDisplay(parseISO(task.completionDate)) : '-'}</TableCell>
+                <TableCell>{task.startDate ? formatDateTime(new Date(task.startDate)) : '-'}</TableCell>
+                <TableCell>{task.completionDate ? formatDateTime(new Date(task.completionDate)) : '-'}</TableCell>
                 <TableCell>
                   {task.productionTime ? `${task.productionTime}h` : '-'}
                 </TableCell>

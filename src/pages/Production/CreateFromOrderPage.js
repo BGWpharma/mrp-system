@@ -43,6 +43,11 @@ import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/dateUtils';
 import { formatCurrency } from '../../utils/formatUtils';
 import { getPriceForCustomerProduct } from '../../services/priceListService';
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { pl } from 'date-fns/locale';
+import { getAllWorkstations } from '../../services/workstationService';
 
 const CreateFromOrderPage = () => {
   const navigate = useNavigate();
@@ -61,27 +66,42 @@ const CreateFromOrderPage = () => {
   const [existingTasks, setExistingTasks] = useState([]);
   const [tasksCreated, setTasksCreated] = useState([]);
   const [updatingPrices, setUpdatingPrices] = useState(false);
+  const [productDates, setProductDates] = useState({});
+  const [workstations, setWorkstations] = useState([]);
+  const [selectedWorkstations, setSelectedWorkstations] = useState({});
   
   // Formularz nowego zadania
   const [taskForm, setTaskForm] = useState({
     name: '',
-    scheduledDate: new Date().toISOString().split('T')[0],
-    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Domyślnie za tydzień
     priority: 'Normalny',
     description: '',
     status: 'Zaplanowane',
-    reservationMethod: 'fifo' // 'expiry' - wg daty ważności, 'fifo' - FIFO
+    reservationMethod: 'fifo', // 'expiry' - wg daty ważności, 'fifo' - FIFO
+    autoReserveMaterials: true // Domyślnie włączone automatyczne rezerwowanie surowców
   });
   
   useEffect(() => {
-    fetchOrders();
-    fetchRecipes();
+    const fetchInitialData = async () => {
+      try {
+        // Pobierz wszystkie zamówienia
+        const ordersData = await getAllOrders();
+        setOrders(ordersData);
+        
+        // Pobierz wszystkie receptury
+        await fetchRecipes();
+        
+        // Pobierz wszystkie stanowiska produkcyjne
+        await fetchWorkstations();
+      } catch (error) {
+        showError('Błąd podczas ładowania danych: ' + error.message);
+        console.error('Error loading initial data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
     
-    // Jeśli przekazano orderId przez state, załaduj szczegóły zamówienia
-    if (location.state?.orderId) {
-      fetchOrderDetails(location.state.orderId);
-    }
-  }, [location.state]);
+    fetchInitialData();
+  }, []);
   
   const fetchRecipes = async () => {
     try {
@@ -215,27 +235,28 @@ const CreateFromOrderPage = () => {
       }
       
       // Ustaw początkowe wartości dla formularza zadania
-      const today = new Date().toISOString().split('T')[0];
-      const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      
       setTaskForm({
         name: `Produkcja z zamówienia #${verifiedOrderData.orderNumber || verifiedOrderData.id.substring(0, 8)}`,
-        scheduledDate: today,
-        endDate: nextWeek,
         priority: 'Normalny',
         description: `Zadanie utworzone na podstawie zamówienia klienta ${verifiedOrderData.customer?.name || '(brak danych)'}`,
         status: 'Zaplanowane',
-        reservationMethod: 'fifo'
+        reservationMethod: 'fifo',
+        autoReserveMaterials: true
       });
       
-      // Domyślnie zaznacz wszystkie elementy zamówienia
+      // Inicjalizacja zaznaczonych elementów
       if (verifiedOrderData.items && verifiedOrderData.items.length > 0) {
-        setSelectedItems(verifiedOrderData.items.map((item, index) => ({
+        // Tworzenie nowego stanu dla zaznaczonych elementów
+        const initialSelectedItems = verifiedOrderData.items.map((item, index) => ({
           ...item,
-          itemId: index, // Dodajemy unikalny identyfikator
-          selected: true,
+          itemId: item.id || index, // Używamy id jeśli istnieje, w przeciwnym razie indeks
+          selected: false, // Domyślnie nic nie jest zaznaczone
           unit: normalizeUnit(item.unit) // Normalizacja jednostek do dopuszczalnych wartości
-        })));
+        }));
+        
+        setSelectedItems(initialSelectedItems);
+      } else {
+        setSelectedItems([]);
       }
     } catch (error) {
       showError('Błąd podczas pobierania szczegółów zamówienia: ' + error.message);
@@ -274,7 +295,7 @@ const CreateFromOrderPage = () => {
     if (Array.isArray(selectedItems)) {
       setSelectedItems(prev => 
         prev.map(item => 
-          item.itemId === itemId 
+          (item.itemId === itemId || item.id === itemId)
             ? { ...item, selected: !item.selected } 
             : item
         )
@@ -397,7 +418,7 @@ const CreateFromOrderPage = () => {
         
         // Utwórz zadanie produkcyjne
         // Uwaga: funkcja createTask automatycznie rezerwuje materiały dla zadania
-        const newTask = await createTask(taskData, currentUser.uid);
+        const newTask = await createTask(taskData, currentUser.uid, taskForm.autoReserveMaterials);
         
         // Dodaj zadanie do zamówienia
         await addProductionTaskToOrder(selectedOrder.id, newTask);
@@ -627,13 +648,57 @@ const CreateFromOrderPage = () => {
           }
         }
         
-        // Utwórz nowe zadanie produkcyjne
+        // Oblicz planowany czas produkcji na podstawie danych z receptury
+        let productionTimePerUnit = 0;
+        let estimatedDuration = 0;
+        
+        if (recipe && recipe.productionTimePerUnit) {
+          productionTimePerUnit = parseFloat(recipe.productionTimePerUnit);
+          // Całkowity czas produkcji w minutach
+          const totalProductionTimeMinutes = productionTimePerUnit * item.quantity;
+          // Konwersja na godziny
+          estimatedDuration = totalProductionTimeMinutes / 60;
+        }
+        
+        // Uzyskaj datę początku produkcji z wyboru użytkownika lub wartości domyślnej
+        const productDate = productDates[item.id] 
+          ? new Date(productDates[item.id]) 
+          : selectedOrder.orderDate 
+            ? new Date(selectedOrder.orderDate) 
+            : new Date();
+            
+        // Domyślnie ustaw godzinę 8:00 rano, jeśli nie została określona przez użytkownika
+        if (!productDates[item.id]) {
+          productDate.setHours(8, 0, 0, 0);
+        }
+        
+        // Formatuj datę rozpoczęcia z aktualną godziną
+        const formattedStartDate = productDate.toISOString();
+        
+        // Oblicz datę zakończenia na podstawie czasu produkcji
+        let endDate = new Date(productDate);
+        
+        if (estimatedDuration > 0) {
+          // Dodaj odpowiednią liczbę godzin do daty rozpoczęcia
+          endDate.setHours(endDate.getHours() + Math.ceil(estimatedDuration));
+        } else {
+          // Jeśli nie ma czasu produkcji, domyślnie zadanie trwa 1 dzień
+          endDate.setDate(endDate.getDate() + 1);
+        }
+        
+        // Formatuj datę zakończenia z godziną
+        const formattedEndDate = endDate.toISOString();
+        
+        // Sprawdź, czy dla tego produktu wybrano stanowisko produkcyjne
+        const workstationId = selectedWorkstations[item.id] || null;
+        
+        // Przy tworzeniu obiektów zadań, dodajemy ID stanowiska:
         const taskData = {
           name: taskForm.name || `Produkcja ${item.name}`,
           status: taskForm.status || 'Zaplanowane',
           priority: taskForm.priority || 'Normalny',
-          scheduledDate: taskForm.scheduledDate || new Date().toISOString().split('T')[0],
-          endDate: taskForm.endDate,
+          scheduledDate: formattedStartDate,
+          endDate: formattedEndDate,
           productName: item.name,
           quantity: item.quantity,
           unit: normalizedUnit,
@@ -642,19 +707,28 @@ const CreateFromOrderPage = () => {
           createdBy: currentUser.uid,
           createdAt: new Date().toISOString(),
           recipe: recipeData,
-          costs: costs,
+          costs: {
+            ...costs,
+            // Dodaj koszt z zamówienia klienta jako całkowity koszt
+            totalCost: itemPrice * item.quantity || totalValue || costs?.totalCost || 0
+          },
           itemPrice: itemPrice,
           totalValue: totalValue,
           orderId: selectedOrder.id, // Dodanie orderId do zadania
           orderNumber: selectedOrder.orderNumber || selectedOrder.id,
           customer: selectedOrder.customer || null,
+          purchaseOrders: selectedOrder.purchaseOrders || [], // Przypisanie powiązanych zamówień zakupu
           isEssential: true,
-          reservationMethod: taskForm.reservationMethod || 'fifo'
+          reservationMethod: taskForm.reservationMethod || 'fifo',
+          productionTimePerUnit: productionTimePerUnit,
+          estimatedDuration: estimatedDuration,
+          autoReserveMaterials: taskForm.autoReserveMaterials, // Przekazanie informacji o automatycznej rezerwacji
+          workstationId: workstationId // ID stanowiska produkcyjnego
         };
         
         // Utwórz zadanie produkcyjne
         // Uwaga: funkcja createTask automatycznie rezerwuje materiały dla zadania
-        const newTask = await createTask(taskData, currentUser.uid);
+        const newTask = await createTask(taskData, currentUser.uid, taskForm.autoReserveMaterials);
         
         if (newTask) {
           // Dodaj zadanie do zamówienia
@@ -938,6 +1012,242 @@ const CreateFromOrderPage = () => {
     }
   };
 
+  // Funkcja sprawdzająca czy wszystkie produkty są zaznaczone
+  const isAllSelected = () => {
+    if (!selectedOrder || !selectedOrder.items || selectedOrder.items.length === 0) {
+      return false;
+    }
+    
+    return selectedOrder.items.every(item => isItemSelected(item.id));
+  };
+  
+  // Funkcja sprawdzająca czy tylko część produktów jest zaznaczona
+  const isPartiallySelected = () => {
+    if (!selectedOrder || !selectedOrder.items || selectedOrder.items.length === 0) {
+      return false;
+    }
+    
+    const selectedCount = selectedOrder.items.filter(item => isItemSelected(item.id)).length;
+    return selectedCount > 0 && selectedCount < selectedOrder.items.length;
+  };
+  
+  // Funkcja sprawdzająca czy konkretny produkt jest zaznaczony
+  const isItemSelected = (itemId) => {
+    if (Array.isArray(selectedItems)) {
+      return selectedItems.some(item => (item.itemId === itemId || item.id === itemId) && item.selected);
+    } else {
+      return Boolean(selectedItems[itemId]);
+    }
+  };
+
+  // Pobierz stanowiska produkcyjne
+  const fetchWorkstations = async () => {
+    try {
+      const workstationsData = await getAllWorkstations();
+      setWorkstations(workstationsData);
+    } catch (error) {
+      showError('Błąd podczas pobierania stanowisk produkcyjnych: ' + error.message);
+      console.error('Error fetching workstations:', error);
+    }
+  };
+
+  // Obsługa wyboru stanowiska produkcyjnego dla zadania
+  const handleWorkstationChange = (itemId, workstationId) => {
+    setSelectedWorkstations(prev => ({
+      ...prev,
+      [itemId]: workstationId
+    }));
+  };
+
+  // Komponent renderujący tabelę produktów z zamówienia
+  const renderProductsTable = () => {
+    if (!selectedOrder || !selectedOrder.items || selectedOrder.items.length === 0) {
+      return (
+        <Typography variant="body1" sx={{ my: 2 }}>
+          Zamówienie nie zawiera żadnych produktów.
+        </Typography>
+      );
+    }
+
+    // Funkcja do obsługi zmiany daty rozpoczęcia dla konkretnego produktu
+    const handleProductDateChange = (e, itemId) => {
+      const { value } = e.target;
+      // Aktualizuj daty rozpoczęcia dla konkretnych produktów
+      setProductDates(prevDates => ({
+        ...prevDates,
+        [itemId]: value
+      }));
+    };
+
+    return (
+      <TableContainer component={Paper} sx={{ mt: 2 }}>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell padding="checkbox">
+                <Checkbox 
+                  checked={isAllSelected()}
+                  onChange={handleSelectAllItems}
+                  indeterminate={isPartiallySelected()}
+                />
+              </TableCell>
+              <TableCell>Produkt</TableCell>
+              <TableCell align="right">Ilość</TableCell>
+              <TableCell>J.m.</TableCell>
+              <TableCell align="right">Cena (€)</TableCell>
+              <TableCell align="right">Wartość (€)</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell>Czas produkcji</TableCell>
+              <TableCell>Data produkcji</TableCell>
+              <TableCell>Stanowisko produkcyjne</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {selectedOrder.items.map((item) => {
+              // Znajdź recepturę dla produktu
+              const recipe = findRecipeForProduct(item.name);
+              // Oblicz planowany czas produkcji dla 1 szt.
+              const productionTimePerUnit = recipe?.productionTimePerUnit || 0;
+              // Oblicz całkowity czas produkcji w minutach
+              const totalProductionTimeMinutes = productionTimePerUnit * item.quantity;
+              // Konwersja na godziny
+              const totalProductionTime = totalProductionTimeMinutes / 60;
+              
+              // Sprawdź, czy element ma już utworzone zadanie
+              const hasTask = existingTasks.some(task => 
+                task.productName === item.name && 
+                task.quantity === item.quantity);
+                    
+              // Utwórz domyślną datę produkcji, jeśli nie została jeszcze ustawiona
+              if (!productDates[item.id]) {
+                const defaultDate = selectedOrder.orderDate ? new Date(selectedOrder.orderDate) : new Date();
+                defaultDate.setHours(8, 0, 0, 0); // domyślnie 8:00 rano
+                
+                // zaktualizuj stan tylko jeśli nie był wcześniej ustawiony
+                if (!productDates[item.id]) {
+                  setProductDates(prev => ({
+                    ...prev,
+                    [item.id]: defaultDate
+                  }));
+                }
+              }
+
+              return (
+                <TableRow 
+                  key={item.id}
+                  sx={{ 
+                    backgroundColor: hasTask ? 'rgba(76, 175, 80, 0.1)' : 'inherit',
+                    '&:hover': { 
+                      backgroundColor: hasTask ? 'rgba(76, 175, 80, 0.2)' : 'rgba(0, 0, 0, 0.04)' 
+                    }
+                  }}
+                >
+                  <TableCell padding="checkbox">
+                    <Checkbox 
+                      checked={isItemSelected(item.id)}
+                      onChange={() => handleItemSelect(item.id)}
+                      disabled={hasTask}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    {item.name}
+                    {recipe && (
+                      <Chip 
+                        size="small" 
+                        label="Receptura" 
+                        color="primary" 
+                        variant="outlined" 
+                        sx={{ ml: 1 }}
+                      />
+                    )}
+                  </TableCell>
+                  <TableCell align="right">{item.quantity}</TableCell>
+                  <TableCell>{item.unit}</TableCell>
+                  <TableCell align="right">{formatCurrency(item.price)}</TableCell>
+                  <TableCell align="right">{formatCurrency(item.price * item.quantity)}</TableCell>
+                  <TableCell>
+                    {hasTask ? (
+                      <Chip 
+                        size="small" 
+                        label="Zadanie utworzone" 
+                        color="success" 
+                        variant="outlined"
+                      />
+                    ) : (
+                      <Chip 
+                        size="small" 
+                        label="Oczekuje" 
+                        color="warning" 
+                        variant="outlined"
+                      />
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {totalProductionTime > 0 ? (
+                      `${(productionTimePerUnit * item.quantity).toFixed(1)} min.`
+                    ) : (
+                      recipe ? (
+                        <Typography variant="body2" color="error">
+                          Brak czasu w recepturze
+                        </Typography>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">
+                          Brak receptury
+                        </Typography>
+                      )
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                      <DateTimePicker
+                        label="Data i godzina produkcji"
+                        value={productDates[item.id] || null}
+                        onChange={(newDate) => {
+                          if (newDate) {
+                            setProductDates(prev => ({
+                              ...prev,
+                              [item.id]: newDate
+                            }));
+                          }
+                        }}
+                        disabled={hasTask}
+                        slotProps={{ 
+                          textField: { 
+                            size: "small",
+                            fullWidth: true
+                          } 
+                        }}
+                        format="dd.MM.yyyy HH:mm"
+                      />
+                    </LocalizationProvider>
+                  </TableCell>
+                  <TableCell>
+                    <FormControl fullWidth>
+                      <Select
+                        value={selectedWorkstations[item.id] || ''}
+                        onChange={(e) => handleWorkstationChange(item.id, e.target.value)}
+                        displayEmpty
+                      >
+                        <MenuItem value="">
+                          <em>Brak</em>
+                        </MenuItem>
+                        {workstations.map((workstation) => (
+                          <MenuItem key={workstation.id} value={workstation.id}>
+                            {workstation.name}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    );
+  };
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1077,37 +1387,6 @@ const CreateFromOrderPage = () => {
                       margin="normal"
                     />
                     
-                    <Grid container spacing={2}>
-                      <Grid item xs={12} sm={6}>
-                        <TextField
-                          name="scheduledDate"
-                          label="Data rozpoczęcia"
-                          type="date"
-                          value={taskForm.scheduledDate}
-                          onChange={handleTaskFormChange}
-                          fullWidth
-                          margin="normal"
-                          InputLabelProps={{
-                            shrink: true,
-                          }}
-                        />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <TextField
-                          name="endDate"
-                          label="Planowana data zakończenia"
-                          type="date"
-                          value={taskForm.endDate}
-                          onChange={handleTaskFormChange}
-                          fullWidth
-                          margin="normal"
-                          InputLabelProps={{
-                            shrink: true,
-                          }}
-                        />
-                      </Grid>
-                    </Grid>
-                    
                     <FormControl fullWidth margin="normal">
                       <InputLabel>Priorytet</InputLabel>
                       <Select
@@ -1134,6 +1413,18 @@ const CreateFromOrderPage = () => {
                         <MenuItem value="expiry">Według daty ważności (najkrótszy termin)</MenuItem>
                       </Select>
                     </FormControl>
+                    <FormControl fullWidth margin="normal">
+                      <InputLabel>Automatyczna rezerwacja surowców</InputLabel>
+                      <Select
+                        name="autoReserveMaterials"
+                        value={taskForm.autoReserveMaterials}
+                        onChange={handleTaskFormChange}
+                        label="Automatyczna rezerwacja surowców"
+                      >
+                        <MenuItem value={true}>Tak - automatycznie rezerwuj surowce</MenuItem>
+                        <MenuItem value={false}>Nie - rezerwacja ręczna później</MenuItem>
+                      </Select>
+                    </FormControl>
                   </Grid>
                 </Grid>
                 
@@ -1141,60 +1432,7 @@ const CreateFromOrderPage = () => {
                   Wybierz produkty do wyprodukowania:
                 </Typography>
                 
-                <TableContainer sx={{ mb: 3 }}>
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell padding="checkbox">
-                          <Checkbox
-                            indeterminate={someItemsSelected && !areAllItemsSelected}
-                            checked={areAllItemsSelected}
-                            onChange={handleSelectAllItems}
-                          />
-                        </TableCell>
-                        <TableCell>Nazwa produktu</TableCell>
-                        <TableCell align="right">Ilość</TableCell>
-                        <TableCell align="right">Cena jednostkowa</TableCell>
-                        <TableCell align="right">Wartość</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {Array.isArray(selectedItems) ? (
-                        // Gdy selectedItems jest tablicą obiektów
-                        selectedItems.map((item) => (
-                          <TableRow key={item.itemId} hover>
-                            <TableCell padding="checkbox">
-                              <Checkbox
-                                checked={item.selected}
-                                onChange={() => handleItemSelect(item.itemId)}
-                              />
-                            </TableCell>
-                            <TableCell>{item.name}</TableCell>
-                            <TableCell align="right">{item.quantity} {item.unit || 'szt.'}</TableCell>
-                            <TableCell align="right">{formatCurrency(item.price)}</TableCell>
-                            <TableCell align="right">{formatCurrency(item.price * item.quantity)}</TableCell>
-                          </TableRow>
-                        ))
-                      ) : (
-                        // Gdy selectedItems jest obiektem z kluczami ID
-                        selectedOrder?.items?.map((item) => (
-                          <TableRow key={item.id} hover>
-                            <TableCell padding="checkbox">
-                              <Checkbox
-                                checked={selectedItems[item.id] || false}
-                                onChange={() => handleItemSelect(item.id)}
-                              />
-                            </TableCell>
-                            <TableCell>{item.name}</TableCell>
-                            <TableCell align="right">{item.quantity} {item.unit || 'szt.'}</TableCell>
-                            <TableCell align="right">{formatCurrency(item.price)}</TableCell>
-                            <TableCell align="right">{formatCurrency(item.price * item.quantity)}</TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                {renderProductsTable()}
                 
                 <TextField
                   name="description"

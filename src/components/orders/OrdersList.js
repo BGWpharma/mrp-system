@@ -57,7 +57,7 @@ import {
   deleteOrder, 
   updateOrderStatus, 
   getOrderById,
-  ORDER_STATUSES
+  ORDER_STATUSES 
 } from '../../services/orderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -118,15 +118,15 @@ const OrdersList = () => {
           console.log(`Pobrano pełne dane zamówienia ${order.id}`, fullOrderData);
           
           // Oblicz wartość PO
-          let poTotal = 0;
-          
+        let poTotal = 0;
+        
           if (fullOrderData.linkedPurchaseOrders && Array.isArray(fullOrderData.linkedPurchaseOrders)) {
             // Dla każdego powiązanego PO, oblicz jego wartość brutto
             poTotal = fullOrderData.linkedPurchaseOrders.reduce((sum, po) => {
               console.log("Przetwarzanie PO:", po);
               
               // Jeśli zamówienie zakupu ma już obliczoną wartość brutto, używamy jej
-              if (po.totalGross !== undefined && po.totalGross !== null) {
+            if (po.totalGross !== undefined && po.totalGross !== null) {
                 const grossValue = typeof po.totalGross === 'number' ? po.totalGross : parseFloat(po.totalGross) || 0;
                 console.log(`Używam istniejącej wartości totalGross dla ${po.number}: ${grossValue}`);
                 return sum + grossValue;
@@ -139,27 +139,27 @@ const OrdersList = () => {
               
               // Stawka VAT i wartość podatku VAT
               const vatRate = typeof po.vatRate === 'number' ? po.vatRate : parseFloat(po.vatRate) || 0;
-              const vatValue = (productsValue * vatRate) / 100;
-              
+            const vatValue = (productsValue * vatRate) / 100;
+            
               // Dodatkowe koszty
-              let additionalCosts = 0;
-              if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
-                additionalCosts = po.additionalCostsItems.reduce((costsSum, cost) => {
+            let additionalCosts = 0;
+            if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
+              additionalCosts = po.additionalCostsItems.reduce((costsSum, cost) => {
                   const costValue = typeof cost.value === 'number' ? cost.value : parseFloat(cost.value) || 0;
                   return costsSum + costValue;
-                }, 0);
-              } else {
+              }, 0);
+            } else {
                 additionalCosts = typeof po.additionalCosts === 'number' ? po.additionalCosts : parseFloat(po.additionalCosts) || 0;
-              }
-              
+            }
+            
               // Obliczanie wartości brutto zamówienia zakupu
-              const grossValue = productsValue + vatValue + additionalCosts;
+            const grossValue = productsValue + vatValue + additionalCosts;
               console.log(`Obliczona wartość PO ${po.number}: ${grossValue}`);
-              
-              return sum + grossValue;
-            }, 0);
-          }
-          
+            
+            return sum + grossValue;
+          }, 0);
+        }
+        
           // Obliczamy wartość produktów, sprawdzając czy nie ma aktualizacji cen na podstawie kosztu procesowego
           const subtotal = await Promise.all((fullOrderData.items || []).map(async (item) => {
             const quantity = parseFloat(item.quantity) || 0;
@@ -185,19 +185,19 @@ const OrdersList = () => {
           
           // Dodanie kosztów dostawy
           const shippingCost = parseFloat(fullOrderData.shippingCost) || 0;
-          
-          // Łączna wartość zamówienia
-          const totalValue = subtotal + shippingCost + poTotal;
+        
+        // Łączna wartość zamówienia
+        const totalValue = subtotal + shippingCost + poTotal;
           
           console.log(`Zaktualizowane wartości zamówienia ${order.id}: produkty=${subtotal}, dostawa=${shippingCost}, PO=${poTotal}, razem=${totalValue}`);
-          
-          return {
+        
+        return {
             ...fullOrderData,
-            totalValue: totalValue,
-            productsValue: subtotal,
-            purchaseOrdersValue: poTotal,
-            shippingCost: shippingCost
-          };
+          totalValue: totalValue,
+          productsValue: subtotal,
+          purchaseOrdersValue: poTotal,
+          shippingCost: shippingCost
+        };
         } else {
           // Jeśli zamówienie nie ma powiązanych PO, oblicz tylko wartość produktów
           const subtotal = await Promise.all((order.items || []).map(async (item) => {
@@ -392,8 +392,8 @@ const OrdersList = () => {
         ? JSON.stringify(newStatus)
         : (newStatus || 'Nieznany');
       
-      setStatusChangeInfo({
-        orderId: order.id,
+    setStatusChangeInfo({
+      orderId: order.id,
         orderNumber: order.orderNumber || order.id.substring(0, 8).toUpperCase(),
         currentStatus: currentStatus,
         newStatus: statusValue
@@ -956,11 +956,11 @@ const OrdersList = () => {
                           </TableCell>
                           <TableCell>
                             <Typography variant="body2" fontWeight="medium">
-                              {order.orderDate ? (
-                                typeof order.orderDate === 'object' && typeof order.orderDate.toDate === 'function' 
-                                  ? formatDate(order.orderDate.toDate(), false)
-                                  : formatDate(order.orderDate, false)
-                              ) : '-'}
+                            {order.orderDate ? (
+                              typeof order.orderDate === 'object' && typeof order.orderDate.toDate === 'function' 
+                                ? formatDate(order.orderDate.toDate(), false)
+                                : formatDate(order.orderDate, false)
+                            ) : '-'}
                             </Typography>
                           </TableCell>
                           <TableCell>
@@ -1137,30 +1137,30 @@ const OrdersList = () => {
                                                 <TableCell align="right">
                                                   {(() => {
                                                     try {
-                                                      // Jeśli zamówienie ma już wartość brutto, używamy jej
-                                                      if (po.totalGross !== undefined && po.totalGross !== null) {
-                                                        return formatCurrency(parseFloat(po.totalGross));
-                                                      }
-                                                      
-                                                      // W przeciwnym razie obliczamy wartość brutto
-                                                      const productsValue = parseFloat(po.value) || 0;
-                                                      const vatRate = parseFloat(po.vatRate) || 23;
-                                                      const vatValue = (productsValue * vatRate) / 100;
-                                                      
-                                                      // Sprawdzenie różnych formatów dodatkowych kosztów
-                                                      let additionalCosts = 0;
-                                                      if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
-                                                        additionalCosts = po.additionalCostsItems.reduce((costsSum, cost) => {
-                                                          return costsSum + (parseFloat(cost.value) || 0);
-                                                        }, 0);
-                                                      } else {
+                                                    // Jeśli zamówienie ma już wartość brutto, używamy jej
+                                                    if (po.totalGross !== undefined && po.totalGross !== null) {
+                                                      return formatCurrency(parseFloat(po.totalGross));
+                                                    }
+                                                    
+                                                    // W przeciwnym razie obliczamy wartość brutto
+                                                    const productsValue = parseFloat(po.value) || 0;
+                                                    const vatRate = parseFloat(po.vatRate) || 23;
+                                                    const vatValue = (productsValue * vatRate) / 100;
+                                                    
+                                                    // Sprawdzenie różnych formatów dodatkowych kosztów
+                                                    let additionalCosts = 0;
+                                                    if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
+                                                      additionalCosts = po.additionalCostsItems.reduce((costsSum, cost) => {
+                                                        return costsSum + (parseFloat(cost.value) || 0);
+                                                      }, 0);
+                                                    } else {
                                                         additionalCosts = typeof po.additionalCosts === 'number' ? po.additionalCosts : parseFloat(po.additionalCosts) || 0;
-                                                      }
-                                                      
-                                                      // Wartość brutto: produkty + VAT + dodatkowe koszty
-                                                      const grossValue = productsValue + vatValue + additionalCosts;
-                                                      
-                                                      return formatCurrency(grossValue);
+                                                    }
+                                                    
+                                                    // Wartość brutto: produkty + VAT + dodatkowe koszty
+                                                    const grossValue = productsValue + vatValue + additionalCosts;
+                                                    
+                                                    return formatCurrency(grossValue);
                                                     } catch (error) {
                                                       console.error("Błąd obliczenia wartości PO:", error);
                                                       return formatCurrency(0);

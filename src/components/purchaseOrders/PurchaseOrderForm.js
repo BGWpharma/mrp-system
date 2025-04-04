@@ -426,10 +426,18 @@ const PurchaseOrderForm = ({ orderId }) => {
       // Przygotuj dane zamówienia do zapisu
       const { supplier, ...orderDataToSave } = poData;
       
+      // Upewnij się, że dostawca istnieje
+      if (!supplier) {
+        showError('Wybierz dostawcę');
+        setSaving(false);
+        return;
+      }
+      
       // Ustaw ID dostawcy w danych zamówienia
       const orderWithSupplierId = {
         ...orderDataToSave,
-        supplierId: supplier?.id || null,
+        supplierId: supplier.id,
+        supplier: supplier,
       };
       
       // Oblicz wartość brutto (totalGross)
@@ -449,20 +457,20 @@ const PurchaseOrderForm = ({ orderId }) => {
       console.log("Dane zamówienia do zapisu:", orderWithSupplierId);
       
       // Zapisz zamówienie do bazy danych
-      await savePurchaseOrder(orderWithSupplierId, currentOrderId, currentUser.id);
-      console.log("Zapisane zamówienie:", orderWithSupplierId);
+      const result = await savePurchaseOrder(orderWithSupplierId, currentOrderId, currentUser.uid);
+      console.log("Zapisane zamówienie:", result);
       
       // Powiadomienie o sukcesie
       showSuccess('Zamówienie zakupu zostało zapisane!');
       
       // Przekieruj do widoku szczegółów zamówienia jeśli nie jesteśmy w trybie wyboru zamówienia
       if (location.pathname.includes('/purchase-orders/')) {
-        navigate(`/purchase-orders/${orderWithSupplierId.id}`);
+        navigate(`/purchase-orders/${result.id}`);
       } else {
         // W trybie wyboru zamówienia, wywołaj callback z wybranym zamówieniem
         const onSelect = location.state?.onSelect;
         if (typeof onSelect === 'function') {
-          onSelect(orderWithSupplierId);
+          onSelect(result);
         }
       }
     } catch (error) {

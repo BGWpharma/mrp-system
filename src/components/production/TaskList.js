@@ -49,7 +49,8 @@ import {
 import { getAllTasks, updateTaskStatus, deleteTask, addTaskProductToInventory, stopProduction } from '../../services/productionService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import { formatDate } from '../../utils/formatters';
+import { formatDate } from '../../utils/dateUtils';
+import { formatDateTime } from '../../utils/formatters';
 import { useTheme as useMuiTheme } from '@mui/material/styles';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useNavigate } from 'react-router-dom';
@@ -58,6 +59,7 @@ import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { pl } from 'date-fns/locale';
+import { getWorkstationById } from '../../services/workstationService';
 
 const TaskList = () => {
   const [tasks, setTasks] = useState([]);
@@ -65,6 +67,7 @@ const TaskList = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
+  const [workstationNames, setWorkstationNames] = useState({});
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
   const muiTheme = useMuiTheme();
@@ -103,6 +106,31 @@ const TaskList = () => {
     
     setFilteredTasks(filtered);
   }, [searchTerm, statusFilter, tasks]);
+
+  // Pobierz nazwy stanowisk dla zadań
+  useEffect(() => {
+    const fetchWorkstationNames = async () => {
+      const workstationData = {};
+      
+      for (const task of tasks) {
+        if (task.workstationId && !workstationData[task.workstationId]) {
+          try {
+            const workstation = await getWorkstationById(task.workstationId);
+            workstationData[task.workstationId] = workstation.name;
+          } catch (error) {
+            console.error(`Błąd podczas pobierania stanowiska dla ID ${task.workstationId}:`, error);
+            workstationData[task.workstationId] = "Nieznane stanowisko";
+          }
+        }
+      }
+      
+      setWorkstationNames(workstationData);
+    };
+    
+    if (tasks.length > 0) {
+      fetchWorkstationNames();
+    }
+  }, [tasks]);
 
   const fetchTasks = async () => {
     try {
@@ -350,7 +378,16 @@ const TaskList = () => {
             </IconButton>
           );
         }
-        return null;
+        return (
+          <IconButton 
+            color="secondary" 
+            component={Link}
+            to={`/production/consumption/${task.id}`}
+            title="Korekta poprocesowa"
+          >
+            <EditIcon />
+          </IconButton>
+        );
       default:
         return null;
     }
@@ -407,6 +444,7 @@ const TaskList = () => {
                 <TableCell>Numer MO</TableCell>
                 <TableCell>Produkt</TableCell>
                 <TableCell>Ilość</TableCell>
+                <TableCell>Stanowisko</TableCell>
                 <TableCell>Data rozpoczęcia</TableCell>
                 <TableCell>Planowana data zakończenia</TableCell>
                 <TableCell>Status</TableCell>
@@ -428,10 +466,16 @@ const TaskList = () => {
                     {task.quantity} {task.unit}
                   </TableCell>
                   <TableCell>
-                    {task.scheduledDate ? formatDate(task.scheduledDate, { timeStyle: undefined }) : 'Nie określono'}
+                    {task.workstationId 
+                      ? (workstationNames[task.workstationId] || "Ładowanie...") 
+                      : "Nie przypisano"
+                    }
                   </TableCell>
                   <TableCell>
-                    {task.endDate ? formatDate(task.endDate, { timeStyle: undefined }) : 'Nie określono'}
+                    {task.scheduledDate ? formatDateTime(task.scheduledDate) : 'Nie określono'}
+                  </TableCell>
+                  <TableCell>
+                    {task.endDate ? formatDateTime(task.endDate) : 'Nie określono'}
                   </TableCell>
                   <TableCell>
                     <Chip 
@@ -441,7 +485,9 @@ const TaskList = () => {
                     />
                   </TableCell>
                   <TableCell>
-                    {task.costs ? (
+                    {task.totalValue ? (
+                      parseFloat(task.totalValue).toLocaleString('pl-PL') + ' EUR'
+                    ) : task.costs ? (
                       task.costs.totalCost.toLocaleString('pl-PL') + ' EUR'
                     ) : (
                       '-'

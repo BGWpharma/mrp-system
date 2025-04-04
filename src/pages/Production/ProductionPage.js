@@ -8,13 +8,15 @@ import {
   TrendingUp as ForecastIcon,
   ViewModule as GridIcon,
   ViewList as ViewListIcon,
-  Description as FormsIcon
+  Description as FormsIcon,
+  Business as BusinessIcon
 } from '@mui/icons-material';
 import TaskList from '../../components/production/TaskList';
 import ProductionCalendar from '../../components/production/ProductionCalendar';
 import ProductionReportPage from './ProductionReportPage';
 import ForecastPage from './ForecastPage';
 import FormsPage from './FormsPage';
+import WorkstationsPage from './WorkstationsPage';
 
 const ProductionPage = () => {
   const [activeTab, setActiveTab] = useState(0);
@@ -47,6 +49,7 @@ const ProductionPage = () => {
         <Tab icon={<CalendarIcon />} label="Kalendarz" iconPosition="start" />
         <Tab icon={<ReportIcon />} label="Raporty" iconPosition="start" />
         <Tab icon={<FormsIcon />} label="Formularze" iconPosition="start" />
+        <Tab icon={<BusinessIcon />} label="Stanowiska produkcyjne" iconPosition="start" />
         <Tab icon={<ForecastIcon />} label="Prognoza zapotrzebowania" iconPosition="start" />
       </Tabs>
       
@@ -54,7 +57,8 @@ const ProductionPage = () => {
       {activeTab === 1 && <ProductionCalendar />}
       {activeTab === 2 && <ProductionReportPage />}
       {activeTab === 3 && <FormsPage />}
-      {activeTab === 4 && <ForecastPage />}
+      {activeTab === 4 && <WorkstationsPage />}
+      {activeTab === 5 && <ForecastPage />}
     </Container>
   );
 };

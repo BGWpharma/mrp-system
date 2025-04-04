@@ -859,7 +859,7 @@ import {
   };
 
   // Bookowanie produktu na zadanie produkcyjne
-  export const bookInventoryForTask = async (itemId, quantity, taskId, userId, reservationMethod = 'expiry') => {
+  export const bookInventoryForTask = async (itemId, quantity, taskId, userId, reservationMethod = 'expiry', batchId = null) => {
     try {
       // Sprawdź, czy pozycja magazynowa istnieje
       let item;
@@ -943,54 +943,96 @@ import {
         ...doc.data()
       }));
       
-      // Sortuj partie według wybranej metody
-      if (reservationMethod === 'fifo') {
-        // FIFO - sortuj według daty przyjęcia (najstarsze pierwsze)
-        batches.sort((a, b) => {
-          const dateA = a.receivedDate ? new Date(a.receivedDate) : new Date(0);
-          const dateB = b.receivedDate ? new Date(b.receivedDate) : new Date(0);
-          return dateA - dateB;
-        });
-      } else {
-        // Domyślnie: według daty ważności (najkrótszy termin pierwszy)
-        batches.sort((a, b) => {
-          // Jeśli nie ma daty ważności, traktuj jako najdalszą datę
-          const dateA = a.expiryDate ? new Date(a.expiryDate) : new Date(9999, 11, 31);
-          const dateB = b.expiryDate ? new Date(b.expiryDate) : new Date(9999, 11, 31);
-          return dateA - dateB;
-        });
-      }
-      
       // Zapisz informacje o zarezerwowanych partiach
       const reservedBatches = [];
       let remainingQuantity = quantity;
-      let selectedBatchId = '';
+      let selectedBatchId = batchId || ''; // Użyj przekazanej partii, jeśli została podana
       let selectedBatchNumber = '';
       
-      for (const batch of batches) {
-        if (remainingQuantity <= 0) break;
+      // Jeśli podano konkretną partię (ręczny wybór), użyj tylko tej partii
+      if (batchId) {
+        const selectedBatch = batches.find(batch => batch.id === batchId);
         
-        const quantityFromBatch = Math.min(batch.quantity, remainingQuantity);
-        remainingQuantity -= quantityFromBatch;
-        
-        // Zachowaj informacje o pierwszej partii do rezerwacji
-        if (!selectedBatchId) {
-          selectedBatchId = batch.id;
-          selectedBatchNumber = batch.batchNumber || batch.lotNumber || 'Bez numeru';
+        if (!selectedBatch) {
+          throw new Error(`Nie znaleziono partii o ID ${batchId}`);
         }
         
+        // Sprawdź czy jest wystarczająca ilość w partii
+        if (selectedBatch.quantity < quantity) {
+          throw new Error(`Niewystarczająca ilość w partii. Dostępne: ${selectedBatch.quantity} ${item.unit}, wymagane: ${quantity} ${item.unit}`);
+        }
+        
+        // Zachowaj informacje o partii
+        selectedBatchId = selectedBatch.id;
+        selectedBatchNumber = selectedBatch.batchNumber || selectedBatch.lotNumber || 'Bez numeru';
+        
         reservedBatches.push({
-          batchId: batch.id,
-          quantity: quantityFromBatch,
-          batchNumber: batch.batchNumber || batch.lotNumber || 'Bez numeru'
+          batchId: selectedBatch.id,
+          quantity: quantity,
+          batchNumber: selectedBatchNumber
         });
+        
+        remainingQuantity = 0; // Cała ilość jest zarezerwowana z tej partii
+      } else {
+        // Standardowa automatyczna rezerwacja - sortuj partie według wybranej metody
+        if (reservationMethod === 'fifo') {
+          // FIFO - sortuj według daty przyjęcia (najstarsze pierwsze)
+          batches.sort((a, b) => {
+            const dateA = a.receivedDate ? new Date(a.receivedDate) : new Date(0);
+            const dateB = b.receivedDate ? new Date(b.receivedDate) : new Date(0);
+            return dateA - dateB;
+          });
+        } else {
+          // Domyślnie: według daty ważności (najkrótszy termin pierwszy)
+          batches.sort((a, b) => {
+            // Jeśli nie ma daty ważności, traktuj jako najdalszą datę
+            const dateA = a.expiryDate ? new Date(a.expiryDate) : new Date(9999, 11, 31);
+            const dateB = b.expiryDate ? new Date(b.expiryDate) : new Date(9999, 11, 31);
+            return dateA - dateB;
+          });
+        }
+        
+        // Przydziel partie automatycznie
+        for (const batch of batches) {
+          if (remainingQuantity <= 0) break;
+          
+          const quantityFromBatch = Math.min(batch.quantity, remainingQuantity);
+          remainingQuantity -= quantityFromBatch;
+          
+          // Zachowaj informacje o pierwszej partii do rezerwacji
+          if (!selectedBatchId) {
+            selectedBatchId = batch.id;
+            selectedBatchNumber = batch.batchNumber || batch.lotNumber || 'Bez numeru';
+          }
+          
+          reservedBatches.push({
+            batchId: batch.id,
+            quantity: quantityFromBatch,
+            batchNumber: batch.batchNumber || batch.lotNumber || 'Bez numeru'
+          });
+        }
       }
       
       // Zapisz informacje o partiach w zadaniu produkcyjnym
       if (taskDoc.exists()) {
         const materialBatches = taskData.materialBatches || {};
         
-        materialBatches[itemId] = reservedBatches;
+        // Jeśli jest to ręczna rezerwacja pojedynczej partii, dodajemy do istniejących
+        if (batchId && materialBatches[itemId]) {
+          // Sprawdź czy ta partia już istnieje w liście
+          const existingBatchIndex = materialBatches[itemId].findIndex(b => b.batchId === batchId);
+          
+          if (existingBatchIndex >= 0) {
+            // Aktualizuj istniejącą partię, dodając nową ilość
+            materialBatches[itemId][existingBatchIndex].quantity += quantity;
+          } else {
+            // Dodaj nową partię do listy
+            materialBatches[itemId].push(...reservedBatches);
+          }
+        } else {
+          // W przypadku automatycznej rezerwacji lub pierwszej ręcznej rezerwacji, zastąp listę
+          materialBatches[itemId] = reservedBatches;
+        }
         
         await updateDoc(taskRef, {
           materialBatches,
@@ -1015,7 +1057,9 @@ import {
         taskNumber: taskNumber,
         clientName: clientName,
         clientId: clientId,
-        notes: `Zarezerwowano na zadanie produkcyjne MO: ${taskNumber || taskId} (metoda: ${reservationMethod})`,
+        notes: batchId 
+          ? `Zarezerwowano na zadanie produkcyjne MO: ${taskNumber || taskId} (ręczny wybór partii)`
+          : `Zarezerwowano na zadanie produkcyjne MO: ${taskNumber || taskId} (metoda: ${reservationMethod})`,
         batchId: selectedBatchId,
         batchNumber: selectedBatchNumber,
         userName: userName,

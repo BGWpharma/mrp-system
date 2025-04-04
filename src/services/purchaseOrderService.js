@@ -226,8 +226,8 @@ export const createPurchaseOrder = async (purchaseOrderData, userId) => {
     // Obliczamy wartość brutto: wartość netto produktów + VAT + dodatkowe koszty
     const totalGross = totalValue + vatValue + additionalCostsTotal;
     
-    // Zapisujemy tylko ID dostawcy, a nie cały obiekt
-    const supplierId = supplier.id;
+    // Zapisujemy tylko ID dostawcy, a nie cały obiekt - z zabezpieczeniem przed undefined
+    const supplierId = supplier?.id || null;
     
     // Przygotuj obiekt zamówienia zakupowego
     const newPurchaseOrder = {

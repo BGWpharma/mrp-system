@@ -175,7 +175,7 @@ import {
   };
   
   // Tworzenie nowego zadania produkcyjnego
-  export const createTask = async (taskData, userId) => {
+  export const createTask = async (taskData, userId, autoReserveMaterials = true) => {
     try {
       // Wygeneruj numer MO
       const moNumber = await generateMONumber();
@@ -186,7 +186,8 @@ import {
         moNumber, // Dodaj numer MO
         createdBy: userId,
         createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
+        autoReserveMaterials // Zapisz informację o tym, czy materiały zostały automatycznie zarezerwowane
       };
       
       // Jeśli nie podano daty zakończenia, ustaw ją na 1 godzinę po dacie rozpoczęcia
@@ -206,7 +207,9 @@ import {
       // Teraz, gdy zadanie zostało utworzone, zarezerwuj materiały
       const missingMaterials = []; // Lista materiałów, których nie ma w magazynie
       
-      if (taskWithMeta.materials && taskWithMeta.materials.length > 0) {
+      // Rezerwuj materiały tylko jeśli autoReserveMaterials jest true
+      if (autoReserveMaterials && taskWithMeta.materials && taskWithMeta.materials.length > 0) {
+        console.log(`Automatyczne rezerwowanie materiałów dla MO: ${moNumber}`);
         // Określ metodę rezerwacji (domyślnie według daty ważności)
         const reservationMethod = taskWithMeta.reservationMethod || 'expiry';
         
@@ -233,6 +236,8 @@ import {
             // Kontynuuj rezerwację pozostałych materiałów mimo błędu
           }
         }
+      } else if (!autoReserveMaterials) {
+        console.log(`Pominięto automatyczną rezerwację materiałów dla MO: ${moNumber} zgodnie z wyborem użytkownika`);
       }
       
       // Jeśli były brakujące materiały, dodaj informację do zadania
@@ -663,6 +668,7 @@ import {
               ? task.scheduledDate.toDate()
               : task.scheduledDate;
               
+          // Sprawdzamy tylko zakres dat, bez wykluczania wstrzymanych zadań
           return taskDate >= startDate && taskDate <= endDate;
         });
       }
@@ -861,17 +867,23 @@ import {
   export const getAllPlannedTasks = async () => {
     try {
       const tasksRef = collection(db, 'productionTasks');
-      // Pobierz zadania zarówno zaplanowane jak i w trakcie realizacji
+      console.log('Pobieranie zaplanowanych zadań produkcyjnych...');
+      
+      // Pobierz zadania zaplanowane, w trakcie realizacji oraz wstrzymane
       const q = query(
         tasksRef, 
-        where('status', 'in', ['Zaplanowane', 'W trakcie'])
+        where('status', 'in', ['Zaplanowane', 'W trakcie', 'Wstrzymane'])
       );
       const snapshot = await getDocs(q);
       
-      return snapshot.docs.map(doc => ({
+      const allTasks = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
+      
+      console.log(`Pobrano ${allTasks.length} zadań`);
+      
+      return allTasks;
     } catch (error) {
       console.error('Błąd podczas pobierania zaplanowanych zadań:', error);
       throw error;

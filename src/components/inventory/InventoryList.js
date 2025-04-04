@@ -113,9 +113,9 @@ const InventoryList = () => {
     fetchInventoryItems();
     fetchExpiryData();
     
-    // Dodaj nasłuchiwanie na zdarzenie aktualizacji magazynu
+    // Dodaj nasłuchiwanie na zdarzenie aktualizacji stanów
     const handleInventoryUpdate = () => {
-      console.log('Wykryto aktualizację magazynu, odświeżam dane...');
+      console.log('Wykryto aktualizację stanów, odświeżam dane...');
       fetchInventoryItems();
     };
     
@@ -141,7 +141,7 @@ const InventoryList = () => {
     }
   }, [searchTerm, inventoryItems]);
 
-  // Dodaj nowy useEffect do pobrania magazynów
+  // Dodaj nowy useEffect do pobrania lokalizacji
   useEffect(() => {
     fetchWarehouses();
   }, []);
@@ -152,14 +152,14 @@ const InventoryList = () => {
       const warehousesList = await getAllWarehouses();
       setWarehouses(warehousesList);
     } catch (error) {
-      console.error('Błąd podczas pobierania magazynów:', error);
-      showError('Błąd podczas pobierania magazynów');
+      console.error('Błąd podczas pobierania lokalizacji:', error);
+      showError('Błąd podczas pobierania lokalizacji');
     } finally {
       setWarehousesLoading(false);
     }
   };
 
-  // Zmodyfikuj funkcję fetchInventoryItems, aby uwzględniała filtrowanie po magazynie
+  // Zmodyfikuj funkcję fetchInventoryItems, aby uwzględniała filtrowanie po lokalizacji
   const fetchInventoryItems = async () => {
     setLoading(true);
     try {
@@ -173,18 +173,18 @@ const InventoryList = () => {
       
     } catch (error) {
       console.error('Error fetching inventory items:', error);
-      showError('Błąd podczas pobierania pozycji magazynowych');
+      showError('Błąd podczas pobierania pozycji ze stanów');
     } finally {
       setLoading(false);
     }
   };
   
-  // Dodaj funkcję obsługującą zmianę wybranego magazynu
+  // Dodaj funkcję obsługującą zmianę wybranego stanów
   const handleWarehouseChange = (event) => {
     setSelectedWarehouse(event.target.value);
   };
   
-  // Efekt, który ponownie pobiera dane po zmianie magazynu
+  // Efekt, który ponownie pobiera dane po zmianie stanów
   useEffect(() => {
     fetchInventoryItems();
   }, [selectedWarehouse]);
@@ -202,15 +202,13 @@ const InventoryList = () => {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Czy na pewno chcesz usunąć tę pozycję magazynową?')) {
+    if (window.confirm('Czy na pewno chcesz usunąć tę pozycję ze stanów?')) {
       try {
         await deleteInventoryItem(id);
-        showSuccess('Pozycja została usunięta');
-        // Odśwież listę pozycji
         fetchInventoryItems();
+        showSuccess('Pozycja została usunięta');
       } catch (error) {
         showError('Błąd podczas usuwania pozycji: ' + error.message);
-        console.error('Error deleting inventory item:', error);
       }
     }
   };
@@ -437,7 +435,7 @@ const InventoryList = () => {
     setCurrentTab(newValue);
   };
   
-  // Zarządzanie magazynami - nowe funkcje
+  // Zarządzanie lokalizacjami - nowe funkcje
   const handleOpenWarehouseDialog = (mode, warehouse = null) => {
     setDialogMode(mode);
     setSelectedWarehouse(warehouse);
@@ -470,8 +468,8 @@ const InventoryList = () => {
   };
 
   const handleSubmitWarehouse = async () => {
-    if (!warehouseFormData.name.trim()) {
-      showError('Nazwa magazynu jest wymagana');
+    if (!warehouseFormData.name) {
+      showError('Nazwa lokalizacji jest wymagana');
       return;
     }
     
@@ -480,16 +478,16 @@ const InventoryList = () => {
     try {
       if (dialogMode === 'add') {
         await createWarehouse(warehouseFormData, currentUser.uid);
-        showSuccess('Magazyn został utworzony');
+        showSuccess('Lokalizacja została utworzona');
       } else {
         await updateWarehouse(selectedWarehouse.id, warehouseFormData, currentUser.uid);
-        showSuccess('Magazyn został zaktualizowany');
+        showSuccess('Lokalizacja została zaktualizowana');
       }
       
       handleCloseWarehouseDialog();
       fetchWarehouses();
     } catch (error) {
-      showError('Błąd podczas zapisywania magazynu: ' + error.message);
+      showError('Błąd podczas zapisywania lokalizacji: ' + error.message);
       console.error('Error saving warehouse:', error);
     } finally {
       setSavingWarehouse(false);
@@ -497,17 +495,16 @@ const InventoryList = () => {
   };
 
   const handleDeleteWarehouse = async (warehouseId) => {
-    if (!window.confirm('Czy na pewno chcesz usunąć ten magazyn? Ta operacja jest nieodwracalna.')) {
+    if (!window.confirm('Czy na pewno chcesz usunąć tę lokalizację? Ta operacja jest nieodwracalna.')) {
       return;
     }
     
     try {
       await deleteWarehouse(warehouseId);
-      showSuccess('Magazyn został usunięty');
       fetchWarehouses();
+      showSuccess('Lokalizacja została usunięta');
     } catch (error) {
-      showError('Błąd podczas usuwania magazynu: ' + error.message);
-      console.error('Error deleting warehouse:', error);
+      showError('Błąd podczas usuwania lokalizacji: ' + error.message);
     }
   };
 
@@ -644,13 +641,13 @@ const InventoryList = () => {
   };
 
   if (loading) {
-    return <div>Ładowanie pozycji magazynowych...</div>;
+    return <div>Ładowanie pozycji ze stanów...</div>;
   }
 
   return (
     <div>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5">Magazyn</Typography>
+        <Typography variant="h5">Stany</Typography>
         <Box>
           <Tooltip title="Sprawdź daty ważności produktów">
             <Button 
@@ -686,11 +683,11 @@ const InventoryList = () => {
         onChange={handleTabChange}
         sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}
       >
-        <Tab label="Magazyn" />
-        <Tab label="Magazyny" />
+        <Tab label="Stany" />
+        <Tab label="Lokalizacja" />
       </Tabs>
 
-      {/* Zawartość pierwszej zakładki - Magazyn */}
+      {/* Zawartość pierwszej zakładki - Stany */}
       {currentTab === 0 && (
         <>
           <Box sx={{ display: 'flex', mb: 3 }}>
@@ -708,7 +705,7 @@ const InventoryList = () => {
 
           {filteredItems.length === 0 ? (
             <Typography variant="body1" align="center">
-              Nie znaleziono pozycji magazynowych
+              Nie znaleziono pozycji ze stanów
             </Typography>
           ) : (
             <TableContainer component={Paper} sx={{ mt: 3 }}>
@@ -832,7 +829,7 @@ const InventoryList = () => {
         </>
       )}
 
-      {/* Zawartość drugiej zakładki - Magazyny */}
+      {/* Zawartość drugiej zakładki - Lokalizacja */}
       {currentTab === 1 && (
         <>
           <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end' }}>
@@ -842,7 +839,7 @@ const InventoryList = () => {
               startIcon={<AddIcon />}
               onClick={() => handleOpenWarehouseDialog('add')}
             >
-              Dodaj magazyn
+              Dodaj lokalizację
             </Button>
           </Box>
 
@@ -867,7 +864,7 @@ const InventoryList = () => {
                       <TableRow>
                         <TableCell colSpan={4} align="center">
                           <Typography variant="body1" sx={{ py: 2 }}>
-                            Brak magazynów. Dodaj pierwszy magazyn, aby rozpocząć.
+                            Brak lokalizacji. Dodaj pierwszą lokalizację, aby rozpocząć.
                           </Typography>
                         </TableCell>
                       </TableRow>
@@ -1034,17 +1031,17 @@ const InventoryList = () => {
         loadingBatches={loadingBatches}
       />
 
-      {/* Dialog do dodawania/edycji magazynu */}
+      {/* Dialog do dodawania/edycji lokalizacji */}
       <Dialog open={openWarehouseDialog} onClose={handleCloseWarehouseDialog} maxWidth="sm" fullWidth>
         <DialogTitle>
-          {dialogMode === 'add' ? 'Dodaj nowy magazyn' : 'Edytuj magazyn'}
+          {dialogMode === 'add' ? 'Dodaj nową lokalizację' : 'Edytuj lokalizację'}
         </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12}>
               <TextField
                 name="name"
-                label="Nazwa magazynu"
+                label="Nazwa lokalizacji"
                 value={warehouseFormData.name}
                 onChange={handleWarehouseFormChange}
                 fullWidth

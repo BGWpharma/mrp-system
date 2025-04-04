@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Container,
@@ -28,7 +28,22 @@ import {
   Select,
   MenuItem,
   FormControl,
-  InputLabel
+  InputLabel,
+  Tabs,
+  Tab,
+  RadioGroup,
+  Radio,
+  FormControlLabel,
+  FormLabel,
+  Checkbox,
+  ListItem,
+  List,
+  ListItemText,
+  ListItemSecondaryAction,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Tooltip
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -46,17 +61,21 @@ import {
   Receipt as ReceiptIcon,
   Add as AddIcon,
   SaveAlt as SaveAltIcon,
-  Info as InfoIcon
+  Info as InfoIcon,
+  BookmarkAdd as BookmarkAddIcon,
+  ExpandMore as ExpandMoreIcon
 } from '@mui/icons-material';
-import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory } from '../../services/productionService';
+import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask } from '../../services/productionService';
+import { getItemBatches, bookInventoryForTask } from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import { formatDate } from '../../utils/formatters';
+import { formatDate, formatCurrency, formatDateTime } from '../../utils/formatters';
 import { PRODUCTION_TASK_STATUSES, TIME_INTERVALS } from '../../utils/constants';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { pl } from 'date-fns/locale';
+import TaskDetails from '../../components/production/TaskDetails';
 
 const TaskDetailsPage = () => {
   const { id } = useParams();
@@ -88,11 +107,70 @@ const TaskDetailsPage = () => {
   const [productionStartTime, setProductionStartTime] = useState(new Date());
   const [productionEndTime, setProductionEndTime] = useState(new Date());
 
-  // Funkcja do pobierania danych zadania
+  // Stany dla rezerwacji surowców
+  const [reserveDialogOpen, setReserveDialogOpen] = useState(false);
+  const [reservationMethod, setReservationMethod] = useState('fifo');
+  const [reservingMaterials, setReservingMaterials] = useState(false);
+  
+  // Nowe stany dla ręcznego wyboru partii
+  const [availableBatches, setAvailableBatches] = useState({});
+  const [selectedBatches, setSelectedBatches] = useState({});
+  const [materialBatchesLoading, setMaterialBatchesLoading] = useState(false);
+  const [manualBatchSelectionActive, setManualBatchSelectionActive] = useState(false);
+  const [expandedMaterial, setExpandedMaterial] = useState(null);
+
   const fetchTask = async () => {
     try {
       setLoading(true);
       const fetchedTask = await getTaskById(id);
+      
+      if (!fetchedTask) {
+        showError('Zadanie produkcyjne nie istnieje');
+        navigate('/production');
+        return;
+      }
+      
+      console.log('Pobrano zadanie produkcyjne:', fetchedTask);
+      
+      // Jeśli zadanie ma przypisane orderId, pobierz pełne dane zamówienia
+      if (fetchedTask.orderId) {
+        try {
+          const { getOrderById } = await import('../../services/orderService');
+          const orderData = await getOrderById(fetchedTask.orderId);
+          
+          if (orderData) {
+            console.log('Pobrano dane zamówienia klienta:', orderData);
+            
+            // Dodaj dane klienta do zadania
+            if (orderData.customer) {
+              fetchedTask.customer = orderData.customer;
+            }
+            
+            // Dodaj numer zamówienia do zadania
+            if (orderData.number) {
+              fetchedTask.orderNumber = orderData.number;
+            }
+            
+            // Pobierz dane powiązanych zamówień zakupu
+            if (orderData.linkedPurchaseOrders && orderData.linkedPurchaseOrders.length > 0) {
+              console.log('Zamówienie ma powiązane PO:', orderData.linkedPurchaseOrders);
+              
+              // Przypisz powiązane PO do zadania
+              fetchedTask.purchaseOrders = orderData.linkedPurchaseOrders.map(po => ({
+                id: po.id,
+                poNumber: po.number,
+                supplier: po.supplier,
+                status: po.status,
+                totalValue: po.totalValue,
+                totalGross: po.totalGross
+              }));
+            }
+          }
+        } catch (error) {
+          console.error('Błąd podczas pobierania danych zamówienia:', error);
+        }
+      }
+      
       setTask(fetchedTask);
       
       // Przygotuj materiały do wyświetlenia
@@ -483,552 +561,582 @@ const TaskDetailsPage = () => {
     }
   };
 
-  if (loading) {
+  // Nowa funkcja do obsługi pobrania partii dla materiałów
+  const fetchBatchesForMaterials = async () => {
+    if (!task || !task.materials || task.materials.length === 0) return;
+    
+    setMaterialBatchesLoading(true);
+    const batchesData = {};
+    const initialSelectedBatches = {};
+    
+    try {
+      for (const material of task.materials) {
+        const materialId = material.inventoryItemId || material.id;
+        if (!materialId) continue;
+        
+        try {
+          const batches = await getItemBatches(materialId);
+          
+          // Filtruj tylko partie z dostępną ilością
+          const availableBatchesForMaterial = batches.filter(batch => batch.quantity > 0);
+          
+          // Sortuj według daty ważności (od najwcześniejszej)
+          availableBatchesForMaterial.sort((a, b) => {
+            if (!a.expiryDate && !b.expiryDate) return 0;
+            if (!a.expiryDate) return 1;
+            if (!b.expiryDate) return -1;
+            return new Date(a.expiryDate) - new Date(b.expiryDate);
+          });
+          
+          batchesData[materialId] = availableBatchesForMaterial;
+          initialSelectedBatches[materialId] = [];
+          
+        } catch (error) {
+          console.error(`Błąd podczas pobierania partii dla materiału ${material.name}:`, error);
+          batchesData[materialId] = [];
+          initialSelectedBatches[materialId] = [];
+        }
+      }
+      
+      setAvailableBatches(batchesData);
+      setSelectedBatches(initialSelectedBatches);
+    } catch (error) {
+      console.error('Błąd podczas pobierania partii dla materiałów:', error);
+      showError('Nie udało się pobrać informacji o partiach materiałów');
+    } finally {
+      setMaterialBatchesLoading(false);
+    }
+  };
+  
+  // Obsługa zmiany metody rezerwacji
+  const handleReservationMethodChange = (e) => {
+    const newMethod = e.target.value;
+    setReservationMethod(newMethod);
+    
+    // Jeśli wybrano ręczną metodę, pobierz partie
+    if (newMethod === 'manual' && Object.keys(availableBatches).length === 0) {
+      fetchBatchesForMaterials();
+      setManualBatchSelectionActive(true);
+    } else {
+      setManualBatchSelectionActive(false);
+    }
+  };
+  
+  // Obsługa zmiany wybranej partii
+  const handleBatchSelection = (materialId, batchId, quantity) => {
+    setSelectedBatches(prev => {
+      const materialBatches = [...(prev[materialId] || [])];
+      const existingBatchIndex = materialBatches.findIndex(b => b.batchId === batchId);
+      
+      if (existingBatchIndex >= 0) {
+        // Aktualizuj istniejącą partię
+        if (quantity <= 0) {
+          // Usuń partię, jeśli ilość jest 0 lub ujemna
+          materialBatches.splice(existingBatchIndex, 1);
+        } else {
+          materialBatches[existingBatchIndex].quantity = quantity;
+        }
+      } else if (quantity > 0) {
+        // Dodaj nową partię
+        const batch = availableBatches[materialId].find(b => b.id === batchId);
+        if (batch) {
+          materialBatches.push({
+            batchId: batchId,
+            quantity: quantity,
+            batchNumber: batch.batchNumber || batch.lotNumber || 'Bez numeru'
+          });
+        }
+      }
+      
+      return {
+        ...prev,
+        [materialId]: materialBatches
+      };
+    });
+  };
+  
+  // Funkcja do sprawdzania, czy wszystkie materiały mają wystarczającą ilość zarezerwowanych partii
+  const validateManualBatchSelection = () => {
+    if (!task || !task.materials) return false;
+    
+    for (const material of task.materials) {
+      const materialId = material.inventoryItemId || material.id;
+      if (!materialId) continue;
+      
+      const materialBatches = selectedBatches[materialId] || [];
+      const totalSelectedQuantity = materialBatches.reduce((sum, batch) => sum + batch.quantity, 0);
+      
+      if (totalSelectedQuantity < material.quantity) {
+        showError(`Niewystarczająca ilość partii wybrana dla materiału ${material.name}. Wybrano: ${totalSelectedQuantity}, wymagane: ${material.quantity}`);
+        return false;
+      }
+    }
+    
+    return true;
+  };
+  
+  // Zmodyfikowana funkcja do rezerwacji materiałów z obsługą ręcznego wyboru partii
+  const handleReserveMaterials = async () => {
+    try {
+      setReservingMaterials(true);
+      
+      if (!task || !task.materials || task.materials.length === 0) {
+        showError('Zadanie nie ma przypisanych materiałów do rezerwacji');
+        setReservingMaterials(false);
+        setReserveDialogOpen(false);
+        return;
+      }
+      
+      // Jeśli wybrano ręczny wybór partii
+      if (reservationMethod === 'manual') {
+        if (!validateManualBatchSelection()) {
+          setReservingMaterials(false);
+          return;
+        }
+        
+        const errors = [];
+        const reservedItems = [];
+        const userId = currentUser?.uid || 'system';
+        
+        // Dla każdego materiału w zadaniu
+        for (const material of task.materials) {
+          const materialId = material.inventoryItemId || material.id;
+          if (!materialId) continue;
+          
+          const materialBatches = selectedBatches[materialId] || [];
+          
+          try {
+            // Rezerwuj materiał
+            for (const batchSelection of materialBatches) {
+              try {
+                await bookInventoryForTask(
+                  materialId,
+                  batchSelection.quantity,
+                  id,
+                  userId,
+                  'manual',
+                  batchSelection.batchId  // Przekazujemy ID konkretnej partii
+                );
+              } catch (error) {
+                console.error(`Błąd podczas rezerwacji partii ${batchSelection.batchNumber} materiału ${material.name}:`, error);
+                errors.push(`Nie można zarezerwować partii ${batchSelection.batchNumber} materiału ${material.name}: ${error.message}`);
+              }
+            }
+            
+            reservedItems.push({
+              itemId: materialId,
+              name: material.name,
+              quantity: material.quantity,
+              unit: material.unit
+            });
+          } catch (error) {
+            console.error(`Błąd podczas rezerwacji materiału ${material.name}:`, error);
+            errors.push(`Nie można zarezerwować materiału ${material.name}: ${error.message}`);
+          }
+        }
+        
+        // Zwróć informację o wyniku operacji
+        if (errors.length === 0) {
+          showSuccess(`Zarezerwowano wszystkie ${reservedItems.length} materiały dla zadania`);
+        } else {
+          // Jeśli mamy częściowy sukces (część materiałów zarezerwowana, część nie)
+          if (reservedItems.length > 0) {
+            showInfo(`Zarezerwowano częściowo: ${reservedItems.length} z ${task.materials.length} materiałów`);
+          }
+          
+          if (errors.length > 0) {
+            showError(`Błędy: ${errors.join(', ')}`);
+          }
+        }
+      } else {
+        // Standardowa rezerwacja automatyczna (FIFO lub według daty ważności)
+        const result = await reserveMaterialsForTask(id, task.materials, reservationMethod);
+        
+        if (result.success) {
+          showSuccess(result.message);
+        } else {
+          // Jeśli mamy częściowy sukces (część materiałów zarezerwowana, część nie)
+          if (result.reservedItems && result.reservedItems.length > 0) {
+            showInfo(`Zarezerwowano częściowo: ${result.reservedItems.length} z ${task.materials.length} materiałów`);
+          }
+          
+          if (result.errors && result.errors.length > 0) {
+            showError(`Błędy: ${result.errors.join(', ')}`);
+          }
+        }
+      }
+      
+      // Odśwież dane zadania
+      const updatedTask = await getTaskById(id);
+      setTask(updatedTask);
+      
+      setReserveDialogOpen(false);
+    } catch (error) {
+      console.error('Błąd podczas rezerwacji materiałów:', error);
+      showError('Nie udało się zarezerwować materiałów: ' + error.message);
+    } finally {
+      setReservingMaterials(false);
+    }
+  };
+  
+  // Renderowanie komponentu do ręcznego wyboru partii
+  const renderManualBatchSelection = () => {
+    if (!task || !task.materials || task.materials.length === 0) {
+      return <Typography>Brak materiałów do zarezerwowania</Typography>;
+    }
+    
+    if (materialBatchesLoading) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4, display: 'flex', justifyContent: 'center' }}>
-        <CircularProgress />
-      </Container>
-    );
-  }
-
-  if (!task) {
-    return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Typography variant="h5">Zadanie nie zostało znalezione</Typography>
-        <Button 
-          variant="contained" 
-          component={Link} 
-          to="/production"
-          startIcon={<ArrowBackIcon />}
-          sx={{ mt: 2 }}
-        >
-          Powrót do produkcji
-        </Button>
-      </Container>
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+          <CircularProgress />
+        </Box>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-        <IconButton 
-          component={Link} 
-          to="/production" 
-          sx={{ mr: 1 }}
-          color="primary"
-        >
-          <ArrowBackIcon />
-        </IconButton>
-        <Typography variant="h5">
-          Szczegóły zadania produkcyjnego
+      <Box sx={{ mt: 2 }}>
+        <Typography variant="subtitle1" gutterBottom>
+          Wybierz partie dla każdego materiału:
         </Typography>
-        {(task.moNumber || task.number) && (
+        
+        {task.materials.map((material) => {
+          const materialId = material.inventoryItemId || material.id;
+          if (!materialId) return null;
+          
+          const materialBatches = availableBatches[materialId] || [];
+          const selectedMaterialBatches = selectedBatches[materialId] || [];
+          const totalSelectedQuantity = selectedMaterialBatches.reduce((sum, batch) => sum + batch.quantity, 0);
+          const isComplete = totalSelectedQuantity >= material.quantity;
+          
+          return (
+            <Accordion 
+              key={materialId}
+              expanded={expandedMaterial === materialId}
+              onChange={() => setExpandedMaterial(expandedMaterial === materialId ? null : materialId)}
+            >
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                  <Typography>{material.name}</Typography>
+                  <Box>
           <Chip
-            label={`MO: ${task.moNumber || task.number}`}
-            color="secondary"
+                      label={`${totalSelectedQuantity} / ${material.quantity} ${material.unit}`}
+                      color={isComplete ? "success" : "warning"}
             size="small"
-            sx={{ ml: 2 }}
-          />
-        )}
-        <Box sx={{ flexGrow: 1 }} />
+                      sx={{ mr: 1 }}
+                    />
+                  </Box>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                {materialBatches.length === 0 ? (
+                  <Typography color="error">
+                    Brak dostępnych partii dla tego materiału
+                  </Typography>
+                ) : (
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Nr partii</TableCell>
+                          <TableCell>Data ważności</TableCell>
+                          <TableCell>Dostępna ilość</TableCell>
+                          <TableCell>Do rezerwacji</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {materialBatches.map((batch) => {
+                          const selectedBatch = selectedMaterialBatches.find(b => b.batchId === batch.id);
+                          const selectedQuantity = selectedBatch ? selectedBatch.quantity : 0;
+                          
+                          return (
+                            <TableRow key={batch.id}>
+                              <TableCell>
+                                {batch.batchNumber || batch.lotNumber || 'Bez numeru'}
+                              </TableCell>
+                              <TableCell>
+                                {batch.expiryDate ? formatDate(batch.expiryDate) : 'Brak'}
+                              </TableCell>
+                              <TableCell>{batch.quantity} {material.unit}</TableCell>
+                              <TableCell>
+                                <TextField
+                                  type="number"
+                                  value={selectedQuantity}
+                                  onChange={(e) => {
+                                    const value = parseFloat(e.target.value);
+                                    const quantity = isNaN(value) ? 0 : Math.min(value, batch.quantity);
+                                    handleBatchSelection(materialId, batch.id, quantity);
+                                  }}
+                                  inputProps={{ 
+                                    min: 0, 
+                                    max: batch.quantity,
+                                    step: 'any'
+                                  }}
+                                  size="small"
+                                  sx={{ width: '100px' }}
+                                />
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+              </AccordionDetails>
+            </Accordion>
+          );
+        })}
+      </Box>
+    );
+  };
+
+  // Renderuj stronę
+    return (
+      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      {loading ? (
+        <CircularProgress />
+      ) : (
+        <>
+          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Button 
+          startIcon={<ArrowBackIcon />}
+              onClick={() => navigate('/production')}
           variant="outlined" 
-          startIcon={<EditIcon />}
+        >
+              Powrót do listy
+        </Button>
+            <Box>
+        <IconButton 
+          color="primary"
           component={Link}
           to={`/production/tasks/${id}/edit`}
           sx={{ mr: 1 }}
         >
-          Edytuj
-        </Button>
-        {task && task.materials && task.materials.length > 0 && (
-          <Button
-            variant="outlined"
-            startIcon={<SettingsIcon />}
-            onClick={() => setConsumptionDialogOpen(true)}
-            sx={{ mr: 1 }}
-          >
-            Zarządzaj materiałami
-          </Button>
-        )}
-        <Button 
-          variant="outlined" 
-          color="error" 
-          startIcon={<DeleteIcon />}
-          onClick={() => setDeleteDialog(true)}
-        >
-          Usuń
-        </Button>
+                <EditIcon />
+              </IconButton>
+              <IconButton color="error" onClick={() => setDeleteDialog(true)}>
+                <DeleteIcon />
+              </IconButton>
+            </Box>
       </Box>
       
-      {alert.open && (
-        <Alert severity={alert.severity} sx={{ mb: 2 }}>
-          {alert.message}
-        </Alert>
-      )}
-      
-      <Paper sx={{ p: 2 }}>
-        <Grid container spacing={2}>
-          <Grid item xs={12} sm={6}>
-            <Typography variant="h6" gutterBottom>
+          <Grid container spacing={3}>
+            <Grid item xs={12}>
+              <Paper sx={{ p: 3 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Typography variant="h5" component="h1">
               {task.name}
-            </Typography>
-            {(task.moNumber || task.number) && (
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <Typography variant="body1" sx={{ mr: 1 }}>
-                  Numer MO:
-                </Typography>
                 <Chip
-                  label={task.moNumber || task.number}
-                  color="secondary"
-                  variant="outlined"
-                />
-              </Box>
-            )}
-            <Typography variant="body1" gutterBottom>
-              Produkt: {task.productName}
-            </Typography>
-            <Typography variant="body1" gutterBottom>
-              Ilość: {task.quantity} {task.unit}
-            </Typography>
-            <Typography variant="body1" gutterBottom>
-              Kategoria: {task.category || 'Brak kategorii'}
-            </Typography>
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <Typography variant="body1" sx={{ mr: 1 }}>
-                Status:
-              </Typography>
+                      label={task.moNumber || 'MO'}
+                      color="primary"
+                      size="small"
+                      sx={{ ml: 2 }}
+                    />
               <Chip
                 label={task.status}
                 color={getStatusColor(task.status)}
-              />
+                      size="small"
+                      sx={{ ml: 1 }}
+                    />
+                    <Chip 
+                      label={task.priority}
+                      color={task.priority === 'Wysoki' ? 'error' : task.priority === 'Normalny' ? 'primary' : 'default'}
+                      variant="outlined"
+                      size="small"
+                      sx={{ ml: 1 }}
+                    />
+            </Typography>
+                  <Box>
+                    {getStatusActions()}
+                  </Box>
             </Box>
-            <Typography variant="body1" gutterBottom>
-              Priorytet: {task.priority || 'Normalny'}
-            </Typography>
-            <Typography variant="body1" gutterBottom>
-              Zaplanowano na: {formatDate(task.scheduledDate)}
-            </Typography>
-            {task.startDate && (
-              <Typography variant="body1" gutterBottom>
-                Data rozpoczęcia: {formatDate(task.startDate)}
-              </Typography>
-            )}
-            {task.completionDate && (
-              <Typography variant="body1" gutterBottom>
-                Data zakończenia: {formatDate(task.completionDate)}
-              </Typography>
-            )}
+
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Produkt:</Typography>
+                    <Typography variant="body1">{task.productName}</Typography>
           </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Ilość:</Typography>
+                    <Typography variant="body1">{task.quantity} {task.unit}</Typography>
         </Grid>
         
-        <Divider sx={{ my: 2 }} />
-        
-        <Typography variant="h6" gutterBottom>
-          Szczegóły
+                  {task.estimatedDuration > 0 && (
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Szacowany czas produkcji:</Typography>
+                      <Typography variant="body1">{task.estimatedDuration.toFixed(1)} godz.</Typography>
+                    </Grid>
+                  )}
+
+                  {task.recipe && task.recipe.recipeName && (
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Receptura:</Typography>
+                      <Typography variant="body1">
+                        <Link to={`/recipes/${task.recipe.recipeId}`}>{task.recipe.recipeName}</Link>
         </Typography>
-        <Typography variant="body1" paragraph>
-          {task.description || 'Brak opisu'}
-        </Typography>
-        
-        <Divider sx={{ my: 2 }} />
-        
-        <Typography variant="h6" gutterBottom>
-          Materiały
-        </Typography>
-        {task.materials && task.materials.length > 0 ? (
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Nazwa</TableCell>
-                  <TableCell>Kategoria</TableCell>
-                  <TableCell align="right">Ilość na jednostkę</TableCell>
-                  <TableCell align="right">Całkowite zapotrzebowanie</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {task.materials.map((material) => (
-                  <TableRow key={material.id}>
-                    <TableCell>{material.name}</TableCell>
-                    <TableCell>{material.category || '-'}</TableCell>
-                    <TableCell align="right">{material.quantity / task.quantity} {material.unit}</TableCell>
-                    <TableCell align="right">{material.quantity} {material.unit}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        ) : (
-          <Typography variant="body1">Brak przypisanych materiałów</Typography>
-        )}
+                    </Grid>
+                  )}
+
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Opis:</Typography>
+                    <Typography variant="body1">{task.description || 'Brak opisu'}</Typography>
+                  </Grid>
+                </Grid>
       </Paper>
-      
-      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-        {getStatusActions()}
-        {task && task.status === 'Zakończone' && task.readyForInventory && (
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<InventoryIcon />}
-            onClick={handleAddToInventory}
-            sx={{ ml: 1 }}
-          >
-            Dodaj produkt jako partię
-          </Button>
-        )}
-      </Box>
-      
-      {/* Dialog zarządzania konsumpcją materiałów */}
-      <Dialog
-        open={consumptionDialogOpen}
-        onClose={() => setConsumptionDialogOpen(false)}
-        fullWidth
-        maxWidth="md"
-      >
-        <DialogTitle>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="h6">Zarządzanie zużyciem materiałów</Typography>
-            <Box>
-              {editMode ? (
-                <>
+            </Grid>
+
+            {/* Dodanie komponentu do wyświetlania powiązanych zamówień */}
+            <TaskDetails task={task} />
+
+            {/* Sekcja materiałów */}
+            <Grid item xs={12}>
+              <Paper sx={{ p: 3 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Typography variant="h6" component="h2">Materiały</Typography>
                   <Button
                     variant="outlined"
-                    startIcon={<CancelIcon />}
-                    onClick={() => setEditMode(false)}
-                    sx={{ mr: 1 }}
+                    color="primary"
+                    startIcon={<BookmarkAddIcon />}
+                    onClick={() => setReserveDialogOpen(true)}
+                    sx={{ mt: 2, mb: 2 }}
                   >
-                    Anuluj
+                    Rezerwuj surowce
                   </Button>
-                  <Button
-                    variant="contained"
-                    startIcon={<SaveIcon />}
-                    onClick={handleSaveChanges}
-                  >
-                    Zapisz zmiany
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button
-                    variant="outlined"
-                    startIcon={<EditIcon />}
-                    onClick={() => setEditMode(true)}
-                    sx={{ mr: 1 }}
-                    disabled={task.materialConsumptionConfirmed}
-                  >
-                    Edytuj ilości
-                  </Button>
-                  <Button
-                    variant="contained"
-                    startIcon={<CheckIcon />}
-                    onClick={() => setConfirmationDialogOpen(true)}
-                    disabled={task.materialConsumptionConfirmed}
-                  >
-                    Potwierdź zużycie
-                  </Button>
-                </>
-              )}
             </Box>
-          </Box>
-        </DialogTitle>
-        <DialogContent dividers>
-          {task.materialConsumptionConfirmed ? (
-            <Alert severity="success" sx={{ mb: 3 }}>
-              Zużycie materiałów dla tego zadania zostało potwierdzone. Stany magazynowe zostały już zaktualizowane.
-            </Alert>
-          ) : task.status === 'Zakończone' ? (
-            <Alert severity="warning" sx={{ mb: 3 }}>
-              Zadanie jest oznaczone jako zakończone, ale zużycie materiałów nie zostało jeszcze potwierdzone. Potwierdź zużycie materiałów.
-            </Alert>
-          ) : (
-            <Alert severity="info" sx={{ mb: 3 }}>
-              Potwierdź faktyczne zużycie materiałów dla tego zadania. W razie potrzeby możesz dostosować ilości przed potwierdzeniem.
-            </Alert>
-          )}
-          
-          {materials.length > 0 ? (
+                
             <TableContainer>
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Materiał</TableCell>
-                    <TableCell>Kategoria</TableCell>
-                    <TableCell align="right">Planowana ilość</TableCell>
-                    <TableCell align="right">Rzeczywiste zużycie</TableCell>
-                    <TableCell align="right">Różnica</TableCell>
+                        <TableCell>Nazwa</TableCell>
+                        <TableCell>Ilość</TableCell>
+                        <TableCell>Jednostka</TableCell>
+                        <TableCell>Rzeczywista ilość</TableCell>
+                        <TableCell>Zarezerwowane partie (LOT)</TableCell>
+                        <TableCell>Edytuj</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {materials.map((material) => {
-                    const plannedQuantity = material.quantity || 0;  // Używamy bezpośrednio wartości quantity
-                    const actualQuantity = materialQuantities[material.id];
-                    
-                    let difference, differenceDisplay;
-                    
-                    if (actualQuantity !== undefined && !isNaN(actualQuantity)) {
-                      difference = actualQuantity - plannedQuantity;
-                      differenceDisplay = `${difference > 0 ? '+' : ''}${difference} ${material.unit}`;
-                    } else {
-                      difference = 0;
-                      differenceDisplay = '-';
-                    }
+                        // Sprawdź czy dla tego materiału są zarezerwowane partie
+                        const materialId = material.inventoryItemId || material.id;
+                        const reservedBatches = task.materialBatches && task.materialBatches[materialId];
                     
                     return (
                       <TableRow key={material.id}>
                         <TableCell>{material.name}</TableCell>
-                        <TableCell>{material.category || '-'}</TableCell>
-                        <TableCell align="right">{plannedQuantity} {material.unit}</TableCell>
-                        <TableCell align="right">
-                          {editMode ? (
-                            <TextField
-                              type="number"
+                            <TableCell>{material.quantity}</TableCell>
+                            <TableCell>{material.unit}</TableCell>
+                            <TableCell>{materialQuantities[material.id] || 0}</TableCell>
+                            <TableCell>
+                              {reservedBatches && reservedBatches.length > 0 ? (
+                                <Box>
+                                  {reservedBatches.map((batch, index) => (
+                                    <Chip
+                                      key={index}
                               size="small"
-                              value={actualQuantity === '' ? '' : actualQuantity || 0}
-                              onChange={(e) => handleQuantityChange(material.id, e.target.value)}
-                              InputProps={{
-                                endAdornment: material.unit
-                              }}
-                              error={Boolean(errors[material.id])}
-                              helperText={errors[material.id]}
-                              sx={{ width: '120px' }}
-                            />
-                          ) : (
-                            <Typography>{actualQuantity === '' ? '-' : actualQuantity} {material.unit}</Typography>
+                                      label={`${batch.batchNumber} (${batch.quantity} ${material.unit})`}
+                                      color="info"
+                                      variant="outlined"
+                                      sx={{ mr: 0.5, mb: 0.5 }}
+                                    />
+                                  ))}
+                                </Box>
+                              ) : (
+                                <Typography variant="body2" color="text.secondary">
+                                  Brak zarezerwowanych partii
+                                </Typography>
                           )}
                         </TableCell>
-                        <TableCell align="right">
-                          <Typography
-                            color={difference === 0 ? 'text.primary' : difference < 0 ? 'success.main' : 'error.main'}
-                          >
-                            {differenceDisplay}
-                          </Typography>
+                            <TableCell>
+                              <IconButton 
+                                color="primary" 
+                                onClick={() => {
+                                  setEditMode(true);
+                                  setMaterialQuantities(prev => ({
+                                    ...prev,
+                                    [material.id]: materialQuantities[material.id] || 0
+                                  }));
+                                }}
+                              >
+                                <EditIcon />
+                              </IconButton>
                         </TableCell>
                       </TableRow>
                     );
                   })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          ) : (
-            <Typography>Brak materiałów dla tego zadania</Typography>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConsumptionDialogOpen(false)}>
-            Zamknij
-          </Button>
-        </DialogActions>
-      </Dialog>
-      
-      {/* Dialog potwierdzenia zużycia materiałów */}
-      <Dialog
-        open={confirmationDialogOpen}
-        onClose={() => setConfirmationDialogOpen(false)}
-      >
-        <DialogTitle>Potwierdź zużycie materiałów</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Czy na pewno chcesz potwierdzić zużycie materiałów? Ta operacja zaktualizuje stany magazynowe i nie będzie można jej cofnąć.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmationDialogOpen(false)}>
-            Anuluj
-          </Button>
-          <Button onClick={handleConfirmConsumption} variant="contained" autoFocus>
-            Potwierdź
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Sekcja historii produkcji */}
-      {productionHistory.length > 0 && (
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Typography variant="h6" gutterBottom>
-            Historia produkcji
-          </Typography>
-          <Divider sx={{ mb: 2 }} />
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Data rozpoczęcia</TableCell>
-                  <TableCell>Data zakończenia</TableCell>
-                  <TableCell align="right">Wyprodukowana ilość</TableCell>
-                  <TableCell align="right">Czas produkcji (min)</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {productionHistory.map((session, index) => (
-                  <TableRow key={index}>
-                    <TableCell>{formatDate(session.startDate)}</TableCell>
-                    <TableCell>{formatDate(session.endDate)}</TableCell>
-                    <TableCell align="right">{session.completedQuantity} {task.unit}</TableCell>
-                    <TableCell align="right">{session.timeSpent}</TableCell>
-                  </TableRow>
-                ))}
-                <TableRow>
-                  <TableCell colSpan={2} align="right" sx={{ fontWeight: 'bold' }}>
-                    Suma:
-                  </TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                    {productionHistory.reduce((sum, session) => sum + session.completedQuantity, 0)} {task.unit}
-                  </TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                    {productionHistory.reduce((sum, session) => sum + session.timeSpent, 0)}
-                  </TableCell>
-                </TableRow>
               </TableBody>
             </Table>
           </TableContainer>
         </Paper>
+            </Grid>
+          
+            {/* Pozostałe sekcje... */}
+          </Grid>
+            </>
       )}
 
-      {/* Dialog zatrzymania produkcji */}
+      {/* Dialogi (potwierdzenie, produkcja, itp.) */}
+      {/* ... */}
+
+      {/* Dialog rezerwacji materiałów */}
       <Dialog
-        open={stopProductionDialogOpen}
-        onClose={() => setStopProductionDialogOpen(false)}
-        maxWidth="sm"
+        open={reserveDialogOpen}
+        onClose={() => setReserveDialogOpen(false)}
+        maxWidth="md"
         fullWidth
       >
-        <DialogTitle>Zatrzymaj produkcję</DialogTitle>
+        <DialogTitle>Rezerwacja surowców</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
-            Wprowadź informacje o zakończonej sesji produkcyjnej
+            Wybierz metodę rezerwacji surowców dla tego zadania produkcyjnego.
           </DialogContentText>
           
-          {productionError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {productionError}
-            </Alert>
-          )}
-
-          <TextField
-            label="Wyprodukowana ilość"
-            type="number"
-            value={completedQuantity}
-            onChange={(e) => setCompletedQuantity(e.target.value)}
-            fullWidth
-            margin="dense"
-            InputProps={{
-              endAdornment: task?.unit
-            }}
-          />
+          <FormControl component="fieldset" sx={{ mb: 2, mt: 2 }}>
+            <FormLabel component="legend">Metoda rezerwacji składników</FormLabel>
+            <RadioGroup
+              row
+              name="reservationMethod"
+              value={reservationMethod}
+              onChange={handleReservationMethodChange}
+            >
+              <FormControlLabel 
+                value="fifo" 
+                control={<Radio />} 
+                label="FIFO (First In, First Out)" 
+              />
+              <FormControlLabel 
+                value="expiry" 
+                control={<Radio />} 
+                label="Według daty ważności (najkrótszej)" 
+              />
+              <FormControlLabel 
+                value="manual" 
+                control={<Radio />} 
+                label="Ręczny wybór partii" 
+              />
+            </RadioGroup>
+          </FormControl>
           
-          <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, my: 2 }}>
-              <Typography variant="subtitle2" gutterBottom>
-                Przedział czasowy produkcji:
-              </Typography>
-              
-              <DateTimePicker
-                label="Czas rozpoczęcia"
-                value={productionStartTime}
-                onChange={(newValue) => setProductionStartTime(newValue)}
-                ampm={false}
-                format="dd-MM-yyyy HH:mm"
-                slotProps={{
-                  textField: {
-                    fullWidth: true,
-                    margin: 'dense',
-                    variant: 'outlined'
-                  }
-                }}
-              />
-              
-              <DateTimePicker
-                label="Czas zakończenia"
-                value={productionEndTime}
-                onChange={(newValue) => setProductionEndTime(newValue)}
-                ampm={false}
-                format="dd-MM-yyyy HH:mm"
-                slotProps={{
-                  textField: {
-                    fullWidth: true,
-                    margin: 'dense',
-                    variant: 'outlined'
-                  }
-                }}
-              />
-              
-              {productionStartTime && productionEndTime && (
-                <Typography variant="body2" color="textSecondary">
-                  Czas trwania: {Math.round((productionEndTime.getTime() - productionStartTime.getTime()) / (1000 * 60))} minut
+          {reservationMethod === 'manual' && renderManualBatchSelection()}
+          
+          {reservationMethod !== 'manual' && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+              Rezerwacja blokuje materiały w magazynie na potrzeby tego zadania produkcyjnego, 
+              zapewniając ich dostępność w momencie rozpoczęcia produkcji.
                 </Typography>
               )}
-            </Box>
-          </LocalizationProvider>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setStopProductionDialogOpen(false)}>
+          <Button onClick={() => setReserveDialogOpen(false)}>
             Anuluj
           </Button>
-          <Button onClick={handleStopProduction} variant="contained">
-            Zatwierdź
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Okno dialogowe usuwania */}
-      <Dialog open={deleteDialog} onClose={() => setDeleteDialog(false)}>
-        <DialogTitle>Potwierdź usunięcie</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Czy na pewno chcesz usunąć to zadanie produkcyjne? Ta operacja jest nieodwracalna.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialog(false)}>Anuluj</Button>
-          <Button onClick={handleDelete} color="error">Usuń</Button>
-        </DialogActions>
-      </Dialog>
-      
-      {/* Dialog przyjęcia produktu do magazynu */}
-      <Dialog
-        open={receiveDialogOpen}
-        onClose={() => setReceiveDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Przyjmij produkt do magazynu</DialogTitle>
-        <DialogContent>
-          {task && (
-            <>
-              <DialogContentText>
-                Produkt zostanie przyjęty do magazynu jako nowa partia (LOT) przypisana do pozycji {task.productName}.
-              </DialogContentText>
-              <Box sx={{ mt: 2, mb: 2 }}>
-                <Typography variant="subtitle1">{task.productName}</Typography>
-                <Typography>
-                  Ilość: {task.quantity} {task.unit || 'szt.'}
-                </Typography>
-                {task.costs && (
-                  <Typography>
-                    Koszt jednostkowy: {Number(task.costs.totalCost / task.quantity).toFixed(2)} PLN
-                  </Typography>
-                )}
-                <Typography variant="body2" color="primary" sx={{ mt: 1 }}>
-                  {task.moNumber ? 
-                    `Numer partii (LOT): LOT-${task.moNumber}` : 
-                    `Numer partii (LOT): LOT-PROD-${id.substring(0, 6)}`}
-                </Typography>
-              </Box>
-              <Alert severity="info" sx={{ mt: 2 }}>
-                Przyjęcie produktu z produkcji utworzy nową partię w magazynie, zwiększając stan magazynowy wybranego produktu.
-              </Alert>
-            </>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setReceiveDialogOpen(false)}>Anuluj</Button>
           <Button 
-            onClick={handleReceiveItem} 
-            color="primary"
+            onClick={handleReserveMaterials} 
             variant="contained"
+            disabled={reservingMaterials}
           >
-            {task && task.inventoryProductId ? 'Przyjmij jako partię' : 'Dodaj do magazynu'}
+            {reservingMaterials ? <CircularProgress size={24} /> : 'Rezerwuj materiały'}
           </Button>
         </DialogActions>
       </Dialog>

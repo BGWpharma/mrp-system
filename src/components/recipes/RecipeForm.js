@@ -142,13 +142,13 @@ const RecipeForm = ({ recipeId }) => {
       }
     };
     
-    // Pobierz magazyny
+    // Pobierz lokalizacje
     const fetchWarehouses = async () => {
       try {
         const warehousesData = await getAllWarehouses();
         setWarehouses(warehousesData);
         
-        // Ustaw domyślny magazyn, jeśli istnieje
+        // Ustaw domyślną lokalizację, jeśli istnieje
         if (warehousesData.length > 0) {
           setProductData(prev => ({
             ...prev,
@@ -156,7 +156,7 @@ const RecipeForm = ({ recipeId }) => {
           }));
         }
       } catch (error) {
-        console.error('Błąd podczas pobierania magazynów:', error);
+        console.error('Błąd podczas pobierania lokalizacji:', error);
       }
     };
 
@@ -321,7 +321,7 @@ const RecipeForm = ({ recipeId }) => {
   // Funkcja do tworzenia produktu w magazynie
   const handleCreateProduct = async () => {
     if (!productData.name || !productData.warehouseId) {
-      showError('Nazwa produktu i magazyn są wymagane');
+      showError('Nazwa produktu i lokalizacja są wymagane');
       return;
     }
     
@@ -356,7 +356,7 @@ const RecipeForm = ({ recipeId }) => {
       // Utwórz produkt w magazynie
       const createdProduct = await createInventoryItem(newProductData, currentUser.uid);
       
-      showSuccess(`Produkt "${createdProduct.name}" został pomyślnie dodany do magazynu "${selectedWarehouse?.name || 'wybranym'}"`);
+      showSuccess(`Produkt "${createdProduct.name}" został pomyślnie dodany do stanów "${selectedWarehouse?.name || 'wybranym'}"`);
       setCreateProductDialogOpen(false);
       
       // Odśwież listę składników, aby nowo utworzony produkt był widoczny
@@ -384,7 +384,7 @@ const RecipeForm = ({ recipeId }) => {
         onClick={() => setCreateProductDialogOpen(true)}
         sx={{ ml: 2 }}
       >
-        Dodaj produkt do magazynu
+        Dodaj produkt do stanów
       </Button>
     );
   };
@@ -408,7 +408,7 @@ const RecipeForm = ({ recipeId }) => {
       ingredients: updatedIngredients
     }));
     
-    showSuccess(`Powiązano składnik "${ingredientName}" z pozycją magazynową`);
+    showSuccess(`Powiązano składnik "${ingredientName}" z pozycją stanów`);
   };
   
   // Funkcja do wyszukiwania i linkowania składników z magazynem
@@ -494,15 +494,15 @@ const RecipeForm = ({ recipeId }) => {
       }
       
       if (linkedCount > 0) {
-        showSuccess(`Powiązano ${linkedCount} składników z magazynem`);
+        showSuccess(`Powiązano ${linkedCount} składników ze stanami`);
       }
       
       if (notFoundCount > 0) {
-        showWarning(`Dla ${notFoundCount} składników nie znaleziono odpowiedników w magazynie`);
+        showWarning(`Dla ${notFoundCount} składników nie znaleziono odpowiedników w stanach`);
       }
       
       if (linkedCount === 0 && notFoundCount === 0 && !resetLinks) {
-        showInfo('Wszystkie składniki są już powiązane z magazynem lub nie można znaleźć dopasowań');
+        showInfo('Wszystkie składniki są już powiązane ze stanami lub nie można znaleźć dopasowań');
       }
     } catch (error) {
       showError('Błąd podczas linkowania składników: ' + error.message);
@@ -688,7 +688,7 @@ const RecipeForm = ({ recipeId }) => {
             onClick={handleAddInventoryItem}
             sx={{ ml: 1 }}
           >
-            Z magazynu
+            Ze stanów
           </Button>
           <Button 
             size="small"
@@ -696,7 +696,7 @@ const RecipeForm = ({ recipeId }) => {
             onClick={() => linkAllIngredientsWithInventory(false)}
             sx={{ ml: 1 }}
           >
-            Powiąż z magazynem
+            Powiąż ze stanami
           </Button>
           <Button 
             size="small"
@@ -717,10 +717,10 @@ const RecipeForm = ({ recipeId }) => {
             renderInput={(params) => (
               <TextField
                 {...params}
-                label="Dodaj składnik z magazynu"
+                label="Dodaj składnik ze stanów"
                 variant="outlined"
                 fullWidth
-                helperText="Tylko składniki z magazynu mają przypisane ceny do kalkulacji kosztów. Składniki dodane ręcznie nie będą uwzględnione w kalkulacji."
+                helperText="Tylko składniki ze stanów mają przypisane ceny do kalkulacji kosztów. Składniki dodane ręcznie nie będą uwzględnione w kalkulacji."
                 InputProps={{
                   ...params.InputProps,
                   endAdornment: (
@@ -807,9 +807,9 @@ const RecipeForm = ({ recipeId }) => {
                         <Chip 
                           size="small" 
                           color="primary" 
-                          label="Magazyn" 
+                          label="Stany" 
                           icon={<InventoryIcon />} 
-                          title="Składnik z magazynu - ma przypisaną cenę do kalkulacji kosztów" 
+                          title="Składnik ze stanów - ma przypisaną cenę do kalkulacji kosztów" 
                         />
                       ) : (
                         <Chip 
@@ -837,7 +837,7 @@ const RecipeForm = ({ recipeId }) => {
           </TableContainer>
         ) : (
           <Typography variant="body2" color="text.secondary" sx={{ my: 2 }}>
-            Brak składników. Dodaj składniki z magazynu lub ręcznie.
+            Brak składników. Dodaj składniki ze stanów lub ręcznie.
           </Typography>
         )}
       </Paper>
@@ -862,10 +862,10 @@ const RecipeForm = ({ recipeId }) => {
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle>Dodaj produkt do magazynu</DialogTitle>
+        <DialogTitle>Dodaj produkt do stanów</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
-            Uzupełnij poniższe dane, aby dodać produkt z receptury do magazynu. 
+            Uzupełnij poniższe dane, aby dodać produkt z receptury do stanów. 
             Koszt produkcji zostanie obliczony na podstawie kosztów składników.
           </DialogContentText>
           
@@ -885,14 +885,14 @@ const RecipeForm = ({ recipeId }) => {
             
             <Grid item xs={12} md={6}>
               <FormControl fullWidth required>
-                <InputLabel id="warehouse-select-label">Magazyn</InputLabel>
+                <InputLabel id="warehouse-select-label">Lokalizacja</InputLabel>
                 <Select
                   labelId="warehouse-select-label"
                   id="warehouse-select"
                   name="warehouseId"
                   value={productData.warehouseId}
                   onChange={handleProductDataChange}
-                  label="Magazyn"
+                  label="Lokalizacja"
                   error={!productData.warehouseId}
                 >
                   {warehouses.map((warehouse) => (
@@ -990,7 +990,7 @@ const RecipeForm = ({ recipeId }) => {
             disabled={creatingProduct || !productData.name || !productData.warehouseId}
             startIcon={creatingProduct ? <CircularProgress size={20} /> : <ProductIcon />}
           >
-            {creatingProduct ? 'Zapisywanie...' : 'Dodaj do magazynu'}
+            {creatingProduct ? 'Zapisywanie...' : 'Dodaj do stanów'}
           </Button>
         </DialogActions>
       </Dialog>

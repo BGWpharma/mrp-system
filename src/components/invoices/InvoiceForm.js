@@ -33,6 +33,7 @@ import {
   createInvoice, 
   getInvoiceById, 
   updateInvoice, 
+  createInvoiceFromOrder,
   DEFAULT_INVOICE,
   calculateInvoiceTotal
 } from '../../services/invoiceService';
@@ -63,6 +64,10 @@ const InvoiceForm = ({ invoiceId }) => {
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [redirectToList, setRedirectToList] = useState(false);
   const [companyInfo, setCompanyInfo] = useState(COMPANY_INFO);
+  const [purchaseOrders, setPurchaseOrders] = useState([]);
+  const [purchaseOrdersLoading, setPurchaseOrdersLoading] = useState(false);
+  const [selectedOrderType, setSelectedOrderType] = useState('customer');
+  const [selectedOrder, setSelectedOrder] = useState(null);
 
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -73,6 +78,7 @@ const InvoiceForm = ({ invoiceId }) => {
       // Pobierz dane klientów
       fetchCustomers();
       fetchOrders();
+      fetchPurchaseOrders();
       
       // Pobierz dane firmy
       try {
@@ -143,11 +149,88 @@ const InvoiceForm = ({ invoiceId }) => {
     setOrdersLoading(true);
     try {
       const fetchedOrders = await getAllOrders();
-      setOrders(fetchedOrders);
+      // Upewnij się, że daty są poprawnie obsługiwane
+      const ordersWithFormattedDates = fetchedOrders.map(order => {
+        // Sprawdź czy data istnieje i jest w poprawnym formacie
+        let formattedDate = null;
+        if (order.orderDate) {
+          try {
+            formattedDate = new Date(order.orderDate);
+            // Jeśli data jest nieprawidłowa (Invalid Date), ustawiam na null
+            if (isNaN(formattedDate.getTime())) {
+              formattedDate = null;
+              console.warn(`Nieprawidłowa data w zamówieniu ${order.orderNumber || order.id}`);
+            }
+          } catch (e) {
+            formattedDate = null;
+            console.error(`Błąd parsowania daty dla zamówienia ${order.orderNumber || order.id}`, e);
+          }
+        }
+        
+        return {
+          ...order,
+          orderDate: formattedDate
+        };
+      });
+      
+      setOrders(ordersWithFormattedDates);
     } catch (error) {
       showError('Błąd podczas pobierania listy zamówień: ' + error.message);
     } finally {
       setOrdersLoading(false);
+    }
+  };
+
+  const fetchPurchaseOrders = async () => {
+    setPurchaseOrdersLoading(true);
+    try {
+      const { getAllPurchaseOrders } = await import('../../services/purchaseOrderService');
+      const fetchedPurchaseOrders = await getAllPurchaseOrders();
+      
+      // Upewnij się, że dane PO są poprawnie przetworzone i zawierają wszystkie wartości
+      const processedPurchaseOrders = fetchedPurchaseOrders.map(po => {
+        let processedPO = { ...po };
+        
+        // Oblicz wartość produktów
+        const productsValue = Array.isArray(po.items) 
+          ? po.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || (parseFloat(item.price) * parseFloat(item.quantity)) || 0), 0)
+          : 0;
+        
+        // Oblicz wartość dodatkowych kosztów
+        let additionalCostsValue = 0;
+        if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
+          additionalCostsValue = po.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
+        } else if (po.additionalCosts) {
+          additionalCostsValue = parseFloat(po.additionalCosts) || 0;
+        }
+        
+        // Oblicz VAT
+        const vatRate = parseFloat(po.vatRate) || 23;
+        const vatValue = (productsValue * vatRate) / 100;
+        
+        // Oblicz wartość całkowitą (brutto)
+        const calculatedGrossValue = productsValue + vatValue + additionalCostsValue;
+        const finalGrossValue = parseFloat(po.totalGross) || calculatedGrossValue;
+        
+        // Dodaj obliczone wartości do obiektu PO
+        processedPO = {
+          ...processedPO,
+          calculatedProductsValue: productsValue,
+          calculatedAdditionalCosts: additionalCostsValue,
+          calculatedVatValue: vatValue,
+          calculatedGrossValue: calculatedGrossValue,
+          finalGrossValue: finalGrossValue
+        };
+        
+        return processedPO;
+      });
+      
+      setPurchaseOrders(processedPurchaseOrders);
+    } catch (error) {
+      showError('Błąd podczas pobierania listy zamówień zakupowych: ' + error.message);
+      console.error('Error fetching purchase orders:', error);
+    } finally {
+      setPurchaseOrdersLoading(false);
     }
   };
 
@@ -264,44 +347,257 @@ const InvoiceForm = ({ invoiceId }) => {
     }
   };
 
-  const handleOrderSelect = async (orderId) => {
-    if (!orderId) {
-      setSelectedOrderId('');
-      return;
-    }
-
-    const selectedOrder = orders.find(order => order.id === orderId);
-    if (!selectedOrder) return;
-
-    // Zachowujemy bieżące dane faktury i aktualizujemy tylko pola związane z zamówieniem
-    setInvoice(prev => {
-      // Zachowujemy obecne pozycje, jeśli lista jest pusta w zamówieniu
-      const updatedItems = selectedOrder.items && selectedOrder.items.length > 0 
-        ? selectedOrder.items 
-        : prev.items;
-        
-      return {
-        ...prev,
-        orderId: selectedOrder.id,
-        orderNumber: selectedOrder.orderNumber,
-        // Aktualizujemy pozycje tylko jeśli są dostępne w zamówieniu
-        items: updatedItems,
-        // Zachowujemy bieżącego klienta, jeśli już jest wybrany
-        // W przeciwnym razie używamy klienta z zamówienia
-        customer: prev.customer?.id ? prev.customer : selectedOrder.customer,
-        // Podobnie dla adresów - zachowujemy istniejące adresy, jeśli są
-        billingAddress: prev.billingAddress || selectedOrder.customer?.billingAddress || selectedOrder.customer?.address || '',
-        shippingAddress: prev.shippingAddress || selectedOrder.shippingAddress || selectedOrder.customer?.shippingAddress || selectedOrder.customer?.address || '',
-        // Aktualizujemy łączną kwotę na podstawie pozycji
-        total: calculateInvoiceTotal(updatedItems)
-      };
-    });
+  const handleOrderSelect = async (orderId, orderType = 'customer') => {
+    if (!orderId) return;
     
+    setSelectedOrderType(orderType);
     setSelectedOrderId(orderId);
     
-    // Aktualizujemy ID klienta tylko jeśli nie był wcześniej wybrany
-    if (!selectedCustomerId && selectedOrder.customer?.id) {
+    try {
+      let selectedOrder;
+      
+      if (orderType === 'purchase') {
+        const { getPurchaseOrderById } = await import('../../services/purchaseOrderService');
+        selectedOrder = await getPurchaseOrderById(orderId);
+        
+        // Dokładnie przeglądamy dane PO
+        console.log('Pełne dane zamówienia zakupowego (PO):', selectedOrder);
+        
+        // Obliczamy pełną wartość zamówienia zakupowego
+        let totalValue = 0;
+        let totalAdditionalCosts = 0;
+        
+        // Wartość produktów
+        const productsValue = Array.isArray(selectedOrder.items) 
+          ? selectedOrder.items.reduce((sum, item) => {
+              const itemPrice = parseFloat(item.totalPrice || (item.price * item.quantity)) || 0;
+              console.log(`Produkt PO: ${item.name}, cena: ${itemPrice}`);
+              return sum + itemPrice;
+            }, 0)
+          : 0;
+        
+        // Obliczamy VAT
+        const vatRate = parseFloat(selectedOrder.vatRate) || 23;
+        const vatValue = (productsValue * vatRate) / 100;
+        
+        // Obliczamy dodatkowe koszty
+        if (selectedOrder.additionalCostsItems && Array.isArray(selectedOrder.additionalCostsItems)) {
+          totalAdditionalCosts = selectedOrder.additionalCostsItems.reduce((sum, cost) => {
+            const costValue = parseFloat(cost.value) || 0;
+            console.log(`Dodatkowy koszt PO: ${cost.name || 'Bez nazwy'}, wartość: ${costValue}`);
+            return sum + costValue;
+          }, 0);
+        } else if (selectedOrder.additionalCosts) {
+          totalAdditionalCosts = parseFloat(selectedOrder.additionalCosts) || 0;
+          console.log(`Dodatkowe koszty PO (łącznie): ${totalAdditionalCosts}`);
+        }
+        
+        // Wartość brutto: produkty + VAT + dodatkowe koszty
+        const calculatedGrossValue = productsValue + vatValue + totalAdditionalCosts;
+        
+        // Używamy zapisanej wartości brutto lub obliczonej
+        const finalGrossValue = parseFloat(selectedOrder.totalGross) || calculatedGrossValue;
+        
+        console.log('Wartości PO:', {
+          productsValue,
+          vatValue,
+          totalAdditionalCosts,
+          calculatedGrossValue,
+          savedTotalGross: selectedOrder.totalGross,
+          finalGrossValue
+        });
+        
+        const invoiceData = {
+          customer: {
+            id: selectedOrder.supplier?.id || '',
+            name: selectedOrder.supplier?.name || '',
+            email: selectedOrder.supplier?.email || '',
+            phone: selectedOrder.supplier?.phone || '',
+            address: selectedOrder.supplier?.address || '',
+            vatEu: selectedOrder.supplier?.vatEu || ''
+          },
+          items: selectedOrder.items || [],
+          orderNumber: selectedOrder.number,
+          billingAddress: selectedOrder.supplier?.address || '',
+          shippingAddress: selectedOrder.deliveryAddress || '',
+          total: finalGrossValue, // Używamy pełnej wartości brutto
+          currency: selectedOrder.currency || 'EUR',
+          vatRate: selectedOrder.vatRate || 23,
+          additionalCosts: totalAdditionalCosts,
+          additionalCostsItems: selectedOrder.additionalCostsItems || [],
+          invoiceType: 'purchase',
+          orderId: orderId
+        };
+        
+        setInvoice(prev => ({
+        ...prev,
+          ...invoiceData
+        }));
+      } else {
+        selectedOrder = orders.find(o => o.id === orderId);
+        if (!selectedOrder) return;
+        
+        // Sprawdź wszystkie możliwe dane zamówienia, które powinny zostać uwzględnione
+        console.log('Pełne dane zamówienia przed przetworzeniem:', selectedOrder);
+        
+        // Wartość produktów
+        const itemsTotal = Array.isArray(selectedOrder.items) 
+          ? selectedOrder.items.reduce((sum, item) => {
+              const price = parseFloat(item.price) || 0;
+              const quantity = parseInt(item.quantity) || 0;
+              const itemTotal = price * quantity;
+              console.log(`Produkt: ${item.name}, cena: ${price}, ilość: ${quantity}, suma: ${itemTotal}`);
+              return sum + itemTotal;
+            }, 0)
+          : 0;
+        
+        // Koszt wysyłki
+        const shippingCost = parseFloat(selectedOrder.shippingCost) || 0;
+        console.log(`Koszt wysyłki: ${shippingCost}`);
+        
+        // Sprawdź czy zamówienie ma powiązane PO i czy mają one poprawne wartości
+        let purchaseOrdersTotal = 0;
+        const linkedPOs = selectedOrder.linkedPurchaseOrders || [];
+        
+        if (linkedPOs && Array.isArray(linkedPOs) && linkedPOs.length > 0) {
+          // Pobierz pełne dane dla każdego powiązanego PO
+          const enrichedLinkedPOs = [];
+          
+          for (const linkedPO of linkedPOs) {
+            let poId = linkedPO.id;
+            let fullPOData;
+            
+            // Znajdź pełne dane PO z wcześniej pobranych danych
+            const matchingPO = purchaseOrders.find(po => po.id === poId || po.number === linkedPO.number);
+            
+            if (matchingPO) {
+              fullPOData = matchingPO;
+            } else {
+              // Jeśli nie znaleziono w pamięci, pobierz z bazy
+              try {
+                const { getPurchaseOrderById } = await import('../../services/purchaseOrderService');
+                fullPOData = await getPurchaseOrderById(poId);
+                
+                // Oblicz wartości jeśli nie są dostępne
+                if (!fullPOData.calculatedGrossValue) {
+                  // Obliczenia jak w fetchPurchaseOrders
+                  const productsValue = Array.isArray(fullPOData.items) 
+                    ? fullPOData.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || (parseFloat(item.price) * parseFloat(item.quantity)) || 0), 0)
+                    : 0;
+                  
+                  let additionalCostsValue = 0;
+                  if (fullPOData.additionalCostsItems && Array.isArray(fullPOData.additionalCostsItems)) {
+                    additionalCostsValue = fullPOData.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
+                  } else if (fullPOData.additionalCosts) {
+                    additionalCostsValue = parseFloat(fullPOData.additionalCosts) || 0;
+                  }
+                  
+                  const vatRate = parseFloat(fullPOData.vatRate) || 23;
+                  const vatValue = (productsValue * vatRate) / 100;
+                  
+                  const calculatedGrossValue = productsValue + vatValue + additionalCostsValue;
+                  const finalGrossValue = parseFloat(fullPOData.totalGross) || calculatedGrossValue;
+                  
+                  fullPOData = {
+                    ...fullPOData,
+                    calculatedProductsValue: productsValue,
+                    calculatedAdditionalCosts: additionalCostsValue,
+                    calculatedVatValue: vatValue,
+                    calculatedGrossValue: calculatedGrossValue,
+                    finalGrossValue: finalGrossValue
+                  };
+                }
+              } catch (error) {
+                console.error(`Błąd podczas pobierania szczegółów PO ${poId}:`, error);
+                fullPOData = linkedPO; // Użyj ograniczonych danych
+              }
+            }
+            
+            // Ustal wartość PO
+            let poValue = 0;
+            
+            if (fullPOData.finalGrossValue !== undefined) {
+              poValue = parseFloat(fullPOData.finalGrossValue);
+            } else if (fullPOData.totalGross !== undefined) {
+              poValue = parseFloat(fullPOData.totalGross) || 0;
+            } else if (fullPOData.value !== undefined) {
+              poValue = parseFloat(fullPOData.value) || 0;
+            } else if (fullPOData.total !== undefined) {
+              poValue = parseFloat(fullPOData.total) || 0;
+            }
+            
+            // Dodaj dodatkowe koszty, jeśli nie zostały uwzględnione
+            if (!fullPOData.finalGrossValue && !fullPOData.totalGross) {
+              let additionalCostsValue = 0;
+              if (fullPOData.additionalCostsItems && Array.isArray(fullPOData.additionalCostsItems)) {
+                additionalCostsValue = fullPOData.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
+              } else if (fullPOData.additionalCosts) {
+                additionalCostsValue = parseFloat(fullPOData.additionalCosts) || 0;
+              }
+              
+              poValue += additionalCostsValue;
+            }
+            
+            console.log(`PO: ${fullPOData.number || fullPOData.id}, wartość: ${poValue}`);
+            enrichedLinkedPOs.push({
+              ...fullPOData,
+              calculatedTotalValue: poValue
+            });
+            
+            purchaseOrdersTotal += poValue;
+          }
+          
+          // Zastąp ograniczone dane PO pełnymi danymi
+          selectedOrder.linkedPurchaseOrders = enrichedLinkedPOs;
+        }
+        
+        // Całkowita wartość zamówienia (produkty + wysyłka + PO)
+        const orderTotal = itemsTotal + shippingCost + purchaseOrdersTotal;
+        
+        // Debugowanie wartości
+        console.log('Obliczanie wartości CO:', {
+          itemsTotal,
+          shippingCost,
+          purchaseOrdersTotal,
+          orderTotal,
+          savedTotal: selectedOrder.total
+        });
+        
+        // Używamy zapisanej wartości zamówienia jeśli istnieje, w przeciwnym razie obliczonej
+        const finalTotal = parseFloat(selectedOrder.total) || orderTotal;
+        
+        // Dodaj sprawdzenie na wypadek, gdyby wartość zamówienia była nadal niepoprawna
+        if (isNaN(finalTotal) || finalTotal <= 0) {
+          showError('Nie można ustalić poprawnej wartości zamówienia. Sprawdź wartości w zamówieniu.');
+          console.error('Nieprawidłowa wartość zamówienia:', finalTotal);
+        }
+        
+        setInvoice(prev => ({
+          ...prev,
+          customer: selectedOrder.customer,
+          items: selectedOrder.items || [],
+          orderNumber: selectedOrder.orderNumber,
+          billingAddress: selectedOrder.customer?.billingAddress || selectedOrder.customer?.address || '',
+          shippingAddress: selectedOrder.shippingAddress || selectedOrder.customer?.address || '',
+          total: finalTotal,
+          currency: selectedOrder.currency || 'EUR',
+          orderId: orderId,
+          shippingInfo: shippingCost > 0 ? {
+            cost: shippingCost,
+            method: selectedOrder.shippingMethod || 'Standard'
+          } : null,
+          linkedPurchaseOrders: selectedOrder.linkedPurchaseOrders || []
+        }));
+        
+        if (selectedOrder.customer?.id) {
       setSelectedCustomerId(selectedOrder.customer.id);
+        }
+      }
+      
+      setSelectedOrder(selectedOrder);
+    } catch (error) {
+      showError('Błąd podczas wczytywania danych zamówienia: ' + error.message);
+      console.error('Error loading order data:', error);
     }
   };
 
@@ -356,41 +652,43 @@ const InvoiceForm = ({ invoiceId }) => {
     setSaving(true);
     
     try {
-      // Przygotuj dane faktury
-      const invoiceData = {
-        ...invoice,
-        // Ustaw dane sprzedawcy z pobranych danych
-        seller: {
-          name: companyInfo.name,
-          address: companyInfo.address,
-          city: companyInfo.city,
-          nip: companyInfo.nip,
-          regon: companyInfo.regon,
-          email: companyInfo.email,
-          phone: companyInfo.phone,
-          bankName: companyInfo.bankName,
-          bankAccount: companyInfo.bankAccount
-        }
-      };
+      let submittedInvoiceId;
+      
+      const invoiceToSubmit = { ...invoice };
+      
+      const isPurchaseInvoice = selectedOrderType === 'purchase' || 
+                               (selectedOrder && selectedOrder.type === 'purchase');
+      
+      if (isPurchaseInvoice) {
+        invoiceToSubmit.invoiceType = 'purchase';
+      }
       
       if (invoiceId) {
-        // Aktualizacja istniejącej faktury
-        await updateInvoice(invoiceId, invoiceData, currentUser.uid);
+        await updateInvoice(invoiceId, invoiceToSubmit, currentUser.uid);
+        submittedInvoiceId = invoiceId;
         showSuccess('Faktura została zaktualizowana');
       } else {
-        // Tworzenie nowej faktury
-        const newInvoiceId = await createInvoice(invoiceData, currentUser.uid);
-        showSuccess('Faktura została utworzona');
-        
-        if (redirectToList) {
-          navigate('/invoices');
+        if (selectedOrderId) {
+          submittedInvoiceId = await createInvoiceFromOrder(
+            selectedOrderId, 
+            invoiceToSubmit, 
+            currentUser.uid
+          );
+          showSuccess('Faktura została utworzona na podstawie zamówienia');
         } else {
-          navigate(`/invoices/${newInvoiceId}`);
+          submittedInvoiceId = await createInvoice(invoiceToSubmit, currentUser.uid);
+          showSuccess('Nowa faktura została utworzona');
         }
       }
+        
+        if (redirectToList) {
+        navigate('/invoices/list');
+        } else {
+        navigate(`/invoices/${submittedInvoiceId}`);
+      }
     } catch (error) {
-      console.error('Błąd podczas zapisywania faktury:', error);
-      showError('Nie udało się zapisać faktury: ' + error.message);
+      showError('Błąd podczas zapisywania faktury: ' + error.message);
+      console.error('Error saving invoice:', error);
     } finally {
       setSaving(false);
     }
@@ -405,7 +703,7 @@ const InvoiceForm = ({ invoiceId }) => {
   }
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box component="form" onSubmit={handleSubmit} noValidate>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Button
           variant="outlined"
@@ -421,7 +719,7 @@ const InvoiceForm = ({ invoiceId }) => {
           variant="contained"
           color="primary"
           startIcon={<SaveIcon />}
-          onClick={handleSubmit}
+          type="submit"
           disabled={saving}
         >
           {saving ? 'Zapisywanie...' : 'Zapisz fakturę'}
@@ -574,16 +872,25 @@ const InvoiceForm = ({ invoiceId }) => {
                       <InputLabel>Powiązane zamówienie</InputLabel>
                       <Select
                         value={selectedOrderId}
-                        onChange={(e) => handleOrderSelect(e.target.value)}
+                        onChange={(e) => handleOrderSelect(e.target.value, selectedOrderType)}
                         label="Powiązane zamówienie"
                         disabled={filteredOrders.length === 0 || ordersLoading}
                       >
                         <MenuItem value="">Brak powiązanego zamówienia</MenuItem>
-                        {filteredOrders.map(order => (
+                        {selectedOrderType === 'customer' ? (
+                          filteredOrders.map(order => (
                           <MenuItem key={order.id} value={order.id}>
-                            {order.orderNumber || order.id} - {new Date(order.orderDate).toLocaleDateString()}
+                              {order.orderNumber} - {order.customer?.name} 
+                              {order.orderDate ? ` (${order.orderDate.toLocaleDateString()})` : ''}
                           </MenuItem>
-                        ))}
+                          ))
+                        ) : (
+                          purchaseOrders.map(po => (
+                            <MenuItem key={po.id} value={po.id}>
+                              {po.number} - {po.supplier?.name} ({po.status})
+                            </MenuItem>
+                          ))
+                        )}
                       </Select>
                     </FormControl>
                     
@@ -708,6 +1015,110 @@ const InvoiceForm = ({ invoiceId }) => {
           </Card>
         ))}
 
+        {/* Wyświetl informacje o kosztach wysyłki, jeśli istnieją */}
+        {invoice.shippingInfo && invoice.shippingInfo.cost > 0 && (
+          <Card variant="outlined" sx={{ mb: 2, p: 2, bgcolor: 'info.lighter' }}>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} sm={6}>
+                <Typography variant="body1" fontWeight="bold">
+                  Koszt wysyłki ({invoice.shippingInfo.method})
+                </Typography>
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <Typography variant="body1">
+                  Wartość netto: {parseFloat(invoice.shippingInfo.cost).toFixed(2)} {invoice.currency || 'zł'}
+                </Typography>
+              </Grid>
+            </Grid>
+          </Card>
+        )}
+
+        {/* Wyświetl informacje o powiązanych zamówieniach zakupowych */}
+        {selectedOrder && selectedOrder.linkedPurchaseOrders && selectedOrder.linkedPurchaseOrders.length > 0 && (
+          <>
+            <Typography variant="subtitle1" sx={{ mt: 3, mb: 1 }}>
+              Powiązane zamówienia zakupowe:
+            </Typography>
+            
+            {selectedOrder.linkedPurchaseOrders.map((po, index) => {
+              // Użyj obliczonej wartości całkowitej lub oblicz ją manualnie
+              let poValue = 0;
+              let productsValue = 0;
+              let additionalCostsValue = 0;
+              
+              if (po.calculatedTotalValue !== undefined) {
+                poValue = parseFloat(po.calculatedTotalValue);
+              } else if (po.finalGrossValue !== undefined) {
+                poValue = parseFloat(po.finalGrossValue);
+              } else if (po.totalGross !== undefined) {
+                poValue = parseFloat(po.totalGross) || 0;
+              } else if (po.value !== undefined) {
+                poValue = parseFloat(po.value) || 0;
+              } else if (po.total !== undefined) {
+                poValue = parseFloat(po.total) || 0;
+              }
+              
+              // Oblicz wartość produktów
+              if (po.calculatedProductsValue !== undefined) {
+                productsValue = parseFloat(po.calculatedProductsValue);
+              } else if (po.totalValue !== undefined) {
+                productsValue = parseFloat(po.totalValue) || 0;
+              } else if (po.netValue !== undefined) {
+                productsValue = parseFloat(po.netValue) || 0;
+              } else if (Array.isArray(po.items)) {
+                productsValue = po.items.reduce((sum, item) => {
+                  return sum + (parseFloat(item.totalPrice) || parseFloat(item.price) * parseFloat(item.quantity) || 0);
+                }, 0);
+              }
+              
+              // Oblicz dodatkowe koszty
+              if (po.calculatedAdditionalCosts !== undefined) {
+                additionalCostsValue = parseFloat(po.calculatedAdditionalCosts);
+              } else if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
+                additionalCostsValue = po.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
+              } else if (po.additionalCosts) {
+                additionalCostsValue = parseFloat(po.additionalCosts) || 0;
+              }
+              
+              // Jeśli wartość produktów + dodatkowe koszty > poValue, to używamy sumy
+              if (productsValue + additionalCostsValue > poValue) {
+                poValue = productsValue + additionalCostsValue;
+              }
+              
+              // Pokazujemy dodatkowe koszty na karcie PO
+              return (
+                <Card key={`po-${index}`} variant="outlined" sx={{ mb: 2, p: 2, bgcolor: 'warning.lighter' }}>
+                  <Grid container spacing={2} alignItems="center">
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body1" fontWeight="bold">
+                        Zamówienie zakupowe {po.number || po.id}
+                      </Typography>
+                      {po.supplier && (
+                        <Typography variant="body2">
+                          Dostawca: {po.supplier.name}
+                        </Typography>
+                      )}
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body1">
+                        Wartość produktów: {productsValue.toFixed(2)} {invoice.currency || 'EUR'}
+                      </Typography>
+                      {additionalCostsValue > 0 && (
+                        <Typography variant="body1" color="primary">
+                          Dodatkowe koszty: {additionalCostsValue.toFixed(2)} {invoice.currency || 'EUR'}
+                        </Typography>
+                      )}
+                      <Typography variant="body1" fontWeight="bold">
+                        Wartość całkowita: {poValue.toFixed(2)} {invoice.currency || 'EUR'}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                </Card>
+              );
+            })}
+          </>
+        )}
+
         <Divider sx={{ my: 3 }} />
 
         <Grid container spacing={2} justifyContent="flex-end">
@@ -727,13 +1138,23 @@ const InvoiceForm = ({ invoiceId }) => {
                 return sum + (quantity * price * (vat / 100));
               }, 0).toFixed(2)} {invoice.currency || 'zł'}
             </Typography>
+            
+            {/* Wyświetl dodatkowe koszty, jeśli istnieją */}
+            {invoice.shippingInfo && invoice.shippingInfo.cost > 0 && (
+              <Typography variant="body1" fontWeight="bold">
+                Koszt wysyłki: {parseFloat(invoice.shippingInfo.cost).toFixed(2)} {invoice.currency || 'zł'}
+              </Typography>
+            )}
+            
+            {/* Wyświetl sumę z powiązanych PO */}
+            {selectedOrder && selectedOrder.linkedPurchaseOrders && selectedOrder.linkedPurchaseOrders.length > 0 && (
+              <Typography variant="body1" fontWeight="bold">
+                Wartość PO: {selectedOrder.linkedPurchaseOrders.reduce((sum, po) => sum + (parseFloat(po.totalGross || po.value) || 0), 0).toFixed(2)} {invoice.currency || 'zł'}
+              </Typography>
+            )}
+            
             <Typography variant="h6" fontWeight="bold" color="primary">
-              Razem brutto: {invoice.items.reduce((sum, item) => {
-                const quantity = Number(item.quantity) || 0;
-                const price = Number(item.price) || 0;
-                const vat = Number(item.vat) || 0;
-                return sum + (quantity * price * (1 + vat / 100));
-              }, 0).toFixed(2)} {invoice.currency || 'zł'}
+              Razem brutto: {parseFloat(invoice.total).toFixed(2)} {invoice.currency || 'zł'}
             </Typography>
           </Grid>
         </Grid>
@@ -758,7 +1179,57 @@ const InvoiceForm = ({ invoiceId }) => {
         </Grid>
       </Paper>
 
-      {/* Dialog wyboru klienta */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Wybierz źródło faktury
+        </Typography>
+        
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={4}>
+            <FormControl fullWidth>
+              <InputLabel>Typ zamówienia</InputLabel>
+              <Select
+                value={selectedOrderType}
+                onChange={(e) => setSelectedOrderType(e.target.value)}
+                label="Typ zamówienia"
+              >
+                <MenuItem value="customer">Zamówienie klienta</MenuItem>
+                <MenuItem value="purchase">Zamówienie zakupowe (PO)</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          
+          <Grid item xs={12} md={8}>
+            <FormControl fullWidth>
+              <InputLabel>Wybierz zamówienie</InputLabel>
+              <Select
+                value={selectedOrderId || ''}
+                onChange={(e) => handleOrderSelect(e.target.value, selectedOrderType)}
+                label="Wybierz zamówienie"
+                disabled={!customers.length || (selectedOrderType === 'customer' ? ordersLoading : purchaseOrdersLoading)}
+              >
+                <MenuItem value="">-- Brak --</MenuItem>
+                
+                {selectedOrderType === 'customer' ? (
+                  filteredOrders.map(order => (
+                    <MenuItem key={order.id} value={order.id}>
+                      {order.orderNumber} - {order.customer?.name} 
+                      {order.orderDate ? ` (${order.orderDate.toLocaleDateString()})` : ''}
+                    </MenuItem>
+                  ))
+                ) : (
+                  purchaseOrders.map(po => (
+                    <MenuItem key={po.id} value={po.id}>
+                      {po.number} - {po.supplier?.name} ({po.status})
+                    </MenuItem>
+                  ))
+                )}
+              </Select>
+            </FormControl>
+          </Grid>
+        </Grid>
+      </Paper>
+
       <Dialog open={customerDialogOpen} onClose={() => setCustomerDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Wybierz klienta</DialogTitle>
         <DialogContent>

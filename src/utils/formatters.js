@@ -124,3 +124,42 @@ export const formatDate = (date, options = {}) => {
     
     return text.substring(0, maxLength) + '...';
   };
+
+  /**
+   * Formatuje datę wraz z godziną w czytelny sposób
+   * 
+   * @param {Date|Object|string|number} date - Data do sformatowania (może być timestamp z Firebase)
+   * @returns {string} Sformatowana data wraz z godziną
+   */
+  export const formatDateTime = (date) => {
+    if (!date) return '—';
+    
+    // Obsługa timestampu Firestore
+    if (date && typeof date === 'object' && typeof date.toDate === 'function') {
+      date = date.toDate();
+    }
+    
+    try {
+      // Obsługa stringa
+      if (typeof date === 'string') {
+        date = new Date(date);
+      }
+      
+      const dateObj = new Date(date);
+      
+      // Sprawdź czy data jest prawidłowa
+      if (isNaN(dateObj.getTime())) {
+        console.warn('Nieprawidłowy format daty:', date);
+        return String(date);
+      }
+      
+      // Formatuj datę i godzinę
+      return new Intl.DateTimeFormat('pl-PL', {
+        dateStyle: 'medium',
+        timeStyle: 'short'
+      }).format(dateObj);
+    } catch (error) {
+      console.error('Error formatting date:', error, date);
+      return String(date);
+    }
+  };

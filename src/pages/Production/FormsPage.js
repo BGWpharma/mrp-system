@@ -13,30 +13,17 @@ const FormsPage = () => {
           Formularze produkcyjne
         </Typography>
         <Typography variant="body2" color="text.secondary" gutterBottom>
-          Formularze i dokumenty dostępne dla brygadzistów i operatorów produkcji
+          Formularze, dokumenty i narzędzia dostępne dla brygadzistów i operatorów produkcji
         </Typography>
       </Box>
       
-      <Alert severity="info" sx={{ mb: 3 }}>
-        Z powodów bezpieczeństwa, strona Google Sites nie może być wyświetlona bezpośrednio w aplikacji.
-      </Alert>
-      
-      <Paper sx={{ 
-        p: 4, 
-        textAlign: 'center',
-        minHeight: '300px',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-        gap: 3
-      }}>
-        <Typography variant="h6">
+      <Paper sx={{ p: 3 }}>
+        <Typography variant="h6" gutterBottom>
           Portal Brygadzistów BGW Pharma
         </Typography>
         
-        <Typography variant="body1" paragraph>
-          Kliknij poniższy przycisk, aby otworzyć portal z formularzami w nowej karcie.
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+          Portal zawiera wszystkie niezbędne dokumenty i formularze produkcyjne.
         </Typography>
         
         <Button 
@@ -47,15 +34,14 @@ const FormsPage = () => {
           href={googleSiteUrl}
           target="_blank"
           rel="noopener noreferrer"
-          size="large"
         >
           Otwórz portal formularzy
         </Button>
-        
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-          Uwaga: Może być wymagane zalogowanie do konta Google.
-        </Typography>
       </Paper>
+      
+      <Alert severity="info" sx={{ mt: 3 }}>
+        Z powodów bezpieczeństwa, strona Google Sites nie może być wyświetlona bezpośrednio w aplikacji.
+      </Alert>
     </Container>
   );
 };

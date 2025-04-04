@@ -26,6 +26,7 @@ import ConsumptionPage from './pages/Production/ConsumptionPage';
 import ForecastPage from './pages/Production/ForecastPage';
 import ReportsPage from './pages/Production/ReportsPage';
 import CreateFromOrderPage from './pages/Production/CreateFromOrderPage';
+import WorkstationsPage from './pages/Production/WorkstationsPage';
 
 // Inventory
 import InventoryPage from './pages/Inventory/InventoryPage';
@@ -142,6 +143,7 @@ function App() {
               <Route path="/production/forecast" element={<PrivateLayout><ForecastPage /></PrivateLayout>} />
               <Route path="/production/reports" element={<PrivateLayout><ReportsPage /></PrivateLayout>} />
               <Route path="/production/create-from-order" element={<PrivateLayout><CreateFromOrderPage /></PrivateLayout>} />
+              <Route path="/production/workstations" element={<PrivateLayout><WorkstationsPage /></PrivateLayout>} />
               
               {/* Inventory Routes */}
               <Route path="/inventory" element={<PrivateLayout><InventoryPage /></PrivateLayout>} />
