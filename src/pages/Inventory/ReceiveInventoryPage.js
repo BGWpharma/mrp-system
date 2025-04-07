@@ -15,15 +15,47 @@ const ReceiveInventoryPage = () => {
     const quantity = queryParams.get('quantity');
     const unitPrice = queryParams.get('unitPrice');
     const reason = queryParams.get('reason');
+    const lotNumber = queryParams.get('lotNumber');
+    const source = queryParams.get('source');
+    const sourceId = queryParams.get('sourceId');
+    const notes = queryParams.get('notes');
+    
+    // Pobierz dodatkowe parametry dotyczące MO i CO
+    const moNumber = queryParams.get('moNumber');
+    const orderNumber = queryParams.get('orderNumber');
+    const orderId = queryParams.get('orderId');
     
     if (poNumber || quantity || unitPrice) {
-      // Konwertujemy wartości liczbowe na poprawne typy danych
-      setInitialData({
+      // Przygotuj obiekt z danymi początkowymi
+      const data = {
         reference: poNumber || '',
         quantity: quantity ? String(quantity) : '',
         unitPrice: unitPrice ? Number(unitPrice) : '',
-        reason: reason || 'purchase' // Używamy reason z URL lub domyślnie 'purchase'
-      });
+        reason: reason || 'purchase', // Używamy reason z URL lub domyślnie 'purchase'
+        lotNumber: lotNumber || '',
+        source: source || '',
+        sourceId: sourceId || ''
+      };
+      
+      // Dodaj informacje o MO i CO, jeśli są dostępne
+      if (moNumber) {
+        data.moNumber = moNumber;
+      }
+      
+      if (orderNumber) {
+        data.orderNumber = orderNumber;
+      }
+      
+      if (orderId) {
+        data.orderId = orderId;
+      }
+      
+      // Dodaj notatki, jeśli są dostępne
+      if (notes) {
+        data.notes = notes;
+      }
+      
+      setInitialData(data);
     }
   }, [location.search]);
   

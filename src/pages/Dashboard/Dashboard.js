@@ -29,7 +29,9 @@ import {
   InsertChart as AnalyticsIcon,
   ArrowUpward as ArrowUpIcon,
   ArrowDownward as ArrowDownIcon,
-  Timeline as TimelineIcon
+  Timeline as TimelineIcon,
+  Storage as WarehouseIcon,
+  Business as WorkstationIcon
 } from '@mui/icons-material';
 import { getTasksByStatus } from '../../services/productionService';
 import { getAllRecipes } from '../../services/recipeService';
@@ -117,15 +119,6 @@ const Dashboard = () => {
     }
   };
 
-  // Dane dla wykresów statystyk
-  const mockData = {
-    salesTrend: 8.6,
-    accountsGrowth: 23.7,
-    inventoryUtilization: 78,
-    productionEfficiency: 68,
-    ordersTrend: -5.2
-  };
-
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Typography variant="h4" gutterBottom>
@@ -146,36 +139,9 @@ const Dashboard = () => {
                 {recipes?.length || 0}
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {mockData.salesTrend > 0 ? (
-                  <ArrowUpIcon sx={{ color: 'success.main', fontSize: 16 }} />
-                ) : (
-                  <ArrowDownIcon sx={{ color: 'error.main', fontSize: 16 }} />
-                )}
-                <Typography 
-                  variant="body2" 
-                  color={mockData.salesTrend > 0 ? 'success.main' : 'error.main'}
-                  sx={{ mr: 1 }}
-                >
-                  {Math.abs(mockData.salesTrend)}%
-                </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Zarządzaj recepturami i składnikami
                 </Typography>
-              </Box>
-              {/* Tło stylizowane na wykres */}
-              <Box sx={{ position: 'relative', mt: 2 }}>
-                <LinearProgress 
-                  variant="determinate" 
-                  value={mockData.inventoryUtilization} 
-                  sx={{ 
-                    height: 8, 
-                    borderRadius: 4, 
-                    backgroundColor: 'rgba(0,230,130,0.1)',
-                    '& .MuiLinearProgress-bar': {
-                      backgroundColor: 'success.main'
-                    }
-                  }} 
-                />
               </Box>
             </CardContent>
             <CardActions sx={{ p: 2, pt: 0, justifyContent: 'space-between' }}>
@@ -202,42 +168,17 @@ const Dashboard = () => {
               <ProductionIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
               <Typography variant="h6">Produkcja</Typography>
               <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
-                {tasks?.length || 0} aktywnych zadań
+                {analyticsData?.production?.tasksInProgress || 0} aktywnych zadań
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Typography variant="body2" color="text.secondary">
                   Planuj i zarządzaj produkcją
                 </Typography>
               </Box>
-              {/* Tło stylizowane na wykres */}
-              <Box sx={{ position: 'relative', mt: 2 }}>
-                <LinearProgress 
-                  variant="determinate" 
-                  value={mockData.productionEfficiency} 
-                  sx={{ 
-                    height: 8, 
-                    borderRadius: 4, 
-                    backgroundColor: 'rgba(33,150,243,0.1)',
-                    '& .MuiLinearProgress-bar': {
-                      backgroundColor: 'primary.main'
-                    }
-                  }} 
-                />
-              </Box>
             </CardContent>
-            <CardActions sx={{ p: 2, pt: 0, justifyContent: 'space-between' }}>
+            <CardActions sx={{ p: 2, pt: 0, justifyContent: 'center' }}>
               <Button component={Link} to="/production" sx={{ flexGrow: 1 }}>
                 Przejdź
-              </Button>
-              <Button 
-                component={Link} 
-                to="/production/new-task" 
-                color="primary"
-                variant="contained"
-                sx={{ flexGrow: 1 }}
-                startIcon={<AddIcon />}
-              >
-                Nowe
               </Button>
             </CardActions>
           </Card>
@@ -247,41 +188,14 @@ const Dashboard = () => {
           <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
             <CardContent sx={{ textAlign: 'center', p: 3 }}>
               <InventoryIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
-              <Typography variant="h6">Magazyn</Typography>
+              <Typography variant="h6">Stany Magazynowe</Typography>
               <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
                 {analyticsData?.inventory?.totalItems || 0} produktów
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {mockData.accountsGrowth > 0 ? (
-                  <ArrowUpIcon sx={{ color: 'success.main', fontSize: 16 }} />
-                ) : (
-                  <ArrowDownIcon sx={{ color: 'error.main', fontSize: 16 }} />
-                )}
-                <Typography 
-                  variant="body2" 
-                  color={mockData.accountsGrowth > 0 ? 'success.main' : 'error.main'}
-                  sx={{ mr: 1 }}
-                >
-                  {Math.abs(mockData.accountsGrowth)}%
-                </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Zarządzaj stanami magazynowymi
                 </Typography>
-              </Box>
-              {/* Tło stylizowane na wykres */}
-              <Box sx={{ position: 'relative', mt: 2 }}>
-                <LinearProgress 
-                  variant="determinate" 
-                  value={85} 
-                  sx={{ 
-                    height: 8, 
-                    borderRadius: 4, 
-                    backgroundColor: 'rgba(255,152,0,0.1)',
-                    '& .MuiLinearProgress-bar': {
-                      backgroundColor: 'warning.main'
-                    }
-                  }} 
-                />
               </Box>
             </CardContent>
             <CardActions sx={{ p: 2, pt: 0, justifyContent: 'space-between' }}>
@@ -305,91 +219,48 @@ const Dashboard = () => {
         <Grid item xs={12} md={3}>
           <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
             <CardContent sx={{ textAlign: 'center', p: 3 }}>
-              <QualityIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
-              <Typography variant="h6">Raporty</Typography>
+              <WorkstationIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
+              <Typography variant="h6">Stanowiska</Typography>
               <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
-                Analizy i zestawienia
+                Stanowiska robocze
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Typography variant="body2" color="text.secondary">
-                  Przeglądaj raporty i analizy
+                  Zarządzaj stanowiskami produkcyjnymi
                 </Typography>
-              </Box>
-              {/* Tło stylizowane na wykres */}
-              <Box sx={{ position: 'relative', mt: 2 }}>
-                <LinearProgress 
-                  variant="determinate" 
-                  value={55} 
-                  sx={{ 
-                    height: 8, 
-                    borderRadius: 4, 
-                    backgroundColor: 'rgba(233,30,99,0.1)',
-                    '& .MuiLinearProgress-bar': {
-                      backgroundColor: 'secondary.main'
-                    }
-                  }} 
-                />
               </Box>
             </CardContent>
             <CardActions sx={{ p: 2, pt: 0, justifyContent: 'space-between' }}>
-              <Button component={Link} to="/quality" sx={{ flexGrow: 1 }}>
+              <Button component={Link} to="/production/workstations" sx={{ flexGrow: 1 }}>
                 Przejdź
               </Button>
               <Button 
                 component={Link} 
-                to="/quality/new-test" 
+                to="/production/workstations/new" 
                 color="primary"
                 variant="contained"
                 sx={{ flexGrow: 1 }}
                 startIcon={<AddIcon />}
               >
-                Nowy test
+                Nowe
               </Button>
             </CardActions>
           </Card>
         </Grid>
         
         {/* Zamówienia */}
-        <Grid item xs={12} md={6}>
+        <Grid item xs={12} md={12}>
           <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
             <CardContent sx={{ textAlign: 'center', p: 3 }}>
               <OrdersIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
               <Typography variant="h6">Zamówienia klientów</Typography>
               <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
-                {orderStats?.total || 0} zamówień ({formatCurrency(orderStats?.totalValue || 0)})
+                {orderStats?.total || 0} zamówień ({orderStats?.totalValue ? formatCurrency(orderStats.totalValue) : '0,00 EUR'})
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {mockData.ordersTrend > 0 ? (
-                  <ArrowUpIcon sx={{ color: 'success.main', fontSize: 16 }} />
-                ) : (
-                  <ArrowDownIcon sx={{ color: 'error.main', fontSize: 16 }} />
-                )}
-                <Typography 
-                  variant="body2" 
-                  color={mockData.ordersTrend > 0 ? 'success.main' : 'error.main'}
-                  sx={{ mr: 1 }}
-                >
-                  {Math.abs(mockData.ordersTrend)}%
-                </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Zarządzaj zamówieniami klientów
                 </Typography>
-              </Box>
-              
-              {/* Tło stylizowane na wykres */}
-              <Box sx={{ position: 'relative', mt: 2 }}>
-                <LinearProgress 
-                  variant="determinate" 
-                  value={64} 
-                  sx={{ 
-                    height: 8, 
-                    borderRadius: 4, 
-                    backgroundColor: 'rgba(76,175,80,0.1)',
-                    '& .MuiLinearProgress-bar': {
-                      backgroundColor: 'success.main'
-                    }
-                  }} 
-                />
               </Box>
               
               {orderStats?.recentOrders && orderStats.recentOrders.length > 0 && (
@@ -436,78 +307,6 @@ const Dashboard = () => {
           </Card>
         </Grid>
         
-        {/* Analizy i Raporty */}
-        <Grid item xs={12} md={6}>
-          <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
-            <CardContent sx={{ textAlign: 'center', p: 3 }}>
-              <AnalyticsIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
-              <Typography variant="h6">Analizy i Raporty</Typography>
-              <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
-                Szczegółowa analityka biznesowa
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Typography variant="body2" color="text.secondary">
-                  Panel analityczny i raporty
-                </Typography>
-              </Box>
-              
-              {/* Tło stylizowane na wykres */}
-              <Box sx={{ position: 'relative', mt: 2 }}>
-                <LinearProgress 
-                  variant="determinate" 
-                  value={78} 
-                  sx={{ 
-                    height: 8, 
-                    borderRadius: 4, 
-                    backgroundColor: 'rgba(156,39,176,0.1)',
-                    '& .MuiLinearProgress-bar': {
-                      backgroundColor: 'secondary.dark'
-                    }
-                  }} 
-                />
-              </Box>
-              
-              <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-around' }}>
-                <Box sx={{ textAlign: 'center' }}>
-                  <Typography variant="h6" color="primary.main">
-                    {analyticsData?.production?.tasksInProgress || 0}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    W trakcie
-                  </Typography>
-                </Box>
-                <Box sx={{ textAlign: 'center' }}>
-                  <Typography variant="h6" color="success.main">
-                    {analyticsData?.production?.completedTasks || 2}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Ukończone
-                  </Typography>
-                </Box>
-                <Box sx={{ textAlign: 'center' }}>
-                  <Typography variant="h6" color="info.main">
-                    {analyticsData?.production?.efficiency || 0}%
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Wydajność
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-            <CardActions sx={{ p: 2, pt: 0, justifyContent: 'center' }}>
-              <Button 
-                component={Link} 
-                to="/analytics" 
-                fullWidth
-                variant="contained"
-                color="primary"
-              >
-                Przejdź do analiz
-              </Button>
-            </CardActions>
-          </Card>
-        </Grid>
-        
         {/* Zadania produkcyjne w trakcie */}
         <Grid item xs={12}>
           <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
@@ -542,7 +341,7 @@ const Dashboard = () => {
                 <Grid item xs={12} md={4}>
                   <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'success.light', borderRadius: 2, color: 'white' }}>
                     <Typography variant="h3" sx={{ mb: 1 }}>
-                      {analyticsData?.production?.completedTasks || 2}
+                      {analyticsData?.production?.completedTasks || 0}
                     </Typography>
                     <Typography variant="body1">
                       Ukończone
@@ -553,10 +352,10 @@ const Dashboard = () => {
                 <Grid item xs={12} md={4}>
                   <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'info.light', borderRadius: 2, color: 'white' }}>
                     <Typography variant="h3" sx={{ mb: 1 }}>
-                      0%
+                      {analyticsData?.sales?.totalOrders || 0}
                     </Typography>
                     <Typography variant="body1">
-                      Wydajność
+                      Zamówienia
                     </Typography>
                   </Box>
                 </Grid>
@@ -597,6 +396,66 @@ const Dashboard = () => {
                   </Typography>
                 </Box>
               )}
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        {/* Karta Analityki */}
+        <Grid item xs={12}>
+          <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
+            <CardContent sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6">
+                  Analityka systemu
+                </Typography>
+                <Button 
+                  component={Link} 
+                  to="/analytics"
+                  variant="outlined"
+                  size="small"
+                  startIcon={<AnalyticsIcon />}
+                >
+                  Przejdź do analityki
+                </Button>
+              </Box>
+              <Divider sx={{ mb: 2 }} />
+              
+              <Typography variant="body1" gutterBottom>
+                Sprawdź szczegółową analitykę systemu w nowym, uproszczonym widoku. 
+                Monitoruj kluczowe wskaźniki dla magazynu, produkcji i zamówień.
+              </Typography>
+              
+              <Box sx={{ mt: 2, p: 2, bgcolor: 'background.paper', borderRadius: 2, border: '1px dashed', borderColor: 'divider' }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Dostępne statystyki:
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={4}>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <OrdersIcon sx={{ mr: 1, color: 'primary.main' }} />
+                      <Typography variant="body2">
+                        Zamówienia i sprzedaż
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <InventoryIcon sx={{ mr: 1, color: 'primary.main' }} />
+                      <Typography variant="body2">
+                        Stany magazynowe
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <ProductionIcon sx={{ mr: 1, color: 'primary.main' }} />
+                      <Typography variant="body2">
+                        Zadania produkcyjne
+                      </Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Box>
             </CardContent>
           </Card>
         </Grid>

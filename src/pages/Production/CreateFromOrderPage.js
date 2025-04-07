@@ -293,13 +293,13 @@ const CreateFromOrderPage = () => {
   
   const handleItemSelect = (itemId) => {
     if (Array.isArray(selectedItems)) {
-      setSelectedItems(prev => 
-        prev.map(item => 
+    setSelectedItems(prev => 
+      prev.map(item => 
           (item.itemId === itemId || item.id === itemId)
-            ? { ...item, selected: !item.selected } 
-            : item
-        )
-      );
+          ? { ...item, selected: !item.selected } 
+          : item
+      )
+    );
     } else {
       // Dla przypadku gdy selectedItems jest obiektem
       setSelectedItems(prev => ({
@@ -312,9 +312,9 @@ const CreateFromOrderPage = () => {
   const handleSelectAllItems = (event) => {
     const checked = event.target.checked;
     if (Array.isArray(selectedItems)) {
-      setSelectedItems(prev => 
-        prev.map(item => ({ ...item, selected: checked }))
-      );
+    setSelectedItems(prev => 
+      prev.map(item => ({ ...item, selected: checked }))
+    );
     } else {
       // Dla przypadku gdy selectedItems jest obiektem
       const updatedItems = {};
@@ -522,9 +522,9 @@ const CreateFromOrderPage = () => {
       }
     } else {
       // Przypadek gdy selectedItems jest obiektem z kluczami ID
-      const selectedKeys = Object.keys(selectedItems).filter(key => selectedItems[key]);
-      if (selectedKeys.length === 0) {
-        showError('Nie wybrano żadnych produktów do produkcji');
+    const selectedKeys = Object.keys(selectedItems).filter(key => selectedItems[key]);
+    if (selectedKeys.length === 0) {
+      showError('Nie wybrano żadnych produktów do produkcji');
         return;
       }
       
@@ -1289,9 +1289,9 @@ const CreateFromOrderPage = () => {
                       const totalValue = parseFloat(order.totalValue) || 0;
                       
                       return (
-                        <MenuItem key={order.id} value={order.id}>
+                      <MenuItem key={order.id} value={order.id}>
                           #{order.orderNumber || order.id.substring(0, 8)} - {order.customer?.name || 'Brak danych klienta'} ({formatCurrency(totalValue)})
-                        </MenuItem>
+                      </MenuItem>
                       );
                     })}
                   </Select>

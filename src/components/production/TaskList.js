@@ -80,6 +80,13 @@ const TaskList = () => {
   const [productionError, setProductionError] = useState(null);
   const [productionStartTime, setProductionStartTime] = useState(new Date());
   const [productionEndTime, setProductionEndTime] = useState(new Date());
+  const [addToInventoryDialogOpen, setAddToInventoryDialogOpen] = useState(false);
+  const [inventoryData, setInventoryData] = useState({
+    expiryDate: null,
+    lotNumber: '',
+    finalQuantity: '',
+  });
+  const [inventoryError, setInventoryError] = useState(null);
 
   // Pobierz zadania przy montowaniu komponentu
   useEffect(() => {
@@ -175,14 +182,75 @@ const TaskList = () => {
   // Funkcja obsługująca dodanie produktu do magazynu
   const handleAddToInventory = async (id) => {
     try {
-      await addTaskProductToInventory(id, currentUser.uid);
-      showSuccess('Produkt został dodany do magazynu jako nowa partia (LOT)');
+      if (!inventoryData.expiryDate) {
+        setInventoryError('Podaj datę ważności produktu');
+        return;
+      }
+
+      if (!inventoryData.lotNumber.trim()) {
+        setInventoryError('Podaj numer partii (LOT)');
+        return;
+      }
+
+      const quantity = parseFloat(inventoryData.finalQuantity);
+      if (isNaN(quantity) || quantity <= 0) {
+        setInventoryError('Nieprawidłowa ilość końcowa');
+        return;
+      }
+
+      // Dodaj parametry do wywołania API
+      await addTaskProductToInventory(id, currentUser.uid, {
+        expiryDate: inventoryData.expiryDate.toISOString(),
+        lotNumber: inventoryData.lotNumber,
+        finalQuantity: quantity
+      });
+      
+      // Znajdź zadanie w tablicy tasks, aby uzyskać dostęp do jego danych
+      const task = tasks.find(t => t.id === id);
+      let message = 'Produkt został dodany do magazynu jako nowa partia (LOT)';
+      
+      // Dodaj informacje o numerze MO i CO, jeśli są dostępne
+      if (task) {
+        if (task.moNumber) {
+          message += ` z MO: ${task.moNumber}`;
+        }
+        
+        if (task.orderNumber) {
+          message += ` i CO: ${task.orderNumber}`;
+        }
+      }
+      
+      showSuccess(message);
+      setAddToInventoryDialogOpen(false);
+      resetInventoryForm();
+      
       // Odśwież listę zadań
       fetchTasks();
     } catch (error) {
-      showError('Błąd podczas dodawania produktu do magazynu: ' + error.message);
+      setInventoryError('Błąd podczas dodawania produktu do magazynu: ' + error.message);
       console.error('Error adding product to inventory:', error);
     }
+  };
+
+  const openAddToInventoryDialog = (task) => {
+    setCurrentTaskId(task.id);
+    // Ustaw domyślne wartości w formularzu na podstawie zadania
+    setInventoryData({
+      expiryDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)), // Domyślnie 1 rok
+      lotNumber: `LOT-${task.moNumber || ''}`,
+      finalQuantity: task.quantity.toString()
+    });
+    setAddToInventoryDialogOpen(true);
+  };
+
+  const resetInventoryForm = () => {
+    setInventoryData({
+      expiryDate: null,
+      lotNumber: '',
+      finalQuantity: ''
+    });
+    setInventoryError(null);
+    setCurrentTaskId(null);
   };
 
   const handleStopProduction = async () => {
@@ -339,13 +407,6 @@ const TaskList = () => {
         return (
           <>
             <IconButton 
-              color="success" 
-              onClick={() => handleStatusChange(task.id, 'Zakończone')}
-              title="Zakończ produkcję"
-            >
-              <CompleteIcon />
-            </IconButton>
-            <IconButton 
               color="error" 
               onClick={() => openStopProductionDialog(task.id)}
               title="Zatrzymaj produkcję"
@@ -371,7 +432,7 @@ const TaskList = () => {
           return (
             <IconButton 
               color="primary" 
-              onClick={() => handleAddToInventory(task.id)}
+              onClick={() => openAddToInventoryDialog(task)}
               title="Dodaj produkt do magazynu"
             >
               <InventoryIcon />
@@ -444,6 +505,7 @@ const TaskList = () => {
                 <TableCell>Numer MO</TableCell>
                 <TableCell>Produkt</TableCell>
                 <TableCell>Ilość</TableCell>
+                <TableCell>Pozostało do produkcji</TableCell>
                 <TableCell>Stanowisko</TableCell>
                 <TableCell>Data rozpoczęcia</TableCell>
                 <TableCell>Planowana data zakończenia</TableCell>
@@ -464,6 +526,27 @@ const TaskList = () => {
                   <TableCell>{task.productName}</TableCell>
                   <TableCell>
                     {task.quantity} {task.unit}
+                  </TableCell>
+                  <TableCell>
+                    {(() => {
+                      // Oblicz pozostałą ilość do wyprodukowania
+                      const totalCompleted = task.totalCompletedQuantity || 0;
+                      const remaining = Math.max(0, task.quantity - totalCompleted);
+                      
+                      // Określ kolor tekstu na podstawie pozostałej ilości
+                      let color = 'inherit';
+                      if (remaining === 0) {
+                        color = 'success.main'; // Zielony, jeśli nie ma nic do produkcji
+                      } else if (remaining < task.quantity * 0.2) {
+                        color = 'warning.main'; // Pomarańczowy, jeśli zostało mniej niż 20%
+                      }
+                      
+                      return (
+                        <Typography sx={{ color }}>
+                          {remaining} {task.unit}
+                        </Typography>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell>
                     {task.workstationId 
@@ -607,6 +690,74 @@ const TaskList = () => {
           </Button>
           <Button onClick={handleStopProduction} variant="contained">
             Zatwierdź
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog dodawania produktu do magazynu */}
+      <Dialog
+        open={addToInventoryDialogOpen}
+        onClose={() => setAddToInventoryDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Dodaj produkt do magazynu</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Wprowadź informacje o partii produktu przed dodaniem do magazynu
+          </DialogContentText>
+          
+          {inventoryError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {inventoryError}
+            </Alert>
+          )}
+          
+          <TextField
+            label="Ilość końcowa"
+            type="number"
+            value={inventoryData.finalQuantity}
+            onChange={(e) => setInventoryData({...inventoryData, finalQuantity: e.target.value})}
+            fullWidth
+            margin="dense"
+            helperText="Wprowadź faktyczną ilość produktu końcowego"
+          />
+          
+          <TextField
+            label="Numer partii (LOT)"
+            value={inventoryData.lotNumber}
+            onChange={(e) => setInventoryData({...inventoryData, lotNumber: e.target.value})}
+            fullWidth
+            margin="dense"
+            helperText="Wprowadź unikalny identyfikator partii produkcyjnej"
+          />
+          
+          <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+            <Box sx={{ my: 2 }}>
+              <DateTimePicker
+                label="Data ważności"
+                value={inventoryData.expiryDate}
+                onChange={(newValue) => setInventoryData({...inventoryData, expiryDate: newValue})}
+                ampm={false}
+                format="dd-MM-yyyy"
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    margin: 'dense',
+                    variant: 'outlined',
+                    helperText: "Data ważności produktu"
+                  }
+                }}
+              />
+            </Box>
+          </LocalizationProvider>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAddToInventoryDialogOpen(false)}>
+            Anuluj
+          </Button>
+          <Button onClick={() => handleAddToInventory(currentTaskId)} variant="contained" color="primary">
+            Dodaj do magazynu
           </Button>
         </DialogActions>
       </Dialog>

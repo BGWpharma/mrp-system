@@ -63,7 +63,6 @@ const SupplierPricesList = ({ itemId, currency = DEFAULT_CURRENCY }) => {
   useEffect(() => {
     if (itemId) {
       fetchSupplierPrices();
-      fetchSuppliers();
     }
   }, [itemId]);
   
@@ -73,34 +72,38 @@ const SupplierPricesList = ({ itemId, currency = DEFAULT_CURRENCY }) => {
       setLoading(true);
       const data = await getSupplierPrices(itemId);
       
-      // Dodajemy dane dostawcy do każdej ceny
-      const pricesWithSupplierDetails = await Promise.all(
-        data.map(async (price) => {
+      // Najpierw pobieramy dostawców, jeśli jeszcze nie zostali pobrani
+      if (suppliers.length === 0) {
+        const suppliersList = await getAllSuppliers();
+        setSuppliers(suppliersList);
+        
+        // Dodajemy dane dostawcy do każdej ceny
+        const pricesWithSupplierDetails = data.map((price) => {
+          const supplier = suppliersList.find(s => s.id === price.supplierId);
+          return {
+            ...price,
+            supplierName: supplier ? supplier.name : 'Nieznany dostawca'
+          };
+        });
+        
+        setSupplierPrices(pricesWithSupplierDetails);
+      } else {
+        // Dodajemy dane dostawcy do każdej ceny
+        const pricesWithSupplierDetails = data.map((price) => {
           const supplier = suppliers.find(s => s.id === price.supplierId);
           return {
             ...price,
             supplierName: supplier ? supplier.name : 'Nieznany dostawca'
           };
-        })
-      );
-      
-      setSupplierPrices(pricesWithSupplierDetails);
+        });
+        
+        setSupplierPrices(pricesWithSupplierDetails);
+      }
     } catch (error) {
       console.error('Błąd podczas pobierania cen dostawców:', error);
       showError('Nie udało się pobrać cen dostawców');
     } finally {
       setLoading(false);
-    }
-  };
-  
-  // Pobieranie listy dostawców
-  const fetchSuppliers = async () => {
-    try {
-      const data = await getAllSuppliers();
-      setSuppliers(data);
-    } catch (error) {
-      console.error('Błąd podczas pobierania dostawców:', error);
-      showError('Nie udało się pobrać listy dostawców');
     }
   };
   

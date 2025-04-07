@@ -76,6 +76,8 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { pl } from 'date-fns/locale';
 import TaskDetails from '../../components/production/TaskDetails';
+import { db } from '../../services/firebase/config';
+import { getDoc, doc } from 'firebase/firestore';
 
 const TaskDetailsPage = () => {
   const { id } = useParams();
@@ -118,6 +120,8 @@ const TaskDetailsPage = () => {
   const [materialBatchesLoading, setMaterialBatchesLoading] = useState(false);
   const [manualBatchSelectionActive, setManualBatchSelectionActive] = useState(false);
   const [expandedMaterial, setExpandedMaterial] = useState(null);
+
+  const [userNames, setUserNames] = useState({});
 
   const fetchTask = async () => {
     try {
@@ -195,6 +199,13 @@ const TaskDetailsPage = () => {
         });
         
         setMaterialQuantities(quantities);
+      }
+
+      // Pobierz dane użytkowników jeśli jest historia zmian statusu
+      if (fetchedTask.statusHistory && fetchedTask.statusHistory.length > 0) {
+        const userIds = fetchedTask.statusHistory.map(change => change.changedBy).filter(id => id);
+        const uniqueUserIds = [...new Set(userIds)];
+        await fetchUserNames(uniqueUserIds);
       }
     } catch (error) {
       showError('Błąd podczas pobierania zadania: ' + error.message);
@@ -408,15 +419,6 @@ const TaskDetailsPage = () => {
           <>
             <Button 
               variant="contained" 
-              color="success" 
-              startIcon={<CompleteIcon />}
-              onClick={() => handleStatusChange('Zakończone')}
-              sx={{ mr: 1 }}
-            >
-              Zakończ produkcję
-            </Button>
-            <Button 
-              variant="contained" 
               color="error" 
               startIcon={<StopIcon />}
               onClick={() => setStopProductionDialogOpen(true)}
@@ -450,7 +452,40 @@ const TaskDetailsPage = () => {
         // Generujemy LOT na podstawie numeru zadania produkcyjnego (MO)
         const lotNumber = task.moNumber ? `LOT-${task.moNumber}` : `LOT-PROD-${id.substring(0, 6)}`;
           
-        navigate(`/inventory/${task.inventoryProductId}/receive?poNumber=PROD-${id.substring(0, 6)}&quantity=${task.quantity}&unitPrice=${unitPrice}&reason=production&lotNumber=${lotNumber}&source=production&sourceId=${id}`);
+        // Przygotuj dodatkowe informacje o pochodzeniu produktu
+        const sourceInfo = new URLSearchParams();
+        sourceInfo.append('poNumber', `PROD-${id.substring(0, 6)}`);
+        sourceInfo.append('quantity', task.quantity);
+        sourceInfo.append('unitPrice', unitPrice);
+        sourceInfo.append('reason', 'production');
+        sourceInfo.append('lotNumber', lotNumber);
+        sourceInfo.append('source', 'production');
+        sourceInfo.append('sourceId', id);
+        
+        // Dodaj informacje o MO i CO
+        if (task.moNumber) {
+          sourceInfo.append('moNumber', task.moNumber);
+        }
+        
+        if (task.orderNumber) {
+          sourceInfo.append('orderNumber', task.orderNumber);
+        }
+        
+        if (task.orderId) {
+          sourceInfo.append('orderId', task.orderId);
+        }
+        
+        // Przygotuj opis dla partii
+        let notes = `Partia z zadania produkcyjnego: ${task.name || ''}`;
+        if (task.moNumber) {
+          notes += ` (MO: ${task.moNumber})`;
+        }
+        if (task.orderNumber) {
+          notes += ` (CO: ${task.orderNumber})`;
+        }
+        sourceInfo.append('notes', notes);
+        
+        navigate(`/inventory/${task.inventoryProductId}/receive?${sourceInfo.toString()}`);
       } else {
         // Jeśli nie ma powiązanej pozycji magazynowej, użyj standardowej funkcji
         await addTaskProductToInventory(id, currentUser.uid);
@@ -890,6 +925,34 @@ const TaskDetailsPage = () => {
     );
   };
 
+  // Funkcja pobierająca dane użytkowników
+  const fetchUserNames = async (userIds) => {
+    const names = {};
+    
+    for (const userId of userIds) {
+      try {
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          // Wybierz najlepszą dostępną informację o użytkowniku w kolejności: displayName, email, id
+          names[userId] = userData.displayName || userData.email || userId;
+        } else {
+          names[userId] = userId; // Fallback na ID, jeśli nie znaleziono użytkownika
+        }
+      } catch (error) {
+        console.error("Błąd podczas pobierania danych użytkownika:", error);
+        names[userId] = userId; // Fallback na ID w przypadku błędu
+      }
+    }
+    
+    setUserNames(names);
+  };
+  
+  // Funkcja zwracająca nazwę użytkownika zamiast ID
+  const getUserName = (userId) => {
+    return userNames[userId] || userId || 'System';
+  };
+
   // Renderuj stronę
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -973,20 +1036,55 @@ const TaskDetailsPage = () => {
                       <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Receptura:</Typography>
                       <Typography variant="body1">
                         <Link to={`/recipes/${task.recipe.recipeId}`}>{task.recipe.recipeName}</Link>
-        </Typography>
+              </Typography>
                     </Grid>
-                  )}
+            )}
 
                   <Grid item xs={12}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Opis:</Typography>
                     <Typography variant="body1">{task.description || 'Brak opisu'}</Typography>
-                  </Grid>
+          </Grid>
                 </Grid>
       </Paper>
-            </Grid>
-
+        </Grid>
+        
             {/* Dodanie komponentu do wyświetlania powiązanych zamówień */}
             <TaskDetails task={task} />
+
+            {/* Sekcja historii zmian statusu */}
+            {task.statusHistory && task.statusHistory.length > 0 && (
+              <Grid item xs={12}>
+                <Paper sx={{ p: 3 }}>
+                  <Typography variant="h6" component="h2" gutterBottom>
+                    Historia zmian statusu
+        </Typography>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                          <TableCell>Data i godzina</TableCell>
+                          <TableCell>Poprzedni status</TableCell>
+                          <TableCell>Nowy status</TableCell>
+                          <TableCell>Kto zmienił</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                        {[...task.statusHistory].reverse().map((change, index) => (
+                          <TableRow key={index}>
+                            <TableCell>
+                              {change.changedAt ? new Date(change.changedAt).toLocaleString('pl') : 'Brak daty'}
+                            </TableCell>
+                            <TableCell>{change.oldStatus}</TableCell>
+                            <TableCell>{change.newStatus}</TableCell>
+                            <TableCell>{getUserName(change.changedBy)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+      </Paper>
+              </Grid>
+            )}
 
             {/* Sekcja materiałów */}
             <Grid item xs={12}>

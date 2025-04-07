@@ -420,10 +420,20 @@ export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, user
     
     // Aktualizuj tylko jeśli status faktycznie się zmienił
     if (oldStatus !== newStatus) {
+      // Dodanie historii zmian statusu
+      const statusHistory = poData.statusHistory || [];
+      const statusChange = {
+        oldStatus: oldStatus || 'Szkic',
+        newStatus: newStatus,
+        changedBy: userId,
+        changedAt: new Date().toISOString()
+      };
+      
       const updateFields = {
         status: newStatus,
         updatedBy: userId,
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
+        statusHistory: [...statusHistory, statusChange]
       };
       
       // Jeśli status zmieniany jest na "delivered" (dostarczone)

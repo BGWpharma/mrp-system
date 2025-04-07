@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -20,7 +20,16 @@ import {
   Link,
   Stack,
   TextField,
-  Input
+  Input,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Tooltip
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -37,7 +46,9 @@ import {
   Upload as UploadIcon,
   DownloadRounded as DownloadIcon,
   Delete as DeleteIcon,
-  Engineering as EngineeringIcon
+  Engineering as EngineeringIcon,
+  PlaylistAdd as PlaylistAddIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { getOrderById, ORDER_STATUSES, updateOrder } from '../../services/orderService';
 import { useNotification } from '../../hooks/useNotification';
@@ -45,6 +56,10 @@ import { formatCurrency } from '../../utils/formatUtils';
 import { formatTimestamp, formatDate } from '../../utils/dateUtils';
 import { storage } from '../../services/firebase/config';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { useAuth } from '../../contexts/AuthContext';
+import { getAllPurchaseOrders } from '../../services/purchaseOrderService';
+import { db } from '../../services/firebase/config';
+import { getDoc, doc } from 'firebase/firestore';
 
 const OrderDetails = () => {
   const { orderId } = useParams();
@@ -54,6 +69,12 @@ const OrderDetails = () => {
   const { showError, showSuccess } = useNotification();
   const navigate = useNavigate();
   const fileInputRef = React.useRef(null);
+  const { currentUser } = useAuth();
+  const [openPurchaseOrderDialog, setOpenPurchaseOrderDialog] = useState(false);
+  const [availablePurchaseOrders, setAvailablePurchaseOrders] = useState([]);
+  const [selectedPurchaseOrderId, setSelectedPurchaseOrderId] = useState('');
+  const [loadingPurchaseOrders, setLoadingPurchaseOrders] = useState(false);
+  const [userNames, setUserNames] = useState({});
 
   useEffect(() => {
     const fetchOrderDetails = async () => {
@@ -61,6 +82,13 @@ const OrderDetails = () => {
         setLoading(true);
         const orderData = await getOrderById(orderId);
         setOrder(orderData);
+        
+        // Jeśli zamówienie ma historię zmian statusu, pobierz dane użytkowników
+        if (orderData.statusHistory && orderData.statusHistory.length > 0) {
+          const userIds = orderData.statusHistory.map(change => change.changedBy).filter(id => id);
+          const uniqueUserIds = [...new Set(userIds)];
+          await fetchUserNames(uniqueUserIds);
+        }
       } catch (error) {
         showError('Błąd podczas pobierania szczegółów zamówienia: ' + error.message);
         console.error('Error fetching order details:', error);
@@ -73,6 +101,21 @@ const OrderDetails = () => {
       fetchOrderDetails();
     }
   }, [orderId, showError]);
+
+  // Funkcja do ręcznego odświeżania danych zamówienia
+  const refreshOrderData = async () => {
+    try {
+      setLoading(true);
+      const refreshedOrderData = await getOrderById(orderId);
+      setOrder(refreshedOrderData);
+      showSuccess('Dane zamówienia zostały odświeżone');
+    } catch (error) {
+      showError('Błąd podczas odświeżania danych zamówienia: ' + error.message);
+      console.error('Error refreshing order data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleBackClick = () => {
     navigate('/orders');
@@ -112,7 +155,7 @@ const OrderDetails = () => {
       const downloadURL = await getDownloadURL(storageRef);
       
       // Aktualizujemy zamówienie z URL do dowodu dostawy
-      await updateOrder(orderId, { ...order, deliveryProof: downloadURL }, order.createdBy);
+      await updateOrder(orderId, { ...order, deliveryProof: downloadURL }, currentUser.uid);
       
       // Aktualizujemy stan lokalny
       setOrder({ ...order, deliveryProof: downloadURL });
@@ -140,7 +183,7 @@ const OrderDetails = () => {
       await deleteObject(storageRef);
       
       // Aktualizujemy zamówienie
-      await updateOrder(orderId, { ...order, deliveryProof: null }, order.createdBy);
+      await updateOrder(orderId, { ...order, deliveryProof: null }, currentUser.uid);
       
       // Aktualizujemy stan lokalny
       setOrder({ ...order, deliveryProof: null });
@@ -164,6 +207,154 @@ const OrderDetails = () => {
       case 'Anulowane': return 'error';
       default: return 'default';
     }
+  };
+
+  const getProductionStatusColor = (status) => {
+    switch (status) {
+      case 'Nowe': return 'default';
+      case 'Zaplanowane': return 'primary';
+      case 'W trakcie': return 'secondary';
+      case 'Wstrzymane': return 'warning';
+      case 'Zakończone': return 'success';
+      case 'Anulowane': return 'error';
+      case 'Potwierdzenie zużycia': return 'info';
+      default: return 'default';
+    }
+  };
+
+  const handleAssignPurchaseOrder = () => {
+    setOpenPurchaseOrderDialog(true);
+    fetchAvailablePurchaseOrders();
+  };
+  
+  const fetchAvailablePurchaseOrders = async () => {
+    try {
+      setLoadingPurchaseOrders(true);
+      const allPurchaseOrders = await getAllPurchaseOrders();
+      
+      // Filtruj, aby wyświetlić tylko PO, które jeszcze nie są przypisane do tego zamówienia
+      const alreadyLinkedIds = (order.linkedPurchaseOrders || []).map(po => po.id);
+      const filteredPOs = allPurchaseOrders.filter(po => !alreadyLinkedIds.includes(po.id));
+      
+      setAvailablePurchaseOrders(filteredPOs);
+    } catch (error) {
+      console.error('Błąd podczas pobierania dostępnych zamówień zakupowych:', error);
+    } finally {
+      setLoadingPurchaseOrders(false);
+    }
+  };
+  
+  const handleClosePurchaseOrderDialog = () => {
+    setOpenPurchaseOrderDialog(false);
+    setSelectedPurchaseOrderId('');
+  };
+  
+  const handlePurchaseOrderSelection = (event) => {
+    setSelectedPurchaseOrderId(event.target.value);
+  };
+  
+  const handleAssignSelected = async () => {
+    if (!selectedPurchaseOrderId) return;
+    
+    try {
+      const selectedPO = availablePurchaseOrders.find(po => po.id === selectedPurchaseOrderId);
+      if (!selectedPO) return;
+      
+      // Przygotuj dane dla nowo powiązanego PO
+      const poToLink = {
+        id: selectedPO.id,
+        number: selectedPO.number,
+        supplier: selectedPO.supplier?.name || selectedPO.supplier || 'Nieznany dostawca',
+        items: selectedPO.items?.length || 0,
+        totalGross: selectedPO.totalGross || 0,
+        status: selectedPO.status || 'draft'
+      };
+      
+      // Dodaj nowe PO do listy
+      const updatedLinkedPOs = [...(order.linkedPurchaseOrders || []), poToLink];
+      
+      // Zaktualizuj zamówienie w bazie danych
+      const updatedOrder = {
+        ...order,
+        linkedPurchaseOrders: updatedLinkedPOs
+      };
+      
+      await updateOrder(order.id, updatedOrder, currentUser.uid);
+      
+      // Zaktualizuj stan lokalny
+      setOrder(updatedOrder);
+      
+      // Zamknij dialog
+      handleClosePurchaseOrderDialog();
+    } catch (error) {
+      console.error('Błąd podczas przypisywania zamówienia zakupowego:', error);
+    }
+  };
+
+  // Funkcja pobierająca dane użytkowników
+  const fetchUserNames = async (userIds) => {
+    const names = {};
+    
+    for (const userId of userIds) {
+      try {
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          // Wybierz najlepszą dostępną informację o użytkowniku w kolejności: displayName, email, id
+          names[userId] = userData.displayName || userData.email || userId;
+        } else {
+          names[userId] = userId; // Fallback na ID, jeśli nie znaleziono użytkownika
+        }
+      } catch (error) {
+        console.error("Błąd podczas pobierania danych użytkownika:", error);
+        names[userId] = userId; // Fallback na ID w przypadku błędu
+      }
+    }
+    
+    setUserNames(names);
+  };
+  
+  // Funkcja zwracająca nazwę użytkownika zamiast ID
+  const getUserName = (userId) => {
+    return userNames[userId] || userId || 'System';
+  };
+
+  // Dodaję komponent wyświetlający historię zmian statusu przed sekcją z listą produktów
+  const renderStatusHistory = () => {
+    if (!order.statusHistory || order.statusHistory.length === 0) {
+      return null;
+    }
+    
+    return (
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Historia zmian statusu
+        </Typography>
+        
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Data i godzina</TableCell>
+              <TableCell>Poprzedni status</TableCell>
+              <TableCell>Nowy status</TableCell>
+              <TableCell>Kto zmienił</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {[...order.statusHistory].reverse().map((change, index) => (
+              <TableRow key={index}>
+                <TableCell>
+                  {change.changedAt ? new Date(change.changedAt).toLocaleString('pl') : 'Brak daty'}
+                </TableCell>
+                <TableCell>{change.oldStatus}</TableCell>
+                <TableCell>{change.newStatus}</TableCell>
+                <TableCell>{getUserName(change.changedBy)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Paper>
+    );
   };
 
   if (loading) {
@@ -350,6 +541,9 @@ const OrderDetails = () => {
           </Paper>
         </Grid>
       </Grid>
+
+      {/* Wyświetlenie historii zmian statusu */}
+      {renderStatusHistory()}
 
       {/* Lista produktów */}
       <Paper sx={{ p: 3, mb: 3 }}>
@@ -540,114 +734,137 @@ const OrderDetails = () => {
       )}
       
       {/* Powiązane zamówienia zakupu */}
-      {order.linkedPurchaseOrders && order.linkedPurchaseOrders.length > 0 && (
+      {order && (
         <Paper sx={{ p: 3, mb: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>Powiązane zamówienia zakupu</Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">Powiązane zamówienia zakupu</Typography>
+            <Button 
+              variant="outlined" 
+              startIcon={<PlaylistAddIcon />} 
+              onClick={handleAssignPurchaseOrder}
+            >
+              Przypisz PO
+            </Button>
+          </Box>
           <Divider sx={{ mb: 2 }} />
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Numer zamówienia</TableCell>
-                <TableCell>Dostawca</TableCell>
-                <TableCell>Ilość pozycji</TableCell>
-                <TableCell align="right">Wartość brutto</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell align="right">Akcje</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {order.linkedPurchaseOrders.map((po, index) => (
-                <TableRow key={index}>
-                  <TableCell>
-                    <Chip 
-                      label={po.number} 
-                      color="primary" 
-                      variant="outlined" 
-                      size="small"
-                      sx={{ fontWeight: 'bold' }}
-                    />
+          
+          {order.linkedPurchaseOrders && order.linkedPurchaseOrders.length > 0 ? (
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Numer zamówienia</TableCell>
+                  <TableCell>Dostawca</TableCell>
+                  <TableCell>Ilość pozycji</TableCell>
+                  <TableCell align="right">Wartość brutto</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell align="right">Akcje</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {order.linkedPurchaseOrders.map((po, index) => (
+                  <TableRow key={index}>
+                    <TableCell>
+                      <Chip 
+                        label={po.number} 
+                        color="primary" 
+                        variant="outlined" 
+                        size="small"
+                        sx={{ fontWeight: 'bold' }}
+                      />
+                    </TableCell>
+                    <TableCell>{po.supplier}</TableCell>
+                    <TableCell>{po.items}</TableCell>
+                    <TableCell align="right">
+                      {(() => {
+                        // Jeśli zamówienie ma już wartość brutto, używamy jej
+                        if (po.totalGross) {
+                          return formatCurrency(po.totalGross);
+                        }
+                        
+                        // W przeciwnym razie obliczamy wartość brutto
+                        const productsValue = parseFloat(po.value) || 0;
+                        const vatRate = parseFloat(po.vatRate) || 23;
+                        const vatValue = (productsValue * vatRate) / 100;
+                        const additionalCosts = parseFloat(po.additionalCosts) || 0;
+                        
+                        // Wartość brutto: produkty + VAT + dodatkowe koszty
+                        const grossValue = productsValue + vatValue + additionalCosts;
+                        
+                        return formatCurrency(grossValue);
+                      })()}
+                    </TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={po.status || "Robocze"} 
+                        color={
+                          po.status === 'completed' ? 'success' : 
+                          po.status === 'in_progress' ? 'warning' : 
+                          'default'
+                        }
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell align="right">
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => navigate(`/purchase-orders/${po.id}`)}
+                      >
+                        Szczegóły
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                
+                {/* Podsumowanie wartości */}
+                <TableRow>
+                  <TableCell colSpan={3} align="right" sx={{ fontWeight: 'bold' }}>
+                    Łączna wartość brutto zamówień zakupu:
                   </TableCell>
-                  <TableCell>{po.supplier}</TableCell>
-                  <TableCell>{po.items}</TableCell>
-                  <TableCell align="right">
+                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                     {(() => {
-                      // Jeśli zamówienie ma już wartość brutto, używamy jej
-                      if (po.totalGross) {
-                        return formatCurrency(po.totalGross);
-                      }
+                      // Obliczanie łącznej wartości brutto wszystkich zamówień zakupu
+                      const totalGross = order.linkedPurchaseOrders.reduce((sum, po) => {
+                        // Jeśli zamówienie ma już wartość brutto, używamy jej
+                        if (po.totalGross) {
+                          return sum + parseFloat(po.totalGross);
+                        }
+                        
+                        // W przeciwnym razie obliczamy wartość brutto
+                        const productsValue = parseFloat(po.value) || 0;
+                        const vatRate = parseFloat(po.vatRate) || 23;
+                        const vatValue = (productsValue * vatRate) / 100;
+                        const additionalCosts = parseFloat(po.additionalCosts) || 0;
+                        
+                        return sum + productsValue + vatValue + additionalCosts;
+                      }, 0);
                       
-                      // W przeciwnym razie obliczamy wartość brutto
-                      const productsValue = parseFloat(po.value) || 0;
-                      const vatRate = parseFloat(po.vatRate) || 23;
-                      const vatValue = (productsValue * vatRate) / 100;
-                      const additionalCosts = parseFloat(po.additionalCosts) || 0;
-                      
-                      // Wartość brutto: produkty + VAT + dodatkowe koszty
-                      const grossValue = productsValue + vatValue + additionalCosts;
-                      
-                      return formatCurrency(grossValue);
+                      return formatCurrency(totalGross);
                     })()}
                   </TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={po.status || "Robocze"} 
-                      color={
-                        po.status === 'completed' ? 'success' : 
-                        po.status === 'in_progress' ? 'warning' : 
-                        'default'
-                      }
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell align="right">
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      onClick={() => navigate(`/purchase-orders/${po.id}`)}
-                    >
-                      Szczegóły
-                    </Button>
-                  </TableCell>
+                  <TableCell colSpan={2} />
                 </TableRow>
-              ))}
-              
-              {/* Podsumowanie wartości */}
-              <TableRow>
-                <TableCell colSpan={3} align="right" sx={{ fontWeight: 'bold' }}>
-                  Łączna wartość brutto zamówień zakupu:
-                </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                  {(() => {
-                    // Obliczanie łącznej wartości brutto wszystkich zamówień zakupu
-                    const totalGross = order.linkedPurchaseOrders.reduce((sum, po) => {
-                      // Jeśli zamówienie ma już wartość brutto, używamy jej
-                      if (po.totalGross) {
-                        return sum + parseFloat(po.totalGross);
-                      }
-                      
-                      // W przeciwnym razie obliczamy wartość brutto
-                      const productsValue = parseFloat(po.value) || 0;
-                      const vatRate = parseFloat(po.vatRate) || 23;
-                      const vatValue = (productsValue * vatRate) / 100;
-                      const additionalCosts = parseFloat(po.additionalCosts) || 0;
-                      
-                      return sum + productsValue + vatValue + additionalCosts;
-                    }, 0);
-                    
-                    return formatCurrency(totalGross);
-                  })()}
-                </TableCell>
-                <TableCell colSpan={2} />
-              </TableRow>
-            </TableBody>
-          </Table>
+              </TableBody>
+            </Table>
+          ) : (
+            <Typography variant="body1" color="text.secondary">
+              Brak powiązanych zamówień zakupu
+            </Typography>
+          )}
         </Paper>
       )}
 
       <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Zadania produkcyjne
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6">Zadania produkcyjne</Typography>
+          <IconButton 
+            color="primary" 
+            onClick={refreshOrderData} 
+            title="Odśwież dane zadań produkcyjnych"
+          >
+            <RefreshIcon />
+          </IconButton>
+        </Box>
         <Divider sx={{ mb: 2 }} />
         
         {!order.productionTasks || order.productionTasks.length === 0 ? (
@@ -663,6 +880,7 @@ const OrderDetails = () => {
                 <TableCell>Produkt</TableCell>
                 <TableCell>Ilość</TableCell>
                 <TableCell>Status</TableCell>
+                <TableCell>Numer partii</TableCell>
                 <TableCell align="right">Akcje</TableCell>
               </TableRow>
             </TableHead>
@@ -676,16 +894,35 @@ const OrderDetails = () => {
                   <TableCell>
                     <Chip 
                       label={task.status} 
-                      color={getStatusChipColor(task.status)}
+                      color={getProductionStatusColor(task.status)}
                       size="small"
-                      icon={<EngineeringIcon />}
                     />
+                  </TableCell>
+                  <TableCell>
+                    {task.lotNumber ? (
+                      <Tooltip title="Numer partii produkcyjnej">
+                        <Chip
+                          label={task.lotNumber}
+                          color="success"
+                          size="small"
+                          variant="outlined"
+                        />
+                      </Tooltip>
+                    ) : task.status === 'Zakończone' ? (
+                      <Chip
+                        label="Brak numeru LOT"
+                        color="warning"
+                        size="small"
+                        variant="outlined"
+                      />
+                    ) : null}
                   </TableCell>
                   <TableCell align="right">
                     <Button
-                      variant="outlined"
                       size="small"
-                      onClick={() => navigate(`/production/tasks/${task.id}`)}
+                      component={RouterLink}
+                      to={`/production/tasks/${task.id}`}
+                      variant="outlined"
                     >
                       Szczegóły
                     </Button>
@@ -696,6 +933,49 @@ const OrderDetails = () => {
           </Table>
         )}
       </Paper>
+
+      {/* Dialog wyboru zamówienia zakupowego */}
+      <Dialog open={openPurchaseOrderDialog} onClose={handleClosePurchaseOrderDialog} maxWidth="md" fullWidth>
+        <DialogTitle>Przypisz zamówienie zakupowe</DialogTitle>
+        <DialogContent>
+          {loadingPurchaseOrders ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : availablePurchaseOrders.length > 0 ? (
+            <Box sx={{ mt: 2 }}>
+              <FormControl fullWidth>
+                <InputLabel>Wybierz zamówienie zakupowe</InputLabel>
+                <Select
+                  value={selectedPurchaseOrderId}
+                  onChange={handlePurchaseOrderSelection}
+                  label="Wybierz zamówienie zakupowe"
+                >
+                  {availablePurchaseOrders.map(po => (
+                    <MenuItem key={po.id} value={po.id}>
+                      {po.number} - {po.supplier?.name || 'Nieznany dostawca'} - Wartość: {po.totalGross} {po.currency || 'EUR'}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
+          ) : (
+            <Typography variant="body1" sx={{ mt: 2 }}>
+              Brak dostępnych zamówień zakupowych, które można przypisać.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleClosePurchaseOrderDialog}>Anuluj</Button>
+          <Button 
+            onClick={handleAssignSelected} 
+            variant="contained" 
+            disabled={!selectedPurchaseOrderId || loadingPurchaseOrders}
+          >
+            Przypisz
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

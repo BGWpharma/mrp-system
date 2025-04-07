@@ -12,7 +12,12 @@ import {
   Menu,
   MenuItem,
   ListItemIcon,
-  ListItemText
+  ListItemText,
+  FormControlLabel,
+  Switch,
+  Grid,
+  Divider,
+  Chip
 } from '@mui/material';
 import {
   CalendarMonth as CalendarIcon,
@@ -21,7 +26,8 @@ import {
   ViewModule as MonthIcon,
   Add as AddIcon,
   BarChart as GanttIcon,
-  ArrowDropDown as ArrowDropDownIcon
+  ArrowDropDown as ArrowDropDownIcon,
+  FilterList as FilterListIcon
 } from '@mui/icons-material';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -31,6 +37,7 @@ import timelinePlugin from '@fullcalendar/timeline';
 import resourceTimelinePlugin from '@fullcalendar/resource-timeline';
 import plLocale from '@fullcalendar/core/locales/pl';
 import { getTasksByDateRange } from '../../services/productionService';
+import { getAllWorkstations } from '../../services/workstationService';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
 
@@ -40,6 +47,11 @@ const ProductionCalendar = () => {
   const [view, setView] = useState('dayGridMonth');
   const [ganttView, setGanttView] = useState('resourceTimelineMonth');
   const [ganttMenuAnchor, setGanttMenuAnchor] = useState(null);
+  const [workstations, setWorkstations] = useState([]);
+  const [workstationColors, setWorkstationColors] = useState({});
+  const [useWorkstationColors, setUseWorkstationColors] = useState(true);
+  const [filterMenuAnchor, setFilterMenuAnchor] = useState(null);
+  const [selectedWorkstations, setSelectedWorkstations] = useState({});
   const calendarRef = useRef(null);
   const navigate = useNavigate();
   const { showError } = useNotification();
@@ -51,6 +63,35 @@ const ProductionCalendar = () => {
       calendarApi.changeView(view);
     }
   }, [view]);
+  
+  // Efekt do pobrania stanowisk produkcyjnych i ich kolorów
+  useEffect(() => {
+    fetchWorkstations();
+  }, []);
+
+  const fetchWorkstations = async () => {
+    try {
+      const data = await getAllWorkstations();
+      setWorkstations(data);
+      
+      // Inicjalizuj stan filtrów - domyślnie wszystkie stanowiska są wybrane
+      const initialSelectedWorkstations = {};
+      data.forEach(workstation => {
+        initialSelectedWorkstations[workstation.id] = true;
+      });
+      setSelectedWorkstations(initialSelectedWorkstations);
+      
+      // Tworzenie mapy kolorów stanowisk
+      const colors = {};
+      data.forEach(workstation => {
+        colors[workstation.id] = workstation.color || '#2196f3'; // Użyj koloru stanowiska lub domyślnego
+      });
+      setWorkstationColors(colors);
+    } catch (error) {
+      console.error('Błąd podczas pobierania stanowisk:', error);
+      showError('Błąd podczas pobierania stanowisk: ' + error.message);
+    }
+  };
 
   const fetchTasks = async (info) => {
     try {
@@ -103,6 +144,29 @@ const ProductionCalendar = () => {
     // Można dodać funkcjonalność tworzenia nowego zadania na kliknięty dzień
     navigate(`/production/new-task?date=${info.dateStr}`);
   };
+  
+  const handleFilterMenuClick = (event) => {
+    setFilterMenuAnchor(event.currentTarget);
+  };
+
+  const handleFilterMenuClose = () => {
+    setFilterMenuAnchor(null);
+  };
+
+  const handleWorkstationFilterChange = (workstationId) => {
+    setSelectedWorkstations(prev => ({
+      ...prev,
+      [workstationId]: !prev[workstationId]
+    }));
+  };
+  
+  const handleSelectAllWorkstations = (select) => {
+    const newSelectedWorkstations = {};
+    workstations.forEach(workstation => {
+      newSelectedWorkstations[workstation.id] = select;
+    });
+    setSelectedWorkstations(newSelectedWorkstations);
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -118,10 +182,31 @@ const ProductionCalendar = () => {
         return '#95a5a6'; // szary
     }
   };
+  
+  // Funkcja zwracająca kolor dla zadania bazując na stanowisku lub statusie
+  const getTaskColor = (task) => {
+    // Jeśli włączone jest użycie kolorów stanowisk i zadanie ma przypisane stanowisko
+    if (useWorkstationColors && task.workstationId && workstationColors[task.workstationId]) {
+      return workstationColors[task.workstationId];
+    }
+    
+    // W przeciwnym razie użyj koloru statusu
+    return getStatusColor(task.status);
+  };
 
   const getCalendarEvents = () => {
     console.log('Generowanie wydarzeń kalendarza z zadań:', tasks);
-    return tasks.map(task => {
+    
+    // Filtruj zadania według wybranych stanowisk
+    const filteredTasks = tasks.filter(task => {
+      // Jeśli zadanie nie ma przypisanego stanowiska, zawsze je pokazuj
+      if (!task.workstationId) return true;
+      
+      // Jeśli stanowisko zadania jest wybrane, pokazuj je
+      return selectedWorkstations[task.workstationId];
+    });
+    
+    return filteredTasks.map(task => {
       // Konwersja Timestamp z Firestore na obiekt Date
       let startDate = task.scheduledDate;
       let endDate = task.endDate || task.scheduledDate;
@@ -159,13 +244,16 @@ const ProductionCalendar = () => {
       // Używamy numeru MO jako tytułu wydarzenia, jeśli jest dostępny
       const title = task.moNumber ? `${task.moNumber} - ${task.productName || ''}` : task.name;
       
+      // Pobierz kolor dla zadania
+      const taskColor = getTaskColor(task);
+      
       return {
         id: task.id,
         title: title,
         start: startDate,
         end: endDate,
-        backgroundColor: getStatusColor(task.status),
-        borderColor: getStatusColor(task.status),
+        backgroundColor: taskColor,
+        borderColor: taskColor,
         extendedProps: {
           moNumber: task.moNumber,
           productName: task.productName,
@@ -173,6 +261,7 @@ const ProductionCalendar = () => {
           unit: task.unit,
           status: task.status,
           estimatedDuration: task.estimatedDuration || '',
+          workstationId: task.workstationId,
           resourceId: task.id // Używamy ID zadania jako resourceId dla wykresu Gantta
         },
         resourceId: task.id // Dla widoku resourceTimeline - używamy ID zadania
@@ -185,8 +274,14 @@ const ProductionCalendar = () => {
     // Zbieramy unikalne zadania z użyciem mapy zamiast tablicy, aby uniknąć duplikatów
     const uniqueResources = new Map();
     
+    // Filtruj zadania według wybranych stanowisk
+    const filteredTasks = tasks.filter(task => {
+      if (!task.workstationId) return true;
+      return selectedWorkstations[task.workstationId];
+    });
+    
     // Dodajemy każde zadanie jako zasób
-    tasks.forEach(task => {
+    filteredTasks.forEach(task => {
       if (!uniqueResources.has(task.id)) {
         uniqueResources.set(task.id, {
           id: task.id,
@@ -210,6 +305,12 @@ const ProductionCalendar = () => {
     
     const durationText = duration ? `(${duration} min)` : '';
     
+    // Znajdź nazwę stanowiska dla zadania
+    const workstationId = eventInfo.event.extendedProps.workstationId;
+    const workstationName = workstationId ? 
+      workstations.find(w => w.id === workstationId)?.name || 'Nieznane stanowisko' : 
+      'Brak przypisanego stanowiska';
+    
     return (
       <Tooltip title={
         <div>
@@ -220,6 +321,7 @@ const ProductionCalendar = () => {
           <Typography variant="body2">Produkt: {eventInfo.event.extendedProps.productName}</Typography>
           <Typography variant="body2">Ilość: {eventInfo.event.extendedProps.quantity} {eventInfo.event.extendedProps.unit}</Typography>
           <Typography variant="body2">Status: {eventInfo.event.extendedProps.status}</Typography>
+          <Typography variant="body2">Stanowisko: {workstationName}</Typography>
           {duration && <Typography variant="body2">Czas trwania: {duration} min</Typography>}
           <Typography variant="body2">
             Od: {new Date(eventInfo.event.start).toLocaleString()}
@@ -296,6 +398,60 @@ const ProductionCalendar = () => {
         </Typography>
         
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={useWorkstationColors}
+                onChange={(e) => setUseWorkstationColors(e.target.checked)}
+                color="primary"
+              />
+            }
+            label="Kolory stanowisk"
+            sx={{ mr: 2 }}
+          />
+          
+          <Button
+            variant="outlined"
+            startIcon={<FilterListIcon />}
+            onClick={handleFilterMenuClick}
+            sx={{ mr: 2 }}
+          >
+            Filtruj
+          </Button>
+          
+          <Menu
+            anchorEl={filterMenuAnchor}
+            open={Boolean(filterMenuAnchor)}
+            onClose={handleFilterMenuClose}
+          >
+            <MenuItem onClick={() => handleSelectAllWorkstations(true)}>
+              <ListItemText>Zaznacz wszystkie</ListItemText>
+            </MenuItem>
+            <MenuItem onClick={() => handleSelectAllWorkstations(false)}>
+              <ListItemText>Odznacz wszystkie</ListItemText>
+            </MenuItem>
+            <Divider />
+            {workstations.map((workstation) => (
+              <MenuItem 
+                key={workstation.id}
+                onClick={() => handleWorkstationFilterChange(workstation.id)}
+                dense
+              >
+                <Box 
+                  sx={{ 
+                    width: 16, 
+                    height: 16, 
+                    bgcolor: workstation.color || '#2196f3',
+                    borderRadius: '50%',
+                    mr: 2,
+                    opacity: selectedWorkstations[workstation.id] ? 1 : 0.3
+                  }} 
+                />
+                <ListItemText>{workstation.name}</ListItemText>
+              </MenuItem>
+            ))}
+          </Menu>
+          
           <ToggleButtonGroup
             value={view.startsWith('resourceTimeline') ? 'gantt' : view}
             exclusive
@@ -366,6 +522,39 @@ const ProductionCalendar = () => {
           </Button>
         </Box>
       </Box>
+      
+      {/* Legenda kolorów */}
+      {useWorkstationColors && workstations.length > 0 && (
+        <Box sx={{ mb: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+          <Typography variant="body2" sx={{ mr: 1, display: 'flex', alignItems: 'center' }}>
+            Legenda stanowisk:
+          </Typography>
+          {workstations.map(workstation => (
+            <Chip
+              key={workstation.id}
+              size="small"
+              label={workstation.name}
+              sx={{
+                backgroundColor: workstation.color || '#2196f3',
+                color: '#fff',
+                opacity: selectedWorkstations[workstation.id] ? 1 : 0.3
+              }}
+            />
+          ))}
+        </Box>
+      )}
+      
+      {!useWorkstationColors && (
+        <Box sx={{ mb: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+          <Typography variant="body2" sx={{ mr: 1, display: 'flex', alignItems: 'center' }}>
+            Legenda statusów:
+          </Typography>
+          <Chip size="small" label="Zaplanowane" sx={{ backgroundColor: '#3788d8', color: '#fff' }} />
+          <Chip size="small" label="W trakcie" sx={{ backgroundColor: '#f39c12', color: '#fff' }} />
+          <Chip size="small" label="Zakończone" sx={{ backgroundColor: '#2ecc71', color: '#fff' }} />
+          <Chip size="small" label="Anulowane" sx={{ backgroundColor: '#e74c3c', color: '#fff' }} />
+        </Box>
+      )}
       
       {loading && (
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>

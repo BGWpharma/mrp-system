@@ -291,16 +291,37 @@ import {
   // Aktualizacja statusu zadania
   export const updateTaskStatus = async (taskId, newStatus, userId) => {
     try {
+      // Sprawdź, czy zadanie istnieje
       const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
-      const taskSnapshot = await getDoc(taskRef);
+      const taskDoc = await getDoc(taskRef);
       
-      if (!taskSnapshot.exists()) {
+      if (!taskDoc.exists()) {
         throw new Error('Zadanie nie istnieje');
       }
       
-      const task = taskSnapshot.data();
+      const task = taskDoc.data();
       const oldStatus = task.status;
-      const updates = { status: newStatus };
+      
+      // Jeśli status się nie zmienił, nie rób nic
+      if (oldStatus === newStatus) {
+        return { success: true, message: `Status zadania jest już ustawiony na ${oldStatus}` };
+      }
+      
+      // Przygotuj aktualizację
+      const updates = {
+        status: newStatus,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId,
+        statusHistory: [
+          ...(task.statusHistory || []),
+          {
+            oldStatus: oldStatus || 'Nowe',
+            newStatus: newStatus,
+            changedBy: userId,
+            changedAt: new Date().toISOString()
+          }
+        ]
+      };
       
       if (newStatus === 'W trakcie') {
         updates.startDate = new Date().toISOString();
@@ -342,6 +363,72 @@ import {
           );
         } catch (notificationError) {
           console.warn('Nie udało się utworzyć powiadomienia:', notificationError);
+        }
+        
+        // Jeśli zadanie jest powiązane z zamówieniem klienta, zaktualizuj informacje w zamówieniu
+        if (task.orderId) {
+          try {
+            console.log(`Próba aktualizacji zadania ${taskId} w zamówieniu ${task.orderId}`);
+            
+            // Pobierz bezpośrednio z bazy danych aktualne dane zamówienia
+            const orderRef = doc(db, 'orders', task.orderId);
+            const orderDoc = await getDoc(orderRef);
+            
+            if (!orderDoc.exists()) {
+              console.error(`Zamówienie o ID ${task.orderId} nie istnieje`);
+              return { success: true, message: `Status zadania zmieniony na ${updates.status}, ale zamówienie nie istnieje` };
+            }
+            
+            const orderData = orderDoc.data();
+            const productionTasks = orderData.productionTasks || [];
+            
+            // Znajdź indeks zadania w tablicy zadań produkcyjnych
+            const taskIndex = productionTasks.findIndex(t => t.id === taskId);
+            
+            if (taskIndex === -1) {
+              console.error(`Zadanie ${taskId} nie znaleziono w zamówieniu ${task.orderId}`);
+              
+              // Jeśli nie znaleziono zadania w zamówieniu, dodaj je
+              productionTasks.push({
+                id: taskId,
+                moNumber: task.moNumber,
+                name: task.name,
+                status: updates.status,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                productName: task.productName,
+                quantity: task.quantity,
+                unit: task.unit
+              });
+              
+              await updateDoc(orderRef, {
+                productionTasks,
+                updatedAt: serverTimestamp(),
+                updatedBy: userId
+              });
+              
+              console.log(`Dodano zadanie ${taskId} do zamówienia ${task.orderId}`);
+            } else {
+              // Aktualizuj informacje o zadaniu w zamówieniu
+              productionTasks[taskIndex] = {
+                ...productionTasks[taskIndex],
+                status: updates.status,
+                updatedAt: new Date().toISOString(),
+                ...(updates.completionDate ? { completionDate: updates.completionDate } : {})
+              };
+              
+              await updateDoc(orderRef, {
+                productionTasks,
+                updatedAt: serverTimestamp(),
+                updatedBy: userId
+              });
+              
+              console.log(`Zaktualizowano status zadania ${taskId} w zamówieniu ${task.orderId}`);
+            }
+          } catch (orderUpdateError) {
+            console.error(`Błąd podczas aktualizacji zadania w zamówieniu: ${orderUpdateError.message}`, orderUpdateError);
+            // Nie przerywamy głównej operacji, jeśli aktualizacja zamówienia się nie powiedzie
+          }
         }
       }
       
@@ -477,7 +564,7 @@ import {
   };
   
   // Dodanie produktu z zadania produkcyjnego do magazynu jako partii
-  export const addTaskProductToInventory = async (taskId, userId) => {
+  export const addTaskProductToInventory = async (taskId, userId, inventoryParams = {}) => {
     const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
     
     // Pobierz aktualne dane zadania
@@ -568,26 +655,57 @@ import {
         }
       }
       
-      // Wygeneruj numer LOT bazując na numerze zadania produkcyjnego (MO)
-      const lotNumber = taskData.moNumber ? 
+      // Użyj parametrów przekazanych z formularza lub wartości domyślnych
+      const finalQuantity = inventoryParams.finalQuantity ? parseFloat(inventoryParams.finalQuantity) : taskData.quantity;
+      const lotNumber = inventoryParams.lotNumber || (taskData.moNumber ? 
         `LOT-${taskData.moNumber}` : 
-        `LOT-PROD-${taskId.substring(0, 6)}`;
+        `LOT-PROD-${taskId.substring(0, 6)}`);
+      
+      // Przygotuj datę ważności z przekazanych parametrów lub ustaw null
+      let expiryDate = null;
+      if (inventoryParams.expiryDate) {
+        expiryDate = new Date(inventoryParams.expiryDate);
+      }
+      
+      // Zbierz szczegóły dotyczące pochodzenia partii
+      const sourceDetails = {
+        moNumber: taskData.moNumber || null,
+        orderNumber: taskData.orderNumber || null,
+        orderId: taskData.orderId || null,
+        productionTaskName: taskData.name || null
+      };
+      
+      // Przygotuj opis pochodzenia partii
+      let sourceNotes = `Partia z zadania produkcyjnego: ${taskData.name || ''}`;
+      
+      if (taskData.moNumber) {
+        sourceNotes += ` (MO: ${taskData.moNumber})`;
+      }
+      
+      if (taskData.orderNumber) {
+        sourceNotes += ` (CO: ${taskData.orderNumber})`;
+      }
       
       // Dodaj partię do magazynu
       const batchRef = doc(collection(db, 'inventoryBatches'));
       const batchData = {
         itemId: inventoryItemId,
         itemName: taskData.productName,
-        quantity: taskData.quantity,
-        initialQuantity: taskData.quantity,
+        quantity: finalQuantity,
+        initialQuantity: finalQuantity,
         batchNumber: lotNumber,
         receivedDate: serverTimestamp(),
-        expiryDate: null, // Można dodać logikę określania daty ważności
+        expiryDate: expiryDate ? Timestamp.fromDate(expiryDate) : null,
         lotNumber: lotNumber,
         source: 'Produkcja',
         sourceId: taskId,
-        notes: `Partia z zadania produkcyjnego: ${taskData.name || ''}${taskData.moNumber ? ' (MO: ' + taskData.moNumber + ')' : ''}`,
-        unitPrice: taskData.costs ? (taskData.costs.totalCost / taskData.quantity) : 0,
+        // Dodajemy pola przechowujące informacje o pochodzeniu
+        moNumber: taskData.moNumber || null,
+        orderNumber: taskData.orderNumber || null,
+        orderId: taskData.orderId || null,
+        sourceDetails: sourceDetails,
+        notes: sourceNotes,
+        unitPrice: taskData.costs ? (taskData.costs.totalCost / finalQuantity) : 0,
         createdAt: serverTimestamp(),
         createdBy: userId
       };
@@ -603,11 +721,13 @@ import {
         itemId: inventoryItemId,
         itemName: taskData.productName,
         type: 'receive',
-        quantity: taskData.quantity,
+        quantity: finalQuantity,
         date: serverTimestamp(),
         reason: 'Z produkcji',
         reference: `Zadanie: ${taskData.name} (ID: ${taskId})`,
-        notes: `Produkt dodany do magazynu z zadania produkcyjnego`,
+        notes: sourceNotes,
+        moNumber: taskData.moNumber || null,
+        orderNumber: taskData.orderNumber || null,
         batchId: batchRef.id,
         createdBy: userId,
         createdAt: serverTimestamp()
@@ -620,6 +740,8 @@ import {
         inventoryUpdated: true,
         inventoryItemId: inventoryItemId,
         inventoryBatchId: batchRef.id,
+        finalQuantity: finalQuantity, // Zapisz końcową ilość w zadaniu
+        lotNumber: lotNumber, // Zapisz numer partii do zadania
         readyForInventory: false, // Oznacz jako już dodane do magazynu
         updatedAt: serverTimestamp(),
         updatedBy: userId
@@ -627,10 +749,100 @@ import {
       
       await updateDoc(taskRef, updates);
       
+      // Jeśli zadanie jest powiązane z zamówieniem klienta, zaktualizuj informacje w zamówieniu
+      if (taskData.orderId) {
+        try {
+          // Pobierz aktualne dane zamówienia
+          const orderRef = doc(db, 'orders', taskData.orderId);
+          const orderDoc = await getDoc(orderRef);
+          
+          if (orderDoc.exists()) {
+            const orderData = orderDoc.data();
+            // Pobierz listę zadań produkcyjnych z zamówienia
+            const productionTasks = orderData.productionTasks || [];
+            
+            // Znajdź indeks zadania w tablicy zadań produkcyjnych
+            const taskIndex = productionTasks.findIndex(task => task.id === taskId);
+            
+            if (taskIndex !== -1) {
+              // Zaktualizuj informacje o zadaniu w zamówieniu
+              productionTasks[taskIndex] = {
+                ...productionTasks[taskIndex],
+                status: 'Zakończone',
+                lotNumber: lotNumber,
+                finalQuantity: finalQuantity,
+                inventoryBatchId: batchRef.id,
+                inventoryItemId: inventoryItemId,
+                updatedAt: new Date().toISOString()
+              };
+              
+              // Zaktualizuj zamówienie
+              await updateDoc(orderRef, {
+                productionTasks: productionTasks,
+                updatedAt: serverTimestamp(),
+                updatedBy: userId
+              });
+              
+              console.log(`Zaktualizowano informacje o partii LOT w zamówieniu ${taskData.orderNumber}`);
+            } else {
+              console.warn(`Nie znaleziono zadania ${taskId} w zamówieniu ${taskData.orderId}`);
+            }
+          } else {
+            console.warn(`Zamówienie o ID ${taskData.orderId} nie istnieje`);
+          }
+        } catch (orderError) {
+          console.error(`Błąd podczas aktualizacji informacji o partii w zamówieniu: ${orderError.message}`, orderError);
+          // Nie przerywamy głównej operacji, jeśli aktualizacja zamówienia się nie powiedzie
+        }
+      } else {
+        // Jeśli zadanie nie ma powiązanego zamówienia klienta, sprawdź czy ma OrderId w polu sourceDetails
+        if (taskData.sourceDetails && taskData.sourceDetails.orderId) {
+          try {
+            // Pobierz aktualne dane zamówienia
+            const orderRef = doc(db, 'orders', taskData.sourceDetails.orderId);
+            const orderDoc = await getDoc(orderRef);
+            
+            if (orderDoc.exists()) {
+              const orderData = orderDoc.data();
+              // Pobierz listę zadań produkcyjnych z zamówienia
+              const productionTasks = orderData.productionTasks || [];
+              
+              // Znajdź indeks zadania w tablicy zadań produkcyjnych
+              const taskIndex = productionTasks.findIndex(task => task.id === taskId);
+              
+              if (taskIndex !== -1) {
+                // Zaktualizuj informacje o zadaniu w zamówieniu
+                productionTasks[taskIndex] = {
+                  ...productionTasks[taskIndex],
+                  status: 'Zakończone',
+                  lotNumber: lotNumber,
+                  finalQuantity: finalQuantity,
+                  inventoryBatchId: batchRef.id,
+                  inventoryItemId: inventoryItemId,
+                  updatedAt: new Date().toISOString()
+                };
+                
+                // Zaktualizuj zamówienie
+                await updateDoc(orderRef, {
+                  productionTasks: productionTasks,
+                  updatedAt: serverTimestamp(),
+                  updatedBy: userId
+                });
+                
+                console.log(`Zaktualizowano informacje o partii LOT w zamówieniu ze źródła ${taskData.sourceDetails.orderNumber}`);
+              }
+            }
+          } catch (sourceOrderError) {
+            console.error(`Błąd podczas aktualizacji informacji o partii w zamówieniu źródłowym: ${sourceOrderError.message}`, sourceOrderError);
+          }
+        }
+      }
+      
       return {
         success: true,
         inventoryItemId,
-        inventoryBatchId: batchRef.id
+        inventoryBatchId: batchRef.id,
+        lotNumber: lotNumber
       };
     } catch (error) {
       console.error('Błąd podczas dodawania produktu do magazynu:', error);

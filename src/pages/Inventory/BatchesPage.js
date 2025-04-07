@@ -397,23 +397,22 @@ const BatchesPage = () => {
             <TableHead>
               <TableRow>
                 <TableCell>Numer partii</TableCell>
-                <TableCell>Numer LOT</TableCell>
-                <TableCell>Data przyjęcia</TableCell>
                 <TableCell>Data ważności</TableCell>
                 <TableCell>Magazyn</TableCell>
                 <TableCell>Ilość początkowa</TableCell>
                 <TableCell>Ilość aktualna</TableCell>
                 <TableCell>Cena jedn.</TableCell>
                 <TableCell>Status</TableCell>
-                <TableCell>Notatki</TableCell>
+                <TableCell>Pochodzenie</TableCell>
+                <TableCell>Uwagi</TableCell>
                 <TableCell>Akcje</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {filteredBatches.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={11} align="center">
-                    Brak partii do wyświetlenia
+                  <TableCell colSpan={10} align="center">
+                    Brak partii dla tego produktu
                   </TableCell>
                 </TableRow>
               ) : (
@@ -423,10 +422,8 @@ const BatchesPage = () => {
                     const status = getBatchStatus(batch);
                     return (
                       <TableRow key={batch.id}>
-                        <TableCell>{batch.batchNumber || '-'}</TableCell>
-                        <TableCell>{batch.lotNumber || '-'}</TableCell>
                         <TableCell>
-                          {formatDate(batch.receivedDate)}
+                          {batch.batchNumber || batch.lotNumber || 'Brak numeru'}
                         </TableCell>
                         <TableCell>
                           {formatDate(batch.expiryDate)}
@@ -450,6 +447,24 @@ const BatchesPage = () => {
                             size="small"
                             icon={status.color === 'error' || status.color === 'warning' ? <WarningIcon /> : null}
                           />
+                        </TableCell>
+                        <TableCell>
+                          {(() => {
+                            let source = '-';
+                            if (batch.source === 'Produkcja' || batch.source === 'production') {
+                              source = 'Z produkcji';
+                              // Dodaj informacje o MO i CO, jeśli są dostępne
+                              if (batch.moNumber) {
+                                source += ` (MO: ${batch.moNumber})`;
+                              }
+                              if (batch.orderNumber) {
+                                source += ` (CO: ${batch.orderNumber})`;
+                              }
+                            } else if (batch.source) {
+                              source = batch.source;
+                            }
+                            return source;
+                          })()}
                         </TableCell>
                         <TableCell>{batch.notes || '-'}</TableCell>
                         <TableCell>
@@ -524,6 +539,33 @@ const BatchesPage = () => {
               <Typography variant="body2" gutterBottom>
                 <strong>Dostępna ilość:</strong> {selectedBatch.quantity} {item?.unit || 'szt.'}
               </Typography>
+              
+              {/* Dodaj informacje o pochodzeniu partii, jeśli są dostępne */}
+              {(selectedBatch.moNumber || selectedBatch.orderNumber || selectedBatch.source) && (
+                <>
+                  <Typography variant="subtitle2" sx={{ mt: 1 }}>
+                    Informacje o pochodzeniu:
+                  </Typography>
+                  
+                  {selectedBatch.source && (
+                    <Typography variant="body2" gutterBottom>
+                      <strong>Źródło:</strong> {selectedBatch.source === 'production' ? 'Z produkcji' : selectedBatch.source}
+                    </Typography>
+                  )}
+                  
+                  {selectedBatch.moNumber && (
+                    <Typography variant="body2" gutterBottom>
+                      <strong>Numer MO:</strong> {selectedBatch.moNumber}
+                    </Typography>
+                  )}
+                  
+                  {selectedBatch.orderNumber && (
+                    <Typography variant="body2" gutterBottom>
+                      <strong>Numer CO:</strong> {selectedBatch.orderNumber}
+                    </Typography>
+                  )}
+                </>
+              )}
               
               <Box sx={{ mt: 3, mb: 2 }}>
                 <Grid container spacing={2}>

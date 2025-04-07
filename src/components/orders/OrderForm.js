@@ -50,7 +50,8 @@ import {
   Person as PersonIcon,
   CloudUpload as CloudUploadIcon,
   ShoppingCart as ShoppingCartIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  PlaylistAdd as PlaylistAddIcon
 } from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -75,9 +76,19 @@ import { getAllRecipes, getRecipeById } from '../../services/recipeService';
 import { storage } from '../../services/firebase/config';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { calculateProductionCost } from '../../utils/costCalculator';
-import { createPurchaseOrder, getPurchaseOrderById } from '../../services/purchaseOrderService';
+import { createPurchaseOrder, getPurchaseOrderById, getAllPurchaseOrders } from '../../services/purchaseOrderService';
 import { getBestSupplierPricesForItems, getAllSuppliers } from '../../services/supplierService';
 import { getPriceForCustomerProduct } from '../../services/priceListService';
+import { 
+  getInventoryItemByName as findProductByName, 
+  getInventoryItemById as getProductById 
+} from '../../services/inventoryService';
+import { 
+  getRecipeById as getRecipeByProductId 
+} from '../../services/recipeService';
+import { 
+  getAllInventoryItems as getAllProducts 
+} from '../../services/inventoryService';
 
 const DEFAULT_ITEM = {
   id: '',
@@ -105,8 +116,12 @@ const OrderForm = ({ orderId }) => {
   const [suppliers, setSuppliers] = useState([]);
   const [isGeneratingPO, setIsGeneratingPO] = useState(false);
   const [isPODialogOpen, setIsPODialogOpen] = useState(false);
+  const [isAssignPODialogOpen, setIsAssignPODialogOpen] = useState(false);
   const [materialsForPO, setMaterialsForPO] = useState([]);
   const [linkedPurchaseOrders, setLinkedPurchaseOrders] = useState([]);
+  const [availablePurchaseOrders, setAvailablePurchaseOrders] = useState([]);
+  const [selectedPurchaseOrderId, setSelectedPurchaseOrderId] = useState('');
+  const [loadingPurchaseOrders, setLoadingPurchaseOrders] = useState(false);
 
   const { currentUser } = useAuth();
   const { showSuccess, showError, showInfo } = useNotification();
@@ -1041,6 +1056,93 @@ const OrderForm = ({ orderId }) => {
     }
   };
 
+  // Funkcja otwierająca dialog przypisania PO
+  const handleAssignPurchaseOrder = () => {
+    setIsAssignPODialogOpen(true);
+    fetchAvailablePurchaseOrders();
+  };
+  
+  // Funkcja pobierająca dostępne zamówienia zakupowe
+  const fetchAvailablePurchaseOrders = async () => {
+    try {
+      setLoadingPurchaseOrders(true);
+      const allPurchaseOrders = await getAllPurchaseOrders();
+      
+      // Filtruj, aby wyświetlić tylko PO, które jeszcze nie są przypisane do tego zamówienia
+      const alreadyLinkedIds = (linkedPurchaseOrders || []).map(po => po.id);
+      const filteredPOs = allPurchaseOrders.filter(po => !alreadyLinkedIds.includes(po.id));
+      
+      setAvailablePurchaseOrders(filteredPOs);
+    } catch (error) {
+      console.error('Błąd podczas pobierania dostępnych zamówień zakupowych:', error);
+      showError('Nie udało się pobrać listy zamówień zakupowych: ' + error.message);
+    } finally {
+      setLoadingPurchaseOrders(false);
+    }
+  };
+  
+  // Funkcja zamykająca dialog przypisania PO
+  const handleCloseAssignPODialog = () => {
+    setIsAssignPODialogOpen(false);
+    setSelectedPurchaseOrderId('');
+  };
+  
+  // Funkcja obsługująca wybór PO z listy
+  const handlePurchaseOrderSelection = (event) => {
+    setSelectedPurchaseOrderId(event.target.value);
+  };
+  
+  // Funkcja przypisująca wybrane PO do zamówienia klienta
+  const handleAssignSelected = async () => {
+    if (!selectedPurchaseOrderId) return;
+    
+    try {
+      const selectedPO = availablePurchaseOrders.find(po => po.id === selectedPurchaseOrderId);
+      if (!selectedPO) return;
+      
+      // Przygotuj dane dla nowo powiązanego PO
+      const poToLink = {
+        id: selectedPO.id,
+        number: selectedPO.number,
+        supplier: selectedPO.supplier?.name || selectedPO.supplier || 'Nieznany dostawca',
+        items: selectedPO.items?.length || 0,
+        totalGross: selectedPO.totalGross || 0,
+        status: selectedPO.status || 'draft'
+      };
+      
+      // Dodaj nowe PO do listy
+      const updatedLinkedPOs = [...(linkedPurchaseOrders || []), poToLink];
+      
+      // Zaktualizuj stan aplikacji
+      setLinkedPurchaseOrders(updatedLinkedPOs);
+      setOrderData(prev => ({
+        ...prev,
+        linkedPurchaseOrders: updatedLinkedPOs
+      }));
+      
+      // Zapisz w bazie danych jeśli zamówienie już istnieje
+      if (orderId) {
+        await updateOrder(
+          orderId, 
+          { 
+            ...orderData, 
+            linkedPurchaseOrders: updatedLinkedPOs 
+          }, 
+          currentUser.uid
+        );
+        showSuccess('Zamówienie zakupowe zostało przypisane');
+      } else {
+        showSuccess('Zamówienie zakupowe zostanie przypisane po zapisaniu zamówienia klienta');
+      }
+      
+      // Zamknij dialog
+      handleCloseAssignPODialog();
+    } catch (error) {
+      console.error('Błąd podczas przypisywania zamówienia zakupowego:', error);
+      showError('Wystąpił błąd podczas przypisywania zamówienia zakupowego: ' + error.message);
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
@@ -1485,6 +1587,15 @@ const OrderForm = ({ orderId }) => {
               </Button>
               <Button
                 variant="outlined"
+                color="primary"
+                startIcon={<PlaylistAddIcon />}
+                onClick={handleAssignPurchaseOrder}
+                disabled={!orderId}
+              >
+                Przypisz istniejące PO
+              </Button>
+              <Button
+                variant="outlined"
                 startIcon={<ShoppingCartIcon />} 
                 onClick={generatePurchaseOrder}
                 disabled={isGeneratingPO || !orderId}
@@ -1769,6 +1880,49 @@ const OrderForm = ({ orderId }) => {
             color="primary"
           >
             {saving ? 'Zapisywanie...' : 'Zapisz'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog wyboru zamówienia zakupowego */}
+      <Dialog open={isAssignPODialogOpen} onClose={handleCloseAssignPODialog} maxWidth="md" fullWidth>
+        <DialogTitle>Przypisz zamówienie zakupowe</DialogTitle>
+        <DialogContent>
+          {loadingPurchaseOrders ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : availablePurchaseOrders.length > 0 ? (
+            <Box sx={{ mt: 2 }}>
+              <FormControl fullWidth>
+                <InputLabel>Wybierz zamówienie zakupowe</InputLabel>
+                <Select
+                  value={selectedPurchaseOrderId}
+                  onChange={handlePurchaseOrderSelection}
+                  label="Wybierz zamówienie zakupowe"
+                >
+                  {availablePurchaseOrders.map(po => (
+                    <MenuItem key={po.id} value={po.id}>
+                      {po.number} - {po.supplier?.name || 'Nieznany dostawca'} - Wartość: {po.totalGross} {po.currency || 'EUR'}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
+          ) : (
+            <Typography variant="body1" sx={{ mt: 2 }}>
+              Brak dostępnych zamówień zakupowych, które można przypisać.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseAssignPODialog}>Anuluj</Button>
+          <Button 
+            onClick={handleAssignSelected} 
+            variant="contained" 
+            disabled={!selectedPurchaseOrderId || loadingPurchaseOrders}
+          >
+            Przypisz
           </Button>
         </DialogActions>
       </Dialog>

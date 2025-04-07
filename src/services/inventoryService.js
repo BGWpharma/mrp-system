@@ -109,33 +109,71 @@ import {
   
   // Pobieranie wszystkich pozycji magazynowych z możliwością filtrowania po magazynie
   export const getAllInventoryItems = async (warehouseId = null) => {
-    const itemsRef = collection(db, INVENTORY_COLLECTION);
-    const q = query(itemsRef, orderBy('name', 'asc'));
-    
-    const querySnapshot = await getDocs(q);
-    const items = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    try {
+      console.log('Pobieranie wszystkich pozycji magazynowych...');
+      const itemsRef = collection(db, INVENTORY_COLLECTION);
+      const q = query(itemsRef, orderBy('name', 'asc'));
+      
+      const querySnapshot = await getDocs(q);
+      const items = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
 
-    // Jeśli podano warehouseId, filtrujemy za pomocą partii
-    if (warehouseId) {
-      // Pobierz wszystkie partie dla podanego magazynu
+      console.log('Pobrane pozycje przed obliczeniem ilości:', items);
+
+      // Pobierz wszystkie partie dla wszystkich przedmiotów
       const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
-      const batchesQuery = query(batchesRef, where('warehouseId', '==', warehouseId));
-      const batchesSnapshot = await getDocs(batchesQuery);
-      
-      // Zbierz ID pozycji, które mają partie w danym magazynie
-      const itemIdsInWarehouse = new Set();
-      batchesSnapshot.docs.forEach(doc => {
-        itemIdsInWarehouse.add(doc.data().itemId);
+      const batchesSnapshot = await getDocs(batchesRef);
+      const batches = batchesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      console.log('Pobrane partie:', batches);
+
+      // Oblicz aktualne ilości i ceny dla każdego przedmiotu
+      const itemsWithQuantities = items.map(item => {
+        const itemBatches = batches.filter(batch => batch.itemId === item.id);
+        const currentQuantity = itemBatches.reduce((sum, batch) => sum + (parseFloat(batch.quantity) || 0), 0);
+        
+        // Znajdź najnowszą cenę z partii
+        const validBatches = itemBatches.filter(batch => parseFloat(batch.quantity) > 0);
+        let latestPrice = item.unitPrice || item.price || 0;
+        
+        if (validBatches.length > 0) {
+          const latestBatch = validBatches.reduce((latest, current) => {
+            const currentDate = current.date ? new Date(current.date.toDate()) : new Date(0);
+            const latestDate = latest.date ? new Date(latest.date.toDate()) : new Date(0);
+            return currentDate > latestDate ? current : latest;
+          });
+          latestPrice = latestBatch.unitPrice || latestBatch.price || latestPrice;
+        }
+
+        return {
+          ...item,
+          currentQuantity,
+          unitPrice: latestPrice
+        };
       });
+
+      console.log('Pozycje po obliczeniu ilości:', itemsWithQuantities);
+
+      // Jeśli podano warehouseId, filtruj tylko przedmioty z danego magazynu
+      if (warehouseId) {
+        return itemsWithQuantities.filter(item => {
+          const itemBatches = batches.filter(batch => 
+            batch.itemId === item.id && batch.warehouseId === warehouseId
+          );
+          return itemBatches.length > 0;
+        });
+      }
       
-      // Filtruj pozycje, które mają partie w danym magazynie
-      return items.filter(item => itemIdsInWarehouse.has(item.id));
+      return itemsWithQuantities;
+    } catch (error) {
+      console.error('Błąd podczas pobierania pozycji magazynowych:', error);
+      return [];
     }
-    
-    return items;
   };
   
   // Pobieranie pozycji magazynowej po ID
@@ -387,6 +425,27 @@ import {
         createdBy: userId
       };
       
+      // Dodaj dodatkowe pola dotyczące pochodzenia, jeśli istnieją
+      if (transactionData.moNumber) {
+        transaction.moNumber = transactionData.moNumber;
+      }
+      
+      if (transactionData.orderNumber) {
+        transaction.orderNumber = transactionData.orderNumber;
+      }
+      
+      if (transactionData.orderId) {
+        transaction.orderId = transactionData.orderId;
+      }
+      
+      if (transactionData.source) {
+        transaction.source = transactionData.source;
+      }
+      
+      if (transactionData.sourceId) {
+        transaction.sourceId = transactionData.sourceId;
+      }
+      
       const transactionRef = await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transaction);
       
       // Generuj numer partii, jeśli nie został podany
@@ -396,24 +455,57 @@ import {
         generatedLotNumber = await generateLOTNumber();
       }
       
+      // Przygotuj dane partii
+      const batch = {
+        itemId,
+        itemName: currentItem.name,
+        transactionId: transactionRef.id,
+        quantity: Number(quantity),
+        initialQuantity: Number(quantity),
+        batchNumber: generatedLotNumber,
+        lotNumber: generatedLotNumber,
+        warehouseId: transactionData.warehouseId, // Zawsze dodajemy warehouseId
+        receivedDate: serverTimestamp(),
+        expiryDate: transactionData.expiryDate || null,
+        notes: transactionData.batchNotes || transactionData.notes || '',
+        unitPrice: transactionData.unitPrice || 0,
+        createdBy: userId
+      };
+      
+      // Dodaj informacje o pochodzeniu partii
+      if (transactionData.moNumber) {
+        batch.moNumber = transactionData.moNumber;
+      }
+      
+      if (transactionData.orderNumber) {
+        batch.orderNumber = transactionData.orderNumber;
+      }
+      
+      if (transactionData.orderId) {
+        batch.orderId = transactionData.orderId;
+      }
+      
+      if (transactionData.source) {
+        batch.source = transactionData.source;
+      }
+      
+      if (transactionData.sourceId) {
+        batch.sourceId = transactionData.sourceId;
+      }
+      
+      // Dodaj dodatkowe dane w strukturze sourceDetails dla lepszej organizacji
+      if (transactionData.source === 'production' || transactionData.reason === 'production') {
+        batch.sourceDetails = {
+          moNumber: transactionData.moNumber || null,
+          orderNumber: transactionData.orderNumber || null,
+          orderId: transactionData.orderId || null,
+          sourceType: 'production',
+          sourceId: transactionData.sourceId || null
+        };
+      }
+      
       // Dodaj partię
       if (transactionData.addBatch !== false) {
-        const batch = {
-          itemId,
-          itemName: currentItem.name,
-          transactionId: transactionRef.id,
-          quantity: Number(quantity),
-          initialQuantity: Number(quantity),
-          batchNumber: generatedLotNumber,
-          lotNumber: generatedLotNumber,
-          warehouseId: transactionData.warehouseId, // Zawsze dodajemy warehouseId
-          receivedDate: serverTimestamp(),
-          expiryDate: transactionData.expiryDate || null,
-          notes: transactionData.batchNotes || '',
-          unitPrice: transactionData.unitPrice || 0,
-          createdBy: userId
-        };
-        
         await addDoc(collection(db, INVENTORY_BATCHES_COLLECTION), batch);
       }
       

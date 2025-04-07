@@ -57,7 +57,12 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
     reference: '',
     notes: '',
     unitPrice: '',
-    warehouseId: ''
+    warehouseId: '',
+    moNumber: '',
+    orderNumber: '',
+    orderId: '',
+    source: '',
+    sourceId: ''
   });
 
   const [batchData, setBatchData] = useState({
@@ -94,9 +99,24 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
             reference: initialData.reference || prev.reference,
             notes: initialData.notes || prev.notes,
             unitPrice: initialData.unitPrice ? Number(initialData.unitPrice) : prev.unitPrice,
+            // Dodajemy nowe pola dla źródła
+            moNumber: initialData.moNumber || prev.moNumber,
+            orderNumber: initialData.orderNumber || prev.orderNumber,
+            orderId: initialData.orderId || prev.orderId,
+            source: initialData.source || prev.source,
+            sourceId: initialData.sourceId || prev.sourceId,
             // Wykorzystujemy pierwszy magazyn jako domyślny, jeśli nie ma ustawionego
             warehouseId: prev.warehouseId || (warehousesList.length > 0 ? warehousesList[0].id : '')
           }));
+          
+          // Jeśli przekazano lotNumber, ustaw go w danych partii
+          if (initialData.lotNumber) {
+            setBatchData(prev => ({
+              ...prev,
+              batchNumber: initialData.lotNumber,
+              batchNotes: initialData.notes || prev.batchNotes
+            }));
+          }
         } else if (warehousesList.length > 0) {
           // Ustaw domyślny magazyn, jeśli nie ma initialData
           setTransactionData(prev => ({
@@ -144,6 +164,27 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
         unitPrice: isReceive ? parseFloat(transactionData.unitPrice) || 0 : undefined
       };
       
+      // Dodaj dodatkowe informacje o pochodzeniu jeśli dostępne
+      if (transactionData.moNumber) {
+        transactionPayload.moNumber = transactionData.moNumber;
+      }
+      
+      if (transactionData.orderNumber) {
+        transactionPayload.orderNumber = transactionData.orderNumber;
+      }
+      
+      if (transactionData.orderId) {
+        transactionPayload.orderId = transactionData.orderId;
+      }
+      
+      if (transactionData.source) {
+        transactionPayload.source = transactionData.source;
+      }
+      
+      if (transactionData.sourceId) {
+        transactionPayload.sourceId = transactionData.sourceId;
+      }
+      
       // Dodaj dane partii, jeśli włączone
       if (isReceive && batchData.useBatch) {
         if (!batchData.expiryDate) {
@@ -153,6 +194,15 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
         transactionPayload.batchNumber = batchData.batchNumber;
         transactionPayload.expiryDate = Timestamp.fromDate(batchData.expiryDate);
         transactionPayload.batchNotes = batchData.batchNotes;
+        
+        // Jeśli nie ma własnych notatek dla partii, ale są dla transakcji,
+        // wykorzystaj je również dla partii
+        if (!transactionPayload.batchNotes && transactionData.notes) {
+          transactionPayload.batchNotes = transactionData.notes;
+        }
+        
+        // Dodaj oznaczenie partii jako lotNumber
+        transactionPayload.lotNumber = batchData.batchNumber;
       } else if (!isReceive && batchData.useBatch && batchData.batchId) {
         transactionPayload.batchId = batchData.batchId;
       }

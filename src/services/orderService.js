@@ -371,13 +371,25 @@ export const updateOrderStatus = async (orderId, status, userId) => {
     
     // Aktualizuj dane zamówienia tylko jeśli status się zmienił
     if (oldStatus !== status) {
-      await updateDoc(orderRef, {
+      // Dodanie historii zmian statusu
+      const statusHistory = orderData.statusHistory || [];
+      const statusChange = {
+        oldStatus: oldStatus || 'Nowy',
+        newStatus: status,
+        changedBy: userId,
+        changedAt: new Date().toISOString()
+      };
+      
+      const updateData = {
         status: status,
         updatedBy: userId,
         updatedAt: serverTimestamp(),
+        statusHistory: [...statusHistory, statusChange],
         // Jeśli status to "Dostarczone", ustaw datę dostawy
         ...(status === 'Dostarczone' ? { deliveryDate: serverTimestamp() } : {})
-      });
+      };
+      
+      await updateDoc(orderRef, updateData);
       
       // Jeśli zaimportowano usługę powiadomień, utwórz powiadomienie o zmianie statusu
       try {
@@ -463,19 +475,144 @@ export const getOrdersStats = async () => {
       recentOrders: []
     };
     
+    // Przetwarzanie zamówień w celu obliczenia pełnych wartości
+    for (const order of allOrders) {
+      // Oblicz pełną wartość zamówienia
+      let fullOrderValue = 0;
+      
+      // Wartość produktów
+      if (order.items && order.items.length > 0) {
+        const productsValue = order.items.reduce((sum, item) => {
+          const quantity = parseFloat(item.quantity) || 0;
+          const price = parseFloat(item.price) || 0;
+          return sum + (quantity * price);
+        }, 0);
+        fullOrderValue += productsValue;
+      }
+      
+      // Koszt wysyłki
+      const shippingCost = parseFloat(order.shippingCost) || 0;
+      fullOrderValue += shippingCost;
+      
+      // Wartość zamówień zakupu
+      if (order.linkedPurchaseOrders && order.linkedPurchaseOrders.length > 0) {
+        // Dla każdego powiązanego zamówienia zakupu
+        for (let i = 0; i < order.linkedPurchaseOrders.length; i++) {
+          const po = order.linkedPurchaseOrders[i];
+          
+          try {
+            // Sprawdź, czy po jest faktycznie obiektem
+            if (!po || typeof po !== 'object') {
+              console.warn('Nieprawidłowy obiekt zamówienia zakupu:', po);
+              continue;
+            }
+            
+            // Jeśli nie ma id, nie możemy zaktualizować danych
+            if (!po.id) {
+              console.warn('Zamówienie zakupu bez ID:', po);
+              continue;
+            }
+            
+            // Pobierz aktualne dane zamówienia zakupu aby mieć najświeższe wartości
+            try {
+              const { getPurchaseOrderById } = await import('./purchaseOrderService');
+              const freshPoData = await getPurchaseOrderById(po.id);
+              
+              if (freshPoData) {
+                console.log(`Użycie świeżych danych dla PO ${po.orderNumber || po.id}`);
+                // Dodaj wartość brutto zamówienia zakupu
+                if (freshPoData.totalGross !== undefined && freshPoData.totalGross !== null) {
+                  fullOrderValue += parseFloat(freshPoData.totalGross) || 0;
+                } else {
+                  // Jeśli nie ma wartości brutto, oblicz ją
+                  let poValue = parseFloat(freshPoData.totalValue || 0);
+                  const vatRate = parseFloat(freshPoData.vatRate || 23);
+                  const vatValue = (poValue * vatRate) / 100;
+                  
+                  // Dodatkowe koszty
+                  let additionalCosts = 0;
+                  if (freshPoData.additionalCostsItems && Array.isArray(freshPoData.additionalCostsItems)) {
+                    additionalCosts = freshPoData.additionalCostsItems.reduce((sum, cost) => {
+                      return sum + (parseFloat(cost.value) || 0);
+                    }, 0);
+                  } else if (freshPoData.additionalCosts) {
+                    additionalCosts = parseFloat(freshPoData.additionalCosts) || 0;
+                  }
+                  
+                  fullOrderValue += poValue + vatValue + additionalCosts;
+                }
+              } else {
+                // Jeśli nie udało się pobrać świeżych danych, użyj danych z obiektu po
+                console.warn(`Brak świeżych danych dla PO ${po.id}, używam danych z obiektu`);
+                
+                if (po.totalGross !== undefined && po.totalGross !== null) {
+                  fullOrderValue += parseFloat(po.totalGross) || 0;
+                } else {
+                  // Jeśli nie ma wartości brutto, oblicz ją
+                  let poValue = parseFloat(po.totalValue || po.value || 0);
+                  const vatRate = parseFloat(po.vatRate || 23);
+                  const vatValue = (poValue * vatRate) / 100;
+                  
+                  // Dodatkowe koszty
+                  let additionalCosts = 0;
+                  if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
+                    additionalCosts = po.additionalCostsItems.reduce((sum, cost) => {
+                      return sum + (parseFloat(cost.value) || 0);
+                    }, 0);
+                  } else if (po.additionalCosts) {
+                    additionalCosts = parseFloat(po.additionalCosts) || 0;
+                  }
+                  
+                  fullOrderValue += poValue + vatValue + additionalCosts;
+                }
+              }
+            } catch (error) {
+              console.warn(`Nie można pobrać świeżych danych PO ${po.id}: ${error.message}`);
+              
+              // Jeśli wystąpił błąd, spróbuj użyć danych z obiektu po
+              if (po.totalGross !== undefined && po.totalGross !== null) {
+                fullOrderValue += parseFloat(po.totalGross) || 0;
+              } else {
+                let poValue = parseFloat(po.totalValue || po.value || 0);
+                const vatRate = parseFloat(po.vatRate || 23);
+                const vatValue = (poValue * vatRate) / 100;
+                
+                // Dodatkowe koszty
+                let additionalCosts = 0;
+                if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
+                  additionalCosts = po.additionalCostsItems.reduce((sum, cost) => {
+                    return sum + (parseFloat(cost.value) || 0);
+                  }, 0);
+                } else if (po.additionalCosts) {
+                  additionalCosts = parseFloat(po.additionalCosts) || 0;
+                }
+                
+                fullOrderValue += poValue + vatValue + additionalCosts;
+              }
+            }
+          } catch (error) {
+            console.error(`Błąd przetwarzania PO ${po.orderNumber || po.id}: ${error.message}`);
+          }
+        }
+      }
+      
+      // Aktualizuj wartość zamówienia
+      order.calculatedTotalValue = fullOrderValue;
+    }
+    
     // Najnowsze zamówienia (max 5)
     stats.recentOrders = allOrders.slice(0, 5).map(order => ({
       id: order.id,
       customer: order.customer.name,
       date: order.orderDate,
-      value: order.totalValue,
+      value: order.calculatedTotalValue || order.totalValue || 0,
       status: order.status
     }));
     
     // Przetwarzanie statystyk
     allOrders.forEach(order => {
       // Suma wartości wszystkich zamówień
-      stats.totalValue += order.totalValue || 0;
+      stats.totalValue += order.calculatedTotalValue || order.totalValue || 0;
       
       // Statystyki według statusu
       if (stats.byStatus[order.status] !== undefined) {
@@ -497,9 +634,10 @@ export const getOrdersStats = async () => {
       }
       
       stats.byMonth[monthKey].total++;
-      stats.byMonth[monthKey].value += order.totalValue || 0;
+      stats.byMonth[monthKey].value += order.calculatedTotalValue || order.totalValue || 0;
     });
     
+    console.log("Statystyki zamówień z pełnymi wartościami:", stats);
     return stats;
   } catch (error) {
     console.error('Błąd podczas pobierania statystyk zamówień:', error);
@@ -681,6 +819,53 @@ export const removeProductionTaskFromOrder = async (orderId, taskId) => {
     return true;
   } catch (error) {
     console.error('Błąd podczas usuwania zadania produkcyjnego z zamówienia:', error);
+    throw error;
+  }
+};
+
+// Funkcja do aktualizacji informacji o zadaniu produkcyjnym w zamówieniu
+export const updateProductionTaskInOrder = async (orderId, taskId, updateData, userId) => {
+  try {
+    // Pobierz aktualne dane zamówienia
+    const orderRef = doc(db, ORDERS_COLLECTION, orderId);
+    const orderDoc = await getDoc(orderRef);
+    
+    if (!orderDoc.exists()) {
+      throw new Error('Zamówienie nie istnieje');
+    }
+    
+    const orderData = orderDoc.data();
+    
+    // Pobierz listę zadań produkcyjnych z zamówienia
+    const productionTasks = orderData.productionTasks || [];
+    
+    // Znajdź indeks zadania w tablicy zadań produkcyjnych
+    const taskIndex = productionTasks.findIndex(task => task.id === taskId);
+    
+    if (taskIndex === -1) {
+      throw new Error(`Zadanie o ID ${taskId} nie zostało znalezione w zamówieniu`);
+    }
+    
+    // Zaktualizuj informacje o zadaniu, zachowując istniejące dane
+    productionTasks[taskIndex] = {
+      ...productionTasks[taskIndex],
+      ...updateData,
+      updatedAt: new Date().toISOString()
+    };
+    
+    // Zaktualizuj zamówienie
+    await updateDoc(orderRef, {
+      productionTasks,
+      updatedAt: serverTimestamp(),
+      updatedBy: userId
+    });
+    
+    return {
+      success: true,
+      message: 'Zadanie produkcyjne zaktualizowane w zamówieniu'
+    };
+  } catch (error) {
+    console.error('Błąd podczas aktualizacji zadania produkcyjnego w zamówieniu:', error);
     throw error;
   }
 }; 

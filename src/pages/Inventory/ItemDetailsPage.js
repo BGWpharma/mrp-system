@@ -32,7 +32,8 @@ import {
   Add as AddIcon,
   QrCode as QrCodeIcon
 } from '@mui/icons-material';
-import { getInventoryItemById, getItemTransactions, getItemBatches } from '../../services/inventoryService';
+import { getInventoryItemById, getItemTransactions, getItemBatches, getSupplierPrices } from '../../services/inventoryService';
+import { getAllSuppliers } from '../../services/supplierService';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
 import { Timestamp } from 'firebase/firestore';
@@ -66,6 +67,7 @@ const ItemDetailsPage = () => {
   const [item, setItem] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [batches, setBatches] = useState([]);
+  const [supplierPrices, setSupplierPrices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tabValue, setTabValue] = useState(0);
   const [labelDialogOpen, setLabelDialogOpen] = useState(false);
@@ -84,6 +86,20 @@ const ItemDetailsPage = () => {
         // Pobierz partie
         const batchesData = await getItemBatches(id);
         setBatches(batchesData);
+
+        // Pobierz ceny dostawców
+        const supplierPricesData = await getSupplierPrices(id);
+        if (supplierPricesData && supplierPricesData.length > 0) {
+          const suppliersList = await getAllSuppliers();
+          const pricesWithDetails = supplierPricesData.map(price => {
+            const supplier = suppliersList.find(s => s.id === price.supplierId);
+            return {
+              ...price,
+              supplierName: supplier ? supplier.name : 'Nieznany dostawca'
+            };
+          });
+          setSupplierPrices(pricesWithDetails);
+        }
       } catch (error) {
         showError('Błąd podczas pobierania danych pozycji: ' + error.message);
         console.error('Error fetching item details:', error);
@@ -354,10 +370,6 @@ const ItemDetailsPage = () => {
                       <TableCell>{item.maxStock ? `${item.maxStock} ${item.unit}` : 'Nie określono'}</TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell component="th">Dostawca</TableCell>
-                      <TableCell>{item.supplierInfo || 'Nie określono'}</TableCell>
-                    </TableRow>
-                    <TableRow>
                       <TableCell component="th">Grupa pakowania</TableCell>
                       <TableCell>{item.packingGroup || 'Nie określono'}</TableCell>
                     </TableRow>
@@ -368,6 +380,34 @@ const ItemDetailsPage = () => {
                   </TableBody>
                 </Table>
               </TableContainer>
+
+              {supplierPrices.length > 0 && (
+                <Box sx={{ mt: 3 }}>
+                  <Typography variant="h6" gutterBottom>Dostawcy i ceny</Typography>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Dostawca</TableCell>
+                          <TableCell align="right">Cena</TableCell>
+                          <TableCell align="right">Min. ilość</TableCell>
+                          <TableCell align="right">Czas dostawy</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {supplierPrices.map(price => (
+                          <TableRow key={price.id}>
+                            <TableCell>{price.supplierName}</TableCell>
+                            <TableCell align="right">{price.price.toFixed(2)} {price.currency || item.currency || 'EUR'}</TableCell>
+                            <TableCell align="right">{price.minQuantity || 1} {item.unit}</TableCell>
+                            <TableCell align="right">{price.leadTime || 7} dni</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              )}
             </Grid>
             
             <Grid item xs={12} md={6}>

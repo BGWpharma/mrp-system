@@ -61,7 +61,7 @@ import { exportToCSV } from '../../utils/exportUtils';
 import { useAuth } from '../../hooks/useAuth';
 import LabelDialog from './LabelDialog';
 import EditReservationDialog from './EditReservationDialog';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp, collection, getDocs, addDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 
 // Definicje stałych (takie same jak w inventoryService.js)
@@ -107,6 +107,21 @@ const InventoryList = () => {
   });
   const [updatingTasks, setUpdatingTasks] = useState(false);
   const [cleaningReservations, setCleaningReservations] = useState(false);
+  const [warehouseItems, setWarehouseItems] = useState([]);
+  const [selectedWarehouseForView, setSelectedWarehouseForView] = useState(null);
+  const [warehouseItemsLoading, setWarehouseItemsLoading] = useState(false);
+  const [groups, setGroups] = useState([]);
+  const [groupsLoading, setGroupsLoading] = useState(false);
+  const [groupFormData, setGroupFormData] = useState({
+    name: '',
+    description: '',
+    items: []
+  });
+  const [openGroupDialog, setOpenGroupDialog] = useState(false);
+  const [selectedGroup, setSelectedGroup] = useState(null);
+  const [groupItems, setGroupItems] = useState([]);
+  const [groupDialogMode, setGroupDialogMode] = useState('add');
+  const [savingGroup, setSavingGroup] = useState(false);
 
   // Pobierz wszystkie pozycje przy montowaniu komponentu
   useEffect(() => {
@@ -433,6 +448,10 @@ const InventoryList = () => {
   // Obsługa przełączania zakładek
   const handleTabChange = (event, newValue) => {
     setCurrentTab(newValue);
+    if (newValue === 2) {
+      // Jeśli wybrano zakładkę "Grupy", pobierz je
+      fetchGroups();
+    }
   };
   
   // Zarządzanie lokalizacjami - nowe funkcje
@@ -640,6 +659,174 @@ const InventoryList = () => {
     }
   };
 
+  // Dodaję funkcję do pobierania grup
+  const fetchGroups = async () => {
+    setGroupsLoading(true);
+    try {
+      // Pobieramy kolekcję grup z Firestore
+      const groupsCollection = collection(db, 'itemGroups');
+      const groupsSnapshot = await getDocs(groupsCollection);
+      const groupsList = groupsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setGroups(groupsList);
+    } catch (error) {
+      console.error('Błąd podczas pobierania grup:', error);
+      showError('Nie udało się pobrać grup');
+    } finally {
+      setGroupsLoading(false);
+    }
+  };
+
+  // Dodaję useEffect do pobierania grup przy montowaniu komponentu
+  useEffect(() => {
+    if (currentTab === 2) {
+      fetchGroups();
+    }
+  }, [currentTab]);
+
+  // Funkcja do pobierania pozycji z wybranego magazynu
+  const fetchWarehouseItems = async (warehouseId) => {
+    setWarehouseItemsLoading(true);
+    try {
+      const items = await getAllInventoryItems(warehouseId);
+      setWarehouseItems(items);
+    } catch (error) {
+      console.error('Błąd podczas pobierania pozycji z magazynu:', error);
+      showError('Nie udało się pobrać pozycji z magazynu');
+    } finally {
+      setWarehouseItemsLoading(false);
+    }
+  };
+
+  // Funkcja do obsługi kliknięcia w magazyn
+  const handleWarehouseClick = async (warehouse) => {
+    setSelectedWarehouseForView(warehouse);
+    await fetchWarehouseItems(warehouse.id);
+  };
+
+  // Funkcja do powrotu do listy magazynów
+  const handleBackToWarehouses = () => {
+    setSelectedWarehouseForView(null);
+    setWarehouseItems([]);
+  };
+
+  // Funkcja do otwierania dialogu tworzenia/edycji grupy
+  const handleOpenGroupDialog = (mode, group = null) => {
+    setGroupDialogMode(mode);
+    
+    if (mode === 'edit' && group) {
+      setSelectedGroup(group);
+      setGroupFormData({
+        name: group.name,
+        description: group.description || '',
+        items: group.items || []
+      });
+      
+      // Pobierz pozycje należące do grupy
+      const groupItemIds = group.items || [];
+      const itemsInGroup = inventoryItems.filter(item => groupItemIds.includes(item.id));
+      setGroupItems(itemsInGroup);
+    } else {
+      setSelectedGroup(null);
+      setGroupFormData({
+        name: '',
+        description: '',
+        items: []
+      });
+      setGroupItems([]);
+    }
+    
+    setOpenGroupDialog(true);
+  };
+
+  // Funkcja do zamykania dialogu grupy
+  const handleCloseGroupDialog = () => {
+    setOpenGroupDialog(false);
+    setGroupFormData({
+      name: '',
+      description: '',
+      items: []
+    });
+    setGroupItems([]);
+  };
+
+  // Funkcja do zapisywania grupy
+  const handleSubmitGroup = async () => {
+    if (!groupFormData.name) {
+      showError('Nazwa grupy jest wymagana');
+      return;
+    }
+    
+    setSavingGroup(true);
+    
+    try {
+      const groupData = {
+        ...groupFormData,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      };
+      
+      if (groupDialogMode === 'add') {
+        // Dodajemy nową grupę
+        const groupsCollection = collection(db, 'itemGroups');
+        await addDoc(groupsCollection, {
+          ...groupData,
+          createdAt: serverTimestamp(),
+          createdBy: currentUser.uid
+        });
+        showSuccess('Grupa została utworzona');
+      } else {
+        // Aktualizujemy istniejącą grupę
+        const groupRef = doc(db, 'itemGroups', selectedGroup.id);
+        await updateDoc(groupRef, groupData);
+        showSuccess('Grupa została zaktualizowana');
+      }
+      
+      handleCloseGroupDialog();
+      fetchGroups();
+    } catch (error) {
+      console.error('Błąd podczas zapisywania grupy:', error);
+      showError('Nie udało się zapisać grupy');
+    } finally {
+      setSavingGroup(false);
+    }
+  };
+
+  // Funkcja do usuwania grupy
+  const handleDeleteGroup = async (groupId) => {
+    if (!window.confirm('Czy na pewno chcesz usunąć tę grupę? Pozycje nie zostaną usunięte.')) {
+      return;
+    }
+    
+    try {
+      const groupRef = doc(db, 'itemGroups', groupId);
+      await deleteDoc(groupRef);
+      showSuccess('Grupa została usunięta');
+      fetchGroups();
+    } catch (error) {
+      console.error('Błąd podczas usuwania grupy:', error);
+      showError('Nie udało się usunąć grupy');
+    }
+  };
+
+  // Funkcja do dodawania pozycji do grupy
+  const handleAddItemToGroup = (item) => {
+    if (!groupFormData.items.includes(item.id)) {
+      const updatedItems = [...groupFormData.items, item.id];
+      setGroupFormData(prev => ({ ...prev, items: updatedItems }));
+      setGroupItems(prev => [...prev, item]);
+    }
+  };
+
+  // Funkcja do usuwania pozycji z grupy
+  const handleRemoveItemFromGroup = (itemId) => {
+    const updatedItems = groupFormData.items.filter(id => id !== itemId);
+    setGroupFormData(prev => ({ ...prev, items: updatedItems }));
+    setGroupItems(prev => prev.filter(item => item.id !== itemId));
+  };
+
   if (loading) {
     return <div>Ładowanie pozycji ze stanów...</div>;
   }
@@ -677,14 +864,15 @@ const InventoryList = () => {
         </Box>
       </Box>
 
-      {/* Dodaj zakładki */}
+      {/* Dodaję zakładkę "Grupy" */}
       <Tabs
         value={currentTab}
         onChange={handleTabChange}
         sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}
       >
         <Tab label="Stany" />
-        <Tab label="Lokalizacja" />
+        <Tab label="Lokalizacje" />
+        <Tab label="Grupy" />
       </Tabs>
 
       {/* Zawartość pierwszej zakładki - Stany */}
@@ -829,28 +1017,25 @@ const InventoryList = () => {
         </>
       )}
 
-      {/* Zawartość drugiej zakładki - Lokalizacja */}
+      {/* Zakładka Lokalizacje */}
       {currentTab === 1 && (
         <>
-          <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end' }}>
+          {!selectedWarehouseForView ? (
+            // Widok listy lokalizacji
+            <>
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
             <Button
               variant="contained"
               color="primary"
-              startIcon={<AddIcon />}
               onClick={() => handleOpenWarehouseDialog('add')}
+                  startIcon={<AddIcon />}
             >
-              Dodaj lokalizację
+                  Nowa lokalizacja
             </Button>
           </Box>
 
-          <Paper sx={{ width: '100%', overflow: 'hidden' }}>
-            <TableContainer sx={{ maxHeight: 440 }}>
-              {warehousesLoading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-                  <CircularProgress />
-                </Box>
-              ) : (
-                <Table stickyHeader aria-label="sticky table">
+              <TableContainer component={Paper}>
+                <Table sx={{ minWidth: 650 }}>
                   <TableHead>
                     <TableRow>
                       <TableCell>Nazwa</TableCell>
@@ -860,18 +1045,30 @@ const InventoryList = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {warehouses.length === 0 ? (
+                    {warehousesLoading ? (
                       <TableRow>
                         <TableCell colSpan={4} align="center">
-                          <Typography variant="body1" sx={{ py: 2 }}>
-                            Brak lokalizacji. Dodaj pierwszą lokalizację, aby rozpocząć.
-                          </Typography>
+                          <CircularProgress />
+                        </TableCell>
+                      </TableRow>
+                    ) : warehouses.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} align="center">
+                          Brak zdefiniowanych lokalizacji
                         </TableCell>
                       </TableRow>
                     ) : (
                       warehouses.map((warehouse) => (
-                        <TableRow key={warehouse.id} hover>
-                          <TableCell>{warehouse.name}</TableCell>
+                        <TableRow key={warehouse.id}>
+                          <TableCell>
+                            <Link 
+                              component="button"
+                              variant="body1"
+                              onClick={() => handleWarehouseClick(warehouse)}
+                            >
+                              {warehouse.name}
+                            </Link>
+                          </TableCell>
                           <TableCell>{warehouse.address}</TableCell>
                           <TableCell>{warehouse.description}</TableCell>
                           <TableCell align="right">
@@ -893,11 +1090,266 @@ const InventoryList = () => {
                     )}
                   </TableBody>
                 </Table>
-              )}
+              </TableContainer>
+            </>
+          ) : (
+            // Widok pozycji w wybranej lokalizacji
+            <>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+                <Button 
+                  variant="outlined" 
+                  onClick={handleBackToWarehouses}
+                  sx={{ mr: 2 }}
+                >
+                  &larr; Powrót do lokalizacji
+                </Button>
+                <Typography variant="h6">
+                  Pozycje w lokalizacji: {selectedWarehouseForView.name}
+                </Typography>
+              </Box>
+
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Nazwa</TableCell>
+                      <TableCell>Kategoria</TableCell>
+                      <TableCell>Jednostka</TableCell>
+                      <TableCell align="right">Ilość</TableCell>
+                      <TableCell align="right">Cena jedn.</TableCell>
+                      <TableCell align="right">Akcje</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {warehouseItemsLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={6} align="center">
+                          <CircularProgress />
+                        </TableCell>
+                      </TableRow>
+                    ) : warehouseItems.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} align="center">
+                          Brak pozycji w tej lokalizacji
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      warehouseItems.map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell>
+                            <Link component={RouterLink} to={`/inventory/${item.id}`}>
+                              {item.name}
+                            </Link>
+                          </TableCell>
+                          <TableCell>{item.category || '-'}</TableCell>
+                          <TableCell>{item.unit || 'szt.'}</TableCell>
+                          <TableCell align="right">{item.quantity || 0}</TableCell>
+                          <TableCell align="right">{item.price ? `${item.price} €` : '-'}</TableCell>
+                          <TableCell align="right">
+                            <IconButton 
+                              color="primary" 
+                              component={RouterLink} 
+                              to={`/inventory/${item.id}`}
+                            >
+                              <InfoIcon />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
             </TableContainer>
-          </Paper>
+            </>
+          )}
         </>
       )}
+
+      {/* Zakładka Grupy */}
+      {currentTab === 2 && (
+        <>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+            <Button 
+              variant="contained" 
+              color="primary" 
+              onClick={() => handleOpenGroupDialog('add')}
+              startIcon={<AddIcon />}
+            >
+              Nowa grupa
+            </Button>
+          </Box>
+
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Nazwa grupy</TableCell>
+                  <TableCell>Opis</TableCell>
+                  <TableCell>Liczba pozycji</TableCell>
+                  <TableCell align="right">Akcje</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {groupsLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={4} align="center">
+                      <CircularProgress />
+                    </TableCell>
+                  </TableRow>
+                ) : groups.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} align="center">
+                      Brak zdefiniowanych grup
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  groups.map((group) => (
+                    <TableRow key={group.id}>
+                      <TableCell>{group.name}</TableCell>
+                      <TableCell>{group.description || '-'}</TableCell>
+                      <TableCell>{group.items?.length || 0}</TableCell>
+                      <TableCell align="right">
+                        <IconButton 
+                          color="primary" 
+                          onClick={() => handleOpenGroupDialog('edit', group)}
+                        >
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton 
+                          color="error" 
+                          onClick={() => handleDeleteGroup(group.id)}
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </>
+      )}
+
+      {/* Dialog do dodawania/edycji grup */}
+      <Dialog open={openGroupDialog} onClose={handleCloseGroupDialog} maxWidth="md" fullWidth>
+        <DialogTitle>
+          {groupDialogMode === 'add' ? 'Nowa grupa' : 'Edytuj grupę'}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Nazwa grupy"
+                  name="name"
+                  value={groupFormData.name}
+                  onChange={(e) => setGroupFormData(prev => ({ ...prev, name: e.target.value }))}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Opis (opcjonalny)"
+                  name="description"
+                  value={groupFormData.description}
+                  onChange={(e) => setGroupFormData(prev => ({ ...prev, description: e.target.value }))}
+                  multiline
+                  rows={2}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                  Pozycje w grupie ({groupItems.length})
+                </Typography>
+                {groupItems.length > 0 ? (
+                  <TableContainer component={Paper} variant="outlined" sx={{ mb: 2 }}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Nazwa</TableCell>
+                          <TableCell>Kategoria</TableCell>
+                          <TableCell align="right">Akcje</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {groupItems.map((item) => (
+                          <TableRow key={item.id}>
+                            <TableCell>{item.name}</TableCell>
+                            <TableCell>{item.category || '-'}</TableCell>
+                            <TableCell align="right">
+                              <IconButton 
+                                size="small" 
+                                color="error" 
+                                onClick={() => handleRemoveItemFromGroup(item.id)}
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                ) : (
+                  <Box sx={{ p: 2, textAlign: 'center', bgcolor: '#f5f5f5', borderRadius: 1, mb: 2 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      Brak pozycji w grupie. Dodaj pozycje z listy poniżej.
+                    </Typography>
+                  </Box>
+                )}
+                
+                <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                  Dostępne pozycje
+                </Typography>
+                <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 300, overflowY: 'auto' }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Nazwa</TableCell>
+                        <TableCell>Kategoria</TableCell>
+                        <TableCell align="right">Akcje</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {inventoryItems
+                        .filter(item => !groupFormData.items.includes(item.id))
+                        .map((item) => (
+                          <TableRow key={item.id}>
+                            <TableCell>{item.name}</TableCell>
+                            <TableCell>{item.category || '-'}</TableCell>
+                            <TableCell align="right">
+                              <IconButton 
+                                size="small" 
+                                color="primary" 
+                                onClick={() => handleAddItemToGroup(item)}
+                              >
+                                <AddIcon />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Grid>
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseGroupDialog}>Anuluj</Button>
+          <Button 
+            onClick={handleSubmitGroup} 
+            variant="contained" 
+            color="primary"
+            disabled={savingGroup || !groupFormData.name}
+          >
+            {savingGroup ? <CircularProgress size={24} /> : 'Zapisz'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Dialog z rezerwacjami */}
       <Dialog
@@ -1020,19 +1472,8 @@ const InventoryList = () => {
         </DialogActions>
       </Dialog>
 
-      <EditReservationDialog
-        open={editDialogOpen}
-        onClose={() => setEditDialogOpen(false)}
-        onSave={handleSaveReservation}
-        editForm={editForm}
-        setEditForm={setEditForm}
-        selectedItem={selectedItem}
-        selectedItemBatches={selectedItemBatches}
-        loadingBatches={loadingBatches}
-      />
-
       {/* Dialog do dodawania/edycji lokalizacji */}
-      <Dialog open={openWarehouseDialog} onClose={handleCloseWarehouseDialog} maxWidth="sm" fullWidth>
+      <Dialog open={openWarehouseDialog} onClose={handleCloseWarehouseDialog} fullWidth>
         <DialogTitle>
           {dialogMode === 'add' ? 'Dodaj nową lokalizację' : 'Edytuj lokalizację'}
         </DialogTitle>
@@ -1118,15 +1559,6 @@ const InventoryList = () => {
           </ListItemIcon>
           <ListItemText>Partie</ListItemText>
         </MenuItem>
-        <MenuItem onClick={() => {
-          if (selectedItem) handleOpenLabelDialog(selectedItem);
-          handleMenuClose();
-        }}>
-          <ListItemIcon>
-            <QrCodeIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Drukuj etykietę</ListItemText>
-        </MenuItem>
         <MenuItem 
           component={RouterLink} 
           to={selectedItem ? `/inventory/${selectedItem.id}/edit` : '#'}
@@ -1147,6 +1579,18 @@ const InventoryList = () => {
           <ListItemText sx={{ color: 'error.main' }}>Usuń</ListItemText>
         </MenuItem>
       </Menu>
+
+      <EditReservationDialog
+        open={editDialogOpen}
+        onClose={() => setEditDialogOpen(false)}
+        onSave={handleSaveReservation}
+        editForm={editForm}
+        setEditForm={setEditForm}
+        selectedItem={selectedItem}
+        selectedItemBatches={selectedItemBatches}
+        loadingBatches={loadingBatches}
+      />
+
     </div>
   );
 };

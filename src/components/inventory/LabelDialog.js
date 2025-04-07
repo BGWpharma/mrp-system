@@ -51,27 +51,27 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
       }}
     >
       <DialogTitle>
-        Generowanie etykiety: {item?.name || 'Produkt'}
+        Generate Label: {item?.name || 'Product'}
       </DialogTitle>
       <DialogContent>
         <Tabs value={selectedTab} onChange={handleTabChange} sx={{ mb: 2 }}>
-          <Tab label="Etykieta produktu" />
-          <Tab label="Etykieta partii" disabled={!batches || batches.length === 0} />
+          <Tab label="Product Label" />
+          <Tab label="Batch Label" disabled={!batches || batches.length === 0} />
         </Tabs>
         
         {selectedTab === 1 && batches && batches.length > 0 && (
           <Box sx={{ mb: 3 }}>
             <FormControl fullWidth>
-              <InputLabel>Wybierz partię</InputLabel>
+              <InputLabel>Select Batch</InputLabel>
               <Select
                 value={selectedBatch?.id || ''}
                 onChange={handleBatchChange}
-                label="Wybierz partię"
+                label="Select Batch"
               >
                 {batches.map((batch) => (
                   <MenuItem key={batch.id} value={batch.id}>
-                    Nr partii: {batch.batchNumber || 'brak'} | Ilość: {batch.quantity} | 
-                    {batch.expiryDate ? ` Ważna do: ${new Date(batch.expiryDate).toLocaleDateString('pl-PL')}` : ' Brak daty ważności'}
+                    Batch No: {batch.batchNumber || 'none'} | Quantity: {batch.quantity} | 
+                    {batch.expiryDate ? ` Expires: ${new Date(batch.expiryDate).toLocaleDateString('en-US')}` : ' No expiry date'}
                   </MenuItem>
                 ))}
               </Select>
@@ -106,7 +106,7 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
       </DialogContent>
       <DialogActions>
         <Button onClick={handleClose} color="primary">
-          Zamknij
+          Close
         </Button>
       </DialogActions>
     </Dialog>

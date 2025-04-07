@@ -19,14 +19,20 @@ import {
   CircularProgress,
   Box,
   Divider,
-  Alert
+  Alert,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Stack
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   Save as SaveIcon,
-  Cancel as CancelIcon
+  Cancel as CancelIcon,
+  ColorLens as ColorLensIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -36,6 +42,22 @@ import {
   updateWorkstation,
   deleteWorkstation
 } from '../../services/workstationService';
+
+// Predefiniowane kolory do wyboru
+const COLOR_OPTIONS = [
+  { name: 'Niebieski', value: '#2196f3' },
+  { name: 'Zielony', value: '#4caf50' },
+  { name: 'Czerwony', value: '#f44336' },
+  { name: 'Pomarańczowy', value: '#ff9800' },
+  { name: 'Fioletowy', value: '#9c27b0' },
+  { name: 'Turkusowy', value: '#009688' },
+  { name: 'Różowy', value: '#e91e63' },
+  { name: 'Szary', value: '#9e9e9e' },
+  { name: 'Brązowy', value: '#795548' },
+  { name: 'Indygo', value: '#3f51b5' },
+  { name: 'Cyjan', value: '#00bcd4' },
+  { name: 'Limonkowy', value: '#cddc39' }
+];
 
 const WorkstationsPage = () => {
   const { currentUser } = useAuth();
@@ -51,7 +73,8 @@ const WorkstationsPage = () => {
     description: '',
     machineType: '',
     location: '',
-    status: 'Active'
+    status: 'Active',
+    color: '#2196f3' // Domyślny kolor - niebieski
   });
 
   // Pobierz wszystkie stanowiska przy ładowaniu strony
@@ -89,7 +112,8 @@ const WorkstationsPage = () => {
       description: '',
       machineType: '',
       location: '',
-      status: 'Active'
+      status: 'Active',
+      color: '#2196f3' // Resetuj także kolor
     });
     setCurrentWorkstation(null);
   };
@@ -108,7 +132,8 @@ const WorkstationsPage = () => {
       description: workstation.description || '',
       machineType: workstation.machineType || '',
       location: workstation.location || '',
-      status: workstation.status || 'Active'
+      status: workstation.status || 'Active',
+      color: workstation.color || '#2196f3' // Użyj koloru z danych lub domyślny jeśli brak
     });
     setFormOpen(true);
   };
@@ -202,6 +227,15 @@ const WorkstationsPage = () => {
                 {workstations.map((workstation) => (
                   <React.Fragment key={workstation.id}>
                     <ListItem>
+                      <Box 
+                        sx={{ 
+                          width: 16, 
+                          height: 16, 
+                          bgcolor: workstation.color || '#2196f3',
+                          borderRadius: '50%',
+                          mr: 2
+                        }} 
+                      />
                       <ListItemText
                         primary={workstation.name}
                         secondary={
@@ -259,65 +293,107 @@ const WorkstationsPage = () => {
             <Grid container spacing={2} sx={{ mt: 1 }}>
               <Grid item xs={12}>
                 <TextField
-                  required
-                  fullWidth
-                  label="Nazwa stanowiska"
+                  label="Nazwa stanowiska *"
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
+                  fullWidth
+                  required
                 />
               </Grid>
               <Grid item xs={12}>
                 <TextField
-                  fullWidth
                   label="Opis"
                   name="description"
                   value={formData.description}
                   onChange={handleChange}
+                  fullWidth
                   multiline
                   rows={2}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12} sm={6}>
                 <TextField
-                  fullWidth
                   label="Typ maszyny"
                   name="machineType"
                   value={formData.machineType}
                   onChange={handleChange}
+                  fullWidth
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12} sm={6}>
                 <TextField
-                  fullWidth
                   label="Lokalizacja"
                   name="location"
                   value={formData.location}
                   onChange={handleChange}
+                  fullWidth
                 />
               </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Status"
-                  name="status"
-                  select
-                  value={formData.status}
-                  onChange={handleChange}
-                  SelectProps={{
-                    native: true
-                  }}
-                >
-                  <option value="Active">Aktywne</option>
-                  <option value="Maintenance">W konserwacji</option>
-                  <option value="Inactive">Nieaktywne</option>
-                </TextField>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Status</InputLabel>
+                  <Select
+                    name="status"
+                    value={formData.status}
+                    onChange={handleChange}
+                    label="Status"
+                  >
+                    <MenuItem value="Active">Aktywne</MenuItem>
+                    <MenuItem value="Inactive">Nieaktywne</MenuItem>
+                    <MenuItem value="Maintenance">W konserwacji</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Kolor w kalendarzu</InputLabel>
+                  <Select
+                    name="color"
+                    value={formData.color}
+                    onChange={handleChange}
+                    label="Kolor w kalendarzu"
+                    renderValue={(selected) => (
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Box 
+                          sx={{ 
+                            width: 20, 
+                            height: 20, 
+                            bgcolor: selected,
+                            borderRadius: '50%',
+                            mr: 1
+                          }} 
+                        />
+                        {COLOR_OPTIONS.find(option => option.value === selected)?.name || selected}
+                      </Box>
+                    )}
+                  >
+                    {COLOR_OPTIONS.map((option) => (
+                      <MenuItem key={option.value} value={option.value}>
+                        <Stack direction="row" alignItems="center" spacing={1}>
+                          <Box 
+                            sx={{ 
+                              width: 20, 
+                              height: 20, 
+                              bgcolor: option.value,
+                              borderRadius: '50%'
+                            }} 
+                          />
+                          <Typography>{option.name}</Typography>
+                        </Stack>
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
               </Grid>
             </Grid>
           </DialogContent>
           <DialogActions>
             <Button
-              onClick={() => setFormOpen(false)}
+              onClick={() => {
+                setFormOpen(false);
+                resetForm();
+              }}
               startIcon={<CancelIcon />}
             >
               Anuluj
@@ -345,10 +421,18 @@ const WorkstationsPage = () => {
             </DialogContentText>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setDeleteDialogOpen(false)}>
+            <Button
+              onClick={() => setDeleteDialogOpen(false)}
+              startIcon={<CancelIcon />}
+            >
               Anuluj
             </Button>
-            <Button onClick={handleDelete} color="error" variant="contained">
+            <Button
+              onClick={handleDelete}
+              color="error"
+              variant="contained"
+              startIcon={<DeleteIcon />}
+            >
               Usuń
             </Button>
           </DialogActions>
