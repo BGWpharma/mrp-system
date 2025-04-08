@@ -70,7 +70,8 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
     batchNumber: '',
     expiryDate: null,
     batchNotes: '',
-    batchId: '' // Dla wydania - ID wybranej partii
+    batchId: '', // Dla wydania - ID wybranej partii
+    noExpiryDate: false // Nowe pole do oznaczenia braku terminu ważności
   });
 
   useEffect(() => {
@@ -187,12 +188,16 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
       
       // Dodaj dane partii, jeśli włączone
       if (isReceive && batchData.useBatch) {
-        if (!batchData.expiryDate) {
-          throw new Error('Data ważności jest wymagana');
+        if (!batchData.expiryDate && !batchData.noExpiryDate) {
+          throw new Error('Data ważności jest wymagana lub zaznacz opcję "Brak terminu ważności"');
         }
         
         transactionPayload.batchNumber = batchData.batchNumber;
-        transactionPayload.expiryDate = Timestamp.fromDate(batchData.expiryDate);
+        if (!batchData.noExpiryDate) {
+          transactionPayload.expiryDate = Timestamp.fromDate(batchData.expiryDate);
+        } else {
+          transactionPayload.noExpiryDate = true;
+        }
         transactionPayload.batchNotes = batchData.batchNotes;
         
         // Jeśli nie ma własnych notatek dla partii, ale są dla transakcji,
@@ -422,23 +427,33 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
       </Paper>
 
       <Paper sx={{ p: 3, mb: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          mb: 2,
+          borderBottom: '1px solid rgba(0, 0, 0, 0.12)',
+          pb: 1
+        }}>
           <Typography variant="h6">
             {isReceive ? 'Informacje o partii' : 'Wybór partii'}
           </Typography>
-          <FormGroup>
-            <FormControlLabel 
-              control={
-                <Switch 
-                  checked={batchData.useBatch} 
-                  onChange={handleBatchChange}
-                  name="useBatch"
-                  color="primary"
-                />
-              } 
-              label={isReceive ? "Dodaj informacje o partii" : "Wybierz konkretną partię"}
-            />
-          </FormGroup>
+          <FormControlLabel 
+            control={
+              <Switch 
+                checked={batchData.useBatch} 
+                onChange={handleBatchChange}
+                name="useBatch"
+                color="primary"
+                size="small"
+              />
+            } 
+            label={
+              <Typography variant="body2" color="text.secondary">
+                {isReceive ? "Dodaj informacje o partii" : "Wybierz konkretną partię"}
+              </Typography>
+            }
+          />
         </Box>
 
         {batchData.useBatch && (
@@ -458,23 +473,76 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
                   />
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
-                    <DatePicker
-                      label="Data ważności"
-                      value={batchData.expiryDate}
-                      onChange={handleDateChange}
-                      renderInput={(params) => 
-                        <TextField 
-                          {...params} 
-                          fullWidth 
-                          required
-                          error={!batchData.expiryDate}
-                          helperText={!batchData.expiryDate ? "Data ważności jest wymagana" : ""}
-                        />
-                      }
-                      disablePast
-                    />
-                  </LocalizationProvider>
+                  <FormControl fullWidth>
+                    <InputLabel shrink id="expiry-date-label">Data ważności</InputLabel>
+                    <Box sx={{ 
+                      mt: 2,
+                      display: 'flex', 
+                      flexDirection: 'column'
+                    }}>
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={batchData.noExpiryDate}
+                            onChange={(e) => {
+                              const { checked } = e.target;
+                              setBatchData(prev => ({ 
+                                ...prev, 
+                                noExpiryDate: checked,
+                                expiryDate: checked ? null : prev.expiryDate 
+                              }));
+                            }}
+                            name="noExpiryDate"
+                            color="primary"
+                          />
+                        }
+                        label={
+                          <Typography 
+                            variant="body2" 
+                            sx={{ 
+                              fontWeight: batchData.noExpiryDate ? 'bold' : 'normal',
+                              color: batchData.noExpiryDate ? 'text.primary' : 'text.secondary'  
+                            }}
+                          >
+                            Brak terminu ważności
+                          </Typography>
+                        }
+                        sx={{ 
+                          mb: 1, 
+                          p: 1, 
+                          border: batchData.noExpiryDate ? '1px solid rgba(0, 0, 0, 0.23)' : 'none',
+                          borderRadius: 1,
+                          bgcolor: batchData.noExpiryDate ? 'rgba(0, 0, 0, 0.04)' : 'transparent'
+                        }}
+                      />
+                      {!batchData.noExpiryDate && (
+                        <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                          <DatePicker
+                            label="Wybierz datę"
+                            value={batchData.expiryDate}
+                            onChange={handleDateChange}
+                            renderInput={(params) => 
+                              <TextField 
+                                {...params} 
+                                fullWidth
+                                variant="outlined"
+                                required
+                                error={!batchData.expiryDate && !batchData.noExpiryDate}
+                                helperText={!batchData.expiryDate && !batchData.noExpiryDate ? "Data ważności jest wymagana" : ""}
+                              />
+                            }
+                            disablePast
+                          />
+                        </LocalizationProvider>
+                      )}
+                    </Box>
+                    {batchData.noExpiryDate && (
+                      <FormHelperText>
+                        Produkt nie będzie śledzony pod kątem terminu przydatności. 
+                        Zalecane tylko dla przedmiotów bez określonego terminu ważności.
+                      </FormHelperText>
+                    )}
+                  </FormControl>
                 </Grid>
                 <Grid item xs={12}>
                   <TextField

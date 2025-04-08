@@ -4,13 +4,14 @@ import {
   Container, Typography, Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Button, TextField, Box, Chip, IconButton, Dialog,
   DialogActions, DialogContent, DialogContentText, DialogTitle, MenuItem, Select, FormControl, InputLabel, 
-  Tooltip
+  Tooltip, Menu, Checkbox, ListItemText
 } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, Description as DescriptionIcon } from '@mui/icons-material';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, Description as DescriptionIcon, ViewColumn as ViewColumnIcon } from '@mui/icons-material';
 import { getAllPurchaseOrders, deletePurchaseOrder, updatePurchaseOrderStatus } from '../../services/purchaseOrderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { STATUS_TRANSLATIONS, PURCHASE_ORDER_STATUSES } from '../../config';
+import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
 
 const PurchaseOrderList = () => {
   const { currentUser } = useAuth();
@@ -27,6 +28,12 @@ const PurchaseOrderList = () => {
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [poToUpdateStatus, setPoToUpdateStatus] = useState(null);
   const [newStatus, setNewStatus] = useState('');
+  const [columnMenuAnchor, setColumnMenuAnchor] = useState(null);
+  
+  // Używamy kontekstu preferencji kolumn
+  const { getColumnPreferencesForView, updateColumnPreferences } = useColumnPreferences();
+  // Pobieramy preferencje dla widoku 'purchaseOrders'
+  const visibleColumns = getColumnPreferencesForView('purchaseOrders');
   
   useEffect(() => {
     fetchPurchaseOrders();
@@ -157,6 +164,19 @@ const PurchaseOrderList = () => {
     return <Chip label={label} color={color} />;
   };
   
+  const handleColumnMenuOpen = (event) => {
+    setColumnMenuAnchor(event.currentTarget);
+  };
+
+  const handleColumnMenuClose = () => {
+    setColumnMenuAnchor(null);
+  };
+
+  const toggleColumnVisibility = (columnName) => {
+    // Zamiast lokalnego setVisibleColumns, używamy funkcji updateColumnPreferences z kontekstu
+    updateColumnPreferences('purchaseOrders', columnName, !visibleColumns[columnName]);
+  };
+  
   if (loading) {
     return (
       <Container>
@@ -206,6 +226,12 @@ const PurchaseOrderList = () => {
             <MenuItem value={PURCHASE_ORDER_STATUSES.COMPLETED}>{STATUS_TRANSLATIONS[PURCHASE_ORDER_STATUSES.COMPLETED]}</MenuItem>
           </Select>
         </FormControl>
+        
+        <Tooltip title="Konfiguruj widoczne kolumny">
+          <IconButton onClick={handleColumnMenuOpen}>
+            <ViewColumnIcon />
+          </IconButton>
+        </Tooltip>
       </Box>
       
       {filteredPOs.length === 0 ? (
@@ -217,103 +243,141 @@ const PurchaseOrderList = () => {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Numer</TableCell>
-                <TableCell>Dostawca</TableCell>
-                <TableCell>Data zamówienia</TableCell>
-                <TableCell>Planowana dostawa</TableCell>
-                <TableCell>Wartość</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Akcje</TableCell>
+                {visibleColumns.number && <TableCell>Numer</TableCell>}
+                {visibleColumns.supplier && <TableCell>Dostawca</TableCell>}
+                {visibleColumns.orderDate && <TableCell>Data zamówienia</TableCell>}
+                {visibleColumns.expectedDeliveryDate && <TableCell>Planowana dostawa</TableCell>}
+                {visibleColumns.value && <TableCell>Wartość</TableCell>}
+                {visibleColumns.status && <TableCell>Status</TableCell>}
+                {visibleColumns.actions && <TableCell>Akcje</TableCell>}
               </TableRow>
             </TableHead>
             <TableBody>
               {filteredPOs.map((po) => (
                 <TableRow key={po.id}>
-                  <TableCell>
-                    {po.number}
-                    {po.invoiceLink && (
-                      <Tooltip title="Faktura załączona">
-                        <DescriptionIcon 
-                          fontSize="small" 
-                          color="primary" 
-                          sx={{ ml: 1, verticalAlign: 'middle' }} 
-                        />
+                  {visibleColumns.number && (
+                    <TableCell>
+                      {po.number}
+                      {po.invoiceLink && (
+                        <Tooltip title="Faktura załączona">
+                          <DescriptionIcon 
+                            fontSize="small" 
+                            color="primary" 
+                            sx={{ ml: 1, verticalAlign: 'middle' }} 
+                          />
+                        </Tooltip>
+                      )}
+                    </TableCell>
+                  )}
+                  {visibleColumns.supplier && <TableCell>{po.supplier?.name}</TableCell>}
+                  {visibleColumns.orderDate && <TableCell>{po.orderDate ? new Date(po.orderDate).toLocaleDateString('pl-PL') : '-'}</TableCell>}
+                  {visibleColumns.expectedDeliveryDate && <TableCell>{po.expectedDeliveryDate ? new Date(po.expectedDeliveryDate).toLocaleDateString('pl-PL') : '-'}</TableCell>}
+                  {visibleColumns.value && (
+                    <TableCell>
+                      {(() => {
+                        // Najpierw sprawdź, czy zamówienie ma już obliczoną wartość brutto
+                        if (po.totalGross !== undefined && po.totalGross !== null) {
+                          return `${parseFloat(po.totalGross).toFixed(2)} ${po.currency || 'PLN'}`;
+                        }
+                        
+                        // Jeśli nie, używaj wartości produktów + dodatkowe koszty
+                        const productsValue = po.calculatedProductsValue || po.totalValue || 0;
+                        let additionalCostsValue = 0;
+                        
+                        if (po.calculatedAdditionalCosts !== undefined) {
+                          additionalCostsValue = parseFloat(po.calculatedAdditionalCosts);
+                        } else if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
+                          additionalCostsValue = po.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
+                        } else if (po.additionalCosts) {
+                          additionalCostsValue = parseFloat(po.additionalCosts) || 0;
+                        }
+                        
+                        const vatValue = (parseFloat(productsValue) * (parseFloat(po.vatRate) || 0)) / 100;
+                        const totalGross = parseFloat(productsValue) + vatValue + additionalCostsValue;
+                        
+                        return `${totalGross.toFixed(2)} ${po.currency || 'PLN'}`;
+                      })()}
+                    </TableCell>
+                  )}
+                  {visibleColumns.status && (
+                    <TableCell onClick={() => handleStatusClick(po)} style={{ cursor: 'pointer' }}>
+                      {getStatusChip(po.status)}
+                    </TableCell>
+                  )}
+                  {visibleColumns.actions && (
+                    <TableCell>
+                      <Tooltip title="Zobacz szczegóły">
+                        <IconButton
+                          component={Link}
+                          to={`/purchase-orders/${po.id}`}
+                          color="primary"
+                        >
+                          <ViewIcon />
+                        </IconButton>
                       </Tooltip>
-                    )}
-                  </TableCell>
-                  <TableCell>{po.supplier?.name}</TableCell>
-                  <TableCell>{po.orderDate ? new Date(po.orderDate).toLocaleDateString('pl-PL') : '-'}</TableCell>
-                  <TableCell>{po.expectedDeliveryDate ? new Date(po.expectedDeliveryDate).toLocaleDateString('pl-PL') : '-'}</TableCell>
-                  <TableCell>
-                    {(() => {
-                      // Najpierw sprawdź, czy zamówienie ma już obliczoną wartość brutto
-                      if (po.totalGross !== undefined && po.totalGross !== null) {
-                        return `${parseFloat(po.totalGross).toFixed(2)} ${po.currency}`;
-                      }
-                      
-                      // Jeśli nie, oblicz ją
-                      // Obliczanie całkowitej wartości brutto
-                      const productsValue = typeof po.items === 'object' && Array.isArray(po.items)
-                        ? po.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0)
-                        : (po.totalValue || 0);
-                      
-                      // Oblicz VAT (tylko od wartości produktów)
-                      const vatRate = po.vatRate || 0;
-                      const vatValue = (productsValue * vatRate) / 100;
-                      
-                      // Oblicz dodatkowe koszty
-                      const additionalCosts = po.additionalCostsItems && Array.isArray(po.additionalCostsItems) 
-                        ? po.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
-                        : (parseFloat(po.additionalCosts) || 0);
-                      
-                      // Wartość brutto to suma: wartość netto produktów + VAT + dodatkowe koszty
-                      const grossValue = productsValue + vatValue + additionalCosts;
-                      
-                      return `${grossValue.toFixed(2)} ${po.currency}`;
-                    })()}
-                  </TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={STATUS_TRANSLATIONS[po.status] || po.status} 
-                      color={getStatusChip(po.status).props.color} 
-                      onClick={() => handleStatusClick(po)} 
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <IconButton
-                      color="primary"
-                      onClick={() => navigate(`/purchase-orders/${po.id}`)}
-                      title="Podgląd"
-                    >
-                      <ViewIcon />
-                    </IconButton>
-                    
-                    {po.status === 'draft' && (
-                      <IconButton
-                        color="secondary"
-                        onClick={() => navigate(`/purchase-orders/${po.id}/edit`)}
-                        title="Edytuj"
-                      >
-                        <EditIcon />
-                      </IconButton>
-                    )}
-                    
-                    {po.status === 'draft' && (
-                      <IconButton
-                        color="error"
-                        onClick={() => handleDeleteClick(po)}
-                        title="Usuń"
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    )}
-                  </TableCell>
+                      <Tooltip title="Edytuj">
+                        <IconButton
+                          component={Link}
+                          to={`/purchase-orders/${po.id}/edit`}
+                          color="secondary"
+                          disabled={po.status !== PURCHASE_ORDER_STATUSES.DRAFT}
+                        >
+                          <EditIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Usuń">
+                        <IconButton
+                          color="error"
+                          onClick={() => handleDeleteClick(po)}
+                          disabled={po.status !== PURCHASE_ORDER_STATUSES.DRAFT}
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </TableContainer>
       )}
+      
+      {/* Menu konfiguracji kolumn */}
+      <Menu
+        anchorEl={columnMenuAnchor}
+        open={Boolean(columnMenuAnchor)}
+        onClose={handleColumnMenuClose}
+      >
+        <MenuItem onClick={() => toggleColumnVisibility('number')}>
+          <Checkbox checked={visibleColumns.number} />
+          <ListItemText primary="Numer" />
+        </MenuItem>
+        <MenuItem onClick={() => toggleColumnVisibility('supplier')}>
+          <Checkbox checked={visibleColumns.supplier} />
+          <ListItemText primary="Dostawca" />
+        </MenuItem>
+        <MenuItem onClick={() => toggleColumnVisibility('orderDate')}>
+          <Checkbox checked={visibleColumns.orderDate} />
+          <ListItemText primary="Data zamówienia" />
+        </MenuItem>
+        <MenuItem onClick={() => toggleColumnVisibility('expectedDeliveryDate')}>
+          <Checkbox checked={visibleColumns.expectedDeliveryDate} />
+          <ListItemText primary="Planowana dostawa" />
+        </MenuItem>
+        <MenuItem onClick={() => toggleColumnVisibility('value')}>
+          <Checkbox checked={visibleColumns.value} />
+          <ListItemText primary="Wartość" />
+        </MenuItem>
+        <MenuItem onClick={() => toggleColumnVisibility('status')}>
+          <Checkbox checked={visibleColumns.status} />
+          <ListItemText primary="Status" />
+        </MenuItem>
+        <MenuItem onClick={() => toggleColumnVisibility('actions')}>
+          <Checkbox checked={visibleColumns.actions} />
+          <ListItemText primary="Akcje" />
+        </MenuItem>
+      </Menu>
       
       {/* Dialog potwierdzenia usunięcia */}
       <Dialog

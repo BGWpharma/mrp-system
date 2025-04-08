@@ -104,7 +104,10 @@ const EditPriceListItemDialog = ({ open, onClose, item, onItemUpdated }) => {
                 value={formData.price}
                 onChange={handleInputChange}
                 required
-                inputProps={{ min: 0, step: 0.01 }}
+                inputProps={{ 
+                  min: 0, 
+                  step: 'any'  // Zamiast 0.01, używamy 'any' aby umożliwić dowolną precyzję
+                }}
               />
             </Grid>
             

@@ -169,5 +169,6 @@ export const DEFAULT_CUSTOMER = {
   billingAddress: '', // Adres do faktury
   shippingAddress: '', // Adres do wysyłki
   address: '', // Stare pole adresu zachowane dla kompatybilności
+  orderAffix: '', // Afiks do numerów zamówień klienta, np. GW, BW itp.
   notes: ''
 }; 

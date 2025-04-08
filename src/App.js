@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'rea
 import { AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { useTheme } from './contexts/ThemeContext';
+import { ColumnPreferencesProvider } from './contexts/ColumnPreferencesContext';
 
 // Pages
 import Login from './pages/Auth/Login';
@@ -120,128 +121,130 @@ function App() {
     <Router>
       <AuthProvider>
         <NotificationProvider>
-          <div className="app-container">
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              
-              <Route path="/" element={<PrivateLayout><Dashboard /></PrivateLayout>} />
-              
-              {/* Recipes Routes */}
-              <Route path="/recipes" element={<PrivateLayout><RecipesPage /></PrivateLayout>} />
-              <Route path="/recipes/new" element={<PrivateLayout><NewRecipePage /></PrivateLayout>} />
-              <Route path="/recipes/:id" element={<PrivateLayout><RecipeDetailsPage /></PrivateLayout>} />
-              <Route path="/recipes/:id/edit" element={<PrivateLayout><EditRecipePage /></PrivateLayout>} />
-              
-              {/* Production Routes */}
-              <Route path="/production" element={<PrivateLayout><ProductionPage /></PrivateLayout>} />
-              <Route path="/production/new-task" element={<PrivateLayout><NewTaskPage /></PrivateLayout>} />
-              <Route path="/production/calendar" element={<PrivateLayout><ProductionCalendarPage /></PrivateLayout>} />
-              <Route path="/production/tasks/:id" element={<PrivateLayout><TaskDetailsPage /></PrivateLayout>} />
-              <Route path="/production/tasks/:id/edit" element={<PrivateLayout><EditTaskPage /></PrivateLayout>} />
-              <Route path="/production/consumption/:taskId" element={<PrivateLayout><ConsumptionPage /></PrivateLayout>} />
-              <Route path="/production/forecast" element={<PrivateLayout><ForecastPage /></PrivateLayout>} />
-              <Route path="/production/reports" element={<PrivateLayout><ReportsPage /></PrivateLayout>} />
-              <Route path="/production/create-from-order" element={<PrivateLayout><CreateFromOrderPage /></PrivateLayout>} />
-              <Route path="/production/workstations" element={<PrivateLayout><WorkstationsPage /></PrivateLayout>} />
-              
-              {/* Inventory Routes */}
-              <Route path="/inventory" element={<PrivateLayout><InventoryPage /></PrivateLayout>} />
-              <Route path="/inventory/new" element={<PrivateLayout><NewInventoryItemPage /></PrivateLayout>} />
-              <Route path="/inventory/:id" element={<PrivateLayout><ItemDetailsPage /></PrivateLayout>} />
-              <Route path="/inventory/:id/batches" element={<PrivateLayout><BatchesPage /></PrivateLayout>} />
-              <Route path="/inventory/:id/batches/:batchId/edit" element={<PrivateLayout><BatchEditPage /></PrivateLayout>} />
-              <Route path="/inventory/:id/edit" element={<PrivateLayout><EditInventoryItemPage /></PrivateLayout>} />
-              <Route path="/inventory/:id/receive" element={<PrivateLayout><ReceiveInventoryPage /></PrivateLayout>} />
-              <Route path="/inventory/:id/issue" element={<PrivateLayout><IssueInventoryPage /></PrivateLayout>} />
-              <Route path="/inventory/:id/history" element={<PrivateLayout><InventoryHistoryPage /></PrivateLayout>} />
-              <Route path="/inventory/expiry-dates" element={<PrivateLayout><ExpiryDatesPage /></PrivateLayout>} />
-              <Route path="/inventory/stocktaking" element={<PrivateLayout><StocktakingPage /></PrivateLayout>} />
-              <Route path="/inventory/stocktaking/new" element={<PrivateLayout><StocktakingFormPage /></PrivateLayout>} />
-              <Route path="/inventory/stocktaking/:id" element={<PrivateLayout><StocktakingDetailsPage /></PrivateLayout>} />
-              <Route path="/inventory/stocktaking/:id/edit" element={<PrivateLayout><StocktakingFormPage /></PrivateLayout>} />
-              <Route path="/inventory/stocktaking/:id/report" element={<PrivateLayout><StocktakingReportPage /></PrivateLayout>} />
-              
-              {/* CMR Routes */}
-              <Route path="/inventory/cmr" element={<PrivateLayout><CmrListPage /></PrivateLayout>} />
-              <Route path="/inventory/cmr/new" element={<PrivateLayout><CmrCreatePage /></PrivateLayout>} />
-              <Route path="/inventory/cmr/:id" element={<PrivateLayout><CmrDetailsPage /></PrivateLayout>} />
-              <Route path="/inventory/cmr/:id/edit" element={<PrivateLayout><CmrEditPage /></PrivateLayout>} />
-              
-              {/* Quality Routes */}
-              <Route path="/quality" element={<PrivateLayout><QualityPage /></PrivateLayout>} />
-              <Route path="/quality/new-test" element={<PrivateLayout><NewTestPage /></PrivateLayout>} />
-              <Route path="/quality/reports" element={<PrivateLayout><QualityReportsPage /></PrivateLayout>} />
-              
-              {/* Orders Routes */}
-              <Route path="/orders" element={<PrivateLayout><OrdersList /></PrivateLayout>} />
-              <Route path="/orders/new" element={<PrivateLayout><OrderForm /></PrivateLayout>} />
-              <Route path="/orders/edit/:orderId" element={<PrivateLayout><EditOrderWrapper /></PrivateLayout>} />
-              <Route path="/orders/:orderId" element={<PrivateLayout><OrderDetails /></PrivateLayout>} />
-              
-              {/* Price Lists Routes - nowy moduł */}
-              <Route path="/sales/price-lists" element={<PrivateLayout><PriceListsPage /></PrivateLayout>} />
-              <Route path="/sales/price-lists/new" element={<PrivateLayout><PriceListFormPage /></PrivateLayout>} />
-              <Route path="/sales/price-lists/:id" element={<PrivateLayout><PriceListDetailsPage /></PrivateLayout>} />
-              <Route path="/sales/price-lists/:id/edit" element={<PrivateLayout><PriceListFormPage /></PrivateLayout>} />
-              
-              {/* Invoices Routes */}
-              <Route path="/invoices" element={<PrivateLayout><InvoicesListPage /></PrivateLayout>} />
-              <Route path="/invoices/new" element={<PrivateLayout><InvoiceFormPage /></PrivateLayout>} />
-              <Route path="/invoices/:invoiceId" element={<PrivateLayout><InvoiceDetailsPage /></PrivateLayout>} />
-              <Route path="/invoices/:invoiceId/edit" element={<PrivateLayout><InvoiceFormPage /></PrivateLayout>} />
-              <Route path="/invoices/company-settings" element={<PrivateLayout><CompanySettingsPage /></PrivateLayout>} />
-              
-              {/* Purchase Orders Routes */}
-              <Route path="/purchase-orders" element={<PrivateLayout><PurchaseOrdersPage /></PrivateLayout>} />
-              <Route path="/purchase-orders/new" element={<PrivateLayout><PurchaseOrderFormPage /></PrivateLayout>} />
-              <Route path="/purchase-orders/:id" element={<PrivateLayout><PurchaseOrderDetailsPage /></PrivateLayout>} />
-              <Route path="/purchase-orders/:id/edit" element={<PrivateLayout><PurchaseOrderFormPage /></PrivateLayout>} />
-              
-              {/* Suppliers Routes */}
-              <Route path="/suppliers" element={<PrivateLayout><SuppliersPage /></PrivateLayout>} />
-              <Route path="/suppliers/new" element={<PrivateLayout><SupplierFormPage /></PrivateLayout>} />
-              <Route path="/suppliers/:id/edit" element={<PrivateLayout><SupplierFormPage /></PrivateLayout>} />
-              <Route path="/suppliers/:id/view" element={<PrivateLayout><SupplierFormPage viewOnly={true} /></PrivateLayout>} />
-              <Route path="/suppliers/:id" element={<PrivateLayout><SupplierFormPage viewOnly={true} /></PrivateLayout>} />
-              
-              {/* Logistics Routes */}
-              <Route path="/logistics/waybill" element={<PrivateLayout><WaybillListPage /></PrivateLayout>} />
-              <Route path="/logistics/waybill/create" element={<PrivateLayout><WaybillCreatePage /></PrivateLayout>} />
-              <Route path="/logistics/waybill/:id" element={<PrivateLayout><WaybillDetailsPage /></PrivateLayout>} />
-              <Route path="/logistics/waybill/:id/edit" element={<PrivateLayout><WaybillEditPage /></PrivateLayout>} />
-              
-              {/* Customers Routes */}
-              <Route path="/customers" element={<PrivateLayout><CustomersList /></PrivateLayout>} />
-              <Route path="/customers/:customerId" element={<PrivateLayout><CustomerDetail /></PrivateLayout>} />
-              
-              {/* Analytics Routes */}
-              <Route path="/analytics" element={<PrivateLayout><AnalyticsDashboard /></PrivateLayout>} />
-              
-              {/* CRM Routes */}
-              <Route path="/crm" element={<PrivateLayout><CRMDashboardPage /></PrivateLayout>} />
-              <Route path="/crm/contacts" element={<PrivateLayout><ContactsPage /></PrivateLayout>} />
-              <Route path="/crm/contacts/new" element={<PrivateLayout><ContactFormPage /></PrivateLayout>} />
-              <Route path="/crm/contacts/:contactId" element={<PrivateLayout><ContactDetailsPage /></PrivateLayout>} />
-              <Route path="/crm/contacts/:contactId/edit" element={<PrivateLayout><ContactFormPage /></PrivateLayout>} />
-              <Route path="/crm/interactions" element={<PrivateLayout><InteractionsPage /></PrivateLayout>} />
-              <Route path="/crm/interactions/new" element={<PrivateLayout><InteractionFormPage /></PrivateLayout>} />
-              <Route path="/crm/interactions/:interactionId" element={<PrivateLayout><InteractionDetailsPage /></PrivateLayout>} />
-              <Route path="/crm/interactions/:interactionId/edit" element={<PrivateLayout><InteractionFormPage /></PrivateLayout>} />
-              <Route path="/crm/opportunities" element={<PrivateLayout><OpportunitiesPage /></PrivateLayout>} />
-              <Route path="/crm/opportunities/new" element={<PrivateLayout><OpportunityFormPage /></PrivateLayout>} />
-              <Route path="/crm/opportunities/:opportunityId" element={<PrivateLayout><OpportunityDetailsPage /></PrivateLayout>} />
-              <Route path="/crm/opportunities/:opportunityId/edit" element={<PrivateLayout><OpportunityFormPage /></PrivateLayout>} />
-              
-              {/* Interakcje zakupowe w sekcji Magazyn */}
-              <Route path="/inventory/interactions" element={<PrivateLayout><InteractionsPage /></PrivateLayout>} />
-              <Route path="/inventory/interactions/new" element={<PrivateLayout><InteractionFormPage /></PrivateLayout>} />
-              <Route path="/inventory/interactions/:interactionId" element={<PrivateLayout><InteractionDetailsPage /></PrivateLayout>} />
-              <Route path="/inventory/interactions/:interactionId/edit" element={<PrivateLayout><InteractionFormPage /></PrivateLayout>} />
-              
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </div>
+          <ColumnPreferencesProvider>
+            <div className="app-container">
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                
+                <Route path="/" element={<PrivateLayout><Dashboard /></PrivateLayout>} />
+                
+                {/* Recipes Routes */}
+                <Route path="/recipes" element={<PrivateLayout><RecipesPage /></PrivateLayout>} />
+                <Route path="/recipes/new" element={<PrivateLayout><NewRecipePage /></PrivateLayout>} />
+                <Route path="/recipes/:id" element={<PrivateLayout><RecipeDetailsPage /></PrivateLayout>} />
+                <Route path="/recipes/:id/edit" element={<PrivateLayout><EditRecipePage /></PrivateLayout>} />
+                
+                {/* Production Routes */}
+                <Route path="/production" element={<PrivateLayout><ProductionPage /></PrivateLayout>} />
+                <Route path="/production/new-task" element={<PrivateLayout><NewTaskPage /></PrivateLayout>} />
+                <Route path="/production/calendar" element={<PrivateLayout><ProductionCalendarPage /></PrivateLayout>} />
+                <Route path="/production/tasks/:id" element={<PrivateLayout><TaskDetailsPage /></PrivateLayout>} />
+                <Route path="/production/tasks/:id/edit" element={<PrivateLayout><EditTaskPage /></PrivateLayout>} />
+                <Route path="/production/consumption/:taskId" element={<PrivateLayout><ConsumptionPage /></PrivateLayout>} />
+                <Route path="/production/forecast" element={<PrivateLayout><ForecastPage /></PrivateLayout>} />
+                <Route path="/production/reports" element={<PrivateLayout><ReportsPage /></PrivateLayout>} />
+                <Route path="/production/create-from-order" element={<PrivateLayout><CreateFromOrderPage /></PrivateLayout>} />
+                <Route path="/production/workstations" element={<PrivateLayout><WorkstationsPage /></PrivateLayout>} />
+                
+                {/* Inventory Routes */}
+                <Route path="/inventory" element={<PrivateLayout><InventoryPage /></PrivateLayout>} />
+                <Route path="/inventory/new" element={<PrivateLayout><NewInventoryItemPage /></PrivateLayout>} />
+                <Route path="/inventory/:id" element={<PrivateLayout><ItemDetailsPage /></PrivateLayout>} />
+                <Route path="/inventory/:id/batches" element={<PrivateLayout><BatchesPage /></PrivateLayout>} />
+                <Route path="/inventory/:id/batches/:batchId/edit" element={<PrivateLayout><BatchEditPage /></PrivateLayout>} />
+                <Route path="/inventory/:id/edit" element={<PrivateLayout><EditInventoryItemPage /></PrivateLayout>} />
+                <Route path="/inventory/:id/receive" element={<PrivateLayout><ReceiveInventoryPage /></PrivateLayout>} />
+                <Route path="/inventory/:id/issue" element={<PrivateLayout><IssueInventoryPage /></PrivateLayout>} />
+                <Route path="/inventory/:id/history" element={<PrivateLayout><InventoryHistoryPage /></PrivateLayout>} />
+                <Route path="/inventory/expiry-dates" element={<PrivateLayout><ExpiryDatesPage /></PrivateLayout>} />
+                <Route path="/inventory/stocktaking" element={<PrivateLayout><StocktakingPage /></PrivateLayout>} />
+                <Route path="/inventory/stocktaking/new" element={<PrivateLayout><StocktakingFormPage /></PrivateLayout>} />
+                <Route path="/inventory/stocktaking/:id" element={<PrivateLayout><StocktakingDetailsPage /></PrivateLayout>} />
+                <Route path="/inventory/stocktaking/:id/edit" element={<PrivateLayout><StocktakingFormPage /></PrivateLayout>} />
+                <Route path="/inventory/stocktaking/:id/report" element={<PrivateLayout><StocktakingReportPage /></PrivateLayout>} />
+                
+                {/* CMR Routes */}
+                <Route path="/inventory/cmr" element={<PrivateLayout><CmrListPage /></PrivateLayout>} />
+                <Route path="/inventory/cmr/new" element={<PrivateLayout><CmrCreatePage /></PrivateLayout>} />
+                <Route path="/inventory/cmr/:id" element={<PrivateLayout><CmrDetailsPage /></PrivateLayout>} />
+                <Route path="/inventory/cmr/:id/edit" element={<PrivateLayout><CmrEditPage /></PrivateLayout>} />
+                
+                {/* Quality Routes */}
+                <Route path="/quality" element={<PrivateLayout><QualityPage /></PrivateLayout>} />
+                <Route path="/quality/new-test" element={<PrivateLayout><NewTestPage /></PrivateLayout>} />
+                <Route path="/quality/reports" element={<PrivateLayout><QualityReportsPage /></PrivateLayout>} />
+                
+                {/* Orders Routes */}
+                <Route path="/orders" element={<PrivateLayout><OrdersList /></PrivateLayout>} />
+                <Route path="/orders/new" element={<PrivateLayout><OrderForm /></PrivateLayout>} />
+                <Route path="/orders/edit/:orderId" element={<PrivateLayout><EditOrderWrapper /></PrivateLayout>} />
+                <Route path="/orders/:orderId" element={<PrivateLayout><OrderDetails /></PrivateLayout>} />
+                
+                {/* Price Lists Routes - nowy moduł */}
+                <Route path="/sales/price-lists" element={<PrivateLayout><PriceListsPage /></PrivateLayout>} />
+                <Route path="/sales/price-lists/new" element={<PrivateLayout><PriceListFormPage /></PrivateLayout>} />
+                <Route path="/sales/price-lists/:id" element={<PrivateLayout><PriceListDetailsPage /></PrivateLayout>} />
+                <Route path="/sales/price-lists/:id/edit" element={<PrivateLayout><PriceListFormPage /></PrivateLayout>} />
+                
+                {/* Invoices Routes */}
+                <Route path="/invoices" element={<PrivateLayout><InvoicesListPage /></PrivateLayout>} />
+                <Route path="/invoices/new" element={<PrivateLayout><InvoiceFormPage /></PrivateLayout>} />
+                <Route path="/invoices/:invoiceId" element={<PrivateLayout><InvoiceDetailsPage /></PrivateLayout>} />
+                <Route path="/invoices/:invoiceId/edit" element={<PrivateLayout><InvoiceFormPage /></PrivateLayout>} />
+                <Route path="/invoices/company-settings" element={<PrivateLayout><CompanySettingsPage /></PrivateLayout>} />
+                
+                {/* Purchase Orders Routes */}
+                <Route path="/purchase-orders" element={<PrivateLayout><PurchaseOrdersPage /></PrivateLayout>} />
+                <Route path="/purchase-orders/new" element={<PrivateLayout><PurchaseOrderFormPage /></PrivateLayout>} />
+                <Route path="/purchase-orders/:id" element={<PrivateLayout><PurchaseOrderDetailsPage /></PrivateLayout>} />
+                <Route path="/purchase-orders/:id/edit" element={<PrivateLayout><PurchaseOrderFormPage /></PrivateLayout>} />
+                
+                {/* Suppliers Routes */}
+                <Route path="/suppliers" element={<PrivateLayout><SuppliersPage /></PrivateLayout>} />
+                <Route path="/suppliers/new" element={<PrivateLayout><SupplierFormPage /></PrivateLayout>} />
+                <Route path="/suppliers/:id/edit" element={<PrivateLayout><SupplierFormPage /></PrivateLayout>} />
+                <Route path="/suppliers/:id/view" element={<PrivateLayout><SupplierFormPage viewOnly={true} /></PrivateLayout>} />
+                <Route path="/suppliers/:id" element={<PrivateLayout><SupplierFormPage viewOnly={true} /></PrivateLayout>} />
+                
+                {/* Logistics Routes */}
+                <Route path="/logistics/waybill" element={<PrivateLayout><WaybillListPage /></PrivateLayout>} />
+                <Route path="/logistics/waybill/create" element={<PrivateLayout><WaybillCreatePage /></PrivateLayout>} />
+                <Route path="/logistics/waybill/:id" element={<PrivateLayout><WaybillDetailsPage /></PrivateLayout>} />
+                <Route path="/logistics/waybill/:id/edit" element={<PrivateLayout><WaybillEditPage /></PrivateLayout>} />
+                
+                {/* Customers Routes */}
+                <Route path="/customers" element={<PrivateLayout><CustomersList /></PrivateLayout>} />
+                <Route path="/customers/:customerId" element={<PrivateLayout><CustomerDetail /></PrivateLayout>} />
+                
+                {/* Analytics Routes */}
+                <Route path="/analytics" element={<PrivateLayout><AnalyticsDashboard /></PrivateLayout>} />
+                
+                {/* CRM Routes */}
+                <Route path="/crm" element={<PrivateLayout><CRMDashboardPage /></PrivateLayout>} />
+                <Route path="/crm/contacts" element={<PrivateLayout><ContactsPage /></PrivateLayout>} />
+                <Route path="/crm/contacts/new" element={<PrivateLayout><ContactFormPage /></PrivateLayout>} />
+                <Route path="/crm/contacts/:contactId" element={<PrivateLayout><ContactDetailsPage /></PrivateLayout>} />
+                <Route path="/crm/contacts/:contactId/edit" element={<PrivateLayout><ContactFormPage /></PrivateLayout>} />
+                <Route path="/crm/interactions" element={<PrivateLayout><InteractionsPage /></PrivateLayout>} />
+                <Route path="/crm/interactions/new" element={<PrivateLayout><InteractionFormPage /></PrivateLayout>} />
+                <Route path="/crm/interactions/:interactionId" element={<PrivateLayout><InteractionDetailsPage /></PrivateLayout>} />
+                <Route path="/crm/interactions/:interactionId/edit" element={<PrivateLayout><InteractionFormPage /></PrivateLayout>} />
+                <Route path="/crm/opportunities" element={<PrivateLayout><OpportunitiesPage /></PrivateLayout>} />
+                <Route path="/crm/opportunities/new" element={<PrivateLayout><OpportunityFormPage /></PrivateLayout>} />
+                <Route path="/crm/opportunities/:opportunityId" element={<PrivateLayout><OpportunityDetailsPage /></PrivateLayout>} />
+                <Route path="/crm/opportunities/:opportunityId/edit" element={<PrivateLayout><OpportunityFormPage /></PrivateLayout>} />
+                
+                {/* Interakcje zakupowe w sekcji Magazyn */}
+                <Route path="/inventory/interactions" element={<PrivateLayout><InteractionsPage /></PrivateLayout>} />
+                <Route path="/inventory/interactions/new" element={<PrivateLayout><InteractionFormPage /></PrivateLayout>} />
+                <Route path="/inventory/interactions/:interactionId" element={<PrivateLayout><InteractionDetailsPage /></PrivateLayout>} />
+                <Route path="/inventory/interactions/:interactionId/edit" element={<PrivateLayout><InteractionFormPage /></PrivateLayout>} />
+                
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </div>
+          </ColumnPreferencesProvider>
         </NotificationProvider>
       </AuthProvider>
     </Router>

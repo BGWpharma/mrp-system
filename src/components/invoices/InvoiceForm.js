@@ -51,7 +51,10 @@ import { getCompanyInfo } from '../../services/companyService';
 const InvoiceForm = ({ invoiceId }) => {
   const [searchParams] = useSearchParams();
   const customerId = searchParams.get('customerId');
-  const [invoice, setInvoice] = useState({ ...DEFAULT_INVOICE });
+  const [invoice, setInvoice] = useState({ 
+    ...DEFAULT_INVOICE,
+    settledAdvancePayments: 0
+  });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [customers, setCustomers] = useState([]);
@@ -244,10 +247,20 @@ const InvoiceForm = ({ invoiceId }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    
+    if (name === 'settledAdvancePayments') {
+      // Przy zmianie rozliczonych zaliczek aktualizuj tylko to pole (total jest obliczane gdzie indziej)
+      setInvoice(prev => ({
+        ...prev,
+        [name]: parseFloat(value) || 0
+      }));
+    } else {
+      // Dla pozostałych pól, standardowa obsługa
     setInvoice(prev => ({
       ...prev,
       [name]: value
     }));
+    }
   };
 
   const handleDateChange = (name, value) => {
@@ -257,12 +270,34 @@ const InvoiceForm = ({ invoiceId }) => {
     }));
   };
 
+  // Funkcja pomocnicza do obliczania całkowitej wartości faktury z zaliczkami
+  const calculateTotalWithAdvancePayments = (items) => {
+    // Oblicz wartość zamówienia na podstawie pozycji
+    let totalValue = calculateInvoiceTotal(items);
+    
+    // Dodaj wartości zaliczek/przedpłat jeśli istnieją
+    if (selectedOrder && selectedOrder.linkedPurchaseOrders && selectedOrder.linkedPurchaseOrders.length > 0) {
+      const poTotalValue = selectedOrder.linkedPurchaseOrders.reduce((sum, po) => {
+        return sum + (parseFloat(po.totalGross || po.value) || 0);
+      }, 0);
+      totalValue += poTotalValue;
+    }
+    
+    return totalValue;
+  };
+
   const handleItemChange = (index, field, value) => {
     const updatedItems = [...invoice.items];
     
-    // Upewnij się, że wartość VAT jest liczbą
+    // Poprawione przetwarzanie wartości VAT - zachowanie wartości tekstowych
     if (field === 'vat') {
-      value = parseInt(value) || 0;
+      // Jeśli wartość jest ciągiem znaków "ZW" lub "NP", zachowaj ją
+      if (value === "ZW" || value === "NP") {
+        // Nie konwertuj stringów "ZW" i "NP"
+      } else {
+        // Dla wartości liczbowych, konwertuj na liczbę (włącznie z 0)
+        value = value === 0 || value === "0" ? 0 : (parseFloat(value) || 0);
+      }
     }
     
     // Upewnij się, że quantity i price są liczbami
@@ -278,7 +313,7 @@ const InvoiceForm = ({ invoiceId }) => {
     setInvoice(prev => ({
       ...prev,
       items: updatedItems,
-      total: calculateInvoiceTotal(updatedItems)
+      total: calculateTotalWithAdvancePayments(updatedItems)
     }));
   };
 
@@ -290,12 +325,15 @@ const InvoiceForm = ({ invoiceId }) => {
       quantity: 1,
       unit: 'szt.',
       price: 0,
-      vat: 23
+      vat: 0
     };
+    
+    const updatedItems = [...invoice.items, newItem];
     
     setInvoice(prev => ({
       ...prev,
-      items: [...prev.items, newItem]
+      items: updatedItems,
+      total: calculateTotalWithAdvancePayments(updatedItems)
     }));
   };
 
@@ -306,7 +344,7 @@ const InvoiceForm = ({ invoiceId }) => {
     setInvoice(prev => ({
       ...prev,
       items: updatedItems,
-      total: calculateInvoiceTotal(updatedItems)
+      total: calculateTotalWithAdvancePayments(updatedItems)
     }));
   };
 
@@ -654,10 +692,17 @@ const InvoiceForm = ({ invoiceId }) => {
     try {
       let submittedInvoiceId;
       
-      const invoiceToSubmit = { ...invoice };
+      const invoiceToSubmit = { 
+        ...invoice,
+        // Upewnij się, że zaliczki/przedpłaty są przekazywane
+        linkedPurchaseOrders: selectedOrder?.linkedPurchaseOrders || invoice.linkedPurchaseOrders || [],
+        settledAdvancePayments: parseFloat(invoice.settledAdvancePayments || 0),
+        // Użyj obliczonej wartości całkowitej z zaliczkami
+        total: calculateTotalWithAdvancePayments(invoice.items)
+      };
       
       const isPurchaseInvoice = selectedOrderType === 'purchase' || 
-                               (selectedOrder && selectedOrder.type === 'purchase');
+                             (selectedOrder && selectedOrder.type === 'purchase');
       
       if (isPurchaseInvoice) {
         invoiceToSubmit.invoiceType = 'purchase';
@@ -693,6 +738,16 @@ const InvoiceForm = ({ invoiceId }) => {
       setSaving(false);
     }
   };
+
+  // Aktualizuj wartość całkowitą przy zmianie selectedOrder
+  useEffect(() => {
+    if (selectedOrder) {
+      setInvoice(prev => ({
+        ...prev,
+        total: calculateTotalWithAdvancePayments(prev.items)
+      }));
+    }
+  }, [selectedOrder]);
 
   if (loading) {
     return (
@@ -980,14 +1035,16 @@ const InvoiceForm = ({ invoiceId }) => {
                 <FormControl fullWidth>
                   <InputLabel>VAT %</InputLabel>
                   <Select
-                    value={item.vat || 23}
-                    onChange={(e) => handleItemChange(index, 'vat', parseInt(e.target.value))}
+                    value={item.vat || (item.vat === 0 ? 0 : 0)}
+                    onChange={(e) => handleItemChange(index, 'vat', e.target.value)}
                     label="VAT %"
                   >
                     <MenuItem value={0}>0%</MenuItem>
                     <MenuItem value={5}>5%</MenuItem>
                     <MenuItem value={8}>8%</MenuItem>
                     <MenuItem value={23}>23%</MenuItem>
+                    <MenuItem value="ZW">ZW</MenuItem>
+                    <MenuItem value="NP">NP</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
@@ -998,7 +1055,7 @@ const InvoiceForm = ({ invoiceId }) => {
               </Grid>
               <Grid item xs={6} sm={3}>
                 <Typography variant="body1" fontWeight="bold">
-                  Wartość brutto: {(item.quantity * item.price * (1 + (item.vat || 23) / 100)).toFixed(2)} {invoice.currency || 'zł'}
+                  Wartość brutto: {(item.quantity * item.price * (1 + (typeof item.vat === 'number' || item.vat === 0 ? item.vat : 0) / 100)).toFixed(2)} {invoice.currency || 'zł'}
                 </Typography>
               </Grid>
               <Grid item xs={12} sm={6} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -1037,7 +1094,7 @@ const InvoiceForm = ({ invoiceId }) => {
         {selectedOrder && selectedOrder.linkedPurchaseOrders && selectedOrder.linkedPurchaseOrders.length > 0 && (
           <>
             <Typography variant="subtitle1" sx={{ mt: 3, mb: 1 }}>
-              Powiązane zamówienia zakupowe:
+              Zaliczki/Przedpłaty:
             </Typography>
             
             {selectedOrder.linkedPurchaseOrders.map((po, index) => {
@@ -1091,7 +1148,7 @@ const InvoiceForm = ({ invoiceId }) => {
                   <Grid container spacing={2} alignItems="center">
                     <Grid item xs={12} sm={6}>
                       <Typography variant="body1" fontWeight="bold">
-                        Zamówienie zakupowe {po.number || po.id}
+                        Zaliczka/Przedpłata {po.number || po.id}
                       </Typography>
                       {po.supplier && (
                         <Typography variant="body2">
@@ -1101,15 +1158,15 @@ const InvoiceForm = ({ invoiceId }) => {
                     </Grid>
                     <Grid item xs={12} sm={6}>
                       <Typography variant="body1">
-                        Wartość produktów: {productsValue.toFixed(2)} {invoice.currency || 'EUR'}
+                        Wartość netto: {productsValue.toFixed(2)} {invoice.currency || 'EUR'}
                       </Typography>
                       {additionalCostsValue > 0 && (
                         <Typography variant="body1" color="primary">
-                          Dodatkowe koszty: {additionalCostsValue.toFixed(2)} {invoice.currency || 'EUR'}
+                          Dodatkowe opłaty: {additionalCostsValue.toFixed(2)} {invoice.currency || 'EUR'}
                         </Typography>
                       )}
                       <Typography variant="body1" fontWeight="bold">
-                        Wartość całkowita: {poValue.toFixed(2)} {invoice.currency || 'EUR'}
+                        Wartość zaliczki: {poValue.toFixed(2)} {invoice.currency || 'EUR'}
                       </Typography>
                     </Grid>
                   </Grid>
@@ -1134,10 +1191,36 @@ const InvoiceForm = ({ invoiceId }) => {
               Razem VAT: {invoice.items.reduce((sum, item) => {
                 const quantity = Number(item.quantity) || 0;
                 const price = Number(item.price) || 0;
-                const vat = Number(item.vat) || 0;
-                return sum + (quantity * price * (vat / 100));
+                
+                // Sprawdź czy stawka VAT to liczba czy string "ZW" lub "NP"
+                let vatRate = 0;
+                if (typeof item.vat === 'number') {
+                  vatRate = item.vat;
+                } else if (item.vat !== "ZW" && item.vat !== "NP") {
+                  vatRate = parseFloat(item.vat) || 0;
+                }
+                // Dla "ZW" i "NP" vatRate pozostaje 0
+                
+                return sum + (quantity * price * (vatRate / 100));
               }, 0).toFixed(2)} {invoice.currency || 'zł'}
             </Typography>
+            
+            {/* Dodanie pola dla rozliczonych zaliczek/przedpłat */}
+            <Box sx={{ mt: 2, mb: 2 }}>
+              <TextField
+                fullWidth
+                label="Rozliczone zaliczki/przedpłaty"
+                type="number"
+                name="settledAdvancePayments"
+                value={invoice.settledAdvancePayments || 0}
+                onChange={handleChange}
+                InputProps={{
+                  endAdornment: <Typography>{invoice.currency || 'zł'}</Typography>,
+                  inputProps: { min: 0, step: 0.01 }
+                }}
+                helperText="Kwota zostanie odliczona od wartości brutto"
+              />
+            </Box>
             
             {/* Wyświetl dodatkowe koszty, jeśli istnieją */}
             {invoice.shippingInfo && invoice.shippingInfo.cost > 0 && (
@@ -1149,12 +1232,12 @@ const InvoiceForm = ({ invoiceId }) => {
             {/* Wyświetl sumę z powiązanych PO */}
             {selectedOrder && selectedOrder.linkedPurchaseOrders && selectedOrder.linkedPurchaseOrders.length > 0 && (
               <Typography variant="body1" fontWeight="bold">
-                Wartość PO: {selectedOrder.linkedPurchaseOrders.reduce((sum, po) => sum + (parseFloat(po.totalGross || po.value) || 0), 0).toFixed(2)} {invoice.currency || 'zł'}
+                Wartość zaliczek/przedpłat: {selectedOrder.linkedPurchaseOrders.reduce((sum, po) => sum + (parseFloat(po.totalGross || po.value) || 0), 0).toFixed(2)} {invoice.currency || 'zł'}
               </Typography>
             )}
             
             <Typography variant="h6" fontWeight="bold" color="primary">
-              Razem brutto: {parseFloat(invoice.total).toFixed(2)} {invoice.currency || 'zł'}
+              Razem brutto: {(parseFloat(invoice.total) - parseFloat(invoice.settledAdvancePayments || 0)).toFixed(2)} {invoice.currency || 'zł'}
             </Typography>
           </Grid>
         </Grid>

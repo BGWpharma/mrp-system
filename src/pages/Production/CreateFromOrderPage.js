@@ -1290,7 +1290,7 @@ const CreateFromOrderPage = () => {
                       
                       return (
                       <MenuItem key={order.id} value={order.id}>
-                          #{order.orderNumber || order.id.substring(0, 8)} - {order.customer?.name || 'Brak danych klienta'} ({formatCurrency(totalValue)})
+                          {order.orderNumber || order.id.substring(0, 8)} - {order.customer?.name || 'Brak danych klienta'} ({formatCurrency(totalValue)})
                       </MenuItem>
                       );
                     })}
@@ -1360,7 +1360,7 @@ const CreateFromOrderPage = () => {
                       Szczegóły zamówienia:
                     </Typography>
                     <Typography variant="body2">
-                      <strong>Numer:</strong> #{selectedOrder.orderNumber || selectedOrder.id.substring(0, 8)}
+                      <strong>Numer:</strong> {selectedOrder.orderNumber || selectedOrder.id.substring(0, 8)}
                     </Typography>
                     <Typography variant="body2">
                       <strong>Klient:</strong> {selectedOrder.customer?.name || 'Brak danych'}

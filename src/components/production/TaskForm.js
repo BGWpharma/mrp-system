@@ -187,8 +187,15 @@ const TaskForm = ({ taskId }) => {
       
       // Jeśli zadanie ma przypisaną recepturę, pobierz jej szczegóły
       if (task.recipeId) {
-        const recipe = await getRecipeById(task.recipeId);
-        // Nie aktualizujemy nazwy produktu, ponieważ może być już wybrana z magazynu
+        try {
+          const recipeData = await getRecipeById(task.recipeId);
+          if (recipeData) {
+            setRecipe(recipeData);
+          }
+        } catch (recipeError) {
+          console.error('Błąd podczas pobierania receptury:', recipeError);
+          showError('Nie udało się pobrać danych receptury');
+        }
       }
     } catch (error) {
       showError('Błąd podczas pobierania zadania: ' + error.message);
@@ -927,13 +934,13 @@ const TaskForm = ({ taskId }) => {
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
-                  label="Szacowany czas produkcji (min)"
+                  label="Szacowany czas produkcji (godziny)"
                   name="estimatedDuration"
                   value={taskData.estimatedDuration}
                   onChange={handleDurationChange}
                   type="number"
                   InputProps={{ inputProps: { min: 0 } }}
-                  helperText={`Całkowity szacowany czas produkcji (${(taskData.estimatedDuration / 60).toFixed(1)} godz.)`}
+                  helperText={`Całkowity szacowany czas produkcji (${(taskData.estimatedDuration).toFixed(1)} godz.)`}
                 />
               </Grid>
               <Grid item xs={6}>

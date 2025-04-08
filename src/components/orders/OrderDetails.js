@@ -392,7 +392,7 @@ const OrderDetails = () => {
           Powrót
         </Button>
         <Typography variant="h5">
-          Zamówienie {order.orderNumber || `#${order.id.substring(0, 8).toUpperCase()}`}
+          Zamówienie {order.orderNumber || order.id.substring(0, 8).toUpperCase()}
         </Typography>
         <Box>
           <Button 

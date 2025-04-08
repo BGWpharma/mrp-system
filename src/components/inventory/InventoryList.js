@@ -34,6 +34,7 @@ import {
   Menu,
   ListItemIcon,
   ListItemText,
+  Checkbox,
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -52,6 +53,7 @@ import {
   QrCode as QrCodeIcon,
   MoreVert as MoreVertIcon,
   DeleteForever as DeleteForeverIcon,
+  ViewColumn as ViewColumnIcon,
 } from '@mui/icons-material';
 import { getAllInventoryItems, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, getItemBatches, updateReservation, updateReservationTasks, cleanupDeletedTaskReservations } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
@@ -63,6 +65,7 @@ import LabelDialog from './LabelDialog';
 import EditReservationDialog from './EditReservationDialog';
 import { doc, getDoc, updateDoc, serverTimestamp, collection, getDocs, addDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
+import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
 
 // Definicje stałych (takie same jak w inventoryService.js)
 const INVENTORY_TRANSACTIONS_COLLECTION = 'inventoryTransactions';
@@ -122,6 +125,25 @@ const InventoryList = () => {
   const [groupItems, setGroupItems] = useState([]);
   const [groupDialogMode, setGroupDialogMode] = useState('add');
   const [savingGroup, setSavingGroup] = useState(false);
+  
+  // Zamiast lokalnego stanu, użyjmy kontekstu preferencji kolumn
+  const [columnMenuAnchor, setColumnMenuAnchor] = useState(null);
+  // Usuń lokalny stan visibleColumns
+  // const [visibleColumns, setVisibleColumns] = useState({
+  //   name: true,
+  //   category: true,
+  //   totalQuantity: true,
+  //   reservedQuantity: true,
+  //   availableQuantity: true,
+  //   status: true,
+  //   location: true,
+  //   actions: true
+  // });
+  
+  // Użyj kontekstu preferencji kolumn
+  const { getColumnPreferencesForView, updateColumnPreferences } = useColumnPreferences();
+  // Pobierz preferencje dla widoku 'inventory'
+  const visibleColumns = getColumnPreferencesForView('inventory');
 
   // Pobierz wszystkie pozycje przy montowaniu komponentu
   useEffect(() => {
@@ -827,6 +849,20 @@ const InventoryList = () => {
     setGroupItems(prev => prev.filter(item => item.id !== itemId));
   };
 
+  // Dodane funkcje do obsługi menu zarządzania kolumnami
+  const handleColumnMenuOpen = (event) => {
+    setColumnMenuAnchor(event.currentTarget);
+  };
+  
+  const handleColumnMenuClose = () => {
+    setColumnMenuAnchor(null);
+  };
+  
+  const toggleColumnVisibility = (columnName) => {
+    // Zamiast lokalnego setVisibleColumns, używamy funkcji updateColumnPreferences z kontekstu
+    updateColumnPreferences('inventory', columnName, !visibleColumns[columnName]);
+  };
+
   if (loading) {
     return <div>Ładowanie pozycji ze stanów...</div>;
   }
@@ -889,6 +925,11 @@ const InventoryList = () => {
                 startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
               }}
             />
+            <Tooltip title="Konfiguruj widoczne kolumny">
+              <IconButton onClick={handleColumnMenuOpen} sx={{ ml: 1 }}>
+                <ViewColumnIcon />
+              </IconButton>
+            </Tooltip>
           </Box>
 
           {filteredItems.length === 0 ? (
@@ -900,14 +941,14 @@ const InventoryList = () => {
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Nazwa</TableCell>
-                    <TableCell>Kategoria</TableCell>
-                    <TableCell>Ilość całkowita</TableCell>
-                    <TableCell>Ilość zarezerwowana</TableCell>
-                    <TableCell>Ilość dostępna</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Lokalizacja</TableCell>
-                    <TableCell align="right">Akcje</TableCell>
+                    {visibleColumns.name && <TableCell>Nazwa</TableCell>}
+                    {visibleColumns.category && <TableCell>Kategoria</TableCell>}
+                    {visibleColumns.totalQuantity && <TableCell>Ilość całkowita</TableCell>}
+                    {visibleColumns.reservedQuantity && <TableCell>Ilość zarezerwowana</TableCell>}
+                    {visibleColumns.availableQuantity && <TableCell>Ilość dostępna</TableCell>}
+                    {visibleColumns.status && <TableCell>Status</TableCell>}
+                    {visibleColumns.location && <TableCell>Lokalizacja</TableCell>}
+                    {visibleColumns.actions && <TableCell align="right">Akcje</TableCell>}
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -918,95 +959,109 @@ const InventoryList = () => {
                     
                     return (
                       <TableRow key={item.id}>
-                        <TableCell>
-                          <Typography variant="body1">{item.name}</Typography>
-                          <Typography variant="body2" color="textSecondary">{item.description}</Typography>
-                          {(item.packingGroup || item.boxesPerPallet) && (
-                            <Box sx={{ mt: 0.5 }}>
-                              {item.packingGroup && (
-                                <Chip
-                                  size="small"
-                                  label={`PG: ${item.packingGroup}`}
-                                  color="default"
-                                  sx={{ mr: 0.5 }}
-                                />
-                              )}
-                              {item.boxesPerPallet && (
-                                <Chip
-                                  size="small"
-                                  label={`${item.boxesPerPallet} kartonów/paletę`}
-                                  color="info"
-                                />
-                              )}
-                            </Box>
-                          )}
-                        </TableCell>
-                        <TableCell>{item.category}</TableCell>
-                        <TableCell>
-                          <Typography variant="body1">{item.quantity} {item.unit}</Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography 
-                            variant="body1" 
-                            color={bookedQuantity > 0 ? "secondary" : "textSecondary"}
-                            sx={{ cursor: bookedQuantity > 0 ? 'pointer' : 'default' }}
-                            onClick={bookedQuantity > 0 ? () => handleShowReservations(item) : undefined}
-                          >
-                            {bookedQuantity} {item.unit}
-                            {bookedQuantity > 0 && (
-                              <Tooltip title="Kliknij, aby zobaczyć szczegóły rezerwacji">
-                                <ReservationIcon fontSize="small" sx={{ ml: 1 }} />
-                              </Tooltip>
+                        {visibleColumns.name && (
+                          <TableCell>
+                            <Typography variant="body1">{item.name}</Typography>
+                            <Typography variant="body2" color="textSecondary">{item.description}</Typography>
+                            {(item.packingGroup || item.boxesPerPallet) && (
+                              <Box sx={{ mt: 0.5 }}>
+                                {item.packingGroup && (
+                                  <Chip
+                                    size="small"
+                                    label={`PG: ${item.packingGroup}`}
+                                    color="default"
+                                    sx={{ mr: 0.5 }}
+                                  />
+                                )}
+                                {item.boxesPerPallet && (
+                                  <Chip
+                                    size="small"
+                                    label={`${item.boxesPerPallet} kartonów/paletę`}
+                                    color="info"
+                                  />
+                                )}
+                              </Box>
                             )}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography 
-                            variant="body1" 
-                            color={availableQuantity < item.minStockLevel ? "error" : "primary"}
-                          >
-                            {availableQuantity} {item.unit}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          {getStockLevelIndicator(availableQuantity, item.minStockLevel, item.optimalStockLevel)}
-                        </TableCell>
-                        <TableCell>
-                          {item.location || '-'}
-                        </TableCell>
-                        <TableCell align="right">
-                          <IconButton 
-                            component={RouterLink} 
-                            to={`/inventory/${item.id}`}
-                            color="secondary"
-                            title="Szczegóły"
-                          >
-                            <InfoIcon />
-                          </IconButton>
-                          <IconButton 
-                            component={RouterLink} 
-                            to={`/inventory/${item.id}/receive`}
-                            color="success"
-                            title="Przyjmij"
-                          >
-                            <ReceiveIcon />
-                          </IconButton>
-                          <IconButton 
-                            component={RouterLink} 
-                            to={`/inventory/${item.id}/issue`}
-                            color="warning"
-                            title="Wydaj"
-                          >
-                            <IssueIcon />
-                          </IconButton>
-                          <IconButton
-                            onClick={(e) => handleMenuOpen(e, item)}
-                            color="primary"
-                            title="Więcej akcji"
-                          >
-                            <MoreVertIcon />
-                          </IconButton>
-                        </TableCell>
+                          </TableCell>
+                        )}
+                        {visibleColumns.category && <TableCell>{item.category}</TableCell>}
+                        {visibleColumns.totalQuantity && (
+                          <TableCell>
+                            <Typography variant="body1">{item.quantity} {item.unit}</Typography>
+                          </TableCell>
+                        )}
+                        {visibleColumns.reservedQuantity && (
+                          <TableCell>
+                            <Typography 
+                              variant="body1" 
+                              color={bookedQuantity > 0 ? "secondary" : "textSecondary"}
+                              sx={{ cursor: bookedQuantity > 0 ? 'pointer' : 'default' }}
+                              onClick={bookedQuantity > 0 ? () => handleShowReservations(item) : undefined}
+                            >
+                              {bookedQuantity} {item.unit}
+                              {bookedQuantity > 0 && (
+                                <Tooltip title="Kliknij, aby zobaczyć szczegóły rezerwacji">
+                                  <ReservationIcon fontSize="small" sx={{ ml: 1 }} />
+                                </Tooltip>
+                              )}
+                            </Typography>
+                          </TableCell>
+                        )}
+                        {visibleColumns.availableQuantity && (
+                          <TableCell>
+                            <Typography 
+                              variant="body1" 
+                              color={availableQuantity < item.minStockLevel ? "error" : "primary"}
+                            >
+                              {availableQuantity} {item.unit}
+                            </Typography>
+                          </TableCell>
+                        )}
+                        {visibleColumns.status && (
+                          <TableCell>
+                            {getStockLevelIndicator(availableQuantity, item.minStockLevel, item.optimalStockLevel)}
+                          </TableCell>
+                        )}
+                        {visibleColumns.location && (
+                          <TableCell>
+                            {item.location || '-'}
+                          </TableCell>
+                        )}
+                        {visibleColumns.actions && (
+                          <TableCell align="right">
+                            <IconButton 
+                              component={RouterLink} 
+                              to={`/inventory/${item.id}`}
+                              color="secondary"
+                              title="Szczegóły"
+                            >
+                              <InfoIcon />
+                            </IconButton>
+                            <IconButton 
+                              component={RouterLink} 
+                              to={`/inventory/${item.id}/receive`}
+                              color="success"
+                              title="Przyjmij"
+                            >
+                              <ReceiveIcon />
+                            </IconButton>
+                            <IconButton 
+                              component={RouterLink} 
+                              to={`/inventory/${item.id}/issue`}
+                              color="warning"
+                              title="Wydaj"
+                            >
+                              <IssueIcon />
+                            </IconButton>
+                            <IconButton
+                              onClick={(e) => handleMenuOpen(e, item)}
+                              color="primary"
+                              title="Więcej akcji"
+                            >
+                              <MoreVertIcon />
+                            </IconButton>
+                          </TableCell>
+                        )}
                       </TableRow>
                     );
                   })}
@@ -1014,6 +1069,46 @@ const InventoryList = () => {
               </Table>
             </TableContainer>
           )}
+          
+          {/* Menu konfiguracji kolumn */}
+          <Menu
+            anchorEl={columnMenuAnchor}
+            open={Boolean(columnMenuAnchor)}
+            onClose={handleColumnMenuClose}
+          >
+            <MenuItem onClick={() => toggleColumnVisibility('name')}>
+              <Checkbox checked={visibleColumns.name} />
+              <ListItemText primary="Nazwa" />
+            </MenuItem>
+            <MenuItem onClick={() => toggleColumnVisibility('category')}>
+              <Checkbox checked={visibleColumns.category} />
+              <ListItemText primary="Kategoria" />
+            </MenuItem>
+            <MenuItem onClick={() => toggleColumnVisibility('totalQuantity')}>
+              <Checkbox checked={visibleColumns.totalQuantity} />
+              <ListItemText primary="Ilość całkowita" />
+            </MenuItem>
+            <MenuItem onClick={() => toggleColumnVisibility('reservedQuantity')}>
+              <Checkbox checked={visibleColumns.reservedQuantity} />
+              <ListItemText primary="Ilość zarezerwowana" />
+            </MenuItem>
+            <MenuItem onClick={() => toggleColumnVisibility('availableQuantity')}>
+              <Checkbox checked={visibleColumns.availableQuantity} />
+              <ListItemText primary="Ilość dostępna" />
+            </MenuItem>
+            <MenuItem onClick={() => toggleColumnVisibility('status')}>
+              <Checkbox checked={visibleColumns.status} />
+              <ListItemText primary="Status" />
+            </MenuItem>
+            <MenuItem onClick={() => toggleColumnVisibility('location')}>
+              <Checkbox checked={visibleColumns.location} />
+              <ListItemText primary="Lokalizacja" />
+            </MenuItem>
+            <MenuItem onClick={() => toggleColumnVisibility('actions')}>
+              <Checkbox checked={visibleColumns.actions} />
+              <ListItemText primary="Akcje" />
+            </MenuItem>
+          </Menu>
         </>
       )}
 

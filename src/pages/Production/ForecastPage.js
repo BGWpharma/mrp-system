@@ -212,7 +212,8 @@ const ForecastPage = () => {
       // Porównaj te dane z bazy z tym co widzimy w UI w szczegółach zadania
       const realMaterialNeeds = {
         'Jabłko': 2, // 2 sztuki na jednostkę (widoczne w UI)
-        'Mąka': 1 // 1 sztuka na jednostkę (widoczne w UI)
+        'Mąka': 1, // 1 sztuka na jednostkę (widoczne w UI)
+        'RAWBW-Sucralose Suralose': 2.07 // Prawidłowa wartość dla sukralozy
       };
       
       // Funkcja korygująca nieprawidłowe ilości
@@ -271,22 +272,29 @@ const ForecastPage = () => {
             materialQuantity = material.unitsPerProduct;
           }
           
+          console.log(`Obliczanie dla materiału ${material.name}: ilość = ${materialQuantity}, ilość zadania = ${taskQuantity}`);
+          
           // Sprawdź wartość materialQuantity - jeśli jest za duża, może być dla całego zadania, a nie na jednostkę
           const quantityPerUnit = material.perUnit || material.quantityPerUnit;
           if (quantityPerUnit && quantityPerUnit > 0) {
             // Jeśli jest explicit określona ilość na jednostkę, użyj jej
             materialQuantity = quantityPerUnit;
+            console.log(`Użyto określonej ilości na jednostkę: ${materialQuantity}`);
           } else if (material.isFullTaskQuantity || material.isTotal) {
             // Jeśli jest oznaczone, że ilość jest dla całego zadania
             materialQuantity = materialQuantity / taskQuantity;
-          } else if (materialQuantity > 10 && taskQuantity > 1) {
+            console.log(`Ilość dla całego zadania podzielona: ${materialQuantity}`);
+          } else if (materialQuantity > 20 && taskQuantity > 1) {
+            // Podwyższamy próg heurystyki do 20 (jak w productionService.js)
             // Wymuś korektę ilości materiału dla znanych składników (heurystyka)
-            materialQuantity = correctMaterialQuantity(material, taskQuantity);
+            const correctedQuantity = correctMaterialQuantity(material, taskQuantity);
+            console.log(`Zastosowano korektę ilości z ${materialQuantity} na ${correctedQuantity}`);
+            materialQuantity = correctedQuantity;
           }
           
           const requiredQuantity = materialQuantity * taskQuantity;
           
-          console.log(`Obliczanie dla materiału ${material.name}: ${materialQuantity} × ${taskQuantity} = ${requiredQuantity}`);
+          console.log(`Ostateczne obliczenie dla ${material.name}: ${materialQuantity} × ${taskQuantity} = ${requiredQuantity}`);
           
           // Dodaj lub zaktualizuj materiał w wymaganiach
           if (!materialRequirements[materialId]) {

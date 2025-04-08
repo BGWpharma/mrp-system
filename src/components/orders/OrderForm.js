@@ -175,7 +175,7 @@ const OrderForm = ({ orderId }) => {
           setOrderData({
             ...fetchedOrder,
             orderDate: formatDateForInput(orderDate),
-            expectedDeliveryDate: expectedDeliveryDate ? formatDateForInput(expectedDeliveryDate) : '',
+            deadline: expectedDeliveryDate ? formatDateForInput(expectedDeliveryDate) : '',
             deliveryDate: deliveryDate ? formatDateForInput(deliveryDate) : '',
             linkedPurchaseOrders: validLinkedPOs
           });
@@ -265,7 +265,7 @@ const OrderForm = ({ orderId }) => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     
-    if (['orderDate', 'expectedDeliveryDate', 'deliveryDate'].includes(name)) {
+    if (['orderDate', 'deadline', 'deliveryDate'].includes(name)) {
       setOrderData(prev => ({ 
         ...prev, 
         [name]: formatDateForInput(value) 
@@ -295,6 +295,7 @@ const OrderForm = ({ orderId }) => {
           shippingAddress: selectedCustomer.shippingAddress || '',
           vatEu: selectedCustomer.vatEu || '',
           billingAddress: selectedCustomer.billingAddress || '',
+          orderAffix: selectedCustomer.orderAffix || '',
           notes: selectedCustomer.notes || ''
         }
       }));
@@ -839,7 +840,7 @@ const OrderForm = ({ orderId }) => {
           currency: 'EUR',
           additionalCostsItems: [], // Inicjalizacja pustej tablicy dodatkowych kosztów
           orderDate: new Date().toISOString().split('T')[0],
-          expectedDeliveryDate: orderData.expectedDeliveryDate || '',
+          deadline: orderData.deadline || '',
           status: 'draft',
           notes: `Automatycznie wygenerowane zamówienie dla: ${orderData.orderNumber}`,
           customerOrderId: orderId,
@@ -1283,8 +1284,8 @@ const OrderForm = ({ orderId }) => {
               <TextField
                 type="date"
                 label="Oczekiwana data dostawy"
-                name="expectedDeliveryDate"
-                value={orderData.expectedDeliveryDate || ''}
+                name="deadline"
+                value={orderData.deadline || ''}
                 onChange={handleChange}
                 fullWidth
                 InputLabelProps={{ shrink: true }}

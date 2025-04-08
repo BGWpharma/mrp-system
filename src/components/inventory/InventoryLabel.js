@@ -27,7 +27,7 @@ import html2canvas from 'html2canvas';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 
-const InventoryLabel = forwardRef(({ item, batch = null, onClose }, ref) => {
+const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null }, ref) => {
   const labelRef = useRef(null);
   
   // Przekazanie referencji do rodzica
@@ -43,7 +43,10 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose }, ref) => {
     additionalInfo: '',
     fontSize: 20,
     codeType: 'barcode', // domyślnie kod kreskowy
-    showCode: true
+    showCode: true,
+    boxQuantity: '', // ilość w kartonie
+    palletQuantity: '', // ilość na palecie
+    showAddress: !!address // pokazuj adres, jeśli został przekazany
   });
 
   const [groups, setGroups] = useState([]);
@@ -53,13 +56,14 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose }, ref) => {
     if (item) {
       setLabelData(prev => ({
         ...prev,
-        title: item.name || 'Produkt'
+        title: item.name || 'Produkt',
+        showAddress: !!address
       }));
       
       // Pobierz grupy, do których należy produkt
       fetchProductGroups();
     }
-  }, [item]);
+  }, [item, address]);
 
   // Funkcja do pobierania grup, do których należy produkt
   const fetchProductGroups = async () => {
@@ -107,10 +111,10 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose }, ref) => {
         <!DOCTYPE html>
         <html>
         <head>
-          <title>Label Print</title>
+          <title>Druk etykiety</title>
           <style>
             @page {
-              size: 10cm 15cm; /* 2:3 proportion */
+              size: 10cm 15cm; /* proporcja 2:3 */
               margin: 0;
             }
             body {
@@ -166,6 +170,14 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose }, ref) => {
             .bold-info {
               font-weight: bold;
             }
+            .address-container {
+              text-align: left;
+              border: 1px solid #ccc;
+              padding: 0.3cm;
+              margin-top: 0.5cm;
+              white-space: pre-line;
+              line-height: 1.3;
+            }
           </style>
         </head>
         <body onload="window.print(); window.setTimeout(function() { window.close(); }, 500);">
@@ -193,14 +205,29 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose }, ref) => {
                 <div class="label-info">Quantity: ${batch.quantity} ${item?.unit || 'pcs.'}</div>
               ` : ''}
               
+              ${labelData.boxQuantity ? `
+                <div class="label-info bold-info">Box quantity: ${labelData.boxQuantity} ${item?.unit || 'pcs.'}</div>
+              ` : ''}
+              
+              ${labelData.palletQuantity ? `
+                <div class="label-info bold-info">Pallet quantity: ${labelData.palletQuantity} ${item?.unit || 'pcs.'}</div>
+              ` : ''}
+              
               ${labelData.additionalInfo ? `
-                <div class="label-info" style="font-style: italic;">${labelData.additionalInfo}</div>
+                <div class="divider"></div>
+                <div class="label-info">${labelData.additionalInfo}</div>
               ` : ''}
             </div>
             
+            ${address && labelData.showAddress ? `
+              <div class="address-container">
+                ${address}
+              </div>
+            ` : ''}
+            
             ${labelData.showCode ? `
               <div class="code-container">
-                <img src="${codeImageUrl}" style="max-width: 100%; height: auto;">
+                <img src="${codeImageUrl}" style="max-width: 100%; height: auto;" />
               </div>
             ` : ''}
           </div>
@@ -300,31 +327,56 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose }, ref) => {
     name: item?.name || '',
     lot: batch?.lotNumber || batch?.batchNumber || '',
     qty: batch?.quantity || '',
-    exp: batch?.expiryDate ? new Date(batch.expiryDate).toLocaleDateString('pl-PL') : '',
+    exp: batch?.expiryDate ? new Date(batch.expiryDate).toLocaleDateString('en-US', {year: 'numeric', month: '2-digit', day: '2-digit'}) : '',
     group: itemGroups.length > 0 ? itemGroups[0].name : '',
     moNumber: batch?.moNumber || '',
-    orderNumber: batch?.orderNumber || ''
+    orderNumber: batch?.orderNumber || '',
+    boxQty: labelData.boxQuantity || '',
+    palletQty: labelData.palletQuantity || '',
+    address: address || ''
   });
 
   return (
     <Box sx={{ p: 2 }}>
       {isEditing && (
         <Paper sx={{ p: 3, mb: 3 }}>
-          <Typography variant="h6" gutterBottom>Edit Label</Typography>
+          <Typography variant="h6" gutterBottom>Edytuj etykietę</Typography>
           <Grid container spacing={2}>
             <Grid item xs={12}>
               <TextField
                 fullWidth
-                label="Title"
+                label="Tytuł"
                 name="title"
                 value={labelData.title}
                 onChange={handleChange}
               />
             </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Ilość w kartonie"
+                name="boxQuantity"
+                type="number"
+                value={labelData.boxQuantity}
+                onChange={handleChange}
+                inputProps={{ min: 0 }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Ilość na palecie"
+                name="palletQuantity"
+                type="number"
+                value={labelData.palletQuantity}
+                onChange={handleChange}
+                inputProps={{ min: 0 }}
+              />
+            </Grid>
             <Grid item xs={12}>
               <TextField
                 fullWidth
-                label="Additional information"
+                label="Dodatkowe informacje"
                 name="additionalInfo"
                 value={labelData.additionalInfo}
                 onChange={handleChange}
@@ -335,7 +387,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose }, ref) => {
             <Grid item xs={12}>
               <TextField
                 fullWidth
-                label="Font size"
+                label="Rozmiar czcionki"
                 name="fontSize"
                 type="number"
                 value={labelData.fontSize}
@@ -345,7 +397,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose }, ref) => {
             </Grid>
             <Grid item xs={12}>
               <FormControl component="fieldset">
-                <FormLabel component="legend">Code type</FormLabel>
+                <FormLabel component="legend">Rodzaj kodu</FormLabel>
                 <RadioGroup 
                   row 
                   name="codeType"
@@ -355,12 +407,12 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose }, ref) => {
                   <FormControlLabel 
                     value="barcode" 
                     control={<Radio />} 
-                    label="Barcode" 
+                    label="Kod kreskowy" 
                   />
                   <FormControlLabel 
                     value="qrcode" 
                     control={<Radio />} 
-                    label="QR code" 
+                    label="Kod QR" 
                   />
                 </RadioGroup>
               </FormControl>
@@ -376,23 +428,39 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose }, ref) => {
                     name="showCode"
                   />
                 }
-                label="Show code"
+                label="Pokaż kod"
               />
             </Grid>
+            {address && (
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={labelData.showAddress}
+                      onChange={(e) => handleChange({
+                        target: { name: 'showAddress', value: e.target.checked, checked: e.target.checked, type: 'checkbox' }
+                      })}
+                      name="showAddress"
+                    />
+                  }
+                  label="Pokaż adres"
+                />
+              </Grid>
+            )}
             <Grid item xs={12} sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
               <Button 
                 variant="outlined" 
                 color="inherit" 
                 onClick={() => setIsEditing(false)}
               >
-                Cancel
+                Anuluj
               </Button>
               <Button 
                 variant="contained" 
                 color="primary" 
                 onClick={handleSave}
               >
-                Save
+                Zapisz
               </Button>
             </Grid>
           </Grid>
@@ -405,7 +473,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose }, ref) => {
           elevation={1}
           sx={{
             width: '10cm',
-            height: '15cm', // 2:3 proportion
+            height: '15cm', // proporcja 2:3
             p: 1,
             backgroundColor: 'white',
             color: 'black',
@@ -430,70 +498,99 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose }, ref) => {
         >
           <Box sx={{ textAlign: 'center' }}>
             <Typography
-              variant="h4"
+              variant="h5"
               component="h3"
               sx={{ 
                 fontWeight: 'bold', 
                 fontSize: `${labelData.fontSize + 6}px`,
                 mb: 1,
-                mt: 0.5
+                mt: 0.5,
+                lineHeight: 1.2
               }}
             >
               {labelData.title}
             </Typography>
             
-            <Typography variant="body1" sx={{ mb: 0.5, fontSize: '16px' }}>
+            <Typography variant="body2" gutterBottom>
               Category: {item?.category || 'No category'}
             </Typography>
 
             {itemGroups.length > 0 && (
-              <Typography variant="body1" sx={{ mb: 0.5, fontSize: '16px' }}>
+              <Typography variant="body2" gutterBottom>
                 Group: {itemGroups.map(g => g.name).join(', ')}
               </Typography>
             )}
 
-            <Divider sx={{ my: 1, bgcolor: 'rgba(0, 0, 0, 0.2)' }} />
+            <Divider sx={{ my: 1 }} />
             
             {batch && (
-              <Typography variant="h5" sx={{ mb: 0.5, fontSize: '20px', fontWeight: 'bold' }}>
-                LOT: {batch.lotNumber || batch.batchNumber || 'No number'}
+              <>
+                <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>
+                  LOT: {batch.lotNumber || batch.batchNumber || 'No number'}
+                </Typography>
+                
+                {batch.moNumber && (
+                  <Typography variant="body2" gutterBottom sx={{ fontWeight: 'bold' }}>
+                    MO: {batch.moNumber}
+                  </Typography>
+                )}
+                
+                {batch.orderNumber && (
+                  <Typography variant="body2" gutterBottom sx={{ fontWeight: 'bold' }}>
+                    CO: {batch.orderNumber}
+                  </Typography>
+                )}
+                
+                {batch.expiryDate && (
+                  <Typography variant="body2" gutterBottom>
+                    Expiry date: {
+                      batch.expiryDate instanceof Date 
+                        ? batch.expiryDate.toLocaleDateString('en-US', {year: 'numeric', month: '2-digit', day: '2-digit'}) 
+                        : new Date(batch.expiryDate).toLocaleDateString('en-US', {year: 'numeric', month: '2-digit', day: '2-digit'})
+                    }
+                  </Typography>
+                )}
+                
+                <Typography variant="body2" gutterBottom>
+                  Quantity: {batch.quantity} {item?.unit || 'pcs.'}
+                </Typography>
+              </>
+            )}
+            
+            {labelData.boxQuantity && (
+              <Typography variant="body2" gutterBottom sx={{ fontWeight: 'bold' }}>
+                Box quantity: {labelData.boxQuantity} {item?.unit || 'pcs.'}
               </Typography>
             )}
             
-            {batch && batch.moNumber && (
-              <Typography variant="body1" sx={{ mb: 0.5, fontSize: '16px', fontWeight: 'bold' }}>
-                MO: {batch.moNumber}
-              </Typography>
-            )}
-            
-            {batch && batch.orderNumber && (
-              <Typography variant="body1" sx={{ mb: 0.5, fontSize: '16px', fontWeight: 'bold' }}>
-                CO: {batch.orderNumber}
-              </Typography>
-            )}
-            
-            {batch && batch.expiryDate && (
-              <Typography variant="body1" sx={{ mb: 0.5, fontSize: '16px' }}>
-                Expiry date: {
-                  batch.expiryDate instanceof Date 
-                    ? batch.expiryDate.toLocaleDateString('en-US', {year: 'numeric', month: '2-digit', day: '2-digit'}) 
-                    : new Date(batch.expiryDate).toLocaleDateString('en-US', {year: 'numeric', month: '2-digit', day: '2-digit'})
-                }
-              </Typography>
-            )}
-            
-            {batch && (
-              <Typography variant="body1" sx={{ mb: 0.5, fontSize: '16px' }}>
-                Quantity: {batch.quantity} {item?.unit || 'pcs.'}
+            {labelData.palletQuantity && (
+              <Typography variant="body2" gutterBottom sx={{ fontWeight: 'bold' }}>
+                Pallet quantity: {labelData.palletQuantity} {item?.unit || 'pcs.'}
               </Typography>
             )}
 
             {labelData.additionalInfo && (
-              <Typography variant="body1" sx={{ mt: 0.5, fontSize: '14px', fontStyle: 'italic' }}>
+              <Typography variant="body2" sx={{ mt: 0.5, fontSize: '14px', fontStyle: 'italic' }}>
                 {labelData.additionalInfo}
               </Typography>
             )}
           </Box>
+
+          {address && labelData.showAddress && (
+            <Paper 
+              variant="outlined" 
+              sx={{ 
+                p: 1, 
+                mt: 1, 
+                mb: 1, 
+                whiteSpace: 'pre-line',
+                fontSize: '14px',
+                lineHeight: 1.3
+              }}
+            >
+              {address}
+            </Paper>
+          )}
 
           {labelData.showCode && (
             <Box sx={{ 
@@ -542,7 +639,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose }, ref) => {
           startIcon={<PrintIcon />}
           onClick={handlePrint}
         >
-          Print
+          Drukuj
         </Button>
         <Button 
           variant="contained" 
@@ -550,7 +647,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose }, ref) => {
           startIcon={<DownloadIcon />}
           onClick={handleSaveAsPNG}
         >
-          Download PNG
+          Pobierz PNG
         </Button>
         <Button 
           variant="contained" 
@@ -558,7 +655,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose }, ref) => {
           startIcon={<EditIcon />}
           onClick={handleEdit}
         >
-          Edit
+          Edytuj
         </Button>
         <Button 
           variant="outlined" 
@@ -566,7 +663,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose }, ref) => {
           startIcon={<CloseIcon />}
           onClick={onClose}
         >
-          Close
+          Zamknij
         </Button>
       </Box>
     </Box>

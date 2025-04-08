@@ -59,6 +59,8 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../services/firebase/config';
 
 const StocktakingDetailsPage = () => {
   const { id } = useParams();
@@ -91,6 +93,9 @@ const StocktakingDetailsPage = () => {
   const [deleteItemId, setDeleteItemId] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   
+  // Dodaję stan do przechowywania nazw użytkowników
+  const [userNames, setUserNames] = useState({});
+  
   useEffect(() => {
     fetchStocktakingData();
     fetchInventoryItems();
@@ -99,6 +104,38 @@ const StocktakingDetailsPage = () => {
   useEffect(() => {
     filterItems();
   }, [searchTerm, items]);
+  
+  // Funkcja pobierająca dane użytkownika
+  const fetchUserNames = async (userIds) => {
+    if (!userIds || userIds.length === 0) return;
+    
+    const names = {};
+    
+    for (const userId of userIds) {
+      if (!userId) continue;
+      
+      try {
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          // Wybierz najlepszą dostępną informację o użytkowniku: displayName, email lub ID
+          names[userId] = userData.displayName || userData.email || userId;
+        } else {
+          names[userId] = userId; // Fallback na ID, jeśli nie znaleziono użytkownika
+        }
+      } catch (error) {
+        console.error("Błąd podczas pobierania danych użytkownika:", error);
+        names[userId] = userId; // Fallback na ID w przypadku błędu
+      }
+    }
+    
+    setUserNames(names);
+  };
+  
+  // Funkcja zwracająca nazwę użytkownika zamiast ID
+  const getUserName = (userId) => {
+    return userNames[userId] || userId || 'System';
+  };
   
   const fetchStocktakingData = async () => {
     try {
@@ -109,6 +146,11 @@ const StocktakingDetailsPage = () => {
       const stocktakingItems = await getStocktakingItems(id);
       setItems(stocktakingItems);
       setFilteredItems(stocktakingItems);
+      
+      // Pobierz nazwę użytkownika, który utworzył inwentaryzację
+      if (stocktakingData && stocktakingData.createdBy) {
+        fetchUserNames([stocktakingData.createdBy]);
+      }
     } catch (error) {
       console.error('Błąd podczas pobierania danych inwentaryzacji:', error);
       setError('Nie udało się pobrać danych inwentaryzacji');
@@ -482,7 +524,7 @@ const StocktakingDetailsPage = () => {
                 <strong>Data utworzenia:</strong> {stocktaking.createdAt ? formatDate(stocktaking.createdAt) : '-'}
               </Typography>
               <Typography variant="body1">
-                <strong>Utworzona przez:</strong> {stocktaking.createdBy || '-'}
+                <strong>Utworzona przez:</strong> {stocktaking.createdBy ? getUserName(stocktaking.createdBy) : '-'}
               </Typography>
               {stocktaking.completedAt && (
                 <Typography variant="body1">
@@ -840,26 +882,16 @@ const StocktakingDetailsPage = () => {
             <Typography variant="subtitle2" gutterBottom>
               Dostosuj stany magazynowe?
             </Typography>
-            <Grid container spacing={2}>
-              <Grid item>
-                <Button
-                  variant={confirmAdjustInventory ? 'contained' : 'outlined'}
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={confirmAdjustInventory}
+                  onChange={(e) => setConfirmAdjustInventory(e.target.checked)}
                   color="primary"
-                  onClick={() => setConfirmAdjustInventory(true)}
-                >
-                  Tak, dostosuj stany
-                </Button>
-              </Grid>
-              <Grid item>
-                <Button
-                  variant={!confirmAdjustInventory ? 'contained' : 'outlined'}
-                  color="secondary"
-                  onClick={() => setConfirmAdjustInventory(false)}
-                >
-                  Nie, tylko zakończ
-                </Button>
-              </Grid>
-            </Grid>
+                />
+              }
+              label={confirmAdjustInventory ? "Tak, dostosuj stany magazynowe" : "Nie, tylko zakończ inwentaryzację"}
+            />
           </Box>
         </DialogContent>
         <DialogActions>

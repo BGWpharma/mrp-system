@@ -35,7 +35,7 @@ export const getKpiData = async () => {
       totalItems: items?.length || 0,
       totalValue: calculateInventoryValue(items)
     };
-    
+
     // Pobierz dane produkcyjne
     const tasksInProgress = await getTasksByStatus('W trakcie');
     const completedTasks = await getTasksByStatus('Zakończone');

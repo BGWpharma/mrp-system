@@ -203,7 +203,7 @@ const Dashboard = () => {
         <Grid item xs={12} md={6}>
               <Card>
             <CardHeader 
-                  title="Ostatnie zamówienia klientów" 
+                  title="Ostatnie zamówienia (CO)" 
                   titleTypographyProps={{ variant: 'h6' }}
                 />
                 <Divider />
@@ -218,7 +218,7 @@ const Dashboard = () => {
                              <PendingIcon color="warning" />}
                           </ListItemIcon>
                           <ListItemText
-                            primary={String(order.customer?.name || order.customer || 'Brak nazwy klienta')}
+                            primary={String(order.orderNumber || `Zamówienie ${order.id ? order.id.substring(0, 8) : ''}`)}
                             secondary={`${formatCurrency(order.value || 0)} - ${formatTimestamp(order.date, false)}`}
                           />
                           <Chip
@@ -285,7 +285,7 @@ const Dashboard = () => {
             <Grid item xs={12}>
               <Card>
                 <CardHeader 
-                  title="Ostatnie zamówienia zakupowe (PO)" 
+                  title="Zamówienia zakupowe (PO)" 
                   titleTypographyProps={{ variant: 'h6' }}
                 />
                 <Divider />
@@ -298,7 +298,7 @@ const Dashboard = () => {
                             <EuroIcon color="primary" />
                           </ListItemIcon>
                           <ListItemText
-                            primary={String(po.supplier?.name || po.supplier || 'Brak nazwy dostawcy')}
+                            primary={String(po.number || `PO-${po.id ? po.id.substring(0, 6) : ''}`)}
                             secondary={`${formatCurrency(po.totalValue || 0)} - ${formatTimestamp(po.date, false)}`}
                           />
                           <Chip

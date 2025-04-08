@@ -29,7 +29,10 @@ import {
   DialogActions,
   Alert,
   Grid,
-  Divider
+  Divider,
+  Menu,
+  ListItemText,
+  Checkbox
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -44,7 +47,9 @@ import {
   Info as InfoIcon,
   Visibility as ViewIcon,
   Done as DoneIcon,
-  Cancel as CancelIcon
+  Cancel as CancelIcon,
+  ViewColumn as ViewColumnIcon,
+  BuildCircle as BuildCircleIcon
 } from '@mui/icons-material';
 import { getAllTasks, updateTaskStatus, deleteTask, addTaskProductToInventory, stopProduction } from '../../services/productionService';
 import { useAuth } from '../../hooks/useAuth';
@@ -60,6 +65,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { pl } from 'date-fns/locale';
 import { getWorkstationById } from '../../services/workstationService';
+import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
 
 const TaskList = () => {
   const [tasks, setTasks] = useState([]);
@@ -87,6 +93,14 @@ const TaskList = () => {
     finalQuantity: '',
   });
   const [inventoryError, setInventoryError] = useState(null);
+  
+  // Stan dla ukrywania kolumn
+  const [columnMenuAnchor, setColumnMenuAnchor] = useState(null);
+  
+  // Używamy kontekstu preferencji kolumn
+  const { getColumnPreferencesForView, updateColumnPreferences } = useColumnPreferences();
+  // Pobieramy preferencje dla widoku 'productionTasks'
+  const visibleColumns = getColumnPreferencesForView('productionTasks');
 
   // Pobierz zadania przy montowaniu komponentu
   useEffect(() => {
@@ -143,6 +157,7 @@ const TaskList = () => {
     try {
       setLoading(true);
       const fetchedTasks = await getAllTasks();
+      console.log("Pobrane zadania:", fetchedTasks);
       setTasks(fetchedTasks);
       setFilteredTasks(fetchedTasks);
     } catch (error) {
@@ -327,13 +342,24 @@ const TaskList = () => {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'Zaplanowane': return 'primary';
-      case 'W trakcie': return 'warning';
-      case 'Potwierdzenie zużycia': return 'info';
-      case 'Zakończone': return 'success';
-      case 'Anulowane': return 'error';
-      case 'Wstrzymane': return 'default';
-      default: return 'default';
+      case 'Zaplanowane':
+      case 'planned':
+        return 'primary';
+      case 'W trakcie':
+      case 'in_progress':
+        return 'warning';
+      case 'Potwierdzenie zużycia':
+        return 'info';
+      case 'Zakończone':
+      case 'completed':
+        return 'success';
+      case 'Anulowane':
+      case 'cancelled':
+        return 'error';
+      case 'Wstrzymane':
+        return 'default';
+      default:
+        return 'default';
     }
   };
 
@@ -395,63 +421,85 @@ const TaskList = () => {
       case 'Zaplanowane':
       case 'Wstrzymane':
         return (
-          <IconButton 
-            color="warning" 
-            onClick={() => handleStatusChange(task.id, 'W trakcie')}
-            title="Rozpocznij produkcję"
-          >
-            <StartIcon />
-          </IconButton>
+          <Tooltip title="Rozpocznij produkcję">
+            <IconButton 
+              color="warning" 
+              onClick={() => handleStatusChange(task.id, 'W trakcie')}
+              size="small"
+            >
+              <StartIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         );
       case 'W trakcie':
         return (
-          <>
+          <Tooltip title="Zatrzymaj produkcję">
             <IconButton 
               color="error" 
               onClick={() => openStopProductionDialog(task.id)}
-              title="Zatrzymaj produkcję"
+              size="small"
             >
-              <StopIcon />
+              <StopIcon fontSize="small" />
             </IconButton>
-          </>
+          </Tooltip>
         );
       case 'Potwierdzenie zużycia':
         return (
-          <IconButton 
-            color="info" 
-            component={Link}
-            to={`/production/consumption/${task.id}`}
-            title="Potwierdź zużycie materiałów"
-          >
-            <CheckIcon />
-          </IconButton>
+          <Tooltip title="Potwierdź zużycie materiałów">
+            <IconButton 
+              color="info" 
+              component={Link}
+              to={`/production/consumption/${task.id}`}
+              size="small"
+            >
+              <CheckIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         );
       case 'Zakończone':
         // Jeśli zadanie jest zakończone i nie zostało jeszcze dodane do magazynu
         if (!task.inventoryUpdated) {
           return (
-            <IconButton 
-              color="primary" 
-              onClick={() => openAddToInventoryDialog(task)}
-              title="Dodaj produkt do magazynu"
-            >
-              <InventoryIcon />
-            </IconButton>
+            <Tooltip title="Dodaj produkt do magazynu">
+              <IconButton 
+                color="primary" 
+                onClick={() => openAddToInventoryDialog(task)}
+                size="small"
+              >
+                <InventoryIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
           );
         }
         return (
-          <IconButton 
-            color="secondary" 
-            component={Link}
-            to={`/production/consumption/${task.id}`}
-            title="Korekta poprocesowa"
-          >
-            <EditIcon />
-          </IconButton>
+          <Tooltip title="Korekta poprocesowa">
+            <IconButton 
+              color="secondary" 
+              component={Link}
+              to={`/production/consumption/${task.id}`}
+              size="small"
+            >
+              <BuildCircleIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         );
       default:
         return null;
     }
+  };
+
+  // Funkcje do zarządzania widocznością kolumn
+  const handleColumnMenuOpen = (event) => {
+    setColumnMenuAnchor(event.currentTarget);
+  };
+  
+  const handleColumnMenuClose = () => {
+    setColumnMenuAnchor(null);
+  };
+  
+  const toggleColumnVisibility = (columnName) => {
+    // Zamiast lokalnego setVisibleColumns, używamy funkcji updateColumnPreferences z kontekstu
+    updateColumnPreferences('productionTasks', columnName, !visibleColumns[columnName]);
   };
 
   if (loading) {
@@ -459,156 +507,265 @@ const TaskList = () => {
   }
 
   return (
-    <Container>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5">Zadania produkcyjne</Typography>
-      </Box>
-
-      <Box sx={{ display: 'flex', mb: 3, gap: 2 }}>
-        <TextField
-          label="Szukaj zadania"
-          variant="outlined"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          fullWidth
-          InputProps={{
-            startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
-          }}
-        />
-        <FormControl sx={{ minWidth: 200 }}>
-          <InputLabel>Status</InputLabel>
-          <Select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            label="Status"
+    <Container maxWidth="xl">
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" gutterBottom align="center">Zadania Produkcyjne</Typography>
+        
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+          <Button 
+            variant="contained" 
+            color="primary" 
+            startIcon={<AddIcon />}
+            component={Link}
+            to="/production/tasks/new"
           >
-            <MenuItem value="">Wszystkie</MenuItem>
-            <MenuItem value="Zaplanowane">Zaplanowane</MenuItem>
-            <MenuItem value="W trakcie">W trakcie</MenuItem>
-            <MenuItem value="Wstrzymane">Wstrzymane</MenuItem>
-            <MenuItem value="Zakończone">Zakończone</MenuItem>
-            <MenuItem value="Anulowane">Anulowane</MenuItem>
-          </Select>
-        </FormControl>
-      </Box>
-
-      {filteredTasks.length === 0 ? (
-        <Typography variant="body1" align="center">
-          Nie znaleziono zadań produkcyjnych
-        </Typography>
-      ) : (
-        <TableContainer component={Paper} sx={{ mt: 3 }}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Nazwa zadania</TableCell>
-                <TableCell>Numer MO</TableCell>
-                <TableCell>Produkt</TableCell>
-                <TableCell>Ilość</TableCell>
-                <TableCell>Pozostało do produkcji</TableCell>
-                <TableCell>Stanowisko</TableCell>
-                <TableCell>Data rozpoczęcia</TableCell>
-                <TableCell>Planowana data zakończenia</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Koszt</TableCell>
-                <TableCell align="right">Akcje</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredTasks.map((task) => (
-                <TableRow key={task.id}>
-                  <TableCell component="th" scope="row">
-                    {task.name}
-                  </TableCell>
-                  <TableCell>
-                    {task.moNumber || '-'}
-                  </TableCell>
-                  <TableCell>{task.productName}</TableCell>
-                  <TableCell>
-                    {task.quantity} {task.unit}
-                  </TableCell>
-                  <TableCell>
-                    {(() => {
-                      // Oblicz pozostałą ilość do wyprodukowania
-                      const totalCompleted = task.totalCompletedQuantity || 0;
-                      const remaining = Math.max(0, task.quantity - totalCompleted);
-                      
-                      // Określ kolor tekstu na podstawie pozostałej ilości
-                      let color = 'inherit';
-                      if (remaining === 0) {
-                        color = 'success.main'; // Zielony, jeśli nie ma nic do produkcji
-                      } else if (remaining < task.quantity * 0.2) {
-                        color = 'warning.main'; // Pomarańczowy, jeśli zostało mniej niż 20%
-                      }
-                      
-                      return (
-                        <Typography sx={{ color }}>
-                          {remaining} {task.unit}
-                        </Typography>
-                      );
-                    })()}
-                  </TableCell>
-                  <TableCell>
-                    {task.workstationId 
-                      ? (workstationNames[task.workstationId] || "Ładowanie...") 
-                      : "Nie przypisano"
-                    }
-                  </TableCell>
-                  <TableCell>
-                    {task.scheduledDate ? formatDateTime(task.scheduledDate) : 'Nie określono'}
-                  </TableCell>
-                  <TableCell>
-                    {task.endDate ? formatDateTime(task.endDate) : 'Nie określono'}
-                  </TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={task.status} 
-                      color={getStatusColor(task.status)} 
-                      size="small" 
-                    />
-                  </TableCell>
-                  <TableCell>
-                    {task.totalValue ? (
-                      parseFloat(task.totalValue).toLocaleString('pl-PL') + ' EUR'
-                    ) : task.costs ? (
-                      task.costs.totalCost.toLocaleString('pl-PL') + ' EUR'
-                    ) : (
-                      '-'
-                    )}
-                  </TableCell>
-                  <TableCell align="right">
-                    {getStatusActions(task)}
-                    <IconButton
-                      size="small"
-                      onClick={() => navigate(`/production/tasks/${task.id}`)}
-                      title="Szczegóły"
-                      color="primary"
-                    >
-                      <InfoIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      onClick={() => navigate(`/production/tasks/${task.id}/edit`)}
-                      title="Edytuj"
-                    >
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      onClick={() => handleDelete(task.id)}
-                      title="Usuń"
-                      color="error"
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </TableCell>
+            Nowe Zadanie
+          </Button>
+          
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <FormControl variant="outlined" size="small" sx={{ minWidth: 200 }}>
+              <InputLabel id="status-filter-label">Status</InputLabel>
+              <Select
+                labelId="status-filter-label"
+                id="status-filter"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                label="Status"
+              >
+                <MenuItem value="">Wszystkie</MenuItem>
+                <MenuItem value="Zaplanowane">Zaplanowane</MenuItem>
+                <MenuItem value="W trakcie">W trakcie</MenuItem>
+                <MenuItem value="Wstrzymane">Wstrzymane</MenuItem>
+                <MenuItem value="Zakończone">Zakończone</MenuItem>
+                <MenuItem value="Anulowane">Anulowane</MenuItem>
+              </Select>
+            </FormControl>
+            
+            <TextField
+              variant="outlined"
+              size="small"
+              placeholder="Szukaj zadania..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              InputProps={{
+                startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />
+              }}
+            />
+            
+            <Tooltip title="Konfiguruj widoczne kolumny">
+              <IconButton onClick={handleColumnMenuOpen}>
+                <ViewColumnIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        </Box>
+        
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+            <CircularProgress />
+          </Box>
+        ) : filteredTasks.length === 0 ? (
+          <Paper sx={{ p: 3, textAlign: 'center' }}>
+            <Typography variant="body1">Brak zadań produkcyjnych spełniających kryteria.</Typography>
+          </Paper>
+        ) : (
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  {visibleColumns.name && <TableCell>Nazwa zadania</TableCell>}
+                  {visibleColumns.productName && <TableCell>Produkt</TableCell>}
+                  {visibleColumns.quantity && <TableCell>Ilość</TableCell>}
+                  {visibleColumns.remainingQuantity && <TableCell>Pozostało do produkcji</TableCell>}
+                  {visibleColumns.workstation && <TableCell>Stanowisko</TableCell>}
+                  {visibleColumns.status && <TableCell>Status</TableCell>}
+                  {visibleColumns.plannedStart && <TableCell>Planowany start</TableCell>}
+                  {visibleColumns.plannedEnd && <TableCell>Planowane zakończenie</TableCell>}
+                  {visibleColumns.cost && <TableCell>Koszt</TableCell>}
+                  {visibleColumns.actions && <TableCell>Akcje</TableCell>}
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
+              </TableHead>
+              <TableBody>
+                {filteredTasks.map((task) => {
+                  // Obliczenie pozostałej ilości do produkcji
+                  const totalCompletedQuantity = task.totalCompletedQuantity || 0;
+                  const remainingQuantity = Math.max(0, task.quantity - totalCompletedQuantity);
+                  
+                  return (
+                    <TableRow key={task.id}>
+                      {visibleColumns.name && (
+                        <TableCell>
+                          <Link to={`/production/tasks/${task.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                            <Typography variant="body1" color="primary">{task.name}</Typography>
+                            {task.clientName && (
+                              <Typography variant="body2" color="textSecondary">
+                                {task.clientName}
+                              </Typography>
+                            )}
+                            {task.moNumber && (
+                              <Chip 
+                                size="small" 
+                                label={`MO: ${task.moNumber}`} 
+                                color="secondary" 
+                                variant="outlined" 
+                                sx={{ mt: 0.5 }}
+                              />
+                            )}
+                          </Link>
+                        </TableCell>
+                      )}
+                      {visibleColumns.productName && (
+                        <TableCell>
+                          <Typography variant="body1">{task.productName}</Typography>
+                        </TableCell>
+                      )}
+                      {visibleColumns.quantity && (
+                        <TableCell>
+                          {task.quantity} {task.unit || 'szt.'}
+                        </TableCell>
+                      )}
+                      {visibleColumns.remainingQuantity && (
+                        <TableCell>
+                          <Typography 
+                            variant="body1" 
+                            color={remainingQuantity === 0 ? 'success.main' : (remainingQuantity < task.quantity * 0.2 ? 'warning.main' : 'inherit')}
+                          >
+                            {remainingQuantity} {task.unit || 'szt.'}
+                          </Typography>
+                        </TableCell>
+                      )}
+                      {visibleColumns.workstation && (
+                        <TableCell>
+                          {workstationNames[task.workstationId] || task.workstationName || '-'}
+                        </TableCell>
+                      )}
+                      {visibleColumns.status && (
+                        <TableCell>
+                          <Chip 
+                            label={task.status} 
+                            color={getStatusColor(task.status)} 
+                          />
+                        </TableCell>
+                      )}
+                      {visibleColumns.plannedStart && (
+                        <TableCell>
+                          {task.scheduledDate ? formatDateTime(task.scheduledDate) : '-'}
+                        </TableCell>
+                      )}
+                      {visibleColumns.plannedEnd && (
+                        <TableCell>
+                          {task.endDate ? formatDateTime(task.endDate) : '-'}
+                        </TableCell>
+                      )}
+                      {visibleColumns.cost && (
+                        <TableCell>
+                          {task.totalValue ? (
+                            parseFloat(task.totalValue).toLocaleString('pl-PL') + ' EUR'
+                          ) : task.costs ? (
+                            task.costs.totalCost.toLocaleString('pl-PL') + ' EUR'
+                          ) : (
+                            '-'
+                          )}
+                        </TableCell>
+                      )}
+                      {visibleColumns.actions && (
+                        <TableCell>
+                          <Box sx={{ display: 'flex', gap: 0.5 }}>
+                            {/* Przycisk akcji zależny od statusu */}
+                            {getStatusActions(task)}
+                            
+                            {/* Przyciski standardowe */}
+                            <Tooltip title="Szczegóły zadania">
+                              <IconButton
+                                size="small"
+                                component={Link}
+                                to={`/production/tasks/${task.id}`}
+                                color="primary"
+                              >
+                                <InfoIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
 
+                            <Tooltip title="Edytuj zadanie">
+                              <IconButton
+                                size="small"
+                                component={Link}
+                                to={`/production/tasks/${task.id}/edit`}
+                                color="secondary"
+                              >
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+
+                            <Tooltip title="Usuń zadanie">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleDelete(task.id)}
+                                color="error"
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </Box>
+      
+      {/* Menu konfiguracji kolumn */}
+      <Menu
+        anchorEl={columnMenuAnchor}
+        open={Boolean(columnMenuAnchor)}
+        onClose={handleColumnMenuClose}
+      >
+        <MenuItem onClick={() => toggleColumnVisibility('name')}>
+          <Checkbox checked={visibleColumns.name} />
+          <ListItemText primary="Nazwa zadania" />
+        </MenuItem>
+        <MenuItem onClick={() => toggleColumnVisibility('productName')}>
+          <Checkbox checked={visibleColumns.productName} />
+          <ListItemText primary="Produkt" />
+        </MenuItem>
+        <MenuItem onClick={() => toggleColumnVisibility('quantity')}>
+          <Checkbox checked={visibleColumns.quantity} />
+          <ListItemText primary="Ilość" />
+        </MenuItem>
+        <MenuItem onClick={() => toggleColumnVisibility('remainingQuantity')}>
+          <Checkbox checked={visibleColumns.remainingQuantity} />
+          <ListItemText primary="Pozostało do produkcji" />
+        </MenuItem>
+        <MenuItem onClick={() => toggleColumnVisibility('workstation')}>
+          <Checkbox checked={visibleColumns.workstation} />
+          <ListItemText primary="Stanowisko" />
+        </MenuItem>
+        <MenuItem onClick={() => toggleColumnVisibility('status')}>
+          <Checkbox checked={visibleColumns.status} />
+          <ListItemText primary="Status" />
+        </MenuItem>
+        <MenuItem onClick={() => toggleColumnVisibility('plannedStart')}>
+          <Checkbox checked={visibleColumns.plannedStart} />
+          <ListItemText primary="Planowany start" />
+        </MenuItem>
+        <MenuItem onClick={() => toggleColumnVisibility('plannedEnd')}>
+          <Checkbox checked={visibleColumns.plannedEnd} />
+          <ListItemText primary="Planowane zakończenie" />
+        </MenuItem>
+        <MenuItem onClick={() => toggleColumnVisibility('cost')}>
+          <Checkbox checked={visibleColumns.cost} />
+          <ListItemText primary="Koszt" />
+        </MenuItem>
+        <MenuItem onClick={() => toggleColumnVisibility('actions')}>
+          <Checkbox checked={visibleColumns.actions} />
+          <ListItemText primary="Akcje" />
+        </MenuItem>
+      </Menu>
+      
       {/* Dialog zatrzymania produkcji */}
       <Dialog
         open={stopProductionDialogOpen}

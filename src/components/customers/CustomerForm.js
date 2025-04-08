@@ -139,6 +139,17 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
         
         <Grid item xs={12} md={6}>
           <TextField
+            name="orderAffix"
+            label="Afiks zamówień klienta"
+            value={formData.orderAffix || ''}
+            onChange={handleChange}
+            fullWidth
+            helperText="Dodatkowy identyfikator do numerów zamówień, np. GW, BW"
+          />
+        </Grid>
+        
+        <Grid item xs={12} md={6}>
+          <TextField
             name="supplierVatEu"
             label="VAT-EU dostawcy"
             value={formData.supplierVatEu || ''}

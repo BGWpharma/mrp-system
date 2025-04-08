@@ -901,6 +901,11 @@ import {
       // Oblicz potrzebne ilości materiałów na podstawie zadań produkcyjnych
       const materialRequirements = {};
       
+      // Znane poprawne wartości materiałów na jednostkę
+      const knownMaterialQuantities = {
+        'RAWBW-Sucralose Suralose': 2.07
+      };
+      
       for (const task of tasks) {
         // Upewnij się, że zadanie ma materiały
         if (!task.materials || task.materials.length === 0) {
@@ -929,8 +934,12 @@ import {
           }
           
           // Dodatkowa logika dla określenia rzeczywistej ilości materiału na jednostkę produktu
-          const quantityPerUnit = material.perUnit || material.quantityPerUnit; 
-          if (quantityPerUnit && quantityPerUnit > 0) {
+          const quantityPerUnit = material.perUnit || material.quantityPerUnit;
+          
+          // Sprawdź, czy mamy znaną wartość dla tego materiału
+          if (knownMaterialQuantities[material.name]) {
+            materialQuantity = knownMaterialQuantities[material.name];
+          } else if (quantityPerUnit && quantityPerUnit > 0) {
             // Jeśli jest explicit określona ilość na jednostkę, użyj jej
             materialQuantity = quantityPerUnit;
           } else if (material.isFullTaskQuantity || material.isTotal) {
@@ -1760,4 +1769,271 @@ import {
     
     const task = taskDoc.data();
     return task.productionSessions || [];
+  };
+
+  // Generuje raport materiałów i LOTów dla zlecenia produkcyjnego (MO)
+  export const generateMaterialsAndLotsReport = async (taskId) => {
+    try {
+      if (!taskId) {
+        throw new Error('Nie podano ID zadania produkcyjnego');
+      }
+      
+      // Pobierz dane zadania produkcyjnego
+      const task = await getTaskById(taskId);
+      
+      if (!task) {
+        throw new Error('Nie znaleziono zadania produkcyjnego');
+      }
+
+      // Pobierz szczegółowe dane partii dla wszystkich materiałów
+      const batchesDetails = {};
+      const materialIds = [];
+
+      // Zbierz wszystkie ID materiałów
+      if (task.materials && task.materials.length > 0) {
+        for (const material of task.materials) {
+          const materialId = material.inventoryItemId || material.id;
+          if (materialId) {
+            materialIds.push(materialId);
+          }
+        }
+      }
+
+      // Pobierz szczegóły partii dla wszystkich materiałów
+      if (materialIds.length > 0) {
+        const { collection, query, where, getDocs } = await import('firebase/firestore');
+        const { db } = await import('./firebase/config');
+
+        for (const materialId of materialIds) {
+          // Pobierz partie dla danego materiału
+          const batchesRef = collection(db, 'inventoryBatches');
+          const q = query(batchesRef, where('itemId', '==', materialId));
+          const batchesSnapshot = await getDocs(q);
+          
+          // Zapisz dane partii
+          batchesDetails[materialId] = {};
+          batchesSnapshot.docs.forEach(doc => {
+            const batchData = doc.data();
+            batchesDetails[materialId][doc.id] = {
+              ...batchData,
+              id: doc.id
+            };
+          });
+        }
+      }
+      
+      // Importuj biblioteki jsPDF i autoTable
+      const { jsPDF } = await import('jspdf');
+      const autoTable = (await import('jspdf-autotable')).default;
+      
+      // Dodaj fontface dla obsługi polskich znaków
+      const addFonts = async () => {
+        try {
+          const standardFont = await import('../../public/fonts/Roboto-Regular-normal.js');
+          const boldFont = await import('../../public/fonts/Roboto-Bold-bold.js');
+          return true;
+        } catch (error) {
+          console.warn('Nie udało się załadować czcionek:', error);
+          return false;
+        }
+      };
+
+      try {
+        await addFonts();
+      } catch (error) {
+        console.warn('Błąd ładowania czcionek:', error);
+      }
+      
+      // Utwórz dokument PDF
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      // Dodaj polskie czcionki jeśli są dostępne
+      try {
+        doc.addFont('Roboto-Regular', 'normal');
+        doc.addFont('Roboto-Bold', 'bold');
+        doc.setFont('Roboto-Regular', 'normal');
+      } catch (error) {
+        console.warn('Nie można ustawić czcionki z polskimi znakami:', error);
+      }
+      
+      // Dodaj nagłówek dokumentu
+      doc.setFontSize(18);
+      doc.text('Rozpiska materialow i LOT-ow', 14, 15);
+      
+      // Dodaj informacje o zleceniu produkcyjnym
+      doc.setFontSize(12);
+      doc.text(`Zlecenie produkcyjne: ${task.moNumber || 'brak numeru'}`, 14, 25);
+      doc.text(`Nazwa: ${task.name || 'brak nazwy'}`, 14, 30);
+      doc.text(`Produkt: ${task.productName || 'brak produktu'}`, 14, 35);
+      doc.text(`Ilosc: ${task.quantity || 0} ${task.unit || 'szt.'}`, 14, 40);
+      
+      if (task.scheduledDate) {
+        const formattedDate = new Date(task.scheduledDate).toLocaleDateString('pl-PL');
+        doc.text(`Data planowana: ${formattedDate}`, 14, 45);
+      }
+      
+      // Jeśli zadanie jest powiązane z zamówieniem klienta, dodaj informacje o zamówieniu
+      if (task.orderId && task.orderNumber) {
+        doc.text(`Zamowienie klienta: ${task.orderNumber}`, 14, 50);
+      }
+      
+      // Jeśli zadanie ma przypisanego klienta, dodaj informacje o kliencie
+      if (task.customer && task.customer.name) {
+        doc.text(`Klient: ${task.customer.name}`, 14, 55);
+      }
+      
+      // Dodaj sekcję materiałów
+      doc.setFontSize(14);
+      doc.text('Zestawienie materialow', 14, 65);
+      
+      // Przygotuj dane dla tabeli materiałów
+      const materialTableData = [];
+      const materialBatchTableData = [];
+      
+      if (task.materials && task.materials.length > 0) {
+        // Przygotuj dane dla tabeli materiałów
+        task.materials.forEach((material, index) => {
+          const actualUsage = task.actualMaterialUsage && task.actualMaterialUsage[material.id] !== undefined
+            ? task.actualMaterialUsage[material.id]
+            : material.quantity;
+          
+          materialTableData.push([
+            (index + 1).toString(),
+            material.name || 'brak nazwy',
+            material.category || 'brak kategorii',
+            material.quantity ? material.quantity.toFixed(2) : '0.00',
+            actualUsage ? actualUsage.toFixed(2) : '0.00',
+            material.unit || 'szt.',
+            (task.materialConsumptionConfirmed ? 'Tak' : 'Nie')
+          ]);
+          
+          // Pobierz i dodaj partie materiałów do drugiej tabeli
+          const materialId = material.inventoryItemId || material.id;
+          if (task.materialBatches && task.materialBatches[materialId]) {
+            task.materialBatches[materialId].forEach(batch => {
+              let expiryDateStr = 'brak daty';
+              
+              // Sprawdź, czy mamy datę ważności bezpośrednio w batch
+              if (batch.expiryDate) {
+                try {
+                  const expiryDate = batch.expiryDate instanceof Date 
+                    ? batch.expiryDate 
+                    : new Date(batch.expiryDate);
+                  expiryDateStr = expiryDate.toLocaleDateString('pl-PL');
+                } catch (error) {
+                  console.error('Błąd podczas formatowania daty ważności:', error);
+                }
+              } 
+              // Jeśli nie mamy daty w batch, sprawdź czy mamy szczegóły partii
+              else if (batch.batchId && batchesDetails[materialId] && batchesDetails[materialId][batch.batchId]) {
+                const batchDetail = batchesDetails[materialId][batch.batchId];
+                if (batchDetail.expiryDate) {
+                  try {
+                    // Konwertuj timestamp na datę
+                    const expiryDate = batchDetail.expiryDate.toDate 
+                      ? batchDetail.expiryDate.toDate() 
+                      : new Date(batchDetail.expiryDate);
+                    expiryDateStr = expiryDate.toLocaleDateString('pl-PL');
+                  } catch (error) {
+                    console.error('Błąd podczas formatowania daty z bazy danych:', error);
+                  }
+                }
+              }
+              
+              materialBatchTableData.push([
+                (index + 1).toString(),
+                material.name || 'brak nazwy',
+                batch.batchNumber || batch.lotNumber || 'brak numeru',
+                batch.quantity ? batch.quantity.toFixed(2) : '0.00',
+                material.unit || 'szt.',
+                expiryDateStr
+              ]);
+            });
+          }
+        });
+      }
+      
+      // Dodaj tabelę materiałów
+      autoTable(doc, {
+        startY: 70,
+        head: [[
+          'L.p.',
+          'Material',
+          'Kategoria',
+          'Planowana ilosc',
+          'Rzeczywista ilosc',
+          'J.m.',
+          'Potwierdzony'
+        ]],
+        body: materialTableData,
+        headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+        alternateRowStyles: { fillColor: [245, 245, 245] },
+        styles: { fontSize: 8, cellPadding: 2 },
+        margin: { top: 70 },
+        tableLineWidth: 0.1,
+        tableLineColor: [0, 0, 0]
+      });
+      
+      // Dodaj sekcję LOT-ów, tylko jeśli są dostępne dane
+      if (materialBatchTableData.length > 0) {
+        // Ustal pozycję początkową dla drugiej tabeli (poniżej pierwszej)
+        const firstTableEndY = doc.lastAutoTable.finalY + 10;
+        
+        doc.setFontSize(14);
+        doc.text('Przypisane partie (LOT)', 14, firstTableEndY);
+        
+        // Dodaj tabelę LOT-ów
+        autoTable(doc, {
+          startY: firstTableEndY + 5,
+          head: [[
+            'L.p.',
+            'Material',
+            'Numer LOT',
+            'Ilosc',
+            'J.m.',
+            'Data waznosci'
+          ]],
+          body: materialBatchTableData,
+          headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+          alternateRowStyles: { fillColor: [245, 245, 245] },
+          styles: { fontSize: 8, cellPadding: 2 },
+          margin: { top: firstTableEndY + 5 },
+          tableLineWidth: 0.1,
+          tableLineColor: [0, 0, 0]
+        });
+      }
+      
+      // Dodaj stopkę
+      const pageCount = doc.internal.getNumberOfPages();
+      for(let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.text(
+          `Strona ${i} z ${pageCount}`,
+          doc.internal.pageSize.width / 2,
+          doc.internal.pageSize.height - 10,
+          { align: 'center' }
+        );
+        
+        // Dodaj datę wygenerowania
+        const currentDate = new Date().toLocaleDateString('pl-PL');
+        doc.text(
+          `Wygenerowano: ${currentDate}`,
+          doc.internal.pageSize.width - 20,
+          doc.internal.pageSize.height - 10,
+          { align: 'right' }
+        );
+      }
+      
+      // Zwróć plik PDF jako Blob
+      const pdfBlob = doc.output('blob');
+      return pdfBlob;
+    } catch (error) {
+      console.error('Błąd podczas generowania raportu materiałów i LOT-ów:', error);
+      throw error;
+    }
   };

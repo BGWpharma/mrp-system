@@ -55,10 +55,11 @@ import { getExpiringBatches, getExpiredBatches } from '../../services/inventoryS
 import { useTheme } from '../../contexts/ThemeContext';
 
 // Styled components
-const StyledListItemButton = styled(ListItemButton)(({ theme }) => ({
+const StyledListItemButton = styled(ListItemButton)(({ theme, isheader, isactive }) => ({
   borderRadius: theme.shape.borderRadius,
   margin: '2px 4px',
   padding: '6px 8px',
+  backgroundColor: isactive === 'true' ? alpha(theme.palette.primary.main, 0.15) : 'transparent',
   '&.Mui-selected': {
     backgroundColor: alpha(theme.palette.primary.main, 0.15),
     '&:hover': {
@@ -152,6 +153,14 @@ const Sidebar = ({ onToggle }) => {
   
   const isActive = (path) => {
     return location.pathname.startsWith(path);
+  };
+  
+  const isMenuActive = (menuPath) => {
+    if (menuPath === '/') {
+      return location.pathname === '/' || location.pathname.startsWith('/analytics');
+    } else {
+      return location.pathname.startsWith(menuPath);
+    }
   };
   
   const handleSubmenuClick = (menuTitle) => {
@@ -278,10 +287,19 @@ const Sidebar = ({ onToggle }) => {
             <React.Fragment key={item.text}>
               <StyledListItemButton 
                 onClick={() => handleSubmenuClick(item.text)} 
-                selected={isActive(item.path)}
+                selected={isMenuActive(item.path)}
+                isheader="true"
+                isactive={isMenuActive(item.path) ? 'true' : 'false'}
+                sx={{
+                  backgroundColor: isMenuActive(item.path) ? alpha('#3f51b5', 0.15) : 'transparent',
+                  color: isMenuActive(item.path) ? 'primary.main' : 'inherit'
+                }}
               >
                 <Tooltip title={item.text} placement="right" arrow>
-                  <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>
+                  <ListItemIcon sx={{ 
+                    minWidth: 36, 
+                    color: isMenuActive(item.path) ? 'primary.main' : 'inherit' 
+                  }}>
                     {item.badge ? (
                       <StyledBadge badgeContent={item.badge} color="primary">
                         {item.icon}
@@ -297,7 +315,8 @@ const Sidebar = ({ onToggle }) => {
                       primary={item.text} 
                       primaryTypographyProps={{ 
                         fontSize: '0.875rem',
-                        fontWeight: isActive(item.path) ? 'medium' : 'normal'
+                        fontWeight: isMenuActive(item.path) ? 'medium' : 'normal',
+                        color: isMenuActive(item.path) ? 'primary.main' : 'inherit'
                       }} 
                     />
                     {openSubmenu === item.text ? <ExpandLess /> : <ExpandMore />}

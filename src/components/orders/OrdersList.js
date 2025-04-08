@@ -914,6 +914,7 @@ const OrdersList = () => {
                     <TableCell>Klient</TableCell>
                     <TableCell>Numer zamówienia</TableCell>
                     <TableCell>Data zamówienia</TableCell>
+                    <TableCell>Oczekiwana data dostawy</TableCell>
                     <TableCell>Wartość</TableCell>
                     <TableCell>Status</TableCell>
                     <TableCell align="right">Akcje</TableCell>
@@ -951,7 +952,7 @@ const OrdersList = () => {
                           </TableCell>
                           <TableCell>
                             <Typography variant="body2" fontWeight="medium">
-                              #{order.orderNumber || (order.id && order.id.substring(0, 8).toUpperCase())}
+                              {order.orderNumber || (order.id && order.id.substring(0, 8).toUpperCase())}
                             </Typography>
                           </TableCell>
                           <TableCell>
@@ -960,6 +961,15 @@ const OrdersList = () => {
                               typeof order.orderDate === 'object' && typeof order.orderDate.toDate === 'function' 
                                 ? formatDate(order.orderDate.toDate(), false)
                                 : formatDate(order.orderDate, false)
+                            ) : '-'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight="medium">
+                            {order.deadline ? (
+                              typeof order.deadline === 'object' && typeof order.deadline.toDate === 'function' 
+                                ? formatDate(order.deadline.toDate(), false)
+                                : formatDate(order.deadline, false)
                             ) : '-'}
                             </Typography>
                           </TableCell>
@@ -1014,7 +1024,7 @@ const OrdersList = () => {
 
                         {/* Expanded details */}
                         <TableRow>
-                          <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={7}>
+                          <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={8}>
                             <Collapse in={expandedOrderId === order.id} timeout="auto" unmountOnExit>
                               <Box sx={{ py: 2, px: 2 }}>
                                 <Typography variant="h6" gutterBottom component="div">

@@ -17,7 +17,8 @@ import {
   Divider,
   Chip,
   LinearProgress,
-  Icon
+  Icon,
+  CircularProgress
 } from '@mui/material';
 import {
   MenuBook as RecipesIcon,
@@ -45,61 +46,101 @@ import { formatTimestamp } from '../../utils/dateUtils';
 const Dashboard = () => {
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [tasksLoading, setTasksLoading] = useState(true);
+  const [recipesLoading, setRecipesLoading] = useState(true);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
   const [tasks, setTasks] = useState([]);
   const [recipes, setRecipes] = useState([]);
   const [orderStats, setOrderStats] = useState(null);
   const [analyticsData, setAnalyticsData] = useState(null);
 
   useEffect(() => {
-    const fetchData = async () => {
+    // Pobieranie zadań produkcyjnych
+    const fetchTasks = async () => {
       try {
-        // Pobierz zadania produkcyjne w trakcie
+        setTasksLoading(true);
         console.log('Próba pobrania zadań w trakcie...');
         const tasksInProgress = await getTasksByStatus('W trakcie');
-        console.log('Zadania produkcyjne w trakcie:', tasksInProgress);
         
-        // Jeśli nie ma zadań w trakcie, sprawdź inne statusy, aby zweryfikować połączenie z bazą
         if (!tasksInProgress || tasksInProgress.length === 0) {
           console.log('Brak zadań w trakcie, sprawdzam zadania zaplanowane...');
           const plannedTasks = await getTasksByStatus('Zaplanowane');
-          console.log('Zadania zaplanowane:', plannedTasks);
           
-          // Jeśli są zadania o innym statusie, ale nie ma w trakcie
           if (plannedTasks && plannedTasks.length > 0) {
             console.log('Znaleziono zadania zaplanowane, ale brak zadań w trakcie');
-            setTasks([]); // Pusto, bo nie ma zadań w trakcie
+            setTasks([]); 
           } else {
             console.log('Brak jakichkolwiek zadań produkcyjnych w bazie');
             setTasks([]);
           }
         } else {
-          // Ustaw znalezione zadania w trakcie
           console.log(`Ustawiam ${tasksInProgress.length} zadań w trakcie`);
           setTasks(tasksInProgress);
         }
-        
-        // Pobierz ostatnie receptury
+      } catch (error) {
+        console.error('Błąd podczas pobierania zadań:', error);
+        setTasks([]);
+      } finally {
+        setTasksLoading(false);
+      }
+    };
+    
+    // Pobieranie receptur
+    const fetchRecipes = async () => {
+      try {
+        setRecipesLoading(true);
         const allRecipes = await getAllRecipes();
         console.log('Wszystkie receptury:', allRecipes);
-        setRecipes(allRecipes ? allRecipes.slice(0, 5) : []); // Tylko 5 najnowszych
-        
-        // Pobierz statystyki zamówień
-        const stats = await getOrdersStats();
+        setRecipes(allRecipes ? allRecipes.slice(0, 5) : []);
+      } catch (error) {
+        console.error('Błąd podczas pobierania receptur:', error);
+        setRecipes([]);
+      } finally {
+        setRecipesLoading(false);
+      }
+    };
+    
+    // Pobieranie statystyk zamówień
+    const fetchOrderStats = async () => {
+      try {
+        setOrdersLoading(true);
+        const stats = await getOrdersStats(true);
         console.log('Statystyki zamówień:', stats);
         setOrderStats(stats || null);
-        
-        // Pobierz dane analityczne
+      } catch (error) {
+        console.error('Błąd podczas pobierania statystyk zamówień:', error);
+        setOrderStats(null);
+      } finally {
+        setOrdersLoading(false);
+      }
+    };
+    
+    // Pobieranie danych analitycznych
+    const fetchAnalytics = async () => {
+      try {
+        setAnalyticsLoading(true);
         const kpiData = await getKpiData();
         console.log('Dane KPI:', kpiData);
         setAnalyticsData(kpiData || null);
       } catch (error) {
-        console.error('Błąd podczas pobierania danych dashboardu:', error);
+        console.error('Błąd podczas pobierania danych KPI:', error);
+        setAnalyticsData(null);
       } finally {
-        setLoading(false);
+        setAnalyticsLoading(false);
       }
     };
     
-    fetchData();
+    // Uruchamiamy wszystkie pobierania równolegle
+    Promise.all([
+      fetchTasks(),
+      fetchRecipes(),
+      fetchOrderStats(),
+      fetchAnalytics()
+    ]).finally(() => {
+      setLoading(false);
+    });
+    
   }, []);
 
   if (loading) {
@@ -118,6 +159,13 @@ const Dashboard = () => {
       default: return 'default';
     }
   };
+
+  // Renderowanie wskaźnika ładowania sekcji
+  const SectionLoading = () => (
+    <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+      <CircularProgress size={24} />
+    </Box>
+  );
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -254,39 +302,46 @@ const Dashboard = () => {
             <CardContent sx={{ textAlign: 'center', p: 3 }}>
               <OrdersIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
               <Typography variant="h6">Zamówienia klientów</Typography>
-              <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
-                {orderStats?.total || 0} zamówień ({orderStats?.totalValue ? formatCurrency(orderStats.totalValue) : '0,00 EUR'})
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Typography variant="body2" color="text.secondary">
-                  Zarządzaj zamówieniami klientów
-                </Typography>
-              </Box>
               
-              {orderStats?.recentOrders && orderStats.recentOrders.length > 0 && (
-                <Box sx={{ mt: 3, textAlign: 'left' }}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Ostatnie zamówienia:
+              {ordersLoading ? (
+                <SectionLoading />
+              ) : (
+                <>
+                  <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
+                    {orderStats?.total || 0} zamówień ({orderStats?.totalValue ? formatCurrency(orderStats.totalValue) : '0,00 EUR'})
                   </Typography>
-                  <List sx={{ maxHeight: '150px', overflow: 'auto' }}>
-                    {orderStats.recentOrders.slice(0, 3).map((order) => (
-                      <ListItem key={order.id} sx={{ py: 0.5 }}>
-                        <ListItemText
-                          primary={order.customer}
-                          secondary={`${formatCurrency(order.value)} - ${formatTimestamp(order.date, false)}`}
-                          primaryTypographyProps={{ variant: 'body2' }}
-                          secondaryTypographyProps={{ variant: 'caption' }}
-                        />
-                        <Chip
-                          label={order.status}
-                          color={getStatusColor(order.status)}
-                          size="small"
-                          sx={{ ml: 1 }}
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      Zarządzaj zamówieniami klientów
+                    </Typography>
+                  </Box>
+                  
+                  {orderStats?.recentOrders && orderStats.recentOrders.length > 0 && (
+                    <Box sx={{ mt: 3, textAlign: 'left' }}>
+                      <Typography variant="subtitle2" gutterBottom>
+                        Ostatnie zamówienia:
+                      </Typography>
+                      <List sx={{ maxHeight: '150px', overflow: 'auto' }}>
+                        {orderStats.recentOrders.slice(0, 3).map((order) => (
+                          <ListItem key={order.id} sx={{ py: 0.5 }}>
+                            <ListItemText
+                              primary={`#${order.orderNumber || order.id?.substring(0, 8).toUpperCase()}`}
+                              secondary={`${order.customer} - ${formatCurrency(order.value)} - ${formatTimestamp(order.date, false)}`}
+                              primaryTypographyProps={{ variant: 'body2', fontWeight: 'bold' }}
+                              secondaryTypographyProps={{ variant: 'caption' }}
+                            />
+                            <Chip
+                              label={order.status}
+                              color={getStatusColor(order.status)}
+                              size="small"
+                              sx={{ ml: 1 }}
+                            />
+                          </ListItem>
+                        ))}
+                      </List>
+                    </Box>
+                  )}
+                </>
               )}
             </CardContent>
             <CardActions sx={{ p: 2, pt: 0, justifyContent: 'space-between' }}>

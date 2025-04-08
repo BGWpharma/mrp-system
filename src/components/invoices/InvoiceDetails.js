@@ -193,21 +193,22 @@ const InvoiceDetails = () => {
           vat: 'VAT',
           valueNet: 'Wartość\nnetto',
           valueGross: 'Wartość\nbrutto',
-          relatedPurchaseOrders: 'Powiązane zamówienia zakupowe:',
-          poNumber: 'Nr PO',
-          supplier: 'Dostawca',
+          relatedPurchaseOrders: 'Zaliczki/Przedpłaty:',
+          poNumber: 'Nr zaliczki',
+          supplier: 'Wpłacający',
           netValue: 'Wartość netto',
-          additionalCosts: 'Dodatkowe koszty',
+          additionalCosts: 'Dodatkowe opłaty',
           grossValue: 'Wartość brutto',
           summary: 'Podsumowanie:',
           totalNet: 'Razem netto:',
           totalVat: 'Razem VAT:',
           shippingCost: 'Koszt dostawy:',
-          purchaseCosts: 'Koszty zakupów:',
+          purchaseCosts: 'Wartość zaliczek/przedpłat:',
+          settledAdvancePayments: 'Rozliczone zaliczki/przedpłaty:',
           totalGross: 'Razem brutto:',
           notes: 'Uwagi:',
           footer: 'Dokument wygenerowany elektronicznie.',
-          unknownSupplier: 'Nieznany dostawca'
+          unknownSupplier: 'Nieznany wpłacający'
         },
         en: {
           invoice: 'INVOICE',
@@ -230,21 +231,22 @@ const InvoiceDetails = () => {
           vat: 'VAT',
           valueNet: 'Net\nvalue',
           valueGross: 'Gross\nvalue',
-          relatedPurchaseOrders: 'Related purchase orders:',
-          poNumber: 'PO Number',
-          supplier: 'Supplier',
+          relatedPurchaseOrders: 'Advance Payments:',
+          poNumber: 'Payment No.',
+          supplier: 'Payer',
           netValue: 'Net value',
-          additionalCosts: 'Additional costs',
+          additionalCosts: 'Additional fees',
           grossValue: 'Gross value',
           summary: 'Summary:',
           totalNet: 'Total net:',
           totalVat: 'Total VAT:',
           shippingCost: 'Shipping cost:',
-          purchaseCosts: 'Purchase costs:',
+          purchaseCosts: 'Total advance payments:',
+          settledAdvancePayments: 'Settled advance payments:',
           totalGross: 'Total gross:',
           notes: 'Notes:',
           footer: 'Document generated electronically.',
-          unknownSupplier: 'Unknown supplier'
+          unknownSupplier: 'Unknown payer'
         }
       };
       
@@ -345,10 +347,18 @@ const InvoiceDetails = () => {
       invoice.items.forEach((item, index) => {
         const quantity = Number(item.quantity) || 0;
         const price = Number(item.price) || 0;
-        const vat = Number(item.vat) || 23;
+        
+        // Sprawdź czy stawka VAT to liczba czy string "ZW" lub "NP"
+        let vatRate = 0;
+        if (typeof item.vat === 'number') {
+          vatRate = item.vat;
+        } else if (item.vat !== "ZW" && item.vat !== "NP") {
+          vatRate = parseFloat(item.vat) || 0;
+        }
+        // Dla "ZW" i "NP" vatRate pozostaje 0
         
         const netValue = quantity * price;
-        const vatValue = netValue * (vat / 100);
+        const vatValue = netValue * (vatRate / 100);
         const grossValue = netValue + vatValue;
         
         tableRows.push({
@@ -357,7 +367,7 @@ const InvoiceDetails = () => {
           ilosc: quantity.toString(),
           jm: item.unit,
           cena: `${price.toFixed(2)}`,
-          vat: `${vat}%`,
+          vat: typeof item.vat === 'string' ? item.vat : `${vatRate}%`,
           netto: `${netValue.toFixed(2)}`,
           brutto: `${grossValue.toFixed(2)}`
         });
@@ -380,19 +390,20 @@ const InvoiceDetails = () => {
         theme: 'grid',
         tableWidth: 'auto',
         styles: { 
-          fontSize: 9,
-          cellPadding: 2,
-          font: 'Roboto'
+          fontSize: 8, // Zmniejszono z 9 na 8 dla lepszego dopasowania
+          cellPadding: 1.5, // Zmniejszono padding z 2 na 1.5
+          font: 'Roboto',
+          overflow: 'linebreak' // Dodane zawijanie tekstu
         },
         columnStyles: {
-          0: { cellWidth: 10, halign: 'center' },
-          1: { cellWidth: 50 },
-          2: { cellWidth: 15, halign: 'right' },
-          3: { cellWidth: 15, halign: 'center' },
-          4: { cellWidth: 20, halign: 'right' },
-          5: { cellWidth: 15, halign: 'center' },
-          6: { cellWidth: 25, halign: 'right' },
-          7: { cellWidth: 25, halign: 'right' }
+          0: { cellWidth: 8, halign: 'center' }, // Zmniejszono szerokość Lp
+          1: { cellWidth: 45 }, // Zmniejszono szerokość nazwy
+          2: { cellWidth: 12, halign: 'right' }, // Zmniejszono szerokość ilości
+          3: { cellWidth: 10, halign: 'center' }, // Zmniejszono szerokość j.m.
+          4: { cellWidth: 20, halign: 'right' }, // Bez zmian
+          5: { cellWidth: 15, halign: 'center' }, // Bez zmian
+          6: { cellWidth: 25, halign: 'right' }, // Bez zmian
+          7: { cellWidth: 25, halign: 'right' } // Bez zmian
         },
         headStyles: { 
           fillColor: [41, 128, 185], 
@@ -433,10 +444,52 @@ const InvoiceDetails = () => {
       // Użyj zapisanej wartości całkowitej z obiektu faktury zamiast przeliczać na nowo
       const totalBrutto = parseFloat(invoice.total) || 0;
       
+      // Oblicz wartość zaliczek/przedpłat
+      let advancePaymentsValue = 0;
+      if (invoice.linkedPurchaseOrders && invoice.linkedPurchaseOrders.length > 0) {
+        advancePaymentsValue = invoice.linkedPurchaseOrders.reduce((sum, po) => {
+          let poValue = 0;
+          if (po.finalGrossValue !== undefined) {
+            poValue = parseFloat(po.finalGrossValue);
+          } else if (po.totalGross !== undefined) {
+            poValue = parseFloat(po.totalGross);
+          } else {
+            const productsValue = po.calculatedProductsValue || po.totalValue || 
+              (Array.isArray(po.items) ? po.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0) : 0);
+            
+            let additionalCostsValue = 0;
+            if (po.calculatedAdditionalCosts !== undefined) {
+              additionalCostsValue = parseFloat(po.calculatedAdditionalCosts);
+            } else if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
+              additionalCostsValue = po.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
+            } else if (po.additionalCosts) {
+              additionalCostsValue = parseFloat(po.additionalCosts) || 0;
+            }
+            
+            const vatRate = parseFloat(po.vatRate) || 0;
+            const vatValue = (productsValue * vatRate) / 100;
+            
+            poValue = productsValue + vatValue + additionalCostsValue;
+          }
+          
+          return sum + poValue;
+      }, 0);
+      }
+      
+      // Jeśli istnieją zaliczki, upewnij się, że są one uwzględnione w rozliczeniu
+      let settledAdvancePayments = 0;
+      if (invoice.settledAdvancePayments && parseFloat(invoice.settledAdvancePayments) > 0) {
+        settledAdvancePayments = parseFloat(invoice.settledAdvancePayments);
+      } else if (advancePaymentsValue > 0) {
+        // Jeśli nie ma określonej wartości rozliczonych zaliczek, użyj pełnej wartości zaliczek
+        settledAdvancePayments = advancePaymentsValue;
+      }
+      
       // Dodaj tabelę z powiązanymi zamówieniami zakupowymi, jeśli istnieją
       let currentY = doc.lastAutoTable.finalY + 10;
       
-      if (invoice.originalOrderType === 'customer' && invoice.linkedPurchaseOrders && invoice.linkedPurchaseOrders.length > 0) {
+      // Dodaję sekcję powiązanych zamówień zakupowych, jeśli istnieją
+      if (invoice.linkedPurchaseOrders && invoice.linkedPurchaseOrders.length > 0) {
         // Dodaj tytuł sekcji PO
         doc.text(t.relatedPurchaseOrders, 14, currentY + 5);
         
@@ -463,7 +516,7 @@ const InvoiceDetails = () => {
             additionalCostsValue = parseFloat(po.additionalCosts) || 0;
           }
           
-          const vatRate = parseFloat(po.vatRate) || 23;
+          const vatRate = parseFloat(po.vatRate) || 0;
           const vatValue = (productsValue * vatRate) / 100;
           
           let totalGross = 0;
@@ -475,12 +528,22 @@ const InvoiceDetails = () => {
             totalGross = productsValue + vatValue + additionalCostsValue;
           }
           
+          // Formatowanie wyświetlania stawki VAT
+          let vatDisplay;
+          if (typeof po.vatRate === 'string') {
+            vatDisplay = po.vatRate;
+          } else if (po.vatRate === 'ZW' || po.vatRate === 'NP') {
+            vatDisplay = po.vatRate;
+          } else {
+            vatDisplay = `${vatRate}%`;
+          }
+          
           return {
             number: po.number || po.id,
             supplier: po.supplier?.name || t.unknownSupplier,
             net: `${productsValue.toFixed(2)}`,
             additional: `${additionalCostsValue.toFixed(2)}`,
-            vat: `${vatValue.toFixed(2)}`,
+            vat: vatDisplay,
             gross: `${totalGross.toFixed(2)}`
           };
         });
@@ -500,9 +563,18 @@ const InvoiceDetails = () => {
           theme: 'grid',
           tableWidth: 'auto',
           styles: { 
-            fontSize: 8,
-            cellPadding: 2,
-            font: 'Roboto'
+            fontSize: 7, // Zmniejszono z 8 na 7
+            cellPadding: 1, // Zmniejszono z 2 na 1
+            font: 'Roboto',
+            overflow: 'linebreak' // Dodane zawijanie tekstu
+          },
+          columnStyles: {
+            0: { cellWidth: 25 },
+            1: { cellWidth: 35 },
+            2: { cellWidth: 20, halign: 'right' },
+            3: { cellWidth: 20, halign: 'right' },
+            4: { cellWidth: 15, halign: 'center' },
+            5: { cellWidth: 25, halign: 'right' }
           },
           headStyles: { 
             fillColor: [41, 128, 185], 
@@ -515,7 +587,7 @@ const InvoiceDetails = () => {
             // Dodawanie waluty po każdej wartości w kolumnach z cenami
             data.table.body.forEach((row, rowIndex) => {
               if (rowIndex >= 0) { // Pomijamy nagłówek
-                [2, 3, 4, 5].forEach(colIndex => {
+                [2, 3, 5].forEach(colIndex => {
                   if (row.cells[colIndex]) {
                     const cell = row.cells[colIndex];
                     if (cell.text) {
@@ -535,12 +607,20 @@ const InvoiceDetails = () => {
       doc.setFont('Roboto', 'bold');
       doc.text(t.summary, 140, currentY);
       doc.setFont('Roboto', 'normal');
+      doc.setFontSize(9); // Zmniejszono rozmiar czcionki
       doc.text(`${t.totalNet} ${totalNetto.toFixed(2)} ${invoice.currency}`, 140, currentY + 6);
       doc.text(`${t.totalVat} ${totalVat.toFixed(2)} ${invoice.currency}`, 140, currentY + 12);
       
       // Dodaj informację o kosztach wysyłki, jeśli istnieją
       let extraLines = 0;
       let summaryY = currentY + 18;
+      
+      // Dodaj informację o rozliczonych zaliczkach, jeśli istnieją
+      if (settledAdvancePayments > 0) {
+        doc.text(`${t.settledAdvancePayments} -${settledAdvancePayments.toFixed(2)} ${invoice.currency}`, 140, summaryY);
+        summaryY += 6;
+        extraLines += 1;
+      }
       
       if (invoice.shippingInfo && invoice.shippingInfo.cost > 0) {
         doc.text(`${t.shippingCost} ${parseFloat(invoice.shippingInfo.cost).toFixed(2)} ${invoice.currency}`, 140, summaryY);
@@ -549,43 +629,17 @@ const InvoiceDetails = () => {
       }
       
       // Dodaj informację o kosztach z powiązanych PO, jeśli istnieją
-      if (invoice.originalOrderType === 'customer' && invoice.linkedPurchaseOrders && invoice.linkedPurchaseOrders.length > 0) {
-        const poTotalValue = invoice.linkedPurchaseOrders.reduce((sum, po) => {
-          let poValue = 0;
-          if (po.finalGrossValue !== undefined) {
-            poValue = parseFloat(po.finalGrossValue);
-          } else if (po.totalGross !== undefined) {
-            poValue = parseFloat(po.totalGross);
-          } else {
-            const productsValue = po.calculatedProductsValue || po.totalValue || 
-              (Array.isArray(po.items) ? po.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0) : 0);
-            
-            let additionalCostsValue = 0;
-            if (po.calculatedAdditionalCosts !== undefined) {
-              additionalCostsValue = parseFloat(po.calculatedAdditionalCosts);
-            } else if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
-              additionalCostsValue = po.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
-            } else if (po.additionalCosts) {
-              additionalCostsValue = parseFloat(po.additionalCosts) || 0;
-            }
-            
-            const vatRate = parseFloat(po.vatRate) || 23;
-            const vatValue = (productsValue * vatRate) / 100;
-            
-            poValue = productsValue + vatValue + additionalCostsValue;
-          }
-          
-          return sum + poValue;
-        }, 0);
-        
-        doc.text(`${t.purchaseCosts} ${poTotalValue.toFixed(2)} ${invoice.currency}`, 140, summaryY);
+      if (advancePaymentsValue > 0) {
+        doc.text(`${t.purchaseCosts} ${advancePaymentsValue.toFixed(2)} ${invoice.currency}`, 140, summaryY);
         summaryY += 6;
         extraLines += 1;
       }
       
       // Dodaj całkowitą kwotę brutto na końcu
       doc.setFont('Roboto', 'bold');
-      doc.text(`${t.totalGross} ${totalBrutto.toFixed(2)} ${invoice.currency}`, 140, summaryY);
+      // Uwzględnij odliczenie zaliczek
+      const finalAmount = totalBrutto - settledAdvancePayments;
+      doc.text(`${t.totalGross} ${finalAmount.toFixed(2)} ${invoice.currency}`, 140, summaryY);
       doc.setFont('Roboto', 'normal');
       
       // Dodaj uwagi, jeśli istnieją
@@ -627,9 +681,22 @@ const InvoiceDetails = () => {
     return items.reduce((sum, item) => {
       const quantity = Number(item.quantity) || 0;
       const price = Number(item.price) || 0;
-      // Jeśli mamy ustaloną stawkę VAT (np. z zamówienia zakupowego), użyj jej
-      const vat = fixedVatRate !== null ? fixedVatRate : (Number(item.vat) || 23);
-      return sum + (quantity * price * (vat / 100));
+      
+      let vatRate = 0;
+      if (fixedVatRate !== null) {
+        // Jeśli mamy ustaloną stawkę VAT (np. z zamówienia zakupowego), użyj jej
+        vatRate = fixedVatRate;
+      } else {
+        // Sprawdź czy stawka VAT to liczba czy string "ZW" lub "NP"
+        if (typeof item.vat === 'number') {
+          vatRate = item.vat;
+        } else if (item.vat !== "ZW" && item.vat !== "NP") {
+          vatRate = parseFloat(item.vat) || 0;
+        }
+        // Dla "ZW" i "NP" vatRate pozostaje 0
+      }
+      
+      return sum + (quantity * price * (vatRate / 100));
     }, 0);
   };
   
@@ -1029,10 +1096,18 @@ const InvoiceDetails = () => {
                 // Upewnij się, że quantity i price są liczbami
                 const quantity = Number(item.quantity) || 0;
                 const price = Number(item.price) || 0;
-                const vat = Number(item.vat) || 23;
+                
+                // Sprawdź czy stawka VAT to liczba czy string "ZW" lub "NP"
+                let vatRate = 0;
+                if (typeof item.vat === 'number') {
+                  vatRate = item.vat;
+                } else if (item.vat !== "ZW" && item.vat !== "NP") {
+                  vatRate = parseFloat(item.vat) || 0;
+                }
+                // Dla "ZW" i "NP" vatRate pozostaje 0
                 
                 const netValue = quantity * price;
-                const vatValue = netValue * (vat / 100);
+                const vatValue = netValue * (vatRate / 100);
                 const grossValue = netValue + vatValue;
                 
                 return (
@@ -1042,7 +1117,7 @@ const InvoiceDetails = () => {
                     <TableCell align="right">{quantity}</TableCell>
                     <TableCell>{item.unit}</TableCell>
                     <TableCell align="right">{price.toFixed(2)} {invoice.currency}</TableCell>
-                    <TableCell align="right">{vat}%</TableCell>
+                    <TableCell align="right">{vatRate}%</TableCell>
                     <TableCell align="right">{netValue.toFixed(2)} {invoice.currency}</TableCell>
                     <TableCell align="right">{grossValue.toFixed(2)} {invoice.currency}</TableCell>
                   </TableRow>
@@ -1078,11 +1153,36 @@ const InvoiceDetails = () => {
                 {invoice.items.reduce((sum, item) => {
                   const quantity = Number(item.quantity) || 0;
                   const price = Number(item.price) || 0;
-                  const vat = Number(item.vat) || 23;
-                  return sum + (quantity * price * (vat / 100));
+                  
+                  // Sprawdź czy stawka VAT to liczba czy string "ZW" lub "NP"
+                  let vatRate = 0;
+                  if (typeof item.vat === 'number') {
+                    vatRate = item.vat;
+                  } else if (item.vat !== "ZW" && item.vat !== "NP") {
+                    vatRate = parseFloat(item.vat) || 0;
+                  }
+                  // Dla "ZW" i "NP" vatRate pozostaje 0
+                  
+                  return sum + (quantity * price * (vatRate / 100));
                 }, 0).toFixed(2)} {invoice.currency}
               </Typography>
             </Grid>
+            
+            {/* Wyświetl rozliczone zaliczki/przedpłaty, jeśli istnieją */}
+            {invoice.settledAdvancePayments > 0 && (
+              <>
+                <Grid item xs={6}>
+                  <Typography variant="body1" fontWeight="bold" align="right">
+                    Rozliczone zaliczki/przedpłaty:
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="body1" fontWeight="bold" align="right" color="secondary">
+                    -{parseFloat(invoice.settledAdvancePayments).toFixed(2)} {invoice.currency}
+                  </Typography>
+                </Grid>
+              </>
+            )}
             
             {/* Wyświetl koszt wysyłki, jeśli istnieje */}
             {invoice.shippingInfo && invoice.shippingInfo.cost > 0 && (
@@ -1103,19 +1203,19 @@ const InvoiceDetails = () => {
         </Box>
         
         {/* Sekcja zamówień zakupowych związanych z fakturą */}
-        {invoice.originalOrderType === 'customer' && invoice.linkedPurchaseOrders && invoice.linkedPurchaseOrders.length > 0 && (
+        {invoice.linkedPurchaseOrders && invoice.linkedPurchaseOrders.length > 0 && (
           <Box sx={{ mt: 4 }}>
             <Typography variant="h6" gutterBottom>
-              Powiązane zamówienia zakupowe
+              Zaliczki/Przedpłaty
             </Typography>
             <TableContainer>
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>Numer zamówienia</TableCell>
-                    <TableCell>Dostawca</TableCell>
-                    <TableCell align="right">Wartość produktów netto</TableCell>
-                    <TableCell align="right">Dodatkowe koszty</TableCell>
+                    <TableCell>Numer zaliczki</TableCell>
+                    <TableCell>Wpłacający</TableCell>
+                    <TableCell align="right">Wartość netto</TableCell>
+                    <TableCell align="right">Dodatkowe opłaty</TableCell>
                     <TableCell align="right">VAT</TableCell>
                     <TableCell align="right">Wartość brutto</TableCell>
                   </TableRow>
@@ -1135,7 +1235,7 @@ const InvoiceDetails = () => {
                       additionalCostsValue = parseFloat(po.additionalCosts) || 0;
                     }
                     
-                    const vatRate = parseFloat(po.vatRate) || 23;
+                    const vatRate = parseFloat(po.vatRate) || 0;
                     const vatValue = (productsValue * vatRate) / 100;
                     
                     let totalGross = 0;
@@ -1145,6 +1245,16 @@ const InvoiceDetails = () => {
                       totalGross = parseFloat(po.totalGross);
                     } else {
                       totalGross = productsValue + vatValue + additionalCostsValue;
+                    }
+                    
+                    // Formatowanie wyświetlania stawki VAT
+                    let vatDisplay;
+                    if (typeof po.vatRate === 'string') {
+                      vatDisplay = po.vatRate;
+                    } else if (po.vatRate === 'ZW' || po.vatRate === 'NP') {
+                      vatDisplay = po.vatRate;
+                    } else {
+                      vatDisplay = `${vatRate}%`;
                     }
                     
                     return (
@@ -1158,10 +1268,10 @@ const InvoiceDetails = () => {
                             {po.number || po.id}
                           </Button>
                         </TableCell>
-                        <TableCell>{po.supplier?.name || 'Nieznany dostawca'}</TableCell>
+                        <TableCell>{po.supplier?.name || 'Nieznany wpłacający'}</TableCell>
                         <TableCell align="right">{productsValue.toFixed(2)} {po.currency || invoice.currency}</TableCell>
                         <TableCell align="right">{additionalCostsValue.toFixed(2)} {po.currency || invoice.currency}</TableCell>
-                        <TableCell align="right">{vatValue.toFixed(2)} {po.currency || invoice.currency}</TableCell>
+                        <TableCell align="right">{vatDisplay === "ZW" || vatDisplay === "NP" ? vatDisplay : `${vatValue.toFixed(2)} ${po.currency || invoice.currency}`}</TableCell>
                         <TableCell align="right">{totalGross.toFixed(2)} {po.currency || invoice.currency}</TableCell>
                       </TableRow>
                     );
@@ -1173,7 +1283,7 @@ const InvoiceDetails = () => {
             {/* Podsumowanie kosztów zakupowych przeniesione poza tabelę */}
             <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
               <Typography variant="h6" fontWeight="bold" align="right">
-                Razem koszty zakupów: {invoice.linkedPurchaseOrders.reduce((sum, po) => {
+                Razem zaliczki/przedpłaty: {invoice.linkedPurchaseOrders.reduce((sum, po) => {
                   let poValue = 0;
                   if (po.finalGrossValue !== undefined) {
                     poValue = parseFloat(po.finalGrossValue);
@@ -1192,7 +1302,7 @@ const InvoiceDetails = () => {
                       additionalCostsValue = parseFloat(po.additionalCosts) || 0;
                     }
                     
-                    const vatRate = parseFloat(po.vatRate) || 23;
+                    const vatRate = parseFloat(po.vatRate) || 0;
                     const vatValue = (productsValue * vatRate) / 100;
                     
                     poValue = productsValue + vatValue + additionalCostsValue;
@@ -1216,7 +1326,7 @@ const InvoiceDetails = () => {
             </Grid>
             <Grid item xs={6}>
               <Typography variant="h6" fontWeight="bold" align="right" color="primary">
-                  {parseFloat(invoice.total).toFixed(2)} {invoice.currency}
+                {(parseFloat(invoice.total) - parseFloat(invoice.settledAdvancePayments || 0)).toFixed(2)} {invoice.currency}
               </Typography>
             </Grid>
           </Grid>

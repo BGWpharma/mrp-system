@@ -749,6 +749,8 @@ const PurchaseOrderForm = ({ orderId }) => {
                   <MenuItem value={5}>5%</MenuItem>
                   <MenuItem value={8}>8%</MenuItem>
                   <MenuItem value={23}>23%</MenuItem>
+                  <MenuItem value="ZW">ZW</MenuItem>
+                  <MenuItem value="NP">NP</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -897,7 +899,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                               value={cost.value}
                               onChange={(e) => handleAdditionalCostChange(cost.id, 'value', e.target.value)}
                               InputProps={{ 
-                                inputProps: { min: 0, step: 0.01 },
+                                inputProps: { min: 0, step: 'any' },
                                 endAdornment: <InputAdornment position="end">{poData.currency}</InputAdornment>
                               }}
                               sx={{ width: 150 }}
@@ -978,7 +980,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                         value={item.quantity}
                         onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
                         size="small"
-                        inputProps={{ min: 0, step: 0.01 }}
+                        inputProps={{ min: 0, step: 'any' }}
                         sx={{ width: 100 }}
                       />
                     </TableCell>
@@ -996,7 +998,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                         value={item.unitPrice}
                         onChange={(e) => handleItemChange(index, 'unitPrice', e.target.value)}
                         size="small"
-                        inputProps={{ min: 0, step: 0.01 }}
+                        inputProps={{ min: 0, step: 'any' }}
                         sx={{ width: 100 }}
                       />
                     </TableCell>

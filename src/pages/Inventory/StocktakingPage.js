@@ -31,6 +31,8 @@ import { pl } from 'date-fns/locale';
 import { getAllStocktakings } from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDate } from '../../utils/formatters';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../services/firebase/config';
 
 const StocktakingPage = () => {
   const [stocktakings, setStocktakings] = useState([]);
@@ -39,6 +41,7 @@ const StocktakingPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState(null);
   const { currentUser } = useAuth();
+  const [userNames, setUserNames] = useState({});
 
   useEffect(() => {
     fetchStocktakings();
@@ -54,12 +57,52 @@ const StocktakingPage = () => {
       const stocktakingsData = await getAllStocktakings();
       setStocktakings(stocktakingsData);
       setFilteredStocktakings(stocktakingsData);
+      
+      // Pobierz nazwy użytkowników
+      const userIds = stocktakingsData
+        .map(stocktaking => stocktaking.createdBy)
+        .filter(id => id); // Filtruj puste ID
+        
+      fetchUserNames(userIds);
     } catch (error) {
       console.error('Błąd podczas pobierania inwentaryzacji:', error);
       setError('Wystąpił błąd podczas ładowania inwentaryzacji.');
     } finally {
       setLoading(false);
     }
+  };
+  
+  // Funkcja pobierająca dane użytkowników
+  const fetchUserNames = async (userIds) => {
+    if (!userIds || userIds.length === 0) return;
+    
+    const uniqueUserIds = [...new Set(userIds)]; // Usuń duplikaty
+    const names = {};
+    
+    for (const userId of uniqueUserIds) {
+      if (!userId) continue;
+      
+      try {
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          // Wybierz najlepszą dostępną informację o użytkowniku: displayName, email lub ID
+          names[userId] = userData.displayName || userData.email || userId;
+        } else {
+          names[userId] = userId; // Fallback na ID, jeśli nie znaleziono użytkownika
+        }
+      } catch (error) {
+        console.error("Błąd podczas pobierania danych użytkownika:", error);
+        names[userId] = userId; // Fallback na ID w przypadku błędu
+      }
+    }
+    
+    setUserNames(names);
+  };
+  
+  // Funkcja zwracająca nazwę użytkownika zamiast ID
+  const getUserName = (userId) => {
+    return userNames[userId] || userId || 'System';
   };
 
   const filterStocktakings = () => {
@@ -168,7 +211,7 @@ const StocktakingPage = () => {
                     {stocktaking.createdAt ? formatDate(stocktaking.createdAt) : '-'}
                   </TableCell>
                   <TableCell>{renderStatusChip(stocktaking.status)}</TableCell>
-                  <TableCell>{stocktaking.createdBy || '-'}</TableCell>
+                  <TableCell>{getUserName(stocktaking.createdBy)}</TableCell>
                   <TableCell align="center">
                     <IconButton
                       component={Link}

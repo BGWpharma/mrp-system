@@ -63,9 +63,10 @@ import {
   SaveAlt as SaveAltIcon,
   Info as InfoIcon,
   BookmarkAdd as BookmarkAddIcon,
-  ExpandMore as ExpandMoreIcon
+  ExpandMore as ExpandMoreIcon,
+  Print as PrintIcon
 } from '@mui/icons-material';
-import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask } from '../../services/productionService';
+import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport } from '../../services/productionService';
 import { getItemBatches, bookInventoryForTask } from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -953,6 +954,31 @@ const TaskDetailsPage = () => {
     return userNames[userId] || userId || 'System';
   };
 
+  // Dodaj funkcję do generowania i pobierania raportu materiałów i LOT-ów
+  const handlePrintMaterialsAndLots = async () => {
+    try {
+      setLoading(true);
+      const reportBlob = await generateMaterialsAndLotsReport(id);
+      
+      // Tworzymy URL do pobrania pliku
+      const url = URL.createObjectURL(reportBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `rozpiska_materialow_${task.moNumber || id}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      showSuccess('Raport materiałów został wygenerowany');
+    } catch (error) {
+      console.error('Błąd podczas generowania raportu materiałów:', error);
+      showError('Nie udało się wygenerować raportu materiałów: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Renderuj stronę
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -962,19 +988,28 @@ const TaskDetailsPage = () => {
         <>
           <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Button 
-          startIcon={<ArrowBackIcon />}
+              startIcon={<ArrowBackIcon />}
               onClick={() => navigate('/production')}
           variant="outlined" 
         >
               Powrót do listy
         </Button>
             <Box>
-        <IconButton 
-          color="primary"
-          component={Link}
-          to={`/production/tasks/${id}/edit`}
-          sx={{ mr: 1 }}
-        >
+          <Button
+            variant="outlined"
+                color="primary"
+                startIcon={<PrintIcon />}
+                onClick={handlePrintMaterialsAndLots}
+            sx={{ mr: 1 }}
+          >
+                Drukuj rozpiskę materiałów
+          </Button>
+              <IconButton 
+                color="primary"
+                component={Link}
+                to={`/production/tasks/${id}/edit`}
+                sx={{ mr: 1 }}
+              >
                 <EditIcon />
               </IconButton>
               <IconButton color="error" onClick={() => setDeleteDialog(true)}>
@@ -1136,7 +1171,8 @@ const TaskDetailsPage = () => {
                                       label={`${batch.batchNumber} (${batch.quantity} ${material.unit})`}
                                       color="info"
                                       variant="outlined"
-                                      sx={{ mr: 0.5, mb: 0.5 }}
+                                      sx={{ mr: 0.5, mb: 0.5, cursor: 'pointer' }}
+                                      onClick={() => navigate(`/inventory/${materialId}/batches`)}
                                     />
                                   ))}
                                 </Box>

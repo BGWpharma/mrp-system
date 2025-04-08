@@ -95,12 +95,20 @@ export const generatePONumber = async () => {
 
 /**
  * Generuje numer zamówienia klienta (CO)
- * Format: CO-ROK-NUMER (np. CO-2023-0001)
+ * Format: CO-ROK-NUMER (np. CO-2023-0001) lub CO-ROK-NUMERAFIKS (np. CO-2023-0001GW)
+ * @param {string} customerAffix - Opcjonalny afiks do dodania do numeru zamówienia
  */
-export const generateCONumber = async () => {
+export const generateCONumber = async (customerAffix = '') => {
   const nextNumber = await getNextNumber('CO');
   const year = new Date().getFullYear();
-  return `CO-${year}-${nextNumber.toString().padStart(4, '0')}`;
+  const baseNumber = `CO-${year}-${nextNumber.toString().padStart(4, '0')}`;
+  
+  // Dodaj afiks tylko jeśli został podany
+  if (customerAffix && typeof customerAffix === 'string' && customerAffix.trim() !== '') {
+    return `${baseNumber}${customerAffix.trim()}`;
+  }
+  
+  return baseNumber;
 };
 
 /**

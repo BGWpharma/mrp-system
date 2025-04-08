@@ -170,8 +170,14 @@ export const createInvoice = async (invoiceData, userId) => {
       invoiceData.number = await generateInvoiceNumber();
     }
     
+    // Upewnij się, że mamy właściwe dane o zaliczkach/przedpłatach
+    const linkedPurchaseOrders = invoiceData.linkedPurchaseOrders || [];
+    const settledAdvancePayments = parseFloat(invoiceData.settledAdvancePayments || 0);
+    
     const newInvoice = {
       ...invoiceData,
+      linkedPurchaseOrders: linkedPurchaseOrders,
+      settledAdvancePayments: settledAdvancePayments,
       createdBy: userId,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -320,8 +326,14 @@ export const updateInvoice = async (invoiceId, invoiceData, userId) => {
     // Walidacja danych faktury
     validateInvoiceData(invoiceData);
     
+    // Upewnij się, że mamy właściwe dane o zaliczkach/przedpłatach
+    const linkedPurchaseOrders = invoiceData.linkedPurchaseOrders || [];
+    const settledAdvancePayments = parseFloat(invoiceData.settledAdvancePayments || 0);
+    
     const updatedInvoice = {
       ...invoiceData,
+      linkedPurchaseOrders: linkedPurchaseOrders,
+      settledAdvancePayments: settledAdvancePayments,
       updatedBy: userId,
       updatedAt: serverTimestamp(),
       // Konwersja dat na Timestamp
@@ -467,50 +479,37 @@ export const generateInvoiceNumber = async () => {
  */
 export const DEFAULT_INVOICE = {
   number: '',
-  customer: {
+  customer: null,
+  seller: null,
+  issueDate: formatDateForInput(new Date()),
+  dueDate: formatDateForInput(new Date(new Date().setDate(new Date().getDate() + 14))), // +14 dni
+  paymentMethod: 'przelew',
+  paymentStatus: 'unpaid',
+  paymentDate: null,
+  items: [{
     id: '',
     name: '',
-    email: '',
-    phone: '',
-    billingAddress: '',
-    shippingAddress: '',
-    vatEu: ''
-  },
-  seller: {
-    name: '',
-    address: '',
-    city: '',
-    nip: '',
-    regon: '',
-    email: '',
-    phone: '',
-    bankName: '',
-    bankAccount: ''
-  },
-  orderId: null,
-  orderNumber: null,
-  items: [
-    {
-      id: '',
-      name: '',
-      description: '',
-      quantity: 1,
-      unit: 'szt.',
-      price: 0,
-      vat: 23 // Domyślna stawka VAT 23%
-    }
-  ],
-  issueDate: formatDateForInput(new Date()),
-  dueDate: formatDateForInput(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)), // +14 dni
-  paymentDate: null,
-  status: 'draft', // draft, issued, sent, paid, overdue, cancelled
-  paymentMethod: 'Przelew',
-  paymentStatus: 'unpaid', // unpaid, paid, partial
+    description: '',
+    quantity: 1,
+    unit: 'szt.',
+    price: 0,
+    vat: 0
+  }],
+  total: 0,
+  currency: 'zł',
   notes: '',
+  status: 'draft',
   billingAddress: '',
   shippingAddress: '',
-  vatRate: 23,
-  total: 0,
-  totalVat: 0,
-  currency: 'EUR'
+  invoiceType: 'standard',
+  originalOrderType: null,
+  orderId: null,
+  orderNumber: null,
+  shippingInfo: null,
+  additionalCostsItems: [],
+  settledAdvancePayments: 0, // Dodaję nowe pole dla rozliczonych zaliczek
+  statusHistory: [],
+  createdBy: null,
+  createdAt: null,
+  updatedAt: null
 }; 

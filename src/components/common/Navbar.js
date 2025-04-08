@@ -42,6 +42,9 @@ import {
 import { getAllOrders, getOrderById } from '../../services/orderService';
 import { getAllTasks } from '../../services/productionService';
 import NotificationsMenu from './NotificationsMenu';
+import { getAllInventoryItems } from '../../services/inventoryService';
+import { getDocs, collection } from 'firebase/firestore';
+import { db } from '../../services/firebase/config';
 
 // Styled components
 const SearchIconWrapper = styled('div')(({ theme }) => ({
@@ -219,10 +222,11 @@ const Navbar = () => {
     
     try {
       // Pobierz dane z różnych źródeł
-      const [purchaseOrders, customerOrders, productionTasks] = await Promise.all([
+      const [purchaseOrders, customerOrders, productionTasks, inventoryItems] = await Promise.all([
         getAllPurchaseOrders(),
         getAllOrders(),
-        getAllTasks()
+        getAllTasks(),
+        getAllInventoryItems()
       ]);
       
       const queryLower = query.toLowerCase();
@@ -257,12 +261,13 @@ const Navbar = () => {
           status: co.status
         }));
       
-      // Filtruj zadania produkcyjne
+      // Filtruj zadania produkcyjne (dodaj wyszukiwanie po lotNumber)
       const filteredMOs = productionTasks
         .filter(mo => 
           mo.moNumber?.toLowerCase().includes(queryLower) || 
           mo.name?.toLowerCase().includes(queryLower) ||
-          mo.productName?.toLowerCase().includes(queryLower)
+          mo.productName?.toLowerCase().includes(queryLower) ||
+          mo.lotNumber?.toLowerCase().includes(queryLower)
         )
         .map(mo => ({
           id: mo.id,
@@ -270,13 +275,45 @@ const Navbar = () => {
           title: `MO: ${mo.moNumber} - ${mo.productName || mo.name || 'Produkt nieznany'}`,
           type: 'productionTask',
           date: mo.scheduledDate || mo.createdAt,
-          status: mo.status
+          status: mo.status,
+          // Dodaj informację o LOT jeśli dostępna
+          lotInfo: mo.lotNumber ? `LOT: ${mo.lotNumber}` : null
         }));
+        
+      // Pobierz wszystkie partie z bazy danych
+      const batchesSnapshot = await getDocs(collection(db, 'inventoryBatches'));
+      const batches = batchesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // Filtruj partie po LOT, numerze partii, nazwie produktu
+      const filteredBatches = batches
+        .filter(batch => 
+          batch.lotNumber?.toLowerCase().includes(queryLower) || 
+          batch.batchNumber?.toLowerCase().includes(queryLower) ||
+          batch.itemName?.toLowerCase().includes(queryLower)
+        )
+        .map(batch => {
+          // Znajdź nazwę produktu dla partii
+          const item = inventoryItems.find(item => item.id === batch.itemId);
+          return {
+            id: batch.id,
+            itemId: batch.itemId,
+            number: batch.lotNumber || batch.batchNumber,
+            title: `LOT: ${batch.lotNumber || batch.batchNumber} - ${batch.itemName || 'Produkt nieznany'}`,
+            type: 'inventoryBatch',
+            date: batch.receivedDate || batch.createdAt,
+            quantity: batch.quantity,
+            unit: item?.unit || 'szt.',
+            expiryDate: batch.expiryDate
+          };
+        });
       
       // Połącz wyniki i ogranicz liczbę
-      const combinedResults = [...filteredPOs, ...filteredCOs, ...filteredMOs]
+      const combinedResults = [...filteredPOs, ...filteredCOs, ...filteredMOs, ...filteredBatches]
         .sort((a, b) => new Date(b.date) - new Date(a.date))
-        .slice(0, 10);
+        .slice(0, 15);
       
       setSearchResults(combinedResults);
     } catch (error) {
@@ -319,6 +356,8 @@ const Navbar = () => {
       navigate(`/orders/${result.id}`);
     } else if (result.type === 'productionTask') {
       navigate(`/production/tasks/${result.id}`);
+    } else if (result.type === 'inventoryBatch') {
+      navigate(`/inventory/${result.itemId}/batches?batchId=${result.id}`);
     }
   };
 
@@ -365,7 +404,7 @@ const Navbar = () => {
             <SearchIcon />
           </SearchIconWrapper>
           <StyledInputBase
-            placeholder="Szukaj zamówień (PO, CO, MO)..."
+            placeholder="Szukaj PO, CO, MO, LOT..."
             inputProps={{ 'aria-label': 'search' }}
             value={searchQuery}
             onChange={handleSearchChange}
@@ -418,20 +457,41 @@ const Navbar = () => {
                         if (result.type === 'purchaseOrder') return '#3f51b5';
                         if (result.type === 'customerOrder') return '#4caf50';
                         if (result.type === 'productionTask') return '#ff9800';
+                        if (result.type === 'inventoryBatch') return '#e91e63';
                         return 'transparent';
                       }
                     }}
                   >
                     <ListItemText 
-                      primary={result.title}
+                      primary={
+                        <>
+                          {result.title}
+                          {result.lotInfo && <Chip size="small" label={result.lotInfo} sx={{ ml: 1, height: 20, fontSize: '0.7rem' }} />}
+                        </>
+                      }
                       secondary={
                         <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Chip 
-                            label={result.status} 
-                            size="small" 
-                            sx={{ height: 20, fontSize: '0.7rem' }}
-                          />
-                          {result.date && new Date(result.date).toLocaleDateString()}
+                          {result.type === 'inventoryBatch' ? (
+                            <>
+                              <Chip 
+                                label={`Ilość: ${result.quantity} ${result.unit}`} 
+                                size="small" 
+                                sx={{ height: 20, fontSize: '0.7rem' }}
+                              />
+                              {result.expiryDate && 
+                                `Ważne do: ${new Date(result.expiryDate).toLocaleDateString('pl-PL')}`
+                              }
+                            </>
+                          ) : (
+                            <>
+                              <Chip 
+                                label={result.status} 
+                                size="small" 
+                                sx={{ height: 20, fontSize: '0.7rem' }}
+                              />
+                              {result.date && new Date(result.date).toLocaleDateString()}
+                            </>
+                          )}
                         </Typography>
                       }
                     />
