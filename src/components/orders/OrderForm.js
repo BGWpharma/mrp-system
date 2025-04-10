@@ -138,9 +138,14 @@ const OrderForm = ({ orderId }) => {
           const fetchedOrder = await getOrderById(orderId);
           
           const orderDate = fetchedOrder.orderDate?.toDate ? fetchedOrder.orderDate.toDate() : new Date(fetchedOrder.orderDate);
+          
+          // Sprawdź najpierw expectedDeliveryDate, potem deadline jako fallback
           const expectedDeliveryDate = fetchedOrder.expectedDeliveryDate?.toDate ? 
             fetchedOrder.expectedDeliveryDate.toDate() : 
-            fetchedOrder.expectedDeliveryDate ? new Date(fetchedOrder.expectedDeliveryDate) : null;
+            fetchedOrder.expectedDeliveryDate ? new Date(fetchedOrder.expectedDeliveryDate) : 
+            fetchedOrder.deadline?.toDate ? fetchedOrder.deadline.toDate() :
+            fetchedOrder.deadline ? new Date(fetchedOrder.deadline) : null;
+            
           const deliveryDate = fetchedOrder.deliveryDate?.toDate ? 
             fetchedOrder.deliveryDate.toDate() : 
             fetchedOrder.deliveryDate ? new Date(fetchedOrder.deliveryDate) : null;
@@ -217,11 +222,18 @@ const OrderForm = ({ orderId }) => {
     setSaving(true);
     
     try {
+      // Przekształć dane formularza w format oczekiwany przez API
+      const orderDataToSave = {
+        ...orderData,
+        // Konwertuj deadline na expectedDeliveryDate
+        expectedDeliveryDate: orderData.deadline ? new Date(orderData.deadline) : null,
+      };
+      
       if (orderId) {
-        await updateOrder(orderId, orderData, currentUser.uid);
+        await updateOrder(orderId, orderDataToSave, currentUser.uid);
         showSuccess('Zamówienie zostało zaktualizowane');
       } else {
-        await createOrder(orderData, currentUser.uid);
+        await createOrder(orderDataToSave, currentUser.uid);
         showSuccess('Zamówienie zostało utworzone');
       }
       navigate('/orders');
@@ -1281,6 +1293,7 @@ const OrderForm = ({ orderId }) => {
               />
             </Grid>
             <Grid item xs={12} sm={6}>
+              {/* Pole deadline jest używane w UI, ale w bazie danych zapisywane jako expectedDeliveryDate */}
               <TextField
                 type="date"
                 label="Oczekiwana data dostawy"
@@ -1289,6 +1302,7 @@ const OrderForm = ({ orderId }) => {
                 onChange={handleChange}
                 fullWidth
                 InputLabelProps={{ shrink: true }}
+                helperText="Data kiedy zamówienie ma być dostarczone do klienta"
               />
             </Grid>
           </Grid>

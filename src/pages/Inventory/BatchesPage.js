@@ -79,11 +79,21 @@ const BatchesPage = () => {
         setItem(itemData);
         
         const batchesData = await getItemBatches(id);
-        setBatches(batchesData);
-        setFilteredBatches(batchesData);
-        
         const warehousesData = await getAllWarehouses();
         setWarehouses(warehousesData);
+        
+        // Dodaj informacje o lokalizacji magazynu do każdej partii
+        const enhancedBatches = batchesData.map(batch => {
+          const warehouse = warehousesData.find(w => w.id === batch.warehouseId);
+          return {
+            ...batch,
+            warehouseName: warehouse?.name || 'Magazyn podstawowy',
+            warehouseAddress: warehouse?.address || '',
+          };
+        });
+        
+        setBatches(enhancedBatches);
+        setFilteredBatches(enhancedBatches);
       } catch (error) {
         showError('Błąd podczas pobierania danych partii: ' + error.message);
         console.error('Error fetching batch data:', error);
@@ -130,6 +140,11 @@ const BatchesPage = () => {
       return { label: 'Wyczerpana', color: 'default' };
     }
 
+    // Jeśli brak daty ważności, nie może być przeterminowana
+    if (!batch.expiryDate) {
+      return { label: 'Aktualna', color: 'success' };
+    }
+
     const today = new Date();
     const expiryDate = batch.expiryDate instanceof Timestamp 
       ? batch.expiryDate.toDate() 
@@ -152,6 +167,7 @@ const BatchesPage = () => {
   const getExpiryWarning = () => {
     const expiredCount = filteredBatches.filter(batch => {
       if (batch.quantity <= 0) return false;
+      if (!batch.expiryDate) return false; // Pomiń partie bez daty ważności
       
       const expiryDate = batch.expiryDate instanceof Timestamp 
         ? batch.expiryDate.toDate() 
@@ -162,6 +178,7 @@ const BatchesPage = () => {
     
     const expiringCount = filteredBatches.filter(batch => {
       if (batch.quantity <= 0) return false;
+      if (!batch.expiryDate) return false; // Pomiń partie bez daty ważności
       
       const today = new Date();
       const thirtyDaysFromNow = new Date();
@@ -268,8 +285,18 @@ const BatchesPage = () => {
       closeTransferDialog();
       
       const batchesData = await getItemBatches(id);
-      setBatches(batchesData);
-      setFilteredBatches(batchesData);
+      // Dodaj informacje o lokalizacji magazynu do każdej partii
+      const enhancedBatches = batchesData.map(batch => {
+        const warehouse = warehouses.find(w => w.id === batch.warehouseId);
+        return {
+          ...batch,
+          warehouseName: warehouse?.name || 'Magazyn podstawowy',
+          warehouseAddress: warehouse?.address || '',
+        };
+      });
+      
+      setBatches(enhancedBatches);
+      setFilteredBatches(enhancedBatches);
     } catch (error) {
       console.error('Error transferring batch:', error);
       showError(error.message);
@@ -429,7 +456,7 @@ const BatchesPage = () => {
                           {formatDate(batch.expiryDate)}
                         </TableCell>
                         <TableCell>
-                          {batch.warehouseName || 'Magazyn podstawowy'}
+                          {batch.warehouseAddress || batch.warehouseName}
                         </TableCell>
                         <TableCell>
                           {batch.initialQuantity} {item.unit}
@@ -534,7 +561,7 @@ const BatchesPage = () => {
                 <strong>Numer partii/LOT:</strong> {selectedBatch.batchNumber || selectedBatch.lotNumber || '-'}
               </Typography>
               <Typography variant="body2" gutterBottom>
-                <strong>Bieżący magazyn:</strong> {selectedBatch.warehouseName || 'Magazyn podstawowy'}
+                <strong>Bieżący magazyn:</strong> {selectedBatch.warehouseAddress || selectedBatch.warehouseName || 'Magazyn podstawowy'}
               </Typography>
               <Typography variant="body2" gutterBottom>
                 <strong>Dostępna ilość:</strong> {selectedBatch.quantity} {item?.unit || 'szt.'}

@@ -62,7 +62,8 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
     orderNumber: '',
     orderId: '',
     source: '',
-    sourceId: ''
+    sourceId: '',
+    itemPOId: ''
   });
 
   const [batchData, setBatchData] = useState({
@@ -75,54 +76,46 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
   });
 
   useEffect(() => {
+    if (initialData) {
+      setTransactionData(prev => ({
+        ...prev,
+        quantity: initialData.quantity || '',
+        reason: initialData.reason || (isReceive ? 'purchase' : 'use'),
+        reference: initialData.reference || '',
+        unitPrice: initialData.unitPrice !== undefined ? initialData.unitPrice : '',
+        notes: initialData.notes || '',
+        moNumber: initialData.moNumber || '',
+        orderNumber: initialData.orderNumber || initialData.reference || '',
+        orderId: initialData.orderId || '',
+        source: initialData.source || 'purchase',
+        sourceId: initialData.sourceId || '',
+        itemPOId: initialData.itemPOId || initialData.id || ''
+      }));
+      
+      // Domyślnie użyj lotu z parametrów, jeśli istnieje
+      setBatchData(prev => ({
+        ...prev,
+        batchNumber: initialData.lotNumber || initialData.batchNumber || ''
+      }));
+    }
+    
     const fetchData = async () => {
       try {
-        if (!itemId) {
-          showError('Nie wybrano pozycji magazynowej');
-          navigate('/inventory');
-          return;
-        }
+        setLoading(true);
         
-        const [fetchedItem, warehousesList] = await Promise.all([
-          getInventoryItemById(itemId),
-          getAllWarehouses()
-        ]);
+        // Pobierz dane produktu
+        const inventoryItem = await getInventoryItemById(itemId);
+        setItem(inventoryItem);
         
-        setItem(fetchedItem);
-        setWarehouses(warehousesList);
+        // Pobierz dostępne magazyny
+        const availableWarehouses = await getAllWarehouses();
+        setWarehouses(availableWarehouses);
         
-        // Zastosuj początkoweowe dane, jeśli zostały przekazane
-        if (initialData) {
+        // Ustaw domyślny magazyn, jeśli istnieje tylko jeden
+        if (availableWarehouses.length === 1) {
           setTransactionData(prev => ({
             ...prev,
-            quantity: initialData.quantity || prev.quantity,
-            reason: initialData.reason || prev.reason,
-            reference: initialData.reference || prev.reference,
-            notes: initialData.notes || prev.notes,
-            unitPrice: initialData.unitPrice ? Number(initialData.unitPrice) : prev.unitPrice,
-            // Dodajemy nowe pola dla źródła
-            moNumber: initialData.moNumber || prev.moNumber,
-            orderNumber: initialData.orderNumber || prev.orderNumber,
-            orderId: initialData.orderId || prev.orderId,
-            source: initialData.source || prev.source,
-            sourceId: initialData.sourceId || prev.sourceId,
-            // Wykorzystujemy pierwszy magazyn jako domyślny, jeśli nie ma ustawionego
-            warehouseId: prev.warehouseId || (warehousesList.length > 0 ? warehousesList[0].id : '')
-          }));
-          
-          // Jeśli przekazano lotNumber, ustaw go w danych partii
-          if (initialData.lotNumber) {
-            setBatchData(prev => ({
-              ...prev,
-              batchNumber: initialData.lotNumber,
-              batchNotes: initialData.notes || prev.batchNotes
-            }));
-          }
-        } else if (warehousesList.length > 0) {
-          // Ustaw domyślny magazyn, jeśli nie ma initialData
-          setTransactionData(prev => ({
-            ...prev,
-            warehouseId: prev.warehouseId || warehousesList[0].id
+            warehouseId: availableWarehouses[0].id
           }));
         }
         
@@ -186,45 +179,70 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
         transactionPayload.sourceId = transactionData.sourceId;
       }
       
-      // Dodaj dane partii, jeśli włączone
-      if (isReceive && batchData.useBatch) {
-        if (!batchData.expiryDate && !batchData.noExpiryDate) {
-          throw new Error('Data ważności jest wymagana lub zaznacz opcję "Brak terminu ważności"');
-        }
-        
-        transactionPayload.batchNumber = batchData.batchNumber;
-        if (!batchData.noExpiryDate) {
-          transactionPayload.expiryDate = Timestamp.fromDate(batchData.expiryDate);
+      if (transactionData.itemPOId) {
+        transactionPayload.itemPOId = transactionData.itemPOId;
+      }
+      
+      // Jeśli to przyjęcie z zakupu, upewnij się że ustawiliśmy source jako 'purchase'
+      if (isReceive && transactionData.orderNumber && !transactionPayload.source) {
+        transactionPayload.source = 'purchase';
+      }
+      
+      // Dodaj informacje o partii, jeśli używamy partii
+      if (batchData.useBatch) {
+        if (isReceive) {
+          // Dla przyjęcia - dane nowej partii
+          transactionPayload.lotNumber = batchData.batchNumber;
+          transactionPayload.batchNotes = batchData.batchNotes;
+          
+          // Sprawdzenie terminu ważności
+          if (!batchData.noExpiryDate && batchData.expiryDate) {
+            const expiryDate = new Date(batchData.expiryDate);
+            transactionPayload.expiryDate = Timestamp.fromDate(expiryDate);
+          }
         } else {
-          transactionPayload.noExpiryDate = true;
+          // Dla wydania - ID istniejącej partii
+          if (!batchData.batchId) {
+            throw new Error('Należy wybrać partię do wydania');
+          }
+          transactionPayload.batchId = batchData.batchId;
         }
-        transactionPayload.batchNotes = batchData.batchNotes;
-        
-        // Jeśli nie ma własnych notatek dla partii, ale są dla transakcji,
-        // wykorzystaj je również dla partii
-        if (!transactionPayload.batchNotes && transactionData.notes) {
-          transactionPayload.batchNotes = transactionData.notes;
-        }
-        
-        // Dodaj oznaczenie partii jako lotNumber
-        transactionPayload.lotNumber = batchData.batchNumber;
-      } else if (!isReceive && batchData.useBatch && batchData.batchId) {
-        transactionPayload.batchId = batchData.batchId;
       }
       
+      // Wykonaj odpowiednią operację w zależności od typu transakcji
+      let result;
       if (isReceive) {
-        await receiveInventory(itemId, transactionData.quantity, transactionPayload, currentUser.uid);
-        showSuccess(`Przyjęto ${transactionData.quantity} ${item.unit} do magazynu`);
+        result = await receiveInventory(
+          itemId, 
+          transactionData.quantity, 
+          transactionPayload,
+          currentUser.uid
+        );
+        showSuccess(`Przyjęto ${transactionData.quantity} ${item.unit} na stan magazynu`);
       } else {
-        await issueInventory(itemId, transactionData.quantity, transactionPayload, currentUser.uid);
-        showSuccess(`Wydano ${transactionData.quantity} ${item.unit} z magazynu`);
+        result = await issueInventory(
+          itemId, 
+          transactionData.quantity, 
+          transactionPayload,
+          currentUser.uid
+        );
+        showSuccess(`Wydano ${transactionData.quantity} ${item.unit} ze stanu magazynu`);
       }
       
-      navigate('/inventory');
+      // Sprawdź, czy jest parametr returnTo w URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const returnTo = urlParams.get('returnTo');
+      
+      if (returnTo) {
+        // Jeśli jest, przekieruj tam
+        navigate(returnTo);
+      } else {
+        // Przekieruj do strony magazynu (domyślnie)
+        navigate('/inventory');
+      }
     } catch (error) {
       showError('Błąd podczas przetwarzania transakcji: ' + error.message);
-      console.error('Error processing transaction:', error);
-    } finally {
+      console.error('Transaction error:', error);
       setProcessing(false);
     }
   };

@@ -559,24 +559,281 @@ export const getPurchaseOrdersBySupplier = async (supplierId) => {
 export const PURCHASE_ORDER_STATUSES = {
   DRAFT: 'draft',
   PENDING: 'pending',
-  CONFIRMED: 'confirmed',
+  APPROVED: 'approved',
+  ORDERED: 'ordered',
+  PARTIAL: 'partial',
   SHIPPED: 'shipped',
   DELIVERED: 'delivered',
   CANCELLED: 'cancelled',
-  COMPLETED: 'completed'
+  COMPLETED: 'completed',
+  CONFIRMED: 'confirmed'
 };
 
 // Funkcja do tłumaczenia statusów na język polski
 export const translateStatus = (status) => {
-  const translations = {
-    [PURCHASE_ORDER_STATUSES.DRAFT]: 'Szkic',
-    [PURCHASE_ORDER_STATUSES.PENDING]: 'Oczekujące',
-    [PURCHASE_ORDER_STATUSES.CONFIRMED]: 'Potwierdzone',
-    [PURCHASE_ORDER_STATUSES.SHIPPED]: 'Wysłane',
-    [PURCHASE_ORDER_STATUSES.DELIVERED]: 'Dostarczone',
-    [PURCHASE_ORDER_STATUSES.CANCELLED]: 'Anulowane',
-    [PURCHASE_ORDER_STATUSES.COMPLETED]: 'Zakończone'
-  };
-  
-  return translations[status] || status;
+  switch (status) {
+    case 'draft': return 'Projekt';
+    case 'pending': return 'Oczekujące';
+    case 'approved': return 'Zatwierdzone';
+    case 'ordered': return 'Zamówione';
+    case 'partial': return 'Częściowo dostarczone';
+    case 'delivered': return 'Dostarczone';
+    case 'completed': return 'Zakończone';
+    case 'cancelled': return 'Anulowane';
+    default: return status;
+  }
+};
+
+/**
+ * Aktualizacja ilości odebranej dla danego produktu w zamówieniu zakupowym
+ * @param {string} purchaseOrderId - ID zamówienia zakupowego
+ * @param {string} itemId - ID produktu, który został odebrany
+ * @param {number} receivedQuantity - Ilość odebranych produktów
+ * @param {string} userId - ID użytkownika dokonującego aktualizacji
+ * @returns {Promise<object>} - Zaktualizowane zamówienie zakupowe
+ */
+export const updatePurchaseOrderReceivedQuantity = async (purchaseOrderId, itemId, receivedQuantity, userId) => {
+  try {
+    if (!purchaseOrderId) {
+      throw new Error('ID zamówienia zakupowego jest wymagane');
+    }
+
+    if (!itemId) {
+      throw new Error('ID produktu jest wymagane');
+    }
+
+    if (!receivedQuantity || isNaN(receivedQuantity) || receivedQuantity <= 0) {
+      throw new Error('Ilość odebrana musi być liczbą większą od zera');
+    }
+
+    // Pobierz bieżące zamówienie
+    const poRef = doc(db, PURCHASE_ORDERS_COLLECTION, purchaseOrderId);
+    const poDoc = await getDoc(poRef);
+
+    if (!poDoc.exists()) {
+      throw new Error(`Nie znaleziono zamówienia zakupowego o ID ${purchaseOrderId}`);
+    }
+
+    const poData = poDoc.data();
+    
+    // Sprawdź, czy zamówienie zawiera element o podanym ID
+    if (!poData.items || !Array.isArray(poData.items)) {
+      throw new Error('Zamówienie nie zawiera listy produktów');
+    }
+
+    let updatedItems = [...poData.items];
+    let itemWasUpdated = false;
+    
+    console.log(`Próba aktualizacji PO ${purchaseOrderId}, produkt ${itemId}, ilość: ${receivedQuantity}`);
+    
+    // Najpierw sprawdź bezpośrednie dopasowanie po ID
+    updatedItems = updatedItems.map(item => {
+      if (item.id === itemId || 
+          item.itemId === itemId || 
+          item.inventoryItemId === itemId) {
+        // Aktualizuj lub ustaw pole received
+        const currentReceived = parseFloat(item.received || 0);
+        const newReceived = currentReceived + parseFloat(receivedQuantity);
+        
+        // Oblicz procent realizacji zamówienia
+        const ordered = parseFloat(item.quantity) || 0;
+        const fulfilledPercentage = ordered > 0 ? (newReceived / ordered) * 100 : 0;
+        
+        itemWasUpdated = true;
+        console.log(`Aktualizacja ilości w PO: ${item.name}, było ${currentReceived}, dodano ${receivedQuantity}, jest ${newReceived}`);
+        
+        return {
+          ...item,
+          received: newReceived,
+          fulfilledPercentage: Math.min(fulfilledPercentage, 100) // Nie więcej niż 100%
+        };
+      }
+      return item;
+    });
+
+    // Jeśli nie znaleziono po ID, spróbuj znaleźć element po nazwie produktu
+    if (!itemWasUpdated) {
+      try {
+        const { getInventoryItemById } = await import('./inventoryService');
+        const inventoryItem = await getInventoryItemById(itemId);
+        
+        if (inventoryItem && inventoryItem.name) {
+          const productName = inventoryItem.name;
+          console.log(`Szukanie dopasowania produktu po nazwie: ${productName}`);
+          
+          // Utwórz nową kopię tablicy items do aktualizacji
+          let foundIndex = -1;
+          
+          // Znajdź produkt o pasującej nazwie
+          for (let i = 0; i < updatedItems.length; i++) {
+            if (updatedItems[i].name && 
+                updatedItems[i].name.toLowerCase().includes(productName.toLowerCase())) {
+              foundIndex = i;
+              break;
+            }
+          }
+          
+          if (foundIndex >= 0) {
+            // Aktualizuj pole received
+            const currentReceived = parseFloat(updatedItems[foundIndex].received || 0);
+            const newReceived = currentReceived + parseFloat(receivedQuantity);
+            
+            // Oblicz procent realizacji zamówienia
+            const ordered = parseFloat(updatedItems[foundIndex].quantity) || 0;
+            const fulfilledPercentage = ordered > 0 ? (newReceived / ordered) * 100 : 0;
+            
+            // Zaktualizuj element
+            updatedItems[foundIndex] = {
+              ...updatedItems[foundIndex],
+              received: newReceived,
+              fulfilledPercentage: Math.min(fulfilledPercentage, 100),
+              // Dodaj również powiązanie z ID produktu magazynowego dla przyszłych aktualizacji
+              inventoryItemId: itemId
+            };
+            
+            itemWasUpdated = true;
+            console.log(`Zaktualizowano element po nazwie produktu: ${productName}`);
+          }
+        }
+      } catch (error) {
+        console.error('Błąd podczas próby dopasowania produktu po nazwie:', error);
+      }
+    }
+
+    // Jeśli dalej nie znaleziono, spróbuj dopasować po kodzie SKU
+    if (!itemWasUpdated && poData.items.length > 0) {
+      try {
+        // Pobierz informacje o produkcie z magazynu
+        const { getInventoryItemById } = await import('./inventoryService');
+        const inventoryItem = await getInventoryItemById(itemId);
+        
+        if (inventoryItem && inventoryItem.sku) {
+          // Spróbuj znaleźć produkt o tym samym SKU
+          let foundIndex = -1;
+          
+          for (let i = 0; i < updatedItems.length; i++) {
+            if (updatedItems[i].sku && inventoryItem.sku === updatedItems[i].sku) {
+              foundIndex = i;
+              break;
+            }
+          }
+          
+          if (foundIndex >= 0) {
+            // Aktualizuj pole received
+            const currentReceived = parseFloat(updatedItems[foundIndex].received || 0);
+            const newReceived = currentReceived + parseFloat(receivedQuantity);
+            
+            // Oblicz procent realizacji zamówienia
+            const ordered = parseFloat(updatedItems[foundIndex].quantity) || 0;
+            const fulfilledPercentage = ordered > 0 ? (newReceived / ordered) * 100 : 0;
+            
+            // Zaktualizuj element
+            updatedItems[foundIndex] = {
+              ...updatedItems[foundIndex],
+              received: newReceived,
+              fulfilledPercentage: Math.min(fulfilledPercentage, 100),
+              inventoryItemId: itemId
+            };
+            
+            itemWasUpdated = true;
+            console.log(`Zaktualizowano element po kodzie SKU: ${inventoryItem.sku}`);
+          }
+        }
+      } catch (error) {
+        console.error('Błąd podczas próby dopasowania produktu po SKU:', error);
+      }
+    }
+
+    // Ostatnia próba - aktualizuj pierwszy element, jeśli jest tylko jeden
+    if (!itemWasUpdated && poData.items.length === 1) {
+      const singleItem = poData.items[0];
+      const currentReceived = parseFloat(singleItem.received || 0);
+      const newReceived = currentReceived + parseFloat(receivedQuantity);
+      
+      // Oblicz procent realizacji zamówienia
+      const ordered = parseFloat(singleItem.quantity) || 0;
+      const fulfilledPercentage = ordered > 0 ? (newReceived / ordered) * 100 : 0;
+      
+      updatedItems[0] = {
+        ...singleItem,
+        received: newReceived,
+        fulfilledPercentage: Math.min(fulfilledPercentage, 100),
+        inventoryItemId: itemId // Zapisz powiązanie
+      };
+      
+      itemWasUpdated = true;
+      console.log(`Zaktualizowano jedyny element w zamówieniu: ${singleItem.name || 'bez nazwy'}`);
+    }
+
+    if (!itemWasUpdated) {
+      console.warn(`Nie znaleziono produktu o ID ${itemId} w zamówieniu zakupowym ${purchaseOrderId}`);
+      // Zwracamy sukces=false zamiast rzucać wyjątek, aby nie przerywać procesu
+      return { 
+        success: false, 
+        message: 'Nie znaleziono produktu w zamówieniu',
+        id: purchaseOrderId
+      };
+    }
+
+    // Zaktualizuj status zamówienia na podstawie stanu odbioru wszystkich przedmiotów
+    let newStatus = poData.status;
+    const allItemsFulfilled = updatedItems.every(item => {
+      const received = parseFloat(item.received || 0);
+      const quantity = parseFloat(item.quantity || 0);
+      return received >= quantity;
+    });
+
+    const anyItemFulfilled = updatedItems.some(item => {
+      const received = parseFloat(item.received || 0);
+      return received > 0;
+    });
+
+    // Aktualizuj status na podstawie stanu odbioru
+    const nonUpdateableStatuses = ['cancelled', 'completed'];
+    
+    if (!nonUpdateableStatuses.includes(poData.status)) {
+      if (allItemsFulfilled) {
+        newStatus = 'delivered';
+      } else if (anyItemFulfilled) {
+        newStatus = 'partial';
+      }
+    }
+
+    // Dodaj historię zmian statusu, jeśli status się zmienia
+    let statusHistory = poData.statusHistory || [];
+    if (newStatus !== poData.status) {
+      statusHistory = [
+        ...statusHistory,
+        {
+          oldStatus: poData.status || 'Nieznany',
+          newStatus: newStatus,
+          changedBy: userId,
+          changedAt: new Date().toISOString()
+        }
+      ];
+    }
+
+    // Przygotuj dane do aktualizacji
+    const updateData = {
+      items: updatedItems,
+      status: newStatus,
+      statusHistory: statusHistory,
+      updatedAt: serverTimestamp(),
+      updatedBy: userId
+    };
+
+    // Aktualizuj dokument w bazie danych
+    await updateDoc(poRef, updateData);
+
+    // Zwróć zaktualizowane dane
+    return {
+      id: purchaseOrderId,
+      success: true,
+      items: updatedItems,
+      status: newStatus
+    };
+  } catch (error) {
+    console.error('Błąd podczas aktualizacji ilości odebranych produktów:', error);
+    throw error;
+  }
 }; 

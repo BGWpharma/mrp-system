@@ -40,68 +40,77 @@ const TaskDetails = ({ task }) => {
     fetchWorkstation();
   }, [task?.workstationId, showError]);
   
+  // Wyświetl debugowe informacje o purchaseOrders
+  useEffect(() => {
+    if (task) {
+      console.log('Task Details - purchaseOrders:', task.purchaseOrders);
+    }
+  }, [task]);
+  
   return (
     <>
-      {hasRelatedOrders && (
-        <Grid item xs={12}>
-          <Paper sx={{ p: 2, mb: 2 }}>
-            <Typography variant="h6" sx={{ mb: 2 }}>
-              Powiązane zamówienia
+      <Grid item xs={12}>
+        <Paper sx={{ p: 2, mb: 2 }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            Powiązane zamówienia
+          </Typography>
+          
+          {hasCustomerOrder && (
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'medium' }}>
+                Zamówienie klienta
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  component={RouterLink}
+                  to={`/orders/${task.orderId}`}
+                  startIcon={<ShoppingCartIcon />}
+                  sx={{ mr: 1 }}
+                >
+                  {task.orderNumber || task.orderId}
+                </Button>
+                {task.customer && (
+                  <Chip 
+                    icon={<PersonIcon />} 
+                    label={task.customer.name || 'Klient'}
+                    size="small"
+                    variant="outlined"
+                  />
+                )}
+              </Box>
+            </Box>
+          )}
+          
+          <Box>
+            <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'medium' }}>
+              Zamówienia komponentów
             </Typography>
-            
-            {hasCustomerOrder && (
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'medium' }}>
-                  Zamówienie klienta
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            {hasPurchaseOrders ? (
+              <Box sx={{ display: 'flex', flexWrap: 'wrap' }}>
+                {task.purchaseOrders.map((po, index) => (
                   <Button
+                    key={index}
                     variant="outlined"
                     size="small"
                     component={RouterLink}
-                    to={`/orders/${task.orderId}`}
-                    startIcon={<ShoppingCartIcon />}
-                    sx={{ mr: 1 }}
+                    to={`/purchase-orders/${po.id}`}
+                    startIcon={<ShoppingBasketIcon />}
+                    sx={{ mr: 1, mb: 1 }}
                   >
-                    {task.orderNumber || task.orderId}
+                    {po.number || po.poNumber || po.id}
                   </Button>
-                  {task.customer && (
-                    <Chip 
-                      icon={<PersonIcon />} 
-                      label={task.customer.name || 'Klient'}
-                      size="small"
-                      variant="outlined"
-                    />
-                  )}
-                </Box>
+                ))}
               </Box>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                Brak powiązanych zamówień zakupowych
+              </Typography>
             )}
-            
-            {hasPurchaseOrders && (
-              <Box>
-                <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'medium' }}>
-                  Zamówienia komponentów
-                </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap' }}>
-                  {task.purchaseOrders.map(po => (
-                    <Button
-                      key={po.id}
-                      variant="outlined"
-                      size="small"
-                      component={RouterLink}
-                      to={`/purchase-orders/${po.id}`}
-                      startIcon={<ShoppingBasketIcon />}
-                      sx={{ mr: 1, mb: 1 }}
-                    >
-                      {po.poNumber || po.id}
-                    </Button>
-                  ))}
-                </Box>
-              </Box>
-            )}
-          </Paper>
-        </Grid>
-      )}
+          </Box>
+        </Paper>
+      </Grid>
       
       {task?.scheduledDate && (
         <Grid item xs={12}>

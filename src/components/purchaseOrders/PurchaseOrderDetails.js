@@ -35,6 +35,7 @@ import { useReactToPrint } from 'react-to-print';
 import { db } from '../../services/firebase/config';
 import { updateDoc, doc, getDoc } from 'firebase/firestore';
 import { formatCurrency } from '../../utils/formatUtils';
+import { getUsersDisplayNames } from '../../services/userService';
 
 const PurchaseOrderDetails = ({ orderId }) => {
   const navigate = useNavigate();
@@ -67,7 +68,8 @@ const PurchaseOrderDetails = ({ orderId }) => {
         if (data.statusHistory && data.statusHistory.length > 0) {
           const userIds = data.statusHistory.map(change => change.changedBy).filter(id => id);
           const uniqueUserIds = [...new Set(userIds)];
-          await fetchUserNames(uniqueUserIds);
+          const names = await getUsersDisplayNames(uniqueUserIds);
+          setUserNames(names);
         }
       } catch (error) {
         showError('Błąd podczas pobierania danych zamówienia: ' + error.message);
@@ -79,30 +81,19 @@ const PurchaseOrderDetails = ({ orderId }) => {
     if (orderId) {
       fetchPurchaseOrder();
     }
-  }, [orderId, showError]);
-  
-  // Funkcja pobierająca dane użytkowników
-  const fetchUserNames = async (userIds) => {
-    const names = {};
     
-    for (const userId of userIds) {
-      try {
-        const userDoc = await getDoc(doc(db, 'users', userId));
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          // Wybierz najlepszą dostępną informację o użytkowniku w kolejności: displayName, email, id
-          names[userId] = userData.displayName || userData.email || userId;
-        } else {
-          names[userId] = userId; // Fallback na ID, jeśli nie znaleziono użytkownika
-        }
-      } catch (error) {
-        console.error("Błąd podczas pobierania danych użytkownika:", error);
-        names[userId] = userId; // Fallback na ID w przypadku błędu
-      }
+    // Sprawdź, czy należy odświeżyć dane po powrocie z innej strony
+    const refreshId = localStorage.getItem('refreshPurchaseOrder');
+    if (refreshId === orderId) {
+      // Usuń flagę, aby nie odświeżać wielokrotnie
+      localStorage.removeItem('refreshPurchaseOrder');
+      // Odśwież dane po krótkim opóźnieniu, aby aplikacja zdążyła się załadować
+      setTimeout(() => {
+        fetchPurchaseOrder();
+        showSuccess('Dane zamówienia zostały zaktualizowane po przyjęciu towaru');
+      }, 500);
     }
-    
-    setUserNames(names);
-  };
+  }, [orderId, showError]);
   
   // Funkcja zwracająca nazwę użytkownika zamiast ID
   const getUserName = (userId) => {
@@ -162,7 +153,11 @@ const PurchaseOrderDetails = ({ orderId }) => {
         const missingUserIds = uniqueUserIds.filter(id => !userNames[id]);
         
         if (missingUserIds.length > 0) {
-          await fetchUserNames(missingUserIds);
+          const newNames = await getUsersDisplayNames(missingUserIds);
+          setUserNames(prevNames => ({
+            ...prevNames,
+            ...newNames
+          }));
         }
       }
       
@@ -193,7 +188,37 @@ const PurchaseOrderDetails = ({ orderId }) => {
       : parseFloat(itemToReceive.unitPrice || 0);
     
     // Przekieruj do strony przyjęcia towaru z parametrami
-    navigate(`/inventory/${itemToReceive.inventoryItemId}/receive?poNumber=${purchaseOrder.number}&quantity=${itemToReceive.quantity}&unitPrice=${unitPrice}`);
+    const queryParams = new URLSearchParams();
+    queryParams.append('poNumber', purchaseOrder.number);
+    queryParams.append('orderId', orderId);
+    queryParams.append('quantity', itemToReceive.quantity);
+    queryParams.append('unitPrice', unitPrice);
+    queryParams.append('reason', 'purchase');
+    queryParams.append('source', 'purchase'); 
+    queryParams.append('sourceId', orderId);
+    
+    // Dodaj dodatkowe informacje, które pomogą zidentyfikować pozycję w zamówieniu
+    if (itemToReceive.id) {
+      queryParams.append('itemPOId', itemToReceive.id);
+    } else if (itemToReceive.itemId) {
+      queryParams.append('itemPOId', itemToReceive.itemId);
+    }
+    
+    // Dodaj nazwę produktu dla łatwiejszego dopasowania w zamówieniu
+    if (itemToReceive.name) {
+      queryParams.append('itemName', itemToReceive.name);
+    }
+    
+    // Dodaj referencję do numeru zamówienia
+    queryParams.append('reference', purchaseOrder.number);
+    
+    // Dodaj parametr returnTo, aby strona wiedziała, gdzie wrócić po wykonaniu operacji
+    queryParams.append('returnTo', `/purchase-orders/${orderId}`);
+    
+    // Ustaw flagę, która spowoduje odświeżenie danych po powrocie
+    localStorage.setItem('refreshPurchaseOrder', orderId);
+    
+    navigate(`/inventory/${itemToReceive.inventoryItemId}/receive?${queryParams.toString()}`);
     setReceiveDialogOpen(false);
   };
   
@@ -293,7 +318,16 @@ const PurchaseOrderDetails = ({ orderId }) => {
   };
   
   // Sprawdza, czy zamówienie jest w stanie, w którym można przyjąć towary do magazynu
-  const canReceiveItems = purchaseOrder.status === PURCHASE_ORDER_STATUSES.DELIVERED;
+  const canReceiveItems = purchaseOrder.status === PURCHASE_ORDER_STATUSES.ORDERED || 
+                          purchaseOrder.status === 'ordered' || 
+                          purchaseOrder.status === 'partial' || 
+                          purchaseOrder.status === PURCHASE_ORDER_STATUSES.PARTIAL ||
+                          purchaseOrder.status === PURCHASE_ORDER_STATUSES.CONFIRMED || 
+                          purchaseOrder.status === 'confirmed' ||
+                          purchaseOrder.status === PURCHASE_ORDER_STATUSES.SHIPPED || 
+                          purchaseOrder.status === 'shipped' ||
+                          purchaseOrder.status === PURCHASE_ORDER_STATUSES.DELIVERED || 
+                          purchaseOrder.status === 'delivered';
   
   return (
     <Box>
@@ -475,28 +509,49 @@ const PurchaseOrderDetails = ({ orderId }) => {
               </TableRow>
             </TableHead>
             <TableBody>
-                {purchaseOrder.items?.map((item, index) => (
-                  <TableRow key={index}>
-                  <TableCell>{item.name}</TableCell>
-                  <TableCell align="right">{item.quantity}</TableCell>
-                  <TableCell>{item.unit}</TableCell>
-                    <TableCell align="right">{formatCurrency(item.unitPrice, purchaseOrder.currency)}</TableCell>
-                    <TableCell align="right">{formatCurrency(item.totalPrice, purchaseOrder.currency)}</TableCell>
-                    <TableCell align="right">{item.received || 0}</TableCell>
-                    <TableCell align="right">
-                      {canReceiveItems && item.inventoryItemId && (
-                      <Button
-                        size="small"
-                          variant="outlined"
-                        startIcon={<InventoryIcon />}
-                        onClick={() => handleReceiveClick(item)}
-                      >
-                        Przyjmij
-                      </Button>
-                      )}
-                    </TableCell>
-                </TableRow>
-              ))}
+                {purchaseOrder.items?.map((item, index) => {
+                  // Oblicz procent realizacji
+                  const received = parseFloat(item.received || 0);
+                  const quantity = parseFloat(item.quantity || 0);
+                  const fulfilledPercentage = quantity > 0 ? (received / quantity) * 100 : 0;
+                  
+                  // Określ kolor tła dla wiersza
+                  let rowColor = 'inherit'; // Domyślny kolor
+                  if (fulfilledPercentage >= 100) {
+                    rowColor = 'rgba(76, 175, 80, 0.1)'; // Lekko zielony dla w pełni odebranych
+                  } else if (fulfilledPercentage > 0) {
+                    rowColor = 'rgba(255, 152, 0, 0.1)'; // Lekko pomarańczowy dla częściowo odebranych
+                  }
+                  
+                  return (
+                    <TableRow 
+                      key={index}
+                      sx={{ backgroundColor: rowColor }}
+                    >
+                      <TableCell>{item.name}</TableCell>
+                      <TableCell align="right">{item.quantity}</TableCell>
+                      <TableCell>{item.unit}</TableCell>
+                      <TableCell align="right">{formatCurrency(item.unitPrice, purchaseOrder.currency)}</TableCell>
+                      <TableCell align="right">{formatCurrency(item.totalPrice, purchaseOrder.currency)}</TableCell>
+                      <TableCell align="right">
+                        {received} {received > 0 && `(${fulfilledPercentage.toFixed(0)}%)`}
+                      </TableCell>
+                      <TableCell align="right">
+                        {canReceiveItems && item.inventoryItemId && 
+                         (parseFloat(item.received || 0) < parseFloat(item.quantity || 0)) && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<InventoryIcon />}
+                            onClick={() => handleReceiveClick(item)}
+                          >
+                            Przyjmij
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>
@@ -526,7 +581,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                 
                 {purchaseOrder.additionalCostsItems?.length > 0 && purchaseOrder.additionalCostsItems.map((cost, index) => (
                   <Typography key={index} variant="body1" gutterBottom>
-                    <strong>{cost.name}:</strong> {formatCurrency(cost.value, purchaseOrder.currency)}
+                    <strong>{cost.description || `Dodatkowy koszt ${index+1}`}:</strong> {formatCurrency(typeof cost.value === 'number' ? cost.value : parseFloat(cost.value) || 0, purchaseOrder.currency)}
                   </Typography>
                 ))}
                 

@@ -403,32 +403,119 @@ const CreateFromOrderPage = () => {
           }
         }
         
+        // Oblicz planowany czas produkcji na podstawie danych z receptury
+        let productionTimePerUnit = 0;
+        let estimatedDuration = 0;
+        
+        if (recipe && recipe.productionTimePerUnit) {
+          productionTimePerUnit = parseFloat(recipe.productionTimePerUnit);
+          // Całkowity czas produkcji w minutach
+          const totalProductionTimeMinutes = productionTimePerUnit * item.quantity;
+          // Konwersja na godziny
+          estimatedDuration = totalProductionTimeMinutes / 60;
+        }
+        
+        // Określ cenę jednostkową i wartość całkowitą
+        const itemPrice = item.price || 0;
+        const totalValue = (item.price || 0) * item.quantity;
+        
+        // Uzyskaj datę początku produkcji z wyboru użytkownika lub wartości domyślnej
+        const productDate = productDates[item.id] 
+          ? new Date(productDates[item.id]) 
+          : selectedOrder.orderDate 
+            ? new Date(selectedOrder.orderDate) 
+            : new Date();
+            
+        // Domyślnie ustaw godzinę 8:00 rano, jeśli nie została określona przez użytkownika
+        if (!productDates[item.id]) {
+          productDate.setHours(8, 0, 0, 0);
+        }
+        
+        // Formatuj datę rozpoczęcia z aktualną godziną
+        const formattedStartDate = productDate.toISOString();
+        
+        // Oblicz datę zakończenia na podstawie czasu produkcji
+        let endDate = new Date(productDate);
+        
+        if (estimatedDuration > 0) {
+          // Dodaj odpowiednią liczbę godzin do daty rozpoczęcia
+          endDate.setHours(endDate.getHours() + Math.ceil(estimatedDuration));
+        } else {
+          // Jeśli nie ma czasu produkcji, domyślnie zadanie trwa 1 dzień
+          endDate.setDate(endDate.getDate() + 1);
+        }
+        
+        // Formatuj datę zakończenia z godziną
+        const formattedEndDate = endDate.toISOString();
+        
+        // Sprawdź, czy dla tego produktu wybrano stanowisko produkcyjne
+        const workstationId = selectedWorkstations[item.id] || null;
+        
         const taskData = {
-          ...taskForm,
+          name: taskForm.name || `Produkcja ${item.name}`,
+          status: taskForm.status || 'Zaplanowane',
+          priority: taskForm.priority || 'Normalny',
+          scheduledDate: formattedStartDate,
+          endDate: formattedEndDate,
           productName: item.name,
           quantity: item.quantity,
           unit: normalizedUnit,
-          customer: selectedOrder.customer,
-          orderId: selectedOrder.id,
-          orderNumber: selectedOrder.orderNumber || selectedOrder.id.substring(0, 8),
           materials: materials,
-          costs: costs,
-          ...recipeData
+          description: taskForm.description || `Zadanie utworzone z zamówienia klienta #${selectedOrder.orderNumber || selectedOrder.id}`,
+          createdBy: currentUser.uid,
+          createdAt: new Date().toISOString(),
+          recipe: recipeData,
+          costs: {
+            ...costs,
+            // Dodaj koszt z zamówienia klienta jako całkowity koszt
+            totalCost: itemPrice * item.quantity || totalValue || costs?.totalCost || 0
+          },
+          itemPrice: itemPrice,
+          totalValue: totalValue,
+          orderId: selectedOrder.id, // Dodanie orderId do zadania
+          orderNumber: selectedOrder.orderNumber || selectedOrder.id,
+          customer: selectedOrder.customer || null,
+          purchaseOrders: selectedOrder.linkedPurchaseOrders && selectedOrder.linkedPurchaseOrders.length > 0 
+            ? selectedOrder.linkedPurchaseOrders.map(po => ({
+                id: po.id,
+                number: po.number || po.poNumber,
+                poNumber: po.poNumber || po.number
+              }))
+            : [], // Zapewnienie, że purchaseOrders jest zawsze tablicą, nawet jeśli puste
+          isEssential: true,
+          reservationMethod: taskForm.reservationMethod || 'fifo',
+          productionTimePerUnit: productionTimePerUnit,
+          estimatedDuration: estimatedDuration,
+          autoReserveMaterials: taskForm.autoReserveMaterials, // Przekazanie informacji o automatycznej rezerwacji
+          workstationId: workstationId // ID stanowiska produkcyjnego
         };
         
         // Utwórz zadanie produkcyjne
         // Uwaga: funkcja createTask automatycznie rezerwuje materiały dla zadania
         const newTask = await createTask(taskData, currentUser.uid, taskForm.autoReserveMaterials);
         
-        // Dodaj zadanie do zamówienia
-        await addProductionTaskToOrder(selectedOrder.id, newTask);
+        if (newTask) {
+          // Dodaj zadanie do zamówienia
+          await addProductionTaskToOrder(selectedOrder.id, newTask);
+          
+          // Dodaj zadanie do listy utworzonych zadań
+          setTasksCreated(prev => [...prev, newTask]);
+        }
       }
       
-      showSuccess('Zadania produkcyjne zostały utworzone i powiązane z zamówieniem');
-      navigate('/production');
+      // Pokaż sukces, jeśli utworzono przynajmniej jedno zadanie
+      if (tasksCreated.length > 0) {
+        showSuccess(`Utworzono ${tasksCreated.length} zadań produkcyjnych`);
+        
+        // Dodaj nowo utworzone zadania do listy istniejących zadań
+        setExistingTasks(prev => [...prev, ...tasksCreated]);
+        
+        // Odśwież szczegóły zamówienia, aby pokazać nowo utworzone zadania
+        fetchOrderDetails(selectedOrder.id);
+      }
     } catch (error) {
-      showError('Błąd podczas tworzenia zadania produkcyjnego: ' + error.message);
-      console.error('Error creating task:', error);
+      console.error('Błąd podczas tworzenia zadań produkcyjnych:', error);
+      showError('Błąd podczas tworzenia zadań produkcyjnych: ' + error.message);
     } finally {
       setCreatingTasks(false);
     }
@@ -717,7 +804,13 @@ const CreateFromOrderPage = () => {
           orderId: selectedOrder.id, // Dodanie orderId do zadania
           orderNumber: selectedOrder.orderNumber || selectedOrder.id,
           customer: selectedOrder.customer || null,
-          purchaseOrders: selectedOrder.purchaseOrders || [], // Przypisanie powiązanych zamówień zakupu
+          purchaseOrders: selectedOrder.linkedPurchaseOrders && selectedOrder.linkedPurchaseOrders.length > 0 
+            ? selectedOrder.linkedPurchaseOrders.map(po => ({
+                id: po.id,
+                number: po.number || po.poNumber,
+                poNumber: po.poNumber || po.number
+              }))
+            : [], // Zapewnienie, że purchaseOrders jest zawsze tablicą, nawet jeśli puste
           isEssential: true,
           reservationMethod: taskForm.reservationMethod || 'fifo',
           productionTimePerUnit: productionTimePerUnit,
@@ -1285,8 +1378,9 @@ const CreateFromOrderPage = () => {
                   >
                     <MenuItem value="">Wybierz zamówienie</MenuItem>
                     {orders.map(order => {
-                      // Zapewnienie, że totalValue jest liczbą
-                      const totalValue = parseFloat(order.totalValue) || 0;
+                      // Zapewnienie, że totalValue jest liczbą - najpierw próbujemy użyć calculatedTotalValue, 
+                      // potem totalValue, a na końcu zwykłej wartości
+                      const totalValue = parseFloat(order.calculatedTotalValue || order.totalValue || order.value || 0);
                       
                       return (
                       <MenuItem key={order.id} value={order.id}>

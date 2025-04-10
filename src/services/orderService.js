@@ -501,44 +501,30 @@ export const getOrdersStats = async (forDashboard = false) => {
       const shippingCost = parseFloat(order.shippingCost) || 0;
       fullOrderValue += shippingCost;
       
-      // Wartość zamówień zakupu
+      // Dodaj wartość powiązanych zamówień zakupu (PO)
       if (order.linkedPurchaseOrders && order.linkedPurchaseOrders.length > 0) {
-        // Dla każdego powiązanego zamówienia zakupu
         for (let i = 0; i < order.linkedPurchaseOrders.length; i++) {
           const po = order.linkedPurchaseOrders[i];
-          
           try {
-            // Sprawdź, czy po jest faktycznie obiektem
-            if (!po || typeof po !== 'object') {
-              console.warn('Nieprawidłowy obiekt zamówienia zakupu:', po);
-              continue;
-            }
-            
-            // Jeśli nie ma id, nie możemy zaktualizować danych
-            if (!po.id) {
-              console.warn('Zamówienie zakupu bez ID:', po);
-              continue;
-            }
-            
-            // Pobierz aktualne dane zamówienia zakupu aby mieć najświeższe wartości
-            // Ale tylko wtedy, gdy nie jest to szybkie ładowanie dla dashboardu
+            // Dla pełnych danych analitycznych, pobierz świeże dane PO
+            // Dla dashboardu używamy istniejących danych dla szybkości
             if (!forDashboard) {
               try {
                 const { getPurchaseOrderById } = await import('./purchaseOrderService');
                 const freshPoData = await getPurchaseOrderById(po.id);
-                
                 if (freshPoData) {
-                  console.log(`Użycie świeżych danych dla PO ${po.orderNumber || po.id}`);
-                  // Dodaj wartość brutto zamówienia zakupu
+                  console.log(`Pobrano świeże dane PO: ${freshPoData.number}`);
+                  
+                  // Jeśli zamówienie ma wartość brutto, używamy jej
                   if (freshPoData.totalGross !== undefined && freshPoData.totalGross !== null) {
                     fullOrderValue += parseFloat(freshPoData.totalGross) || 0;
                   } else {
-                    // Jeśli nie ma wartości brutto, oblicz ją
-                    let poValue = parseFloat(freshPoData.totalValue || 0);
+                    // W przeciwnym razie oblicz wartość brutto
+                    const poProductsValue = parseFloat(freshPoData.totalValue || freshPoData.value || 0);
                     const vatRate = parseFloat(freshPoData.vatRate || 23);
-                    const vatValue = (poValue * vatRate) / 100;
+                    const vatValue = (poProductsValue * vatRate) / 100;
                     
-                    // Dodatkowe koszty
+                    // Dodatkowe koszty - sprawdź najpierw nowy format, a potem stary
                     let additionalCosts = 0;
                     if (freshPoData.additionalCostsItems && Array.isArray(freshPoData.additionalCostsItems)) {
                       additionalCosts = freshPoData.additionalCostsItems.reduce((sum, cost) => {
@@ -548,16 +534,32 @@ export const getOrdersStats = async (forDashboard = false) => {
                       additionalCosts = parseFloat(freshPoData.additionalCosts) || 0;
                     }
                     
-                    fullOrderValue += poValue + vatValue + additionalCosts;
+                    fullOrderValue += poProductsValue + vatValue + additionalCosts;
                   }
-                } else {
-                  // Jeśli nie udało się pobrać świeżych danych, użyj danych z obiektu po
-                  console.warn(`Brak świeżych danych dla PO ${po.id}, używam danych z obiektu`);
-                  fullOrderValue = calculateFromPoData(po, fullOrderValue);
                 }
               } catch (error) {
                 console.warn(`Nie można pobrać świeżych danych PO ${po.id}: ${error.message}`);
-                fullOrderValue = calculateFromPoData(po, fullOrderValue);
+                // Jeśli nie możemy pobrać świeżych danych, używamy istniejących
+                if (po.totalGross !== undefined && po.totalGross !== null) {
+                  fullOrderValue += parseFloat(po.totalGross) || 0;
+                } else {
+                  // Jeśli nie ma wartości brutto, oblicz ją
+                  const poProductsValue = parseFloat(po.totalValue || po.value || 0);
+                  const vatRate = parseFloat(po.vatRate || 23);
+                  const vatValue = (poProductsValue * vatRate) / 100;
+                  
+                  // Dodatkowe koszty - sprawdź najpierw nowy format, a potem stary
+                  let additionalCosts = 0;
+                  if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
+                    additionalCosts = po.additionalCostsItems.reduce((sum, cost) => {
+                      return sum + (parseFloat(cost.value) || 0);
+                    }, 0);
+                  } else if (po.additionalCosts) {
+                    additionalCosts = parseFloat(po.additionalCosts) || 0;
+                  }
+                  
+                  fullOrderValue += poProductsValue + vatValue + additionalCosts;
+                }
               }
             } else {
               // Dla dashboardu używamy istniejących danych - znacznie szybciej
@@ -565,11 +567,11 @@ export const getOrdersStats = async (forDashboard = false) => {
                 fullOrderValue += parseFloat(po.totalGross) || 0;
               } else {
                 // Jeśli nie ma wartości brutto, oblicz ją
-                let poValue = parseFloat(po.totalValue || po.value || 0);
+                const poProductsValue = parseFloat(po.totalValue || po.value || 0);
                 const vatRate = parseFloat(po.vatRate || 23);
-                const vatValue = (poValue * vatRate) / 100;
+                const vatValue = (poProductsValue * vatRate) / 100;
                 
-                // Dodatkowe koszty
+                // Dodatkowe koszty - sprawdź najpierw nowy format, a potem stary
                 let additionalCosts = 0;
                 if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
                   additionalCosts = po.additionalCostsItems.reduce((sum, cost) => {
@@ -579,7 +581,7 @@ export const getOrdersStats = async (forDashboard = false) => {
                   additionalCosts = parseFloat(po.additionalCosts) || 0;
                 }
                 
-                fullOrderValue += poValue + vatValue + additionalCosts;
+                fullOrderValue += poProductsValue + vatValue + additionalCosts;
               }
             }
           } catch (error) {
@@ -590,71 +592,53 @@ export const getOrdersStats = async (forDashboard = false) => {
       
       // Aktualizuj wartość zamówienia
       order.calculatedTotalValue = fullOrderValue;
-    }
-    
-    // Pomocnicza funkcja do używania istniejących danych PO
-    function calculateFromPoData(po, totalValue) {
-      if (po.totalGross !== undefined && po.totalGross !== null) {
-        totalValue += parseFloat(po.totalGross) || 0;
-      } else {
-        let poValue = parseFloat(po.totalValue || po.value || 0);
-        const vatRate = parseFloat(po.vatRate || 23);
-        const vatValue = (poValue * vatRate) / 100;
-        
-        // Dodatkowe koszty
-        let additionalCosts = 0;
-        if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
-          additionalCosts = po.additionalCostsItems.reduce((sum, cost) => {
-            return sum + (parseFloat(cost.value) || 0);
-          }, 0);
-        } else if (po.additionalCosts) {
-          additionalCosts = parseFloat(po.additionalCosts) || 0;
+      
+      // Aktualizuj statystyki
+      if (order.status) {
+        if (stats.byStatus[order.status] !== undefined) {
+          stats.byStatus[order.status]++;
         }
-        
-        totalValue += poValue + vatValue + additionalCosts;
-      }
-      return totalValue;
-    }
-    
-    // Najnowsze zamówienia (max 5)
-    stats.recentOrders = allOrders.slice(0, 5).map(order => ({
-      id: order.id,
-      orderNumber: order.orderNumber,
-      customer: order.customer.name,
-      date: order.orderDate,
-      value: order.calculatedTotalValue || order.totalValue || 0,
-      status: order.status
-    }));
-    
-    // Przetwarzanie statystyk
-    allOrders.forEach(order => {
-      // Suma wartości wszystkich zamówień
-      stats.totalValue += order.calculatedTotalValue || order.totalValue || 0;
-      
-      // Statystyki według statusu
-      if (stats.byStatus[order.status] !== undefined) {
-        stats.byStatus[order.status]++;
       }
       
-      // Statystyki według miesiąca
-      const orderDate = order.orderDate instanceof Timestamp 
-        ? order.orderDate.toDate() 
-        : new Date(order.orderDate);
+      // Aktualizacja całkowitej wartości
+      stats.totalValue += fullOrderValue;
       
-      const monthKey = `${orderDate.getFullYear()}-${(orderDate.getMonth() + 1).toString().padStart(2, '0')}`;
+      // Aktualizacja statystyk miesięcznych
+      const date = order.orderDate ? new Date(order.orderDate) : new Date();
+      const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
       
       if (!stats.byMonth[monthKey]) {
         stats.byMonth[monthKey] = {
-          total: 0,
-          value: 0
+          count: 0,
+          value: 0,
+          month: date.getMonth() + 1,
+          year: date.getFullYear()
         };
       }
       
-      stats.byMonth[monthKey].total++;
-      stats.byMonth[monthKey].value += order.calculatedTotalValue || order.totalValue || 0;
+      stats.byMonth[monthKey].count++;
+      stats.byMonth[monthKey].value += fullOrderValue;
+    }
+    
+    // Sortuj zamówienia według daty (najnowsze pierwsze)
+    allOrders.sort((a, b) => {
+      const dateA = a.orderDate ? new Date(a.orderDate) : new Date(0);
+      const dateB = b.orderDate ? new Date(b.orderDate) : new Date(0);
+      return dateB - dateA;
     });
     
-    console.log("Statystyki zamówień z pełnymi wartościami:", stats);
+    // Listy ostatnich zamówień
+    stats.recentOrders = allOrders.slice(0, 10).map(order => ({
+      id: order.id,
+      orderNumber: order.orderNumber,
+      date: order.orderDate,
+      status: order.status,
+      value: order.value || 0,
+      calculatedTotalValue: order.calculatedTotalValue || order.totalValue || 0,
+      totalValue: order.calculatedTotalValue || order.totalValue || 0
+    }));
+    
+    console.log('Statystyki zamówień zostały obliczone', stats);
     return stats;
   } catch (error) {
     console.error('Błąd podczas pobierania statystyk zamówień:', error);

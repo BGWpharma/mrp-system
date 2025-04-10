@@ -12,6 +12,7 @@ const ReceiveInventoryPage = () => {
     // Pobierz parametry z URL
     const queryParams = new URLSearchParams(location.search);
     const poNumber = queryParams.get('poNumber');
+    const orderId = queryParams.get('orderId');
     const quantity = queryParams.get('quantity');
     const unitPrice = queryParams.get('unitPrice');
     const reason = queryParams.get('reason');
@@ -19,22 +20,27 @@ const ReceiveInventoryPage = () => {
     const source = queryParams.get('source');
     const sourceId = queryParams.get('sourceId');
     const notes = queryParams.get('notes');
+    const itemPOId = queryParams.get('itemPOId');
+    const returnTo = queryParams.get('returnTo');
     
     // Pobierz dodatkowe parametry dotyczące MO i CO
     const moNumber = queryParams.get('moNumber');
     const orderNumber = queryParams.get('orderNumber');
-    const orderId = queryParams.get('orderId');
     
-    if (poNumber || quantity || unitPrice) {
+    if (poNumber || quantity || unitPrice || orderId) {
       // Przygotuj obiekt z danymi początkowymi
       const data = {
         reference: poNumber || '',
+        orderNumber: poNumber || '',
         quantity: quantity ? String(quantity) : '',
         unitPrice: unitPrice ? Number(unitPrice) : '',
         reason: reason || 'purchase', // Używamy reason z URL lub domyślnie 'purchase'
         lotNumber: lotNumber || '',
-        source: source || '',
-        sourceId: sourceId || ''
+        source: source || 'purchase',
+        sourceId: sourceId || '',
+        orderId: orderId || '',
+        itemPOId: itemPOId || '',
+        returnTo: returnTo || ''
       };
       
       // Dodaj informacje o MO i CO, jeśli są dostępne
@@ -44,10 +50,6 @@ const ReceiveInventoryPage = () => {
       
       if (orderNumber) {
         data.orderNumber = orderNumber;
-      }
-      
-      if (orderId) {
-        data.orderId = orderId;
       }
       
       // Dodaj notatki, jeśli są dostępne
@@ -61,9 +63,9 @@ const ReceiveInventoryPage = () => {
   
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <InventoryTransactionForm 
-        itemId={id} 
-        transactionType="receive" 
+      <InventoryTransactionForm
+        itemId={id}
+        transactionType="receive"
         initialData={initialData}
       />
     </Container>

@@ -121,6 +121,33 @@ const ExpiryDatesPage = () => {
   const filteredExpiringBatches = filterBatches(expiringBatches);
   const filteredExpiredBatches = filterBatches(expiredBatches);
 
+  // Dla funkcji renderowania statusu daty ważności:
+  const renderExpiryStatus = (batch) => {
+    // Jeśli brak daty ważności, nie może być przeterminowana
+    if (!batch.expiryDate) {
+      return <Chip label="Brak daty" color="info" size="small" />;
+    }
+    
+    const expiryDate = batch.expiryDate instanceof Timestamp 
+      ? batch.expiryDate.toDate() 
+      : new Date(batch.expiryDate);
+    
+    const today = new Date();
+    
+    if (expiryDate < today) {
+      return <Chip label="Przeterminowana" color="error" size="small" />;
+    }
+    
+    const thirtyDaysFromNow = new Date();
+    thirtyDaysFromNow.setDate(today.getDate() + 30);
+    
+    if (expiryDate <= thirtyDaysFromNow) {
+      return <Chip label="Wygasa wkrótce" color="warning" size="small" />;
+    }
+    
+    return <Chip label="Aktualna" color="success" size="small" />;
+  };
+
   if (loading) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4, display: 'flex', justifyContent: 'center' }}>
@@ -228,13 +255,18 @@ const ExpiryDatesPage = () => {
                     <TableCell>Produkt</TableCell>
                     <TableCell>Numer partii</TableCell>
                     <TableCell>Data ważności</TableCell>
-                    <TableCell>Pozostało dni</TableCell>
+                    <TableCell>Status</TableCell>
                     <TableCell>Ilość</TableCell>
                     <TableCell>Akcje</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {filteredExpiringBatches.map(batch => {
+                    // Sprawdź, czy batch.expiryDate istnieje
+                    if (!batch.expiryDate) {
+                      return null; // Pomiń partie bez daty ważności
+                    }
+                    
                     const expiryDate = batch.expiryDate instanceof Timestamp 
                       ? batch.expiryDate.toDate() 
                       : new Date(batch.expiryDate);
@@ -253,11 +285,7 @@ const ExpiryDatesPage = () => {
                         <TableCell>{batch.batchNumber || '-'}</TableCell>
                         <TableCell>{expiryDate.toLocaleDateString('pl-PL')}</TableCell>
                         <TableCell>
-                          <Chip 
-                            label={`${diffDays} dni`} 
-                            color={diffDays <= 7 ? "error" : "warning"} 
-                            size="small" 
-                          />
+                          {renderExpiryStatus(batch)}
                         </TableCell>
                         <TableCell>{batch.quantity}</TableCell>
                         <TableCell>
@@ -292,13 +320,18 @@ const ExpiryDatesPage = () => {
                     <TableCell>Produkt</TableCell>
                     <TableCell>Numer partii</TableCell>
                     <TableCell>Data ważności</TableCell>
-                    <TableCell>Przeterminowane o</TableCell>
+                    <TableCell>Status</TableCell>
                     <TableCell>Ilość</TableCell>
                     <TableCell>Akcje</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {filteredExpiredBatches.map(batch => {
+                    // Sprawdź, czy batch.expiryDate istnieje
+                    if (!batch.expiryDate) {
+                      return null; // Pomiń partie bez daty ważności
+                    }
+                    
                     const expiryDate = batch.expiryDate instanceof Timestamp 
                       ? batch.expiryDate.toDate() 
                       : new Date(batch.expiryDate);
@@ -317,11 +350,7 @@ const ExpiryDatesPage = () => {
                         <TableCell>{batch.batchNumber || '-'}</TableCell>
                         <TableCell>{expiryDate.toLocaleDateString('pl-PL')}</TableCell>
                         <TableCell>
-                          <Chip 
-                            label={`${diffDays} dni`} 
-                            color="error" 
-                            size="small" 
-                          />
+                          {renderExpiryStatus(batch)}
                         </TableCell>
                         <TableCell>{batch.quantity}</TableCell>
                         <TableCell>

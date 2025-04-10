@@ -10,6 +10,7 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../services/firebase/config';
+import { updateUserData } from '../services/userService';
 
 export const AuthContext = createContext();
 
@@ -26,10 +27,11 @@ export const AuthProvider = ({ children }) => {
   const signup = async (email, password, userData) => {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     
-    // Dodajemy dodatkowe dane użytkownika do Firestore
-    await setDoc(doc(db, 'users', userCredential.user.uid), {
+    // Dodajemy dodatkowe dane użytkownika do Firestore za pomocą userService
+    await updateUserData(userCredential.user.uid, {
       ...userData,
       email,
+      displayName: userData.displayName || email.split('@')[0],
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
@@ -50,19 +52,13 @@ export const AuthProvider = ({ children }) => {
     
     const userCredential = await signInWithPopup(auth, provider);
     
-    // Sprawdź, czy użytkownik już istnieje w Firestore
-    const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
-    
-    // Jeśli nie istnieje, dodaj go
-    if (!userDoc.exists()) {
-      await setDoc(doc(db, 'users', userCredential.user.uid), {
-        email: userCredential.user.email,
-        displayName: userCredential.user.displayName,
-        photoURL: userCredential.user.photoURL,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-    }
+    // Aktualizuj dane użytkownika w Firestore za pomocą userService
+    await updateUserData(userCredential.user.uid, {
+      email: userCredential.user.email,
+      displayName: userCredential.user.displayName,
+      photoURL: userCredential.user.photoURL,
+      updatedAt: serverTimestamp()
+    });
     
     return userCredential.user;
   };
@@ -78,10 +74,20 @@ export const AuthProvider = ({ children }) => {
       if (user) {
         // Pobierz dodatkowe dane użytkownika z Firestore
         const userDoc = await getDoc(doc(db, 'users', user.uid));
+        
         if (userDoc.exists()) {
           setCurrentUser({ ...user, ...userDoc.data() });
         } else {
-          setCurrentUser(user);
+          // Zapisz podstawowe dane użytkownika jeśli go jeszcze nie ma w bazie
+          await updateUserData(user.uid, {
+            email: user.email,
+            displayName: user.displayName,
+            photoURL: user.photoURL
+          });
+          
+          // Pobierz zaktualizowane dane
+          const updatedUserDoc = await getDoc(doc(db, 'users', user.uid));
+          setCurrentUser({ ...user, ...updatedUserDoc.data() });
         }
       } else {
         setCurrentUser(null);

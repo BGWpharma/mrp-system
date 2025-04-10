@@ -325,8 +325,8 @@ const Dashboard = () => {
                         {orderStats.recentOrders.slice(0, 3).map((order) => (
                           <ListItem key={order.id} sx={{ py: 0.5 }}>
                             <ListItemText
-                              primary={`#${order.orderNumber || order.id?.substring(0, 8).toUpperCase()}`}
-                              secondary={`${order.customer} - ${formatCurrency(order.value)} - ${formatTimestamp(order.date, false)}`}
+                              primary={`#${order.orderNumber || (order.id ? order.id.substring(0, 8).toUpperCase() : '')}`}
+                              secondary={`${formatCurrency(order.totalValue || order.calculatedTotalValue || order.value || 0)} - ${formatTimestamp(order.date, false)}`}
                               primaryTypographyProps={{ variant: 'body2', fontWeight: 'bold' }}
                               secondaryTypographyProps={{ variant: 'caption' }}
                             />

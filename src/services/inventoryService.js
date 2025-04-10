@@ -522,6 +522,56 @@ import {
         });
       }
       
+      // Jeśli przyjęcie jest związane z zamówieniem zakupowym, zaktualizuj ilość odebranych produktów
+      if (transactionData.source === 'purchase' || transactionData.reason === 'purchase' || transactionData.orderNumber) {
+        try {
+          // Importuj funkcję do aktualizacji zamówienia zakupowego
+          const { updatePurchaseOrderReceivedQuantity } = await import('./purchaseOrderService');
+          
+          // Jeśli mamy orderId, użyj go, w przeciwnym razie spróbuj znaleźć zamówienie po numerze
+          let poId = transactionData.orderId;
+          
+          // Jeśli nie mamy ID, ale mamy numer zamówienia, spróbuj pobrać zamówienie na podstawie numeru
+          if (!poId && transactionData.orderNumber) {
+            try {
+              const { db } = await import('./firebase/config');
+              const { collection, query, where, getDocs } = await import('firebase/firestore');
+              
+              const poQuery = query(
+                collection(db, 'purchaseOrders'),
+                where('number', '==', transactionData.orderNumber)
+              );
+              
+              const querySnapshot = await getDocs(poQuery);
+              if (!querySnapshot.empty) {
+                poId = querySnapshot.docs[0].id;
+                console.log(`Znaleziono zamówienie zakupowe o numerze ${transactionData.orderNumber}, ID: ${poId}`);
+              }
+            } catch (error) {
+              console.error('Błąd podczas wyszukiwania PO po numerze:', error);
+            }
+          }
+          
+          // Aktualizuj zamówienie, jeśli znaleźliśmy ID oraz ID produktu
+          if (poId) {
+            let itemPoId = transactionData.itemPOId || itemId;
+            
+            console.log(`Aktualizacja ilości odebranej dla PO ${poId}, produkt ${itemPoId}, ilość: ${quantity}`);
+            await updatePurchaseOrderReceivedQuantity(
+              poId, 
+              itemPoId, 
+              Number(quantity),
+              userId
+            );
+          } else {
+            console.warn(`Nie znaleziono identyfikatora zamówienia dla numeru ${transactionData.orderNumber}`);
+          }
+        } catch (error) {
+          console.error('Błąd podczas aktualizacji zamówienia zakupowego:', error);
+          // Kontynuuj mimo błędu - przyjęcie towaru jest ważniejsze
+        }
+      }
+      
       // Emituj zdarzenie o zmianie stanu magazynu
       const event = new CustomEvent('inventory-updated', { 
         detail: { itemId, action: 'receive', quantity: Number(quantity) }
@@ -950,6 +1000,75 @@ import {
     }
   };
 
+  // Pobranie informacji o rezerwacjach dla konkretnej partii
+  export const getBatchReservations = async (batchId) => {
+    try {
+      if (!batchId) {
+        return [];
+      }
+      
+      // Pobierz transakcje z typem 'booking' dla danej partii
+      const transactionsRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
+      const q = query(
+        transactionsRef,
+        where('batchId', '==', batchId),
+        where('type', '==', 'booking')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      let reservations = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // Uwzględnij anulowania rezerwacji (booking_cancel)
+      const cancelQuery = query(
+        transactionsRef,
+        where('batchId', '==', batchId),
+        where('type', '==', 'booking_cancel')
+      );
+      
+      const cancelSnapshot = await getDocs(cancelQuery);
+      const cancellations = cancelSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // Dla każdej anulowanej rezerwacji, odejmij ją od odpowiedniej rezerwacji
+      // Grupujemy anulowania po taskId
+      const cancellationsByTask = {};
+      cancellations.forEach(cancel => {
+        const taskId = cancel.taskId || cancel.referenceId;
+        if (!taskId) return;
+        
+        if (!cancellationsByTask[taskId]) {
+          cancellationsByTask[taskId] = 0;
+        }
+        cancellationsByTask[taskId] += cancel.quantity || 0;
+      });
+      
+      // Modyfikujemy rezerwacje o anulowania
+      reservations = reservations.map(reservation => {
+        const taskId = reservation.taskId || reservation.referenceId;
+        if (!taskId) return reservation;
+        
+        const cancelledQuantity = cancellationsByTask[taskId] || 0;
+        return {
+          ...reservation,
+          quantity: Math.max(0, (reservation.quantity || 0) - cancelledQuantity)
+        };
+      });
+      
+      // Usuń rezerwacje o ilości 0
+      reservations = reservations.filter(reservation => (reservation.quantity || 0) > 0);
+      
+      return reservations;
+    } catch (error) {
+      console.error('Błąd podczas pobierania rezerwacji partii:', error);
+      return [];
+    }
+  };
+
   // Bookowanie produktu na zadanie produkcyjne
   export const bookInventoryForTask = async (itemId, quantity, taskId, userId, reservationMethod = 'expiry', batchId = null) => {
     try {
@@ -972,9 +1091,17 @@ import {
       const allBatches = await getItemBatches(itemId);
       const availableQuantity = allBatches.reduce((sum, batch) => sum + (batch.quantity || 0), 0);
       
+      // Sprawdź, czy jest wystarczająca ilość produktu po uwzględnieniu już zarezerwowanych ilości
+      // Oblicz rzeczywiście dostępną ilość odejmując ilość już zarezerwowaną
+      const effectivelyAvailable = availableQuantity - (item.bookedQuantity || 0);
+      
       // Sprawdź, czy jest wystarczająca ilość produktu
-      if (availableQuantity < quantity) {
-        throw new Error(`Niewystarczająca ilość produktu w magazynie. Dostępne: ${availableQuantity} ${item.unit}`);
+      if (effectivelyAvailable < quantity) {
+        throw new Error(`Niewystarczająca ilość produktu w magazynie po uwzględnieniu rezerwacji. 
+        Dostępne fizycznie: ${availableQuantity} ${item.unit}, 
+        Zarezerwowane: ${item.bookedQuantity || 0} ${item.unit}, 
+        Efektywnie dostępne: ${effectivelyAvailable} ${item.unit},
+        Wymagane: ${quantity} ${item.unit}`);
       }
       
       // Pobierz dane zadania produkcyjnego na początku funkcji
@@ -1049,9 +1176,28 @@ import {
           throw new Error(`Nie znaleziono partii o ID ${batchId}`);
         }
         
+        // Oblicz rzeczywiście dostępną ilość w partii (z uwzględnieniem rezerwacji)
+        // Pobranie szczegółowych informacji o partii i jej rezerwacjach  
+        let availableQuantityInBatch = selectedBatch.quantity;
+        
+        // Pobierz informacje o rezerwacjach tej partii
+        const batchReservations = await getBatchReservations(batchId);
+        const batchBookedQuantity = batchReservations.reduce((sum, reservation) => {
+          // Nie wliczaj rezerwacji z aktualnego zadania, jeśli edytujemy istniejącą rezerwację
+          if (reservation.taskId === taskId) return sum;
+          return sum + (reservation.quantity || 0);
+        }, 0);
+        
+        // Oblicz faktycznie dostępną ilość w partii
+        const effectivelyAvailableInBatch = availableQuantityInBatch - batchBookedQuantity;
+        
         // Sprawdź czy jest wystarczająca ilość w partii
-        if (selectedBatch.quantity < quantity) {
-          throw new Error(`Niewystarczająca ilość w partii. Dostępne: ${selectedBatch.quantity} ${item.unit}, wymagane: ${quantity} ${item.unit}`);
+        if (effectivelyAvailableInBatch < quantity) {
+          throw new Error(`Niewystarczająca ilość w partii po uwzględnieniu rezerwacji. 
+          Dostępne fizycznie: ${availableQuantityInBatch} ${item.unit}, 
+          Zarezerwowane przez inne MO: ${batchBookedQuantity} ${item.unit}, 
+          Efektywnie dostępne: ${effectivelyAvailableInBatch} ${item.unit},
+          Wymagane: ${quantity} ${item.unit}`);
         }
         
         // Zachowaj informacje o partii
@@ -1084,11 +1230,35 @@ import {
           });
         }
         
-        // Przydziel partie automatycznie
+        // Przydziel partie automatycznie, uwzględniając już istniejące rezerwacje
+        const batchReservationsPromises = batches.map(batch => getBatchReservations(batch.id));
+        const batchReservationsArrays = await Promise.all(batchReservationsPromises);
+        
+        // Konwertuj na mapę batch.id -> ilość zarezerwowana
+        const batchReservationsMap = {};
+        batches.forEach((batch, idx) => {
+          const batchReservations = batchReservationsArrays[idx];
+          const totalReserved = batchReservations.reduce((sum, reservation) => {
+            // Nie wliczaj rezerwacji z aktualnego zadania
+            if (reservation.taskId === taskId) return sum;
+            return sum + (reservation.quantity || 0);
+          }, 0);
+          
+          batchReservationsMap[batch.id] = totalReserved;
+        });
+        
+        // Przydziel partie automatycznie, uwzględniając rezerwacje
         for (const batch of batches) {
           if (remainingQuantity <= 0) break;
           
-          const quantityFromBatch = Math.min(batch.quantity, remainingQuantity);
+          const reservedForThisBatch = batchReservationsMap[batch.id] || 0;
+          const effectivelyAvailable = Math.max(0, batch.quantity - reservedForThisBatch);
+          
+          if (effectivelyAvailable <= 0) continue; // Pomiń partie całkowicie zarezerwowane
+          
+          const quantityFromBatch = Math.min(effectivelyAvailable, remainingQuantity);
+          if (quantityFromBatch <= 0) continue; // Pomiń partie, z których nie pobieramy ilości
+          
           remainingQuantity -= quantityFromBatch;
           
           // Zachowaj informacje o pierwszej partii do rezerwacji
@@ -1102,6 +1272,12 @@ import {
             quantity: quantityFromBatch,
             batchNumber: batch.batchNumber || batch.lotNumber || 'Bez numeru'
           });
+        }
+        
+        // Sprawdź, czy udało się zebrać całą wymaganą ilość
+        if (remainingQuantity > 0) {
+          throw new Error(`Nie można zarezerwować wymaganej ilości ${quantity} ${item.unit} produktu ${item.name}. 
+          Brakuje ${remainingQuantity} ${item.unit} ze względu na istniejące rezerwacje przez inne zadania produkcyjne.`);
         }
       }
       
