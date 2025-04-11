@@ -138,6 +138,14 @@ const ForecastPage = () => {
         const isInDateRange = taskDate >= startDateTime && taskDate <= endDateTime;
         const isValidStatus = task.status === 'Zaplanowane' || task.status === 'W trakcie' || task.status === 'Wstrzymane';
         
+        // Dodaj dodatkowy log do debugowania
+        console.log(`Zadanie ${task.id} - isInDateRange: ${isInDateRange}, isValidStatus: ${isValidStatus}, taskDate: ${taskDate}, startDateTime: ${startDateTime}, endDateTime: ${endDateTime}`);
+        
+        // Zadania "Wstrzymane" uwzględniamy zawsze, niezależnie od daty
+        if (task.status === 'Wstrzymane') {
+          return true;
+        }
+        
         return isInDateRange && isValidStatus;
       });
       

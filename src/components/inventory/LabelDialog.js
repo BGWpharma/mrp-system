@@ -22,6 +22,9 @@ import {
 } from '@mui/material';
 import InventoryLabel from './InventoryLabel';
 import { getAllCustomers } from '../../services/customerService';
+import { updateInventoryItem } from '../../services/inventoryService';
+import { useAuth } from '../../hooks/useAuth';
+import { useNotification } from '../../hooks/useNotification';
 
 const LabelDialog = ({ open, onClose, item, batches = [] }) => {
   const [selectedTab, setSelectedTab] = useState(0);
@@ -38,13 +41,18 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
     postalCode: '',
     country: 'Polska'
   });
+  const [boxQuantity, setBoxQuantity] = useState(item?.itemsPerBox || '');
+  const [isSaving, setIsSaving] = useState(false);
+  const { currentUser } = useAuth();
+  const { showSuccess, showError } = useNotification();
   const labelRef = useRef(null);
   
   useEffect(() => {
     if (open) {
       fetchCustomers();
+      setBoxQuantity(item?.itemsPerBox || '');
     }
-  }, [open]);
+  }, [open, item]);
 
   const fetchCustomers = async () => {
     try {
@@ -64,7 +72,7 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
   
   const handleBatchChange = (event) => {
     const batchId = event.target.value;
-    const batch = batches?.find(b => b.id === batchId) || null;
+    const batch = batchId ? batches?.find(b => b.id === batchId) || null : null;
     setSelectedBatch(batch);
   };
   
@@ -98,6 +106,28 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
 
   const handleCustomerChange = (event, newValue) => {
     setSelectedCustomer(newValue);
+  };
+
+  const handleBoxQuantityChange = (e) => {
+    setBoxQuantity(e.target.value);
+  };
+
+  const handleSaveBoxQuantity = async () => {
+    if (!item || !currentUser) return;
+    
+    try {
+      setIsSaving(true);
+      
+      // Zapisz nową wartość itemsPerBox w pozycji magazynowej
+      await updateInventoryItem(item.id, { itemsPerBox: boxQuantity }, currentUser.uid);
+      
+      showSuccess('Zaktualizowano ilość produktu w kartonie');
+    } catch (error) {
+      console.error('Błąd podczas zapisywania ilości w kartonie:', error);
+      showError('Nie udało się zapisać ilości w kartonie');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Formatowanie adresu do wyświetlenia
@@ -149,9 +179,62 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
       </DialogTitle>
       <DialogContent>
         <Tabs value={selectedTab} onChange={handleTabChange} sx={{ mb: 2 }}>
-          <Tab label="Etykieta produktu" />
+          <Tab label="Etykieta kartonu" />
           <Tab label="Etykieta partii" disabled={!batches || batches.length === 0} />
         </Tabs>
+        
+        {selectedTab === 0 && (
+          <Box sx={{ mb: 3 }}>
+            <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
+              <Typography variant="subtitle1" gutterBottom>Ilość produktu w kartonie</Typography>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs>
+                  <TextField
+                    fullWidth
+                    label="Ilość w kartonie"
+                    type="number"
+                    value={boxQuantity}
+                    onChange={handleBoxQuantityChange}
+                    InputProps={{ endAdornment: item?.unit || 'szt.' }}
+                    helperText="Określ ilość produktu w jednym kartonie"
+                  />
+                </Grid>
+                <Grid item>
+                  <Button 
+                    variant="contained" 
+                    color="primary" 
+                    onClick={handleSaveBoxQuantity}
+                    disabled={isSaving}
+                  >
+                    {isSaving ? 'Zapisywanie...' : 'Zapisz do pozycji'}
+                  </Button>
+                </Grid>
+              </Grid>
+            </Paper>
+            
+            {batches && batches.length > 0 && (
+              <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
+                <Typography variant="subtitle1" gutterBottom>Wybierz partię dla etykiety kartonu</Typography>
+                <FormControl fullWidth>
+                  <InputLabel>Wybierz partię</InputLabel>
+                  <Select
+                    value={selectedBatch?.id || ''}
+                    onChange={handleBatchChange}
+                    label="Wybierz partię"
+                  >
+                    <MenuItem value="">Brak partii</MenuItem>
+                    {batches.map((batch) => (
+                      <MenuItem key={batch.id} value={batch.id}>
+                        Numer partii: {batch.batchNumber || batch.lotNumber || 'brak'} | Ilość: {batch.quantity} | 
+                        {batch.expiryDate ? ` Termin ważności: ${new Date(batch.expiryDate).toLocaleDateString('pl-PL')}` : ' Brak terminu ważności'}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Paper>
+            )}
+          </Box>
+        )}
         
         {selectedTab === 1 && batches && batches.length > 0 && (
           <Box sx={{ mb: 3 }}>
@@ -164,7 +247,7 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
               >
                 {batches.map((batch) => (
                   <MenuItem key={batch.id} value={batch.id}>
-                    Numer partii: {batch.batchNumber || 'brak'} | Ilość: {batch.quantity} | 
+                    Numer partii: {batch.batchNumber || batch.lotNumber || 'brak'} | Ilość: {batch.quantity} | 
                     {batch.expiryDate ? ` Termin ważności: ${new Date(batch.expiryDate).toLocaleDateString('pl-PL')}` : ' Brak terminu ważności'}
                   </MenuItem>
                 ))}
@@ -248,70 +331,71 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
               ) : (
                 <Autocomplete
                   options={customers}
-                  getOptionLabel={(option) => option.name}
-                  value={selectedCustomer}
+                  getOptionLabel={(customer) => customer.name}
                   onChange={handleCustomerChange}
-                  renderInput={(params) => <TextField {...params} label="Wybierz klienta" />}
-                  fullWidth
+                  value={selectedCustomer}
+                  renderInput={(params) => (
+                    <TextField {...params} label="Wybierz klienta" fullWidth />
+                  )}
                 />
               )}
-
+              
               {selectedCustomer && (
-                <Paper variant="outlined" sx={{ mt: 2, p: 2 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Adres dostawy:
-                  </Typography>
-                  <Typography variant="body1" sx={{ whiteSpace: 'pre-line', mb: 1 }}>
-                    {selectedCustomer.shippingAddress || selectedCustomer.billingAddress || "Brak adresu"}
+                <Paper variant="outlined" sx={{ p: 2, mt: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>Adres dostawy:</Typography>
+                  <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                    {selectedCustomer.shippingAddress || 'Brak adresu dostawy'}
                   </Typography>
                   
-                  {selectedCustomer.billingAddress && selectedCustomer.billingAddress !== selectedCustomer.shippingAddress && (
-                    <>
-                      <Divider sx={{ my: 1 }} />
-                      <Typography variant="body2" color="text.secondary">
-                        Adres do faktury:
-                      </Typography>
-                      <Typography variant="body1" sx={{ whiteSpace: 'pre-line' }}>
-                        {selectedCustomer.billingAddress}
-                      </Typography>
-                    </>
-                  )}
+                  <Divider sx={{ my: 2 }} />
+                  
+                  <Typography variant="subtitle2" gutterBottom>Adres do faktury:</Typography>
+                  <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                    {selectedCustomer.billingAddress || 'Brak adresu do faktury'}
+                  </Typography>
                 </Paper>
               )}
             </Box>
           )}
         </Paper>
-        
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px' }}>
-            <CircularProgress />
-          </Box>
-        ) : (
-          <>
-            {selectedTab === 0 && (
-              <InventoryLabel 
-                ref={labelRef}
-                item={item} 
-                onClose={handleClose}
-                address={getAddressForLabel()}
-              />
-            )}
-            
-            {selectedTab === 1 && selectedBatch && (
-              <InventoryLabel 
-                ref={labelRef}
-                item={item} 
-                batch={selectedBatch}
-                onClose={handleClose}
-                address={getAddressForLabel()}
-              />
-            )}
-          </>
-        )}
+
+        {/* Podgląd etykiety */}
+        <Box sx={{ minHeight: '400px', border: '1px solid #e0e0e0', p: 1, borderRadius: 1, overflow: 'auto' }}>
+          <InventoryLabel 
+            ref={labelRef}
+            item={item}
+            batch={selectedBatch}
+            address={getAddressForLabel()}
+            boxQuantity={selectedTab === 0 ? boxQuantity : ''}
+            labelType={selectedTab === 0 ? 'box' : 'batch'}
+          />
+        </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleClose} color="primary">
-          Zamknij
+        <Button onClick={handleClose}>Zamknij</Button>
+        <Button 
+          onClick={() => {
+            if (labelRef.current) {
+              labelRef.current.handlePrint();
+            }
+          }}
+          variant="contained" 
+          color="primary"
+          disabled={loading}
+        >
+          Drukuj etykietę
+        </Button>
+        <Button 
+          onClick={() => {
+            if (labelRef.current) {
+              labelRef.current.handleSaveAsPNG();
+            }
+          }}
+          variant="outlined" 
+          color="primary"
+          disabled={loading}
+        >
+          Zapisz jako obraz
         </Button>
       </DialogActions>
     </Dialog>

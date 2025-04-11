@@ -463,12 +463,12 @@ const ItemDetailsPage = () => {
                       <TableCell>{item.maxStock ? `${item.maxStock} ${item.unit}` : 'Nie określono'}</TableCell>
                     </TableRow>
                     <TableRow>
-                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>Grupa pakowania</TableCell>
-                      <TableCell>{item.packingGroup || 'Nie określono'}</TableCell>
-                    </TableRow>
-                    <TableRow>
                         <TableCell component="th" sx={{ fontWeight: 'medium' }}>Ilość kartonów na paletę</TableCell>
                       <TableCell>{item.boxesPerPallet ? `${item.boxesPerPallet} szt.` : 'Nie określono'}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>Ilość produktu per karton</TableCell>
+                      <TableCell>{item.itemsPerBox ? `${item.itemsPerBox} ${item.unit}` : 'Nie określono'}</TableCell>
                     </TableRow>
                   </TableBody>
                 </Table>

@@ -47,6 +47,7 @@ const InventoryItemForm = ({ itemId }) => {
     supplierInfo: '',
     packingGroup: '',
     boxesPerPallet: '',
+    itemsPerBox: '',
     currency: 'EUR'
   });
 
@@ -224,33 +225,24 @@ const InventoryItemForm = ({ itemId }) => {
           <Grid item xs={12} sm={6}>
             <TextField
               fullWidth
-              label="Informacje o dostawcy"
-              name="supplierInfo"
-              value={itemData.supplierInfo || ''}
-              onChange={handleChange}
-              helperText="Informacje ogólne o dostawcach (użyj sekcji poniżej, aby przypisać konkretne ceny)"
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label="Grupa pakowania"
-              name="packingGroup"
-              value={itemData.packingGroup || ''}
-              onChange={handleChange}
-              helperText="Grupa pakowania produktu"
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
               label="Ilość kartonów na paletę"
               name="boxesPerPallet"
               type="number"
               value={itemData.boxesPerPallet || ''}
               onChange={handleChange}
               inputProps={{ min: 0, step: 1 }}
-              helperText="Ilość kartonów, które mieszczą się na jednej palecie"
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              label="Ilość produktu per karton"
+              name="itemsPerBox"
+              type="number"
+              value={itemData.itemsPerBox || ''}
+              onChange={handleChange}
+              inputProps={{ min: 0, step: 1 }}
+              helperText="Ilość jednostek produktu w jednym kartonie"
             />
           </Grid>
         </Grid>

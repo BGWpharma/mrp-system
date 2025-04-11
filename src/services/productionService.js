@@ -1909,6 +1909,7 @@ import {
       // Pobierz szczegółowe dane partii dla wszystkich materiałów
       const batchesDetails = {};
       const materialIds = [];
+      const inventoryItemsDetails = {}; // Dodaj obiekt do przechowywania szczegółów elementów inwentarza
 
       // Zbierz wszystkie ID materiałów
       if (task.materials && task.materials.length > 0) {
@@ -1920,10 +1921,24 @@ import {
         }
       }
 
-      // Pobierz szczegóły partii dla wszystkich materiałów
+      // Pobierz szczegóły partii i elementów inwentarza dla wszystkich materiałów
       if (materialIds.length > 0) {
-        const { collection, query, where, getDocs } = await import('firebase/firestore');
+        const { collection, query, where, getDocs, doc, getDoc } = await import('firebase/firestore');
         const { db } = await import('./firebase/config');
+
+        // Pobierz szczegóły elementów inwentarza
+        for (const materialId of materialIds) {
+          try {
+            const itemRef = doc(db, 'inventory', materialId);
+            const itemSnap = await getDoc(itemRef);
+            
+            if (itemSnap.exists()) {
+              inventoryItemsDetails[materialId] = itemSnap.data();
+            }
+          } catch (error) {
+            console.error(`Błąd podczas pobierania szczegółów elementu inwentarza ${materialId}:`, error);
+          }
+        }
 
         for (const materialId of materialIds) {
           // Pobierz partie dla danego materiału
@@ -2022,14 +2037,17 @@ import {
             ? task.actualMaterialUsage[material.id]
             : material.quantity;
           
+          // Pobierz kategorię z szczegółów elementu inwentarza, jeśli jest dostępna
+          const itemId = material.inventoryItemId || material.id;
+          let category = material.category || (inventoryItemsDetails[itemId]?.category) || 'brak kategorii';
+          
           materialTableData.push([
             (index + 1).toString(),
             material.name || 'brak nazwy',
-            material.category || 'brak kategorii',
+            category,
             material.quantity ? material.quantity.toFixed(2) : '0.00',
             actualUsage ? actualUsage.toFixed(2) : '0.00',
-            material.unit || 'szt.',
-            (task.materialConsumptionConfirmed ? 'Tak' : 'Nie')
+            material.unit || 'szt.'
           ]);
           
           // Pobierz i dodaj partie materiałów do drugiej tabeli
@@ -2087,8 +2105,7 @@ import {
           'Kategoria',
           'Planowana ilosc',
           'Rzeczywista ilosc',
-          'J.m.',
-          'Potwierdzony'
+          'J.m.'
         ]],
         body: materialTableData,
         headStyles: { fillColor: [41, 128, 185], textColor: 255 },
