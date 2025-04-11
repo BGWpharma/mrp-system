@@ -64,21 +64,19 @@ import {
   Info as InfoIcon,
   BookmarkAdd as BookmarkAddIcon,
   ExpandMore as ExpandMoreIcon,
-  Print as PrintIcon
+  Print as PrintIcon,
+  Inventory2 as PackagingIcon
 } from '@mui/icons-material';
-import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport } from '../../services/productionService';
-import { getItemBatches, bookInventoryForTask, cancelBooking, getBatchReservations } from '../../services/inventoryService';
+import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession } from '../../services/productionService';
+import { getItemBatches, bookInventoryForTask, cancelBooking, getBatchReservations, getAllInventoryItems, getInventoryItemById } from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate, formatCurrency, formatDateTime } from '../../utils/formatters';
 import { PRODUCTION_TASK_STATUSES, TIME_INTERVALS } from '../../utils/constants';
-import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { pl } from 'date-fns/locale';
+import { format, parseISO } from 'date-fns';
 import TaskDetails from '../../components/production/TaskDetails';
 import { db } from '../../services/firebase/config';
-import { getDoc, doc } from 'firebase/firestore';
+import { getDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { getUsersDisplayNames } from '../../services/userService';
 
 const TaskDetailsPage = () => {
@@ -103,6 +101,12 @@ const TaskDetailsPage = () => {
   const [timeSpent, setTimeSpent] = useState('');
   const [productionHistory, setProductionHistory] = useState([]);
   const [productionError, setProductionError] = useState(null);
+  const [editingHistoryItem, setEditingHistoryItem] = useState(null);
+  const [editedHistoryItem, setEditedHistoryItem] = useState({
+    quantity: 0,
+    startTime: new Date(),
+    endTime: new Date()
+  });
 
   const [deleteDialog, setDeleteDialog] = useState(false);
   const [quantity, setQuantity] = useState(0);
@@ -125,6 +129,12 @@ const TaskDetailsPage = () => {
 
   const [userNames, setUserNames] = useState({});
 
+  // Nowy stan dla dodawania opakowań
+  const [packagingDialogOpen, setPackagingDialogOpen] = useState(false);
+  const [availablePackaging, setAvailablePackaging] = useState([]);
+  const [selectedPackaging, setSelectedPackaging] = useState([]);
+  const [loadingPackaging, setLoadingPackaging] = useState(false);
+
   const fetchTask = async () => {
     try {
       setLoading(true);
@@ -134,11 +144,30 @@ const TaskDetailsPage = () => {
       
       // Inicjalizacja materiałów, jeśli zadanie ma materiały
       if (fetchedTask?.materials?.length > 0) {
-        const materialsList = fetchedTask.materials.map(material => ({
-          ...material,
-          plannedQuantity: (material.quantity || 0) * (fetchedTask.quantity || 1)
-        }));
+        // Dla każdego materiału pobierz aktualne informacje o cenie
+        const materialPromises = fetchedTask.materials.map(async (material) => {
+          let updatedMaterial = { ...material };
+          
+          // Jeśli materiał ma powiązanie z elementem magazynowym, pobierz jego aktualną cenę
+          if (material.inventoryItemId) {
+            try {
+              const inventoryItem = await getInventoryItemById(material.inventoryItemId);
+              if (inventoryItem) {
+                updatedMaterial.unitPrice = inventoryItem.unitPrice || inventoryItem.price || 0;
+              }
+            } catch (error) {
+              console.error(`Błąd podczas pobierania ceny dla materiału ${material.name}:`, error);
+            }
+          }
+          
+          return {
+            ...updatedMaterial,
+            plannedQuantity: (updatedMaterial.quantity || 0) * (fetchedTask.quantity || 1)
+          };
+        });
         
+        // Poczekaj na rozwiązanie wszystkich promisów
+        const materialsList = await Promise.all(materialPromises);
         setMaterials(materialsList);
         
         // Inicjalizacja rzeczywistych ilości
@@ -1041,6 +1070,185 @@ const TaskDetailsPage = () => {
     }
   };
 
+  // Funkcja do pobierania dostępnych opakowań
+  const fetchAvailablePackaging = async () => {
+    try {
+      setLoadingPackaging(true);
+      const allItems = await getAllInventoryItems();
+      // Filtrujemy tylko opakowania
+      const packagingItems = allItems.filter(item => item.category === 'Opakowania');
+      
+      setAvailablePackaging(packagingItems.map(item => ({
+        ...item,
+        selected: false,
+        quantity: 0,
+        unitPrice: item.unitPrice || item.price || 0
+      })));
+    } catch (error) {
+      console.error('Błąd podczas pobierania opakowań:', error);
+      showError('Nie udało się pobrać listy opakowań: ' + error.message);
+    } finally {
+      setLoadingPackaging(false);
+    }
+  };
+  
+  // Obsługa otwierania dialogu opakowań
+  const handleOpenPackagingDialog = () => {
+    fetchAvailablePackaging();
+    setPackagingDialogOpen(true);
+  };
+  
+  // Obsługa zmiany ilości wybranego opakowania
+  const handlePackagingQuantityChange = (id, value) => {
+    setAvailablePackaging(prev => prev.map(item => 
+      item.id === id ? { ...item, quantity: parseFloat(value) || 0, selected: parseFloat(value) > 0 } : item
+    ));
+  };
+  
+  // Obsługa wyboru/odznaczenia opakowania
+  const handlePackagingSelection = (id, selected) => {
+    setAvailablePackaging(prev => prev.map(item => 
+      item.id === id ? { ...item, selected } : item
+    ));
+  };
+  
+  // Dodanie wybranych opakowań do materiałów zadania
+  const handleAddPackagingToTask = async () => {
+    try {
+      setLoadingPackaging(true);
+      
+      // Filtrujemy wybrane opakowania
+      const packagingToAdd = availablePackaging.filter(item => item.selected && item.quantity > 0);
+      
+      if (packagingToAdd.length === 0) {
+        showError('Nie wybrano żadnych opakowań do dodania');
+        return;
+      }
+      
+      // Pobierz aktualne zadanie
+      const updatedTask = await getTaskById(id);
+      const currentMaterials = updatedTask.materials || [];
+      
+      // Przygotuj nowe materiały do dodania
+      const newMaterials = packagingToAdd.map(item => ({
+        id: item.id,
+        name: item.name,
+        quantity: item.quantity,
+        unit: item.unit,
+        inventoryItemId: item.id,
+        isPackaging: true,
+        category: 'Opakowania',
+        unitPrice: item.unitPrice || 0
+      }));
+      
+      // Połącz istniejące materiały z nowymi opakowaniami
+      const updatedMaterials = [...currentMaterials];
+      
+      // Sprawdź czy dane opakowanie już istnieje i aktualizuj ilość lub dodaj nowe
+      newMaterials.forEach(newMaterial => {
+        const existingIndex = updatedMaterials.findIndex(m => m.id === newMaterial.id);
+        if (existingIndex >= 0) {
+          // Aktualizuj istniejące opakowanie
+          updatedMaterials[existingIndex].quantity = 
+            (parseFloat(updatedMaterials[existingIndex].quantity) || 0) + 
+            (parseFloat(newMaterial.quantity) || 0);
+        } else {
+          // Dodaj nowe opakowanie
+          updatedMaterials.push(newMaterial);
+        }
+      });
+      
+      // Zaktualizuj zadanie w bazie danych
+      await updateDoc(doc(db, 'productionTasks', id), {
+        materials: updatedMaterials,
+        updatedAt: serverTimestamp()
+      });
+      
+      // Odśwież dane zadania
+      fetchTask();
+      
+      showSuccess('Opakowania zostały dodane do zadania produkcyjnego');
+      setPackagingDialogOpen(false);
+    } catch (error) {
+      console.error('Błąd podczas dodawania opakowań:', error);
+      showError('Nie udało się dodać opakowań do zadania: ' + error.message);
+    } finally {
+      setLoadingPackaging(false);
+    }
+  };
+
+  // Funkcja obsługująca rozpoczęcie edycji sesji produkcyjnej
+  const handleEditHistoryItem = (item) => {
+    setEditingHistoryItem(item.id);
+    setEditedHistoryItem({
+      quantity: item.quantity || 0,
+      startTime: item.startTime ? new Date(item.startTime) : new Date(),
+      endTime: item.endTime ? new Date(item.endTime) : new Date(),
+    });
+  };
+
+  // Funkcja zapisująca zmiany w sesji produkcyjnej
+  const handleSaveHistoryItemEdit = async (historyItemId) => {
+    try {
+      setLoading(true);
+      
+      if (!historyItemId) {
+        showError('Nie można edytować sesji produkcyjnej: brak identyfikatora');
+        return;
+      }
+      
+      // Walidacja danych
+      if (editedHistoryItem.endTime < editedHistoryItem.startTime) {
+        showError('Czas zakończenia nie może być wcześniejszy niż czas rozpoczęcia');
+        return;
+      }
+      
+      if (isNaN(editedHistoryItem.quantity) || editedHistoryItem.quantity < 0) {
+        showError('Nieprawidłowa ilość');
+        return;
+      }
+      
+      // Obliczenie nowego czasu trwania w minutach
+      const durationMs = editedHistoryItem.endTime.getTime() - editedHistoryItem.startTime.getTime();
+      const durationMinutes = Math.round(durationMs / (1000 * 60));
+      
+      if (durationMinutes <= 0) {
+        showError('Przedział czasowy musi być dłuższy niż 0 minut');
+        return;
+      }
+      
+      // Przygotuj dane do aktualizacji
+      const updateData = {
+        quantity: parseFloat(editedHistoryItem.quantity),
+        timeSpent: durationMinutes,
+        startTime: editedHistoryItem.startTime.toISOString(),
+        endTime: editedHistoryItem.endTime.toISOString()
+      };
+      
+      // Wywołaj funkcję aktualizującą sesję produkcyjną
+      await updateProductionSession(historyItemId, updateData, currentUser.uid);
+      
+      showSuccess('Sesja produkcyjna została zaktualizowana');
+      
+      // Odśwież dane historii produkcji i zadania
+      await fetchProductionHistory();
+      await fetchTask();
+      
+      // Zresetuj stan edycji
+      setEditingHistoryItem(null);
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji sesji produkcyjnej:', error);
+      showError('Nie udało się zaktualizować sesji produkcyjnej: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Funkcja anulująca edycję
+  const handleCancelHistoryItemEdit = () => {
+    setEditingHistoryItem(null);
+  };
+
   // Renderuj stronę
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -1192,16 +1400,27 @@ const TaskDetailsPage = () => {
               <Paper sx={{ p: 3 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                   <Typography variant="h6" component="h2">Materiały</Typography>
-                  <Button
-                    variant="outlined"
-                    color="primary"
-                    startIcon={<BookmarkAddIcon />}
-                    onClick={() => setReserveDialogOpen(true)}
-                    sx={{ mt: 2, mb: 2 }}
-                  >
-                    Rezerwuj surowce
-                  </Button>
-            </Box>
+                  <Box>
+                    <Button
+                      variant="outlined"
+                      color="primary"
+                      startIcon={<PackagingIcon />}
+                      onClick={handleOpenPackagingDialog}
+                      sx={{ mt: 2, mb: 2, mr: 2 }}
+                    >
+                      Dodaj opakowania
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="primary"
+                      startIcon={<BookmarkAddIcon />}
+                      onClick={() => setReserveDialogOpen(true)}
+                      sx={{ mt: 2, mb: 2 }}
+                    >
+                      Rezerwuj surowce
+                    </Button>
+                  </Box>
+                </Box>
                 
             <TableContainer>
               <Table>
@@ -1211,6 +1430,8 @@ const TaskDetailsPage = () => {
                         <TableCell>Ilość</TableCell>
                         <TableCell>Jednostka</TableCell>
                         <TableCell>Rzeczywista ilość</TableCell>
+                        <TableCell>Cena jedn.</TableCell>
+                        <TableCell>Koszt</TableCell>
                         <TableCell>Zarezerwowane partie (LOT)</TableCell>
                         <TableCell>Akcje</TableCell>
                   </TableRow>
@@ -1220,6 +1441,11 @@ const TaskDetailsPage = () => {
                         // Sprawdź czy dla tego materiału są zarezerwowane partie
                         const materialId = material.inventoryItemId || material.id;
                         const reservedBatches = task.materialBatches && task.materialBatches[materialId];
+                        
+                        // Oblicz koszt materiału
+                        const quantity = materialQuantities[material.id] || material.quantity || 0;
+                        const unitPrice = material.unitPrice || 0;
+                        const cost = quantity * unitPrice;
                     
                     return (
                       <TableRow key={material.id}>
@@ -1242,6 +1468,8 @@ const TaskDetailsPage = () => {
                                 materialQuantities[material.id] || 0
                               )}
                             </TableCell>
+                            <TableCell>{unitPrice.toFixed(2)} €</TableCell>
+                            <TableCell>{cost.toFixed(2)} €</TableCell>
                             <TableCell>
                               {reservedBatches && reservedBatches.length > 0 ? (
                                 <Box>
@@ -1303,7 +1531,181 @@ const TaskDetailsPage = () => {
               </TableBody>
             </Table>
           </TableContainer>
+          
+          {/* Podsumowanie kosztów materiałów */}
+          <Box sx={{ mt: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <Typography variant="h6">Podsumowanie kosztów materiałów</Typography>
+              </Grid>
+              <Grid item xs={12} md={6} sx={{ textAlign: 'right' }}>
+                <Typography variant="body1">
+                  <strong>Całkowity koszt materiałów:</strong> {
+                    materials.reduce((sum, material) => {
+                      const quantity = materialQuantities[material.id] || material.quantity || 0;
+                      const unitPrice = material.unitPrice || 0;
+                      return sum + (quantity * unitPrice);
+                    }, 0).toFixed(2)
+                  } €
+                </Typography>
+                <Typography variant="body1">
+                  <strong>Koszt materiałów na jednostkę:</strong> {
+                    task.quantity ? 
+                    (materials.reduce((sum, material) => {
+                      const quantity = materialQuantities[material.id] || material.quantity || 0;
+                      const unitPrice = material.unitPrice || 0;
+                      return sum + (quantity * unitPrice);
+                    }, 0) / task.quantity).toFixed(2) : '0.00'
+                  } €/{task.unit}
+                </Typography>
+              </Grid>
+            </Grid>
+          </Box>
         </Paper>
+            </Grid>
+            
+            {/* Sekcja historii produkcji */}
+            <Grid item xs={12}>
+              <Paper sx={{ p: 3 }}>
+                <Typography variant="h6" component="h2" gutterBottom>
+                  Historia produkcji
+                </Typography>
+                
+                {productionHistory.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">
+                    Brak historii produkcji dla tego zadania
+                  </Typography>
+                ) : (
+                  <TableContainer>
+                    <Table>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Data rozpoczęcia</TableCell>
+                          <TableCell>Data zakończenia</TableCell>
+                          <TableCell>Czas trwania</TableCell>
+                          <TableCell>Wyprodukowana ilość</TableCell>
+                          <TableCell>Operator</TableCell>
+                          <TableCell>Akcje</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {productionHistory.map((item) => (
+                          <TableRow key={item.id}>
+                            {editingHistoryItem === item.id ? (
+                              // Widok edycji
+                              <>
+                                <TableCell>
+                                  <TextField
+                                    type="datetime-local"
+                                    value={editedHistoryItem.startTime instanceof Date 
+                                      ? editedHistoryItem.startTime.toISOString().slice(0, 16) 
+                                      : ''}
+                                    onChange={(e) => {
+                                      const newDate = e.target.value ? new Date(e.target.value) : new Date();
+                                      setEditedHistoryItem(prev => ({ 
+                                        ...prev, 
+                                        startTime: newDate
+                                      }));
+                                    }}
+                                    size="small"
+                                    fullWidth
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <TextField
+                                    type="datetime-local"
+                                    value={editedHistoryItem.endTime instanceof Date 
+                                      ? editedHistoryItem.endTime.toISOString().slice(0, 16) 
+                                      : ''}
+                                    onChange={(e) => {
+                                      const newDate = e.target.value ? new Date(e.target.value) : new Date();
+                                      setEditedHistoryItem(prev => ({ 
+                                        ...prev, 
+                                        endTime: newDate
+                                      }));
+                                    }}
+                                    size="small"
+                                    fullWidth
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  {Math.round(
+                                    (editedHistoryItem.endTime.getTime() - editedHistoryItem.startTime.getTime()) / (1000 * 60)
+                                  )} min
+                                </TableCell>
+                                <TableCell>
+                                  <TextField
+                                    type="number"
+                                    value={editedHistoryItem.quantity}
+                                    onChange={(e) => setEditedHistoryItem(prev => ({ 
+                                      ...prev, 
+                                      quantity: e.target.value === '' ? '' : parseFloat(e.target.value) 
+                                    }))}
+                                    inputProps={{ min: 0, step: 'any' }}
+                                    size="small"
+                                    fullWidth
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  {getUserName(item.userId)}
+                                </TableCell>
+                                <TableCell>
+                                  <Box sx={{ display: 'flex' }}>
+                                    <IconButton 
+                                      color="primary" 
+                                      onClick={() => handleSaveHistoryItemEdit(item.id)}
+                                      title="Zapisz zmiany"
+                                    >
+                                      <SaveIcon />
+                                    </IconButton>
+                                    <IconButton 
+                                      color="error" 
+                                      onClick={handleCancelHistoryItemEdit}
+                                      title="Anuluj edycję"
+                                    >
+                                      <CancelIcon />
+                                    </IconButton>
+                                  </Box>
+                                </TableCell>
+                              </>
+                            ) : (
+                              // Widok standardowy
+                              <>
+                                <TableCell>{item.startTime ? formatDateTime(item.startTime) : '-'}</TableCell>
+                                <TableCell>{item.endTime ? formatDateTime(item.endTime) : '-'}</TableCell>
+                                <TableCell>{item.timeSpent ? `${item.timeSpent} min` : '-'}</TableCell>
+                                <TableCell>{item.quantity} {task.unit}</TableCell>
+                                <TableCell>{getUserName(item.userId)}</TableCell>
+                                <TableCell>
+                                  <IconButton 
+                                    color="primary" 
+                                    onClick={() => handleEditHistoryItem(item)}
+                                    title="Edytuj sesję produkcyjną"
+                                  >
+                                    <EditIcon />
+                                  </IconButton>
+                                </TableCell>
+                              </>
+                            )}
+                          </TableRow>
+                        ))}
+                        
+                        {/* Wiersz podsumowania */}
+                        <TableRow sx={{ '& td': { fontWeight: 'bold', bgcolor: 'rgba(0, 0, 0, 0.04)' } }}>
+                          <TableCell colSpan={2} align="right">Suma:</TableCell>
+                          <TableCell>
+                            {productionHistory.reduce((sum, item) => sum + (item.timeSpent || 0), 0)} min
+                          </TableCell>
+                          <TableCell>
+                            {productionHistory.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0)} {task.unit}
+                          </TableCell>
+                          <TableCell colSpan={2}></TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+              </Paper>
             </Grid>
           
             {/* Pozostałe sekcje... */}
@@ -1397,6 +1799,180 @@ const TaskDetailsPage = () => {
             color="error"
           >
             Usuń zadanie
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog dodawania opakowań */}
+      <Dialog
+        open={packagingDialogOpen}
+        onClose={() => setPackagingDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Dodaj opakowania do zadania produkcyjnego</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Wybierz opakowania, które chcesz dodać do tego zadania produkcyjnego (np. palety, folia, kartony).
+          </DialogContentText>
+          
+          {loadingPackaging ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <TableContainer component={Paper} sx={{ mt: 2 }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell padding="checkbox">Wybierz</TableCell>
+                    <TableCell>Nazwa</TableCell>
+                    <TableCell>Dostępna ilość</TableCell>
+                    <TableCell>Jednostka</TableCell>
+                    <TableCell>Cena jedn.</TableCell>
+                    <TableCell>Ilość do dodania</TableCell>
+                    <TableCell>Koszt</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {availablePackaging.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} align="center">
+                        Brak dostępnych opakowań
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    availablePackaging.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell padding="checkbox">
+                          <Checkbox
+                            checked={item.selected}
+                            onChange={(e) => handlePackagingSelection(item.id, e.target.checked)}
+                          />
+                        </TableCell>
+                        <TableCell>{item.name}</TableCell>
+                        <TableCell>{item.currentQuantity || 0}</TableCell>
+                        <TableCell>{item.unit}</TableCell>
+                        <TableCell>{item.unitPrice ? item.unitPrice.toFixed(2) : '0.00'} €</TableCell>
+                        <TableCell>
+                          <TextField
+                            type="number"
+                            value={item.quantity}
+                            onChange={(e) => handlePackagingQuantityChange(item.id, e.target.value)}
+                            disabled={!item.selected}
+                            inputProps={{ min: 0, step: 'any' }}
+                            size="small"
+                            sx={{ width: '100px' }}
+                          />
+                        </TableCell>
+                        <TableCell>{(item.quantity * (item.unitPrice || 0)).toFixed(2)} €</TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPackagingDialogOpen(false)}>
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleAddPackagingToTask} 
+            variant="contained"
+            disabled={loadingPackaging || availablePackaging.filter(item => item.selected && item.quantity > 0).length === 0}
+          >
+            {loadingPackaging ? <CircularProgress size={24} /> : 'Dodaj opakowania'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog zatrzymania produkcji */}
+      <Dialog
+        open={stopProductionDialogOpen}
+        onClose={() => setStopProductionDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Zatrzymaj produkcję</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Wprowadź informacje o zakończonej sesji produkcyjnej
+          </DialogContentText>
+          
+          {productionError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {productionError}
+            </Alert>
+          )}
+
+          <TextField
+            label="Wyprodukowana ilość"
+            type="number"
+            value={completedQuantity}
+            onChange={(e) => setCompletedQuantity(e.target.value)}
+            fullWidth
+            margin="dense"
+            InputProps={{
+              endAdornment: <Typography variant="body2">{task?.unit || 'szt.'}</Typography>
+            }}
+          />
+          
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, my: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Przedział czasowy produkcji:
+            </Typography>
+            
+            <TextField
+              label="Czas rozpoczęcia"
+              type="datetime-local"
+              value={productionStartTime instanceof Date 
+                ? productionStartTime.toISOString().slice(0, 16) 
+                : ''}
+              onChange={(e) => {
+                const newDate = e.target.value ? new Date(e.target.value) : new Date();
+                setProductionStartTime(newDate);
+              }}
+              fullWidth
+              margin="dense"
+              variant="outlined"
+              InputLabelProps={{
+                shrink: true,
+              }}
+            />
+            
+            <TextField
+              label="Czas zakończenia"
+              type="datetime-local"
+              value={productionEndTime instanceof Date 
+                ? productionEndTime.toISOString().slice(0, 16) 
+                : ''}
+              onChange={(e) => {
+                const newDate = e.target.value ? new Date(e.target.value) : new Date();
+                setProductionEndTime(newDate);
+              }}
+              fullWidth
+              margin="dense"
+              variant="outlined"
+              InputLabelProps={{
+                shrink: true,
+              }}
+            />
+            
+            {productionStartTime && productionEndTime && (
+              <Typography variant="body2" color="textSecondary">
+                Czas trwania: {Math.round((productionEndTime.getTime() - productionStartTime.getTime()) / (1000 * 60))} minut
+              </Typography>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStopProductionDialogOpen(false)}>
+            Anuluj
+          </Button>
+          <Button onClick={handleStopProduction} variant="contained">
+            Zatwierdź
           </Button>
         </DialogActions>
       </Dialog>

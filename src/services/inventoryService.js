@@ -13,7 +13,8 @@ import {
     serverTimestamp,
     increment,
     Timestamp,
-    setDoc
+    setDoc,
+    writeBatch
   } from 'firebase/firestore';
   import { db } from './firebase/config';
   import { generateLOTNumber } from '../utils/numberGenerators';
@@ -3008,7 +3009,16 @@ import {
         return null;
       }
       
-      // Najpierw szukamy dostawców, którzy spełniają wymóg minimalnej ilości
+      // Najpierw sprawdzamy, czy jest domyślna cena dostawcy
+      const defaultPrice = querySnapshot.docs.find(doc => doc.data().isDefault === true);
+      if (defaultPrice) {
+        return {
+          id: defaultPrice.id,
+          ...defaultPrice.data()
+        };
+      }
+      
+      // Jeśli nie ma domyślnej ceny, szukamy dostawców, którzy spełniają wymóg minimalnej ilości
       const eligiblePrices = [];
       querySnapshot.forEach(doc => {
         const priceData = doc.data();
@@ -3068,5 +3078,42 @@ import {
     } catch (error) {
       console.error('Błąd podczas pobierania najlepszych cen dostawców:', error);
       return {};
+    }
+  };
+
+  /**
+   * Ustawia cenę dostawcy jako domyślną dla danej pozycji magazynowej
+   * @param {string} itemId - ID pozycji magazynowej
+   * @param {string} priceId - ID ceny dostawcy do ustawienia jako domyślna
+   * @returns {Promise<void>}
+   */
+  export const setDefaultSupplierPrice = async (itemId, priceId) => {
+    try {
+      // Najpierw pobieramy wszystkie ceny dostawców dla danej pozycji
+      const supplierPricesRef = collection(db, INVENTORY_SUPPLIER_PRICES_COLLECTION);
+      const q = query(
+        supplierPricesRef,
+        where('itemId', '==', itemId)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      // Usuwamy flagę domyślności ze wszystkich pozycji
+      const batch = writeBatch(db);
+      
+      querySnapshot.forEach(doc => {
+        // Najpierw zerujemy wszystkie ceny jako nie domyślne
+        batch.update(doc.ref, { isDefault: false });
+      });
+      
+      // Ustawiamy wybraną cenę jako domyślną
+      const priceDocRef = doc(db, INVENTORY_SUPPLIER_PRICES_COLLECTION, priceId);
+      batch.update(priceDocRef, { isDefault: true });
+      
+      // Zatwierdzamy zmiany
+      await batch.commit();
+    } catch (error) {
+      console.error('Błąd podczas ustawiania domyślnej ceny dostawcy:', error);
+      throw error;
     }
   };

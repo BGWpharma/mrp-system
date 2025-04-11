@@ -52,10 +52,26 @@ const PurchaseOrderDetails = ({ orderId }) => {
   const [invoiceLink, setInvoiceLink] = useState('');
   const [userNames, setUserNames] = useState({});
   
-  const printRef = useRef();
+  const printRef = useRef(null);
   
   const handlePrint = useReactToPrint({
     content: () => printRef.current,
+    documentTitle: `Zamówienie ${purchaseOrder?.number || 'PO'}`,
+    onBeforeGetContent: () => {
+      return new Promise((resolve) => {
+        console.log('printRef:', printRef.current);
+        if (!printRef.current) {
+          showError('Nie można znaleźć zawartości do wydruku. Spróbuj odświeżyć stronę.');
+          return Promise.reject('Element do wydruku nie jest dostępny');
+        }
+        resolve();
+      });
+    },
+    onPrintError: (error) => {
+      console.error('Błąd podczas drukowania:', error);
+      showError('Wystąpił błąd podczas drukowania. Spróbuj ponownie.');
+    },
+    removeAfterPrint: true
   });
   
   useEffect(() => {
@@ -329,6 +345,139 @@ const PurchaseOrderDetails = ({ orderId }) => {
                           purchaseOrder.status === PURCHASE_ORDER_STATUSES.DELIVERED || 
                           purchaseOrder.status === 'delivered';
   
+  // Dodajemy alternatywną funkcję do drukowania w przypadku problemów
+  const handleDirectPrint = () => {
+    console.log('Używam alternatywnej metody drukowania...');
+    console.log('printRef:', printRef.current);
+    
+    if (!printRef.current) {
+      showError('Nie można znaleźć zawartości do wydruku');
+      return;
+    }
+    
+    try {
+      // Otwieramy nowe okno
+      const printWindow = window.open('', '_blank', 'width=800,height=600');
+      
+      // Przygotowujemy zawartość HTML
+      const printContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Zamówienie ${purchaseOrder?.number || 'PO'}</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              padding: 20px;
+              max-width: 800px;
+              margin: 0 auto;
+            }
+            .header {
+              text-align: center;
+              margin-bottom: 20px;
+              padding-bottom: 10px;
+              border-bottom: 1px solid #ddd;
+            }
+            .section {
+              margin-bottom: 20px;
+              padding: 15px;
+              border: 1px solid #eee;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+            }
+            th, td {
+              padding: 8px;
+              text-align: left;
+              border-bottom: 1px solid #ddd;
+            }
+            th {
+              background-color: #f2f2f2;
+            }
+            .supplier-info {
+              margin-bottom: 15px;
+            }
+            .total-section {
+              text-align: right;
+              margin-top: 20px;
+            }
+          </style>
+        </head>
+        <body onload="window.print(); window.setTimeout(function() { window.close(); }, 500);">
+          <div class="header">
+            <h1>Zamówienie ${purchaseOrder?.number || ''}</h1>
+            <p>Status: ${purchaseOrder?.status || ''}</p>
+          </div>
+          
+          <div class="section">
+            <div class="supplier-info">
+              <h3>Dostawca</h3>
+              <p>${purchaseOrder?.supplier?.name || 'Brak danych dostawcy'}</p>
+              ${purchaseOrder?.supplier?.contactPerson ? `<p>Osoba kontaktowa: ${purchaseOrder.supplier.contactPerson}</p>` : ''}
+              ${purchaseOrder?.supplier?.email ? `<p>Email: ${purchaseOrder.supplier.email}</p>` : ''}
+              ${purchaseOrder?.supplier?.phone ? `<p>Telefon: ${purchaseOrder.supplier.phone}</p>` : ''}
+            </div>
+            
+            <div>
+              <h3>Informacje o zamówieniu</h3>
+              <p>Data zamówienia: ${purchaseOrder?.orderDate ? new Date(purchaseOrder.orderDate).toLocaleDateString('pl') : 'Nie określono'}</p>
+              <p>Oczekiwana data dostawy: ${purchaseOrder?.expectedDeliveryDate ? new Date(purchaseOrder.expectedDeliveryDate).toLocaleDateString('pl') : 'Nie określono'}</p>
+            </div>
+          </div>
+          
+          <div class="section">
+            <h3>Pozycje zamówienia</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Produkt</th>
+                  <th>Ilość</th>
+                  <th>Jednostka</th>
+                  <th>Cena jedn.</th>
+                  <th>Wartość</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${purchaseOrder?.items?.map(item => `
+                  <tr>
+                    <td>${item.name}</td>
+                    <td>${item.quantity}</td>
+                    <td>${item.unit}</td>
+                    <td>${formatCurrency(item.unitPrice, purchaseOrder.currency)}</td>
+                    <td>${formatCurrency(item.totalPrice, purchaseOrder.currency)}</td>
+                  </tr>
+                `).join('') || '<tr><td colspan="5">Brak pozycji</td></tr>'}
+              </tbody>
+            </table>
+            
+            <div class="total-section">
+              <p>Wartość netto: ${formatCurrency(purchaseOrder?.totalValue, purchaseOrder?.currency)}</p>
+              <p>VAT (${purchaseOrder?.vatRate || 0}%): ${formatCurrency(purchaseOrder?.totalValue * (purchaseOrder?.vatRate / 100), purchaseOrder?.currency)}</p>
+              <h3>Wartość brutto: ${formatCurrency(purchaseOrder?.totalGross, purchaseOrder?.currency)}</h3>
+            </div>
+          </div>
+          
+          ${purchaseOrder?.notes ? `
+            <div class="section">
+              <h3>Uwagi</h3>
+              <p>${purchaseOrder.notes}</p>
+            </div>
+          ` : ''}
+        </body>
+        </html>
+      `;
+      
+      // Wpisujemy do nowego okna
+      printWindow.document.open();
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+    } catch (error) {
+      console.error('Błąd podczas drukowania:', error);
+      showError('Wystąpił błąd podczas drukowania. Spróbuj ponownie.');
+    }
+  };
+  
   return (
     <Box>
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between' }}>
@@ -343,7 +492,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
           <Button 
             variant="outlined" 
             startIcon={<PrintIcon />} 
-            onClick={handlePrint}
+            onClick={handleDirectPrint}
             sx={{ mr: 1 }}
           >
             Drukuj
@@ -375,16 +524,25 @@ const PurchaseOrderDetails = ({ orderId }) => {
         </Box>
       </Box>
       
-      <div ref={printRef}>
-      <Paper sx={{ p: 3, mb: 3 }}>
+      <Box 
+        ref={printRef} 
+        sx={{ 
+          mb: 3,
+          '@media print': {
+            padding: 0,
+            margin: 0
+          }
+        }}
+      >
+        <Paper sx={{ p: 3, mb: 3 }}>
           <Grid container spacing={2}>
-          <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={6}>
               <Box sx={{ mb: 2 }}>
                 <Typography variant="h5" component="h1">
                   Zamówienie {purchaseOrder.number}
                   <Box component="span" sx={{ ml: 2 }}>
-                {getStatusChip(purchaseOrder.status)}
-              </Box>
+                    {getStatusChip(purchaseOrder.status)}
+                  </Box>
                 </Typography>
               </Box>
               
@@ -410,12 +568,12 @@ const PurchaseOrderDetails = ({ orderId }) => {
                   </Link>
                 </Typography>
               )}
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
               <Typography variant="h6" gutterBottom>Dostawca</Typography>
               
-            {purchaseOrder.supplier ? (
+              {purchaseOrder.supplier ? (
                 <>
                   <Typography variant="body1" gutterBottom>
                     <strong>{purchaseOrder.supplier.name}</strong>
@@ -436,14 +594,14 @@ const PurchaseOrderDetails = ({ orderId }) => {
                       </Box>
                     )}
                     
-                {purchaseOrder.supplier.email && (
+                    {purchaseOrder.supplier.email && (
                       <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                         <EmailIcon sx={{ mr: 1, fontSize: 16 }} />
                         <a href={`mailto:${purchaseOrder.supplier.email}`}>{purchaseOrder.supplier.email}</a>
                       </Box>
                     )}
                     
-                {purchaseOrder.supplier.phone && (
+                    {purchaseOrder.supplier.phone && (
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         <PhoneIcon sx={{ mr: 1, fontSize: 16 }} />
                         <a href={`tel:${purchaseOrder.supplier.phone}`}>{purchaseOrder.supplier.phone}</a>
@@ -451,18 +609,18 @@ const PurchaseOrderDetails = ({ orderId }) => {
                     )}
                   </Typography>
                 </>
-            ) : (
+              ) : (
                 <Typography variant="body2">
-                Brak danych dostawcy
-              </Typography>
-            )}
+                  Brak danych dostawcy
+                </Typography>
+              )}
+            </Grid>
           </Grid>
-        </Grid>
-      </Paper>
-      
+        </Paper>
+        
         {/* Historia zmian statusu */}
         {purchaseOrder.statusHistory && purchaseOrder.statusHistory.length > 0 && (
-        <Paper sx={{ p: 3, mb: 3 }}>
+          <Paper sx={{ p: 3, mb: 3 }}>
             <Typography variant="h6" gutterBottom>
               Historia zmian statusu
             </Typography>
@@ -489,26 +647,27 @@ const PurchaseOrderDetails = ({ orderId }) => {
                 ))}
               </TableBody>
             </Table>
-        </Paper>
-      )}
-      
-      <Paper sx={{ p: 3, mb: 3 }}>
+          </Paper>
+        )}
+        
+        <Paper sx={{ p: 3, mb: 3 }}>
           <Typography variant="h6" gutterBottom>Elementy zamówienia</Typography>
           
           <TableContainer sx={{ mb: 3 }}>
             <Table>
-            <TableHead>
-              <TableRow>
+              <TableHead>
+                <TableRow>
                   <TableCell>Nazwa produktu</TableCell>
-                <TableCell align="right">Ilość</TableCell>
-                <TableCell>Jednostka</TableCell>
-                <TableCell align="right">Cena jedn.</TableCell>
+                  <TableCell align="right">Ilość</TableCell>
+                  <TableCell>Jednostka</TableCell>
+                  <TableCell align="right">Cena jedn.</TableCell>
                   <TableCell align="right">Wartość netto</TableCell>
                   <TableCell align="right">Odebrano</TableCell>
-                  <TableCell></TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
+                  {/* Ukrywamy kolumnę akcji przy drukowaniu */}
+                  <TableCell sx={{ '@media print': { display: 'none' } }}></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
                 {purchaseOrder.items?.map((item, index) => {
                   // Oblicz procent realizacji
                   const received = parseFloat(item.received || 0);
@@ -536,7 +695,8 @@ const PurchaseOrderDetails = ({ orderId }) => {
                       <TableCell align="right">
                         {received} {received > 0 && `(${fulfilledPercentage.toFixed(0)}%)`}
                       </TableCell>
-                      <TableCell align="right">
+                      {/* Ukrywamy przycisk akcji przy drukowaniu */}
+                      <TableCell align="right" sx={{ '@media print': { display: 'none' } }}>
                         {canReceiveItems && item.inventoryItemId && 
                          (parseFloat(item.received || 0) < parseFloat(item.quantity || 0)) && (
                           <Button
@@ -592,18 +752,18 @@ const PurchaseOrderDetails = ({ orderId }) => {
             </Grid>
           </Grid>
         </Paper>
-      </div>
+      </Box>
       
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button 
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end', '@media print': { display: 'none' } }}>
+        <Button 
           color="error"
           variant="outlined" 
           startIcon={<DeleteIcon />} 
           onClick={handleDeleteClick}
         >
           Usuń zamówienie
-            </Button>
-          </Box>
+        </Button>
+      </Box>
       
       {/* Dialog usuwania */}
       <Dialog
@@ -639,11 +799,16 @@ const PurchaseOrderDetails = ({ orderId }) => {
               onChange={(e) => setNewStatus(e.target.value)}
               label="Status"
             >
-              {Object.values(PURCHASE_ORDER_STATUSES).map((status) => (
-                <MenuItem key={status} value={status}>
-                  {translateStatus(status)}
-                </MenuItem>
-              ))}
+              <MenuItem value="draft">{translateStatus('draft')}</MenuItem>
+              <MenuItem value="pending">{translateStatus('pending')}</MenuItem>
+              <MenuItem value="approved">{translateStatus('approved')}</MenuItem>
+              <MenuItem value="ordered">{translateStatus('ordered')}</MenuItem>
+              <MenuItem value="partial">{translateStatus('partial')}</MenuItem>
+              <MenuItem value="shipped">{translateStatus('shipped')}</MenuItem>
+              <MenuItem value="delivered">{translateStatus('delivered')}</MenuItem>
+              <MenuItem value="cancelled">{translateStatus('cancelled')}</MenuItem>
+              <MenuItem value="completed">{translateStatus('completed')}</MenuItem>
+              <MenuItem value="confirmed">{translateStatus('confirmed')}</MenuItem>
             </Select>
           </FormControl>
         </DialogContent>
@@ -660,9 +825,9 @@ const PurchaseOrderDetails = ({ orderId }) => {
       >
         <DialogTitle>Przyjęcie towaru do magazynu</DialogTitle>
         <DialogContent>
-              <DialogContentText>
+          <DialogContentText>
             Czy chcesz przejść do strony przyjęcia towaru dla produktu: {itemToReceive?.name}?
-                </DialogContentText>
+          </DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setReceiveDialogOpen(false)}>Anuluj</Button>

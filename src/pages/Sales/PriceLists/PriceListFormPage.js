@@ -48,56 +48,45 @@ const PriceListFormPage = () => {
   const { showNotification } = useNotification();
   
   useEffect(() => {
-    fetchCustomers();
+    async function loadData() {
+      try {
+        // Najpierw załaduj klientów
+        const customersData = await getAllCustomers();
+        setCustomers(customersData);
+        
+        // Następnie, jeśli jesteśmy w trybie edycji, pobierz listę cenową
+        if (isEditMode) {
+          setInitialLoading(true);
+          const priceList = await getPriceListById(id);
+          
+          // Konwertuj daty z Timestamp na Date
+          const formattedPriceList = {
+            ...priceList,
+            validFrom: priceList.validFrom ? priceList.validFrom.toDate() : null,
+            validTo: priceList.validTo ? priceList.validTo.toDate() : null
+          };
+          
+          setFormData(formattedPriceList);
+          
+          // Znajdź wybranego klienta z już załadowanej listy klientów
+          if (priceList.customerId) {
+            const customer = customersData.find(c => c.id === priceList.customerId);
+            setSelectedCustomer(customer || null);
+          }
+        }
+      } catch (error) {
+        console.error('Błąd podczas ładowania danych:', error);
+        showNotification('Wystąpił błąd podczas ładowania danych', 'error');
+        if (isEditMode) {
+          navigate('/sales/price-lists');
+        }
+      } finally {
+        setInitialLoading(false);
+      }
+    }
     
-    if (isEditMode) {
-      fetchPriceList();
-    }
-  }, [id]);
-  
-  const fetchCustomers = async () => {
-    try {
-      const data = await getAllCustomers();
-      setCustomers(data);
-      
-      // Jeśli jesteśmy w trybie edycji i mamy już załadowane dane listy cenowej
-      if (isEditMode && formData.customerId) {
-        const customer = data.find(c => c.id === formData.customerId);
-        setSelectedCustomer(customer || null);
-      }
-    } catch (error) {
-      console.error('Błąd podczas pobierania klientów:', error);
-      showNotification('Błąd podczas pobierania klientów', 'error');
-    }
-  };
-  
-  const fetchPriceList = async () => {
-    try {
-      setInitialLoading(true);
-      const priceList = await getPriceListById(id);
-      
-      // Konwertuj daty z Timestamp na Date
-      const formattedPriceList = {
-        ...priceList,
-        validFrom: priceList.validFrom ? priceList.validFrom.toDate() : null,
-        validTo: priceList.validTo ? priceList.validTo.toDate() : null
-      };
-      
-      setFormData(formattedPriceList);
-      
-      // Znajdź wybranego klienta, ale tylko jeśli już mamy załadowanych klientów
-      if (customers.length > 0) {
-        const customer = customers.find(c => c.id === priceList.customerId);
-        setSelectedCustomer(customer || null);
-      }
-    } catch (error) {
-      console.error('Błąd podczas pobierania listy cenowej:', error);
-      showNotification('Błąd podczas pobierania listy cenowej', 'error');
-      navigate('/sales/price-lists');
-    } finally {
-      setInitialLoading(false);
-    }
-  };
+    loadData();
+  }, [id, isEditMode, navigate, showNotification]);
   
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;

@@ -577,9 +577,11 @@ export const translateStatus = (status) => {
     case 'approved': return 'Zatwierdzone';
     case 'ordered': return 'Zamówione';
     case 'partial': return 'Częściowo dostarczone';
+    case 'shipped': return 'Wysłane';
     case 'delivered': return 'Dostarczone';
     case 'completed': return 'Zakończone';
     case 'cancelled': return 'Anulowane';
+    case 'confirmed': return 'Potwierdzone';
     default: return status;
   }
 };

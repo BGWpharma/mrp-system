@@ -22,16 +22,19 @@ import {
   Select,
   MenuItem,
   CircularProgress,
-  InputAdornment
+  InputAdornment,
+  FormControlLabel,
+  Checkbox
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   Save as SaveIcon,
-  Cancel as CancelIcon
+  Cancel as CancelIcon,
+  Check as CheckIcon
 } from '@mui/icons-material';
-import { getSupplierPrices, addSupplierPrice, updateSupplierPrice, deleteSupplierPrice } from '../../services/inventoryService';
+import { getSupplierPrices, addSupplierPrice, updateSupplierPrice, deleteSupplierPrice, setDefaultSupplierPrice } from '../../services/inventoryService';
 import { getAllSuppliers } from '../../services/supplierService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -57,7 +60,8 @@ const SupplierPricesList = ({ itemId, currency = DEFAULT_CURRENCY }) => {
     price: '',
     minQuantity: 1,
     leadTime: 7,
-    notes: ''
+    notes: '',
+    isDefault: false
   });
   
   useEffect(() => {
@@ -115,7 +119,8 @@ const SupplierPricesList = ({ itemId, currency = DEFAULT_CURRENCY }) => {
         price: item.price,
         minQuantity: item.minQuantity || 1,
         leadTime: item.leadTime || 7,
-        notes: item.notes || ''
+        notes: item.notes || '',
+        isDefault: item.isDefault || false
       });
       setEditingId(item.id);
     } else {
@@ -124,7 +129,8 @@ const SupplierPricesList = ({ itemId, currency = DEFAULT_CURRENCY }) => {
         price: '',
         minQuantity: 1,
         leadTime: 7,
-        notes: ''
+        notes: '',
+        isDefault: false
       });
       setEditingId(null);
     }
@@ -168,7 +174,8 @@ const SupplierPricesList = ({ itemId, currency = DEFAULT_CURRENCY }) => {
         minQuantity: parseInt(formData.minQuantity) || 1,
         leadTime: parseInt(formData.leadTime) || 7,
         notes: formData.notes,
-        currency
+        currency,
+        isDefault: formData.isDefault
       };
       
       if (editingId) {
@@ -211,6 +218,25 @@ const SupplierPricesList = ({ itemId, currency = DEFAULT_CURRENCY }) => {
     }
   };
   
+  // Dodaję nową funkcję do ustawiania domyślnej ceny
+  const handleSetDefaultPrice = async (priceId) => {
+    try {
+      await setDefaultSupplierPrice(itemId, priceId);
+      
+      // Aktualizuj lokalny stan - odznacz wszystkie inne ceny i oznacz wybraną jako domyślną
+      const updatedPrices = supplierPrices.map(price => ({
+        ...price,
+        isDefault: price.id === priceId
+      }));
+      
+      setSupplierPrices(updatedPrices);
+      showSuccess('Ustawiono domyślną cenę dostawcy');
+    } catch (error) {
+      console.error('Błąd podczas ustawiania domyślnej ceny:', error);
+      showError('Nie udało się ustawić domyślnej ceny');
+    }
+  };
+  
   return (
     <Box sx={{ mt: 2 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -245,6 +271,7 @@ const SupplierPricesList = ({ itemId, currency = DEFAULT_CURRENCY }) => {
                 <TableCell align="right">Min. ilość</TableCell>
                 <TableCell align="right">Czas dostawy (dni)</TableCell>
                 <TableCell>Uwagi</TableCell>
+                <TableCell align="center">Domyślna</TableCell>
                 <TableCell align="right">Akcje</TableCell>
               </TableRow>
             </TableHead>
@@ -258,6 +285,16 @@ const SupplierPricesList = ({ itemId, currency = DEFAULT_CURRENCY }) => {
                   <TableCell align="right">{item.minQuantity || 1}</TableCell>
                   <TableCell align="right">{item.leadTime || 7}</TableCell>
                   <TableCell>{item.notes}</TableCell>
+                  <TableCell align="center">
+                    <IconButton
+                      color={item.isDefault ? "primary" : "default"}
+                      onClick={() => handleSetDefaultPrice(item.id)}
+                      size="small"
+                      title={item.isDefault ? "Domyślna cena" : "Ustaw jako domyślną"}
+                    >
+                      <CheckIcon />
+                    </IconButton>
+                  </TableCell>
                   <TableCell align="right">
                     <IconButton
                       size="small"
@@ -358,6 +395,18 @@ const SupplierPricesList = ({ itemId, currency = DEFAULT_CURRENCY }) => {
               onChange={handleInputChange}
               multiline
               rows={2}
+            />
+            
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={formData.isDefault}
+                  onChange={(e) => setFormData(prev => ({ ...prev, isDefault: e.target.checked }))}
+                  name="isDefault"
+                  color="primary"
+                />
+              }
+              label="Ustaw jako domyślną cenę dostawcy"
             />
           </Box>
         </DialogContent>

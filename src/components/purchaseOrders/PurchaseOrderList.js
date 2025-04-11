@@ -413,11 +413,16 @@ const PurchaseOrderList = () => {
               onChange={(e) => setNewStatus(e.target.value)}
               label="Status"
             >
-              {Object.values(PURCHASE_ORDER_STATUSES).map((status) => (
-                <MenuItem key={status} value={status}>
-                  {STATUS_TRANSLATIONS[status] || status}
-                </MenuItem>
-              ))}
+              <MenuItem value="draft">Projekt</MenuItem>
+              <MenuItem value="pending">Oczekujące</MenuItem>
+              <MenuItem value="approved">Zatwierdzone</MenuItem>
+              <MenuItem value="ordered">Zamówione</MenuItem>
+              <MenuItem value="partial">Częściowo dostarczone</MenuItem>
+              <MenuItem value="shipped">Wysłane</MenuItem>
+              <MenuItem value="delivered">Dostarczone</MenuItem>
+              <MenuItem value="cancelled">Anulowane</MenuItem>
+              <MenuItem value="completed">Zakończone</MenuItem>
+              <MenuItem value="confirmed">Potwierdzone</MenuItem>
             </Select>
           </FormControl>
         </DialogContent>

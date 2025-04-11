@@ -1768,7 +1768,128 @@ import {
     }
     
     const task = taskDoc.data();
-    return task.productionSessions || [];
+    const productionSessions = task.productionSessions || [];
+    
+    // Tworzymy wpisy w kolekcji productionHistory jeśli nie istnieją
+    // i upewniamy się, że zawierają wszystkie potrzebne dane
+    const historyCollectionRef = collection(db, 'productionHistory');
+    const historyItems = [];
+    
+    // Dla każdej sesji, sprawdź czy istnieje już w kolekcji productionHistory
+    for (const [index, session] of productionSessions.entries()) {
+      // Tworzymy unikalny identyfikator na podstawie ID zadania i indeksu sesji
+      // (dla zapewnienia kompatybilności z istniejącymi danymi)
+      const sessionId = `${taskId}_session_${index}`;
+      
+      // Sprawdzamy czy wpis już istnieje
+      const historyDocRef = doc(db, 'productionHistory', sessionId);
+      const historyDoc = await getDoc(historyDocRef);
+      
+      let historyItem;
+      
+      if (historyDoc.exists()) {
+        // Pobierz istniejący dokument
+        historyItem = {
+          id: historyDoc.id,
+          ...historyDoc.data()
+        };
+      } else {
+        // Utwórz nowy dokument w kolekcji productionHistory
+        const newHistoryItem = {
+          taskId,
+          sessionIndex: index,
+          startTime: session.startDate,
+          endTime: session.endDate,
+          timeSpent: session.timeSpent,
+          quantity: session.completedQuantity,
+          userId: session.createdBy,
+          createdAt: serverTimestamp()
+        };
+        
+        // Zapisz w bazie danych
+        await setDoc(doc(db, 'productionHistory', sessionId), newHistoryItem);
+        
+        historyItem = {
+          id: sessionId,
+          ...newHistoryItem
+        };
+      }
+      
+      historyItems.push(historyItem);
+    }
+    
+    return historyItems;
+  };
+
+  // Funkcja do aktualizacji sesji produkcyjnej
+  export const updateProductionSession = async (sessionId, updateData, userId) => {
+    try {
+      // Pobierz aktualne dane sesji
+      const sessionRef = doc(db, 'productionHistory', sessionId);
+      const sessionDoc = await getDoc(sessionRef);
+      
+      if (!sessionDoc.exists()) {
+        throw new Error('Sesja produkcyjna nie istnieje');
+      }
+      
+      const sessionData = sessionDoc.data();
+      const taskId = sessionData.taskId;
+      const sessionIndex = sessionData.sessionIndex;
+      
+      // Pobierz dane zadania
+      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+      const taskDoc = await getDoc(taskRef);
+      
+      if (!taskDoc.exists()) {
+        throw new Error('Zadanie produkcyjne nie istnieje');
+      }
+      
+      const task = taskDoc.data();
+      const productionSessions = [...(task.productionSessions || [])];
+      
+      // Sprawdź czy sesja istnieje w tablicy sesji zadania
+      if (!productionSessions[sessionIndex]) {
+        throw new Error('Sesja produkcyjna nie została znaleziona w zadaniu');
+      }
+      
+      // Aktualizuj dane w dokumencie productionHistory
+      await updateDoc(sessionRef, {
+        ...updateData,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      });
+      
+      // Aktualizuj dane w tablicy sesji zadania
+      productionSessions[sessionIndex] = {
+        ...productionSessions[sessionIndex],
+        startDate: updateData.startTime,
+        endDate: updateData.endTime,
+        timeSpent: updateData.timeSpent,
+        completedQuantity: updateData.quantity
+      };
+      
+      // Oblicz całkowitą wyprodukowaną ilość
+      const totalCompletedQuantity = productionSessions.reduce(
+        (sum, session) => sum + (session.completedQuantity || 0), 
+        0
+      );
+      
+      // Aktualizuj dane zadania
+      await updateDoc(taskRef, {
+        productionSessions,
+        totalCompletedQuantity,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      });
+      
+      return {
+        success: true,
+        message: 'Sesja produkcyjna została zaktualizowana'
+      };
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji sesji produkcyjnej:', error);
+      throw error;
+    }
   };
 
   // Generuje raport materiałów i LOTów dla zlecenia produkcyjnego (MO)

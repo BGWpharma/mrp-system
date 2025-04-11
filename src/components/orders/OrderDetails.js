@@ -25,11 +25,13 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  DialogContentText,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  Tooltip
+  Tooltip,
+  Alert
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -48,7 +50,11 @@ import {
   Delete as DeleteIcon,
   Engineering as EngineeringIcon,
   PlaylistAdd as PlaylistAddIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  PictureAsPdf as PdfIcon,
+  Link as LinkIcon,
+  OpenInNew as OpenInNewIcon,
+  Label as LabelIcon
 } from '@mui/icons-material';
 import { getOrderById, ORDER_STATUSES, updateOrder } from '../../services/orderService';
 import { useNotification } from '../../hooks/useNotification';
@@ -76,6 +82,10 @@ const OrderDetails = () => {
   const [selectedPurchaseOrderId, setSelectedPurchaseOrderId] = useState('');
   const [loadingPurchaseOrders, setLoadingPurchaseOrders] = useState(false);
   const [userNames, setUserNames] = useState({});
+  const [driveLinkDialogOpen, setDriveLinkDialogOpen] = useState(false);
+  const [driveLink, setDriveLink] = useState('');
+  const [labelDialogOpen, setLabelDialogOpen] = useState(false);
+  const [selectedItemForLabel, setSelectedItemForLabel] = useState(null);
 
   useEffect(() => {
     const fetchOrderDetails = async () => {
@@ -336,6 +346,131 @@ const OrderDetails = () => {
     );
   };
 
+  const handleDriveLinkDialogOpen = () => {
+    setDriveLinkDialogOpen(true);
+  };
+
+  const handleDriveLinkDialogClose = () => {
+    setDriveLinkDialogOpen(false);
+    setDriveLink('');
+  };
+
+  const handleDriveLinkChange = (e) => {
+    setDriveLink(e.target.value);
+  };
+
+  const handleDriveLinkSubmit = async () => {
+    if (!driveLink) {
+      showError('Wprowadź prawidłowy link do Google Drive');
+      return;
+    }
+
+    // Sprawdzamy czy link jest do Google Drive
+    if (!driveLink.includes('drive.google.com')) {
+      showError('Link musi być z Google Drive');
+      return;
+    }
+
+    try {
+      setUploading(true);
+      
+      // Aktualizujemy zamówienie z linkiem do Google Drive
+      await updateOrder(orderId, { 
+        ...order, 
+        deliveryProof: driveLink,
+        deliveryProofType: 'link' // Dodajemy informację o typie dowodu
+      }, currentUser.uid);
+      
+      // Aktualizujemy stan lokalny
+      setOrder({ 
+        ...order, 
+        deliveryProof: driveLink,
+        deliveryProofType: 'link'
+      });
+      
+      showSuccess('Link do Google Drive dodany jako dowód dostawy');
+      handleDriveLinkDialogClose();
+    } catch (error) {
+      console.error('Błąd podczas dodawania linku do Google Drive:', error);
+      showError('Wystąpił błąd podczas dodawania linku');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Pomocnicze funkcje do wykrywania typu dowodu dostawy
+  const isImageUrl = (url) => {
+    return url && (
+      url.endsWith('.jpg') || 
+      url.endsWith('.jpeg') || 
+      url.endsWith('.png') || 
+      url.endsWith('.gif') || 
+      url.endsWith('.bmp') ||
+      url.startsWith('data:image/')
+    );
+  };
+
+  const isGoogleDriveLink = (url) => {
+    return url && url.includes('drive.google.com');
+  };
+
+  const handleLabelDialogOpen = (item) => {
+    setSelectedItemForLabel(item);
+    setLabelDialogOpen(true);
+  };
+
+  const handleLabelDialogClose = () => {
+    setLabelDialogOpen(false);
+    setSelectedItemForLabel(null);
+  };
+
+  const handlePrintLabel = () => {
+    // Przekierowanie do strony drukowania etykiety wysyłkowej dla wybranego produktu
+    navigate(`/orders/${orderId}/shipping-label`, { 
+      state: { 
+        item: selectedItemForLabel,
+        orderNumber: order.orderNumber, 
+        returnTo: `/orders/${orderId}`
+      } 
+    });
+    handleLabelDialogClose();
+  };
+
+  // Funkcja do określania statusu produkcji dla danego elementu
+  const getProductionStatus = (item, productionTasks) => {
+    if (!productionTasks || !Array.isArray(productionTasks) || productionTasks.length === 0) {
+      return <Chip label="Brak zadań" size="small" color="default" />;
+    }
+
+    // Znajdź zadania produkcyjne dla tego elementu
+    const tasksForItem = productionTasks.filter(task => 
+      task.productId === item.id || 
+      task.productName?.toLowerCase() === item.name?.toLowerCase()
+    );
+
+    if (tasksForItem.length === 0) {
+      return <Chip label="Brak zadań" size="small" color="default" />;
+    }
+
+    // Określ ogólny status na podstawie wszystkich zadań
+    const allCompleted = tasksForItem.every(task => task.status === 'Zakończone');
+    const allCancelled = tasksForItem.every(task => task.status === 'Anulowane');
+    const anyInProgress = tasksForItem.some(task => task.status === 'W trakcie' || task.status === 'Wstrzymane');
+    const anyPlanned = tasksForItem.some(task => task.status === 'Zaplanowane');
+
+    if (allCompleted) {
+      return <Chip label="Zakończone" size="small" color="success" />;
+    } else if (allCancelled) {
+      return <Chip label="Anulowane" size="small" color="error" />;
+    } else if (anyInProgress) {
+      return <Chip label="W trakcie" size="small" color="warning" />;
+    } else if (anyPlanned) {
+      return <Chip label="Zaplanowane" size="small" color="primary" />;
+    } else {
+      return <Chip label="Mieszany" size="small" color="default" />;
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
@@ -386,8 +521,16 @@ const OrderDetails = () => {
             startIcon={<PrintIcon />} 
             variant="outlined"
             onClick={handlePrintInvoice}
+            sx={{ mr: 1 }}
           >
             Drukuj
+          </Button>
+          <Button 
+            startIcon={<LabelIcon />} 
+            variant="outlined"
+            onClick={() => setLabelDialogOpen(true)}
+          >
+            Drukuj etykietę
           </Button>
         </Box>
       </Box>
@@ -545,32 +688,35 @@ const OrderDetails = () => {
         <Divider sx={{ mb: 2 }} />
         <Table>
           <TableHead>
-            <TableRow>
-              <TableCell>Produkt</TableCell>
-              <TableCell align="right">Ilość</TableCell>
-              <TableCell align="right">Cena</TableCell>
-              <TableCell align="right">Wartość</TableCell>
+            <TableRow sx={{ bgcolor: 'primary.main', color: 'primary.contrastText' }}>
+              <TableCell sx={{ color: 'inherit' }}>Produkt</TableCell>
+              <TableCell sx={{ color: 'inherit' }} align="right">Ilość</TableCell>
+              <TableCell sx={{ color: 'inherit' }} align="right">Cena</TableCell>
+              <TableCell sx={{ color: 'inherit' }} align="right">Wartość</TableCell>
+              <TableCell sx={{ color: 'inherit' }}>Status produkcji</TableCell>
+              <TableCell sx={{ color: 'inherit' }}>Akcje</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {order.items && order.items.map((item, index) => (
-              <TableRow key={index}>
+              <TableRow key={index} sx={{ '&:nth-of-type(odd)': { bgcolor: 'action.hover' } }}>
+                <TableCell>{item.name}</TableCell>
+                <TableCell align="right">{item.quantity} {item.unit}</TableCell>
+                <TableCell align="right">{formatCurrency(item.price)}</TableCell>
+                <TableCell align="right">{formatCurrency(item.quantity * item.price)}</TableCell>
                 <TableCell>
-                  <Typography variant="body1">{item.name}</Typography>
-                  {item.id && (
-                    <Typography variant="caption" color="textSecondary">
-                      ID: {item.id}
-                    </Typography>
-                  )}
+                  {getProductionStatus(item, order.productionTasks)}
                 </TableCell>
-                <TableCell align="right">
-                  {item.quantity} {item.unit}
-                </TableCell>
-                <TableCell align="right">
-                  {formatCurrency(item.price)}
-                </TableCell>
-                <TableCell align="right">
-                  {formatCurrency(item.price * item.quantity)}
+                <TableCell>
+                  <Tooltip title="Drukuj etykietę">
+                    <IconButton 
+                      size="small" 
+                      color="primary"
+                      onClick={() => handleLabelDialogOpen(item)}
+                    >
+                      <LabelIcon />
+                    </IconButton>
+                  </Tooltip>
                 </TableCell>
               </TableRow>
             ))}
@@ -697,22 +843,41 @@ const OrderDetails = () => {
         
         {order.deliveryProof ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <Box sx={{ width: '100%', maxWidth: 600, mb: 2 }}>
-              <img 
-                src={order.deliveryProof} 
-                alt="Dowód dostawy" 
-                style={{ width: '100%', height: 'auto', borderRadius: 4 }} 
-              />
-            </Box>
+            {isImageUrl(order.deliveryProof) ? (
+              <Box sx={{ width: '100%', maxWidth: 600, mb: 2 }}>
+                <img 
+                  src={order.deliveryProof} 
+                  alt="Dowód dostawy" 
+                  style={{ width: '100%', height: 'auto', borderRadius: 4 }} 
+                />
+              </Box>
+            ) : isGoogleDriveLink(order.deliveryProof) ? (
+              <Box sx={{ width: '100%', maxWidth: 600, mb: 2, p: 3, border: '1px dashed', borderColor: 'divider', borderRadius: 1 }}>
+                <Typography variant="h6" align="center" gutterBottom>
+                  <LinkIcon color="primary" sx={{ verticalAlign: 'middle', mr: 1 }} />
+                  Link do Google Drive
+                </Typography>
+                <Typography variant="body2" color="text.secondary" gutterBottom align="center">
+                  {order.deliveryProof}
+                </Typography>
+              </Box>
+            ) : (
+              <Box sx={{ width: '100%', maxWidth: 600, mb: 2 }}>
+                <Alert severity="info">
+                  Dokument w formacie, który nie może być wyświetlony w przeglądarce. 
+                  Kliknij przycisk "Otwórz", aby wyświetlić dokument.
+                </Alert>
+              </Box>
+            )}
             <Box sx={{ display: 'flex', gap: 2 }}>
               <Button 
                 variant="outlined"
-                startIcon={<DownloadIcon />}
+                startIcon={<OpenInNewIcon />}
                 href={order.deliveryProof}
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Pobierz
+                Otwórz
               </Button>
               <Button 
                 variant="outlined" 
@@ -728,26 +893,35 @@ const OrderDetails = () => {
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <Typography variant="body1" sx={{ mb: 2 }}>
-              Brak załączonego dowodu dostawy. Dodaj skan lub zdjęcie potwierdzenia dostawy.
+              Brak załączonego dowodu dostawy. Dodaj skan, zdjęcie lub link do dokumentu potwierdzającego dostawę.
             </Typography>
-            <input
-              ref={fileInputRef}
-              accept="image/*, application/pdf"
-              style={{ display: 'none' }}
-              id="delivery-proof-upload"
-              type="file"
-              onChange={handleDeliveryProofUpload}
-            />
-            <label htmlFor="delivery-proof-upload">
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <input
+                ref={fileInputRef}
+                accept="image/*, application/pdf"
+                style={{ display: 'none' }}
+                id="delivery-proof-upload"
+                type="file"
+                onChange={handleDeliveryProofUpload}
+              />
+              <label htmlFor="delivery-proof-upload">
+                <Button
+                  variant="contained"
+                  component="span"
+                  startIcon={<UploadIcon />}
+                  disabled={uploading}
+                >
+                  {uploading ? 'Przesyłanie...' : 'Dodaj plik'}
+                </Button>
+              </label>
               <Button
-                variant="contained"
-                component="span"
-                startIcon={<UploadIcon />}
-                disabled={uploading}
+                variant="outlined"
+                startIcon={<LinkIcon />}
+                onClick={handleDriveLinkDialogOpen}
               >
-                {uploading ? 'Przesyłanie...' : 'Dodaj dowód dostawy'}
+                Dodaj link Google Drive
               </Button>
-            </label>
+            </Box>
           </Box>
         )}
       </Paper>
@@ -1031,6 +1205,81 @@ const OrderDetails = () => {
             disabled={!selectedPurchaseOrderId || loadingPurchaseOrders}
           >
             Przypisz
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog do wprowadzania linku Google Drive */}
+      <Dialog open={driveLinkDialogOpen} onClose={handleDriveLinkDialogClose}>
+        <DialogTitle>Dodaj link do Google Drive</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Wprowadź link do dokumentu w Google Drive, który będzie służył jako dowód dostawy.
+          </DialogContentText>
+          <TextField
+            autoFocus
+            margin="dense"
+            id="drive-link"
+            label="Link do Google Drive"
+            type="url"
+            fullWidth
+            variant="outlined"
+            value={driveLink}
+            onChange={handleDriveLinkChange}
+            placeholder="https://drive.google.com/file/d/..."
+            helperText="Link musi pochodzić z Google Drive i być publicznie dostępny"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleDriveLinkDialogClose}>Anuluj</Button>
+          <Button onClick={handleDriveLinkSubmit} variant="contained">Dodaj</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog wyboru etykiety produktu */}
+      <Dialog open={labelDialogOpen} onClose={handleLabelDialogClose}>
+        <DialogTitle>Wybierz produkt do etykiety</DialogTitle>
+        <DialogContent>
+          {selectedItemForLabel ? (
+            <DialogContentText>
+              Wybrano produkt: {selectedItemForLabel.name}
+            </DialogContentText>
+          ) : (
+            <DialogContentText>
+              Wybierz produkt z listy dla którego chcesz wydrukować etykietę:
+            </DialogContentText>
+          )}
+          
+          {!selectedItemForLabel && (
+            <FormControl fullWidth sx={{ mt: 2 }}>
+              <InputLabel>Produkt</InputLabel>
+              <Select
+                value={selectedItemForLabel?.id || ''}
+                onChange={(e) => {
+                  const selected = order.items.find(item => item.id === e.target.value);
+                  setSelectedItemForLabel(selected);
+                }}
+                label="Produkt"
+              >
+                {order.items && order.items.map((item, index) => (
+                  <MenuItem key={index} value={item.id || index}>
+                    {item.name} ({item.quantity} {item.unit})
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleLabelDialogClose}>Anuluj</Button>
+          <Button 
+            onClick={handlePrintLabel} 
+            variant="contained" 
+            color="primary" 
+            disabled={!selectedItemForLabel}
+            startIcon={<LabelIcon />}
+          >
+            Drukuj etykietę
           </Button>
         </DialogActions>
       </Dialog>

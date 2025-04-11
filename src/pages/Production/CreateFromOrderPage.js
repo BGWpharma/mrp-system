@@ -865,188 +865,6 @@ const CreateFromOrderPage = () => {
     }
   };
 
-  // Nowa funkcja do aktualizacji cen produktów na podstawie listy cen dla receptur
-  const updatePricesFromPriceList = async () => {
-    if (!selectedOrder || !selectedOrder.items || selectedOrder.items.length === 0) {
-      showInfo('Zamówienie nie zawiera żadnych pozycji do aktualizacji cen');
-      return;
-    }
-
-    try {
-      setUpdatingPrices(true);
-      
-      const customerId = selectedOrder.customer?.id;
-      if (!customerId) {
-        showError('Zamówienie nie ma przypisanego klienta');
-        setUpdatingPrices(false);
-        return;
-      }
-      
-      let hasUpdates = false;
-      const updatedItems = [...selectedOrder.items];
-      
-      // Przeszukaj pozycje zamówienia
-      for (let i = 0; i < updatedItems.length; i++) {
-        const item = updatedItems[i];
-        
-        // Sprawdź czy pozycja jest recepturą
-        const isRecipe = item.itemType === 'recipe' || item.isRecipe;
-        let recipeId = isRecipe ? item.id : null;
-        
-        // Jeśli nie jest bezpośrednio recepturą, spróbuj znaleźć pasującą recepturę
-        if (!isRecipe) {
-          const matchingRecipe = findRecipeForProduct(item.name);
-          if (matchingRecipe) {
-            recipeId = matchingRecipe.id;
-          }
-        }
-        
-        // Jeśli mamy identyfikator receptury, pobierz cenę z listy cen
-        if (recipeId) {
-          const priceFromList = await getPriceForCustomerProduct(customerId, recipeId, true);
-          
-          if (priceFromList !== null && priceFromList !== undefined) {
-            console.log(`Znaleziono cenę ${priceFromList} dla produktu ${item.name} w liście cen`);
-            
-            // Aktualizuj cenę tylko jeśli jest różna
-            if (item.price !== priceFromList) {
-              updatedItems[i] = {
-                ...item,
-                price: priceFromList,
-                fromPriceList: true,
-                originalPrice: item.price  // Zapisz oryginalną cenę
-              };
-              hasUpdates = true;
-            }
-          }
-        }
-      }
-      
-      // Jeśli są zmiany, zaktualizuj zamówienie
-      if (hasUpdates) {
-        // Oblicz nową wartość całkowitą
-        const totalValue = updatedItems.reduce((sum, item) => sum + (parseFloat(item.quantity) * parseFloat(item.price)), 0);
-        
-        // Utwórz nowy obiekt zamówienia z zaktualizowanymi pozycjami
-        const updatedOrder = {
-          ...selectedOrder,
-          items: updatedItems,
-          totalValue: totalValue
-        };
-        
-        // Zaktualizuj zamówienie w bazie danych
-        await updateOrder(selectedOrder.id, updatedOrder, currentUser.uid);
-        
-        // Zaktualizuj stan lokalny
-        setSelectedOrder(updatedOrder);
-        
-        // Zaktualizuj również listę zamówień, aby odzwierciedlić zmiany
-        setOrders(prevOrders => 
-          prevOrders.map(order => 
-            order.id === updatedOrder.id ? {...order, totalValue: totalValue} : order
-          )
-        );
-        
-        setSelectedItems(updatedItems.map((item, index) => ({
-          ...item,
-          itemId: index,
-          selected: true,
-          unit: normalizeUnit(item.unit)
-        })));
-        
-        showSuccess('Ceny produktów zostały zaktualizowane na podstawie listy cen');
-      } else {
-        showInfo('Nie znaleziono aktualizacji cen w listach cenowych');
-      }
-    } catch (error) {
-      console.error('Błąd podczas aktualizacji cen:', error);
-      showError('Wystąpił błąd podczas aktualizacji cen: ' + error.message);
-    } finally {
-      setUpdatingPrices(false);
-    }
-  };
-
-  // Funkcja aktualizująca koszt zamówienia na podstawie kosztów produkcji
-  const updateOrderWithProductionCosts = async () => {
-    if (!selectedOrder) {
-      showError('Nie wybrano zamówienia');
-      return;
-    }
-    
-    try {
-      setUpdatingPrices(true);
-      
-      // Pobierz zadania produkcyjne powiązane z zamówieniem
-      const order = await getOrderById(selectedOrder.id);
-      
-      if (!order.productionTasks || order.productionTasks.length === 0) {
-        showInfo('Zamówienie nie ma powiązanych zadań produkcyjnych');
-        setUpdatingPrices(false);
-        return;
-      }
-      
-      // Utwórz mapę kosztów produkcji dla każdej pozycji zamówienia
-      const productionCostsMap = {};
-      
-      // Zbierz koszty produkcji z zadań produkcyjnych
-      for (const task of order.productionTasks) {
-        if (!task.costs) continue;
-        
-        // Znajdź odpowiadającą pozycję zamówienia
-        const matchingItem = order.items.find(item => 
-          item.name.toLowerCase() === task.productName.toLowerCase()
-        );
-        
-        if (matchingItem) {
-          // Jeśli już mamy koszt dla tej pozycji, dodaj do istniejącego
-          if (productionCostsMap[matchingItem.id]) {
-            productionCostsMap[matchingItem.id] += task.costs.totalCost || 0;
-          } else {
-            productionCostsMap[matchingItem.id] = task.costs.totalCost || 0;
-          }
-        }
-      }
-      
-      // Sprawdź czy zamówienie ma powiązane zamówienia zakupu
-      if (order.linkedPurchaseOrders && order.linkedPurchaseOrders.length > 0) {
-        // Dla każdej pozycji zamówienia dodajemy koszty materiałów z zamówień zakupu
-        order.linkedPurchaseOrders.forEach(po => {
-          // W tym miejscu możemy dodać logikę przypisywania kosztów PO do pozycji CO
-          // Na razie po prostu informujemy o powiązanych PO
-          console.log(`Zamówienie ma powiązane PO: ${po.number} o wartości ${po.value}`);
-        });
-      }
-      
-      // Dodaj informacje o kosztach produkcji do zamówienia
-      const updatedOrder = {
-        ...order,
-        productionCosts: productionCostsMap,
-        hasProductionCosts: true
-      };
-      
-      // Zaktualizuj zamówienie w bazie danych
-      await updateOrder(order.id, updatedOrder, currentUser.uid);
-      
-      // Zaktualizuj również listę zamówień
-      setOrders(prevOrders => 
-        prevOrders.map(o => 
-          o.id === order.id ? {...o, hasProductionCosts: true} : o
-        )
-      );
-      
-      showSuccess('Koszty produkcji zostały zaktualizowane w zamówieniu');
-      
-      // Odśwież dane zamówienia
-      fetchOrderDetails(order.id);
-      
-    } catch (error) {
-      console.error('Błąd podczas aktualizacji kosztów produkcji:', error);
-      showError('Wystąpił błąd podczas aktualizacji kosztów produkcji: ' + error.message);
-    } finally {
-      setUpdatingPrices(false);
-    }
-  };
-
   // Funkcja sprawdzająca czy zadania produkcyjne istnieją i usuwająca nieistniejące referencje
   const verifyProductionTasks = async (orderData) => {
     if (!orderData || !orderData.productionTasks || orderData.productionTasks.length === 0) {
@@ -1394,6 +1212,7 @@ const CreateFromOrderPage = () => {
               
               {selectedOrderId && (
                 <Grid item xs={12} md={6} sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                  {/* Usunięte przyciski:
                   <Button
                     variant="outlined"
                     onClick={updatePricesFromPriceList}
@@ -1411,6 +1230,7 @@ const CreateFromOrderPage = () => {
                   >
                     {updatingPrices ? 'Aktualizowanie...' : 'Wlicz koszty produkcji do CO'}
                   </Button>
+                  */}
                 </Grid>
               )}
             </Grid>

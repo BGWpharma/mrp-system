@@ -51,7 +51,9 @@ import {
   CloudUpload as CloudUploadIcon,
   ShoppingCart as ShoppingCartIcon,
   Refresh as RefreshIcon,
-  PlaylistAdd as PlaylistAddIcon
+  PlaylistAdd as PlaylistAddIcon,
+  Link as LinkIcon,
+  OpenInNew as OpenInNewIcon
 } from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -122,6 +124,8 @@ const OrderForm = ({ orderId }) => {
   const [availablePurchaseOrders, setAvailablePurchaseOrders] = useState([]);
   const [selectedPurchaseOrderId, setSelectedPurchaseOrderId] = useState('');
   const [loadingPurchaseOrders, setLoadingPurchaseOrders] = useState(false);
+  const [driveLinkDialogOpen, setDriveLinkDialogOpen] = useState(false);
+  const [driveLink, setDriveLink] = useState('');
 
   const { currentUser } = useAuth();
   const { showSuccess, showError, showInfo } = useNotification();
@@ -1156,6 +1160,56 @@ const OrderForm = ({ orderId }) => {
     }
   };
 
+  const handleDriveLinkDialogOpen = () => {
+    setDriveLinkDialogOpen(true);
+  };
+
+  const handleDriveLinkDialogClose = () => {
+    setDriveLinkDialogOpen(false);
+    setDriveLink('');
+  };
+
+  const handleDriveLinkChange = (e) => {
+    setDriveLink(e.target.value);
+  };
+
+  const handleDriveLinkSubmit = () => {
+    if (!driveLink) {
+      showError('Wprowadź prawidłowy link do Google Drive');
+      return;
+    }
+
+    // Sprawdzamy czy link jest do Google Drive
+    if (!driveLink.includes('drive.google.com')) {
+      showError('Link musi być z Google Drive');
+      return;
+    }
+
+    setOrderData(prev => ({
+      ...prev,
+      deliveryProof: driveLink,
+      deliveryProofType: 'link' // Dodajemy informację o typie dowodu
+    }));
+
+    showSuccess('Link do Google Drive dodany jako dowód dostawy');
+    handleDriveLinkDialogClose();
+  };
+
+  const isImageUrl = (url) => {
+    return url && (
+      url.endsWith('.jpg') || 
+      url.endsWith('.jpeg') || 
+      url.endsWith('.png') || 
+      url.endsWith('.gif') || 
+      url.endsWith('.bmp') ||
+      url.startsWith('data:image/')
+    );
+  };
+
+  const isGoogleDriveLink = (url) => {
+    return url && url.includes('drive.google.com');
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
@@ -1532,22 +1586,41 @@ const OrderForm = ({ orderId }) => {
           
           {orderData.deliveryProof ? (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <Box sx={{ width: '100%', maxWidth: 600, mb: 2 }}>
-                <img 
-                  src={orderData.deliveryProof} 
-                  alt="Dowód dostawy" 
-                  style={{ width: '100%', height: 'auto', borderRadius: 4 }} 
-                />
-              </Box>
+              {isImageUrl(orderData.deliveryProof) ? (
+                <Box sx={{ width: '100%', maxWidth: 600, mb: 2 }}>
+                  <img 
+                    src={orderData.deliveryProof} 
+                    alt="Dowód dostawy" 
+                    style={{ width: '100%', height: 'auto', borderRadius: 4 }} 
+                  />
+                </Box>
+              ) : isGoogleDriveLink(orderData.deliveryProof) ? (
+                <Box sx={{ width: '100%', maxWidth: 600, mb: 2, p: 3, border: '1px dashed', borderColor: 'divider', borderRadius: 1 }}>
+                  <Typography variant="h6" align="center" gutterBottom>
+                    <LinkIcon color="primary" sx={{ verticalAlign: 'middle', mr: 1 }} />
+                    Link do Google Drive
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" gutterBottom align="center">
+                    {orderData.deliveryProof}
+                  </Typography>
+                </Box>
+              ) : (
+                <Box sx={{ width: '100%', maxWidth: 600, mb: 2 }}>
+                  <Alert severity="info">
+                    Dokument w formacie, który nie może być wyświetlony w przeglądarce. 
+                    Kliknij przycisk "Otwórz", aby wyświetlić dokument.
+                  </Alert>
+                </Box>
+              )}
               <Box sx={{ display: 'flex', gap: 2 }}>
                 <Button 
                   variant="outlined"
-                  startIcon={<DownloadIcon />}
+                  startIcon={<OpenInNewIcon />}
                   href={orderData.deliveryProof}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  Pobierz
+                  Otwórz
                 </Button>
                 <Button 
                   variant="outlined" 
@@ -1563,26 +1636,35 @@ const OrderForm = ({ orderId }) => {
           ) : (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <Typography variant="body1" sx={{ mb: 2 }}>
-                Brak załączonego dowodu dostawy. Dodaj skan lub zdjęcie potwierdzenia dostawy.
+                Brak załączonego dowodu dostawy. Dodaj skan, zdjęcie lub link do dokumentu potwierdzającego dostawę.
               </Typography>
-              <input
-                ref={fileInputRef}
-                accept="image/*, application/pdf"
-                style={{ display: 'none' }}
-                id="delivery-proof-upload"
-                type="file"
-                onChange={handleDeliveryProofUpload}
-              />
-              <label htmlFor="delivery-proof-upload">
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <input
+                  ref={fileInputRef}
+                  accept="image/*, application/pdf"
+                  style={{ display: 'none' }}
+                  id="delivery-proof-upload"
+                  type="file"
+                  onChange={handleDeliveryProofUpload}
+                />
+                <label htmlFor="delivery-proof-upload">
+                  <Button
+                    variant="contained"
+                    component="span"
+                    startIcon={<UploadIcon />}
+                    disabled={uploading}
+                  >
+                    {uploading ? 'Przesyłanie...' : 'Dodaj plik'}
+                  </Button>
+                </label>
                 <Button
-                  variant="contained"
-                  component="span"
-                  startIcon={<UploadIcon />}
-                  disabled={uploading}
+                  variant="outlined"
+                  startIcon={<LinkIcon />}
+                  onClick={handleDriveLinkDialogOpen}
                 >
-                  {uploading ? 'Przesyłanie...' : 'Dodaj dowód dostawy'}
+                  Dodaj link Google Drive
                 </Button>
-              </label>
+              </Box>
             </Box>
           )}
         </Paper>
@@ -1690,7 +1772,7 @@ const OrderForm = ({ orderId }) => {
           ) : (
             <Typography variant="body2" color="text.secondary">
               Brak powiązanych zamówień zakupu. Kliknij "Generuj zamówienia zakupu", aby automatycznie utworzyć zamówienia dla materiałów z receptur.
-                  </Typography>
+            </Typography>
           )}
         </Paper>
         
@@ -1708,13 +1790,13 @@ const OrderForm = ({ orderId }) => {
                 <Typography variant="subtitle2" color="text.secondary">Wartość produktów:</Typography>
                 <Typography variant="h6" fontWeight="bold">{formatCurrency(calculateSubtotal())}</Typography>
               </Paper>
-                </Grid>
+            </Grid>
             <Grid item xs={12} md={3}>
               <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
                 <Typography variant="subtitle2" color="text.secondary">Koszt dostawy:</Typography>
                 <Typography variant="h6" fontWeight="bold">{formatCurrency(parseFloat(orderData.shippingCost) || 0)}</Typography>
               </Paper>
-              </Grid>
+            </Grid>
             <Grid item xs={12} md={3}>
               <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
                 <Typography variant="subtitle2" color="text.secondary">Wartość zamówień zakupu:</Typography>
@@ -1939,6 +2021,33 @@ const OrderForm = ({ orderId }) => {
           >
             Przypisz
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog do wprowadzania linku Google Drive */}
+      <Dialog open={driveLinkDialogOpen} onClose={handleDriveLinkDialogClose}>
+        <DialogTitle>Dodaj link do Google Drive</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Wprowadź link do dokumentu w Google Drive, który będzie służył jako dowód dostawy.
+          </DialogContentText>
+          <TextField
+            autoFocus
+            margin="dense"
+            id="drive-link"
+            label="Link do Google Drive"
+            type="url"
+            fullWidth
+            variant="outlined"
+            value={driveLink}
+            onChange={handleDriveLinkChange}
+            placeholder="https://drive.google.com/file/d/..."
+            helperText="Link musi pochodzić z Google Drive i być publicznie dostępny"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleDriveLinkDialogClose}>Anuluj</Button>
+          <Button onClick={handleDriveLinkSubmit} variant="contained">Dodaj</Button>
         </DialogActions>
       </Dialog>
     </>

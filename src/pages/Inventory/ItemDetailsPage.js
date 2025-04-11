@@ -215,10 +215,11 @@ const ItemDetailsPage = () => {
         <Button 
           startIcon={<ArrowBackIcon />} 
           onClick={() => navigate('/inventory')}
+          variant="outlined"
         >
           Powrót
         </Button>
-        <Typography variant="h5">
+        <Typography variant="h5" fontWeight="bold">
           Szczegóły pozycji magazynowej
         </Typography>
         <Box>
@@ -249,7 +250,8 @@ const ItemDetailsPage = () => {
             Drukuj etykietę
           </Button>
           <Button 
-            variant="outlined" 
+            variant="contained" 
+            color="primary"
             component={Link} 
             to={`/inventory/${id}/receive`}
             startIcon={<AddIcon />}
@@ -259,60 +261,127 @@ const ItemDetailsPage = () => {
         </Box>
       </Box>
 
-      <Paper sx={{ mb: 3 }}>
-        <Box sx={{ p: 3 }}>
-          <Typography variant="h4" gutterBottom>
+      {/* Sekcja głównych informacji */}
+      <Paper elevation={3} sx={{ mb: 3, overflow: 'hidden', borderRadius: 2 }}>
+        <Box sx={{ p: 3, bgcolor: '#f8f9fa' }}>
+          <Typography variant="h4" gutterBottom fontWeight="bold">
             {item.name}
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
             <Chip 
               label={item.category || 'Brak kategorii'} 
               color="primary" 
-              sx={{ mr: 2 }}
+              sx={{ mr: 2, fontWeight: 'medium' }}
             />
             {getStockLevelIndicator(item.quantity, item.minStock, item.maxStock)}
           </Box>
           {item.description && (
-            <Typography variant="body1" paragraph>
+            <Paper sx={{ p: 2, mb: 2, bgcolor: 'white', borderRadius: 1 }}>
+              <Typography variant="body1">
               {item.description}
             </Typography>
+            </Paper>
           )}
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={4}>
-              <Typography variant="subtitle2" color="text.secondary">
+        </Box>
+        
+        {/* Statystyki produktu */}
+        <Box sx={{ 
+          p: 3, 
+          display: 'flex', 
+          flexWrap: 'wrap', 
+          gap: 4, 
+          justifyContent: 'space-between', 
+          borderTop: '1px solid #e0e0e0',
+          bgcolor: 'white'
+        }}>
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center',
+            minWidth: '150px'
+          }}>
+            <Typography variant="h6" fontWeight="bold" color="primary">
+              {item.quantity}
+            </Typography>
+            <Typography variant="subtitle1">
+              {item.unit}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
                 Stan magazynowy
               </Typography>
-              <Typography variant="h6">
-                {item.quantity} {item.unit}
+          </Box>
+
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center',
+            minWidth: '150px'
+          }}>
+            <Typography variant="h6" fontWeight="bold">
+              {item.location || 'Nie określono'}
               </Typography>
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <Typography variant="subtitle2" color="text.secondary">
+            <Typography variant="body2" color="text.secondary">
                 Lokalizacja
               </Typography>
-              <Typography variant="h6">
-                {item.location || 'Nie określono'}
+          </Box>
+
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center',
+            minWidth: '150px'
+          }}>
+            <Typography variant="h6" fontWeight="bold">
+              {item.minStock || 'Nie określono'}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Min. ilość
+            </Typography>
+          </Box>
+
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center',
+            minWidth: '150px'
+          }}>
+            <Typography variant="h6" fontWeight="bold">
+              {item.maxStock || 'Nie określono'}
               </Typography>
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <Typography variant="subtitle2" color="text.secondary">
-                Ostatnia aktualizacja
+            <Typography variant="body2" color="text.secondary">
+              Maks. ilość
               </Typography>
-              <Typography variant="h6">
+          </Box>
+
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center',
+            minWidth: '150px'
+          }}>
+            <Typography variant="h6" fontWeight="bold">
                 {formatDate(item.updatedAt)}
               </Typography>
-            </Grid>
-          </Grid>
+            <Typography variant="body2" color="text.secondary">
+              Ostatnia aktualizacja
+            </Typography>
+          </Box>
         </Box>
 
-        <Box sx={{ display: 'flex', p: 2, bgcolor: 'background.default' }}>
+        {/* Przyciski akcji */}
+        <Box sx={{ 
+          display: 'flex', 
+          p: 2, 
+          borderTop: '1px solid #e0e0e0',
+          bgcolor: '#f8f9fa'
+        }}>
           <Button 
             variant="contained" 
             color="success" 
             startIcon={<ReceiveIcon />}
             component={Link}
             to={`/inventory/${id}/receive`}
-            sx={{ mr: 2 }}
+            sx={{ mr: 2, borderRadius: 4, px: 3 }}
           >
             Przyjmij
           </Button>
@@ -323,69 +392,96 @@ const ItemDetailsPage = () => {
             component={Link}
             to={`/inventory/${id}/issue`}
             disabled={item.quantity <= 0}
+            sx={{ borderRadius: 4, px: 3 }}
           >
             Wydaj
           </Button>
         </Box>
+      </Paper>
 
+      {/* Alerty */}
         {expiredBatches.length > 0 && (
-          <Alert severity="error" sx={{ mb: 3 }}>
-            <AlertTitle>Przeterminowane partie</AlertTitle>
-            W magazynie znajduje się {expiredBatches.length} {expiredBatches.length === 1 ? 'przeterminowana partia' : 
+        <Paper elevation={3} sx={{ mb: 3, overflow: 'hidden', borderRadius: 2 }}>
+          <Alert severity="error" sx={{ borderRadius: 0 }}>
+            <AlertTitle><strong>Przeterminowane partie</strong></AlertTitle>
+            <Typography>
+              W magazynie znajduje się <strong>{expiredBatches.length}</strong> {expiredBatches.length === 1 ? 'przeterminowana partia' : 
               expiredBatches.length < 5 ? 'przeterminowane partie' : 'przeterminowanych partii'} tego produktu.
-            Łącznie {expiredBatches.reduce((sum, batch) => sum + batch.quantity, 0)} {item?.unit}.
+              Łącznie <strong>{expiredBatches.reduce((sum, batch) => sum + batch.quantity, 0)} {item?.unit}</strong>.
+            </Typography>
           </Alert>
+        </Paper>
         )}
         
         {expiringBatches.length > 0 && (
-          <Alert severity="warning" sx={{ mb: 3 }}>
-            <AlertTitle>Partie z krótkim terminem ważności</AlertTitle>
-            W magazynie znajduje się {expiringBatches.length} {expiringBatches.length === 1 ? 'partia' : 
+        <Paper elevation={3} sx={{ mb: 3, overflow: 'hidden', borderRadius: 2 }}>
+          <Alert severity="warning" sx={{ borderRadius: 0 }}>
+            <AlertTitle><strong>Partie z krótkim terminem ważności</strong></AlertTitle>
+            <Typography>
+              W magazynie znajduje się <strong>{expiringBatches.length}</strong> {expiringBatches.length === 1 ? 'partia' : 
               expiringBatches.length < 5 ? 'partie' : 'partii'} tego produktu z terminem ważności krótszym niż 30 dni.
-            Łącznie {expiringBatches.reduce((sum, batch) => sum + batch.quantity, 0)} {item?.unit}.
+              Łącznie <strong>{expiringBatches.reduce((sum, batch) => sum + batch.quantity, 0)} {item?.unit}</strong>.
+            </Typography>
           </Alert>
-        )}
+        </Paper>
+      )}
 
-        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs value={tabValue} onChange={handleTabChange} aria-label="item tabs">
-            <Tab label="Szczegółowe informacje" id="item-tab-0" />
-            <Tab label="Partie i daty ważności" id="item-tab-1" />
-            <Tab label="Historia transakcji" id="item-tab-2" />
+      {/* Główne zakładki */}
+      <Paper elevation={3} sx={{ borderRadius: 2, overflow: 'hidden' }}>
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: '#f8f9fa' }}>
+          <Tabs 
+            value={tabValue} 
+            onChange={handleTabChange} 
+            aria-label="item tabs"
+            variant="fullWidth"
+            textColor="primary"
+            indicatorColor="primary"
+          >
+            <Tab label="Szczegółowe informacje" id="item-tab-0" sx={{ fontWeight: 'medium', py: 2 }} />
+            <Tab label="Partie i daty ważności" id="item-tab-1" sx={{ fontWeight: 'medium', py: 2 }} />
+            <Tab label="Historia transakcji" id="item-tab-2" sx={{ fontWeight: 'medium', py: 2 }} />
           </Tabs>
         </Box>
 
+        {/* Zawartość zakładki Szczegółowe informacje */}
         <TabPanel value={tabValue} index={0}>
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
-              <Typography variant="h6" gutterBottom>Parametry magazynowe</Typography>
+              <Paper elevation={1} sx={{ p: 2, mb: 3, borderRadius: 2 }}>
+                <Typography variant="h6" gutterBottom sx={{ borderBottom: '1px solid #e0e0e0', pb: 1, fontWeight: 'bold' }}>
+                  Parametry magazynowe
+                </Typography>
               <TableContainer>
-                <Table>
+                  <Table sx={{ '& td, & th': { borderBottom: '1px solid #f5f5f5', py: 1.5 } }}>
                   <TableBody>
                     <TableRow>
-                      <TableCell component="th">Minimalny stan</TableCell>
+                        <TableCell component="th" sx={{ width: '40%', fontWeight: 'medium' }}>Minimalny stan</TableCell>
                       <TableCell>{item.minStock ? `${item.minStock} ${item.unit}` : 'Nie określono'}</TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell component="th">Maksymalny stan</TableCell>
+                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>Maksymalny stan</TableCell>
                       <TableCell>{item.maxStock ? `${item.maxStock} ${item.unit}` : 'Nie określono'}</TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell component="th">Grupa pakowania</TableCell>
+                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>Grupa pakowania</TableCell>
                       <TableCell>{item.packingGroup || 'Nie określono'}</TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell component="th">Ilość kartonów na paletę</TableCell>
+                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>Ilość kartonów na paletę</TableCell>
                       <TableCell>{item.boxesPerPallet ? `${item.boxesPerPallet} szt.` : 'Nie określono'}</TableCell>
                     </TableRow>
                   </TableBody>
                 </Table>
               </TableContainer>
+              </Paper>
 
               {supplierPrices.length > 0 && (
-                <Box sx={{ mt: 3 }}>
-                  <Typography variant="h6" gutterBottom>Dostawcy i ceny</Typography>
+                <Paper elevation={1} sx={{ p: 2, borderRadius: 2 }}>
+                  <Typography variant="h6" gutterBottom sx={{ borderBottom: '1px solid #e0e0e0', pb: 1, fontWeight: 'bold' }}>
+                    Dostawcy i ceny
+                  </Typography>
                   <TableContainer>
-                    <Table size="small">
+                    <Table size="small" sx={{ '& th': { fontWeight: 'bold', bgcolor: '#f8f9fa' } }}>
                       <TableHead>
                         <TableRow>
                           <TableCell>Dostawca</TableCell>
@@ -396,9 +492,14 @@ const ItemDetailsPage = () => {
                       </TableHead>
                       <TableBody>
                         {supplierPrices.map(price => (
-                          <TableRow key={price.id}>
-                            <TableCell>{price.supplierName}</TableCell>
-                            <TableCell align="right">{price.price.toFixed(2)} {price.currency || item.currency || 'EUR'}</TableCell>
+                          <TableRow key={price.id} hover>
+                            <TableCell sx={{ fontWeight: price.isDefault ? 'bold' : 'normal' }}>
+                              {price.isDefault && <Chip size="small" label="Domyślny" color="primary" variant="outlined" sx={{ mr: 1, height: 20 }} />}
+                              {price.supplierName}
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 'medium' }}>
+                              {price.price.toFixed(2)} {price.currency || item.currency || 'EUR'}
+                            </TableCell>
                             <TableCell align="right">{price.minQuantity || 1} {item.unit}</TableCell>
                             <TableCell align="right">{price.leadTime || 7} dni</TableCell>
                           </TableRow>
@@ -406,27 +507,38 @@ const ItemDetailsPage = () => {
                       </TableBody>
                     </Table>
                   </TableContainer>
-                </Box>
+                </Paper>
               )}
             </Grid>
             
             <Grid item xs={12} md={6}>
-              <Typography variant="h6" gutterBottom>Notatki</Typography>
-              <Typography variant="body1" paragraph style={{ whiteSpace: 'pre-line' }}>
+              <Paper elevation={1} sx={{ p: 2, borderRadius: 2 }}>
+                <Typography variant="h6" gutterBottom sx={{ borderBottom: '1px solid #e0e0e0', pb: 1, fontWeight: 'bold' }}>
+                  Notatki
+                </Typography>
+                <Box sx={{ p: 2, bgcolor: '#fafafa', borderRadius: 1, minHeight: '200px' }}>
+                  <Typography variant="body1" style={{ whiteSpace: 'pre-line' }}>
                 {item.notes || 'Brak notatek'}
               </Typography>
+                </Box>
+              </Paper>
             </Grid>
           </Grid>
         </TabPanel>
 
+        {/* Zawartość zakładki Partie */}
         <TabPanel value={tabValue} index={1}>
-          <Typography variant="h6" gutterBottom>Partie i daty ważności</Typography>
+          <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>
+            Partie i daty ważności
+          </Typography>
           
           {batches.length === 0 ? (
+            <Paper elevation={1} sx={{ p: 3, borderRadius: 2, textAlign: 'center', bgcolor: '#f8f9fa' }}>
             <Typography variant="body1">Brak zarejestrowanych partii dla tego produktu.</Typography>
+            </Paper>
           ) : (
-            <TableContainer component={Paper} sx={{ mt: 2 }}>
-              <Table>
+            <TableContainer component={Paper} sx={{ mt: 2, borderRadius: 2, overflow: 'hidden', elevation: 1 }}>
+              <Table sx={{ '& th': { fontWeight: 'bold', bgcolor: '#f8f9fa' } }}>
                 <TableHead>
                   <TableRow>
                     <TableCell>Numer partii</TableCell>
@@ -465,10 +577,21 @@ const ItemDetailsPage = () => {
                       }
                       
                       return (
-                        <TableRow key={batch.id}>
-                          <TableCell>{batch.batchNumber || '-'}</TableCell>
+                        <TableRow 
+                          key={batch.id} 
+                          hover
+                          sx={{
+                            bgcolor: status === 'expired' ? 'rgba(255, 0, 0, 0.05)' : 
+                                    status === 'expiring' ? 'rgba(255, 152, 0, 0.05)' : 
+                                    'inherit'
+                          }}
+                        >
+                          <TableCell sx={{ fontWeight: 'medium' }}>{batch.batchNumber || '-'}</TableCell>
                           <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              <Typography sx={{ fontWeight: 'medium' }}>
                             {expiryDate.toLocaleDateString('pl-PL')}
+                              </Typography>
                             {status === 'expired' && (
                               <Chip 
                                 size="small" 
@@ -485,9 +608,13 @@ const ItemDetailsPage = () => {
                                 sx={{ ml: 1 }} 
                               />
                             )}
+                            </Box>
                           </TableCell>
                           <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              <Typography sx={{ fontWeight: 'medium' }}>
                             {batch.quantity} {item.unit}
+                              </Typography>
                             {batch.quantity === 0 && (
                               <Chip 
                                 size="small" 
@@ -496,17 +623,13 @@ const ItemDetailsPage = () => {
                                 sx={{ ml: 1 }} 
                               />
                             )}
+                            </Box>
                           </TableCell>
                           <TableCell>
-                            {status === 'expired' ? (
-                              <Chip label="Przeterminowane" color="error" />
-                            ) : status === 'expiring' ? (
-                              <Chip label="Wkrótce wygaśnie" color="warning" />
-                            ) : batch.quantity <= 0 ? (
-                              <Chip label="Wydane" color="default" />
-                            ) : (
-                              <Chip label="Aktualne" color="success" />
-                            )}
+                            {status === 'expired' && 'Przeterminowane'}
+                            {status === 'expiring' && 'Kończy się termin'}
+                            {status === 'valid' && batch.quantity > 0 && 'Dostępne'}
+                            {batch.quantity <= 0 && 'Wydane'}
                           </TableCell>
                           <TableCell>{receivedDate.toLocaleDateString('pl-PL')}</TableCell>
                           <TableCell>{batch.notes || '-'}</TableCell>

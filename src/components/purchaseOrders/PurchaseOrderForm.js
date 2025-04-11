@@ -24,13 +24,18 @@ import {
   CircularProgress,
   Tooltip,
   Container,
-  InputAdornment
+  InputAdornment,
+  Badge
 } from '@mui/material';
 import {
   Add as AddIcon,
   Delete as DeleteIcon,
   FindReplace as SuggestIcon,
-  InfoOutlined as InfoIcon
+  InfoOutlined as InfoIcon,
+  FindInPage as FindInPageIcon,
+  CheckCircleOutline as CheckCircleOutlineIcon,
+  Check as CheckIcon,
+  StarOutline as StarIcon
 } from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -509,31 +514,35 @@ const PurchaseOrderForm = ({ orderId }) => {
         return;
       }
       
-      // Znajdź najlepsze ceny dostawców
+      // Znajdź najlepsze ceny dostawców (funkcja sprawdzi również domyślne ceny)
       const bestPrices = await getBestSupplierPricesForItems(itemsToCheck);
       setSupplierSuggestions(bestPrices);
       
-      let hasRecommendations = false;
+      let hasDefaultPrices = false;
+      let anyPriceFound = false;
       
-      // Aktualizuj pozycje zamówienia z najlepszymi cenami
+      // Aktualizuj pozycje zamówienia z najlepszymi/domyślnymi cenami
       const updatedItems = poData.items.map(item => {
         if (item.inventoryItemId && bestPrices[item.inventoryItemId]) {
           const bestPrice = bestPrices[item.inventoryItemId];
+          anyPriceFound = true;
           
           // Znajdź nazwę dostawcy
           const supplier = suppliers.find(s => s.id === bestPrice.supplierId);
           const supplierName = supplier ? supplier.name : 'Nieznany dostawca';
           
-          // Jeśli najlepsza cena jest lepsza niż aktualna, zaznacz że mamy rekomendację
-          if (!item.supplierPrice || bestPrice.price < item.unitPrice) {
-            hasRecommendations = true;
+          // Sprawdź czy to domyślna cena
+          if (bestPrice.isDefault) {
+            hasDefaultPrices = true;
           }
           
           return {
             ...item,
             supplierPrice: bestPrice.price,
             supplierId: bestPrice.supplierId,
-            supplierName: supplierName
+            supplierName: supplierName,
+            unitPrice: bestPrice.price,
+            totalPrice: bestPrice.price * item.quantity
           };
         }
         return item;
@@ -545,14 +554,159 @@ const PurchaseOrderForm = ({ orderId }) => {
         items: updatedItems
       }));
       
-      if (hasRecommendations) {
-        showSuccess('Znaleziono najlepsze ceny dostawców dla pozycji zamówienia');
+      // Znajdź dostawcę z największą liczbą pozycji
+      const supplierCounts = {};
+      for (const itemId in bestPrices) {
+        const supplierId = bestPrices[itemId].supplierId;
+        supplierCounts[supplierId] = (supplierCounts[supplierId] || 0) + 1;
+      }
+      
+      // Znajdź dostawcę z największą liczbą pozycji
+      let bestSupplierId = null;
+      let maxCount = 0;
+      
+      for (const supplierId in supplierCounts) {
+        if (supplierCounts[supplierId] > maxCount) {
+          maxCount = supplierCounts[supplierId];
+          bestSupplierId = supplierId;
+        }
+      }
+      
+      // Jeśli nie mamy jeszcze wybranego dostawcy, ustaw dostawcę z największą liczbą pozycji
+      if (!poData.supplier && bestSupplierId) {
+        const supplier = suppliers.find(s => s.id === bestSupplierId);
+        if (supplier) {
+          setPoData(prev => ({
+            ...prev,
+            supplier: supplier,
+            deliveryAddress: supplier.addresses && supplier.addresses.length > 0
+              ? formatAddress(supplier.addresses.find(a => a.isMain) || supplier.addresses[0])
+              : ''
+          }));
+        }
+      }
+      
+      if (hasDefaultPrices) {
+        showSuccess('Zastosowano domyślne ceny dostawców');
+      } else if (anyPriceFound) {
+        showInfo('Nie znaleziono domyślnych cen dostawców. Zastosowano najlepsze dostępne ceny.');
       } else {
-        showInfo('Nie znaleziono lepszych cen niż aktualne');
+        showInfo('Nie znaleziono żadnych cen dostawców dla wybranych produktów.');
       }
     } catch (error) {
-      console.error('Błąd podczas szukania najlepszych cen dostawców:', error);
-      showError('Błąd podczas szukania najlepszych cen dostawców');
+      console.error('Błąd podczas używania domyślnych cen dostawców:', error);
+      showError('Błąd podczas używania domyślnych cen dostawców');
+    } finally {
+      setLoadingSupplierSuggestions(false);
+    }
+  };
+  
+  // Funkcja do znajdowania i używania domyślnych cen dostawców
+  const useDefaultSupplierPrices = async () => {
+    if (!poData.items || poData.items.length === 0) {
+      showInfo('Brak pozycji w zamówieniu');
+      return;
+    }
+    
+    try {
+      setLoadingSupplierSuggestions(true);
+      
+      // Przygotuj listę elementów do sprawdzenia
+      const itemsToCheck = poData.items
+        .filter(item => item.inventoryItemId)
+        .map(item => ({
+          itemId: item.inventoryItemId,
+          quantity: item.quantity
+        }));
+      
+      if (itemsToCheck.length === 0) {
+        showInfo('Brak pozycji magazynowych do sprawdzenia');
+        setLoadingSupplierSuggestions(false);
+        return;
+      }
+      
+      // Znajdź najlepsze ceny dostawców (funkcja sprawdzi również domyślne ceny)
+      const bestPrices = await getBestSupplierPricesForItems(itemsToCheck);
+      setSupplierSuggestions(bestPrices);
+      
+      let hasDefaultPrices = false;
+      let anyPriceFound = false;
+      
+      // Aktualizuj pozycje zamówienia z najlepszymi/domyślnymi cenami
+      const updatedItems = poData.items.map(item => {
+        if (item.inventoryItemId && bestPrices[item.inventoryItemId]) {
+          const bestPrice = bestPrices[item.inventoryItemId];
+          anyPriceFound = true;
+          
+          // Znajdź nazwę dostawcy
+          const supplier = suppliers.find(s => s.id === bestPrice.supplierId);
+          const supplierName = supplier ? supplier.name : 'Nieznany dostawca';
+          
+          // Sprawdź czy to domyślna cena
+          if (bestPrice.isDefault) {
+            hasDefaultPrices = true;
+          }
+          
+          return {
+            ...item,
+            supplierPrice: bestPrice.price,
+            supplierId: bestPrice.supplierId,
+            supplierName: supplierName,
+            unitPrice: bestPrice.price,
+            totalPrice: bestPrice.price * item.quantity
+          };
+        }
+        return item;
+      });
+      
+      // Aktualizuj poData z zaktualizowanymi pozycjami
+      setPoData(prev => ({
+        ...prev,
+        items: updatedItems
+      }));
+      
+      // Znajdź dostawcę z największą liczbą pozycji
+      const supplierCounts = {};
+      for (const itemId in bestPrices) {
+        const supplierId = bestPrices[itemId].supplierId;
+        supplierCounts[supplierId] = (supplierCounts[supplierId] || 0) + 1;
+      }
+      
+      // Znajdź dostawcę z największą liczbą pozycji
+      let bestSupplierId = null;
+      let maxCount = 0;
+      
+      for (const supplierId in supplierCounts) {
+        if (supplierCounts[supplierId] > maxCount) {
+          maxCount = supplierCounts[supplierId];
+          bestSupplierId = supplierId;
+        }
+      }
+      
+      // Jeśli nie mamy jeszcze wybranego dostawcy, ustaw dostawcę z największą liczbą pozycji
+      if (!poData.supplier && bestSupplierId) {
+        const supplier = suppliers.find(s => s.id === bestSupplierId);
+        if (supplier) {
+          setPoData(prev => ({
+            ...prev,
+            supplier: supplier,
+            deliveryAddress: supplier.addresses && supplier.addresses.length > 0
+              ? formatAddress(supplier.addresses.find(a => a.isMain) || supplier.addresses[0])
+              : ''
+          }));
+        }
+      }
+      
+      if (hasDefaultPrices) {
+        showSuccess('Zastosowano domyślne ceny dostawców');
+      } else if (anyPriceFound) {
+        showInfo('Nie znaleziono domyślnych cen dostawców. Zastosowano najlepsze dostępne ceny.');
+      } else {
+        showInfo('Nie znaleziono żadnych cen dostawców dla wybranych produktów.');
+      }
+    } catch (error) {
+      console.error('Błąd podczas używania domyślnych cen dostawców:', error);
+      showError('Błąd podczas używania domyślnych cen dostawców');
     } finally {
       setLoadingSupplierSuggestions(false);
     }
@@ -992,15 +1146,23 @@ const PurchaseOrderForm = ({ orderId }) => {
                         sx={{ width: 80 }}
                       />
                     </TableCell>
-                    <TableCell>
+                    <TableCell align="right">
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                        {supplierSuggestions[item.inventoryItemId]?.isDefault && (
+                          <Tooltip title="Domyślna cena dostawcy">
+                            <StarIcon color="primary" sx={{ mr: 1 }} />
+                          </Tooltip>
+                        )}
                       <TextField
                         type="number"
-                        value={item.unitPrice}
+                          value={item.unitPrice || 0}
                         onChange={(e) => handleItemChange(index, 'unitPrice', e.target.value)}
                         size="small"
                         inputProps={{ min: 0, step: 'any' }}
                         sx={{ width: 100 }}
                       />
+                        {poData.currency}
+                      </Box>
                     </TableCell>
                     <TableCell>{formatCurrency(item.totalPrice || 0)}</TableCell>
                     {Object.keys(supplierSuggestions).length > 0 && (
@@ -1034,34 +1196,49 @@ const PurchaseOrderForm = ({ orderId }) => {
             </Table>
           </TableContainer>
           
-          <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2, mb: 2 }}>
+            <Box>
             <Button
-              startIcon={<AddIcon />}
-              onClick={handleAddItem}
               variant="outlined"
+                startIcon={<FindInPageIcon />}
+                onClick={findBestSuppliers}
+                disabled={loading || loadingSupplierSuggestions || poData.items.length === 0}
+                sx={{ mr: 1 }}
             >
-              Dodaj pozycję
+                Znajdź najlepsze ceny
             </Button>
             
             <Button
-              startIcon={<SuggestIcon />}
-              onClick={findBestSuppliers}
-              disabled={loadingSupplierSuggestions || poData.items.length === 0}
               variant="outlined"
-              color="info"
+                startIcon={<CheckCircleOutlineIcon />}
+                onClick={useDefaultSupplierPrices}
+                disabled={loading || loadingSupplierSuggestions || poData.items.length === 0}
+                sx={{ mr: 1 }}
             >
-              {loadingSupplierSuggestions ? 'Szukanie...' : 'Znajdź najlepsze ceny'}
+                Użyj domyślnych cen
             </Button>
             
             {Object.keys(supplierSuggestions).length > 0 && (
               <Button
+                  variant="contained"
+                  color="secondary"
+                  startIcon={<CheckIcon />}
                 onClick={applyBestSupplierPrices}
-                variant="outlined"
-                color="success"
+                  disabled={loading || loadingSupplierSuggestions}
               >
-                Zastosuj najlepsze ceny
+                  Zastosuj ceny
               </Button>
             )}
+            </Box>
+            
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<AddIcon />}
+              onClick={handleAddItem}
+            >
+              Dodaj pozycję
+            </Button>
           </Box>
           
           {loadingSupplierSuggestions && (

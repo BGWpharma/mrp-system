@@ -49,7 +49,8 @@ import {
   ListAlt as ListAltIcon,
   ChevronLeft as ChevronLeftIcon,
   Menu as MenuIcon,
-  LocalShipping as ShippingIcon
+  LocalShipping as ShippingIcon,
+  SmartToy as AIAssistantIcon
 } from '@mui/icons-material';
 import { getExpiringBatches, getExpiredBatches } from '../../services/inventoryService';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -180,6 +181,11 @@ const Sidebar = ({ onToggle }) => {
   };
   
   const menuItems = [
+    { text: 'Asystent AI',
+      icon: <AIAssistantIcon />,
+      path: '/ai-assistant',
+      hasSubmenu: false
+    },
     { text: 'Dashboard', 
       icon: <DashboardIcon />, 
       path: '/',
