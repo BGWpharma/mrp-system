@@ -6,7 +6,9 @@ import {
   Person as PersonIcon,
   ShoppingBasket as ShoppingBasketIcon,
   Schedule as ScheduleIcon,
-  Business as BusinessIcon
+  Business as BusinessIcon,
+  BatchPrediction as BatchIcon,
+  EventNote as DateIcon
 } from '@mui/icons-material';
 import { formatDateTime } from '../../utils/formatters';
 import { getWorkstationById } from '../../services/workstationService';
@@ -22,6 +24,9 @@ const TaskDetails = ({ task }) => {
   
   // Jeśli nie ma żadnych powiązanych zamówień, nie renderuj sekcji dla zamówień
   const hasRelatedOrders = hasCustomerOrder || hasPurchaseOrders;
+  
+  // Sprawdź czy zadanie ma zdefiniowany LOT lub datę ważności
+  const hasProductBatchInfo = Boolean(task?.lotNumber || task?.expiryDate);
   
   // Ładuj dane stanowiska produkcyjnego, jeśli zadanie ma przypisane ID stanowiska
   useEffect(() => {
@@ -173,6 +178,47 @@ const TaskDetails = ({ task }) => {
                 <Typography variant="body1" component="span" sx={{ ml: 1 }}>
                   {workstation.name}
                   {workstation.location && ` (lokalizacja: ${workstation.location})`}
+                </Typography>
+              </Box>
+            )}
+          </Paper>
+        </Grid>
+      )}
+      
+      {/* Nowa sekcja dla informacji o partii produktu */}
+      {hasProductBatchInfo && (
+        <Grid item xs={12}>
+          <Paper sx={{ p: 2, mb: 2 }}>
+            <Typography variant="h6" sx={{ mb: 2 }}>
+              Dane partii produktu końcowego
+            </Typography>
+            
+            {task.lotNumber && (
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <BatchIcon color="primary" sx={{ mr: 1 }} />
+                <Typography variant="subtitle1" component="span" sx={{ fontWeight: 'medium' }}>
+                  Numer partii (LOT):
+                </Typography>
+                <Typography variant="body1" component="span" sx={{ ml: 1 }}>
+                  {task.lotNumber}
+                </Typography>
+              </Box>
+            )}
+            
+            {task.expiryDate && (
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <DateIcon color="primary" sx={{ mr: 1 }} />
+                <Typography variant="subtitle1" component="span" sx={{ fontWeight: 'medium' }}>
+                  Data ważności:
+                </Typography>
+                <Typography variant="body1" component="span" sx={{ ml: 1 }}>
+                  {task.expiryDate instanceof Date 
+                    ? task.expiryDate.toLocaleDateString('pl-PL')
+                    : typeof task.expiryDate === 'string'
+                      ? new Date(task.expiryDate).toLocaleDateString('pl-PL')
+                      : task.expiryDate && task.expiryDate.toDate
+                        ? task.expiryDate.toDate().toLocaleDateString('pl-PL')
+                        : 'Nie określono'}
                 </Typography>
               </Box>
             )}

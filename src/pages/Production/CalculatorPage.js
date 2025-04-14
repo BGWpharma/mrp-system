@@ -322,7 +322,8 @@ const CalculatorPage = () => {
     // Przelicz ilości składników
     const calculatedIngredients = filteredIngredients.map(ingredient => {
       const originalQuantity = parseFloat(ingredient.quantity || 0);
-      let calculatedQuantity = parseFloat((originalQuantity * scaleFactor).toFixed(2));
+      // Usuwam zaokrąglenie do 2 miejsc po przecinku, zachowuję pełną precyzję obliczeń
+      let calculatedQuantity = originalQuantity * scaleFactor;
       
       // Sprawdzenie czy wartość nie jest NaN
       if (isNaN(calculatedQuantity)) {
@@ -335,7 +336,7 @@ const CalculatorPage = () => {
       return {
         id: ingredient.id,
         name: ingredient.name,
-        quantity: calculatedQuantity,
+        quantity: calculatedQuantity, // Zachowujemy pełną precyzję
         unit: ingredient.unit
       };
     });
@@ -345,18 +346,18 @@ const CalculatorPage = () => {
       .filter(ing => ing.unit === 'kg')
       .reduce((sum, ing) => sum + ing.quantity, 0);
     
-    console.log(`Sumaryczna waga składników w kg: ${totalWeight.toFixed(2)}, oczekiwana objętość mieszania: ${batchSize}`);
+    console.log(`Sumaryczna waga składników w kg: ${totalWeight}, oczekiwana objętość mieszania: ${batchSize}`);
     
     // Dla trybu wagi, jeśli suma wag różni się od oczekiwanej objętości,
     // dostosuj proporcjonalnie wszystkie składniki
-    if (!useProductPieces && Math.abs(totalWeight - batchSize) > 0.1) {
+    if (!useProductPieces && Math.abs(totalWeight - batchSize) > 0.001) { // Zwiększona precyzja
       console.log(`Dostosowanie składników aby osiągnąć dokładną objętość ${batchSize} kg`);
       const adjustmentFactor = batchSize / totalWeight;
       
       // Zastosuj korektę do wszystkich składników
       calculatedIngredients.forEach(ing => {
         if (ing.unit === 'kg') {
-          ing.quantity = parseFloat((ing.quantity * adjustmentFactor).toFixed(2));
+          ing.quantity = ing.quantity * adjustmentFactor; // Zachowujemy pełną precyzję
         }
       });
       
@@ -365,9 +366,15 @@ const CalculatorPage = () => {
         .filter(ing => ing.unit === 'kg')
         .reduce((sum, ing) => sum + ing.quantity, 0);
       
-      console.log(`Suma wag po korekcie: ${adjustedTotalWeight.toFixed(2)} kg`);
+      console.log(`Suma wag po korekcie: ${adjustedTotalWeight} kg`);
     }
     
+    // Zaokrąglanie do wyświetlania dopiero na końcu procesu obliczeń
+    calculatedIngredients.forEach(ing => {
+      // Używamy właściwości displayQuantity do wyświetlania zaokrąglonych wartości
+      ing.displayQuantity = ing.quantity.toFixed(4);
+    });
+
     return calculatedIngredients;
   };
   
@@ -381,17 +388,17 @@ const CalculatorPage = () => {
     try {
       // Przygotowanie nagłówków CSV
       let csvContent = usePieces ? 
-        'Objętość;Liczba sztuk;Nazwa produktu;Składnik;Ilość;Jednostka\n' : 
-        'Objętość;Nazwa produktu;Składnik;Ilość;Jednostka\n';
+        'Objętość;Liczba sztuk;Nazwa produktu;Składnik;Ilość;Jednostka;Sprawdzone;Wstawione w mieszalnik;Zrobione\n' : 
+        'Objętość;Nazwa produktu;Składnik;Ilość;Jednostka;Sprawdzone;Wstawione w mieszalnik;Zrobione\n';
       
       // Dodanie wierszy dla każdego mieszania i jego składników
       mixings.forEach(mixing => {
         // Dodaj wyróżniony nagłówek dla każdego mieszania
-        const headerColumns = usePieces ? 6 : 5;
+        const headerColumns = usePieces ? 9 : 8; // Zwiększono liczbę kolumn
         csvContent += `"Mieszanie nr. ${mixing.mixingNumber}"${';'.repeat(headerColumns - 1)}\n`;
         
         // Dodaj wiersz z informacją o objętości mieszania i liczbie sztuk (jeśli w trybie sztuk)
-        const formattedVolumeToMix = `="${Number(mixing.volumeToMix).toFixed(2)}"`;
+        const formattedVolumeToMix = `="${Number(mixing.volumeToMix).toFixed(4)}"`;
         
         // Używamy przefiltrowanych składników bez opakowań
         mixing.ingredients.forEach(ingredient => {
@@ -400,18 +407,20 @@ const CalculatorPage = () => {
             // Formatujemy liczby, sprawdzając czy nie są NaN
             let formattedQuantity;
             if (typeof ingredient.quantity === 'number' && !isNaN(ingredient.quantity)) {
-              formattedQuantity = `="${ingredient.quantity.toFixed(2)}"`; 
+              formattedQuantity = `="${ingredient.quantity.toFixed(4)}"`; 
             } else {
-              formattedQuantity = '="0.00"';
+              formattedQuantity = '="0.0000"';
             }
             
             if (usePieces) {
               // Format dla trybu sztuk produktu
               const formattedPiecesCount = `="${mixing.piecesCount || 0}"`;
-              csvContent += `${formattedVolumeToMix};${formattedPiecesCount};${mixing.recipeName};${ingredient.name};${formattedQuantity};${ingredient.unit}\n`;
+              // Dodajemy puste kolumny na końcu
+              csvContent += `${formattedVolumeToMix};${formattedPiecesCount};${mixing.recipeName};${ingredient.name};${formattedQuantity};${ingredient.unit};;;\n`;
             } else {
               // Format dla trybu kilogramów
-              csvContent += `${formattedVolumeToMix};${mixing.recipeName};${ingredient.name};${formattedQuantity};${ingredient.unit}\n`;
+              // Dodajemy puste kolumny na końcu
+              csvContent += `${formattedVolumeToMix};${mixing.recipeName};${ingredient.name};${formattedQuantity};${ingredient.unit};;;\n`;
             }
           }
         });
@@ -428,8 +437,8 @@ const CalculatorPage = () => {
           // Podsumowanie dla trybu sztuk
           csvContent += `"Podsumowanie:";;;;;
 "Całkowita liczba sztuk:";="${calculationResult.targetAmount}";;;;
-"Waga jednej sztuki:";="${calculationResult.singlePieceWeight?.toFixed(2)}";kg;;;
-"Całkowita waga:";="${calculationResult.totalWeight?.toFixed(2)}";kg;;;
+"Waga jednej sztuki:";="${calculationResult.singlePieceWeight?.toFixed(4)}";kg;;;
+"Całkowita waga:";="${calculationResult.totalWeight?.toFixed(4)}";kg;;;
 "Liczba mieszań:";="${calculationResult.totalMixings}";;;;
 ${';'.repeat(5)}\n`;
         } else {
@@ -660,39 +669,40 @@ ${';'.repeat(4)}\n`;
                   <TableCell>Składnik</TableCell>
                   <TableCell align="right">Ilość</TableCell>
                   <TableCell>Jednostka</TableCell>
+                  <TableCell>Sprawdzone</TableCell>
+                  <TableCell>Wstawione w mieszalnik</TableCell>
+                  <TableCell>Zrobione</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {mixings.map((mixing) => (
-                  mixing.ingredients.map((ingredient, idx) => (
-                    <TableRow key={`${mixing.mixingNumber}-${ingredient.id}-${idx}`}>
-                      {idx === 0 ? (
+                  mixing.ingredients.map((ingredient, ingredientIndex) => (
+                    <TableRow key={`ingredient-${ingredientIndex}`}>
+                      {ingredientIndex === 0 && (
                         <>
                           <TableCell rowSpan={mixing.ingredients.length}>
                             {mixing.mixingNumber}
                           </TableCell>
                           <TableCell rowSpan={mixing.ingredients.length}>
-                            {mixing.volumeToMix} kg
-                            {usePieces && (
-                              <Typography variant="caption" display="block" color="text.secondary">
-                                (suma składników: {mixing.totalIngredientsWeight?.toFixed(2)} kg)
-                              </Typography>
-                            )}
+                            {mixing.volumeToMix.toFixed(4)} kg
+                            {/* Dodajemy informację o rzeczywistej wadze składników */}
+                            <Typography variant="caption" display="block" color="text.secondary">
+                              (suma składników: {mixing.totalIngredientsWeight.toFixed(4)} kg)
+                            </Typography>
                           </TableCell>
                           {usePieces && (
                             <TableCell rowSpan={mixing.ingredients.length}>
-                              {mixing.piecesCount} szt.
+                              {mixing.piecesCount}
                             </TableCell>
                           )}
                         </>
-                      ) : null}
+                      )}
                       <TableCell>{ingredient.name}</TableCell>
-                      <TableCell align="right">{
-                        typeof ingredient.quantity === 'number' && !isNaN(ingredient.quantity) 
-                          ? ingredient.quantity.toFixed(2) 
-                          : ingredient.quantity
-                      }</TableCell>
+                      <TableCell align="right">{ingredient.quantity.toFixed(4)}</TableCell>
                       <TableCell>{ingredient.unit}</TableCell>
+                      <TableCell></TableCell>
+                      <TableCell></TableCell>
+                      <TableCell></TableCell>
                     </TableRow>
                   ))
                 ))}
@@ -704,14 +714,14 @@ ${';'.repeat(4)}\n`;
             {calculationResult.isProductPieces ? (
               <>
                 Wygenerowano plan {calculationResult.totalMixings} mieszań dla {calculationResult.targetAmount} sztuk produktu 
-                (waga 1 szt. ≈ {calculationResult.singlePieceWeight?.toFixed(2)} kg, łączna waga {calculationResult.totalWeight?.toFixed(2)} kg).
+                (waga 1 szt. ≈ {calculationResult.singlePieceWeight?.toFixed(4)} kg, łączna waga {calculationResult.totalWeight?.toFixed(4)} kg).
                 {calculationResult.fullMixingsCount > 0 && ` ${calculationResult.fullMixingsCount} pełnych mieszań po ${calculationResult.piecesPerFullMixing} szt.`}
                 {calculationResult.piecesInLastMixing > 0 && ` oraz 1 mieszanie zawierające ${calculationResult.piecesInLastMixing} szt.`}
               </>
             ) : (
               <>
                 Wygenerowano plan {calculationResult.totalMixings} mieszań: {calculationResult.fullMixingsCount} pełnych mieszań po {calculationResult.mixerVolume} kg
-                {calculationResult.remainingAmount > 0 ? ` oraz 1 mieszanie o objętości ${calculationResult.remainingAmount} kg` : ''}.
+                {calculationResult.remainingAmount > 0 ? ` oraz 1 mieszanie o objętości ${calculationResult.remainingAmount.toFixed(4)} kg` : ''}.
               </>
             )}
           </Alert>

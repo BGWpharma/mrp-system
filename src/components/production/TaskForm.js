@@ -54,6 +54,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatCurrency } from '../../utils/formatters';
 import { getAllWorkstations } from '../../services/workstationService';
+import { generateLOTNumber } from '../../utils/numberGenerators';
 
 const TaskForm = ({ taskId }) => {
   const [loading, setLoading] = useState(!!taskId);
@@ -83,7 +84,9 @@ const TaskForm = ({ taskId }) => {
     notes: '',
     moNumber: '',
     workstationId: '', // ID stanowiska produkcyjnego
-    autoReserveMaterials: true // domyślnie włączone automatyczne rezerwowanie materiałów
+    autoReserveMaterials: true, // domyślnie włączone automatyczne rezerwowanie materiałów
+    lotNumber: '', // Numer partii produktu (LOT)
+    expiryDate: null // Data ważności produktu
   });
 
   // Dodajemy stan dla kalkulacji kosztów
@@ -171,7 +174,11 @@ const TaskForm = ({ taskId }) => {
         endDate: task.endDate ? 
           (task.endDate instanceof Date ? task.endDate :
            task.endDate.toDate ? task.endDate.toDate() : 
-           new Date(task.endDate)) : new Date(new Date().getTime() + 60 * 60 * 1000)
+           new Date(task.endDate)) : new Date(new Date().getTime() + 60 * 60 * 1000),
+        expiryDate: task.expiryDate ? 
+          (task.expiryDate instanceof Date ? task.expiryDate :
+           task.expiryDate.toDate ? task.expiryDate.toDate() : 
+           new Date(task.expiryDate)) : null
       };
       
       console.log('Pobrane zadanie z przetworzonymi datami:', taskWithParsedDates);
@@ -778,6 +785,21 @@ const TaskForm = ({ taskId }) => {
     }));
   };
 
+  // Dodajemy funkcję do generowania numeru LOT
+  const generateLot = async () => {
+    try {
+      // Użyj istniejącej funkcji generującej numery LOT
+      const lotNumber = await generateLOTNumber();
+      setTaskData(prev => ({
+        ...prev,
+        lotNumber
+      }));
+    } catch (error) {
+      console.error('Błąd podczas generowania numeru LOT:', error);
+      showError('Nie udało się wygenerować numeru LOT');
+    }
+  };
+
   if (loading) {
     return <div>Ładowanie zadania...</div>;
   }
@@ -1024,6 +1046,48 @@ const TaskForm = ({ taskId }) => {
                   </Select>
                   <FormHelperText>Wybierz stanowisko produkcyjne dla tego zadania</FormHelperText>
                 </FormControl>
+              </Grid>
+              <Grid item xs={12}>
+                <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>
+                  Dane partii produktu końcowego
+                </Typography>
+                <Divider sx={{ mb: 2 }} />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+                  <TextField
+                    fullWidth
+                    label="Numer LOT"
+                    name="lotNumber"
+                    value={taskData.lotNumber || ''}
+                    onChange={handleChange}
+                    helperText="Określ numer partii (LOT) dla produktu końcowego"
+                  />
+                  <Button 
+                    variant="outlined" 
+                    onClick={generateLot}
+                    sx={{ mt: 2, ml: 1, height: 56 }}
+                  >
+                    Generuj
+                  </Button>
+                </Box>
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                  <DateTimePicker
+                    label="Data ważności"
+                    value={taskData.expiryDate}
+                    onChange={(date) => setTaskData({...taskData, expiryDate: date})}
+                    slotProps={{
+                      textField: {
+                        fullWidth: true,
+                        helperText: "Określ datę ważności produktu końcowego"
+                      }
+                    }}
+                  />
+                </LocalizationProvider>
               </Grid>
             </Grid>
 

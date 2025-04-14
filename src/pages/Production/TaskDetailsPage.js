@@ -447,8 +447,10 @@ const TaskDetailsPage = () => {
         const unitPrice = task.costs && task.quantity ? 
           Number(task.costs.totalCost / task.quantity) : 0;
         
-        // Generujemy LOT na podstawie numeru zadania produkcyjnego (MO)
-        const lotNumber = task.moNumber ? `LOT-${task.moNumber}` : `LOT-PROD-${id.substring(0, 6)}`;
+        // Użyj LOT z zadania produkcyjnego, jeśli jest dostępny,
+        // w przeciwnym przypadku wygeneruj na podstawie numeru MO
+        const lotNumber = task.lotNumber || 
+                         (task.moNumber ? `LOT-${task.moNumber}` : `LOT-PROD-${id.substring(0, 6)}`);
           
         // Przygotuj dodatkowe informacje o pochodzeniu produktu
         const sourceInfo = new URLSearchParams();
@@ -459,6 +461,32 @@ const TaskDetailsPage = () => {
         sourceInfo.append('lotNumber', lotNumber);
         sourceInfo.append('source', 'production');
         sourceInfo.append('sourceId', id);
+        
+        // Dodaj datę ważności, jeśli została zdefiniowana w zadaniu
+        if (task.expiryDate) {
+          // Konwertuj różne formaty daty do ISO string
+          let expiryDateStr;
+          if (task.expiryDate instanceof Date) {
+            expiryDateStr = task.expiryDate.toISOString();
+          } else if (task.expiryDate.toDate && typeof task.expiryDate.toDate === 'function') {
+            // Firebase Timestamp
+            expiryDateStr = task.expiryDate.toDate().toISOString();
+          } else if (task.expiryDate.seconds) {
+            // Timestamp z sekundami
+            expiryDateStr = new Date(task.expiryDate.seconds * 1000).toISOString();
+          } else if (typeof task.expiryDate === 'string') {
+            // String z datą - upewnij się, że to poprawny format ISO
+            try {
+              expiryDateStr = new Date(task.expiryDate).toISOString();
+            } catch (e) {
+              console.error('Błąd podczas konwersji daty ważności:', e);
+            }
+          }
+          
+          if (expiryDateStr) {
+            sourceInfo.append('expiryDate', expiryDateStr);
+          }
+        }
         
         // Dodaj informacje o MO i CO
         if (task.moNumber) {
@@ -482,6 +510,8 @@ const TaskDetailsPage = () => {
           notes += ` (CO: ${task.orderNumber})`;
         }
         sourceInfo.append('notes', notes);
+        
+        console.log('Przekazuję parametry do formularza przyjęcia:', Object.fromEntries(sourceInfo));
         
         navigate(`/inventory/${task.inventoryProductId}/receive?${sourceInfo.toString()}`);
       } else {
@@ -938,10 +968,10 @@ const TaskDetailsPage = () => {
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
                   <Typography>{material.name}</Typography>
                   <Box>
-          <Chip
-                      label={`${totalSelectedQuantity} / ${material.quantity} ${material.unit}`}
+                    <Chip
+                      label={`${totalSelectedQuantity.toFixed(3)} / ${parseFloat(material.quantity).toFixed(3)} ${material.unit}`}
                       color={isComplete ? "success" : "warning"}
-            size="small"
+                      size="small"
                       sx={{ mr: 1 }}
                     />
                   </Box>
@@ -994,14 +1024,14 @@ const TaskDetailsPage = () => {
                                 {batch.expiryDate ? formatDate(batch.expiryDate) : 'Brak'}
                               </TableCell>
                               <TableCell>
-                                {batch.quantity} {material.unit}
+                                {parseFloat(batch.quantity).toFixed(3)} {material.unit}
                                 {reservedByOthers > 0 && (
                                   <Typography variant="caption" color="error" display="block">
-                                    Zarezerwowane: {reservedByOthers} {material.unit}
+                                    Zarezerwowane: {parseFloat(reservedByOthers).toFixed(3)} {material.unit}
                                   </Typography>
                                 )}
                                 <Typography variant="caption" color={effectiveQuantity > 0 ? "success" : "error"} display="block">
-                                  Dostępne: {effectiveQuantity} {material.unit}
+                                  Dostępne: {parseFloat(effectiveQuantity).toFixed(3)} {material.unit}
                                 </Typography>
                               </TableCell>
                               <TableCell>
@@ -1249,6 +1279,161 @@ const TaskDetailsPage = () => {
     setEditingHistoryItem(null);
   };
 
+  // Funkcja do drukowania szczegółów MO
+  const handlePrintMODetails = () => {
+    // Funkcja pomocnicza do formatowania dat
+    const formatDateForPrint = (dateValue) => {
+      if (!dateValue) return 'Nie określono';
+      
+      try {
+        // Spróbuj różne formaty konwersji daty
+        let date;
+        if (dateValue instanceof Date) {
+          date = dateValue;
+        } else if (dateValue.toDate && typeof dateValue.toDate === 'function') {
+          // Timestamp z Firebase
+          date = dateValue.toDate();
+        } else if (dateValue.seconds) {
+          // Obiekt timestamp z sekundami
+          date = new Date(dateValue.seconds * 1000);
+        } else {
+          // String lub inny format
+          date = new Date(dateValue);
+        }
+        
+        // Sprawdź czy data jest prawidłowa
+        if (isNaN(date.getTime())) {
+          return 'Nie określono';
+        }
+        
+        // Formatuj datę do czytelnego formatu
+        return date.toLocaleDateString('pl-PL', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      } catch (error) {
+        console.error('Błąd konwersji daty:', error);
+        return 'Nie określono';
+      }
+    };
+    
+    // Przygotuj zawartość do wydruku
+    let printContents = `
+      <html>
+      <head>
+        <title>Szczegóły MO: ${task.moNumber || ''}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 20px; }
+          .header { text-align: center; margin-bottom: 20px; border-bottom: 1px solid #ccc; padding-bottom: 10px; }
+          h1 { margin-bottom: 5px; }
+          table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+          th { background-color: #f2f2f2; width: 30%; }
+          .section { margin-top: 20px; }
+          .footer { text-align: center; margin-top: 50px; font-size: 0.8em; border-top: 1px solid #ccc; padding-top: 10px; }
+          .highlighted { background-color: #f9f9f9; border-left: 4px solid #2196F3; padding-left: 10px; }
+          @media print {
+            body { -webkit-print-color-adjust: exact; color-adjust: exact; }
+            button { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>Szczegóły zlecenia produkcyjnego</h1>
+          <h2>MO: ${task.moNumber || 'Nie określono'}</h2>
+        </div>
+        
+        <div class="section">
+          <h3>Informacje podstawowe</h3>
+          <table>
+            <tr><th>Nazwa zadania:</th><td>${task.name || 'Nie określono'}</td></tr>
+            <tr><th>Produkt:</th><td>${task.productName || 'Nie określono'}</td></tr>
+            <tr><th>Ilość:</th><td>${task.quantity || '0'} ${task.unit || 'szt.'}</td></tr>
+            <tr><th>Status:</th><td>${task.status || 'Nie określono'}</td></tr>
+            <tr><th>Priorytet:</th><td>${task.priority || 'Normalny'}</td></tr>
+          </table>
+        </div>
+
+        <div class="section highlighted">
+          <h3>Informacje o partii produktu</h3>
+          <table>
+            <tr><th>Numer LOT:</th><td>${task.lotNumber || 'Nie określono'}</td></tr>
+            <tr><th>Data ważności:</th><td>${task.expiryDate ? formatDateForPrint(task.expiryDate).split(',')[0] : 'Nie określono'}</td></tr>
+          </table>
+        </div>
+
+        <div class="section">
+          <h3>Harmonogram</h3>
+          <table>
+            <tr><th>Planowany start:</th><td>${formatDateForPrint(task.scheduledDate)}</td></tr>
+            <tr><th>Planowane zakończenie:</th><td>${formatDateForPrint(task.endDate)}</td></tr>
+            <tr><th>Szacowany czas produkcji:</th><td>${task.estimatedDuration ? task.estimatedDuration.toFixed(1) + ' godz.' : 'Nie określono'}</td></tr>
+            <tr><th>Czas na jednostkę:</th><td>${task.productionTimePerUnit ? task.productionTimePerUnit + ' min./szt.' : 'Nie określono'}</td></tr>
+          </table>
+        </div>
+
+        <div class="section">
+          <h3>Materiały</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Nazwa</th>
+                <th>Ilość planowana</th>
+                <th>Ilość rzeczywista</th>
+                <th>Jednostka</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${materials.map(material => `
+                <tr>
+                  <td>${material.name || 'Nie określono'}</td>
+                  <td>${material.quantity || 0}</td>
+                  <td>${materialQuantities[material.id] || 0}</td>
+                  <td>${material.unit || 'szt.'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        ${task.notes ? `
+        <div class="section">
+          <h3>Notatki</h3>
+          <p>${task.notes}</p>
+        </div>
+        ` : ''}
+
+        <div class="footer">
+          <p>Data wydruku: ${new Date().toLocaleDateString('pl-PL', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          })}</p>
+          <p>System MRP</p>
+        </div>
+        
+        <div style="text-align: center; margin-top: 20px;">
+          <button onclick="window.print()" style="padding: 10px 20px; background-color: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px;">
+            Drukuj dokument
+          </button>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    // Otwórz nowe okno z zawartością do wydruku zamiast modyfikowania bieżącego dokumentu
+    const printWindow = window.open('', '_blank');
+    printWindow.document.open();
+    printWindow.document.write(printContents);
+    printWindow.document.close();
+  };
+
   // Renderuj stronę
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -1273,6 +1458,15 @@ const TaskDetailsPage = () => {
             sx={{ mr: 1 }}
           >
                 Drukuj rozpiskę materiałów
+          </Button>
+          <Button
+            variant="outlined"
+                color="secondary"
+                startIcon={<PrintIcon />}
+                onClick={handlePrintMODetails}
+            sx={{ mr: 1 }}
+          >
+                Drukuj szczegóły MO
           </Button>
               <IconButton 
                 color="primary"

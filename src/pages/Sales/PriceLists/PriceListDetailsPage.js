@@ -15,7 +15,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import { format } from 'date-fns';
 
 import { getPriceListById, deletePriceList } from '../../../services/priceListService';
-import { useNotification } from '../../../contexts/NotificationContext';
+import { useNotification } from '../../../hooks/useNotification';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import Loader from '../../../components/common/Loader';
 import GoBackButton from '../../../components/common/GoBackButton';

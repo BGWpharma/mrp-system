@@ -55,7 +55,7 @@ import {
   DeleteForever as DeleteForeverIcon,
   ViewColumn as ViewColumnIcon,
 } from '@mui/icons-material';
-import { getAllInventoryItems, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, getItemBatches, updateReservation, updateReservationTasks, cleanupDeletedTaskReservations } from '../../services/inventoryService';
+import { getAllInventoryItems, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, getItemBatches, updateReservation, updateReservationTasks, cleanupDeletedTaskReservations, deleteReservation } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
 import { toast } from 'react-hot-toast';
@@ -625,6 +625,23 @@ const InventoryList = () => {
       await fetchReservations(selectedItem);
     } catch (error) {
       console.error('Błąd podczas aktualizacji rezerwacji:', error);
+      showError(error.message);
+    }
+  };
+
+  // Funkcja do usuwania rezerwacji
+  const handleDeleteReservation = async (reservationId) => {
+    if (!window.confirm('Czy na pewno chcesz usunąć tę rezerwację? Ta operacja jest nieodwracalna.')) {
+      return;
+    }
+    
+    try {
+      await deleteReservation(reservationId, currentUser.uid);
+      showSuccess('Rezerwacja została usunięta');
+      // Odśwież dane
+      await fetchReservations(selectedItem);
+    } catch (error) {
+      console.error('Błąd podczas usuwania rezerwacji:', error);
       showError(error.message);
     }
   };
@@ -1546,15 +1563,22 @@ const InventoryList = () => {
                       )}
                     </TableCell>
                     <TableCell>
-                      {!reservation.fulfilled && (
-                        <IconButton
-                          size="small"
+                      <Box display="flex" justifyContent="flex-end">
+                        <IconButton 
+                          color="primary" 
+                          size="small" 
                           onClick={() => handleEditReservation(reservation)}
-                          title="Edytuj rezerwację"
                         >
-                          <EditIcon />
+                          <EditIcon fontSize="small" />
                         </IconButton>
-                      )}
+                        <IconButton 
+                          color="error" 
+                          size="small" 
+                          onClick={() => handleDeleteReservation(reservation.id)}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
                     </TableCell>
                   </TableRow>
                 ))}

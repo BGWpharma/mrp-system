@@ -14,7 +14,7 @@ import {
 import { updatePriceListItem } from '../../../services/priceListService';
 import { UNIT_OPTIONS } from '../../../config';
 import { useAuth } from '../../../contexts/AuthContext';
-import { useNotification } from '../../../contexts/NotificationContext';
+import { useNotification } from '../../../hooks/useNotification';
 
 const EditPriceListItemDialog = ({ open, onClose, item, onItemUpdated }) => {
   const [formData, setFormData] = useState({

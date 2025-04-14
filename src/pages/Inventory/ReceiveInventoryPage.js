@@ -27,6 +27,9 @@ const ReceiveInventoryPage = () => {
     const moNumber = queryParams.get('moNumber');
     const orderNumber = queryParams.get('orderNumber');
     
+    // Pobierz datę ważności, jeśli jest dostępna
+    const expiryDate = queryParams.get('expiryDate');
+    
     if (poNumber || quantity || unitPrice || orderId) {
       // Przygotuj obiekt z danymi początkowymi
       const data = {
@@ -50,6 +53,16 @@ const ReceiveInventoryPage = () => {
       
       if (orderNumber) {
         data.orderNumber = orderNumber;
+      }
+      
+      // Dodaj datę ważności, jeśli jest dostępna
+      if (expiryDate) {
+        try {
+          data.expiryDate = new Date(expiryDate);
+          console.log('Ustawiono datę ważności z parametru URL:', data.expiryDate);
+        } catch (e) {
+          console.error('Błąd podczas parsowania daty ważności:', e);
+        }
       }
       
       // Dodaj notatki, jeśli są dostępne

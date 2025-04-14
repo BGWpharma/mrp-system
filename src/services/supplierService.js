@@ -202,4 +202,45 @@ export const getBestSupplierPricesForItems = async (items) => {
     console.error('Błąd podczas pobierania najlepszych cen dostawców:', error);
     return {};
   }
+};
+
+/**
+ * Pobiera cenę dostawcy dla konkretnego przedmiotu
+ * @param {string} itemId - ID przedmiotu
+ * @param {string} supplierId - ID dostawcy
+ * @returns {Promise<Object|null>} - Dane cenowe lub null jeśli nie znaleziono
+ */
+export const getSupplierPriceForItem = async (itemId, supplierId) => {
+  try {
+    console.log(`[DEBUG] Szukam ceny dla produktu ${itemId} od dostawcy ${supplierId}`);
+    
+    const supplierPricesRef = collection(db, 'inventorySupplierPrices');
+    const q = query(
+      supplierPricesRef,
+      where('itemId', '==', itemId),
+      where('supplierId', '==', supplierId)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) {
+      console.log(`[DEBUG] Nie znaleziono ceny dla produktu ${itemId} od dostawcy ${supplierId}`);
+      return null;
+    }
+    
+    const priceDoc = querySnapshot.docs[0];
+    const priceData = priceDoc.data();
+    
+    console.log(`[DEBUG] Znaleziona cena:`, priceData);
+    console.log(`[DEBUG] minQuantity:`, priceData.minQuantity);
+    console.log(`[DEBUG] leadTime:`, priceData.leadTime);
+    
+    return {
+      id: priceDoc.id,
+      ...priceData
+    };
+  } catch (error) {
+    console.error('Błąd podczas pobierania ceny dostawcy dla produktu:', error);
+    return null;
+  }
 }; 

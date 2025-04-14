@@ -12,6 +12,7 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import { db } from './firebase/config';
+import { createNotification } from './notificationService';
 
 // Stałe dla kolekcji w Firebase
 const PURCHASE_ORDERS_COLLECTION = 'purchaseOrders';
@@ -195,7 +196,6 @@ export const createPurchaseOrder = async (purchaseOrderData, userId) => {
       supplier, 
       items = [], 
       currency = 'EUR', 
-      vatRate = 23, 
       additionalCostsItems = [], 
       additionalCosts = 0,
       status = 'draft', 
@@ -203,28 +203,63 @@ export const createPurchaseOrder = async (purchaseOrderData, userId) => {
       orderDate = new Date(),
       expectedDeliveryDate,
       deliveryAddress = '',
-      notes = ''
+      notes = '',
+      totalValue,
+      totalGross,
+      totalVat
     } = purchaseOrderData;
 
     // Generuj numer zamówienia
     const number = await generateOrderNumber('PO');
     
-    // Obliczamy wartość zamówienia
-    const totalValue = items.reduce((sum, item) => {
-      const itemPrice = parseFloat(item.totalPrice) || 0;
-      return sum + itemPrice;
-    }, 0);
+    // Obliczamy wartości VAT i brutto jeśli nie zostały dostarczone
+    let calculatedTotalValue = totalValue;
+    let calculatedTotalGross = totalGross;
+    let calculatedTotalVat = totalVat;
     
-    // Obliczamy wartość VAT (tylko od produktów)
-    const vatValue = (totalValue * vatRate) / 100;
+    if (!calculatedTotalValue || !calculatedTotalGross || !calculatedTotalVat) {
+      // Obliczanie wartości netto i VAT dla pozycji produktów
+      let itemsNetTotal = 0;
+      let itemsVatTotal = 0;
+      
+      for (const item of items) {
+        const itemNet = parseFloat(item.totalPrice) || 0;
+        itemsNetTotal += itemNet;
     
-    // Obliczamy dodatkowe koszty
-    const additionalCostsTotal = additionalCostsItems && Array.isArray(additionalCostsItems) 
-      ? additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
-      : (parseFloat(additionalCosts) || 0);
-    
-    // Obliczamy wartość brutto: wartość netto produktów + VAT + dodatkowe koszty
-    const totalGross = totalValue + vatValue + additionalCostsTotal;
+        // Obliczanie VAT dla pozycji na podstawie jej indywidualnej stawki VAT
+        const vatRate = typeof item.vatRate === 'number' ? item.vatRate : 0;
+        const itemVat = (itemNet * vatRate) / 100;
+        itemsVatTotal += itemVat;
+      }
+      
+      // Obliczanie wartości netto i VAT dla dodatkowych kosztów
+      let additionalCostsNetTotal = 0;
+      let additionalCostsVatTotal = 0;
+      
+      for (const cost of additionalCostsItems) {
+        const costNet = parseFloat(cost.value) || 0;
+        additionalCostsNetTotal += costNet;
+        
+        // Obliczanie VAT dla dodatkowego kosztu na podstawie jego indywidualnej stawki VAT
+        const vatRate = typeof cost.vatRate === 'number' ? cost.vatRate : 0;
+        const costVat = (costNet * vatRate) / 100;
+        additionalCostsVatTotal += costVat;
+      }
+      
+      // Dla wstecznej kompatybilności - obsługa starego pola additionalCosts
+      if (additionalCosts > 0 && (!additionalCostsItems || additionalCostsItems.length === 0)) {
+        additionalCostsNetTotal += parseFloat(additionalCosts) || 0;
+      }
+      
+      // Suma wartości netto: produkty + dodatkowe koszty
+      calculatedTotalValue = itemsNetTotal + additionalCostsNetTotal;
+      
+      // Suma VAT: VAT od produktów + VAT od dodatkowych kosztów
+      calculatedTotalVat = itemsVatTotal + additionalCostsVatTotal;
+      
+      // Wartość brutto: suma netto + suma VAT
+      calculatedTotalGross = calculatedTotalValue + calculatedTotalVat;
+    }
     
     // Zapisujemy tylko ID dostawcy, a nie cały obiekt - z zabezpieczeniem przed undefined
     const supplierId = supplier?.id || null;
@@ -234,10 +269,10 @@ export const createPurchaseOrder = async (purchaseOrderData, userId) => {
       number,
       supplierId,
       items,
-      totalValue,
-      totalGross, // Dodajemy wartość brutto
+      totalValue: calculatedTotalValue,
+      totalGross: calculatedTotalGross, // Wartość brutto
+      totalVat: calculatedTotalVat, // Wartość VAT (nowe pole)
       additionalCostsItems,
-      vatRate,
       currency,
       status,
       targetWarehouseId,
@@ -251,31 +286,18 @@ export const createPurchaseOrder = async (purchaseOrderData, userId) => {
       updatedAt: serverTimestamp()
     };
     
-    console.log("Dane do zapisania:", newPurchaseOrder);
-    
-    // Dodaj nowe zamówienie do kolekcji
+    // Dodaj zamówienie do bazy danych
     const docRef = await addDoc(collection(db, PURCHASE_ORDERS_COLLECTION), newPurchaseOrder);
-    const id = docRef.id;
     
-    console.log(`Utworzono zamówienie z ID: ${id}`);
-    
-    // Pobierz dane dostawcy dla zwrócenia pełnego obiektu zamówienia
-    let supplierData = null;
-    if (supplierId) {
-      const supplierDoc = await getDoc(doc(db, SUPPLIERS_COLLECTION, supplierId));
-      if (supplierDoc.exists()) {
-        supplierData = { id: supplierDoc.id, ...supplierDoc.data() };
-      }
-    }
-    
-    // Przygotuj dane wynikowe
+    // Konwersja Date na ISO string dla zwróconych danych
     const result = {
-      id: id,
+      id: docRef.id,
       ...newPurchaseOrder,
-      supplier: supplierData,
-      orderDate: newPurchaseOrder.orderDate.toISOString(),
-      expectedDeliveryDate: newPurchaseOrder.expectedDeliveryDate ? newPurchaseOrder.expectedDeliveryDate.toISOString() : null,
-      createdAt: new Date().toISOString() // Ponieważ serverTimestamp() nie zwraca rzeczywistej wartości od razu
+      supplier: supplier, // Dodajemy pełny obiekt dostawcy dla interfejsu
+      orderDate: typeof newPurchaseOrder.orderDate === 'object' ? newPurchaseOrder.orderDate.toISOString() : newPurchaseOrder.orderDate,
+      expectedDeliveryDate: newPurchaseOrder.expectedDeliveryDate ? (typeof newPurchaseOrder.expectedDeliveryDate === 'object' ? newPurchaseOrder.expectedDeliveryDate.toISOString() : newPurchaseOrder.expectedDeliveryDate) : null,
+      createdAt: new Date().toISOString(), // serverTimestamp nie zwraca wartości od razu
+      updatedAt: new Date().toISOString()
     };
     
     console.log("Nowe PO - wynik:", result);
@@ -286,102 +308,198 @@ export const createPurchaseOrder = async (purchaseOrderData, userId) => {
   }
 };
 
-export const updatePurchaseOrder = async (id, purchaseOrderData) => {
+export const updatePurchaseOrder = async (purchaseOrderId, updateData, userId) => {
   try {
-    console.log("Aktualizacja zamówienia - dane wejściowe:", purchaseOrderData);
-    
-    const purchaseOrderRef = doc(db, PURCHASE_ORDERS_COLLECTION, id);
-    
     // Sprawdź, czy zamówienie istnieje
-    const docSnap = await getDoc(purchaseOrderRef);
-    if (!docSnap.exists()) {
-      throw new Error(`Nie znaleziono zamówienia zakupowego o ID ${id}`);
+    const purchaseOrderRef = doc(db, PURCHASE_ORDERS_COLLECTION, purchaseOrderId);
+    const purchaseOrderSnap = await getDoc(purchaseOrderRef);
+    
+    if (!purchaseOrderSnap.exists()) {
+      throw new Error(`Zamówienie zakupowe o ID ${purchaseOrderId} nie istnieje`);
     }
     
-    const existingData = docSnap.data();
+    const existingPO = purchaseOrderSnap.data();
     
-    // Zapisujemy tylko ID dostawcy, a nie cały obiekt
-    // Zabezpieczenie przed błędem undefined w supplierId
-    let supplierId = purchaseOrderData.supplier?.id;
-    if (supplierId === undefined && existingData.supplierId) {
-      // Jeśli supplierId nie istnieje w danych wejściowych, ale istnieje w bieżących danych, użyj istniejącego
-      supplierId = existingData.supplierId;
-      console.log(`Użyto istniejącego supplierId: ${supplierId}`);
-    } else if (supplierId === undefined) {
-      // Jeśli supplierId nie istnieje nigdzie, ustaw puste pole
-      supplierId = '';
-      console.log('Ustawiono pusty supplierId, ponieważ nie został podany');
+    const { 
+      supplier,
+      items = [], 
+      additionalCostsItems = [],
+      additionalCosts,
+      status,
+      targetWarehouseId,
+      orderDate,
+      expectedDeliveryDate,
+      deliveryAddress,
+      notes,
+      currency,
+      totalValue,
+      totalGross,
+      totalVat
+    } = updateData;
+    
+    // Bezpieczne pobieranie ID dostawcy
+    const supplierId = supplier?.id || null;
+    
+    // Obliczamy wartości VAT i brutto jeśli nie zostały dostarczone
+    let calculatedTotalValue = totalValue;
+    let calculatedTotalGross = totalGross;
+    let calculatedTotalVat = totalVat;
+    
+    if (!calculatedTotalValue || !calculatedTotalGross || !calculatedTotalVat) {
+      // Obliczanie wartości netto i VAT dla pozycji produktów
+      let itemsNetTotal = 0;
+      let itemsVatTotal = 0;
+      
+      for (const item of items) {
+        const itemNet = parseFloat(item.totalPrice) || 0;
+        itemsNetTotal += itemNet;
+    
+        // Obliczanie VAT dla pozycji na podstawie jej indywidualnej stawki VAT
+        const vatRate = typeof item.vatRate === 'number' ? item.vatRate : 0;
+        const itemVat = (itemNet * vatRate) / 100;
+        itemsVatTotal += itemVat;
+      }
+      
+      // Obliczanie wartości netto i VAT dla dodatkowych kosztów
+      let additionalCostsNetTotal = 0;
+      let additionalCostsVatTotal = 0;
+      
+      for (const cost of additionalCostsItems) {
+        const costNet = parseFloat(cost.value) || 0;
+        additionalCostsNetTotal += costNet;
+    
+        // Obliczanie VAT dla dodatkowego kosztu na podstawie jego indywidualnej stawki VAT
+        const vatRate = typeof cost.vatRate === 'number' ? cost.vatRate : 0;
+        const costVat = (costNet * vatRate) / 100;
+        additionalCostsVatTotal += costVat;
+      }
+      
+      // Dla wstecznej kompatybilności - obsługa starego pola additionalCosts
+      if (additionalCosts > 0 && (!additionalCostsItems || additionalCostsItems.length === 0)) {
+        additionalCostsNetTotal += parseFloat(additionalCosts) || 0;
+      }
+      
+      // Suma wartości netto: produkty + dodatkowe koszty
+      calculatedTotalValue = itemsNetTotal + additionalCostsNetTotal;
+      
+      // Suma VAT: VAT od produktów + VAT od dodatkowych kosztów
+      calculatedTotalVat = itemsVatTotal + additionalCostsVatTotal;
+      
+      // Wartość brutto: suma netto + suma VAT
+      calculatedTotalGross = calculatedTotalValue + calculatedTotalVat;
     }
     
-    // Zachowujemy numer zamówienia z oryginalnego dokumentu
-    const number = existingData.number;
-    
-    // Obliczamy wartość netto produktów
-    const productsValue = purchaseOrderData.items && Array.isArray(purchaseOrderData.items)
-      ? purchaseOrderData.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0)
-      : (purchaseOrderData.totalValue || 0);
-    
-    // Obliczamy wartość VAT (tylko od produktów)
-    const vatRate = purchaseOrderData.vatRate || 23;
-    const vatValue = (productsValue * vatRate) / 100;
-    
-    // Obliczamy dodatkowe koszty
-    const additionalCosts = purchaseOrderData.additionalCostsItems && Array.isArray(purchaseOrderData.additionalCostsItems) 
-      ? purchaseOrderData.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
-      : (parseFloat(purchaseOrderData.additionalCosts) || 0);
-    
-    // Obliczamy wartość brutto: wartość netto produktów + VAT + dodatkowe koszty
-    const totalGross = productsValue + vatValue + additionalCosts;
-    
-    const updates = {
-      number: number, // Zachowaj oryginalny numer zamówienia
-      supplierId: supplierId, // Użyj bezpiecznego, nienulowego pola
-      items: purchaseOrderData.items || [],
-      totalValue: productsValue,
-      totalGross: totalGross,
-      additionalCostsItems: purchaseOrderData.additionalCostsItems || [],
-      vatRate: vatRate,
-      currency: purchaseOrderData.currency || 'EUR',
-      status: purchaseOrderData.status || 'draft',
-      targetWarehouseId: purchaseOrderData.targetWarehouseId || '',
-      orderDate: purchaseOrderData.orderDate ? new Date(purchaseOrderData.orderDate) : new Date(),
-      expectedDeliveryDate: purchaseOrderData.expectedDeliveryDate ? new Date(purchaseOrderData.expectedDeliveryDate) : null,
-      deliveryAddress: purchaseOrderData.deliveryAddress || '',
-      notes: purchaseOrderData.notes || '',
-      updatedBy: purchaseOrderData.updatedBy || null,
+    // Przygotuj dane do aktualizacji
+    const updateFields = {
+      supplierId,
+      items,
+      additionalCostsItems,
+      targetWarehouseId,
+      deliveryAddress,
+      notes,
+      currency,
+      totalValue: calculatedTotalValue,
+      totalGross: calculatedTotalGross,
+      totalVat: calculatedTotalVat,
+      updatedBy: userId,
       updatedAt: serverTimestamp()
     };
     
-    console.log("Dane do zaktualizowania:", updates);
+    // Dodaj datę zamówienia jeśli została dostarczona
+    if (orderDate) {
+      updateFields.orderDate = typeof orderDate === 'string' ? new Date(orderDate) : orderDate;
+    }
     
-    // Aktualizuj zamówienie w bazie danych
-    await updateDoc(purchaseOrderRef, updates);
+    // Dodaj przewidywaną datę dostawy jeśli została dostarczona
+    if (expectedDeliveryDate) {
+      updateFields.expectedDeliveryDate = typeof expectedDeliveryDate === 'string' ? new Date(expectedDeliveryDate) : expectedDeliveryDate;
+    }
     
-    // Pobierz dane dostawcy dla zwrócenia pełnego obiektu zamówienia
-    let supplierData = null;
-    if (supplierId) {
-      const supplierDoc = await getDoc(doc(db, SUPPLIERS_COLLECTION, supplierId));
-      if (supplierDoc.exists()) {
-        supplierData = { id: supplierDoc.id, ...supplierDoc.data() };
+    // Aktualizuj status i historię statusów jeśli status się zmienił
+    if (status && status !== existingPO.status) {
+      updateFields.status = status;
+      
+      // Pobierz istniejącą historię statusów lub utwórz nową
+      const existingStatusHistory = existingPO.statusHistory || [];
+      
+      // Dodaj nowy wpis do historii statusów
+      const statusHistoryEntry = {
+        status,
+        date: new Date(),
+        userId
+      };
+      
+      updateFields.statusHistory = [...existingStatusHistory, statusHistoryEntry];
+    
+      // Wyślij powiadomienie o zmianie statusu
+      try {
+        await createNotification({
+          title: 'Zmiana statusu zamówienia',
+          content: `Zamówienie ${existingPO.number || purchaseOrderId} zmieniło status na: ${status}`,
+          type: 'purchaseOrder',
+          objectId: purchaseOrderId,
+          createdBy: userId
+        });
+      } catch (notificationError) {
+        console.error('Błąd podczas wysyłania powiadomienia:', notificationError);
+        // Kontynuuj mimo błędu powiadomienia
       }
     }
     
-    // Przygotuj dane wynikowe z zachowaniem wszystkich pól
-    const result = {
-      id: id,
-      ...existingData,
-      ...updates,
-      supplier: supplierData,
-      // Konwersja Date na ISO string (dla kompatybilności z istniejącym kodem)
-      orderDate: updates.orderDate.toISOString(),
-      expectedDeliveryDate: updates.expectedDeliveryDate ? updates.expectedDeliveryDate.toISOString() : null,
-      updatedAt: new Date().toISOString() // Ponieważ serverTimestamp() nie zwraca rzeczywistej wartości od razu
+    // Aktualizuj dokument
+    await updateDoc(purchaseOrderRef, updateFields);
+    
+    // Pobierz zaktualizowane dane zamówienia
+    const updatedDocSnap = await getDoc(purchaseOrderRef);
+    
+    if (!updatedDocSnap.exists()) {
+      throw new Error(`Nie można pobrać zaktualizowanego zamówienia o ID ${purchaseOrderId}`);
+    }
+    
+    const updatedData = updatedDocSnap.data();
+    
+    // Pobierz dane dostawcy jeśli jest ID dostawcy
+    let supplierData = null;
+    if (updatedData.supplierId) {
+      try {
+        const supplierDoc = await getDoc(doc(db, SUPPLIERS_COLLECTION, updatedData.supplierId));
+      if (supplierDoc.exists()) {
+        supplierData = { id: supplierDoc.id, ...supplierDoc.data() };
+      }
+      } catch (supplierError) {
+        console.error('Błąd podczas pobierania danych dostawcy:', supplierError);
+        // Kontynuuj mimo błędu pobierania dostawcy
+      }
+    }
+    
+    // Bezpieczna konwersja dat na string
+    const safeToISOString = (dateObj) => {
+      if (!dateObj) return null;
+      if (typeof dateObj === 'string') return dateObj;
+      if (dateObj instanceof Date) return dateObj.toISOString();
+      if (dateObj.toDate && typeof dateObj.toDate === 'function') {
+        try {
+          return dateObj.toDate().toISOString();
+        } catch (e) {
+          console.error('Nie można skonwertować timestamp na date:', e);
+          return null;
+        }
+      }
+      return null;
     };
     
-    console.log("Zaktualizowane PO - wynik:", result);
-    return result;
+    // Zwróć zaktualizowany obiekt zamówienia zakupowego
+    return {
+      id: purchaseOrderId,
+      ...updatedData,
+      supplier: supplierData,
+      orderDate: safeToISOString(updatedData.orderDate),
+      expectedDeliveryDate: safeToISOString(updatedData.expectedDeliveryDate),
+      createdAt: safeToISOString(updatedData.createdAt),
+      updatedAt: safeToISOString(updatedData.updatedAt)
+    };
   } catch (error) {
-    console.error(`Błąd podczas aktualizacji zamówienia zakupowego o ID ${id}:`, error);
+    console.error('Błąd podczas aktualizacji zamówienia zakupowego:', error);
     throw error;
   }
 };
@@ -836,6 +954,114 @@ export const updatePurchaseOrderReceivedQuantity = async (purchaseOrderId, itemI
     };
   } catch (error) {
     console.error('Błąd podczas aktualizacji ilości odebranych produktów:', error);
+    throw error;
+  }
+};
+
+export const updatePurchaseOrderItems = async (purchaseOrderId, updatedItems, userId) => {
+  try {
+    // Sprawdź, czy zamówienie istnieje
+    const purchaseOrderRef = doc(db, PURCHASE_ORDERS_COLLECTION, purchaseOrderId);
+    const purchaseOrderSnap = await getDoc(purchaseOrderRef);
+    
+    if (!purchaseOrderSnap.exists()) {
+      throw new Error(`Zamówienie zakupowe o ID ${purchaseOrderId} nie istnieje`);
+    }
+    
+    const existingPO = purchaseOrderSnap.data();
+    
+    // Pobierz istniejące pozycje
+    const existingItems = existingPO.items || [];
+    
+    // Zaktualizuj pozycje - zastępuj istniejące lub dodaj nowe
+    const newItems = [...existingItems];
+    
+    // Dla każdej zaktualizowanej pozycji
+    for (const updatedItem of updatedItems) {
+      // Znajdź pozycję po ID
+      const index = newItems.findIndex(item => item.id === updatedItem.id);
+      
+      if (index !== -1) {
+        // Zaktualizuj istniejącą pozycję
+        newItems[index] = {
+          ...newItems[index],
+          ...updatedItem
+        };
+      } else {
+        // Dodaj nową pozycję
+        newItems.push(updatedItem);
+      }
+    }
+    
+    // Obliczanie wartości netto i VAT dla zaktualizowanych pozycji
+    let itemsNetTotal = 0;
+    let itemsVatTotal = 0;
+    
+    for (const item of newItems) {
+      const itemNet = parseFloat(item.totalPrice) || 0;
+      itemsNetTotal += itemNet;
+      
+      // Obliczanie VAT dla pozycji na podstawie jej indywidualnej stawki VAT
+      const vatRate = typeof item.vatRate === 'number' ? item.vatRate : 0;
+      const itemVat = (itemNet * vatRate) / 100;
+      itemsVatTotal += itemVat;
+    }
+    
+    // Obliczanie wartości netto i VAT dla dodatkowych kosztów
+    let additionalCostsNetTotal = 0;
+    let additionalCostsVatTotal = 0;
+    
+    if (existingPO.additionalCostsItems && Array.isArray(existingPO.additionalCostsItems)) {
+      for (const cost of existingPO.additionalCostsItems) {
+        const costNet = parseFloat(cost.value) || 0;
+        additionalCostsNetTotal += costNet;
+        
+        // Obliczanie VAT dla dodatkowego kosztu na podstawie jego indywidualnej stawki VAT
+        const vatRate = typeof cost.vatRate === 'number' ? cost.vatRate : 0;
+        const costVat = (costNet * vatRate) / 100;
+        additionalCostsVatTotal += costVat;
+      }
+    } else if (existingPO.additionalCosts > 0) {
+      // Dla wstecznej kompatybilności - obsługa starego pola additionalCosts
+      additionalCostsNetTotal += parseFloat(existingPO.additionalCosts) || 0;
+    }
+    
+    // Suma wartości netto: produkty + dodatkowe koszty
+    const calculatedTotalValue = itemsNetTotal + additionalCostsNetTotal;
+    
+    // Suma VAT: VAT od produktów + VAT od dodatkowych kosztów
+    const calculatedTotalVat = itemsVatTotal + additionalCostsVatTotal;
+    
+    // Wartość brutto: suma netto + suma VAT
+    const calculatedTotalGross = calculatedTotalValue + calculatedTotalVat;
+    
+    // Przygotuj dane do aktualizacji
+    const updateFields = {
+      items: newItems,
+      totalValue: calculatedTotalValue,
+      totalGross: calculatedTotalGross,
+      totalVat: calculatedTotalVat,
+      updatedBy: userId,
+      updatedAt: serverTimestamp()
+    };
+    
+    // Aktualizuj dokument
+    await updateDoc(purchaseOrderRef, updateFields);
+    
+    // Pobierz zaktualizowane dane zamówienia
+    const updatedDocSnap = await getDoc(purchaseOrderRef);
+    
+    if (!updatedDocSnap.exists()) {
+      throw new Error(`Nie można pobrać zaktualizowanego zamówienia o ID ${purchaseOrderId}`);
+    }
+    
+    return {
+      id: purchaseOrderId,
+      ...updatedDocSnap.data(),
+      updatedAt: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error('Błąd podczas aktualizacji pozycji zamówienia zakupowego:', error);
     throw error;
   }
 }; 

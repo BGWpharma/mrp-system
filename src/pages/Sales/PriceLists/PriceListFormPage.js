@@ -28,7 +28,7 @@ import {
 import { getAllCustomers } from '../../../services/customerService';
 import { CURRENCY_OPTIONS } from '../../../config';
 import { useAuth } from '../../../contexts/AuthContext';
-import { useNotification } from '../../../contexts/NotificationContext';
+import { useNotification } from '../../../hooks/useNotification';
 import Loader from '../../../components/common/Loader';
 import GoBackButton from '../../../components/common/GoBackButton';
 import PriceListItemsTable from '../../../components/sales/priceLists/PriceListItemsTable';

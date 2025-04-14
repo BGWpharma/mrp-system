@@ -24,7 +24,7 @@ import * as inventoryService from '../../../services/inventoryService';
 import { getAllRecipes } from '../../../services/recipeService';
 import { UNIT_OPTIONS } from '../../../config';
 import { useAuth } from '../../../contexts/AuthContext';
-import { useNotification } from '../../../contexts/NotificationContext';
+import { useNotification } from '../../../hooks/useNotification';
 
 const AddPriceListItemDialog = ({ open, onClose, priceListId, onItemAdded }) => {
   const [formData, setFormData] = useState({ ...DEFAULT_PRICE_LIST_ITEM });

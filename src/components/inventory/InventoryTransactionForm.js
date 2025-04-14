@@ -92,11 +92,26 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
         itemPOId: initialData.itemPOId || initialData.id || ''
       }));
       
-      // Domyślnie użyj lotu z parametrów, jeśli istnieje
-      setBatchData(prev => ({
+      // Ustawienie danych partii
+      setBatchData(prev => {
+        const newBatchData = {
         ...prev,
+          useBatch: true, // Włącz obsługę partii, gdy mamy dane LOT lub datę ważności
         batchNumber: initialData.lotNumber || initialData.batchNumber || ''
-      }));
+        };
+        
+        // Jeśli mamy datę ważności, ustaw ją
+        if (initialData.expiryDate) {
+          console.log('Znaleziono datę ważności w initialData:', initialData.expiryDate);
+          newBatchData.expiryDate = new Date(initialData.expiryDate);
+          newBatchData.noExpiryDate = false;
+        }
+        
+        return newBatchData;
+      });
+      
+      // Dodaj logowanie dla debugowania
+      console.log('Dane początkowe z formularza:', initialData);
     }
     
     const fetchData = async () => {

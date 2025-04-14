@@ -249,12 +249,53 @@ const TaskList = () => {
 
   const openAddToInventoryDialog = (task) => {
     setCurrentTaskId(task.id);
-    // Ustaw domyślne wartości w formularzu na podstawie zadania
+    
+    // Dodaję logowanie do celów diagnostycznych
+    console.log('Dane zadania:', task);
+    console.log('Data ważności z zadania:', task.expiryDate);
+    
+    // Poprawna konwersja daty ważności z różnych formatów
+    let expiryDate = null;
+    
+    if (task.expiryDate) {
+      try {
+        // Sprawdź typ daty i odpowiednio ją skonwertuj
+        if (task.expiryDate instanceof Date) {
+          expiryDate = task.expiryDate;
+        } else if (task.expiryDate.toDate && typeof task.expiryDate.toDate === 'function') {
+          // Obsługa obiektu Firebase Timestamp
+          expiryDate = task.expiryDate.toDate();
+        } else if (task.expiryDate.seconds) {
+          // Obsługa obiektu timestamp z sekundami
+          expiryDate = new Date(task.expiryDate.seconds * 1000);
+        } else if (typeof task.expiryDate === 'string') {
+          // Obsługa formatu string
+          expiryDate = new Date(task.expiryDate);
+        }
+        console.log('Skonwertowana data ważności:', expiryDate);
+      } catch (error) {
+        console.error('Błąd konwersji daty ważności:', error);
+        // W przypadku błędu konwersji, ustaw datę domyślną
+        expiryDate = new Date(new Date().setFullYear(new Date().getFullYear() + 1));
+      }
+    } else {
+      // Domyślna data ważności (1 rok od dzisiaj)
+      expiryDate = new Date(new Date().setFullYear(new Date().getFullYear() + 1));
+    }
+    
+    // Ustaw wartości w formularzu na podstawie danych z zadania produkcyjnego
     setInventoryData({
-      expiryDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)), // Domyślnie 1 rok
-      lotNumber: `LOT-${task.moNumber || ''}`,
+      expiryDate: expiryDate,
+      lotNumber: task.lotNumber || `LOT-${task.moNumber || ''}`,
       finalQuantity: task.quantity.toString()
     });
+    
+    console.log('Dane formularza po konwersji:', {
+      expiryDate: expiryDate,
+      lotNumber: task.lotNumber || `LOT-${task.moNumber || ''}`,
+      finalQuantity: task.quantity.toString()
+    });
+    
     setAddToInventoryDialogOpen(true);
   };
 
@@ -579,6 +620,7 @@ const TaskList = () => {
                   {visibleColumns.remainingQuantity && <TableCell>Pozostało do produkcji</TableCell>}
                   {visibleColumns.workstation && <TableCell>Stanowisko</TableCell>}
                   {visibleColumns.status && <TableCell>Status</TableCell>}
+                  {visibleColumns.materialsReserved && <TableCell>Surowce zarezerwowane</TableCell>}
                   {visibleColumns.plannedStart && <TableCell>Planowany start</TableCell>}
                   {visibleColumns.plannedEnd && <TableCell>Planowane zakończenie</TableCell>}
                   {visibleColumns.cost && <TableCell>Koszt</TableCell>}
@@ -645,6 +687,34 @@ const TaskList = () => {
                             label={task.status} 
                             color={getStatusColor(task.status)} 
                           />
+                        </TableCell>
+                      )}
+                      {visibleColumns.materialsReserved && (
+                        <TableCell>
+                          {task.materials && task.materials.length > 0 ? (
+                            task.materialsReserved || task.autoReserveMaterials ? (
+                              <Chip 
+                                label="Zarezerwowane" 
+                                color="success" 
+                                size="small" 
+                                variant="outlined"
+                              />
+                            ) : (
+                              <Chip 
+                                label="Niezarezerwowane" 
+                                color="warning" 
+                                size="small" 
+                                variant="outlined"
+                              />
+                            )
+                          ) : (
+                            <Chip 
+                              label="Brak materiałów" 
+                              color="default" 
+                              size="small" 
+                              variant="outlined"
+                            />
+                          )}
                         </TableCell>
                       )}
                       {visibleColumns.plannedStart && (
@@ -747,6 +817,10 @@ const TaskList = () => {
         <MenuItem onClick={() => toggleColumnVisibility('status')}>
           <Checkbox checked={visibleColumns.status} />
           <ListItemText primary="Status" />
+        </MenuItem>
+        <MenuItem onClick={() => toggleColumnVisibility('materialsReserved')}>
+          <Checkbox checked={visibleColumns.materialsReserved} />
+          <ListItemText primary="Surowce zarezerwowane" />
         </MenuItem>
         <MenuItem onClick={() => toggleColumnVisibility('plannedStart')}>
           <Checkbox checked={visibleColumns.plannedStart} />
@@ -895,14 +969,23 @@ const TaskList = () => {
                 label="Data ważności"
                 value={inventoryData.expiryDate}
                 onChange={(newValue) => setInventoryData({...inventoryData, expiryDate: newValue})}
-                ampm={false}
+                views={['year', 'month', 'day']}
                 format="dd-MM-yyyy"
                 slotProps={{
                   textField: {
                     fullWidth: true,
                     margin: 'dense',
                     variant: 'outlined',
-                    helperText: "Data ważności produktu"
+                    helperText: "Data ważności produktu",
+                    error: !inventoryData.expiryDate,
+                    InputProps: {
+                      onError: (error) => {
+                        console.error("Błąd w polu daty:", error);
+                      }
+                    }
+                  },
+                  actionBar: {
+                    actions: ['clear', 'today']
                   }
                 }}
               />

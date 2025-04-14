@@ -27,7 +27,7 @@ import { format } from 'date-fns';
 
 import { getAllPriceLists, deletePriceList } from '../../../services/priceListService';
 import { useAuth } from '../../../contexts/AuthContext';
-import { useNotification } from '../../../contexts/NotificationContext';
+import { useNotification } from '../../../hooks/useNotification';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import Loader from '../../../components/common/Loader';
 

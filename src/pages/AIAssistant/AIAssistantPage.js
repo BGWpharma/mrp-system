@@ -76,6 +76,7 @@ const AIAssistantPage = () => {
   const [openInstructionsDialog, setOpenInstructionsDialog] = useState(false);
   const [openQuotaAlert, setOpenQuotaAlert] = useState(false);
   const [openQuotaDialog, setOpenQuotaDialog] = useState(false);
+  const [processingInBackground, setProcessingInBackground] = useState(false);
   const messagesEndRef = useRef(null);
 
   // Otwórz dialog z informacjami o przekroczeniu limitu
@@ -133,7 +134,10 @@ const AIAssistantPage = () => {
   // Automatyczne przewijanie do najnowszej wiadomości
   useEffect(() => {
     if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      // Dodajemy małe opóźnienie, aby mieć pewność, że UI się zaktualizował
+      setTimeout(() => {
+        messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
     }
   }, [messages]);
 
@@ -168,65 +172,153 @@ const AIAssistantPage = () => {
       return;
     }
 
+    // Zapisz wartość aktualnego inputa przed wyczyszczeniem
+    const currentInput = input.trim();
+    
+    // Wyczyść pole inputa i pokaż wskaźnik ładowania
+    setInput('');
+    setLoading(true);
+    
+    console.log('Wysyłanie wiadomości:', currentInput);
+
     // Jeśli nie ma aktualnej konwersacji, utwórz nową
     let conversationId = currentConversationId;
     if (!conversationId) {
       try {
+        console.log('Tworzenie nowej konwersacji...');
         conversationId = await createConversation(currentUser.uid);
         setCurrentConversationId(conversationId);
       } catch (error) {
         console.error('Błąd podczas tworzenia nowej konwersacji:', error);
         showError('Nie udało się utworzyć nowej konwersacji');
+        setLoading(false);
         return;
       }
     }
 
-    // Dodaj wiadomość użytkownika
-    const userMessage = { 
-      role: 'user', 
-      content: input, 
-      timestamp: new Date().toISOString() 
-    };
-    
     try {
-      // Dodaj wiadomość użytkownika do bazy danych
-      await addMessageToConversation(conversationId, 'user', input);
+      console.log('Konwersacja ID:', conversationId);
       
-      // Zaktualizuj lokalny stan
-      setMessages(prevMessages => [...prevMessages, userMessage]);
-      setInput('');
-      setLoading(true);
+      // Dodaj wiadomość użytkownika do bazy danych
+      console.log('Dodawanie wiadomości użytkownika do bazy danych...');
+      const userMessageId = await addMessageToConversation(conversationId, 'user', currentInput);
+      console.log('ID wiadomości użytkownika:', userMessageId);
+      
+      // Przygotuj wiadomość użytkownika do lokalnego wyświetlenia
+      const userMessage = { 
+        id: userMessageId,
+        role: 'user', 
+        content: currentInput, 
+        timestamp: new Date().toISOString() 
+      };
+      
+      // Dodaj wiadomość użytkownika do lokalnego stanu
+      setMessages(prevMessages => {
+        // Sprawdź, czy wiadomość już istnieje w stanie
+        const isDuplicate = prevMessages.some(msg => 
+          msg.content === currentInput && 
+          msg.role === 'user' &&
+          new Date(msg.timestamp).getTime() > Date.now() - 10000 // 10 sekund
+        );
+        
+        if (isDuplicate) {
+          console.log('Wykryto duplikat wiadomości - nie dodaję ponownie');
+          return prevMessages;
+        }
+        
+        return [...prevMessages, userMessage];
+      });
       
       // Przetwórz zapytanie i uzyskaj odpowiedź asystenta
-      const aiResponse = await processAIQuery(input, messages, currentUser.uid);
+      console.log('Przetwarzanie zapytania przez AI...');
+      const aiResponse = await processAIQuery(currentInput, messages, currentUser.uid);
+      console.log('Uzyskano odpowiedź AI:', aiResponse ? 'tak' : 'nie');
       
-      // Sprawdź, czy odpowiedź zawiera informację o błędzie limitów OpenAI
-      const isQuotaError = aiResponse.includes('Przekroczono limit dostępnych środków') || 
-                           aiResponse.includes('quota') || 
-                           aiResponse.includes('billing');
-      
-      // Jeśli wystąpił błąd przekroczenia limitów, pokaż alert
-      if (isQuotaError) {
-        setOpenQuotaAlert(true);
+      if (!aiResponse) {
+        console.error('Otrzymano pustą odpowiedź od asystenta AI');
+        showError('Nie otrzymano odpowiedzi od asystenta. Spróbuj ponownie później.');
+        setLoading(false);
+        return;
       }
       
-      // Dodaj odpowiedź asystenta do bazy danych
-      await addMessageToConversation(conversationId, 'assistant', aiResponse);
+      // Sprawdź, czy odpowiedź to wiadomość o opóźnieniu
+      const isDelayedResponse = aiResponse.includes('Pracuję nad analizą danych') &&
+                               aiResponse.includes('Proszę o cierpliwość');
       
-      // Zaktualizuj lokalny stan
+      // Dodaj odpowiedź asystenta do bazy danych
+      console.log('Dodawanie odpowiedzi asystenta do bazy danych...');
+      const assistantMessageId = await addMessageToConversation(conversationId, 'assistant', aiResponse);
+      console.log('ID wiadomości asystenta:', assistantMessageId);
+      
+      // Zaktualizuj lokalny stan o odpowiedź asystenta
       const assistantMessage = { 
+        id: assistantMessageId,
         role: 'assistant', 
         content: aiResponse, 
         timestamp: new Date().toISOString() 
       };
+      
       setMessages(prevMessages => [...prevMessages, assistantMessage]);
       
+      // Jeśli mamy wiadomość o opóźnieniu, uruchom drugi proces pobierania
+      if (isDelayedResponse) {
+        console.log('Wykryto wiadomość o opóźnieniu, kontynuuję pobieranie danych...');
+        
+        // Ustaw flagę ładowania, ale nie blokuj interfejsu
+        setProcessingInBackground(true);
+        
+        // Uruchom pobieranie pełnej odpowiedzi w tle
+        setTimeout(async () => {
+          try {
+            // Drugie zapytanie AI z dłuższym limitem czasu
+            const fullResponse = await processAIQuery(currentInput, 
+                                                     messages.concat([assistantMessage]), 
+                                                     currentUser.uid,
+                                                     30000); // Dłuższy limit czasu
+            
+            if (fullResponse && fullResponse !== aiResponse) {
+              console.log('Otrzymano pełną odpowiedź AI po opóźnieniu');
+              
+              // Zaktualizuj odpowiedź w bazie danych
+              const updatedMessageId = await addMessageToConversation(
+                conversationId, 
+                'assistant', 
+                fullResponse
+              );
+              
+              // Zaktualizuj lokalny stan
+              const updatedMessage = {
+                id: updatedMessageId,
+                role: 'assistant',
+                content: fullResponse,
+                timestamp: new Date().toISOString(),
+                updatedFromDelayed: true
+              };
+              
+              setMessages(prevMessages => {
+                // Zastąp poprzednią odpowiedź z opóźnieniem
+                const filtered = prevMessages.filter(msg => 
+                  msg.id !== assistantMessageId
+                );
+                return [...filtered, updatedMessage];
+              });
+            }
+          } catch (error) {
+            console.error('Błąd podczas pobierania pełnej odpowiedzi:', error);
+          } finally {
+            setProcessingInBackground(false);
+          }
+        }, 2000);
+      }
+      
       // Odśwież listę konwersacji
+      console.log('Odświeżanie listy konwersacji...');
       const updatedConversations = await getUserConversations(currentUser.uid);
       setConversationHistory(updatedConversations);
       
     } catch (error) {
       console.error('Błąd podczas komunikacji z asystentem:', error);
+      console.error('Szczegóły błędu:', error.message, error.stack);
       showError('Wystąpił błąd podczas komunikacji z asystentem. Spróbuj ponownie.');
     } finally {
       setLoading(false);
@@ -351,6 +443,29 @@ const AIAssistantPage = () => {
       hour: '2-digit', 
       minute: '2-digit' 
     });
+  };
+
+  // Dodajmy indykator przetwarzania w tle
+  const renderBackgroundProcessingIndicator = () => {
+    if (!processingInBackground) return null;
+    
+    return (
+      <div style={{ 
+        position: 'fixed', 
+        bottom: '20px', 
+        right: '20px',
+        display: 'flex',
+        alignItems: 'center',
+        backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
+        padding: '8px 16px',
+        borderRadius: '20px',
+        boxShadow: mode === 'dark' ? '0 2px 4px rgba(255, 255, 255, 0.1)' : '0 2px 4px rgba(0, 0, 0, 0.1)',
+        zIndex: 1000
+      }}>
+        <CircularProgress size={20} style={{ marginRight: '8px' }} />
+        <Typography variant="body2">Pobieranie danych...</Typography>
+      </div>
+    );
   };
 
   return (
@@ -719,7 +834,9 @@ const AIAssistantPage = () => {
             p: 2, 
             display: 'flex', 
             flexDirection: 'column',
-            height: '70vh'
+            height: '70vh',
+            maxHeight: '70vh',
+            overflow: 'hidden'
           }}
         >
           {/* Obszar wiadomości */}
@@ -730,7 +847,9 @@ const AIAssistantPage = () => {
               mb: 2,
               display: 'flex',
               flexDirection: 'column',
-              gap: 2
+              gap: 2,
+              minHeight: 0,
+              height: '100%'
             }}
           >
             {messages.length === 0 ? (
@@ -755,6 +874,19 @@ const AIAssistantPage = () => {
                   lub innych aspektów działania Twojej firmy. Asystent przeanalizuje dane
                   i udzieli odpowiedzi na podstawie aktualnych informacji.
                 </Typography>
+                
+                <Alert 
+                  severity="success" 
+                  sx={{ mt: 3, maxWidth: '600px', width: '100%' }}
+                >
+                  <Typography variant="subtitle2">
+                    Asystent ma teraz bezpośredni dostęp do bazy danych!
+                  </Typography>
+                  <Typography variant="body2">
+                    Możesz pytać o dane z modułów: Magazyn, Zamówienia, Produkcja, Dostawcy i Receptury.
+                    Asystent analizuje dane w czasie rzeczywistym i dostarcza aktualne odpowiedzi.
+                  </Typography>
+                </Alert>
                 
                 {!hasApiKey && (
                   <Alert 
@@ -783,55 +915,79 @@ const AIAssistantPage = () => {
                 )}
               </Box>
             ) : (
-              messages.map((message, index) => (
-                <Card 
-                  key={index} 
-                  sx={{ 
-                    maxWidth: message.role === 'user' ? '80%' : '90%',
-                    alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start',
-                    backgroundColor: message.role === 'user' 
-                      ? (mode === 'dark' ? 'primary.dark' : 'primary.light') 
-                      : (mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)'),
-                  }}
-                >
-                  <CardContent>
-                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 1 }}>
-                      <Avatar 
+              <Box sx={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: 2, 
+                width: '100%',
+                minHeight: 'min-content',
+                flexGrow: 1
+              }}>
+                {messages
+                  .filter((msg, index, self) => {
+                    // Jeśli wiadomość ma ID, używamy ID jako klucza unikalności
+                    if (msg.id) {
+                      return index === self.findIndex(m => m.id === msg.id);
+                    }
+                    
+                    // Dla wiadomości bez ID, sprawdzamy zawartość i czas
+                    return index === self.findIndex(m => 
+                      m.content === msg.content && 
+                      m.role === msg.role &&
+                      Math.abs(new Date(m.timestamp) - new Date(msg.timestamp)) < 1000
+                    );
+                  })
+                  .map((message, index) => (
+                  <Card 
+                    key={message.id || index} 
+                    sx={{ 
+                      maxWidth: message.role === 'user' ? '80%' : '90%',
+                      alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start',
+                      backgroundColor: message.role === 'user' 
+                        ? (mode === 'dark' ? 'primary.dark' : 'primary.light') 
+                        : (mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)'),
+                      flex: '0 0 auto'
+                    }}
+                  >
+                    <CardContent>
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 1 }}>
+                        <Avatar 
+                          sx={{ 
+                            width: 28, 
+                            height: 28,
+                            bgcolor: message.role === 'user' ? 'secondary.main' : 'primary.main'
+                          }}
+                        >
+                          {message.role === 'user' ? <PersonIcon /> : <BotIcon />}
+                        </Avatar>
+                        <Typography variant="subtitle2">
+                          {message.role === 'user' ? 'Ty' : 'Asystent AI'}
+                        </Typography>
+                      </Box>
+                      
+                      <Typography variant="body1" sx={{ ml: 4, whiteSpace: 'pre-wrap' }}>
+                        {message.content}
+                      </Typography>
+                      
+                      <Typography 
+                        variant="caption" 
                         sx={{ 
-                          width: 28, 
-                          height: 28,
-                          bgcolor: message.role === 'user' ? 'secondary.main' : 'primary.main'
+                          display: 'block', 
+                          textAlign: 'right',
+                          mt: 1,
+                          color: 'text.secondary'
                         }}
                       >
-                        {message.role === 'user' ? <PersonIcon /> : <BotIcon />}
-                      </Avatar>
-                      <Typography variant="subtitle2">
-                        {message.role === 'user' ? 'Ty' : 'Asystent AI'}
+                        {formatDate(message.timestamp)}
                       </Typography>
-                    </Box>
-                    
-                    <Typography variant="body1" sx={{ ml: 4, whiteSpace: 'pre-wrap' }}>
-                      {message.content}
-                    </Typography>
-                    
-                    <Typography 
-                      variant="caption" 
-                      sx={{ 
-                        display: 'block', 
-                        textAlign: 'right',
-                        mt: 1,
-                        color: 'text.secondary'
-                      }}
-                    >
-                      {formatDate(message.timestamp)}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              ))
+                    </CardContent>
+                  </Card>
+                ))}
+              </Box>
             )}
             
             {loading && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, ml: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, ml: 2, flex: '0 0 auto' }}>
                 <CircularProgress size={20} />
                 <Typography variant="body2" color="text.secondary">
                   Asystent odpowiada...
@@ -883,6 +1039,9 @@ const AIAssistantPage = () => {
           </Box>
         </Paper>
       </Box>
+      
+      {/* Dodajemy indykator przetwarzania w tle */}
+      {renderBackgroundProcessingIndicator()}
     </Container>
   );
 };

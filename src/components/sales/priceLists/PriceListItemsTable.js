@@ -22,7 +22,7 @@ import {
   getPriceListItems, 
   deletePriceListItem 
 } from '../../../services/priceListService';
-import { useNotification } from '../../../contexts/NotificationContext';
+import { useNotification } from '../../../hooks/useNotification';
 import ConfirmDialog from '../../common/ConfirmDialog';
 import Loader from '../../common/Loader';
 import AddPriceListItemDialog from './AddPriceListItemDialog';

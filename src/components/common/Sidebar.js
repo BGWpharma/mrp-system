@@ -50,7 +50,8 @@ import {
   ChevronLeft as ChevronLeftIcon,
   Menu as MenuIcon,
   LocalShipping as ShippingIcon,
-  SmartToy as AIAssistantIcon
+  SmartToy as AIAssistantIcon,
+  Calculate as CalculateIcon
 } from '@mui/icons-material';
 import { getExpiringBatches, getExpiredBatches } from '../../services/inventoryService';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -207,6 +208,18 @@ const Sidebar = ({ onToggle }) => {
         { text: 'Zamówienia klientów', icon: <OrdersIcon />, path: '/orders' },
       ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
     },
+    { text: 'Produkcja',
+      icon: <ProductionIcon />,
+      path: '/production',
+      hasSubmenu: true,
+      children: [
+        { text: 'Formularze', icon: <ListAltIcon />, path: '/production/forms' },
+        { text: 'Kalendarz', icon: <CalendarIcon />, path: '/production/calendar' },
+        { text: 'Kalkulator', icon: <CalculateIcon />, path: '/production/calculator' },
+        { text: 'Lista zadań produkcyjnych', icon: <ListIcon />, path: '/production' },
+        { text: 'Receptury', icon: <RecipesIcon />, path: '/recipes' },
+      ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
+    },
     { text: 'Stany', 
       icon: <InventoryIcon />, 
       path: '/inventory', 
@@ -220,16 +233,6 @@ const Sidebar = ({ onToggle }) => {
         { text: 'Stan', icon: <WarehouseIcon />, path: '/inventory' },
         { text: 'Terminy ważności', icon: <CalendarIcon />, path: '/inventory/expiry-dates' },
         { text: 'Zamówienia komponentów', icon: <PurchaseOrdersIcon />, path: '/purchase-orders' },
-      ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
-    },
-    { text: 'Produkcja',
-      icon: <ProductionIcon />,
-      path: '/production',
-      hasSubmenu: true,
-      children: [
-        { text: 'Kalendarz', icon: <CalendarIcon />, path: '/production/calendar' },
-        { text: 'Receptury', icon: <RecipesIcon />, path: '/recipes' },
-        { text: 'Lista zadań produkcyjnych', icon: <ListIcon />, path: '/production' },
       ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
     }
   ].sort((a, b) => a.text.localeCompare(b.text, 'pl'));

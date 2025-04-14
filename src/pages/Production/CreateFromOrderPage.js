@@ -451,6 +451,7 @@ const CreateFromOrderPage = () => {
         // Sprawdź, czy dla tego produktu wybrano stanowisko produkcyjne
         const workstationId = selectedWorkstations[item.id] || null;
         
+        // Przy tworzeniu obiektów zadań, dodajemy pola lotNumber i expiryDate:
         const taskData = {
           name: taskForm.name || `Produkcja ${item.name}`,
           status: taskForm.status || 'Zaplanowane',
@@ -487,7 +488,9 @@ const CreateFromOrderPage = () => {
           productionTimePerUnit: productionTimePerUnit,
           estimatedDuration: estimatedDuration,
           autoReserveMaterials: taskForm.autoReserveMaterials, // Przekazanie informacji o automatycznej rezerwacji
-          workstationId: workstationId // ID stanowiska produkcyjnego
+          workstationId: workstationId, // ID stanowiska produkcyjnego
+          lotNumber: `LOT-${selectedOrder.orderNumber || new Date().toISOString().slice(0, 10).replace(/-/g, '')}`, // Domyślny LOT na podstawie numeru zamówienia
+          expiryDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)) // Domyślna data ważności - 1 rok
         };
         
         // Utwórz zadanie produkcyjne
@@ -779,7 +782,7 @@ const CreateFromOrderPage = () => {
         // Sprawdź, czy dla tego produktu wybrano stanowisko produkcyjne
         const workstationId = selectedWorkstations[item.id] || null;
         
-        // Przy tworzeniu obiektów zadań, dodajemy ID stanowiska:
+        // Przy tworzeniu obiektów zadań, dodajemy pola lotNumber i expiryDate:
         const taskData = {
           name: taskForm.name || `Produkcja ${item.name}`,
           status: taskForm.status || 'Zaplanowane',
@@ -816,7 +819,9 @@ const CreateFromOrderPage = () => {
           productionTimePerUnit: productionTimePerUnit,
           estimatedDuration: estimatedDuration,
           autoReserveMaterials: taskForm.autoReserveMaterials, // Przekazanie informacji o automatycznej rezerwacji
-          workstationId: workstationId // ID stanowiska produkcyjnego
+          workstationId: workstationId, // ID stanowiska produkcyjnego
+          lotNumber: `LOT-${selectedOrder.orderNumber || new Date().toISOString().slice(0, 10).replace(/-/g, '')}`, // Domyślny LOT na podstawie numeru zamówienia
+          expiryDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)) // Domyślna data ważności - 1 rok
         };
         
         // Utwórz zadanie produkcyjne

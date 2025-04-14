@@ -268,6 +268,14 @@ const OrderForm = ({ orderId }) => {
       if (item.price < 0) {
         errors[`item_${index}_price`] = 'Cena nie może być ujemna';
       }
+      
+      // Sprawdź minimalne ilości zamówienia dla produktów (nie receptur)
+      if (item.id && item.itemType === 'product' && !item.isRecipe) {
+        const minOrderQuantity = item.minOrderQuantity || 0;
+        if (minOrderQuantity > 0 && parseFloat(item.quantity) < minOrderQuantity && item.unit === item.originalUnit) {
+          errors[`item_${index}_quantity`] = `Minimalna ilość zamówienia to ${minOrderQuantity} ${item.unit}`;
+        }
+      }
     });
     
     if (!orderData.orderDate) {
@@ -406,82 +414,105 @@ const OrderForm = ({ orderId }) => {
     }
   };
 
-  const handleProductSelect = (index, selectedProduct, type) => {
-    if (selectedProduct && type === 'recipe') {
+  const handleProductSelect = async (index, product, type = 'product') => {
+    try {
+      if (!product) {
+        return;
+      }
+      
+      const itemType = type;
+      let id = product.id;
+      let name = product.name;
+      let unit = product.unit || 'szt.';
+      let basePrice = 0;
+      let price = 0;
+      let margin = DEFAULT_MARGIN;
+      let isRecipe = type === 'recipe';
+      let fromPriceList = false;
+      let recipeId = isRecipe ? product.id : null;
+      let minOrderQuantity = 0;
+      
+      // Jeśli to produkt, pobierz jego cenę z listy cenowej klienta
+      if (!isRecipe && customerData?.id) {
+        try {
+          const priceListItem = await getPriceForCustomerProduct(customerData.id, product.id);
+          
+          if (priceListItem) {
+            price = priceListItem.price;
+            fromPriceList = true;
+          }
+        } catch (error) {
+          console.error('Błąd podczas pobierania ceny z listy cenowej:', error);
+        }
+      }
+      
+      // Jeśli to produkt, pobierz jego szczegóły
+      if (!isRecipe) {
+        try {
+          const productDetails = await getProductById(product.id);
+          if (productDetails) {
+            unit = productDetails.unit || unit;
+            minOrderQuantity = productDetails.minOrderQuantity || 0;
+            // Jeśli nie mamy ceny z listy cenowej, użyj ceny bazowej produktu
+            if (!fromPriceList) {
+              basePrice = productDetails.standardPrice || 0;
+              
+              // Zastosuj marżę do ceny bazowej
+              const calculatedPrice = basePrice * (1 + margin / 100);
+              price = parseFloat(calculatedPrice.toFixed(2));
+            }
+          }
+        } catch (error) {
+          console.error('Błąd podczas pobierania szczegółów produktu:', error);
+        }
+      } else {
+        // Jeśli to receptura, oblicz koszt produkcji
+        try {
+          const recipe = await getRecipeByProductId(product.id);
+          if (recipe) {
+            const cost = await calculateProductionCost(recipe);
+            basePrice = cost.totalCost;
+            
+            // Zastosuj marżę do kosztu produkcji
+            const calculatedPrice = basePrice * (1 + margin / 100);
+            price = parseFloat(calculatedPrice.toFixed(2));
+          }
+        } catch (error) {
+          console.error('Błąd podczas obliczania kosztu produkcji:', error);
+        }
+      }
+      
+      // Aktualizuj stan przedmiotu
       const updatedItems = [...orderData.items];
       updatedItems[index] = {
         ...updatedItems[index],
-        id: selectedProduct.id,
-        name: selectedProduct.name,
-        price: selectedProduct.price || 0,
-        unit: selectedProduct.unit || 'szt.',
-        itemType: type,
-        isRecipe: true
+        id,
+        name,
+        unit,
+        price,
+        basePrice,
+        margin,
+        fromPriceList,
+        isRecipe,
+        recipeId,
+        itemType,
+        minOrderQuantity,
+        originalUnit: unit,
       };
       
       setOrderData(prev => ({
         ...prev,
-        items: updatedItems
+        items: updatedItems,
       }));
       
-      // Pobierz cenę z listy cenowej dla klienta
-      if (orderData.customer && orderData.customer.id) {
-        (async () => {
-          try {
-            const priceFromList = await getPriceForCustomerProduct(
-              orderData.customer.id, 
-              selectedProduct.id,
-              true // dla receptury
-            );
-            
-            if (priceFromList !== null) {
-              // Aktualizuj cenę z listy cenowej
-              const itemsWithPrice = [...updatedItems];
-              itemsWithPrice[index] = {
-                ...itemsWithPrice[index],
-                price: priceFromList,
-                fromPriceList: true
-              };
-              
-              setOrderData(prev => ({
-                ...prev,
-                items: itemsWithPrice
-              }));
-              
-              // Pokaż informację o użyciu ceny z listy cenowej
-              showInfo(`Zastosowano cenę ${priceFromList} EUR z listy cenowej klienta`);
-            } else {
-              // Jeśli nie ma ceny w liście cenowej, sprawdź koszt procesowy receptury
-              const recipe = await getRecipeById(selectedProduct.id);
-              if (recipe && recipe.processingCostPerUnit) {
-                // Zaktualizuj cenę na podstawie kosztu procesowego
-                const itemsWithPrice = [...updatedItems];
-                itemsWithPrice[index] = {
-                  ...itemsWithPrice[index],
-                  price: recipe.processingCostPerUnit,
-                  fromPriceList: false,
-                  fromProcessingCost: true
-                };
-                
-                setOrderData(prev => ({
-                  ...prev,
-                  items: itemsWithPrice
-                }));
-                
-                // Pokaż informację o użyciu kosztu procesowego
-                showInfo(`Zastosowano koszt procesowy ${recipe.processingCostPerUnit} EUR z receptury`);
-              }
-            }
-          } catch (error) {
-            console.error('Błąd podczas pobierania ceny z listy cenowej:', error);
-          }
-        })();
-      }
-      
+      // Wyczyść błędy walidacji dla tego przedmiotu
       const updatedErrors = { ...validationErrors };
       delete updatedErrors[`item_${index}_name`];
-      delete updatedErrors[`item_${index}_price`];
       setValidationErrors(updatedErrors);
+      
+    } catch (error) {
+      console.error('Błąd podczas wyboru produktu:', error);
+      showError(`Wystąpił błąd: ${error.message}`);
     }
   };
 
@@ -704,13 +735,16 @@ const OrderForm = ({ orderId }) => {
       for (const ingredient of recipe.ingredients) {
         if (!ingredient.id) continue; // Pomiń składniki bez ID (nie są z magazynu)
         
-        const requiredQuantity = parseFloat(ingredient.quantity) * scaleFactor;
+        // Oblicz wymaganą ilość i zaokrąglij do 3 miejsc po przecinku dla uniknięcia błędów IEEE 754
+        const calculatedQuantity = parseFloat(ingredient.quantity) * scaleFactor;
+        const requiredQuantity = parseFloat(calculatedQuantity.toFixed(3));
         
         // Znajdź istniejący materiał lub dodaj nowy
         const existingIndex = allMaterials.findIndex(m => m.id === ingredient.id);
         
         if (existingIndex >= 0) {
-          allMaterials[existingIndex].quantity += requiredQuantity;
+          // Dodaj zaokrągloną wartość
+          allMaterials[existingIndex].quantity = parseFloat((allMaterials[existingIndex].quantity + requiredQuantity).toFixed(3));
         } else {
           // Znajdź pełne dane składnika w magazynie
           const inventoryItem = products.find(p => p.id === ingredient.id);

@@ -19,7 +19,13 @@ import {
   Tab,
   Tabs,
   Alert,
-  AlertTitle
+  AlertTitle,
+  TextField,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
+  IconButton
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -30,7 +36,10 @@ import {
   Warning as WarningIcon,
   ViewList as ViewListIcon,
   Add as AddIcon,
-  QrCode as QrCodeIcon
+  QrCode as QrCodeIcon,
+  Refresh as RefreshIcon,
+  SortByAlpha as SortIcon,
+  FilterList as FilterIcon
 } from '@mui/icons-material';
 import { getInventoryItemById, getItemTransactions, getItemBatches, getSupplierPrices } from '../../services/inventoryService';
 import { getAllSuppliers } from '../../services/supplierService';
@@ -71,6 +80,11 @@ const ItemDetailsPage = () => {
   const [loading, setLoading] = useState(true);
   const [tabValue, setTabValue] = useState(0);
   const [labelDialogOpen, setLabelDialogOpen] = useState(false);
+  const [reservations, setReservations] = useState([]);
+  const [filteredReservations, setFilteredReservations] = useState([]);
+  const [reservationFilter, setReservationFilter] = useState('all');
+  const [sortField, setSortField] = useState('createdAt');
+  const [sortOrder, setSortOrder] = useState('desc');
 
   useEffect(() => {
     const fetchItemData = async () => {
@@ -100,6 +114,9 @@ const ItemDetailsPage = () => {
           });
           setSupplierPrices(pricesWithDetails);
         }
+        
+        // Pobierz rezerwacje (transakcje typu 'booking')
+        await fetchReservations(itemData);
       } catch (error) {
         showError('Błąd podczas pobierania danych pozycji: ' + error.message);
         console.error('Error fetching item details:', error);
@@ -186,6 +203,90 @@ const ItemDetailsPage = () => {
   // Funkcja zamykająca dialog etykiet
   const handleCloseLabelDialog = () => {
     setLabelDialogOpen(false);
+  };
+
+  // Funkcja do pobierania rezerwacji dla produktu
+  const fetchReservations = async (itemData) => {
+    try {
+      // Pobierz wszystkie transakcje dla danego przedmiotu
+      const transactions = await getItemTransactions(itemData.id);
+      
+      // Filtruj tylko transakcje rezerwacji (typ 'booking')
+      let bookingTransactions = transactions.filter(
+        transaction => transaction.type === 'booking'
+      );
+      
+      // Lista zadań do sprawdzenia
+      const taskIds = bookingTransactions
+        .filter(transaction => transaction.referenceId)
+        .map(transaction => transaction.referenceId);
+      
+      // Ustaw rezerwacje
+      setReservations(bookingTransactions);
+      
+      // Zastosuj filtrowanie i sortowanie
+      filterAndSortReservations(reservationFilter, sortField, sortOrder, bookingTransactions);
+    } catch (error) {
+      console.error('Błąd podczas pobierania rezerwacji:', error);
+      showError('Nie udało się pobrać listy rezerwacji');
+    }
+  };
+  
+  // Funkcja do filtrowania rezerwacji
+  const handleFilterChange = (event) => {
+    const filterValue = event.target.value;
+    setReservationFilter(filterValue);
+    
+    filterAndSortReservations(filterValue, sortField, sortOrder);
+  };
+  
+  // Funkcja do sortowania rezerwacji
+  const handleSort = (field) => {
+    const newSortOrder = field === sortField && sortOrder === 'asc' ? 'desc' : 'asc';
+    setSortOrder(newSortOrder);
+    setSortField(field);
+    
+    filterAndSortReservations(reservationFilter, field, newSortOrder);
+  };
+  
+  // Funkcja do filtrowania i sortowania rezerwacji
+  const filterAndSortReservations = (filterValue, field, order, data = reservations) => {
+    let filtered = [...data];
+    
+    // Filtrowanie
+    if (filterValue === 'active') {
+      filtered = filtered.filter(reservation => !reservation.fulfilled);
+    } else if (filterValue === 'fulfilled') {
+      filtered = filtered.filter(reservation => reservation.fulfilled);
+    }
+    
+    // Sortowanie
+    filtered.sort((a, b) => {
+      let valueA, valueB;
+      
+      // Pobierz wartości do porównania w zależności od pola
+      if (field === 'createdAt') {
+        valueA = new Date(a.createdAt?.seconds ? a.createdAt.toDate() : a.createdAt).getTime();
+        valueB = new Date(b.createdAt?.seconds ? b.createdAt.toDate() : b.createdAt).getTime();
+      } else if (field === 'quantity') {
+        valueA = a.quantity;
+        valueB = b.quantity;
+      } else {
+        valueA = a[field] || '';
+        valueB = b[field] || '';
+      }
+      
+      // Porównaj wartości
+      if (typeof valueA === 'string' && typeof valueB === 'string') {
+        return order === 'asc' 
+          ? valueA.localeCompare(valueB) 
+          : valueB.localeCompare(valueA);
+      } else {
+        return order === 'asc' ? valueA - valueB : valueB - valueA;
+      }
+    });
+    
+    setFilteredReservations(filtered);
   };
 
   if (loading) {
@@ -440,6 +541,7 @@ const ItemDetailsPage = () => {
             <Tab label="Szczegółowe informacje" id="item-tab-0" sx={{ fontWeight: 'medium', py: 2 }} />
             <Tab label="Partie i daty ważności" id="item-tab-1" sx={{ fontWeight: 'medium', py: 2 }} />
             <Tab label="Historia transakcji" id="item-tab-2" sx={{ fontWeight: 'medium', py: 2 }} />
+            <Tab label="Rezerwacje" id="item-tab-3" sx={{ fontWeight: 'medium', py: 2 }} />
           </Tabs>
         </Box>
 
@@ -679,6 +781,111 @@ const ItemDetailsPage = () => {
                       <TableCell>{transaction.notes || '—'}</TableCell>
                     </TableRow>
                   ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={3}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">Rezerwacje produktu</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Button 
+                startIcon={<RefreshIcon />} 
+                onClick={() => fetchReservations(item)}
+                variant="outlined"
+                size="small"
+                sx={{ mr: 2 }}
+              >
+                Odśwież
+              </Button>
+              <FormControl variant="outlined" size="small" sx={{ minWidth: 150, mr: 2 }}>
+                <InputLabel id="reservation-filter-label">Filtruj</InputLabel>
+                <Select
+                  labelId="reservation-filter-label"
+                  value={reservationFilter}
+                  onChange={handleFilterChange}
+                  label="Filtruj"
+                >
+                  <MenuItem value="all">Wszystkie</MenuItem>
+                  <MenuItem value="active">Aktywne</MenuItem>
+                  <MenuItem value="fulfilled">Zrealizowane</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+          </Box>
+          
+          {filteredReservations.length === 0 ? (
+            <Alert severity="info">Brak rezerwacji dla tego produktu.</Alert>
+          ) : (
+            <TableContainer component={Paper} elevation={0} variant="outlined">
+              <Table sx={{ '& thead th': { fontWeight: 'bold', bgcolor: '#f8f9fa' } }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell 
+                      onClick={() => handleSort('createdAt')}
+                      sx={{ cursor: 'pointer' }}
+                    >
+                      Data rezerwacji {sortField === 'createdAt' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    </TableCell>
+                    <TableCell 
+                      onClick={() => handleSort('quantity')}
+                      sx={{ cursor: 'pointer' }}
+                    >
+                      Ilość {sortField === 'quantity' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    </TableCell>
+                    <TableCell 
+                      onClick={() => handleSort('taskName')}
+                      sx={{ cursor: 'pointer' }}
+                    >
+                      Zadanie produkcyjne {sortField === 'taskName' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    </TableCell>
+                    <TableCell 
+                      onClick={() => handleSort('clientName')}
+                      sx={{ cursor: 'pointer' }}
+                    >
+                      Klient {sortField === 'clientName' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    </TableCell>
+                    <TableCell>Partia</TableCell>
+                    <TableCell>Status</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {filteredReservations.map((reservation) => {
+                    const createdDate = reservation.createdAt?.seconds ? 
+                      reservation.createdAt.toDate() : 
+                      new Date(reservation.createdAt);
+                      
+                    return (
+                      <TableRow key={reservation.id} hover>
+                        <TableCell>
+                          {formatDate(createdDate)}
+                        </TableCell>
+                        <TableCell>
+                          <Typography fontWeight="bold">
+                            {reservation.quantity} {item.unit}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          {reservation.taskName || reservation.taskNumber || reservation.referenceId || '—'}
+                        </TableCell>
+                        <TableCell>
+                          {reservation.clientName || '—'}
+                        </TableCell>
+                        <TableCell>
+                          {reservation.batchNumber || reservation.batchId || '—'}
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={reservation.fulfilled ? "Zrealizowana" : "Aktywna"} 
+                            color={reservation.fulfilled ? "success" : "primary"} 
+                            size="small" 
+                          />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>

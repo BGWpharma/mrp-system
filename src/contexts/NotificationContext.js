@@ -1,13 +1,8 @@
 // src/contexts/NotificationContext.js
-import React, { createContext, useState, useCallback, useContext } from 'react';
+import React, { createContext, useState, useCallback } from 'react';
 import { Snackbar, Alert } from '@mui/material';
 
 export const NotificationContext = createContext();
-
-// Dodajemy hook dla łatwego dostępu do kontekstu
-export const useNotification = () => {
-  return useContext(NotificationContext);
-};
 
 export const NotificationProvider = ({ children }) => {
   const [notification, setNotification] = useState({
@@ -49,11 +44,13 @@ export const NotificationProvider = ({ children }) => {
   }, [showNotification]);
 
   const value = {
+    notification,
     showNotification,
     showSuccess,
     showError,
     showWarning,
-    showInfo
+    showInfo,
+    closeNotification
   };
 
   return (

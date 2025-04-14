@@ -5,6 +5,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { useTheme } from './contexts/ThemeContext';
 import { ColumnPreferencesProvider } from './contexts/ColumnPreferencesContext';
+import Notifications from './components/common/Notifications';
 
 // Pages
 import Login from './pages/Auth/Login';
@@ -28,6 +29,8 @@ import ForecastPage from './pages/Production/ForecastPage';
 import ReportsPage from './pages/Production/ReportsPage';
 import CreateFromOrderPage from './pages/Production/CreateFromOrderPage';
 import WorkstationsPage from './pages/Production/WorkstationsPage';
+import CalculatorPage from './pages/Production/CalculatorPage';
+import FormsPage from './pages/Production/FormsPage';
 
 // Inventory
 import InventoryPage from './pages/Inventory/InventoryPage';
@@ -127,6 +130,7 @@ function App() {
         <NotificationProvider>
           <ColumnPreferencesProvider>
             <div className="app-container">
+              <Notifications />
               <Routes>
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
@@ -143,6 +147,8 @@ function App() {
                 <Route path="/production" element={<PrivateLayout><ProductionPage /></PrivateLayout>} />
                 <Route path="/production/new-task" element={<PrivateLayout><NewTaskPage /></PrivateLayout>} />
                 <Route path="/production/calendar" element={<PrivateLayout><ProductionCalendarPage /></PrivateLayout>} />
+                <Route path="/production/calculator" element={<PrivateLayout><CalculatorPage /></PrivateLayout>} />
+                <Route path="/production/forms" element={<PrivateLayout><FormsPage /></PrivateLayout>} />
                 <Route path="/production/tasks/:id" element={<PrivateLayout><TaskDetailsPage /></PrivateLayout>} />
                 <Route path="/production/tasks/:id/edit" element={<PrivateLayout><EditTaskPage /></PrivateLayout>} />
                 <Route path="/production/consumption/:taskId" element={<PrivateLayout><ConsumptionPage /></PrivateLayout>} />

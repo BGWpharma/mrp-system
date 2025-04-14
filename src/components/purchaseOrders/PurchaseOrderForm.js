@@ -25,7 +25,8 @@ import {
   Tooltip,
   Container,
   InputAdornment,
-  Badge
+  Badge,
+  FormHelperText
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -60,7 +61,8 @@ import { formatAddress } from '../../utils/addressUtils';
 import { 
   getAllSuppliers,
   getBestSupplierPriceForItem, 
-  getBestSupplierPricesForItems 
+  getBestSupplierPricesForItems,
+  getSupplierPriceForItem
 } from '../../services/supplierService';
 
 const PurchaseOrderForm = ({ orderId }) => {
@@ -89,7 +91,6 @@ const PurchaseOrderForm = ({ orderId }) => {
     totalGross: 0,
     additionalCostsItems: [], // Tablica obiektów z dodatkowymi kosztami
     currency: 'EUR',
-    vatRate: 23, // Domyślna stawka VAT 23%
     targetWarehouseId: '', // Nowe pole dla magazynu docelowego
     orderDate: formatDateForInput(new Date()),
     expectedDeliveryDate: '',
@@ -145,19 +146,31 @@ const PurchaseOrderForm = ({ orderId }) => {
             additionalCostsItems = [{
               id: `cost-${Date.now()}`,
               value: poDetails.additionalCosts || 0,
-              description: poDetails.additionalCostsDescription || 'Dodatkowe koszty'
+              description: poDetails.additionalCostsDescription || 'Dodatkowe koszty',
+              vatRate: 23 // Domyślna stawka VAT
             }];
           }
+          
+          // Upewnij się, że wszystkie pozycje mają ustawione pole vatRate
+          const itemsWithVatRate = poDetails.items ? poDetails.items.map(item => ({
+            ...item,
+            vatRate: typeof item.vatRate === 'number' ? item.vatRate : 23 // Domyślna stawka VAT 23%
+          })) : [];
+          
+          // Upewnij się, że wszystkie dodatkowe koszty mają ustawione pole vatRate
+          const costsWithVatRate = additionalCostsItems.map(cost => ({
+            ...cost,
+            vatRate: typeof cost.vatRate === 'number' ? cost.vatRate : 23 // Domyślna stawka VAT 23%
+          }));
           
           setPoData({
             ...poDetails,
             supplier: matchedSupplier,
             orderDate: formattedOrderDate,
             expectedDeliveryDate: formattedDeliveryDate,
-            vatRate: poDetails.vatRate || 23,
-            targetWarehouseId: poDetails.targetWarehouseId || '',
             invoiceLink: poDetails.invoiceLink || '',
-            additionalCostsItems: additionalCostsItems
+            items: itemsWithVatRate,
+            additionalCostsItems: costsWithVatRate
           });
         } else if (location.state?.materialId) {
           // Jeśli mamy materialId z parametrów stanu (z prognozy zapotrzebowania),
@@ -215,19 +228,50 @@ const PurchaseOrderForm = ({ orderId }) => {
   
   // Funkcja do obliczania sumy
   const calculateTotals = (items, additionalCosts = []) => {
-    const itemsTotal = items.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
-    const additionalCostsTotal = additionalCosts.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
-    const totalNet = itemsTotal + additionalCostsTotal;
+    // Obliczanie wartości netto i VAT dla pozycji produktów
+    let itemsNetTotal = 0;
+    let itemsVatTotal = 0;
     
-    // VAT naliczany tylko od wartości produktów, bez dodatkowych kosztów
-    const vatValue = (itemsTotal * (poData.vatRate || 0)) / 100;
-    // Wartość brutto to suma: wartość netto produktów + VAT + dodatkowe koszty
-    const totalGross = itemsTotal + vatValue + additionalCostsTotal;
+    items.forEach(item => {
+      const itemNet = item.totalPrice || 0;
+      itemsNetTotal += itemNet;
+      
+      // Obliczanie VAT dla pozycji na podstawie jej indywidualnej stawki VAT
+      const vatRate = typeof item.vatRate === 'number' ? item.vatRate : 0;
+      const itemVat = (itemNet * vatRate) / 100;
+      itemsVatTotal += itemVat;
+    });
+    
+    // Obliczanie wartości netto i VAT dla dodatkowych kosztów
+    let additionalCostsNetTotal = 0;
+    let additionalCostsVatTotal = 0;
+    
+    additionalCosts.forEach(cost => {
+      const costNet = parseFloat(cost.value) || 0;
+      additionalCostsNetTotal += costNet;
+      
+      // Obliczanie VAT dla dodatkowego kosztu na podstawie jego indywidualnej stawki VAT
+      const vatRate = typeof cost.vatRate === 'number' ? cost.vatRate : 0;
+      const costVat = (costNet * vatRate) / 100;
+      additionalCostsVatTotal += costVat;
+    });
+    
+    // Suma wartości netto: produkty + dodatkowe koszty
+    const totalNet = itemsNetTotal + additionalCostsNetTotal;
+    
+    // Suma VAT: VAT od produktów + VAT od dodatkowych kosztów
+    const totalVat = itemsVatTotal + additionalCostsVatTotal;
+    
+    // Wartość brutto: suma netto + suma VAT
+    const totalGross = totalNet + totalVat;
     
     return {
-      itemsTotal,
-      additionalCostsTotal,
+      itemsNetTotal,
+      itemsVatTotal,
+      additionalCostsNetTotal,
+      additionalCostsVatTotal,
       totalNet,
+      totalVat,
       totalGross,
     };
   };
@@ -240,10 +284,11 @@ const PurchaseOrderForm = ({ orderId }) => {
       totalValue: totals.totalNet,
       totalGross: totals.totalGross
     }));
-  }, [poData.items, poData.additionalCostsItems, poData.vatRate]);
+  }, [poData.items, poData.additionalCostsItems]);
   
   const handleChange = (e) => {
     const { name, value } = e.target;
+    // Standardowa obsługa pól
     setPoData(prev => ({ ...prev, [name]: value }));
   };
   
@@ -292,7 +337,8 @@ const PurchaseOrderForm = ({ orderId }) => {
         quantity: 1,
         unit: 'szt',
         unitPrice: 0,
-        totalPrice: 0
+        totalPrice: 0,
+        vatRate: 23 // Domyślna stawka VAT 23%
       }]
     }));
   };
@@ -305,6 +351,12 @@ const PurchaseOrderForm = ({ orderId }) => {
   
   const handleItemChange = (index, field, value) => {
     const updatedItems = [...poData.items];
+    
+    // Dla pola vatRate upewnij się, że nie jest undefined
+    if (field === 'vatRate' && value === undefined) {
+      value = 23; // Domyślna wartość VAT
+    }
+    
     updatedItems[index][field] = value;
     
     // Przelicz totalPrice jeśli zmieniono quantity lub unitPrice
@@ -320,19 +372,67 @@ const PurchaseOrderForm = ({ orderId }) => {
   const handleItemSelect = (index, selectedItem) => {
     if (!selectedItem) return;
     
+    console.log(`[DEBUG] handleItemSelect - Wybrano pozycję:`, selectedItem);
+    console.log(`[DEBUG] handleItemSelect - minOrderQuantity:`, selectedItem.minOrderQuantity);
+    
+    // Sprawdź czy dostawca ma cenę dla tego przedmiotu
+    if (poData.supplier && poData.supplier.id) {
+      (async () => {
+        try {
+          console.log(`[DEBUG] Sprawdzam cenę dla dostawcy ${poData.supplier.id} i produktu ${selectedItem.id}`);
+          const supplierPrice = await getSupplierPriceForItem(selectedItem.id, poData.supplier.id);
+          
+          if (supplierPrice) {
+            console.log(`[DEBUG] Znaleziono cenę dostawcy:`, supplierPrice);
+            console.log(`[DEBUG] minQuantity z ceny dostawcy:`, supplierPrice.minQuantity);
+            
+            // Aktualizuj pozycję z ceną dostawcy
+            const updatedItems = [...poData.items];
+            updatedItems[index] = {
+              ...updatedItems[index],
+              inventoryItemId: selectedItem.id,
+              name: selectedItem.name,
+              unit: selectedItem.unit || 'szt',
+              // Używamy ceny dostawcy
+              unitPrice: supplierPrice.price || 0,
+              // Zachowujemy istniejącą ilość, jeśli jest, lub używamy minQuantity, jeśli jest większe od 1
+              quantity: updatedItems[index].quantity || Math.max(1, supplierPrice.minQuantity || 1),
+              totalPrice: (updatedItems[index].quantity || 1) * (supplierPrice.price || 0),
+              vatRate: updatedItems[index].vatRate || 23, // Zachowujemy stawkę VAT lub ustawiamy domyślną 23%
+              minOrderQuantity: supplierPrice.minQuantity || selectedItem.minOrderQuantity || 0
+            };
+            
+            console.log(`[DEBUG] Aktualizacja pozycji z ceną dostawcy:`, updatedItems[index]);
+            setPoData(prev => ({ ...prev, items: updatedItems }));
+            
+            // Pokaż informację o cenie dostawcy
+            showSuccess(`Zastosowano cenę dostawcy: ${supplierPrice.price} ${poData.currency}`);
+            return;
+          } else {
+            console.log(`[DEBUG] Nie znaleziono ceny dostawcy`);
+          }
+        } catch (error) {
+          console.error('Błąd podczas sprawdzania ceny dostawcy:', error);
+        }
+      })();
+    }
+    
+    // Jeśli nie ma ceny dostawcy lub wystąpił błąd, używamy domyślnych wartości
     const updatedItems = [...poData.items];
     updatedItems[index] = {
       ...updatedItems[index],
-      id: selectedItem.id,
       inventoryItemId: selectedItem.id,
       name: selectedItem.name,
       unit: selectedItem.unit || 'szt',
       // Zachowujemy istniejące wartości jeśli są, lub ustawiamy domyślne
       quantity: updatedItems[index].quantity || 1,
       unitPrice: updatedItems[index].unitPrice || 0,
-      totalPrice: (updatedItems[index].quantity || 1) * (updatedItems[index].unitPrice || 0)
+      totalPrice: (updatedItems[index].quantity || 1) * (updatedItems[index].unitPrice || 0),
+      vatRate: updatedItems[index].vatRate || 23, // Zachowujemy stawkę VAT lub ustawiamy domyślną 23%
+      minOrderQuantity: selectedItem.minOrderQuantity || 0
     };
     
+    console.log(`[DEBUG] Aktualizacja pozycji bez ceny dostawcy:`, updatedItems[index]);
     setPoData(prev => ({ ...prev, items: updatedItems }));
   };
   
@@ -341,25 +441,15 @@ const PurchaseOrderForm = ({ orderId }) => {
     try {
       let result;
       
-      // Obliczanie wartości brutto, która zostanie zapisana w bazie danych
-      const productsValue = orderData.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0);
-      const vatRate = parseFloat(orderData.vatRate) || 0;
-      const vatValue = (productsValue * vatRate) / 100;
+      // Obliczanie wartości przy użyciu funkcji calculateTotals
+      const totals = calculateTotals(orderData.items, orderData.additionalCostsItems);
       
-      let additionalCosts = 0;
-      if (orderData.additionalCostsItems && Array.isArray(orderData.additionalCostsItems)) {
-        additionalCosts = orderData.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
-      } else {
-        additionalCosts = parseFloat(orderData.additionalCosts) || 0;
-      }
+      // Dodaj obliczone wartości do zapisywanych danych
+      orderData.totalValue = totals.totalNet;
+      orderData.totalGross = totals.totalGross;
+      orderData.totalVat = totals.totalVat;
       
-      // Wartość brutto: produkty + VAT + dodatkowe koszty
-      const grossValue = productsValue + vatValue + additionalCosts;
-      
-      // Dodaj wartość brutto do zapisywanych danych
-      orderData.totalGross = grossValue;
-      
-      console.log(`Zapisuję PO, wartość brutto: ${grossValue} (produkty: ${productsValue}, VAT: ${vatValue}, koszty: ${additionalCosts})`);
+      console.log(`Zapisuję PO, wartość brutto: ${totals.totalGross} (netto produkty: ${totals.itemsNetTotal}, VAT produkty: ${totals.itemsVatTotal}, netto koszty: ${totals.additionalCostsNetTotal}, VAT koszty: ${totals.additionalCostsVatTotal})`);
       
       // Rozróżnienie między tworzeniem nowego zamówienia a aktualizacją istniejącego
       if (orderId && orderId !== 'new') {
@@ -367,7 +457,7 @@ const PurchaseOrderForm = ({ orderId }) => {
         result = await updatePurchaseOrder(orderId, {
           ...orderData,
           updatedBy: userId
-        });
+        }, userId);
         console.log('Zaktualizowano zamówienie zakupu:', result);
       } else {
         // Tworzenie nowego zamówienia
@@ -412,6 +502,22 @@ const PurchaseOrderForm = ({ orderId }) => {
       return false;
     }
     
+    // Sprawdź minimalne ilości zamówienia
+    const itemWithWrongMinQuantity = poData.items.find(item => {
+      const inventoryItem = inventoryItems.find(i => i.id === item.inventoryItemId);
+      if (!inventoryItem) return false;
+      
+      const minOrderQuantity = inventoryItem.minOrderQuantity || 0;
+      return minOrderQuantity > 0 && 
+             parseFloat(item.quantity) < minOrderQuantity && 
+             item.unit === inventoryItem.unit;
+    });
+    
+    if (itemWithWrongMinQuantity) {
+      showError('Niektóre pozycje nie spełniają minimalnych ilości zamówienia. Użyj przycisku "Uzupełnij minimalne ilości".');
+      return false;
+    }
+    
     return true;
   };
   
@@ -445,23 +551,10 @@ const PurchaseOrderForm = ({ orderId }) => {
         supplier: supplier,
       };
       
-      // Oblicz wartość brutto (totalGross)
-      const productsValue = poData.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0);
-      const vatRate = parseFloat(poData.vatRate) || 23;
-      const vatValue = (productsValue * vatRate) / 100;
-      
-      const additionalCosts = poData.additionalCostsItems && Array.isArray(poData.additionalCostsItems) 
-        ? poData.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
-        : 0;
-      
-      const totalGross = productsValue + vatValue + additionalCosts;
-      
-      // Dodaj wartość brutto do zapisywanych danych
-      orderWithSupplierId.totalGross = totalGross;
-      
       console.log("Dane zamówienia do zapisu:", orderWithSupplierId);
       
-      // Zapisz zamówienie do bazy danych
+      // Zapisz zamówienie do bazy danych - calculateTotals wewnątrz savePurchaseOrder 
+      // obliczy prawidłowe wartości na podstawie indywidualnych stawek VAT
       const result = await savePurchaseOrder(orderWithSupplierId, currentOrderId, currentUser.uid);
       console.log("Zapisane zamówienie:", result);
       
@@ -719,65 +812,100 @@ const PurchaseOrderForm = ({ orderId }) => {
       return;
     }
     
-    // Aktualizuj pozycje zamówienia
+    // Aktualizuj wszystkie pozycje z sugerowanymi cenami
     const updatedItems = poData.items.map(item => {
       if (item.inventoryItemId && supplierSuggestions[item.inventoryItemId]) {
-        const bestPrice = supplierSuggestions[item.inventoryItemId];
+        const suggestion = supplierSuggestions[item.inventoryItemId];
+        
         return {
           ...item,
-          unitPrice: bestPrice.price,
-          totalPrice: bestPrice.price * item.quantity
+          unitPrice: suggestion.price,
+          totalPrice: suggestion.price * item.quantity
         };
       }
       return item;
     });
     
-    // Aktualizuj poData
     setPoData(prev => ({
       ...prev,
       items: updatedItems
     }));
     
-    // Znajdź dostawcę z największą liczbą pozycji
-    const supplierCounts = {};
-    for (const itemId in supplierSuggestions) {
-      const supplierId = supplierSuggestions[itemId].supplierId;
-      supplierCounts[supplierId] = (supplierCounts[supplierId] || 0) + 1;
-    }
-    
-    // Znajdź dostawcę z największą liczbą pozycji
-    let bestSupplierId = null;
-    let maxCount = 0;
-    
-    for (const supplierId in supplierCounts) {
-      if (supplierCounts[supplierId] > maxCount) {
-        maxCount = supplierCounts[supplierId];
-        bestSupplierId = supplierId;
-      }
-    }
-    
-    // Jeśli nie mamy jeszcze wybranego dostawcy, ustaw dostawcę z największą liczbą pozycji
-    if (!poData.supplier && bestSupplierId) {
-      const supplier = suppliers.find(s => s.id === bestSupplierId);
-      if (supplier) {
-        setPoData(prev => ({
-          ...prev,
-          supplier: supplier,
-          deliveryAddress: supplier.addresses && supplier.addresses.length > 0
-            ? formatAddress(supplier.addresses.find(a => a.isMain) || supplier.addresses[0])
-            : ''
-        }));
-      }
-    }
-    
-    showSuccess('Zastosowano najlepsze ceny dostawców');
+    showSuccess('Zastosowano sugerowane ceny dostawców');
   };
   
-  // Dodaję funkcję obsługi zmiany dodatkowych kosztów
+  // Funkcja do uzupełniania minimalnych ilości zamówienia
+  const fillMinimumOrderQuantities = () => {
+    if (!poData.items || poData.items.length === 0) {
+      showInfo('Brak pozycji w zamówieniu');
+      return;
+    }
+    
+    console.log('[DEBUG] Rozpoczynam uzupełnianie minimalnych ilości zamówienia');
+    console.log('[DEBUG] poData.items:', poData.items);
+    console.log('[DEBUG] inventoryItems:', inventoryItems);
+    
+    try {
+      // Aktualizuj pozycje zamówienia uwzględniając minimalne ilości zamówienia
+      const updatedItems = poData.items.map(item => {
+        // Sprawdź czy istnieje element magazynowy o tym ID
+        const inventoryItem = inventoryItems.find(i => i.id === item.inventoryItemId);
+        console.log(`[DEBUG] Pozycja: ${item.name}, ID: ${item.inventoryItemId}`);
+        console.log(`[DEBUG] Znaleziony inventoryItem:`, inventoryItem);
+        
+        if (!inventoryItem) {
+          console.log(`[DEBUG] Nie znaleziono elementu magazynowego dla ID: ${item.inventoryItemId}`);
+          return item;
+        }
+        
+        // Jeśli istnieje minimalna ilość zakupu i aktualna ilość jest mniejsza, zaktualizuj
+        const minOrderQuantity = inventoryItem.minOrderQuantity || 0;
+        console.log(`[DEBUG] minOrderQuantity:`, minOrderQuantity);
+        console.log(`[DEBUG] item.quantity:`, parseFloat(item.quantity));
+        console.log(`[DEBUG] item.unit:`, item.unit);
+        console.log(`[DEBUG] inventoryItem.unit:`, inventoryItem.unit);
+        
+        if (minOrderQuantity > 0 && parseFloat(item.quantity) < minOrderQuantity && item.unit === inventoryItem.unit) {
+          console.log(`[DEBUG] Aktualizuję ilość z ${item.quantity} na ${minOrderQuantity}`);
+          const updatedQuantity = minOrderQuantity;
+          return {
+            ...item,
+            quantity: updatedQuantity,
+            totalPrice: (item.unitPrice || 0) * updatedQuantity
+          };
+        }
+        
+        console.log(`[DEBUG] Nie aktualizuję ilości dla: ${item.name}`);
+        return item;
+      });
+      
+      // Sprawdź czy dokonano jakichkolwiek zmian
+      const hasChanges = updatedItems.some((updatedItem, index) => 
+        updatedItem.quantity !== poData.items[index].quantity
+      );
+      
+      console.log(`[DEBUG] Czy dokonano zmian: ${hasChanges}`);
+      
+      if (hasChanges) {
+        console.log(`[DEBUG] Aktualizuję pozycje zamówienia`);
+        setPoData(prev => ({
+          ...prev,
+          items: updatedItems
+        }));
+        showSuccess('Uzupełniono minimalne ilości zamówienia');
+      } else {
+        showInfo('Wszystkie pozycje już spełniają minimalne ilości zamówienia');
+      }
+    } catch (error) {
+      console.error('Błąd podczas uzupełniania minimalnych ilości:', error);
+      showError('Wystąpił błąd podczas uzupełniania minimalnych ilości');
+    }
+  };
+  
+  // Obsługa zmian w dodatkowych kosztach
   const handleAdditionalCostsChange = (e) => {
     const { name, value } = e.target;
-    const numericValue = name === 'additionalCostsItems' ? parseFloat(value) || 0 : value;
-    setPoData(prev => ({ ...prev, [name]: numericValue }));
+    setPoData(prev => ({ ...prev, [name]: value }));
   };
   
   // Dodaję funkcję do dodawania nowej pozycji kosztów dodatkowych
@@ -788,8 +916,9 @@ const PurchaseOrderForm = ({ orderId }) => {
         ...prev.additionalCostsItems,
         {
           id: `cost-${Date.now()}`,
+          description: '',
           value: 0,
-          description: ''
+          vatRate: 23 // Domyślna stawka VAT 23%
         }
       ]
     }));
@@ -799,6 +928,10 @@ const PurchaseOrderForm = ({ orderId }) => {
   const handleAdditionalCostChange = (id, field, value) => {
     const updatedCosts = poData.additionalCostsItems.map(item => {
       if (item.id === id) {
+        // Dla pola vatRate upewnij się, że nie jest undefined
+        if (field === 'vatRate' && value === undefined) {
+          value = 23; // Domyślna wartość VAT
+        }
         return { ...item, [field]: field === 'value' ? parseFloat(value) || 0 : value };
       }
       return item;
@@ -885,26 +1018,6 @@ const PurchaseOrderForm = ({ orderId }) => {
                   <MenuItem value="EUR">EUR</MenuItem>
                   <MenuItem value="PLN">PLN</MenuItem>
                   <MenuItem value="USD">USD</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            {/* Stawka VAT */}
-            <Grid item xs={12} md={3}>
-              <FormControl fullWidth>
-                <InputLabel>Stawka VAT</InputLabel>
-                <Select
-                  name="vatRate"
-                  value={poData.vatRate}
-                  onChange={handleChange}
-                  label="Stawka VAT"
-                >
-                  <MenuItem value={0}>0%</MenuItem>
-                  <MenuItem value={5}>5%</MenuItem>
-                  <MenuItem value={8}>8%</MenuItem>
-                  <MenuItem value={23}>23%</MenuItem>
-                  <MenuItem value="ZW">ZW</MenuItem>
-                  <MenuItem value="NP">NP</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -1007,9 +1120,14 @@ const PurchaseOrderForm = ({ orderId }) => {
             {/* Dodatkowe koszty */}
             <Grid item xs={12}>
               <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="subtitle1">
-                  Dodatkowe koszty
-                </Typography>
+                <Box>
+                  <Typography variant="subtitle1">
+                    Dodatkowe koszty
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Dla każdego kosztu można ustawić indywidualną stawkę VAT
+                  </Typography>
+                </Box>
                 <Button
                   startIcon={<AddIcon />}
                   onClick={handleAddAdditionalCost}
@@ -1031,6 +1149,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                       <TableRow>
                         <TableCell>Opis</TableCell>
                         <TableCell align="right">Kwota</TableCell>
+                        <TableCell align="right">VAT</TableCell>
                         <TableCell width="50px"></TableCell>
                       </TableRow>
                     </TableHead>
@@ -1052,12 +1171,28 @@ const PurchaseOrderForm = ({ orderId }) => {
                               size="small"
                               value={cost.value}
                               onChange={(e) => handleAdditionalCostChange(cost.id, 'value', e.target.value)}
-                              InputProps={{ 
-                                inputProps: { min: 0, step: 'any' },
-                                endAdornment: <InputAdornment position="end">{poData.currency}</InputAdornment>
+                              InputProps={{
+                                endAdornment: <InputAdornment position="end">{poData.currency}</InputAdornment>,
                               }}
-                              sx={{ width: 150 }}
+                              inputProps={{ min: 0, step: 'any' }}
+                              sx={{ width: 120 }}
                             />
+                          </TableCell>
+                          <TableCell align="right">
+                            <FormControl size="small" sx={{ width: 100 }}>
+                              <Select
+                                value={cost.vatRate !== undefined ? cost.vatRate : 23}
+                                onChange={(e) => handleAdditionalCostChange(cost.id, 'vatRate', e.target.value)}
+                                size="small"
+                              >
+                                <MenuItem value={0}>0%</MenuItem>
+                                <MenuItem value={5}>5%</MenuItem>
+                                <MenuItem value={8}>8%</MenuItem>
+                                <MenuItem value={23}>23%</MenuItem>
+                                <MenuItem value="ZW">ZW</MenuItem>
+                                <MenuItem value="NP">NP</MenuItem>
+                              </Select>
+                            </FormControl>
                           </TableCell>
                           <TableCell>
                             <IconButton
@@ -1077,6 +1212,9 @@ const PurchaseOrderForm = ({ orderId }) => {
                         <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                           {poData.additionalCostsItems.reduce((sum, item) => sum + (parseFloat(item.value) || 0), 0).toFixed(2)} {poData.currency}
                         </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                          {poData.additionalCostsItems.reduce((sum, item) => sum + (parseFloat(item.vatRate) || 0), 0).toFixed(2)}%
+                        </TableCell>
                         <TableCell />
                       </TableRow>
                     </TableBody>
@@ -1091,6 +1229,9 @@ const PurchaseOrderForm = ({ orderId }) => {
           {/* Pozycje zamówienia */}
           <Box sx={{ mb: 2 }}>
             <Typography variant="h6">Pozycje zamówienia</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Dla każdej pozycji można ustawić indywidualną stawkę VAT
+            </Typography>
           </Box>
           
           <TableContainer component={Paper}>
@@ -1102,6 +1243,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                   <TableCell>Jedn.</TableCell>
                   <TableCell>Cena jedn.</TableCell>
                   <TableCell>Wartość</TableCell>
+                  <TableCell>VAT</TableCell>
                   {Object.keys(supplierSuggestions).length > 0 && (
                     <TableCell>Sugestia</TableCell>
                   )}
@@ -1153,18 +1295,34 @@ const PurchaseOrderForm = ({ orderId }) => {
                             <StarIcon color="primary" sx={{ mr: 1 }} />
                           </Tooltip>
                         )}
-                      <TextField
-                        type="number"
+                        <TextField
+                          type="number"
                           value={item.unitPrice || 0}
-                        onChange={(e) => handleItemChange(index, 'unitPrice', e.target.value)}
-                        size="small"
-                        inputProps={{ min: 0, step: 'any' }}
-                        sx={{ width: 100 }}
-                      />
+                          onChange={(e) => handleItemChange(index, 'unitPrice', e.target.value)}
+                          size="small"
+                          inputProps={{ min: 0, step: 'any' }}
+                          sx={{ width: 100 }}
+                        />
                         {poData.currency}
                       </Box>
                     </TableCell>
                     <TableCell>{formatCurrency(item.totalPrice || 0)}</TableCell>
+                    <TableCell>
+                      <FormControl size="small" sx={{ width: 100 }}>
+                        <Select
+                          value={item.vatRate !== undefined ? item.vatRate : 23}
+                          onChange={(e) => handleItemChange(index, 'vatRate', e.target.value)}
+                          size="small"
+                        >
+                          <MenuItem value={0}>0%</MenuItem>
+                          <MenuItem value={5}>5%</MenuItem>
+                          <MenuItem value={8}>8%</MenuItem>
+                          <MenuItem value={23}>23%</MenuItem>
+                          <MenuItem value="ZW">ZW</MenuItem>
+                          <MenuItem value="NP">NP</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </TableCell>
                     {Object.keys(supplierSuggestions).length > 0 && (
                       <TableCell>
                         {item.inventoryItemId && supplierSuggestions[item.inventoryItemId] && (
@@ -1218,6 +1376,16 @@ const PurchaseOrderForm = ({ orderId }) => {
                 Użyj domyślnych cen
             </Button>
             
+            <Button
+              variant="outlined"
+                startIcon={<SuggestIcon />}
+                onClick={fillMinimumOrderQuantities}
+                disabled={loading || loadingSupplierSuggestions || poData.items.length === 0}
+                sx={{ mr: 1 }}
+            >
+                Uzupełnij minimalne ilości
+            </Button>
+            
             {Object.keys(supplierSuggestions).length > 0 && (
               <Button
                   variant="contained"
@@ -1265,29 +1433,71 @@ const PurchaseOrderForm = ({ orderId }) => {
                 <Typography variant="subtitle1" gutterBottom>
                   Wartość produktów netto: <strong>{poData.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0).toFixed(2)} {poData.currency}</strong>
                 </Typography>
+                
+                {/* Sekcja VAT dla produktów */}
+                {poData.items.length > 0 && (
+                  <>
+                    <Typography variant="subtitle2" gutterBottom>
+                      VAT od produktów:
+                    </Typography>
+                    {/* Grupowanie pozycji według stawki VAT */}
+                    {Array.from(new Set(poData.items.map(item => item.vatRate))).sort((a, b) => a - b).map(vatRate => {
+                      if (vatRate === undefined) return null;
+                      
+                      const itemsWithSameVat = poData.items.filter(item => item.vatRate === vatRate);
+                      const sumNet = itemsWithSameVat.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
+                      const vatValue = typeof vatRate === 'number' ? (sumNet * vatRate) / 100 : 0;
+                      
+                      return (
+                        <Typography key={vatRate} variant="body2" gutterBottom sx={{ pl: 2 }}>
+                          Stawka {vatRate}%: <strong>{vatValue.toFixed(2)} {poData.currency}</strong> (od {sumNet.toFixed(2)} {poData.currency})
+                        </Typography>
+                      );
+                    })}
+                  </>
+                )}
+                
+                {/* Sekcja VAT dla dodatkowych kosztów */}
                 {poData.additionalCostsItems.length > 0 && (
                   <>
-                    {poData.additionalCostsItems.map((cost, index) => (
-                      <Typography key={cost.id} variant="subtitle2" gutterBottom>
-                        {cost.description || `Dodatkowy koszt ${index+1}`}: <strong>{parseFloat(cost.value).toFixed(2)} {poData.currency}</strong>
-                      </Typography>
-                    ))}
                     <Typography variant="subtitle1" gutterBottom>
                       Suma dodatkowych kosztów: <strong>{poData.additionalCostsItems.reduce((sum, item) => sum + (parseFloat(item.value) || 0), 0).toFixed(2)} {poData.currency}</strong>
                     </Typography>
+                    
+                    <Typography variant="subtitle2" gutterBottom>
+                      VAT od dodatkowych kosztów:
+                    </Typography>
+                    {/* Grupowanie kosztów według stawki VAT */}
+                    {Array.from(new Set(poData.additionalCostsItems.map(cost => cost.vatRate))).sort((a, b) => a - b).map(vatRate => {
+                      if (vatRate === undefined) return null;
+                      
+                      const costsWithSameVat = poData.additionalCostsItems.filter(cost => cost.vatRate === vatRate);
+                      const sumNet = costsWithSameVat.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
+                      const vatValue = typeof vatRate === 'number' ? (sumNet * vatRate) / 100 : 0;
+                      
+                      return (
+                        <Typography key={vatRate} variant="body2" gutterBottom sx={{ pl: 2 }}>
+                          Stawka {vatRate}%: <strong>{vatValue.toFixed(2)} {poData.currency}</strong> (od {sumNet.toFixed(2)} {poData.currency})
+                        </Typography>
+                      );
+                    })}
                   </>
                 )}
+                
                 <Typography variant="subtitle1" gutterBottom>
                   Wartość netto razem: <strong>{poData.totalValue.toFixed(2)} {poData.currency}</strong>
                 </Typography>
-                <Typography variant="subtitle1" gutterBottom>
-                  Stawka VAT: <strong>{poData.vatRate}%</strong>
-                </Typography>
-                <Typography variant="subtitle1" gutterBottom>
-                  Wartość podatku VAT (tylko od produktów): <strong>
-                    {((poData.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0) * poData.vatRate) / 100).toFixed(2)} {poData.currency}
-                  </strong>
-                </Typography>
+                
+                {/* Sumujemy wszystkie wartości VAT */}
+                {(() => {
+                  const totals = calculateTotals(poData.items, poData.additionalCostsItems);
+                  return (
+                    <Typography variant="subtitle1" gutterBottom>
+                      Suma podatku VAT: <strong>{totals.totalVat.toFixed(2)} {poData.currency}</strong>
+                    </Typography>
+                  );
+                })()}
+                
                 <Typography variant="h6" color="primary" gutterBottom>
                   Wartość brutto: <strong>{poData.totalGross.toFixed(2)} {poData.currency}</strong>
                 </Typography>

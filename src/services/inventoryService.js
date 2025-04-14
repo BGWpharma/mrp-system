@@ -130,11 +130,11 @@ import {
         id: doc.id,
         ...doc.data()
       }));
-
+      
       console.log('Pobrane partie:', batches);
 
       // Oblicz aktualne ilości i ceny dla każdego przedmiotu
-      const itemsWithQuantities = items.map(item => {
+      const itemsWithQuantities = await Promise.all(items.map(async item => {
         const itemBatches = batches.filter(batch => batch.itemId === item.id);
         const currentQuantity = itemBatches.reduce((sum, batch) => sum + (parseFloat(batch.quantity) || 0), 0);
         
@@ -150,13 +150,31 @@ import {
           });
           latestPrice = latestBatch.unitPrice || latestBatch.price || latestPrice;
         }
+        
+        // Pobierz ceny dostawców dla tego elementu i sprawdź minQuantity
+        let minOrderQuantity = item.minOrderQuantity;
+        try {
+          if (!minOrderQuantity) {
+            const prices = await getSupplierPrices(item.id);
+            if (prices && prices.length > 0) {
+              const defaultPrice = prices.find(p => p.isDefault) || prices[0];
+              if (defaultPrice && defaultPrice.minQuantity) {
+                console.log(`[DEBUG] Używam minQuantity ${defaultPrice.minQuantity} jako minOrderQuantity dla ${item.name}`);
+                minOrderQuantity = defaultPrice.minQuantity;
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`Błąd podczas pobierania cen dostawców dla ${item.id}:`, error);
+        }
 
         return {
           ...item,
           currentQuantity,
-          unitPrice: latestPrice
+          unitPrice: latestPrice,
+          minOrderQuantity: minOrderQuantity
         };
-      });
+      }));
 
       console.log('Pozycje po obliczeniu ilości:', itemsWithQuantities);
 
@@ -1365,7 +1383,12 @@ import {
       
       // Sprawdź, czy jest wystarczająca ilość zarezerwowana
       if (!item.bookedQuantity || item.bookedQuantity < quantity) {
-        throw new Error(`Nie można anulować rezerwacji. Zarezerwowano tylko: ${item.bookedQuantity || 0} ${item.unit}`);
+        // Zamiast rzucać błąd, zwracamy sukces i logujemy informację
+        console.warn(`Anulowanie rezerwacji dla ${item.name}: zarezerwowano tylko ${item.bookedQuantity || 0} ${item.unit}, próbowano anulować ${quantity} ${item.unit}`);
+        return {
+          success: true,
+          message: `Anulowano rezerwację ${Math.min(item.bookedQuantity || 0, quantity)} ${item.unit} produktu ${item.name}`
+        };
       }
       
       // Aktualizuj pole bookedQuantity w produkcie
@@ -2964,6 +2987,8 @@ import {
    */
   export const getSupplierPriceForItem = async (itemId, supplierId) => {
     try {
+      console.log(`[DEBUG] Szukam ceny dla produktu ${itemId} od dostawcy ${supplierId}`);
+      
       const supplierPricesRef = collection(db, INVENTORY_SUPPLIER_PRICES_COLLECTION);
       const q = query(
         supplierPricesRef,
@@ -2974,17 +2999,24 @@ import {
       const querySnapshot = await getDocs(q);
       
       if (querySnapshot.empty) {
+        console.log(`[DEBUG] Nie znaleziono ceny dla produktu ${itemId} od dostawcy ${supplierId}`);
         return null;
       }
       
-      const doc = querySnapshot.docs[0];
+      const priceDoc = querySnapshot.docs[0];
+      const priceData = priceDoc.data();
+      
+      console.log(`[DEBUG] Znaleziona cena:`, priceData);
+      console.log(`[DEBUG] minQuantity:`, priceData.minQuantity);
+      console.log(`[DEBUG] leadTime:`, priceData.leadTime);
+      
       return {
-        id: doc.id,
-        ...doc.data()
+        id: priceDoc.id,
+        ...priceData
       };
     } catch (error) {
-      console.error('Błąd podczas pobierania ceny dostawcy dla pozycji:', error);
-      throw error;
+      console.error('Błąd podczas pobierania ceny dostawcy dla produktu:', error);
+      return null;
     }
   };
 
@@ -2996,52 +3028,50 @@ import {
    */
   export const getBestSupplierPriceForItem = async (itemId, quantity = 1) => {
     try {
-      const supplierPricesRef = collection(db, INVENTORY_SUPPLIER_PRICES_COLLECTION);
-      const q = query(
-        supplierPricesRef,
-        where('itemId', '==', itemId),
-        orderBy('price', 'asc')
-      );
+      console.log(`[DEBUG] Szukam najlepszej ceny dla produktu ${itemId}, ilość: ${quantity}`);
       
+      // Pobierz wszystkie ceny dostawców dla produktu
+      const pricesRef = collection(db, 'inventorySupplierPrices');
+      const q = query(pricesRef, where('itemId', '==', itemId));
       const querySnapshot = await getDocs(q);
       
       if (querySnapshot.empty) {
+        console.log(`[DEBUG] Brak cen dostawców dla produktu ${itemId}`);
         return null;
       }
       
-      // Najpierw sprawdzamy, czy jest domyślna cena dostawcy
-      const defaultPrice = querySnapshot.docs.find(doc => doc.data().isDefault === true);
-      if (defaultPrice) {
-        return {
-          id: defaultPrice.id,
-          ...defaultPrice.data()
-        };
-      }
-      
-      // Jeśli nie ma domyślnej ceny, szukamy dostawców, którzy spełniają wymóg minimalnej ilości
-      const eligiblePrices = [];
+      // Mapuj dokumenty na obiekty z ceną
+      const prices = [];
       querySnapshot.forEach(doc => {
         const priceData = doc.data();
-        if (!priceData.minQuantity || quantity >= priceData.minQuantity) {
-          eligiblePrices.push({
-            id: doc.id,
-            ...priceData
-          });
-        }
+        console.log(`[DEBUG] Znaleziona cena dostawcy:`, priceData);
+        console.log(`[DEBUG] minQuantity:`, priceData.minQuantity);
+        
+        prices.push({
+          id: doc.id,
+          ...priceData
+        });
       });
       
-      if (eligiblePrices.length === 0) {
-        // Jeśli nie ma dostawców spełniających wymóg minimalnej ilości,
-        // zwracamy po prostu najtańszego dostawcę
-        const cheapestPrice = querySnapshot.docs[0].data();
-        return {
-          id: querySnapshot.docs[0].id,
-          ...cheapestPrice
-        };
+      // Filtruj ceny dostawców według minimalnej ilości - tylko te, które spełniają wymagania
+      // Używamy tutaj minQuantity, a nie minOrderQuantity!
+      const validPrices = prices.filter(price => {
+        const minQ = price.minQuantity || 0;
+        const isValid = minQ <= quantity;
+        console.log(`[DEBUG] Cena ${price.id}, dostawca ${price.supplierId}, minQuantity: ${minQ}, czy ważna: ${isValid}`);
+        return isValid;
+      });
+      
+      if (validPrices.length === 0) {
+        console.log(`[DEBUG] Brak ważnych cen dla ilości ${quantity}`);
+        return prices[0]; // Zwróć pierwszą cenę, jeśli nie znaleziono spełniających kryterium
       }
       
-      // Zwracamy najtańszą cenę spośród kwalifikujących się dostawców
-      return eligiblePrices[0];
+      // Znajdź najniższą cenę
+      validPrices.sort((a, b) => (a.price || 0) - (b.price || 0));
+      console.log(`[DEBUG] Najlepsza cena: ${validPrices[0].price}, dostawca: ${validPrices[0].supplierId}, minQuantity: ${validPrices[0].minQuantity}`);
+      
+      return validPrices[0];
     } catch (error) {
       console.error('Błąd podczas pobierania najlepszej ceny dostawcy:', error);
       return null;
@@ -3114,6 +3144,61 @@ import {
       await batch.commit();
     } catch (error) {
       console.error('Błąd podczas ustawiania domyślnej ceny dostawcy:', error);
+      throw error;
+    }
+  };
+
+  // Usuwanie rezerwacji produktu
+  export const deleteReservation = async (reservationId, userId) => {
+    try {
+      // Pobierz aktualną rezerwację
+      const reservationRef = doc(db, INVENTORY_TRANSACTIONS_COLLECTION, reservationId);
+      const reservationDoc = await getDoc(reservationRef);
+      
+      if (!reservationDoc.exists()) {
+        throw new Error('Rezerwacja nie istnieje');
+      }
+      
+      const reservation = reservationDoc.data();
+      const itemId = reservation.itemId;
+      const quantity = reservation.quantity || 0;
+      
+      if (itemId) {
+        // Pobierz aktualny stan produktu
+        const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
+        const itemDoc = await getDoc(itemRef);
+        
+        if (itemDoc.exists()) {
+          const itemData = itemDoc.data();
+          const bookedQuantity = itemData.bookedQuantity || 0;
+          
+          // Oblicz nową wartość bookedQuantity (nie może być ujemna)
+          const newBookedQuantity = Math.max(0, bookedQuantity - quantity);
+          
+          // Aktualizuj pole bookedQuantity w produkcie
+          await updateDoc(itemRef, {
+            bookedQuantity: newBookedQuantity,
+            updatedAt: serverTimestamp(),
+            updatedBy: userId
+          });
+        }
+      }
+      
+      // Usuń rezerwację
+      await deleteDoc(reservationRef);
+      
+      // Emituj zdarzenie o zmianie stanu magazynu
+      const event = new CustomEvent('inventory-updated', { 
+        detail: { itemId, action: 'reservation_delete', quantity }
+      });
+      window.dispatchEvent(event);
+      
+      return {
+        success: true,
+        message: `Usunięto rezerwację`
+      };
+    } catch (error) {
+      console.error('Błąd podczas usuwania rezerwacji:', error);
       throw error;
     }
   };

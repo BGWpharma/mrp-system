@@ -359,6 +359,40 @@ const PurchaseOrderDetails = ({ orderId }) => {
       // Otwieramy nowe okno
       const printWindow = window.open('', '_blank', 'width=800,height=600');
       
+      // Obliczamy wartości VAT
+      const vatValues = calculateVATValues(purchaseOrder.items, purchaseOrder.additionalCostsItems);
+      
+      // Przygotowujemy zawartość HTML dla stawek VAT produktów
+      let vatProductsHtml = '';
+      Array.from(new Set(purchaseOrder.items.map(item => item.vatRate)))
+        .sort((a, b) => a - b)
+        .forEach(vatRate => {
+          if (vatRate === undefined) return;
+          
+          const itemsWithSameVat = purchaseOrder.items.filter(item => item.vatRate === vatRate);
+          const sumNet = itemsWithSameVat.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0);
+          const vatValue = typeof vatRate === 'number' ? (sumNet * vatRate) / 100 : 0;
+          
+          vatProductsHtml += `<p>VAT ${vatRate}%: ${formatCurrency(vatValue, purchaseOrder.currency)} (od ${formatCurrency(sumNet, purchaseOrder.currency)})</p>`;
+        });
+      
+      // Przygotowujemy zawartość HTML dla dodatkowych kosztów
+      let additionalCostsHtml = '';
+      if (purchaseOrder.additionalCostsItems && purchaseOrder.additionalCostsItems.length > 0) {
+        additionalCostsHtml = '<h4>Dodatkowe koszty:</h4>';
+        purchaseOrder.additionalCostsItems.forEach((cost, index) => {
+          const costValue = parseFloat(cost.value) || 0;
+          const vatRate = typeof cost.vatRate === 'number' ? cost.vatRate : 0;
+          const vatValue = (costValue * vatRate) / 100;
+          
+          additionalCostsHtml += `<p>${cost.description || `Dodatkowy koszt ${index+1}`}: ${formatCurrency(costValue, purchaseOrder.currency)}`;
+          if (vatRate > 0) {
+            additionalCostsHtml += ` + VAT ${vatRate}%: ${formatCurrency(vatValue, purchaseOrder.currency)}`;
+          }
+          additionalCostsHtml += '</p>';
+        });
+      }
+      
       // Przygotowujemy zawartość HTML
       const printContent = `
         <!DOCTYPE html>
@@ -436,6 +470,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                   <th>Jednostka</th>
                   <th>Cena jedn.</th>
                   <th>Wartość</th>
+                  <th>VAT</th>
                 </tr>
               </thead>
               <tbody>
@@ -446,15 +481,19 @@ const PurchaseOrderDetails = ({ orderId }) => {
                     <td>${item.unit}</td>
                     <td>${formatCurrency(item.unitPrice, purchaseOrder.currency)}</td>
                     <td>${formatCurrency(item.totalPrice, purchaseOrder.currency)}</td>
+                    <td>${item.vatRate}%</td>
                   </tr>
-                `).join('') || '<tr><td colspan="5">Brak pozycji</td></tr>'}
+                `).join('') || '<tr><td colspan="6">Brak pozycji</td></tr>'}
               </tbody>
             </table>
             
             <div class="total-section">
-              <p>Wartość netto: ${formatCurrency(purchaseOrder?.totalValue, purchaseOrder?.currency)}</p>
-              <p>VAT (${purchaseOrder?.vatRate || 0}%): ${formatCurrency(purchaseOrder?.totalValue * (purchaseOrder?.vatRate / 100), purchaseOrder?.currency)}</p>
-              <h3>Wartość brutto: ${formatCurrency(purchaseOrder?.totalGross, purchaseOrder?.currency)}</h3>
+              <p>Wartość produktów netto: ${formatCurrency(vatValues.itemsNetTotal, purchaseOrder.currency)}</p>
+              ${vatProductsHtml}
+              ${additionalCostsHtml}
+              <p>Wartość netto razem: ${formatCurrency(vatValues.totalNet, purchaseOrder.currency)}</p>
+              <p>Suma podatku VAT: ${formatCurrency(vatValues.totalVat, purchaseOrder.currency)}</p>
+              <h3>Wartość brutto: ${formatCurrency(vatValues.totalGross, purchaseOrder.currency)}</h3>
             </div>
           </div>
           
@@ -476,6 +515,60 @@ const PurchaseOrderDetails = ({ orderId }) => {
       console.error('Błąd podczas drukowania:', error);
       showError('Wystąpił błąd podczas drukowania. Spróbuj ponownie.');
     }
+  };
+  
+  // Funkcja obliczająca wartości VAT dla każdej pozycji i każdego kosztu
+  const calculateVATValues = (items = [], additionalCostsItems = []) => {
+    // Obliczanie wartości netto i VAT dla pozycji produktów
+    let itemsNetTotal = 0;
+    let itemsVatTotal = 0;
+    
+    items.forEach(item => {
+      const itemNet = parseFloat(item.totalPrice) || 0;
+      itemsNetTotal += itemNet;
+      
+      // Obliczanie VAT dla pozycji na podstawie jej indywidualnej stawki VAT
+      const vatRate = typeof item.vatRate === 'number' ? item.vatRate : 0;
+      const itemVat = (itemNet * vatRate) / 100;
+      itemsVatTotal += itemVat;
+    });
+    
+    // Obliczanie wartości netto i VAT dla dodatkowych kosztów
+    let additionalCostsNetTotal = 0;
+    let additionalCostsVatTotal = 0;
+    
+    additionalCostsItems.forEach(cost => {
+      const costNet = parseFloat(cost.value) || 0;
+      additionalCostsNetTotal += costNet;
+      
+      // Obliczanie VAT dla dodatkowego kosztu na podstawie jego indywidualnej stawki VAT
+      const vatRate = typeof cost.vatRate === 'number' ? cost.vatRate : 0;
+      const costVat = (costNet * vatRate) / 100;
+      additionalCostsVatTotal += costVat;
+    });
+    
+    // Suma wartości netto: produkty + dodatkowe koszty
+    const totalNet = itemsNetTotal + additionalCostsNetTotal;
+    
+    // Suma VAT: VAT od produktów + VAT od dodatkowych kosztów
+    const totalVat = itemsVatTotal + additionalCostsVatTotal;
+    
+    // Wartość brutto: suma netto + suma VAT
+    const totalGross = totalNet + totalVat;
+    
+    return {
+      itemsNetTotal,
+      itemsVatTotal,
+      additionalCostsNetTotal,
+      additionalCostsVatTotal,
+      totalNet,
+      totalVat,
+      totalGross,
+      vatRates: {
+        items: Array.from(new Set(items.map(item => item.vatRate))),
+        additionalCosts: Array.from(new Set(additionalCostsItems.map(cost => cost.vatRate)))
+      }
+    };
   };
   
   return (
@@ -732,22 +825,66 @@ const PurchaseOrderDetails = ({ orderId }) => {
             <Grid item xs={12} md={6}>
               <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                 <Typography variant="body1" gutterBottom>
-                  <strong>Wartość netto:</strong> {formatCurrency(purchaseOrder.totalValue, purchaseOrder.currency)}
+                  <strong>Wartość produktów netto:</strong> {formatCurrency(purchaseOrder.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0), purchaseOrder.currency)}
                 </Typography>
                 
-                <Typography variant="body1" gutterBottom>
-                  <strong>VAT ({purchaseOrder.vatRate}%):</strong> {formatCurrency(purchaseOrder.totalValue * (purchaseOrder.vatRate / 100), purchaseOrder.currency)}
-                </Typography>
+                {/* Sekcja VAT dla produktów */}
+                {purchaseOrder.items.length > 0 && (
+                  <>
+                    <Typography variant="subtitle2" gutterBottom>
+                      VAT od produktów:
+                    </Typography>
+                    {/* Grupowanie pozycji według stawki VAT */}
+                    {Array.from(new Set(purchaseOrder.items.map(item => item.vatRate))).sort((a, b) => a - b).map(vatRate => {
+                      if (vatRate === undefined) return null;
+                      
+                      const itemsWithSameVat = purchaseOrder.items.filter(item => item.vatRate === vatRate);
+                      const sumNet = itemsWithSameVat.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0);
+                      const vatValue = typeof vatRate === 'number' ? (sumNet * vatRate) / 100 : 0;
+                      
+                      return (
+                        <Typography key={vatRate} variant="body2" gutterBottom sx={{ pl: 2 }}>
+                          Stawka {vatRate}%: <strong>{formatCurrency(vatValue, purchaseOrder.currency)}</strong> (od {formatCurrency(sumNet, purchaseOrder.currency)})
+                        </Typography>
+                      );
+                    })}
+                  </>
+                )}
                 
-                {purchaseOrder.additionalCostsItems?.length > 0 && purchaseOrder.additionalCostsItems.map((cost, index) => (
-                  <Typography key={index} variant="body1" gutterBottom>
-                    <strong>{cost.description || `Dodatkowy koszt ${index+1}`}:</strong> {formatCurrency(typeof cost.value === 'number' ? cost.value : parseFloat(cost.value) || 0, purchaseOrder.currency)}
-                  </Typography>
-                ))}
+                {/* Sekcja dodatkowych kosztów z VAT */}
+                {purchaseOrder.additionalCostsItems?.length > 0 && (
+                  <>
+                    <Typography variant="subtitle1" gutterBottom>
+                      <strong>Dodatkowe koszty:</strong>
+                    </Typography>
+                    {purchaseOrder.additionalCostsItems.map((cost, index) => (
+                      <Typography key={index} variant="body2" gutterBottom sx={{ pl: 2 }}>
+                        {cost.description || `Dodatkowy koszt ${index+1}`}: <strong>{formatCurrency(parseFloat(cost.value) || 0, purchaseOrder.currency)}</strong>
+                        {typeof cost.vatRate === 'number' && cost.vatRate > 0 && (
+                          <span> + VAT {cost.vatRate}%: <strong>{formatCurrency(((parseFloat(cost.value) || 0) * cost.vatRate) / 100, purchaseOrder.currency)}</strong></span>
+                        )}
+                      </Typography>
+                    ))}
+                  </>
+                )}
                 
-                <Typography variant="h6" sx={{ mt: 1 }}>
-                  <strong>Wartość brutto:</strong> {formatCurrency(purchaseOrder.totalGross, purchaseOrder.currency)}
-                </Typography>
+                {/* Podsumowanie */}
+                {(() => {
+                  const vatValues = calculateVATValues(purchaseOrder.items, purchaseOrder.additionalCostsItems);
+                  return (
+                    <>
+                      <Typography variant="subtitle1" gutterBottom>
+                        <strong>Wartość netto razem:</strong> {formatCurrency(vatValues.totalNet, purchaseOrder.currency)}
+                      </Typography>
+                      <Typography variant="subtitle1" gutterBottom>
+                        <strong>Suma podatku VAT:</strong> {formatCurrency(vatValues.totalVat, purchaseOrder.currency)}
+                      </Typography>
+                      <Typography variant="h6" sx={{ mt: 1 }}>
+                        <strong>Wartość brutto:</strong> {formatCurrency(vatValues.totalGross, purchaseOrder.currency)}
+                      </Typography>
+                    </>
+                  );
+                })()}
               </Box>
             </Grid>
           </Grid>

@@ -225,6 +225,18 @@ const InventoryItemForm = ({ itemId }) => {
           <Grid item xs={12} sm={6}>
             <TextField
               fullWidth
+              label="Minimalna ilość zakupu"
+              name="minOrderQuantity"
+              type="number"
+              value={itemData.minOrderQuantity || ''}
+              onChange={handleChange}
+              inputProps={{ min: 0, step: 0.01 }}
+              helperText="Minimalna ilość, jaką można zamówić od dostawcy"
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
               label="Ilość kartonów na paletę"
               name="boxesPerPallet"
               type="number"

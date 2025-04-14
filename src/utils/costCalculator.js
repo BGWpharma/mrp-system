@@ -294,4 +294,83 @@ export const calculateEstimatedProductionTime = (recipe, taskQuantity = 1) => {
   const estimatedTime = prepTime * taskQuantity;
 
   return estimatedTime;
+};
+
+/**
+ * Oblicza koszt produkcji na podstawie receptury
+ * @param {Object} recipe - Obiekt receptury
+ * @param {Object} options - Opcje kalkulacji
+ * @returns {Object} - Obliczony koszt produkcji
+ */
+export const calculateProductionCost = async (recipe, options = {}) => {
+  try {
+    if (!recipe || !recipe.ingredients || !Array.isArray(recipe.ingredients)) {
+      return { totalCost: 0, materials: 0, labor: 0, overhead: 0 };
+    }
+    
+    // Domyślne opcje
+    const {
+      laborHourlyRate = 50, // stawka godzinowa pracy w EUR/h
+      overheadRate = 10, // procent narzutu od kosztów bezpośrednich
+      machineHourlyRate = 25, // stawka godzinowa maszyny w EUR/h
+    } = options;
+    
+    // Pobierz ceny składników (tu w prostszej formie niż w calculateManufacturingOrderCosts)
+    const pricesMap = {};
+    for (const ingredient of recipe.ingredients) {
+      if (ingredient && ingredient.id) {
+        // W rzeczywistym przypadku tutaj pobierałbyś ceny z bazy danych
+        // Dla uproszczenia użyjemy ceny z samego składnika, jeśli jest dostępna
+        pricesMap[ingredient.id] = {
+          itemPrice: ingredient.price || 0,
+          batchPrice: ingredient.batchPrice || 0
+        };
+      }
+    }
+    
+    // 1. Koszty materiałów
+    const materialCostResult = calculateMaterialsCost(recipe.ingredients, pricesMap);
+    
+    // 2. Koszty pracy (robocizny)
+    // Przewidywany czas pracy (w minutach)
+    const prepTime = parseFloat(recipe.prepTime || 0);
+    const workTime = parseFloat(recipe.workTime || 0);
+    const totalTime = prepTime + workTime;
+    
+    // Przelicz minuty na godziny
+    const totalWorkHours = totalTime / 60;
+    
+    // Oblicz koszt pracy
+    const laborCost = totalWorkHours * laborHourlyRate;
+    
+    // 3. Koszty maszyn
+    // Szacowany czas pracy maszyn (taki sam jak czas pracy, jeśli nie określono inaczej)
+    const machineWorkHours = parseFloat(recipe.machineTime || totalWorkHours);
+    const machineCost = machineWorkHours * machineHourlyRate;
+    
+    // 4. Koszty bezpośrednie łącznie
+    const directCosts = materialCostResult.totalCost + laborCost + machineCost;
+    
+    // 5. Koszty pośrednie (narzut)
+    const overheadCost = directCosts * (overheadRate / 100);
+    
+    // 6. Całkowity koszt produkcji
+    const totalCost = directCosts + overheadCost;
+    
+    // 7. Koszt jednostkowy - dla jednej jednostki receptury
+    const unitCost = totalCost;
+    
+    return {
+      totalCost: unitCost,
+      materials: materialCostResult.totalCost,
+      labor: laborCost,
+      machine: machineCost,
+      overhead: overheadCost,
+      directCosts: directCosts,
+      details: materialCostResult.details
+    };
+  } catch (error) {
+    console.error('Błąd podczas obliczania kosztu produkcji:', error);
+    return { totalCost: 0, materials: 0, labor: 0, overhead: 0 };
+  }
 }; 
