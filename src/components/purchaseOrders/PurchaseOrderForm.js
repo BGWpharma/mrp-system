@@ -1383,7 +1383,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                 disabled={loading || loadingSupplierSuggestions || poData.items.length === 0}
                 sx={{ mr: 1 }}
             >
-                Uzupełnij minimalne ilości
+                Uzupełnij minimalne ilości Work in Progress
             </Button>
             
             {Object.keys(supplierSuggestions).length > 0 && (

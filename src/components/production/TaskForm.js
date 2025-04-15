@@ -962,7 +962,11 @@ const TaskForm = ({ taskId }) => {
                   onChange={handleDurationChange}
                   type="number"
                   InputProps={{ inputProps: { min: 0 } }}
-                  helperText={`Całkowity szacowany czas produkcji (${(taskData.estimatedDuration).toFixed(1)} godz.)`}
+                  helperText={`Całkowity szacowany czas produkcji (${
+                    typeof taskData.estimatedDuration === 'number' 
+                      ? (taskData.estimatedDuration).toFixed(1) 
+                      : parseFloat(taskData.estimatedDuration || 0).toFixed(1)
+                  } godz.)`}
                 />
               </Grid>
               <Grid item xs={6}>

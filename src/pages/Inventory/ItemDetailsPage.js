@@ -25,7 +25,8 @@ import {
   Select,
   FormControl,
   InputLabel,
-  IconButton
+  IconButton,
+  CircularProgress
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -39,11 +40,13 @@ import {
   QrCode as QrCodeIcon,
   Refresh as RefreshIcon,
   SortByAlpha as SortIcon,
-  FilterList as FilterIcon
+  FilterList as FilterIcon,
+  Delete as DeleteIcon
 } from '@mui/icons-material';
-import { getInventoryItemById, getItemTransactions, getItemBatches, getSupplierPrices } from '../../services/inventoryService';
+import { getInventoryItemById, getItemTransactions, getItemBatches, getSupplierPrices, deleteReservation, cleanupDeletedTaskReservations } from '../../services/inventoryService';
 import { getAllSuppliers } from '../../services/supplierService';
 import { useNotification } from '../../hooks/useNotification';
+import { useAuth } from '../../hooks/useAuth';
 import { formatDate } from '../../utils/formatters';
 import { Timestamp } from 'firebase/firestore';
 import LabelDialog from '../../components/inventory/LabelDialog';
@@ -72,7 +75,8 @@ function TabPanel(props) {
 const ItemDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { showError } = useNotification();
+  const { showError, showSuccess } = useNotification();
+  const { currentUser } = useAuth();
   const [item, setItem] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [batches, setBatches] = useState([]);
@@ -85,6 +89,7 @@ const ItemDetailsPage = () => {
   const [reservationFilter, setReservationFilter] = useState('all');
   const [sortField, setSortField] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState('desc');
+  const [updatingReservations, setUpdatingReservations] = useState(false);
 
   useEffect(() => {
     const fetchItemData = async () => {
@@ -221,6 +226,54 @@ const ItemDetailsPage = () => {
         .filter(transaction => transaction.referenceId)
         .map(transaction => transaction.referenceId);
       
+      // Sprawdź, czy rezerwacje mają powiązane partie w zadaniach produkcyjnych
+      const { db } = await import('../../services/firebase/config');
+      const { collection, query, where, getDocs } = await import('firebase/firestore');
+      
+      // Pobierz zadania produkcyjne związane z rezerwacjami
+      const tasksRef = collection(db, 'productionTasks');
+      const tasksQuery = query(tasksRef, where('__name__', 'in', taskIds.length > 0 ? taskIds : ['placeholder']));
+      const tasksSnapshot = await getDocs(tasksQuery);
+      
+      // Mapa zadań produkcyjnych
+      const tasksMap = {};
+      tasksSnapshot.forEach(doc => {
+        const taskData = doc.data();
+        tasksMap[doc.id] = taskData;
+      });
+      
+      // Uzupełnij informacje o rezerwacjach o dane z zadań produkcyjnych
+      bookingTransactions = bookingTransactions.map(reservation => {
+        const taskId = reservation.referenceId || reservation.taskId;
+        const task = tasksMap[taskId];
+        
+        // Utwórz tablicę przypisanych partii
+        let assignedBatches = [];
+        
+        // Jeśli zadanie istnieje i ma dane o przypisanych partiach
+        if (task && task.materialBatches && task.materialBatches[itemData.id]) {
+          // Pobierz wszystkie przypisane partie dla tego materiału
+          assignedBatches = task.materialBatches[itemData.id] || [];
+        }
+        
+        // Zachowaj istniejące wartości, jeśli task nie istnieje
+        const existingTaskName = reservation.taskName;
+        const existingTaskNumber = reservation.taskNumber || reservation.moNumber;
+        const existingClientName = reservation.clientName;
+        const existingClientId = reservation.clientId;
+        
+        return {
+          ...reservation,
+          // Dodaj dane zadania, preferując dane z zadania, ale zachowując istniejące wartości jako zapasowe
+          taskName: task ? task.name : existingTaskName,
+          taskNumber: task ? (task.number || task.moNumber) : existingTaskNumber,
+          clientName: task ? task.clientName : existingClientName,
+          clientId: task ? task.clientId : existingClientId,
+          // Dodaj informacje o przypisanych partiach
+          assignedBatches
+        };
+      });
+      
       // Ustaw rezerwacje
       setReservations(bookingTransactions);
       
@@ -287,6 +340,54 @@ const ItemDetailsPage = () => {
     });
     
     setFilteredReservations(filtered);
+  };
+
+  // Funkcja do usuwania rezerwacji
+  const handleDeleteReservation = async (reservationId) => {
+    if (!window.confirm('Czy na pewno chcesz usunąć tę rezerwację? Ta operacja jest nieodwracalna.')) {
+      return;
+    }
+    
+    try {
+      const { success, message } = await deleteReservation(reservationId, currentUser.uid);
+      
+      if (success) {
+        showSuccess(message || 'Rezerwacja została usunięta');
+        // Odśwież dane
+        await fetchReservations(item);
+      } else {
+        showError(message || 'Nie udało się usunąć rezerwacji');
+      }
+    } catch (error) {
+      console.error('Błąd podczas usuwania rezerwacji:', error);
+      showError(error.message || 'Wystąpił błąd podczas usuwania rezerwacji');
+    }
+  };
+
+  // Funkcja do czyszczenia rezerwacji z usuniętych zadań
+  const handleCleanupDeletedTaskReservations = async () => {
+    if (!window.confirm('Czy na pewno chcesz usunąć wszystkie rezerwacje dla usuniętych zadań produkcyjnych? Ta operacja jest nieodwracalna.')) {
+      return;
+    }
+    
+    setUpdatingReservations(true);
+    try {
+      const result = await cleanupDeletedTaskReservations();
+      
+      if (result.count > 0) {
+        showSuccess(`Usunięto ${result.count} rezerwacji z usuniętych zadań produkcyjnych.`);
+      } else {
+        showSuccess('Nie znaleziono rezerwacji do wyczyszczenia.');
+      }
+      
+      // Odśwież dane po aktualizacji
+      await fetchReservations(item);
+    } catch (error) {
+      console.error('Błąd podczas czyszczenia rezerwacji:', error);
+      showError('Wystąpił błąd podczas czyszczenia rezerwacji');
+    } finally {
+      setUpdatingReservations(false);
+    }
   };
 
   if (loading) {
@@ -800,6 +901,17 @@ const ItemDetailsPage = () => {
               >
                 Odśwież
               </Button>
+              <Button 
+                startIcon={updatingReservations ? <CircularProgress size={20} /> : <DeleteIcon />} 
+                onClick={handleCleanupDeletedTaskReservations}
+                variant="outlined"
+                color="error"
+                size="small"
+                disabled={updatingReservations}
+                sx={{ mr: 2 }}
+              >
+                {updatingReservations ? 'Czyszczenie...' : 'Usuń rezerwacje usuniętych MO'}
+              </Button>
               <FormControl variant="outlined" size="small" sx={{ minWidth: 150, mr: 2 }}>
                 <InputLabel id="reservation-filter-label">Filtruj</InputLabel>
                 <Select
@@ -842,6 +954,12 @@ const ItemDetailsPage = () => {
                       Zadanie produkcyjne {sortField === 'taskName' && (sortOrder === 'asc' ? '↑' : '↓')}
                     </TableCell>
                     <TableCell 
+                      onClick={() => handleSort('taskNumber')}
+                      sx={{ cursor: 'pointer' }}
+                    >
+                      Nr MO {sortField === 'taskNumber' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    </TableCell>
+                    <TableCell 
                       onClick={() => handleSort('clientName')}
                       sx={{ cursor: 'pointer' }}
                     >
@@ -849,6 +967,7 @@ const ItemDetailsPage = () => {
                     </TableCell>
                     <TableCell>Partia</TableCell>
                     <TableCell>Status</TableCell>
+                    <TableCell>Akcje</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -868,13 +987,29 @@ const ItemDetailsPage = () => {
                           </Typography>
                         </TableCell>
                         <TableCell>
-                          {reservation.taskName || reservation.taskNumber || reservation.referenceId || '—'}
+                          {reservation.taskName || '—'}
+                        </TableCell>
+                        <TableCell>
+                          {reservation.taskNumber || '—'}
                         </TableCell>
                         <TableCell>
                           {reservation.clientName || '—'}
                         </TableCell>
                         <TableCell>
-                          {reservation.batchNumber || reservation.batchId || '—'}
+                          {reservation.assignedBatches && reservation.assignedBatches.length > 0 ? (
+                            <div>
+                              {reservation.assignedBatches.map((batch, index) => (
+                                <Chip 
+                                  key={index}
+                                  label={`${batch.batchNumber || batch.batchId} (${batch.quantity} ${item.unit})`}
+                                  size="small"
+                                  sx={{ m: 0.2 }}
+                                />
+                              ))}
+                            </div>
+                          ) : (
+                            reservation.batchNumber || reservation.batchId || '—'
+                          )}
                         </TableCell>
                         <TableCell>
                           <Chip 
@@ -882,6 +1017,16 @@ const ItemDetailsPage = () => {
                             color={reservation.fulfilled ? "success" : "primary"} 
                             size="small" 
                           />
+                        </TableCell>
+                        <TableCell>
+                          <IconButton 
+                            size="small" 
+                            color="error" 
+                            onClick={() => handleDeleteReservation(reservation.id)}
+                            aria-label="Usuń rezerwację"
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
                         </TableCell>
                       </TableRow>
                     );

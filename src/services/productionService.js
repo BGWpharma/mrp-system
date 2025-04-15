@@ -464,17 +464,40 @@ import {
       
       const task = taskSnapshot.data();
       
-      // Jeśli zadanie jest w stanie "Zaplanowane" i ma materiały, anuluj rezerwacje
-      if (task.status === 'Zaplanowane' && task.materials && task.materials.length > 0) {
+      // Anuluj rezerwacje materiałów bez względu na stan zadania
+      if (task.materials && task.materials.length > 0) {
         for (const material of task.materials) {
           try {
+            if (!material.id && !material.inventoryItemId) {
+              console.warn(`Materiał ${material.name} nie ma ID, pomijam anulowanie rezerwacji`);
+              continue;
+            }
             // Anuluj rezerwację materiału
-            await cancelBooking(material.id, material.quantity, taskId, task.createdBy || 'system');
+            const materialId = material.inventoryItemId || material.id;
+            await cancelBooking(materialId, material.quantity, taskId, task.createdBy || 'system');
+            console.log(`Anulowano rezerwację materiału ${material.name} dla usuniętego zadania`);
           } catch (error) {
             console.error(`Błąd przy anulowaniu rezerwacji materiału ${material.name}:`, error);
             // Kontynuuj anulowanie rezerwacji pozostałych materiałów mimo błędu
           }
         }
+      }
+      
+      // Usuń wszystkie rezerwacje związane z tym zadaniem z kolekcji transakcji
+      try {
+        const { cleanupTaskReservations, cleanupDeletedTaskReservations } = await import('./inventoryService');
+        
+        // Najpierw wyczyść konkretne rezerwacje dla tego zadania
+        await cleanupTaskReservations(taskId);
+        console.log(`Usunięto wszystkie rezerwacje związane z zadaniem ${taskId}`);
+        
+        // Dodatkowo uruchom pełne czyszczenie rezerwacji z usuniętych zadań
+        // to zapewni że wszystkie rezerwacje będą usunięte, nawet jeśli pojedyncze anulowanie się nie powiodło
+        await cleanupDeletedTaskReservations();
+        console.log(`Wykonano pełne czyszczenie rezerwacji z usuniętych zadań`);
+      } catch (error) {
+        console.error(`Błąd podczas usuwania rezerwacji dla zadania ${taskId}:`, error);
+        // Kontynuuj usuwanie zadania mimo błędu
       }
       
       // Sprawdź, czy zadanie ma powiązane partie w magazynie
@@ -1475,18 +1498,44 @@ import {
             );
             
             const batchesSnapshot = await getDocs(q);
-            const availableBatches = batchesSnapshot.docs
-              .map(doc => ({
-                id: doc.id,
-                ...doc.data()
-              }))
-              .sort((a, b) => {
+            if (batchesSnapshot.empty) {
+              console.warn(`Brak dostępnych partii dla materiału: ${material.name}`);
+              const assignmentErrors = [];
+              assignmentErrors.push(`Brak dostępnych partii dla materiału: ${material.name}`);
+              throw new Error(`Brak dostępnych partii dla materiału: ${material.name}. ${assignmentErrors.join(", ")}`);
+              continue;
+            }
+            
+            const availableBatches = batchesSnapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            })).sort((a, b) => {
+              const dateA = a.expiryDate ? new Date(a.expiryDate) : new Date(9999, 11, 31);
+              const dateB = b.expiryDate ? new Date(b.expiryDate) : new Date(9999, 11, 31);
+              return dateA - dateB;
+            });
+            
+            console.log(`Znaleziono ${availableBatches.length} dostępnych partii dla materiału ${material.name}`);
+            
+            // Domyślna metoda rezerwacji to expiry (FEFO), chyba że określono inaczej
+            const methodOfReservation = 'expiry'; // Zastępuję niezdefiniowaną zmienną reservationMethod
+            if (methodOfReservation === 'fifo') {
+              availableBatches.sort((a, b) => {
+                const dateA = a.createdAt ? (a.createdAt instanceof Timestamp ? a.createdAt.toDate() : new Date(a.createdAt)) : new Date(0);
+                const dateB = b.createdAt ? (b.createdAt instanceof Timestamp ? b.createdAt.toDate() : new Date(b.createdAt)) : new Date(0);
+                return dateA - dateB;
+              });
+            } else {
+              // Według daty ważności (expiry)
+              availableBatches.sort((a, b) => {
                 const dateA = a.expiryDate ? new Date(a.expiryDate) : new Date(9999, 11, 31);
                 const dateB = b.expiryDate ? new Date(b.expiryDate) : new Date(9999, 11, 31);
                 return dateA - dateB;
               });
+            }
             
-            console.log(`Znaleziono ${availableBatches.length} dostępnych partii dla materiału ${material.name}`);
+            console.log(`Posortowane partie dla materiału ${material.name}:`, 
+                        availableBatches.map(b => `${b.batchId} (${b.quantity || 0} ${material.unit || 'szt.'})`));
             
             // Przypisz partie automatycznie według FEFO - użyj skorygowanej ilości
             let remainingQuantity = consumedQuantity;
@@ -1608,34 +1657,70 @@ import {
   };
 
   // Zarezerwowanie składników dla zadania
-  export const reserveMaterialsForTask = async (taskId, selectedBatches = []) => {
+  export const reserveMaterialsForTask = async (taskId, userId, reservationMethod, selectedBatches = []) => {
     try {
-      console.log("Rezerwowanie materiałów dla zadania:", taskId);
-      console.log("Wybrane partie:", selectedBatches);
-
-      // Importy Firebase
-      const { db } = await import('./firebase/config');
-      const { doc, getDoc, updateDoc, collection, increment } = await import('firebase/firestore');
-
-      // Pobierz zadanie
-      const taskRef = doc(db, 'productionTasks', taskId);
+      console.log(`[DEBUG] Rozpoczynam rezerwację materiałów dla zadania ${taskId}, metoda=${reservationMethod}`);
+      
+      // Pobierz dane zadania produkcyjnego
+      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
       const taskDoc = await getDoc(taskRef);
       if (!taskDoc.exists()) {
         throw new Error(`Nie znaleziono zadania o ID: ${taskId}`);
       }
+      
       const task = { id: taskDoc.id, ...taskDoc.data() };
+      console.log("Pobrano zadanie:", task.moNumber || task.id);
+      
+      // Sprawdź, czy materiały są już zarezerwowane dla tego zadania
+      if (task.materialsReserved) {
+        console.log(`[DEBUG] Materiały dla zadania ${taskId} są już zarezerwowane. Pomijam ponowną rezerwację.`);
+        return {
+          success: true,
+          message: 'Materiały są już zarezerwowane dla tego zadania',
+          reservedItems: []
+        };
+      }
+      
+      // Reszta kodu pozostaje bez zmian...
 
       // Jeśli nie ma wymaganych materiałów, nie rób nic
       if (!task.requiredMaterials || task.requiredMaterials.length === 0) {
         console.log("Brak wymaganych materiałów dla tego zadania.");
-        return { success: true, message: "Brak materiałów do zarezerwowania" };
+        
+        // Sprawdź, czy są materiały w polu materials
+        if (task.materials && task.materials.length > 0) {
+          console.log("Znaleziono materiały w polu 'materials':", task.materials);
+          // Utwórz requiredMaterials na podstawie pola materials
+          const requiredMaterials = task.materials.map(material => ({
+            id: material.inventoryItemId || material.id,
+            name: material.name,
+            quantity: material.quantity,
+            unit: material.unit || 'szt.'
+          }));
+          
+          // Zaktualizuj zadanie z requiredMaterials
+          await updateDoc(taskRef, {
+            requiredMaterials: requiredMaterials
+          });
+          
+          console.log("Utworzono requiredMaterials na podstawie materials:", requiredMaterials);
+          task.requiredMaterials = requiredMaterials;
+        } else {
+          return { success: true, message: "Brak materiałów do zarezerwowania" };
+        }
       }
 
       // Pobierz aktualny stan rezerwacji
       let currentReservations = [];
       if (task.materialReservations && task.materialReservations.length > 0) {
         currentReservations = [...task.materialReservations];
+        console.log("Istniejące rezerwacje materiałów:", currentReservations);
       }
+
+      // Zainicjuj zmienne do śledzenia postępu i błędów
+      let reservationsSuccess = false;
+      let reservedItems = [];
+      let errors = [];
 
       // Dla każdego wymaganego materiału
       for (const requiredMaterial of task.requiredMaterials) {
@@ -1658,10 +1743,62 @@ import {
                    Już zarezerwowane: ${alreadyReservedQty}, Pozostało do zarezerwowania: ${remainingToReserve}`);
 
         // Znajdź wybraną partię dla tego materiału
-        const materialBatches = selectedBatches.filter(b => b.materialId === requiredMaterial.id);
+        let materialBatches = selectedBatches.filter(b => b.materialId === requiredMaterial.id);
+        
+        // Jeśli nie wybrano ręcznie partii, a metoda to FIFO lub expiry, pobierz dostępne partie automatycznie
+        if (materialBatches.length === 0 && (reservationMethod === 'fifo' || reservationMethod === 'expiry')) {
+          console.log(`Automatyczne wybieranie partii dla materiału ${requiredMaterial.name} metodą ${reservationMethod}`);
+          
+          // Pobierz dostępne partie dla tego materiału
+          const batchesRef = collection(db, 'inventoryBatches');
+          const q = query(
+            batchesRef,
+            where('itemId', '==', requiredMaterial.id),
+            where('quantity', '>', 0)
+          );
+          
+          const batchesSnapshot = await getDocs(q);
+          if (batchesSnapshot.empty) {
+            console.warn(`Brak dostępnych partii dla materiału: ${requiredMaterial.name}`);
+            errors.push(`Brak dostępnych partii dla materiału: ${requiredMaterial.name}`);
+            continue;
+          }
+          
+          const availableBatches = batchesSnapshot.docs.map(doc => ({
+            id: doc.id,
+            batchId: doc.id,
+            ...doc.data(),
+            materialId: requiredMaterial.id
+          }));
+          
+          console.log(`Znaleziono ${availableBatches.length} dostępnych partii dla materiału ${requiredMaterial.name}`);
+          
+          // Sortuj partie według metody rezerwacji
+          if (reservationMethod === 'fifo') {
+            availableBatches.sort((a, b) => {
+              const dateA = a.createdAt ? (a.createdAt instanceof Timestamp ? a.createdAt.toDate() : new Date(a.createdAt)) : new Date(0);
+              const dateB = b.createdAt ? (b.createdAt instanceof Timestamp ? b.createdAt.toDate() : new Date(b.createdAt)) : new Date(0);
+              return dateA - dateB;
+            });
+          } else {
+            // Według daty ważności (expiry)
+            availableBatches.sort((a, b) => {
+              const dateA = a.expiryDate ? new Date(a.expiryDate) : new Date(9999, 11, 31);
+              const dateB = b.expiryDate ? new Date(b.expiryDate) : new Date(9999, 11, 31);
+              return dateA - dateB;
+            });
+          }
+          
+          console.log(`Posortowane partie dla materiału ${requiredMaterial.name}:`, 
+                      availableBatches.map(b => `${b.batchId} (${b.quantity || 0} ${requiredMaterial.unit || 'szt.'})`));
+          
+          // Dodaj partie do listy wybranych partii
+          materialBatches = availableBatches;
+        }
         
         if (materialBatches.length === 0) {
           console.warn(`Nie wybrano partii dla materiału: ${requiredMaterial.name}`);
+          errors.push(`Nie wybrano partii dla materiału: ${requiredMaterial.name}`);
           continue;
         }
 
@@ -1675,78 +1812,153 @@ import {
         for (const batch of materialBatches) {
           if (remainingToReserve <= 0) break;
 
-          // Pobierz aktualny stan partii
-          const batchRef = doc(db, 'inventory', batch.batchId);
-          const batchDoc = await getDoc(batchRef);
-          if (!batchDoc.exists()) {
-            console.error(`Nie znaleziono partii o ID: ${batch.batchId}`);
-            continue;
+          try {
+            // Pobierz aktualny stan partii dla logowania
+            const batchRef = doc(db, 'inventoryBatches', batch.batchId);
+            const batchDoc = await getDoc(batchRef);
+            if (!batchDoc.exists()) {
+              console.error(`Nie znaleziono partii o ID: ${batch.batchId}`);
+              errors.push(`Nie znaleziono partii o ID: ${batch.batchId}`);
+              continue;
+            }
+            
+            const batchData = batchDoc.data();
+            const availableQty = batchData.quantity || 0;
+            
+            console.log(`Partia ${batch.batchId}, Dostępna ilość: ${availableQty} ${requiredMaterial.unit || 'szt.'}`);
+            
+            // Oblicz ile można zarezerwować z tej partii
+            const toReserve = Math.min(remainingToReserve, availableQty);
+            // Zaokrąglij rezerwowaną ilość do 3 miejsc po przecinku
+            const reserveAmount = parseFloat(toReserve.toFixed(3));
+            
+            if (reserveAmount <= 0) {
+              console.warn(`Partia ${batch.batchId} nie ma dostępnej ilości.`);
+              continue;
+            }
+            
+            console.log(`Rezerwowanie ${reserveAmount} ${requiredMaterial.unit || 'szt.'} z partii ${batch.batchId}`);
+            
+            // Użyj funkcji bookInventoryForTask z inventoryService
+            const { bookInventoryForTask } = await import('../services/inventoryService');
+            const bookingResult = await bookInventoryForTask(
+              requiredMaterial.id,
+              reserveAmount,
+              taskId,
+              userId || 'system',
+              reservationMethod,
+              batch.batchId
+            );
+            
+            console.log(`Wynik rezerwacji partii ${batch.batchId}:`, bookingResult);
+            
+            if (bookingResult.success) {
+              try {
+                // Uwzględnij informacje z bookInventoryForTask
+                if (bookingResult.reservedBatches && bookingResult.reservedBatches.length > 0) {
+                  // Upewnij się, że mamy numery partii
+                  const enhancedBatches = bookingResult.reservedBatches.map(reservedBatch => {
+                    // Jeśli nie ma batchNumber, spróbuj pobrać z batchData
+                    if (!reservedBatch.batchNumber && batchData) {
+                      return {
+                        ...reservedBatch,
+                        batchNumber: batchData.batchNumber || batchData.lotNumber || `Partia ${reservedBatch.batchId.substring(0, 6)}`
+                      };
+                    }
+                    return reservedBatch;
+                  });
+                  
+                  materialReservations.push(...enhancedBatches);
+                }
+              } catch (batchError) {
+                console.error('Błąd podczas przetwarzania informacji o partiach:', batchError);
+              }
+              
+              remainingToReserve = parseFloat((remainingToReserve - reserveAmount).toFixed(3));
+              console.log(`Zarezerwowano ${reserveAmount} z partii ${batchData.batchNumber || batch.batchId}, 
+                         Pozostało do zarezerwowania: ${remainingToReserve}`);
+                         
+              // Dodaj do listy zarezerwowanych materiałów
+              reservedItems.push({
+                materialId: requiredMaterial.id,
+                itemId: requiredMaterial.id, // Dodaję itemId, ponieważ czasem używamy tego pola
+                name: requiredMaterial.name,
+                batchId: batch.batchId,
+                batchNumber: batchData.batchNumber || batchData.lotNumber || `Partia ${batch.batchId.substring(0, 6)}`,
+                quantity: reserveAmount
+              });
+              
+              reservationsSuccess = true;
+            } else {
+              console.error(`Błąd rezerwacji partii ${batch.batchId}:`, bookingResult.message || 'Nieznany błąd');
+              errors.push(bookingResult.message || `Nie można zarezerwować partii ${batch.batchId}`);
+            }
+          } catch (error) {
+            console.error(`Błąd podczas rezerwacji partii ${batch.batchId}:`, error);
+            errors.push(error.message || `Nieznany błąd podczas rezerwacji partii ${batch.batchId}`);
           }
-          
-          const batchData = batchDoc.data();
-          // Zaokrąglij dostępną ilość do 3 miejsc po przecinku
-          const availableQty = parseFloat(parseFloat(batchData.availableQuantity || 0).toFixed(3));
-
-          // Jeśli partia jest pusta, pomiń
-          if (availableQty <= 0) {
-            console.warn(`Partia ${batch.batchId} nie ma dostępnej ilości.`);
-            continue;
-          }
-
-          // Oblicz ile można zarezerwować z tej partii
-          const toReserve = Math.min(remainingToReserve, availableQty);
-          // Zaokrąglij rezerwowaną ilość do 3 miejsc po przecinku
-          const reserveAmount = parseFloat(toReserve.toFixed(3));
-
-          // Aktualizuj dostępną ilość w partii
-          const newAvailableQty = parseFloat((availableQty - reserveAmount).toFixed(3));
-          
-          await updateDoc(batchRef, {
-            availableQuantity: newAvailableQty,
-            reservedQuantity: increment(reserveAmount)
-          });
-
-          // Dodaj informację o rezerwacji
-          materialReservations.push({
-            batchId: batch.batchId,
-            batchNumber: batchData.batchNumber || '',
-            quantity: reserveAmount,
-            reservedAt: new Date().toISOString()
-          });
-
-          remainingToReserve = parseFloat((remainingToReserve - reserveAmount).toFixed(3));
-          console.log(`Zarezerwowano ${reserveAmount} z partii ${batchData.batchNumber || batch.batchId}, 
-                     Pozostało do zarezerwowania: ${remainingToReserve}`);
-        }
-
-        // Aktualizuj lub dodaj rezerwację dla tego materiału
-        if (existingReservation) {
-          // Zaokrąglij do 3 miejsc po przecinku
-          const newReservedQty = parseFloat((alreadyReservedQty + (requiredQuantity - remainingToReserve - alreadyReservedQty)).toFixed(3));
-          
-          existingReservation.reservedQuantity = newReservedQty;
-          existingReservation.batches = materialReservations;
-        } else {
-          // Zaokrąglij do 3 miejsc po przecinku
-          const newReservedQty = parseFloat((requiredQuantity - remainingToReserve).toFixed(3));
-          
-          currentReservations.push({
-            materialId: requiredMaterial.id,
-            materialName: requiredMaterial.name,
-            requiredQuantity: requiredQuantity,
-            reservedQuantity: newReservedQty,
-            unit: requiredMaterial.unit || 'szt.',
-            batches: materialReservations
-          });
         }
       }
 
       // Aktualizuj zadanie z informacjami o rezerwacjach
+      console.log("[DEBUG] Aktualizacja zadania z rezerwacjami:", JSON.stringify(currentReservations));
+      
+      // Przygotuj obiekt materialBatches na podstawie rezerwacji
+      let materialBatches = task.materialBatches || {};
+      console.log("[DEBUG] Stan materialBatches przed aktualizacją:", JSON.stringify(materialBatches));
+      
+      // Pobieramy aktualny stan zadania, aby uzyskać najnowsze dane materialBatches
+      // które mogły zostać zaktualizowane przez funkcje bookInventoryForTask
+      const updatedTaskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+      const updatedTaskDoc = await getDoc(updatedTaskRef);
+      if (updatedTaskDoc.exists()) {
+        const updatedTask = updatedTaskDoc.data();
+        if (updatedTask.materialBatches) {
+          materialBatches = updatedTask.materialBatches;
+          console.log("[DEBUG] Pobrano aktualny stan materialBatches z bazy danych:", JSON.stringify(materialBatches));
+        }
+      }
+      
+      // Jeśli z jakiegoś powodu materialBatches jest nadal puste, ale mamy reservedItems,
+      // zbudujmy materialBatches na podstawie reservedItems
+      if (Object.keys(materialBatches).length === 0 && reservedItems.length > 0) {
+        console.log("[DEBUG] Odtwarzanie materialBatches z reservedItems");
+        for (const item of reservedItems) {
+          if (!materialBatches[item.materialId]) {
+            materialBatches[item.materialId] = [];
+          }
+          materialBatches[item.materialId].push({
+            batchId: item.batchId,
+            quantity: item.quantity,
+            batchNumber: item.batchNumber
+          });
+          console.log(`[DEBUG] Dodano partię do ${item.name}:`, JSON.stringify(materialBatches[item.materialId]));
+        }
+      }
+      
+      console.log("[DEBUG] Przygotowane materialBatches do aktualizacji:", JSON.stringify(materialBatches));
+      
       await updateDoc(taskRef, {
-        materialReservations: currentReservations
+        materialReservations: currentReservations,
+        materialsReserved: reservationsSuccess,
+        reservationComplete: reservationsSuccess,
+        materialBatches: materialBatches  // Dodajemy aktualizację materialBatches
       });
+      
+      console.log("[DEBUG] Zakończono aktualizację zadania z materialBatches");
 
-      return { success: true, message: "Materiały zostały zarezerwowane" };
+      if (errors.length > 0) {
+        return { 
+          success: reservationsSuccess, 
+          message: reservationsSuccess 
+            ? "Materiały zostały częściowo zarezerwowane" 
+            : "Wystąpiły problemy podczas rezerwowania materiałów",
+          reservedItems,
+          errors
+        };
+      }
+
+      return { success: true, message: "Materiały zostały zarezerwowane", reservedItems };
     } catch (error) {
       console.error("Błąd podczas rezerwowania materiałów:", error);
       return { success: false, message: "Wystąpił błąd podczas rezerwowania materiałów", error };

@@ -782,6 +782,19 @@ const TaskDetailsPage = () => {
         return;
       }
       
+      console.log("Rozpoczynam proces rezerwacji materiałów dla zadania:", id);
+      console.log("Metoda rezerwacji:", reservationMethod);
+      console.log("Task data:", task);
+      
+      // Jeśli zadanie ma już zarezerwowane materiały, pominięcie ponownej rezerwacji
+      if (task.materialsReserved && task.materialBatches) {
+        console.log("Materiały są już zarezerwowane dla tego zadania. Pomijam ponowną rezerwację.");
+        showInfo("Materiały są już zarezerwowane dla tego zadania.");
+        setReservingMaterials(false);
+        setReserveDialogOpen(false);
+        return;
+      }
+      
       // Jeśli wybrano ręczny wybór partii
       if (reservationMethod === 'manual') {
         if (!validateManualBatchSelection()) {
@@ -877,7 +890,10 @@ const TaskDetailsPage = () => {
         }
       } else {
         // Standardowa rezerwacja automatyczna (FIFO lub według daty ważności)
-        const result = await reserveMaterialsForTask(id, task.materials, reservationMethod);
+        console.log("Wykonuję automatyczną rezerwację materiałów metodą:", reservationMethod);
+        const userId = currentUser?.uid || 'system';
+        const result = await reserveMaterialsForTask(id, userId, reservationMethod);
+        console.log("Wynik automatycznej rezerwacji materiałów:", result);
         
         if (result.success) {
           showSuccess(result.message);
@@ -893,8 +909,20 @@ const TaskDetailsPage = () => {
         }
       }
       
+      // Aktualizuj stan rezerwacji materiałów w zadaniu
+      console.log("Aktualizacja statusu zadania - materiały zarezerwowane");
+      const taskRef = doc(db, 'productionTasks', id);
+      await updateDoc(taskRef, {
+        materialsReserved: true,
+        reservationComplete: true,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser?.uid || 'system'
+      });
+      
       // Odśwież dane zadania
+      console.log("Pobieranie zaktualizowanych danych zadania po rezerwacji");
       const updatedTask = await getTaskById(id);
+      console.log("Zaktualizowane dane zadania:", updatedTask);
       setTask(updatedTask);
       
       setReserveDialogOpen(false);

@@ -22,7 +22,6 @@ import {
   ViewDay as DayIcon,
   ViewWeek as WeekIcon,
   ViewModule as MonthIcon,
-  Add as AddIcon,
   BarChart as GanttIcon,
   ArrowDropDown as ArrowDropDownIcon,
   FilterList as FilterListIcon
@@ -34,7 +33,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 import timelinePlugin from '@fullcalendar/timeline';
 import resourceTimelinePlugin from '@fullcalendar/resource-timeline';
 import plLocale from '@fullcalendar/core/locales/pl';
-import { getTasksByDateRange } from '../../services/productionService';
+import { getTasksByDateRange, updateTask } from '../../services/productionService';
 import { getAllWorkstations } from '../../services/workstationService';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
@@ -51,6 +50,7 @@ const ProductionCalendar = () => {
   const [view, setView] = useState('dayGridMonth');
   const [ganttView, setGanttView] = useState('resourceTimelineWeek');
   const [ganttMenuAnchor, setGanttMenuAnchor] = useState(null);
+  const [editable, setEditable] = useState(true);
   const [workstations, setWorkstations] = useState([]);
   const [useWorkstationColors, setUseWorkstationColors] = useState(false);
   const [selectedWorkstations, setSelectedWorkstations] = useState({});
@@ -59,9 +59,12 @@ const ProductionCalendar = () => {
   const [endDate, setEndDate] = useState(endOfMonth(new Date()));
   const [dateRangeMenuAnchor, setDateRangeMenuAnchor] = useState(null);
   const [filterMenuAnchor, setFilterMenuAnchor] = useState(null);
+  const [ganttDetail, setGanttDetail] = useState('day');
+  const [detailMenuAnchor, setDetailMenuAnchor] = useState(null);
   const calendarRef = useRef(null);
   const navigate = useNavigate();
-  const { showError } = useNotification();
+  const { showError, showSuccess } = useNotification();
+  const [eventResizableFromStart, setEventResizableFromStart] = useState(true);
 
   // Efekt do aktualizacji widoku kalendarza po zmianie stanu view
   useEffect(() => {
@@ -92,32 +95,104 @@ const ProductionCalendar = () => {
   };
 
   const fetchTasks = async (info) => {
+    // Jeśli już trwa ładowanie, nie uruchamiaj kolejnego zapytania
+    if (loading) return;
+    
     try {
       setLoading(true);
-      const rangeStartDate = customDateRange ? startDate.toISOString() : info.startStr;
-      const rangeEndDate = customDateRange ? endDate.toISOString() : info.endStr;
+      
+      // Weryfikacja parametrów
+      if (!info || (!info.startStr && !info.endStr && !customDateRange)) {
+        console.error('Brakujące parametry w fetchTasks', info);
+        return;
+      }
+      
+      // Bezpieczne pobieranie zakresu dat
+      let rangeStartDate, rangeEndDate;
+      
+      if (customDateRange) {
+        rangeStartDate = startDate.toISOString();
+        rangeEndDate = endDate.toISOString();
+      } else if (info) {
+        rangeStartDate = info.startStr;
+        rangeEndDate = info.endStr;
+      } else {
+        // Awaryjnie użyj dzisiejszej daty i miesiąca do przodu
+        const today = new Date();
+        rangeStartDate = today.toISOString();
+        rangeEndDate = new Date(today.getFullYear(), today.getMonth() + 1, today.getDate()).toISOString();
+      }
       
       console.log('Pobieranie zadań dla zakresu dat:', rangeStartDate, '-', rangeEndDate);
-      const fetchedTasks = await getTasksByDateRange(rangeStartDate, rangeEndDate);
-      console.log('Pobrano zadania:', fetchedTasks);
-      setTasks(fetchedTasks);
+      
+      // Dodajemy timeout, żeby React miał czas na aktualizację stanu
+      setTimeout(async () => {
+        try {
+          const fetchedTasks = await getTasksByDateRange(rangeStartDate, rangeEndDate);
+          console.log('Pobrano zadania:', fetchedTasks);
+          setTasks(fetchedTasks);
+        } catch (error) {
+          showError('Błąd podczas pobierania zadań: ' + error.message);
+          console.error('Error fetching tasks:', error);
+        } finally {
+          setLoading(false);
+        }
+      }, 100);
     } catch (error) {
-      showError('Błąd podczas pobierania zadań: ' + error.message);
-      console.error('Error fetching tasks:', error);
-    } finally {
+      showError('Błąd podczas przygotowania zapytania o zadania: ' + error.message);
+      console.error('Error in fetchTasks:', error);
       setLoading(false);
     }
   };
 
   const handleViewChange = (event, newView) => {
     if (newView !== null) {
-      // Jeśli wybrano widok Gantta, użyj aktualnie wybranego widoku Gantta
-      if (newView === 'gantt') {
-        setView(ganttView);
-      } else {
-        setView(newView);
+      try {
+        // Jeśli wybrano widok Gantta, użyj aktualnie wybranego widoku Gantta
+        const viewToUse = newView === 'gantt' ? ganttView : newView;
+        
+        // Aktualizuj stan widoku
+        setView(viewToUse);
+        
+        // Jeśli mamy referencję do kalendarza, zaktualizuj widok
+        if (calendarRef.current) {
+          const calendarApi = calendarRef.current.getApi();
+          
+          // Daj czas na aktualizację stanu
+          setTimeout(() => {
+            try {
+              calendarApi.changeView(viewToUse);
+            } catch (error) {
+              console.error('Błąd podczas zmiany widoku:', error);
+            }
+          }, 0);
+          
+          // Jeśli mamy niestandardowy zakres dat, przejdź do daty początkowej
+          if (customDateRange) {
+            calendarApi.gotoDate(startDate);
+            
+            // Pobierz zadania dla ustawionego zakresu dat
+            fetchTasks({
+              startStr: startDate.toISOString(),
+              endStr: endDate.toISOString()
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Błąd podczas zmiany widoku:', error);
+        showError('Wystąpił błąd podczas zmiany widoku: ' + error.message);
       }
     }
+  };
+
+  // Obsługa zdarzenia FullCalendar datesSet - wywołuje się przy zmianie wyświetlanego zakresu dat
+  const handleDatesSet = (dateInfo) => {
+    // Jeśli nie mamy niestandardowego zakresu, po prostu pobierz zadania dla widocznego zakresu
+    if (!customDateRange) {
+      fetchTasks(dateInfo);
+    }
+    // Nie wykonuj żadnych innych operacji, które mogłyby zmieniać stan komponentu
+    // i powodować zapętlenie renderowania
   };
 
   const handleGanttMenuClick = (event) => {
@@ -129,18 +204,62 @@ const ProductionCalendar = () => {
   };
 
   const handleGanttViewChange = (newGanttView) => {
-    setGanttView(newGanttView);
-    setView(newGanttView);
-    handleGanttMenuClose();
+    try {
+      // Zamknij menu Gantta
+      handleGanttMenuClose();
+      
+      // Aktualizuj stan widoku Gantta i ogólnego widoku
+      setGanttView(newGanttView);
+      setView(newGanttView);
+      
+      // Aktualizuj również poziom szczegółowości na podstawie wybranego widoku
+      if (newGanttView === 'resourceTimelineDay') {
+        setGanttDetail('hour');
+      } else if (newGanttView === 'resourceTimelineWeek' || newGanttView === 'resourceTimelineMonth') {
+        setGanttDetail('day');
+      } else if (newGanttView === 'resourceTimelineYear') {
+        setGanttDetail('week');
+      }
+      
+      // Jeśli mamy referencję do kalendarza, zaktualizuj widok
+      if (calendarRef.current) {
+        const calendarApi = calendarRef.current.getApi();
+        
+        // Daj czas na aktualizację stanu
+        setTimeout(() => {
+          try {
+            calendarApi.changeView(newGanttView);
+          } catch (error) {
+            console.error('Błąd podczas zmiany widoku Gantta:', error);
+          }
+        }, 0);
+        
+        // Jeśli mamy niestandardowy zakres dat, przejdź do daty początkowej
+        if (customDateRange) {
+          calendarApi.gotoDate(startDate);
+          
+          // Pobierz zadania dla ustawionego zakresu dat
+          fetchTasks({
+            startStr: startDate.toISOString(),
+            endStr: endDate.toISOString()
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Błąd podczas zmiany widoku Gantta:', error);
+      showError('Wystąpił błąd podczas zmiany widoku: ' + error.message);
+    }
   };
 
+  // Obsługa kliknięcia w zdarzenie
   const handleEventClick = (info) => {
     navigate(`/production/tasks/${info.event.id}`);
   };
 
+  // Funkcja obsługująca kliknięcie w pusty obszar kalendarza - została wyłączona
   const handleDateClick = (info) => {
-    // Można dodać funkcjonalność tworzenia nowego zadania na kliknięty dzień
-    navigate(`/production/new-task?date=${info.dateStr}`);
+    // Funkcjonalność dodawania nowego zadania została wyłączona
+    // navigate(`/production/new-task?date=${info.dateStr}`);
   };
   
   const handleFilterMenuClick = (event) => {
@@ -182,10 +301,18 @@ const ProductionCalendar = () => {
   };
   
   const getTaskColor = (task) => {
-    if (useWorkstationColors && task.workstationId && workstations.find(w => w.id === task.workstationId)?.color) {
-      return workstations.find(w => w.id === task.workstationId)?.color;
+    // Sprawdź, czy używamy kolorów stanowisk
+    if (useWorkstationColors) {
+      // Jeśli zadanie ma przypisane stanowisko i stanowisko ma określony kolor
+      if (task.workstationId && workstations.find(w => w.id === task.workstationId)?.color) {
+        return workstations.find(w => w.id === task.workstationId)?.color;
+      }
+      // Jeśli zadanie nie ma przypisanego stanowiska lub stanowisko nie ma określonego koloru,
+      // to i tak użyj koloru statusu, a nie domyślnego szarego
+      return getStatusColor(task.status);
     }
     
+    // Jeśli nie używamy kolorów stanowisk, użyj koloru statusu
     return getStatusColor(task.status);
   };
 
@@ -254,7 +381,11 @@ const ProductionCalendar = () => {
           workstationId: task.workstationId,
           resourceId: task.id // Używamy ID zadania jako resourceId dla wykresu Gantta
         },
-        resourceId: task.id // Dla widoku resourceTimeline - używamy ID zadania
+        resourceId: task.id, // Dla widoku resourceTimeline - używamy ID zadania
+        editable: canEditTask(task), // Określa, czy konkretne zadanie może być edytowane
+        durationEditable: canEditTask(task), // Określa, czy czas trwania może być zmieniony
+        startEditable: canEditTask(task), // Określa, czy data rozpoczęcia może być zmieniona
+        resizableFromStart: eventResizableFromStart && canEditTask(task) // Rozciąganie od początku
       };
     });
   };
@@ -394,6 +525,30 @@ const ProductionCalendar = () => {
       
       console.log('Inicjalizacja kalendarza - zakres dat:', viewStart, viewEnd);
       
+      // Sprawdź, czy to widok Gantta
+      if (view.startsWith('resourceTimeline')) {
+        // Ustaw odpowiedni widok Gantta w zależności od liczby dni
+        const diffInDays = Math.ceil((viewEnd - viewStart) / (1000 * 60 * 60 * 24));
+        
+        let ganttViewToUse = 'resourceTimelineWeek';
+        if (diffInDays <= 1) {
+          ganttViewToUse = 'resourceTimelineDay';
+        } else if (diffInDays <= 7) {
+          ganttViewToUse = 'resourceTimelineWeek';
+        } else if (diffInDays <= 31) {
+          ganttViewToUse = 'resourceTimelineMonth';
+        } else {
+          ganttViewToUse = 'resourceTimelineYear';
+        }
+        
+        // Zmień widok jeśli potrzeba
+        if (ganttViewToUse !== view) {
+          setGanttView(ganttViewToUse);
+          setView(ganttViewToUse);
+          calendarApi.changeView(ganttViewToUse);
+        }
+      }
+      
       // Ręczne wywołanie pobrania zadań
       const fetchInitialTasks = async () => {
         try {
@@ -459,41 +614,335 @@ const ProductionCalendar = () => {
         return;
     }
     
-    setStartDate(newStartDate);
-    setEndDate(newEndDate);
-    setCustomDateRange(true);
-    
-    if (calendarRef.current) {
-      const calendarApi = calendarRef.current.getApi();
-      calendarApi.gotoDate(newStartDate);
+    try {
+      // Najpierw zamknij menu
+      handleDateRangeMenuClose();
       
-      fetchTasks({
-        startStr: newStartDate.toISOString(),
-        endStr: newEndDate.toISOString()
-      });
+      // Aktualizuj stany dat
+      setStartDate(newStartDate);
+      setEndDate(newEndDate);
+      
+      if (calendarRef.current) {
+        const calendarApi = calendarRef.current.getApi();
+        
+        // Oblicz różnicę między datami w dniach
+        const diffInDays = Math.ceil((newEndDate - newStartDate) / (1000 * 60 * 60 * 24));
+        
+        // Wybierz odpowiedni widok na podstawie różnicy w dniach
+        let viewToUse = view;
+        if (view.startsWith('resourceTimeline')) {
+          if (diffInDays <= 1) {
+            viewToUse = 'resourceTimelineDay';
+          } else if (diffInDays <= 7) {
+            viewToUse = 'resourceTimelineWeek';
+          } else if (diffInDays <= 31) {
+            viewToUse = 'resourceTimelineMonth';
+          } else {
+            viewToUse = 'resourceTimelineYear';
+          }
+          
+          // Tylko jeśli widok się zmienił, aktualizuj stan
+          if (viewToUse !== view) {
+            setGanttView(viewToUse);
+            setView(viewToUse);
+            
+            // Daj czas na zaktualizowanie stanu przed zmianą widoku
+            setTimeout(() => {
+              try {
+                calendarApi.changeView(viewToUse);
+              } catch (error) {
+                console.error('Błąd podczas zmiany widoku kalendarza:', error);
+              }
+            }, 0);
+          }
+        }
+        
+        // Przejdź do daty początkowej
+        calendarApi.gotoDate(newStartDate);
+        
+        // Pobierz zadania dla wybranego zakresu
+        fetchTasks({
+          startStr: newStartDate.toISOString(),
+          endStr: newEndDate.toISOString()
+        });
+      }
+      
+      // Ustaw customDateRange jako ostatni krok
+      setCustomDateRange(true);
+    } catch (error) {
+      console.error('Błąd podczas stosowania zakresu dat:', error);
+      showError('Wystąpił błąd podczas zmiany zakresu dat: ' + error.message);
     }
-    
-    handleDateRangeMenuClose();
   };
 
   const applyCustomDateRange = () => {
-    if (calendarRef.current) {
-      const calendarApi = calendarRef.current.getApi();
-      calendarApi.gotoDate(startDate);
+    try {
+      // Najpierw zamknij menu
+      handleDateRangeMenuClose();
       
-      if (view.startsWith('resourceTimeline')) {
+      if (calendarRef.current) {
+        const calendarApi = calendarRef.current.getApi();
+        
+        // Oblicz różnicę między datami w dniach
+        const diffInDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+        
+        // Wybierz odpowiedni widok na podstawie różnicy w dniach
+        let viewToUse = view;
+        if (view.startsWith('resourceTimeline')) {
+          if (diffInDays <= 7) {
+            viewToUse = 'resourceTimelineWeek';
+          } else if (diffInDays <= 31) {
+            viewToUse = 'resourceTimelineMonth';
+          } else {
+            viewToUse = 'resourceTimelineYear';
+          }
+          
+          // Tylko jeśli widok się zmienił, aktualizuj stan
+          if (viewToUse !== view) {
+            setGanttView(viewToUse);
+            setView(viewToUse);
+            
+            // Daj czas na zaktualizowanie stanu przed zmianą widoku
+            setTimeout(() => {
+              try {
+                calendarApi.changeView(viewToUse);
+              } catch (error) {
+                console.error('Błąd podczas zmiany widoku kalendarza:', error);
+              }
+            }, 0);
+          }
+        }
+        
+        // Przejdź do daty początkowej
+        calendarApi.gotoDate(startDate);
+        
+        // Pobierz zadania dla wybranego zakresu
         fetchTasks({
           startStr: startDate.toISOString(),
           endStr: endDate.toISOString()
         });
-      } else {
-        calendarApi.gotoDate(startDate);
+      }
+      
+      // Ustaw customDateRange jako ostatni krok
+      setCustomDateRange(true);
+    } catch (error) {
+      console.error('Błąd podczas stosowania niestandardowego zakresu dat:', error);
+      showError('Wystąpił błąd podczas zmiany zakresu dat: ' + error.message);
+    }
+  };
+
+  // Obsługa przeciągnięcia wydarzenia (zmiana daty/czasu)
+  const handleEventDrop = async (info) => {
+    try {
+      setLoading(true);
+      const { event } = info;
+      const taskId = event.id;
+      
+      // Przygotowanie danych do aktualizacji
+      const updateData = {
+        scheduledDate: event.start,
+        endDate: event.end
+      };
+      
+      console.log(`Zadanie przeciągnięte: ${taskId}`, updateData);
+      
+      // Aktualizacja zadania w bazie danych
+      await updateTask(taskId, updateData, 'system');
+      showSuccess('Zadanie zostało zaktualizowane pomyślnie');
+      
+      // Odświeżenie widoku
+      fetchTasks({
+        startStr: calendarRef.current.getApi().view.activeStart.toISOString(),
+        endStr: calendarRef.current.getApi().view.activeEnd.toISOString()
+      });
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji zadania:', error);
+      showError('Błąd podczas aktualizacji zadania: ' + error.message);
+      info.revert(); // Cofnij zmianę wizualnie
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Obsługa przełącznika dla opcji zmiany rozmiaru od początku
+  const handleResizableFromStartToggle = (event) => {
+    setEventResizableFromStart(event.target.checked);
+  };
+
+  // Obsługa zmiany rozmiaru wydarzenia od początku (gdy eventResizableFromStart jest true)
+  const handleEventResize = async (info) => {
+    try {
+      setLoading(true);
+      const { event } = info;
+      const taskId = event.id;
+      
+      // Przygotowanie danych do aktualizacji
+      const updateData = {
+        endDate: event.end
+      };
+      
+      // Jeśli rozciąganie od początku jest włączone i zmienił się początek wydarzenia
+      if (eventResizableFromStart && info.startDelta && (info.startDelta.days !== 0 || info.startDelta.milliseconds !== 0)) {
+        updateData.scheduledDate = event.start;
+      }
+      
+      console.log(`Zmieniono rozmiar zadania: ${taskId}`, updateData);
+      
+      // Aktualizacja zadania w bazie danych
+      await updateTask(taskId, updateData, 'system');
+      showSuccess('Czas trwania zadania został zaktualizowany pomyślnie');
+      
+      // Odświeżenie widoku
+      fetchTasks({
+        startStr: calendarRef.current.getApi().view.activeStart.toISOString(),
+        endStr: calendarRef.current.getApi().view.activeEnd.toISOString()
+      });
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji czasu trwania zadania:', error);
+      showError('Błąd podczas aktualizacji zadania: ' + error.message);
+      info.revert(); // Cofnij zmianę wizualnie
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Funkcja pomocnicza określająca, czy zadanie może być edytowane
+  const canEditTask = (task) => {
+    // Sprawdź czy zadanie ma status, który pozwala na edycję
+    // Na przykład, nie pozwalaj na edycję zakończonych lub anulowanych zadań
+    return task.status !== 'Zakończone' && task.status !== 'Anulowane';
+  };
+
+  // Obsługa kliknięcia w przełącznik edycji
+  const handleEditableToggle = (event) => {
+    setEditable(event.target.checked);
+  };
+
+  // Funkcja do obsługi nawigacji kalendarza (prev, next, today buttons)
+  const handleNavigation = (action) => {
+    if (calendarRef.current) {
+      const calendarApi = calendarRef.current.getApi();
+      
+      // Jeśli mamy niestandardowy zakres dat, wyłącz niestandardowy zakres
+      // aby kalendarz funkcjonował normalnie
+      if (customDateRange) {
+        setCustomDateRange(false);
+        
+        // Przypisujemy nowe daty do startDate i endDate na podstawie aktualnego widoku
+        const currentViewStart = calendarApi.view.currentStart;
+        const currentViewEnd = calendarApi.view.currentEnd;
+        setStartDate(currentViewStart);
+        setEndDate(currentViewEnd);
+      }
+      
+      // Wykonaj akcję nawigacji
+      if (action === 'prev') {
+        calendarApi.prev();
+      } else if (action === 'next') {
+        calendarApi.next();
+      } else if (action === 'today') {
+        calendarApi.today();
       }
     }
+  };
+
+  // Aktualizacja tytułu kalendarza na podstawie zakresu dat
+  const getCalendarTitle = () => {
+    if (calendarRef.current) {
+      try {
+        return calendarRef.current.getApi().view.title;
+      } catch (error) {
+        console.error('Błąd podczas pobierania tytułu kalendarza:', error);
+        return customDateRange 
+          ? `${format(startDate, 'dd.MM.yyyy')} - ${format(endDate, 'dd.MM.yyyy')}`
+          : '31 mar – 6 kwi 2025';
+      }
+    } else {
+      return customDateRange 
+        ? `${format(startDate, 'dd.MM.yyyy')} - ${format(endDate, 'dd.MM.yyyy')}`
+        : '31 mar – 6 kwi 2025';
+    }
+  };
+
+  // Prostszy efekt do aktualizacji kalendarza po zmianie zakresu dat
+  useEffect(() => {
+    if (customDateRange && calendarRef.current) {
+      try {
+        // Pobierz zadania dla wybranego zakresu
+        fetchTasks({
+          startStr: startDate.toISOString(),
+          endStr: endDate.toISOString()
+        });
+      } catch (error) {
+        console.error('Błąd podczas aktualizacji kalendarza:', error);
+        showError('Błąd podczas aktualizacji widoku kalendarza: ' + error.message);
+      }
+    }
+  }, [customDateRange]);
+
+  const handleDetailMenuClick = (event) => {
+    setDetailMenuAnchor(event.currentTarget);
+  };
+
+  const handleDetailMenuClose = () => {
+    setDetailMenuAnchor(null);
+  };
+
+  const handleGanttDetailChange = (detail) => {
+    setGanttDetail(detail);
+    handleDetailMenuClose();
     
-    setCustomDateRange(true);
-    
-    handleDateRangeMenuClose();
+    if (calendarRef.current) {
+      try {
+        const calendarApi = calendarRef.current.getApi();
+        
+        // Dostosuj widok Gantta do wybranej szczegółowości
+        let viewToUse = ganttView;
+        
+        // Aktualizuj widok odpowiednio do wybranej szczegółowości
+        if (detail === 'hour') {
+          // Dla widoku godzinowego używamy widoku dnia z podziałem na godziny
+          viewToUse = 'resourceTimelineDay';
+        } else if (detail === 'day') {
+          // Dla widoku dziennego używamy widoku tygodnia lub miesiąca,
+          // w zależności od długości wybranego zakresu dat
+          const diffInDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+          if (diffInDays <= 7) {
+            viewToUse = 'resourceTimelineWeek';
+          } else {
+            viewToUse = 'resourceTimelineMonth';
+          }
+        } else if (detail === 'week') {
+          // Dla widoku tygodniowego używamy widoku miesiąca lub roku
+          viewToUse = 'resourceTimelineYear';
+        }
+        
+        // Aktualizuj stany tylko jeśli widok się zmienił
+        if (viewToUse !== view) {
+          setGanttView(viewToUse);
+          setView(viewToUse);
+          
+          // Daj czas na aktualizację stanu
+          setTimeout(() => {
+            try {
+              calendarApi.changeView(viewToUse);
+              
+              // Pobierz zadania dla aktualnie widocznego zakresu
+              fetchTasks({
+                startStr: calendarApi.view.activeStart.toISOString(),
+                endStr: calendarApi.view.activeEnd.toISOString()
+              });
+            } catch (error) {
+              console.error('Błąd podczas zmiany szczegółowości widoku:', error);
+              showError('Wystąpił błąd podczas zmiany widoku: ' + error.message);
+            }
+          }, 0);
+        }
+      } catch (error) {
+        console.error('Błąd podczas zmiany szczegółowości widoku:', error);
+        showError('Wystąpił błąd podczas zmiany widoku: ' + error.message);
+      }
+    }
   };
 
   return (
@@ -627,6 +1076,69 @@ const ProductionCalendar = () => {
             sx={{ mr: 1 }}
           />
           
+          <FormControlLabel
+            control={
+              <Switch
+                checked={editable}
+                onChange={handleEditableToggle}
+                color="primary"
+              />
+            }
+            label="Tryb edycji"
+            sx={{ mr: 1 }}
+          />
+          
+          {view.startsWith('resourceTimeline') && (
+            <>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={eventResizableFromStart}
+                    onChange={handleResizableFromStartToggle}
+                    color="primary"
+                    disabled={!editable}
+                  />
+                }
+                label="Rozciąganie od początku"
+                sx={{ mr: 1 }}
+              />
+              
+              <Button
+                variant="outlined"
+                onClick={handleDetailMenuClick}
+                sx={{ mr: 1 }}
+                size="small"
+              >
+                Szczegółowość: {ganttDetail === 'hour' ? 'Godzina' : ganttDetail === 'day' ? 'Dzień' : 'Tydzień'}
+              </Button>
+              
+              <Menu
+                anchorEl={detailMenuAnchor}
+                open={Boolean(detailMenuAnchor)}
+                onClose={handleDetailMenuClose}
+              >
+                <MenuItem 
+                  onClick={() => handleGanttDetailChange('hour')}
+                  selected={ganttDetail === 'hour'}
+                >
+                  Godzina
+                </MenuItem>
+                <MenuItem 
+                  onClick={() => handleGanttDetailChange('day')}
+                  selected={ganttDetail === 'day'}
+                >
+                  Dzień
+                </MenuItem>
+                <MenuItem 
+                  onClick={() => handleGanttDetailChange('week')}
+                  selected={ganttDetail === 'week'}
+                >
+                  Tydzień
+                </MenuItem>
+              </Menu>
+            </>
+          )}
+          
           <Button
             variant="outlined"
             startIcon={<FilterListIcon />}
@@ -672,15 +1184,6 @@ const ProductionCalendar = () => {
               </Tooltip>
             </ToggleButton>
           </ToggleButtonGroup>
-          
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AddIcon />}
-            onClick={() => navigate('/production/new-task')}
-          >
-            Nowe zadanie
-          </Button>
         </Box>
       </Box>
       
@@ -729,8 +1232,40 @@ const ProductionCalendar = () => {
         position: 'relative', 
         minHeight: 0,
         width: '100%',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column'
       }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <Button 
+            variant="outlined" 
+            size="small" 
+            onClick={() => handleNavigation('prev')}
+            sx={{ minWidth: 40, px: 1 }}
+          >
+            &lt;
+          </Button>
+          <Button 
+            variant="outlined" 
+            size="small" 
+            onClick={() => handleNavigation('next')}
+            sx={{ minWidth: 40, px: 1, mx: 1 }}
+          >
+            &gt;
+          </Button>
+          <Button 
+            variant="outlined" 
+            size="small" 
+            onClick={() => handleNavigation('today')}
+            sx={{ mx: 1 }}
+          >
+            Dziś
+          </Button>
+          
+          <Typography variant="h6" sx={{ flexGrow: 1, textAlign: 'center' }}>
+            {getCalendarTitle()}
+          </Typography>
+        </Box>
         <style>
           {`
             .fc-scrollgrid-section-header {
@@ -784,6 +1319,61 @@ const ProductionCalendar = () => {
             .fc-timeline-lane-frame {
               border-bottom: 1px solid #ddd;
             }
+            .fc-timeline-slot-label {
+              text-transform: capitalize;
+            }
+            .fc-timeline-slot-label-frame {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+            }
+            .fc-timeline-slot-label-cushion {
+              font-weight: bold;
+            }
+            
+            /* Style dla różnych poziomów szczegółowości */
+            .fc-resourceTimelineDay-view .fc-timeline-slot-label-frame {
+              padding: 2px 0;
+            }
+            
+            .fc-resourceTimelineWeek-view .fc-timeline-slot-label-frame,
+            .fc-resourceTimelineMonth-view .fc-timeline-slot-label-frame {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              padding: 4px 0;
+            }
+            
+            .fc-resourceTimelineYear-view .fc-timeline-slot-label-frame {
+              padding: 4px 0;
+            }
+            
+            /* Usunięcie duplikowanych nagłówków kolumn/sekcji */
+            .fc-col-header, .fc-scrollgrid-section-header th[role="columnheader"] {
+              display: none;
+            }
+            
+            /* Wyjątek dla pierwszego nagłówka */
+            .fc-col-header-cell:first-child, 
+            .fc-scrollgrid-section-header th[role="columnheader"]:first-child {
+              display: table-cell;
+            }
+            
+            /* Zwiększenie szerokości dla kolumn dnia */
+            .fc-resourceTimelineMonth-view .fc-timeline-slot {
+              min-width: 60px !important;
+            }
+            
+            /* Style dla widoku godzinowego */
+            .fc-resourceTimelineDay-view .fc-timeline-slot {
+              min-width: 80px !important;
+            }
+
+            .fc-resourceTimelineDay-view .fc-timeline-slot-label-cushion {
+              font-size: 12px;
+            }
+            
             .fc-day-sat .fc-timeline-slot-label-frame, 
             .fc-day-sun .fc-timeline-slot-label-frame {
               background-color: #f5f5f5;
@@ -805,24 +1395,53 @@ const ProductionCalendar = () => {
               border-color: #f44336;
               color: #f44336;
             }
+            .fc-event {
+              cursor: pointer;
+            }
+            .fc-event.task-completed {
+              opacity: 0.7;
+              cursor: default;
+            }
+            .fc-event-resizer {
+              display: block;
+              width: 8px;
+              height: 8px;
+            }
+            .fc-event-resizer-start {
+              left: -4px;
+            }
+            .fc-event-resizer-end {
+              right: -4px;
+            }
+            .fc-timeline-event .fc-event-resizer {
+              top: 0;
+              bottom: 0;
+              width: 8px;
+              height: 100%;
+            }
+            .fc-timeline-event .fc-event-resizer-start {
+              left: -4px;
+              cursor: w-resize;
+            }
+            .fc-timeline-event .fc-event-resizer-end {
+              right: -4px;
+              cursor: e-resize;
+            }
           `}
         </style>
         <FullCalendar
           ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, timelinePlugin, resourceTimelinePlugin]}
           initialView={view}
-          headerToolbar={{
-            left: 'prev,next today',
-            center: 'title',
-            right: ''
-          }}
+          headerToolbar={false}
           events={getCalendarEvents()}
           resources={getResources()}
           resourceLabelText="Zadania"
           eventContent={renderEventContent}
           eventClick={handleEventClick}
-          dateClick={handleDateClick}
-          datesSet={customDateRange ? null : fetchTasks}
+          dateClick={null}
+          selectable={false}
+          datesSet={handleDatesSet}
           locale={plLocale}
           height="100%"
           allDaySlot={true}
@@ -838,6 +1457,16 @@ const ProductionCalendar = () => {
           nowIndicator={true}
           schedulerLicenseKey="GPL-My-Project-Is-Open-Source"
           resourceAreaWidth={view.startsWith('resourceTimeline') ? '30%' : '20%'}
+          editable={editable}
+          eventDurationEditable={editable}
+          eventStartEditable={editable}
+          eventResourceEditable={false}
+          eventResizableFromStart={eventResizableFromStart}
+          droppable={editable}
+          eventDrop={handleEventDrop}
+          eventResize={handleEventResize}
+          eventOverlap={false}
+          snapDuration="00:15:00"
           slotLabelFormat={{
             hour: '2-digit',
             minute: '2-digit',
@@ -861,6 +1490,56 @@ const ProductionCalendar = () => {
             day: 'numeric',
             month: 'numeric'
           }}
+          titleFormat={{ 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+          }}
+          slotLabelContent={(args) => {
+            if (view.startsWith('resourceTimeline')) {
+              const date = args.date;
+              
+              // Dla widoku dziennego (godziny)
+              if (view === 'resourceTimelineDay') {
+                const hour = date.getHours();
+                const minute = date.getMinutes();
+                return (
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                      {`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`}
+                    </Typography>
+                  </Box>
+                );
+              }
+              
+              // Dla widoku tygodniowego (dni)
+              if (view === 'resourceTimelineWeek' || view === 'resourceTimelineMonth') {
+                const weekday = new Intl.DateTimeFormat('pl', { weekday: 'short' }).format(date);
+                const day = date.getDate();
+                return (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{day}</Typography>
+                    <Typography variant="caption" sx={{ textTransform: 'uppercase' }}>{weekday}</Typography>
+                  </Box>
+                );
+              }
+              
+              // Dla widoku rocznego (tygodnie/miesiące)
+              if (view === 'resourceTimelineYear') {
+                if (date.getDate() === 1 || args.isLabeled) {
+                  const month = new Intl.DateTimeFormat('pl', { month: 'short' }).format(date);
+                  return (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{month}</Typography>
+                      <Typography variant="caption">{date.getDate()}</Typography>
+                    </Box>
+                  );
+                }
+                return null;
+              }
+            }
+            return null;
+          }}
           views={{
             timeGridDay: {
               dayHeaderFormat: { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }
@@ -880,24 +1559,43 @@ const ProductionCalendar = () => {
             },
             resourceTimelineDay: {
               slotLabelFormat: [
-                { month: 'long', day: 'numeric' },
                 { hour: '2-digit', minute: '2-digit', hour12: false }
               ],
-              slotMinWidth: 100
+              slotMinWidth: 100,
+              slotDuration: { hours: 1 },
+              snapDuration: { minutes: 15 },
+              columnHeaderFormat: { weekday: 'long', day: 'numeric', month: 'long' },
+              headerToolbar: false // Wyłączenie domyślnego nagłówka
             },
             resourceTimelineWeek: {
               slotLabelFormat: [
-                { weekday: 'short', day: 'numeric' },
-                { hour: '2-digit', minute: '2-digit', hour12: false }
+                { weekday: 'short', day: 'numeric', month: 'short' }
               ],
-              slotMinWidth: 100
+              slotMinWidth: 100,
+              slotDuration: { days: 1 },
+              columnHeaderFormat: { weekday: 'short', day: 'numeric', month: 'short' },
+              headerToolbar: false // Wyłączenie domyślnego nagłówka
             },
             resourceTimelineMonth: {
-              slotLabelFormat: [
-                { day: 'numeric' },
-                { weekday: 'short' }
-              ],
-              slotMinWidth: 60
+              slotLabelFormat: {
+                weekday: 'short', 
+                day: 'numeric'
+              },
+              duration: { months: 1 },
+              slotMinWidth: 60,
+              slotDuration: { days: 1 },
+              columnHeaderFormat: { weekday: 'short', day: 'numeric' },
+              headerToolbar: false // Wyłączenie domyślnego nagłówka
+            },
+            resourceTimelineYear: {
+              slotLabelFormat: {
+                month: 'short',
+                day: 'numeric'
+              },
+              slotMinWidth: 40,
+              slotDuration: { weeks: 1 },
+              columnHeaderFormat: { month: 'long' },
+              headerToolbar: false // Wyłączenie domyślnego nagłówka
             }
           }}
         />

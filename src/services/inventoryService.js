@@ -1091,6 +1091,27 @@ import {
   // Bookowanie produktu na zadanie produkcyjne
   export const bookInventoryForTask = async (itemId, quantity, taskId, userId, reservationMethod = 'expiry', batchId = null) => {
     try {
+      console.log(`[DEBUG] Rozpoczynam rezerwację dla itemId=${itemId}, quantity=${quantity}, taskId=${taskId}, method=${reservationMethod}, batchId=${batchId}`);
+      
+      // Sprawdź, czy ta partia jest już zarezerwowana dla tego zadania
+      if (batchId) {
+        const existingReservations = await getBatchReservations(batchId);
+        const alreadyReservedForTask = existingReservations.find(r => r.taskId === taskId);
+        
+        if (alreadyReservedForTask) {
+          console.log(`[DEBUG] Partia ${batchId} jest już zarezerwowana dla zadania ${taskId}. Pomijam ponowną rezerwację.`);
+          return {
+            success: true,
+            message: `Partia jest już zarezerwowana dla tego zadania`,
+            reservedBatches: [{
+              batchId: batchId,
+              quantity: alreadyReservedForTask.quantity,
+              batchNumber: alreadyReservedForTask.batchNumber || 'Bez numeru'
+            }]
+          };
+        }
+      }
+      
       // Sprawdź, czy pozycja magazynowa istnieje
       let item;
       try {
@@ -1304,6 +1325,9 @@ import {
       if (taskDoc.exists()) {
         const materialBatches = taskData.materialBatches || {};
         
+        console.log(`[DEBUG] Stan materialBatches przed aktualizacją:`, JSON.stringify(materialBatches));
+        console.log(`[DEBUG] Zarezerwowane partie:`, JSON.stringify(reservedBatches));
+        
         // Jeśli jest to ręczna rezerwacja pojedynczej partii, dodajemy do istniejących
         if (batchId && materialBatches[itemId]) {
           // Sprawdź czy ta partia już istnieje w liście
@@ -1321,10 +1345,22 @@ import {
           materialBatches[itemId] = reservedBatches;
         }
         
+        console.log(`[DEBUG] Stan materialBatches po aktualizacji:`, JSON.stringify(materialBatches));
+        
         await updateDoc(taskRef, {
           materialBatches,
           updatedAt: serverTimestamp()
         });
+        
+        console.log(`[DEBUG] Zaktualizowano zadanie produkcyjne z nowymi partiami`);
+      }
+      
+      // Upewnij się, że wszystkie zarezerwowane partie mają numery
+      for (let i = 0; i < reservedBatches.length; i++) {
+        if (!reservedBatches[i].batchNumber) {
+          // Jeśli batchNumber nie istnieje, użyj lotNumber lub wygeneruj numer na podstawie ID
+          reservedBatches[i].batchNumber = reservedBatches[i].lotNumber || `Partia ${reservedBatches[i].batchId.substring(0, 6)}`;
+        }
       }
       
       // Utwórz nazwę użytkownika (jeśli dostępna)
@@ -3200,5 +3236,95 @@ import {
     } catch (error) {
       console.error('Błąd podczas usuwania rezerwacji:', error);
       throw error;
+    }
+  };
+
+  // Funkcja do usuwania wszystkich rezerwacji związanych z konkretnym zadaniem
+  export const cleanupTaskReservations = async (taskId) => {
+    try {
+      console.log(`Rozpoczynam czyszczenie rezerwacji dla zadania ${taskId}...`);
+      
+      // Pobierz wszystkie rezerwacje (transakcje booking) dla tego zadania
+      const transactionsRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
+      const q = query(
+        transactionsRef,
+        where('type', '==', 'booking'),
+        where('referenceId', '==', taskId)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const reservations = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      if (reservations.length === 0) {
+        console.log(`Nie znaleziono rezerwacji dla zadania ${taskId}`);
+        return { success: true, message: 'Brak rezerwacji do wyczyszczenia', count: 0 };
+      }
+      
+      const deletedReservations = [];
+      const errors = [];
+      
+      // Dla każdej rezerwacji z zadaniem
+      for (const reservation of reservations) {
+        try {
+          // Pobierz informacje o produkcie
+          const itemId = reservation.itemId;
+          const quantity = reservation.quantity;
+          
+          if (itemId) {
+            // Zaktualizuj stan magazynowy - zmniejsz ilość zarezerwowaną
+            const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
+            const itemDoc = await getDoc(itemRef);
+            
+            if (itemDoc.exists()) {
+              const itemData = itemDoc.data();
+              const bookedQuantity = itemData.bookedQuantity || 0;
+              
+              // Oblicz nową wartość bookedQuantity (nie może być ujemna)
+              const newBookedQuantity = Math.max(0, bookedQuantity - quantity);
+              
+              // Aktualizuj pozycję magazynową
+              await updateDoc(itemRef, {
+                bookedQuantity: newBookedQuantity,
+                updatedAt: serverTimestamp()
+              });
+              
+              console.log(`Zaktualizowano bookedQuantity dla ${itemId}: ${bookedQuantity} -> ${newBookedQuantity}`);
+            }
+          }
+          
+          // Usuń rezerwację
+          const reservationRef = doc(db, INVENTORY_TRANSACTIONS_COLLECTION, reservation.id);
+          await deleteDoc(reservationRef);
+          
+          console.log(`Usunięto rezerwację ${reservation.id} dla zadania ${taskId}`);
+          deletedReservations.push(reservation);
+        } catch (error) {
+          console.error(`Błąd podczas usuwania rezerwacji ${reservation.id}:`, error);
+          errors.push({
+            id: reservation.id,
+            error: error.message
+          });
+        }
+      }
+      
+      // Emituj zdarzenie o zmianie stanu magazynu
+      const event = new CustomEvent('inventory-updated', { 
+        detail: { action: 'cleanup-reservations' }
+      });
+      window.dispatchEvent(event);
+      
+      return {
+        success: true,
+        message: `Usunięto ${deletedReservations.length} rezerwacji dla zadania ${taskId}`,
+        count: deletedReservations.length,
+        deletedReservations,
+        errors
+      };
+    } catch (error) {
+      console.error(`Błąd podczas czyszczenia rezerwacji dla zadania ${taskId}:`, error);
+      throw new Error(`Błąd podczas czyszczenia rezerwacji: ${error.message}`);
     }
   };
