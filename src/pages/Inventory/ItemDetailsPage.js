@@ -43,7 +43,7 @@ import {
   FilterList as FilterIcon,
   Delete as DeleteIcon
 } from '@mui/icons-material';
-import { getInventoryItemById, getItemTransactions, getItemBatches, getSupplierPrices, deleteReservation, cleanupDeletedTaskReservations } from '../../services/inventoryService';
+import { getInventoryItemById, getItemTransactions, getItemBatches, getSupplierPrices, deleteReservation, cleanupDeletedTaskReservations, getReservationsGroupedByTask } from '../../services/inventoryService';
 import { getAllSuppliers } from '../../services/supplierService';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
@@ -213,72 +213,16 @@ const ItemDetailsPage = () => {
   // Funkcja do pobierania rezerwacji dla produktu
   const fetchReservations = async (itemData) => {
     try {
-      // Pobierz wszystkie transakcje dla danego przedmiotu
-      const transactions = await getItemTransactions(itemData.id);
+      // Pobierz zgrupowane rezerwacje zamiast pojedynczych transakcji
+      const groupedReservations = await getReservationsGroupedByTask(itemData.id);
       
-      // Filtruj tylko transakcje rezerwacji (typ 'booking')
-      let bookingTransactions = transactions.filter(
-        transaction => transaction.type === 'booking'
-      );
-      
-      // Lista zadań do sprawdzenia
-      const taskIds = bookingTransactions
-        .filter(transaction => transaction.referenceId)
-        .map(transaction => transaction.referenceId);
-      
-      // Sprawdź, czy rezerwacje mają powiązane partie w zadaniach produkcyjnych
-      const { db } = await import('../../services/firebase/config');
-      const { collection, query, where, getDocs } = await import('firebase/firestore');
-      
-      // Pobierz zadania produkcyjne związane z rezerwacjami
-      const tasksRef = collection(db, 'productionTasks');
-      const tasksQuery = query(tasksRef, where('__name__', 'in', taskIds.length > 0 ? taskIds : ['placeholder']));
-      const tasksSnapshot = await getDocs(tasksQuery);
-      
-      // Mapa zadań produkcyjnych
-      const tasksMap = {};
-      tasksSnapshot.forEach(doc => {
-        const taskData = doc.data();
-        tasksMap[doc.id] = taskData;
-      });
-      
-      // Uzupełnij informacje o rezerwacjach o dane z zadań produkcyjnych
-      bookingTransactions = bookingTransactions.map(reservation => {
-        const taskId = reservation.referenceId || reservation.taskId;
-        const task = tasksMap[taskId];
-        
-        // Utwórz tablicę przypisanych partii
-        let assignedBatches = [];
-        
-        // Jeśli zadanie istnieje i ma dane o przypisanych partiach
-        if (task && task.materialBatches && task.materialBatches[itemData.id]) {
-          // Pobierz wszystkie przypisane partie dla tego materiału
-          assignedBatches = task.materialBatches[itemData.id] || [];
-        }
-        
-        // Zachowaj istniejące wartości, jeśli task nie istnieje
-        const existingTaskName = reservation.taskName;
-        const existingTaskNumber = reservation.taskNumber || reservation.moNumber;
-        const existingClientName = reservation.clientName;
-        const existingClientId = reservation.clientId;
-        
-        return {
-          ...reservation,
-          // Dodaj dane zadania, preferując dane z zadania, ale zachowując istniejące wartości jako zapasowe
-          taskName: task ? task.name : existingTaskName,
-          taskNumber: task ? (task.number || task.moNumber) : existingTaskNumber,
-          clientName: task ? task.clientName : existingClientName,
-          clientId: task ? task.clientId : existingClientId,
-          // Dodaj informacje o przypisanych partiach
-          assignedBatches
-        };
-      });
+      console.log('Zgrupowane rezerwacje:', groupedReservations);
       
       // Ustaw rezerwacje
-      setReservations(bookingTransactions);
+      setReservations(groupedReservations);
       
       // Zastosuj filtrowanie i sortowanie
-      filterAndSortReservations(reservationFilter, sortField, sortOrder, bookingTransactions);
+      filterAndSortReservations(reservationFilter, sortField, sortOrder, groupedReservations);
     } catch (error) {
       console.error('Błąd podczas pobierania rezerwacji:', error);
       showError('Nie udało się pobrać listy rezerwacji');
@@ -306,11 +250,13 @@ const ItemDetailsPage = () => {
   const filterAndSortReservations = (filterValue, field, order, data = reservations) => {
     let filtered = [...data];
     
-    // Filtrowanie
+    // Filtrowanie - w nowej strukturze nie mamy pola fulfilled, więc pomijamy filtrowanie
     if (filterValue === 'active') {
-      filtered = filtered.filter(reservation => !reservation.fulfilled);
+      // Wszystkie rezerwacje są aktywne w nowej strukturze
+      filtered = filtered;
     } else if (filterValue === 'fulfilled') {
-      filtered = filtered.filter(reservation => reservation.fulfilled);
+      // Nie mamy zrealizowanych rezerwacji w nowej strukturze
+      filtered = [];
     }
     
     // Sortowanie
@@ -322,8 +268,9 @@ const ItemDetailsPage = () => {
         valueA = new Date(a.createdAt?.seconds ? a.createdAt.toDate() : a.createdAt).getTime();
         valueB = new Date(b.createdAt?.seconds ? b.createdAt.toDate() : b.createdAt).getTime();
       } else if (field === 'quantity') {
-        valueA = a.quantity;
-        valueB = b.quantity;
+        // W nowej strukturze mamy totalQuantity zamiast quantity
+        valueA = a.totalQuantity;
+        valueB = b.totalQuantity;
       } else {
         valueA = a[field] || '';
         valueB = b[field] || '';
@@ -343,21 +290,43 @@ const ItemDetailsPage = () => {
   };
 
   // Funkcja do usuwania rezerwacji
-  const handleDeleteReservation = async (reservationId) => {
+  const handleDeleteReservation = async (taskId) => {
     if (!window.confirm('Czy na pewno chcesz usunąć tę rezerwację? Ta operacja jest nieodwracalna.')) {
       return;
     }
     
     try {
-      const { success, message } = await deleteReservation(reservationId, currentUser.uid);
+      let success = true;
+      let allMessage = '';
+      
+      // Pobierz aktualną rezerwację
+      const reservation = reservations.find(r => r.taskId === taskId);
+      
+      if (reservation && reservation.batches && reservation.batches.length > 0) {
+        // Usuń wszystkie rezerwacje dla wszystkich partii
+        for (const batch of reservation.batches) {
+          try {
+            const result = await deleteReservation(batch.reservationId, currentUser.uid);
+            if (!result.success) {
+              success = false;
+              allMessage += result.message + '; ';
+            }
+          } catch (error) {
+            console.error(`Błąd podczas usuwania rezerwacji partii ${batch.batchNumber}:`, error);
+            success = false;
+            allMessage += error.message + '; ';
+          }
+        }
+      }
       
       if (success) {
-        showSuccess(message || 'Rezerwacja została usunięta');
-        // Odśwież dane
-        await fetchReservations(item);
+        showSuccess('Rezerwacja została usunięta');
       } else {
-        showError(message || 'Nie udało się usunąć rezerwacji');
+        showError(allMessage || 'Nie udało się usunąć wszystkich rezerwacji');
       }
+      
+      // Odśwież dane
+      await fetchReservations(item);
     } catch (error) {
       console.error('Błąd podczas usuwania rezerwacji:', error);
       showError(error.message || 'Wystąpił błąd podczas usuwania rezerwacji');
@@ -977,13 +946,13 @@ const ItemDetailsPage = () => {
                       new Date(reservation.createdAt);
                       
                     return (
-                      <TableRow key={reservation.id} hover>
+                      <TableRow key={reservation.taskId} hover>
                         <TableCell>
                           {formatDate(createdDate)}
                         </TableCell>
                         <TableCell>
                           <Typography fontWeight="bold">
-                            {reservation.quantity} {item.unit}
+                            {reservation.totalQuantity} {item.unit}
                           </Typography>
                         </TableCell>
                         <TableCell>
@@ -996,37 +965,38 @@ const ItemDetailsPage = () => {
                           {reservation.clientName || '—'}
                         </TableCell>
                         <TableCell>
-                          {reservation.assignedBatches && reservation.assignedBatches.length > 0 ? (
-                            <div>
-                              {reservation.assignedBatches.map((batch, index) => (
+                          {reservation.batches && reservation.batches.length > 0 ? (
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                              {reservation.batches.map((batch, index) => (
                                 <Chip 
                                   key={index}
-                                  label={`${batch.batchNumber || batch.batchId} (${batch.quantity} ${item.unit})`}
+                                  label={`${batch.batchNumber} (${batch.quantity} ${item.unit})`}
                                   size="small"
-                                  sx={{ m: 0.2 }}
+                                  color="info"
+                                  variant="outlined"
                                 />
                               ))}
-                            </div>
-                          ) : (
-                            reservation.batchNumber || reservation.batchId || '—'
-                          )}
+                            </Box>
+                          ) : '—'}
                         </TableCell>
                         <TableCell>
                           <Chip 
-                            label={reservation.fulfilled ? "Zrealizowana" : "Aktywna"} 
-                            color={reservation.fulfilled ? "success" : "primary"} 
+                            label="Aktywna"
+                            color="primary" 
                             size="small" 
                           />
                         </TableCell>
                         <TableCell>
-                          <IconButton 
-                            size="small" 
-                            color="error" 
-                            onClick={() => handleDeleteReservation(reservation.id)}
-                            aria-label="Usuń rezerwację"
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
+                          <Box>
+                            <IconButton 
+                              size="small" 
+                              color="error" 
+                              onClick={() => handleDeleteReservation(reservation.taskId)}
+                              aria-label="Usuń rezerwację"
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Box>
                         </TableCell>
                       </TableRow>
                     );

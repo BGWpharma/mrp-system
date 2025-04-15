@@ -150,6 +150,14 @@ const BatchesPage = () => {
       ? batch.expiryDate.toDate() 
       : new Date(batch.expiryDate);
     
+    // Sprawdź czy to domyślna data (rok 1970 lub wcześniejszy)
+    const isDefaultOrInvalidDate = expiryDate.getFullYear() <= 1970;
+    
+    // Jeśli to domyślna data, traktuj jak brak daty ważności
+    if (isDefaultOrInvalidDate) {
+      return { label: 'Aktualna', color: 'success' };
+    }
+    
     if (expiryDate < today) {
       return { label: 'Przeterminowana', color: 'error' };
     }
@@ -173,6 +181,10 @@ const BatchesPage = () => {
         ? batch.expiryDate.toDate() 
         : new Date(batch.expiryDate);
       
+      // Sprawdź czy to domyślna data (rok 1970 lub wcześniejszy)
+      const isDefaultOrInvalidDate = expiryDate.getFullYear() <= 1970;
+      if (isDefaultOrInvalidDate) return false; // Pomiń partie z domyślną datą
+      
       return expiryDate < new Date();
     }).length;
     
@@ -187,6 +199,10 @@ const BatchesPage = () => {
       const expiryDate = batch.expiryDate instanceof Timestamp 
         ? batch.expiryDate.toDate() 
         : new Date(batch.expiryDate);
+      
+      // Sprawdź czy to domyślna data (rok 1970 lub wcześniejszy)
+      const isDefaultOrInvalidDate = expiryDate.getFullYear() <= 1970;
+      if (isDefaultOrInvalidDate) return false; // Pomiń partie z domyślną datą
       
       return expiryDate >= today && expiryDate <= thirtyDaysFromNow;
     }).length;
@@ -453,7 +469,38 @@ const BatchesPage = () => {
                           {batch.batchNumber || batch.lotNumber || 'Brak numeru'}
                         </TableCell>
                         <TableCell>
-                          {formatDate(batch.expiryDate)}
+                          {(() => {
+                            // Jeśli brak daty ważności
+                            if (!batch.expiryDate) {
+                              return '—';
+                            }
+                            
+                            // Upewnij się, że batch.expiryDate to obiekt Date
+                            let expiryDate;
+                            try {
+                              expiryDate = batch.expiryDate instanceof Timestamp 
+                                ? batch.expiryDate.toDate() 
+                                : (batch.expiryDate instanceof Date 
+                                  ? batch.expiryDate 
+                                  : new Date(batch.expiryDate));
+                            } catch (e) {
+                              console.error("Błąd konwersji daty:", e);
+                              return '—';
+                            }
+                            
+                            // Sprawdź czy to domyślna/nieprawidłowa data (rok 1970 lub wcześniejszy)
+                            if (!expiryDate || expiryDate.getFullYear() <= 1970) {
+                              return '—';
+                            }
+                            
+                            // Użyj formatDate tylko dla prawidłowych dat
+                            try {
+                              return formatDate(expiryDate);
+                            } catch (e) {
+                              console.error("Błąd formatowania daty:", e);
+                              return '—';
+                            }
+                          })()}
                         </TableCell>
                         <TableCell>
                           {batch.warehouseAddress || batch.warehouseName}

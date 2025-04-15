@@ -1671,14 +1671,43 @@ import {
       const task = { id: taskDoc.id, ...taskDoc.data() };
       console.log("Pobrano zadanie:", task.moNumber || task.id);
       
-      // Sprawdź, czy materiały są już zarezerwowane dla tego zadania
-      if (task.materialsReserved) {
-        console.log(`[DEBUG] Materiały dla zadania ${taskId} są już zarezerwowane. Pomijam ponowną rezerwację.`);
+      // Sprawdź, czy istnieją nowe materiały, które nie są jeszcze zarezerwowane
+      const existingReservedMaterials = new Set();
+      
+      // Zbierz ID wszystkich już zarezerwowanych materiałów
+      if (task.materialBatches) {
+        Object.keys(task.materialBatches).forEach(materialId => {
+          existingReservedMaterials.add(materialId);
+        });
+      }
+      
+      // Sprawdź, czy są nowe materiały do zarezerwowania
+      let newMaterialsToReserve = [];
+      
+      if (task.requiredMaterials && task.requiredMaterials.length > 0) {
+        newMaterialsToReserve = task.requiredMaterials.filter(material => {
+          return material.id && !existingReservedMaterials.has(material.id);
+        });
+      } else if (task.materials && task.materials.length > 0) {
+        newMaterialsToReserve = task.materials.filter(material => {
+          const materialId = material.inventoryItemId || material.id;
+          return materialId && !existingReservedMaterials.has(materialId);
+        });
+      }
+      
+      // Sprawdź, czy materiały są już zarezerwowane dla tego zadania i nie ma nowych materiałów
+      if (task.materialsReserved && newMaterialsToReserve.length === 0) {
+        console.log(`[DEBUG] Materiały dla zadania ${taskId} są już zarezerwowane i nie ma nowych materiałów. Pomijam ponowną rezerwację.`);
         return {
           success: true,
           message: 'Materiały są już zarezerwowane dla tego zadania',
           reservedItems: []
         };
+      }
+      
+      // Jeśli są już zarezerwowane materiały, ale są też nowe do zarezerwowania
+      if (task.materialsReserved && newMaterialsToReserve.length > 0) {
+        console.log(`[DEBUG] Zadanie ma już zarezerwowane materiały, ale wykryto ${newMaterialsToReserve.length} nowych materiałów do zarezerwowania.`);
       }
       
       // Reszta kodu pozostaje bez zmian...
@@ -1724,6 +1753,12 @@ import {
 
       // Dla każdego wymaganego materiału
       for (const requiredMaterial of task.requiredMaterials) {
+        // Jeśli zadanie ma już zarezerwowane materiały i ten materiał jest już zarezerwowany, pomiń go
+        if (task.materialsReserved && existingReservedMaterials.has(requiredMaterial.id)) {
+          console.log(`Materiał ${requiredMaterial.name} jest już zarezerwowany, pomijam.`);
+          continue;
+        }
+        
         // Pomiń jeśli materiał jest już w pełni zarezerwowany
         const existingReservation = currentReservations.find(r => r.materialId === requiredMaterial.id);
         const alreadyReservedQty = existingReservation ? existingReservation.reservedQuantity : 0;
@@ -1903,19 +1938,36 @@ import {
       // Aktualizuj zadanie z informacjami o rezerwacjach
       console.log("[DEBUG] Aktualizacja zadania z rezerwacjami:", JSON.stringify(currentReservations));
       
-      // Przygotuj obiekt materialBatches na podstawie rezerwacji
-      let materialBatches = task.materialBatches || {};
-      console.log("[DEBUG] Stan materialBatches przed aktualizacją:", JSON.stringify(materialBatches));
+      // Przygotuj materialBatches do aktualizacji
+      let materialBatches = {};
       
-      // Pobieramy aktualny stan zadania, aby uzyskać najnowsze dane materialBatches
-      // które mogły zostać zaktualizowane przez funkcje bookInventoryForTask
-      const updatedTaskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
-      const updatedTaskDoc = await getDoc(updatedTaskRef);
-      if (updatedTaskDoc.exists()) {
-        const updatedTask = updatedTaskDoc.data();
-        if (updatedTask.materialBatches) {
-          materialBatches = updatedTask.materialBatches;
-          console.log("[DEBUG] Pobrano aktualny stan materialBatches z bazy danych:", JSON.stringify(materialBatches));
+      // Jeśli zadanie ma już zarezerwowane materiały, zachowaj istniejące rezerwacje partii
+      if (task.materialsReserved && task.materialBatches) {
+        materialBatches = { ...task.materialBatches };
+      }
+      
+      // Dodaj nowe rezerwacje partii
+      for (const item of reservedItems) {
+        if (item.batches && item.batches.length > 0) {
+          if (!materialBatches[item.materialId]) {
+            materialBatches[item.materialId] = [];
+          }
+          
+          // Dla każdej partii wybranej dla tego materiału
+          for (const batch of item.batches) {
+            // Dodaj partię do listy, tylko jeśli nie jest już dodana
+            const alreadyExists = materialBatches[item.materialId].some(
+              existing => existing.batchId === batch.batchId
+            );
+            
+            if (!alreadyExists) {
+              materialBatches[item.materialId].push({
+                batchId: batch.batchId,
+                quantity: batch.quantity,
+                batchNumber: batch.batchNumber
+              });
+            }
+          }
         }
       }
       
@@ -1938,10 +1990,15 @@ import {
       
       console.log("[DEBUG] Przygotowane materialBatches do aktualizacji:", JSON.stringify(materialBatches));
       
+      // Ustaw materialsReserved na true tylko jeśli wszystkie materiały zostały zarezerwowane
+      // lub jeśli było to już ustawione wcześniej
+      const allMaterialsReserved = task.materialsReserved || 
+        (task.requiredMaterials.length === reservedItems.length + existingReservedMaterials.size);
+      
       await updateDoc(taskRef, {
         materialReservations: currentReservations,
-        materialsReserved: reservationsSuccess,
-        reservationComplete: reservationsSuccess,
+        materialsReserved: allMaterialsReserved,
+        reservationComplete: allMaterialsReserved,
         materialBatches: materialBatches  // Dodajemy aktualizację materialBatches
       });
       

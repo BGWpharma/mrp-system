@@ -351,7 +351,7 @@ export const getPriceForCustomerProduct = async (customerId, productId, isRecipe
       // Znajdź pozycję dla danego produktu, uwzględniając czy to receptura czy nie
       const item = items.find(item => 
         item.productId === productId && 
-        !!item.isRecipe === !!isRecipe
+        (isRecipe === true ? !!item.isRecipe === true : true)
       );
       
       if (item) {

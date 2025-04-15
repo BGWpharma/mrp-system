@@ -592,16 +592,6 @@ const RecipeForm = ({ recipeId }) => {
               rows={2}
             />
           </Grid>
-          <Grid item xs={12}>
-            <TextField
-              label="Czas przygotowania (min)"
-              name="prepTime"
-              type="number"
-              value={recipeData.prepTime || ''}
-              onChange={handleChange}
-              fullWidth
-            />
-          </Grid>
           
           <Grid item xs={12} sm={6}>
             <TextField
@@ -640,19 +630,6 @@ const RecipeForm = ({ recipeId }) => {
             value="szt." 
           />
           
-          {recipeId && (
-            <Grid item xs={12}>
-              <Button 
-                variant="outlined" 
-                color="secondary" 
-                onClick={handleFixYield}
-                disabled={saving}
-                startIcon={<BuildIcon />}
-              >
-                Napraw wydajność
-              </Button>
-            </Grid>
-          )}
           <Grid item xs={12}>
             <FormControl fullWidth>
               <InputLabel>Status</InputLabel>
@@ -840,20 +817,6 @@ const RecipeForm = ({ recipeId }) => {
             Brak składników. Dodaj składniki ze stanów lub ręcznie.
           </Typography>
         )}
-      </Paper>
-
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>Notatki dodatkowe</Typography>
-        <Divider sx={{ mb: 2 }} />
-        <TextField
-          name="notes"
-          value={recipeData.notes || ''}
-          onChange={handleChange}
-          fullWidth
-          multiline
-          rows={3}
-          placeholder="Dodatkowe uwagi, alternatywne składniki, informacje o alergenach..."
-        />
       </Paper>
 
       <Dialog 

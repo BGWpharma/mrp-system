@@ -147,7 +147,7 @@ const CreateFromOrderPage = () => {
     const materials = recipe.ingredients.map(ingredient => ({
       id: ingredient.id || ingredient.inventoryItemId,
       name: ingredient.name,
-      quantity: parseFloat((ingredient.quantity * scaleFactor).toFixed(2)),
+      quantity: parseFloat((ingredient.quantity * scaleFactor).toFixed(10)),
       unit: ingredient.unit,
       inventoryItemId: ingredient.inventoryItemId || ingredient.id || null,
       notes: `Z receptury: ${recipe.name}`

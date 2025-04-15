@@ -210,8 +210,13 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
           transactionPayload.lotNumber = batchData.batchNumber;
           transactionPayload.batchNotes = batchData.batchNotes;
           
-          // Sprawdzenie terminu ważności
-          if (!batchData.noExpiryDate && batchData.expiryDate) {
+          // Obsługa daty ważności
+          if (batchData.noExpiryDate) {
+            // Jeśli zaznaczono "brak terminu ważności", nie ustawiamy pola expiryDate
+            // To spowoduje, że zostanie ono zapisane jako null w bazie danych
+            transactionPayload.noExpiryDate = true; // Dodatkowa flaga informująca o braku daty
+          } else if (batchData.expiryDate) {
+            // Tylko jeśli mamy faktyczną datę ważności, ustawiamy ją
             const expiryDate = new Date(batchData.expiryDate);
             transactionPayload.expiryDate = Timestamp.fromDate(expiryDate);
           }
@@ -605,6 +610,22 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
                       <MenuItem value="" disabled>Brak dostępnych partii</MenuItem>
                     ) : (
                       batches.map(batch => {
+                        // Sprawdź czy partia ma datę ważności
+                        if (!batch.expiryDate) {
+                          // Dla partii bez daty ważności
+                          return (
+                            <MenuItem 
+                              key={batch.id} 
+                              value={batch.id}
+                              disabled={batch.quantity < parseFloat(transactionData.quantity || 0)}
+                            >
+                              {batch.batchNumber ? `${batch.batchNumber} - ` : ''}
+                              Ilość: {batch.quantity} {item.unit} | 
+                              Bez daty ważności
+                            </MenuItem>
+                          );
+                        }
+                        
                         const expiryDate = batch.expiryDate instanceof Timestamp 
                           ? batch.expiryDate.toDate() 
                           : new Date(batch.expiryDate);

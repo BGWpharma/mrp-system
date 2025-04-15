@@ -132,6 +132,14 @@ const ExpiryDatesPage = () => {
       ? batch.expiryDate.toDate() 
       : new Date(batch.expiryDate);
     
+    // Sprawdź czy to domyślna data (z roku 1970 lub wcześniejszego)
+    const isDefaultOrInvalidDate = expiryDate.getFullYear() <= 1970;
+    
+    // Jeśli to domyślna data, traktuj jak brak daty ważności
+    if (isDefaultOrInvalidDate) {
+      return <Chip label="Brak daty" color="info" size="small" />;
+    }
+    
     const today = new Date();
     
     if (expiryDate < today) {

@@ -334,39 +334,32 @@ import {
   // Pobieranie partii dla danej pozycji magazynowej
   export const getItemBatches = async (itemId, warehouseId = null) => {
     try {
-      const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
-      
+      // Utwórz podstawowe zapytanie
       let q;
+      
       if (warehouseId) {
-        // Jeśli podano magazyn, filtruj partie po magazynie
+        // Filtruj według ID pozycji i magazynu
         q = query(
-          batchesRef,
+          collection(db, INVENTORY_BATCHES_COLLECTION),
           where('itemId', '==', itemId),
-          where('warehouseId', '==', warehouseId),
-          orderBy('expiryDate', 'asc') // Sortuj wg daty ważności (FEFO)
+          where('warehouseId', '==', warehouseId)
         );
       } else {
-        // W przeciwnym razie pobierz wszystkie partie dla pozycji
+        // Filtruj tylko według ID pozycji
         q = query(
-          batchesRef,
-          where('itemId', '==', itemId),
-          orderBy('expiryDate', 'asc') // Sortuj wg daty ważności (FEFO)
+          collection(db, INVENTORY_BATCHES_COLLECTION),
+          where('itemId', '==', itemId)
         );
       }
       
+      // Wykonaj zapytanie
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          // Konwertuj Timestamp na Date dla łatwiejszej obsługi
-          expiryDate: data.expiryDate ? data.expiryDate.toDate() : null,
-          receivedDate: data.receivedDate ? data.receivedDate.toDate() : null,
-          // Upewnij się, że cena jednostkowa jest dostępna
-          unitPrice: data.unitPrice || 0
-        };
-      });
+      
+      // Pobierz i zwróć wyniki - bez filtrowania dat
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
     } catch (error) {
       console.error('Error getting item batches:', error);
       throw error;
@@ -382,20 +375,38 @@ import {
     const thresholdDate = new Date();
     thresholdDate.setDate(today.getDate() + daysThreshold);
     
+    // Minimalna data do sprawdzenia - wyklucza daty 1.01.1970
+    const minValidDate = new Date(1971, 0, 1); // 1 stycznia 1971
+    
     // Używamy filtrów po stronie serwera z indeksem złożonym
     const q = query(
       batchesRef,
       where('expiryDate', '>=', Timestamp.fromDate(today)),
       where('expiryDate', '<=', Timestamp.fromDate(thresholdDate)),
+      where('expiryDate', '>=', Timestamp.fromDate(minValidDate)), // Wyklucz daty wcześniejsze niż 1.01.1971
       where('quantity', '>', 0), // Tylko partie z ilością większą od 0
       orderBy('expiryDate', 'asc')
     );
     
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
+    const batches = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
+    
+    // Nadal filtrujemy po stronie klienta dla pewności
+    return batches.filter(batch => {
+      if (!batch.expiryDate) return false;
+      
+      const expiryDate = batch.expiryDate instanceof Timestamp 
+        ? batch.expiryDate.toDate() 
+        : new Date(batch.expiryDate);
+        
+      // Sprawdź czy to domyślna data (1.01.1970)
+      const isDefaultDate = expiryDate.getFullYear() <= 1970;
+      
+      return !isDefaultDate;
+    });
   };
 
   // Pobieranie przeterminowanych partii
@@ -405,19 +416,37 @@ import {
     // Dzisiejsza data
     const today = new Date();
     
-    // Używamy filtrów po stronie serwera z indeksem złożonym
-    const q = query(
+    // Minimalna data do sprawdzenia - wyklucza daty 1.01.1970
+    const minValidDate = new Date(1971, 0, 1); // 1 stycznia 1971
+    
+    // Używamy bardziej złożonego zapytania, które wykluczy daty przed 1971 rokiem
+    const q1 = query(
       batchesRef,
       where('expiryDate', '<', Timestamp.fromDate(today)),
+      where('expiryDate', '>=', Timestamp.fromDate(minValidDate)),
       where('quantity', '>', 0), // Tylko partie z ilością większą od 0
       orderBy('expiryDate', 'desc')
     );
     
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
+    const querySnapshot = await getDocs(q1);
+    const batches = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
+    
+    // Nadal filtrujemy po stronie klienta dla pewności
+    return batches.filter(batch => {
+      if (!batch.expiryDate) return false;
+      
+      const expiryDate = batch.expiryDate instanceof Timestamp 
+        ? batch.expiryDate.toDate() 
+        : new Date(batch.expiryDate);
+        
+      // Sprawdź czy to domyślna data (1.01.1970)
+      const isDefaultDate = expiryDate.getFullYear() <= 1970;
+      
+      return !isDefaultDate;
+    });
   };
 
   // Przyjęcie towaru (zwiększenie stanu) z datą ważności
@@ -485,11 +514,16 @@ import {
         lotNumber: generatedLotNumber,
         warehouseId: transactionData.warehouseId, // Zawsze dodajemy warehouseId
         receivedDate: serverTimestamp(),
-        expiryDate: transactionData.expiryDate || null,
         notes: transactionData.batchNotes || transactionData.notes || '',
         unitPrice: transactionData.unitPrice || 0,
         createdBy: userId
       };
+      
+      // Ustaw datę ważności tylko jeśli została jawnie podana
+      // Dzięki temu unikniemy automatycznej konwersji null -> 1.01.1970
+      if (transactionData.expiryDate) {
+        batch.expiryDate = transactionData.expiryDate;
+      }
       
       // Dodaj informacje o pochodzeniu partii
       if (transactionData.moNumber) {
@@ -1595,8 +1629,17 @@ import {
         throw new Error(`Brak dostępnych partii produktu w magazynie.`);
       }
       
-      // Filtruj partie, które mają datę ważności (nie null)
-      const batchesWithExpiry = availableBatches.filter(batch => batch.expiryDate);
+      // Filtruj partie, które mają datę ważności (nie null i nie 1.01.1970)
+      const batchesWithExpiry = availableBatches.filter(batch => {
+        if (!batch.expiryDate) return false;
+        
+        const expiryDate = batch.expiryDate instanceof Timestamp 
+          ? batch.expiryDate.toDate() 
+          : new Date(batch.expiryDate);
+          
+        // Sprawdź czy to nie domyślna/nieprawidłowa data (rok 1970 lub wcześniejszy)
+        return expiryDate.getFullYear() > 1970;
+      });
       
       // Sortuj według daty ważności (od najwcześniejszej) - sortowanie po stronie klienta
       batchesWithExpiry.sort((a, b) => {
@@ -1605,8 +1648,17 @@ import {
         return dateA - dateB;
       });
       
-      // Dodaj partie bez daty ważności na koniec
-      const batchesWithoutExpiry = availableBatches.filter(batch => !batch.expiryDate);
+      // Dodaj partie bez daty ważności lub z domyślną datą na koniec
+      const batchesWithoutExpiry = availableBatches.filter(batch => {
+        if (!batch.expiryDate) return true;
+        
+        const expiryDate = batch.expiryDate instanceof Timestamp 
+          ? batch.expiryDate.toDate() 
+          : new Date(batch.expiryDate);
+          
+        // Sprawdź czy to domyślna/nieprawidłowa data (rok 1970 lub wcześniejszy)
+        return expiryDate.getFullYear() <= 1970;
+      });
       
       // Połącz obie listy
       const sortedBatches = [...batchesWithExpiry, ...batchesWithoutExpiry];
@@ -2814,13 +2866,22 @@ import {
     try {
       console.log(`Przeliczanie ilości dla pozycji ${itemId} na podstawie partii...`);
       
-      // Pobierz wszystkie partie dla danej pozycji
-      const batches = await getItemBatches(itemId);
+      // Pobierz wszystkie partie dla danej pozycji - pobierzmy bezpośrednio z bazy danych
+      // zamiast używać funkcji getItemBatches, która może stosować filtrowanie
+      const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
+      const q = query(batchesRef, where('itemId', '==', itemId));
+      const querySnapshot = await getDocs(q);
       
-      // Oblicz sumę ilości ze wszystkich partii
-      const totalQuantity = batches.reduce((sum, batch) => sum + (Number(batch.quantity) || 0), 0);
+      let totalQuantity = 0;
       
-      console.log(`Suma ilości z partii: ${totalQuantity}`);
+      // Iteruj po wszystkich partiach i sumuj ich ilości
+      querySnapshot.forEach(doc => {
+        const batchData = doc.data();
+        // Dodaj ilość niezależnie od daty ważności
+        totalQuantity += Number(batchData.quantity) || 0;
+      });
+      
+      console.log(`Suma ilości z partii (włącznie z partiami bez daty ważności): ${totalQuantity}`);
       
       // Zaktualizuj stan głównej pozycji magazynowej
       const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
@@ -3198,6 +3259,8 @@ import {
       const reservation = reservationDoc.data();
       const itemId = reservation.itemId;
       const quantity = reservation.quantity || 0;
+      const taskId = reservation.referenceId || reservation.taskId;
+      const batchId = reservation.batchId;
       
       if (itemId) {
         // Pobierz aktualny stan produktu
@@ -3220,12 +3283,58 @@ import {
         }
       }
       
+      // Jeśli mamy ID zadania produkcyjnego i ID partii, usuń również referencję z zadania
+      if (taskId && batchId) {
+        try {
+          const taskRef = doc(db, 'productionTasks', taskId);
+          const taskDoc = await getDoc(taskRef);
+          
+          if (taskDoc.exists()) {
+            const taskData = taskDoc.data();
+            
+            // Sprawdź, czy zadanie ma zarezerwowane partie
+            if (taskData.materialBatches && taskData.materialBatches[itemId]) {
+              // Znajdź i usuń partię z listy
+              const updatedBatches = taskData.materialBatches[itemId].filter(
+                batch => batch.batchId !== batchId
+              );
+              
+              // Aktualizuj dane zadania
+              const materialBatches = { ...taskData.materialBatches };
+              
+              if (updatedBatches.length === 0) {
+                // Jeśli nie zostały żadne partie dla tego materiału, usuń cały klucz
+                delete materialBatches[itemId];
+              } else {
+                materialBatches[itemId] = updatedBatches;
+              }
+              
+              // Sprawdź, czy zostały jakiekolwiek zarezerwowane materiały
+              const hasAnyReservations = Object.keys(materialBatches).length > 0;
+              
+              // Aktualizuj zadanie produkcyjne
+              await updateDoc(taskRef, {
+                materialBatches,
+                materialsReserved: hasAnyReservations,
+                updatedAt: serverTimestamp(),
+                updatedBy: userId
+              });
+              
+              console.log(`Usunięto rezerwację partii ${batchId} z zadania produkcyjnego ${taskId}`);
+            }
+          }
+        } catch (error) {
+          console.error(`Błąd podczas aktualizacji zadania produkcyjnego ${taskId}:`, error);
+          // Kontynuuj mimo błędu
+        }
+      }
+      
       // Usuń rezerwację
       await deleteDoc(reservationRef);
       
       // Emituj zdarzenie o zmianie stanu magazynu
       const event = new CustomEvent('inventory-updated', { 
-        detail: { itemId, action: 'reservation_delete', quantity }
+        detail: { itemId, action: 'reservation_delete', quantity, taskId }
       });
       window.dispatchEvent(event);
       
@@ -3326,5 +3435,63 @@ import {
     } catch (error) {
       console.error(`Błąd podczas czyszczenia rezerwacji dla zadania ${taskId}:`, error);
       throw new Error(`Błąd podczas czyszczenia rezerwacji: ${error.message}`);
+    }
+  };
+
+  /**
+   * Pobieranie rezerwacji dla produktu, zgrupowanych według zadania produkcyjnego
+   * @param {string} itemId - ID przedmiotu
+   * @returns {Promise<Array>} - Lista rezerwacji zgrupowanych według zadania
+   */
+  export const getReservationsGroupedByTask = async (itemId) => {
+    try {
+      // Pobierz wszystkie transakcje dla danego przedmiotu
+      const transactions = await getItemTransactions(itemId);
+      
+      // Filtruj tylko transakcje rezerwacji (typ 'booking')
+      const bookingTransactions = transactions.filter(
+        transaction => transaction.type === 'booking'
+      );
+      
+      // Grupuj rezerwacje według zadania produkcyjnego (referenceId)
+      const reservationsByTask = {};
+      
+      bookingTransactions.forEach(transaction => {
+        const taskId = transaction.referenceId || transaction.taskId;
+        if (!taskId) return;
+        
+        if (!reservationsByTask[taskId]) {
+          reservationsByTask[taskId] = {
+            taskId: taskId,
+            taskName: transaction.taskName || '',
+            taskNumber: transaction.taskNumber || '',
+            clientName: transaction.clientName || '',
+            clientId: transaction.clientId || '',
+            totalQuantity: 0,
+            batches: [],
+            createdAt: transaction.createdAt,
+            updatedAt: transaction.updatedAt
+          };
+        }
+        
+        // Dodaj ilość do sumy
+        reservationsByTask[taskId].totalQuantity += parseFloat(transaction.quantity) || 0;
+        
+        // Dodaj partię do listy partii dla tego zadania
+        if (transaction.batchId) {
+          reservationsByTask[taskId].batches.push({
+            batchId: transaction.batchId,
+            batchNumber: transaction.batchNumber || 'Bez numeru',
+            quantity: parseFloat(transaction.quantity) || 0,
+            reservationId: transaction.id
+          });
+        }
+      });
+      
+      // Konwertuj obiekt na tablicę
+      return Object.values(reservationsByTask);
+    } catch (error) {
+      console.error('Błąd podczas pobierania zgrupowanych rezerwacji:', error);
+      throw error;
     }
   };

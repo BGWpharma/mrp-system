@@ -786,13 +786,35 @@ const TaskDetailsPage = () => {
       console.log("Metoda rezerwacji:", reservationMethod);
       console.log("Task data:", task);
       
-      // Jeśli zadanie ma już zarezerwowane materiały, pominięcie ponownej rezerwacji
-      if (task.materialsReserved && task.materialBatches) {
+      // Sprawdź, czy istnieją nowe materiały, które nie są jeszcze zarezerwowane
+      const existingReservedMaterials = new Set();
+      
+      // Zbierz ID wszystkich już zarezerwowanych materiałów
+      if (task.materialBatches) {
+        Object.keys(task.materialBatches).forEach(materialId => {
+          existingReservedMaterials.add(materialId);
+        });
+      }
+      
+      // Sprawdź, czy są nowe materiały do zarezerwowania
+      const newMaterialsToReserve = task.materials.filter(material => {
+        const materialId = material.inventoryItemId || material.id;
+        return materialId && !existingReservedMaterials.has(materialId);
+      });
+      
+      // Jeśli zadanie ma już zarezerwowane materiały i nie ma nowych materiałów do zarezerwowania
+      if (task.materialsReserved && task.materialBatches && newMaterialsToReserve.length === 0) {
         console.log("Materiały są już zarezerwowane dla tego zadania. Pomijam ponowną rezerwację.");
         showInfo("Materiały są już zarezerwowane dla tego zadania.");
         setReservingMaterials(false);
         setReserveDialogOpen(false);
         return;
+      }
+      
+      // Jeśli są już zarezerwowane materiały, ale są też nowe do zarezerwowania
+      if (task.materialsReserved && task.materialBatches && newMaterialsToReserve.length > 0) {
+        console.log(`Wykryto ${newMaterialsToReserve.length} nowe materiały do zarezerwowania.`);
+        showInfo(`Rezerwuję ${newMaterialsToReserve.length} nowe materiały dodane do zadania.`);
       }
       
       // Jeśli wybrano ręczny wybór partii
@@ -807,35 +829,16 @@ const TaskDetailsPage = () => {
         const userId = currentUser?.uid || 'system';
         
         try {
-          // Najpierw anuluj istniejące rezerwacje dla każdego materiału
+          // Teraz rezerwuj partie tylko dla nowych materiałów lub wszystkich jeśli nie było wcześniejszej rezerwacji
           for (const material of task.materials) {
             const materialId = material.inventoryItemId || material.id;
             if (!materialId) continue;
             
-            // Sprawdź, czy materiał ma już zarezerwowane partie
-            if (task.materialBatches && task.materialBatches[materialId] && task.materialBatches[materialId].length > 0) {
-              try {
-                // Oblicz łączną ilość zarezerwowaną do anulowania
-                const totalBookedQuantity = task.materialBatches[materialId].reduce(
-                  (sum, batch) => sum + batch.quantity, 0
-                );
-                
-                // Anuluj rezerwację
-                if (totalBookedQuantity > 0) {
-                  console.log(`Anulowanie rezerwacji ${totalBookedQuantity} jednostek materiału ${material.name}`);
-                  await cancelBooking(materialId, totalBookedQuantity, id, userId);
-                }
-              } catch (error) {
-                console.error(`Błąd podczas anulowania rezerwacji dla materiału ${material.name}:`, error);
-                // Kontynuuj mimo błędu, aby spróbować zarezerwować nowe partie
-              }
+            // Pomijamy materiały, które są już zarezerwowane (chyba że nie ma nowych materiałów)
+            if (existingReservedMaterials.has(materialId) && newMaterialsToReserve.length > 0) {
+              console.log(`Materiał ${material.name} jest już zarezerwowany, pomijam.`);
+              continue;
             }
-          }
-          
-          // Teraz rezerwuj nowe partie
-          for (const material of task.materials) {
-            const materialId = material.inventoryItemId || material.id;
-            if (!materialId) continue;
             
             const materialBatches = selectedBatches[materialId] || [];
             

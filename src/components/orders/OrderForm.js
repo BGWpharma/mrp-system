@@ -434,14 +434,18 @@ const OrderForm = ({ orderId }) => {
       let recipeId = isRecipe ? product.id : null;
       let minOrderQuantity = 0;
       
-      // Jeśli to produkt, pobierz jego cenę z listy cenowej klienta
-      if (!isRecipe && orderData.customer?.id) {
+      // Jeżeli mamy klienta, spróbuj pobrać cenę z listy cenowej
+      if (orderData.customer?.id) {
         try {
-          const priceListItem = await getPriceForCustomerProduct(orderData.customer.id, product.id);
+          // Pobierz cenę z listy cenowej klienta, wskazując czy to receptura czy produkt
+          const priceListItem = await getPriceForCustomerProduct(orderData.customer.id, product.id, isRecipe);
           
           if (priceListItem) {
-            price = priceListItem.price;
+            console.log(`Znaleziono cenę w liście cenowej: ${priceListItem} dla ${name} (${isRecipe ? 'receptura' : 'produkt'})`);
+            price = priceListItem;
             fromPriceList = true;
+          } else {
+            console.log(`Nie znaleziono ceny w liście cenowej dla ${name} (${isRecipe ? 'receptura' : 'produkt'})`);
           }
         } catch (error) {
           console.error('Błąd podczas pobierania ceny z listy cenowej:', error);
@@ -468,19 +472,36 @@ const OrderForm = ({ orderId }) => {
           console.error('Błąd podczas pobierania szczegółów produktu:', error);
         }
       } else {
-        // Jeśli to receptura, oblicz koszt produkcji
-        try {
-          const recipe = await getRecipeByProductId(product.id);
-          if (recipe) {
-            const cost = await calculateProductionCost(recipe);
-            basePrice = cost.totalCost;
+        // Jeśli to receptura, oblicz koszt produkcji tylko jeśli nie mamy ceny z listy cenowej
+        if (!fromPriceList) {
+          try {
+            // Spróbuj najpierw pobrać recepturę bezpośrednio
+            let recipe = await getRecipeById(product.id);
             
-            // Zastosuj marżę do kosztu produkcji
-            const calculatedPrice = basePrice * (1 + margin / 100);
-            price = parseFloat(calculatedPrice.toFixed(2));
+            if (!recipe) {
+              // Jeśli nie ma receptury o tym ID, spróbuj pobrać recepturę powiązaną z produktem
+              recipe = await getRecipeByProductId(product.id);
+            }
+            
+            if (recipe) {
+              // Jeśli receptura ma koszt procesowy, użyj go jako ceny bazowej
+              if (recipe.processingCostPerUnit && recipe.processingCostPerUnit > 0) {
+                basePrice = recipe.processingCostPerUnit;
+                console.log(`Użyto kosztu procesowego receptury: ${basePrice}`);
+              } else {
+                // W przeciwnym razie oblicz koszt produkcji
+                const cost = await calculateProductionCost(recipe);
+                basePrice = cost.totalCost;
+                console.log(`Obliczono koszt produkcji receptury: ${basePrice}`);
+              }
+              
+              // Zastosuj marżę do kosztu produkcji
+              const calculatedPrice = basePrice * (1 + margin / 100);
+              price = parseFloat(calculatedPrice.toFixed(2));
+            }
+          } catch (error) {
+            console.error('Błąd podczas obliczania kosztu produkcji:', error);
           }
-        } catch (error) {
-          console.error('Błąd podczas obliczania kosztu produkcji:', error);
         }
       }
       
