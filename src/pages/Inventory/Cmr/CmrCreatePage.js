@@ -13,12 +13,25 @@ const CmrCreatePage = () => {
 
   const handleSubmit = async (formData) => {
     try {
-      await createCmrDocument(formData, currentUser.uid);
+      console.log('CmrCreatePage - Tworzenie dokumentu CMR z danymi:', formData);
+      
+      // Upewnij się, że wszystkie pola są określone
+      const dataToSave = {
+        ...formData,
+        specialAgreements: formData.specialAgreements || '',
+        reservations: formData.reservations || '',
+        notes: formData.notes || ''
+      };
+      
+      console.log('CmrCreatePage - Wywołuję createCmrDocument z danymi:', dataToSave);
+      const result = await createCmrDocument(dataToSave, currentUser.uid);
+      console.log('CmrCreatePage - Wynik createCmrDocument:', result);
+      
       showSuccess('Dokument CMR został utworzony pomyślnie');
       navigate('/inventory/cmr');
     } catch (error) {
-      console.error('Błąd podczas tworzenia dokumentu CMR:', error);
-      showError('Nie udało się utworzyć dokumentu CMR');
+      console.error('CmrCreatePage - Błąd podczas tworzenia dokumentu CMR:', error);
+      showError('Nie udało się utworzyć dokumentu CMR: ' + error.message);
     }
   };
 

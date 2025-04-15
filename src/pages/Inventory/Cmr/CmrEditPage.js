@@ -35,12 +35,25 @@ const CmrEditPage = () => {
   
   const handleSubmit = async (formData) => {
     try {
-      await updateCmrDocument(id, formData, currentUser.uid);
+      console.log('CmrEditPage - Aktualizacja dokumentu CMR z danymi:', formData);
+      
+      // Upewnij się, że wszystkie pola są określone
+      const dataToSave = {
+        ...formData,
+        specialAgreements: formData.specialAgreements || '',
+        reservations: formData.reservations || '',
+        notes: formData.notes || ''
+      };
+      
+      console.log('CmrEditPage - Wywołuję updateCmrDocument z danymi:', dataToSave);
+      const result = await updateCmrDocument(id, dataToSave, currentUser.uid);
+      console.log('CmrEditPage - Wynik updateCmrDocument:', result);
+      
       showSuccess('Dokument CMR został zaktualizowany pomyślnie');
       navigate(`/inventory/cmr/${id}`);
     } catch (error) {
-      console.error('Błąd podczas aktualizacji dokumentu CMR:', error);
-      showError('Nie udało się zaktualizować dokumentu CMR');
+      console.error('CmrEditPage - Błąd podczas aktualizacji dokumentu CMR:', error);
+      showError('Nie udało się zaktualizować dokumentu CMR: ' + error.message);
     }
   };
   

@@ -105,6 +105,8 @@ const DEFAULT_ITEM = {
   itemType: 'product'
 };
 
+const DEFAULT_MARGIN = 20; // Domyślna marża w procentach
+
 const OrderForm = ({ orderId }) => {
   const [loading, setLoading] = useState(!!orderId);
   const [saving, setSaving] = useState(false);
@@ -433,9 +435,9 @@ const OrderForm = ({ orderId }) => {
       let minOrderQuantity = 0;
       
       // Jeśli to produkt, pobierz jego cenę z listy cenowej klienta
-      if (!isRecipe && customerData?.id) {
+      if (!isRecipe && orderData.customer?.id) {
         try {
-          const priceListItem = await getPriceForCustomerProduct(customerData.id, product.id);
+          const priceListItem = await getPriceForCustomerProduct(orderData.customer.id, product.id);
           
           if (priceListItem) {
             price = priceListItem.price;

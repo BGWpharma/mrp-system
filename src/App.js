@@ -70,12 +70,6 @@ import SupplierFormPage from './pages/SupplierFormPage';
 import CustomersList from './components/customers/CustomersList';
 import CustomerDetail from './components/customers/CustomerDetail';
 
-// Logistics - nowy moduł
-import WaybillListPage from './pages/Logistics/Waybill/WaybillListPage';
-import WaybillDetailsPage from './pages/Logistics/Waybill/WaybillDetailsPage';
-import WaybillCreatePage from './pages/Logistics/Waybill/WaybillCreatePage';
-import WaybillEditPage from './pages/Logistics/Waybill/WaybillEditPage';
-
 // Analytics
 import AnalyticsDashboard from './pages/Analytics/Dashboard';
 
@@ -217,12 +211,6 @@ function App() {
                 <Route path="/suppliers/:id/edit" element={<PrivateLayout><SupplierFormPage /></PrivateLayout>} />
                 <Route path="/suppliers/:id/view" element={<PrivateLayout><SupplierFormPage viewOnly={true} /></PrivateLayout>} />
                 <Route path="/suppliers/:id" element={<PrivateLayout><SupplierFormPage viewOnly={true} /></PrivateLayout>} />
-                
-                {/* Logistics Routes */}
-                <Route path="/logistics/waybill" element={<PrivateLayout><WaybillListPage /></PrivateLayout>} />
-                <Route path="/logistics/waybill/create" element={<PrivateLayout><WaybillCreatePage /></PrivateLayout>} />
-                <Route path="/logistics/waybill/:id" element={<PrivateLayout><WaybillDetailsPage /></PrivateLayout>} />
-                <Route path="/logistics/waybill/:id/edit" element={<PrivateLayout><WaybillEditPage /></PrivateLayout>} />
                 
                 {/* Customers Routes */}
                 <Route path="/customers" element={<PrivateLayout><CustomersList /></PrivateLayout>} />
