@@ -577,39 +577,8 @@ const OrderDetails = () => {
                   // Koszt dostawy
                   const shippingCost = parseFloat(order.shippingCost) || 0;
                   
-                  // Oblicz sumę wartości brutto zamówień zakupu
-                  const poTotal = (order.linkedPurchaseOrders || []).reduce((sum, po) => {
-                    try {
-                      // Jeśli zamówienie ma wartość brutto, użyj jej
-                      if (po.totalGross !== undefined && po.totalGross !== null) {
-                        return sum + (parseFloat(po.totalGross) || 0);
-                      }
-                      
-                      // W przeciwnym razie oblicz wartość brutto
-                      const poValue = parseFloat(po.value) || 0;
-                      const vatRate = parseFloat(po.vatRate) || 23;
-                      const vatValue = (poValue * vatRate) / 100;
-                      
-                      // Sprawdzenie różnych formatów dodatkowych kosztów
-                      let additionalCosts = 0;
-                      if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
-                        additionalCosts = po.additionalCostsItems.reduce((costsSum, cost) => {
-                          return costsSum + (parseFloat(cost.value) || 0);
-                        }, 0);
-                      } else if (po.additionalCosts !== undefined) {
-                        additionalCosts = typeof po.additionalCosts === 'number' ? po.additionalCosts : parseFloat(po.additionalCosts) || 0;
-                      }
-                      
-                      // Wartość brutto: produkty + VAT + dodatkowe koszty
-                      return sum + poValue + vatValue + additionalCosts;
-                    } catch (error) {
-                      console.error('Błąd podczas obliczania wartości PO:', error);
-                      return sum;
-                    }
-                  }, 0);
-                  
                   // Łączna wartość
-                  const total = productsValue + shippingCost + poTotal;
+                  const total = productsValue + shippingCost;
                   
                   return formatCurrency(total);
                 })()}
@@ -797,38 +766,10 @@ const OrderDetails = () => {
                   // Koszt dostawy
                   const shippingCost = parseFloat(order.shippingCost) || 0;
                   
-                  // Oblicz sumę wartości brutto zamówień zakupu
-                  const poTotal = (order.linkedPurchaseOrders || []).reduce((sum, po) => {
-                    try {
-                      // Jeśli zamówienie ma wartość brutto, użyj jej
-                      if (po.totalGross !== undefined && po.totalGross !== null) {
-                        return sum + (parseFloat(po.totalGross) || 0);
-                      }
-                      
-                      // W przeciwnym razie oblicz wartość brutto
-                      const poValue = parseFloat(po.value) || 0;
-                      const vatRate = parseFloat(po.vatRate) || 23;
-                      const vatValue = (poValue * vatRate) / 100;
-                      
-                      // Sprawdź zarówno nowy jak i stary format dodatkowych kosztów
-                      let additionalCosts = 0;
-                      if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
-                        additionalCosts = po.additionalCostsItems.reduce((costsSum, cost) => {
-                          return costsSum + (parseFloat(cost.value) || 0);
-                        }, 0);
-                      } else if (po.additionalCosts !== undefined) {
-                        additionalCosts = typeof po.additionalCosts === 'number' ? po.additionalCosts : parseFloat(po.additionalCosts) || 0;
-                      }
-                      
-                      return sum + poValue + vatValue + additionalCosts;
-                    } catch (error) {
-                      console.error('Błąd podczas obliczania wartości PO:', error);
-                      return sum;
-                    }
-                  }, 0);
-                  
                   // Łączna wartość
-                  return formatCurrency(productsValue + shippingCost + poTotal);
+                  const total = productsValue + shippingCost;
+                  
+                  return formatCurrency(total);
                 })()}
               </TableCell>
             </TableRow>

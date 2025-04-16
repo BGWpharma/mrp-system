@@ -558,6 +558,104 @@ import {
         };
       }
       
+      // Dodaj szczegółowe dane o zamówieniu zakupu, jeśli przyjęcie pochodzi z PO
+      if (transactionData.source === 'purchase' || transactionData.reason === 'purchase') {
+        // Pobierz pełne dane o zamówieniu zakupu
+        let poId = transactionData.orderId;
+        if (poId) {
+          try {
+            const { getPurchaseOrderById } = await import('./purchaseOrderService');
+            const poData = await getPurchaseOrderById(poId);
+            
+            // Zapisz szczegółowe informacje o PO w partii
+            batch.purchaseOrderDetails = {
+              id: poId,
+              number: poData.number || transactionData.orderNumber || null,
+              status: poData.status || null,
+              supplier: poData.supplier ? {
+                id: poData.supplier.id || null,
+                name: poData.supplier.name || null,
+                code: poData.supplier.code || null
+              } : null,
+              orderDate: poData.orderDate || null,
+              deliveryDate: poData.expectedDeliveryDate || poData.deliveryDate || null,
+              itemPoId: transactionData.itemPOId || null,
+              invoiceNumber: poData.invoiceNumber || null,
+              invoiceLink: poData.invoiceLink || null
+            };
+            
+            // Zapisz również w starszym formacie dla kompatybilności
+            batch.sourceDetails = {
+              sourceType: 'purchase',
+              orderId: poId || null,
+              orderNumber: poData.number || transactionData.orderNumber || null,
+              supplierId: poData.supplier?.id || null,
+              supplierName: poData.supplier?.name || null
+            };
+            
+            // Aktualizuj cenę jednostkową na podstawie dodatkowych kosztów z PO
+            if (poData && (poData.additionalCostsItems || poData.additionalCosts)) {
+              try {
+                let additionalCostsTotal = 0;
+                
+                // Oblicz sumę dodatkowych kosztów z nowego formatu additionalCostsItems
+                if (poData.additionalCostsItems && Array.isArray(poData.additionalCostsItems)) {
+                  additionalCostsTotal = poData.additionalCostsItems.reduce((sum, cost) => {
+                    return sum + (parseFloat(cost.value) || 0);
+                  }, 0);
+                }
+                // Dla wstecznej kompatybilności - stare pole additionalCosts
+                else if (poData.additionalCosts) {
+                  additionalCostsTotal = parseFloat(poData.additionalCosts) || 0;
+                }
+                
+                // Oblicz całkowitą ilość produktów w zamówieniu
+                let totalProductQuantity = 0;
+                if (poData.items && Array.isArray(poData.items)) {
+                  totalProductQuantity = poData.items.reduce((sum, item) => {
+                    return sum + (parseFloat(item.quantity) || 0);
+                  }, 0);
+                }
+                
+                // Jeśli mamy dodatkowe koszty i ilość produktów > 0, oblicz dodatkowy koszt na jednostkę
+                if (additionalCostsTotal > 0 && totalProductQuantity > 0) {
+                  const additionalCostPerUnit = additionalCostsTotal / totalProductQuantity;
+                  
+                  // Aktualizuj cenę jednostkową w partii
+                  let baseUnitPrice = parseFloat(transactionData.unitPrice) || 0;
+                  
+                  // Dodaj informację o dodatkowym koszcie jako osobne pole
+                  batch.additionalCostPerUnit = additionalCostPerUnit;
+                  
+                  // Aktualizuj cenę jednostkową - dodaj dodatkowy koszt na jednostkę
+                  batch.unitPrice = baseUnitPrice + additionalCostPerUnit;
+                  
+                  // Zachowaj oryginalną cenę jednostkową
+                  batch.baseUnitPrice = baseUnitPrice;
+                  
+                  console.log(`Zaktualizowano cenę jednostkową partii z ${baseUnitPrice} na ${batch.unitPrice} (dodatkowy koszt: ${additionalCostPerUnit} per jednostka)`);
+                }
+              } catch (error) {
+                console.error('Błąd podczas aktualizacji ceny jednostkowej na podstawie dodatkowych kosztów:', error);
+              }
+            }
+          } catch (error) {
+            console.error('Błąd podczas pobierania szczegółów PO:', error);
+            // Dodaj podstawowe informacje nawet jeśli wystąpił błąd
+            batch.purchaseOrderDetails = {
+              id: poId || null,
+              number: transactionData.orderNumber || null
+            };
+            
+            batch.sourceDetails = {
+              sourceType: 'purchase',
+              orderId: poId || null,
+              orderNumber: transactionData.orderNumber || null
+            };
+          }
+        }
+      }
+      
       // Dodaj partię
       if (transactionData.addBatch !== false) {
         await addDoc(collection(db, INVENTORY_BATCHES_COLLECTION), batch);
@@ -3713,5 +3811,31 @@ import {
         message: `Błąd podczas czyszczenia rezerwacji: ${error.message}`,
         error
       };
+    }
+  };
+
+  // Funkcja do pobierania pojedynczej partii z magazynu
+  export const getInventoryBatch = async (batchId) => {
+    try {
+      if (!batchId) {
+        console.error('Nie podano ID partii');
+        return null;
+      }
+
+      const batchRef = doc(db, 'inventoryBatches', batchId);
+      const batchSnapshot = await getDoc(batchRef);
+
+      if (!batchSnapshot.exists()) {
+        console.log(`Nie znaleziono partii o ID ${batchId}`);
+        return null;
+      }
+
+      return {
+        id: batchSnapshot.id,
+        ...batchSnapshot.data()
+      };
+    } catch (error) {
+      console.error(`Błąd podczas pobierania partii o ID ${batchId}:`, error);
+      throw error;
     }
   };

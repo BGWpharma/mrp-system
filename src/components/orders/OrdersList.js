@@ -186,8 +186,8 @@ const OrdersList = () => {
           // Dodanie kosztów dostawy
           const shippingCost = parseFloat(fullOrderData.shippingCost) || 0;
         
-        // Łączna wartość zamówienia
-        const totalValue = subtotal + shippingCost + poTotal;
+        // Łączna wartość zamówienia - bez PO
+        const totalValue = subtotal + shippingCost;
           
           console.log(`Zaktualizowane wartości zamówienia ${order.id}: produkty=${subtotal}, dostawa=${shippingCost}, PO=${poTotal}, razem=${totalValue}`);
         
@@ -225,7 +225,7 @@ const OrdersList = () => {
           // Dodanie kosztów dostawy
           const shippingCost = parseFloat(order.shippingCost) || 0;
           
-          // Łączna wartość zamówienia
+          // Łączna wartość zamówienia - bez PO
           const totalValue = subtotal + shippingCost;
           
           console.log(`Zaktualizowane wartości zamówienia ${order.id}: produkty=${subtotal}, dostawa=${shippingCost}, PO=0, razem=${totalValue}`);

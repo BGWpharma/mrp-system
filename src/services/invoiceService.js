@@ -289,12 +289,13 @@ const calculateOrderTotal = (orderData) => {
   // Wartość wysyłki
   const shippingCost = parseFloat(orderData.shippingCost) || 0;
   
-  // Wartość z powiązanych zamówień zakupowych
+  // Wartość z powiązanych zamówień zakupowych - nie dodajemy do sumy, odejmujemy
   const purchaseOrdersTotal = Array.isArray(orderData.linkedPurchaseOrders)
     ? orderData.linkedPurchaseOrders.reduce((sum, po) => sum + (parseFloat(po.totalGross) || 0), 0)
     : 0;
   
-  return itemsTotal + shippingCost + purchaseOrdersTotal;
+  // Zwracamy tylko sumę wartości produktów i kosztów wysyłki, bez dodawania kosztów PO
+  return itemsTotal + shippingCost;
 };
 
 /**

@@ -493,110 +493,13 @@ const InvoiceForm = ({ invoiceId }) => {
         const shippingCost = parseFloat(selectedOrder.shippingCost) || 0;
         console.log(`Koszt wysyłki: ${shippingCost}`);
         
-        // Sprawdź czy zamówienie ma powiązane PO i czy mają one poprawne wartości
-        let purchaseOrdersTotal = 0;
-        const linkedPOs = selectedOrder.linkedPurchaseOrders || [];
-        
-        if (linkedPOs && Array.isArray(linkedPOs) && linkedPOs.length > 0) {
-          // Pobierz pełne dane dla każdego powiązanego PO
-          const enrichedLinkedPOs = [];
-          
-          for (const linkedPO of linkedPOs) {
-            let poId = linkedPO.id;
-            let fullPOData;
-            
-            // Znajdź pełne dane PO z wcześniej pobranych danych
-            const matchingPO = purchaseOrders.find(po => po.id === poId || po.number === linkedPO.number);
-            
-            if (matchingPO) {
-              fullPOData = matchingPO;
-            } else {
-              // Jeśli nie znaleziono w pamięci, pobierz z bazy
-              try {
-                const { getPurchaseOrderById } = await import('../../services/purchaseOrderService');
-                fullPOData = await getPurchaseOrderById(poId);
-                
-                // Oblicz wartości jeśli nie są dostępne
-                if (!fullPOData.calculatedGrossValue) {
-                  // Obliczenia jak w fetchPurchaseOrders
-                  const productsValue = Array.isArray(fullPOData.items) 
-                    ? fullPOData.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || (parseFloat(item.price) * parseFloat(item.quantity)) || 0), 0)
-                    : 0;
-                  
-                  let additionalCostsValue = 0;
-                  if (fullPOData.additionalCostsItems && Array.isArray(fullPOData.additionalCostsItems)) {
-                    additionalCostsValue = fullPOData.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
-                  } else if (fullPOData.additionalCosts) {
-                    additionalCostsValue = parseFloat(fullPOData.additionalCosts) || 0;
-                  }
-                  
-                  const vatRate = parseFloat(fullPOData.vatRate) || 23;
-                  const vatValue = (productsValue * vatRate) / 100;
-                  
-                  const calculatedGrossValue = productsValue + vatValue + additionalCostsValue;
-                  const finalGrossValue = parseFloat(fullPOData.totalGross) || calculatedGrossValue;
-                  
-                  fullPOData = {
-                    ...fullPOData,
-                    calculatedProductsValue: productsValue,
-                    calculatedAdditionalCosts: additionalCostsValue,
-                    calculatedVatValue: vatValue,
-                    calculatedGrossValue: calculatedGrossValue,
-                    finalGrossValue: finalGrossValue
-                  };
-                }
-              } catch (error) {
-                console.error(`Błąd podczas pobierania szczegółów PO ${poId}:`, error);
-                fullPOData = linkedPO; // Użyj ograniczonych danych
-              }
-            }
-            
-            // Ustal wartość PO
-            let poValue = 0;
-            
-            if (fullPOData.finalGrossValue !== undefined) {
-              poValue = parseFloat(fullPOData.finalGrossValue);
-            } else if (fullPOData.totalGross !== undefined) {
-              poValue = parseFloat(fullPOData.totalGross) || 0;
-            } else if (fullPOData.value !== undefined) {
-              poValue = parseFloat(fullPOData.value) || 0;
-            } else if (fullPOData.total !== undefined) {
-              poValue = parseFloat(fullPOData.total) || 0;
-            }
-            
-            // Dodaj dodatkowe koszty, jeśli nie zostały uwzględnione
-            if (!fullPOData.finalGrossValue && !fullPOData.totalGross) {
-              let additionalCostsValue = 0;
-              if (fullPOData.additionalCostsItems && Array.isArray(fullPOData.additionalCostsItems)) {
-                additionalCostsValue = fullPOData.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
-              } else if (fullPOData.additionalCosts) {
-                additionalCostsValue = parseFloat(fullPOData.additionalCosts) || 0;
-              }
-              
-              poValue += additionalCostsValue;
-            }
-            
-            console.log(`PO: ${fullPOData.number || fullPOData.id}, wartość: ${poValue}`);
-            enrichedLinkedPOs.push({
-              ...fullPOData,
-              calculatedTotalValue: poValue
-            });
-            
-            purchaseOrdersTotal += poValue;
-          }
-          
-          // Zastąp ograniczone dane PO pełnymi danymi
-          selectedOrder.linkedPurchaseOrders = enrichedLinkedPOs;
-        }
-        
-        // Całkowita wartość zamówienia (produkty + wysyłka + PO)
-        const orderTotal = itemsTotal + shippingCost + purchaseOrdersTotal;
+        // Całkowita wartość zamówienia (produkty + wysyłka) - bez uwzględniania PO
+        const orderTotal = itemsTotal + shippingCost;
         
         // Debugowanie wartości
         console.log('Obliczanie wartości CO:', {
           itemsTotal,
           shippingCost,
-          purchaseOrdersTotal,
           orderTotal,
           savedTotal: selectedOrder.total
         });

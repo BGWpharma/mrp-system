@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Container,
@@ -68,7 +68,7 @@ import {
   Inventory2 as PackagingIcon
 } from '@mui/icons-material';
 import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession } from '../../services/productionService';
-import { getItemBatches, bookInventoryForTask, cancelBooking, getBatchReservations, getAllInventoryItems, getInventoryItemById } from '../../services/inventoryService';
+import { getItemBatches, bookInventoryForTask, cancelBooking, getBatchReservations, getAllInventoryItems, getInventoryItemById, getInventoryBatch } from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate, formatCurrency, formatDateTime } from '../../utils/formatters';
@@ -999,6 +999,7 @@ const TaskDetailsPage = () => {
                           <TableCell>Nr partii</TableCell>
                           <TableCell>Data ważności</TableCell>
                           <TableCell>Dostępna ilość</TableCell>
+                          <TableCell>Cena jedn.</TableCell>
                           <TableCell>Do rezerwacji</TableCell>
                         </TableRow>
                       </TableHead>
@@ -1044,6 +1045,9 @@ const TaskDetailsPage = () => {
                                 </Typography>
                               </TableCell>
                               <TableCell>
+                                {batch.unitPrice ? `${parseFloat(batch.unitPrice).toFixed(2)} €` : '—'}
+                              </TableCell>
+                              <TableCell>
                                 <TextField
                                   type="number"
                                   value={selectedQuantity}
@@ -1086,26 +1090,242 @@ const TaskDetailsPage = () => {
 
   // Dodaj funkcję do generowania i pobierania raportu materiałów i LOT-ów
   const handlePrintMaterialsAndLots = async () => {
+    if (!task) return;
+    
     try {
-      setLoading(true);
-      const reportBlob = await generateMaterialsAndLotsReport(id);
+      const report = await generateMaterialsAndLotsReport(id);
       
-      // Tworzymy URL do pobrania pliku
-      const url = URL.createObjectURL(reportBlob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `rozpiska_materialow_${task.moNumber || id}_${new Date().toISOString().slice(0, 10)}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      // Formatowanie daty dla wydruku
+      const formatDate = (dateString) => {
+        if (!dateString) return 'Nie określono';
+        const date = new Date(dateString);
+        return date.toLocaleDateString('pl-PL', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        });
+      };
       
-      showSuccess('Raport materiałów został wygenerowany');
+      // HTML do wydruku
+      const printContents = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Rozpiska materiałów - MO ${task.moNumber}</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              margin: 20px;
+              line-height: 1.5;
+            }
+            h1, h2, h3 {
+              margin-top: 20px;
+              margin-bottom: 10px;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-bottom: 20px;
+            }
+            th, td {
+              border: 1px solid #ddd;
+              padding: 8px;
+              text-align: left;
+            }
+            th {
+              background-color: #f2f2f2;
+            }
+            .header {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 20px;
+            }
+            .section {
+              margin-bottom: 30px;
+            }
+            .footer {
+              margin-top: 50px;
+              text-align: center;
+              font-size: 12px;
+              color: #666;
+            }
+            @media print {
+              button {
+                display: none;
+              }
+            }
+            .reserved {
+              background-color: #e8f5e9;
+            }
+            .not-reserved {
+              background-color: #ffebee;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <h1>Rozpiska materiałów</h1>
+              <h2>MO: ${task.moNumber}</h2>
+            </div>
+            <div>
+              <p><strong>Data:</strong> ${new Date().toLocaleDateString('pl-PL')}</p>
+              <p><strong>Status:</strong> ${task.status}</p>
+            </div>
+          </div>
+          
+          <div class="section">
+            <h3>Szczegóły zadania</h3>
+            <table>
+              <tr><th>Produkt:</th><td>${task.productName}</td></tr>
+              <tr><th>Ilość:</th><td>${task.quantity} ${task.unit}</td></tr>
+              <tr><th>Data rozpoczęcia:</th><td>${formatDate(task.scheduledDate)}</td></tr>
+              <tr><th>Planowane zakończenie:</th><td>${formatDate(task.endDate)}</td></tr>
+            </table>
+          </div>
+          
+          <div class="section">
+            <h3>Lista materiałów</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Nazwa materiału</th>
+                  <th>Ilość potrzebna</th>
+                  <th>Jednostka</th>
+                  <th>Cena jedn.</th>
+                  <th>Koszt</th>
+                  <th>Stan</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${report.materials.map(material => {
+                  const materialId = material.inventoryItemId || material.id;
+                  const reservedBatches = task.materialBatches && task.materialBatches[materialId];
+                  const hasReservedBatches = reservedBatches && reservedBatches.length > 0;
+                  
+                  // Oblicz koszt materiału
+                  const quantity = material.quantity || 0;
+                  const unitPrice = material.unitPrice || 0;
+                  const cost = quantity * unitPrice;
+                  
+                  return `
+                    <tr class="${hasReservedBatches ? 'reserved' : 'not-reserved'}">
+                      <td>${material.name}</td>
+                      <td>${material.quantity}</td>
+                      <td>${material.unit}</td>
+                      <td>${hasReservedBatches ? unitPrice.toFixed(2) + ' €' : '—'}</td>
+                      <td>${hasReservedBatches ? cost.toFixed(2) + ' €' : '—'}</td>
+                      <td>${hasReservedBatches ? 'Zarezerwowano' : 'Nie zarezerwowano'}</td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+          
+          <div class="section">
+            <h3>Zarezerwowane partie (LOT)</h3>
+            ${Object.keys(report.batches || {}).length === 0 ? 
+              `<p>Brak zarezerwowanych partii</p>` : 
+              `<table>
+                <thead>
+                  <tr>
+                    <th>Materiał</th>
+                    <th>Partia (LOT)</th>
+                    <th>Ilość</th>
+                    <th>Cena jedn.</th>
+                    <th>Koszt</th>
+                    <th>Data ważności</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${Object.entries(report.batches || {}).map(([materialId, batches]) => {
+                    const material = report.materials.find(m => m.id === materialId || m.inventoryItemId === materialId);
+                    
+                    return batches.map(batch => {
+                      const batchCost = (batch.quantity || 0) * (batch.unitPrice || 0);
+                      return `
+                        <tr>
+                          <td>${material ? material.name : 'Nieznany materiał'}</td>
+                          <td>${batch.batchNumber}</td>
+                          <td>${batch.quantity} ${material ? material.unit : 'szt.'}</td>
+                          <td>${batch.unitPrice ? batch.unitPrice.toFixed(2) + ' €' : '—'}</td>
+                          <td>${batchCost ? batchCost.toFixed(2) + ' €' : '—'}</td>
+                          <td>${formatDate(batch.expiryDate)}</td>
+                        </tr>
+                      `;
+                    }).join('');
+                  }).join('')}
+                </tbody>
+              </table>`
+            }
+          </div>
+          
+          <div class="section">
+            <h3>Podsumowanie kosztów</h3>
+            <table>
+              <tr>
+                <th>Całkowity koszt materiałów:</th>
+                <td>
+                  ${report.materials.reduce((sum, material) => {
+                    const materialId = material.inventoryItemId || material.id;
+                    const reservedBatches = task.materialBatches && task.materialBatches[materialId];
+                    
+                    // Uwzględnij koszt tylko jeśli materiał ma zarezerwowane partie
+                    if (reservedBatches && reservedBatches.length > 0) {
+                      const quantity = material.quantity || 0;
+                      const unitPrice = material.unitPrice || 0;
+                      return sum + (quantity * unitPrice);
+                    }
+                    return sum;
+                  }, 0).toFixed(2)} €
+                </td>
+              </tr>
+              <tr>
+                <th>Koszt materiałów na jednostkę produktu:</th>
+                <td>
+                  ${task.quantity ? 
+                    (report.materials.reduce((sum, material) => {
+                      const materialId = material.inventoryItemId || material.id;
+                      const reservedBatches = task.materialBatches && task.materialBatches[materialId];
+                      
+                      // Uwzględnij koszt tylko jeśli materiał ma zarezerwowane partie
+                      if (reservedBatches && reservedBatches.length > 0) {
+                        const quantity = material.quantity || 0;
+                        const unitPrice = material.unitPrice || 0;
+                        return sum + (quantity * unitPrice);
+                      }
+                      return sum;
+                    }, 0) / task.quantity).toFixed(2) 
+                    : '0.00'} €/${task.unit}
+                </td>
+              </tr>
+            </table>
+          </div>
+          
+          <div class="footer">
+            <p>Wygenerowano: ${new Date().toLocaleString('pl-PL')}</p>
+            <p>System MRP</p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 20px;">
+            <button onclick="window.print()" style="padding: 10px 20px; background-color: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px;">
+              Drukuj raport
+            </button>
+          </div>
+        </body>
+        </html>
+      `;
+      
+      // Otwórz nowe okno z zawartością do wydruku
+      const printWindow = window.open('', '_blank');
+      printWindow.document.open();
+      printWindow.document.write(printContents);
+      printWindow.document.close();
     } catch (error) {
       console.error('Błąd podczas generowania raportu materiałów:', error);
-      showError('Nie udało się wygenerować raportu materiałów: ' + error.message);
-    } finally {
-      setLoading(false);
+      showError('Wystąpił błąd podczas generowania raportu materiałów');
     }
   };
 
@@ -1443,6 +1663,89 @@ const TaskDetailsPage = () => {
     printWindow.document.close();
   };
 
+  // Funkcja do pobierania aktualnych cen partii i aktualizacji cen materiałów
+  const updateMaterialPricesFromBatches = useCallback(async () => {
+    if (!task || !task.materialBatches) return;
+    
+    try {
+      // Tworzymy kopię materiałów, aby je zaktualizować
+      const updatedMaterials = [...materials];
+      let materialsChanged = false;
+      
+      // Dla każdego materiału z przypisanymi partiami, obliczamy aktualną cenę
+      for (const material of updatedMaterials) {
+        const materialId = material.inventoryItemId || material.id;
+        const reservedBatches = task.materialBatches && task.materialBatches[materialId];
+        
+        if (reservedBatches && reservedBatches.length > 0) {
+          let totalCost = 0;
+          let totalQuantity = 0;
+          
+          // Pobierz aktualne dane każdej partii i oblicz średnią ważoną cenę
+          for (const batchReservation of reservedBatches) {
+            try {
+              const batchData = await getInventoryBatch(batchReservation.batchId);
+              if (batchData) {
+                const batchQuantity = parseFloat(batchReservation.quantity) || 0;
+                const batchUnitPrice = parseFloat(batchData.unitPrice) || 0;
+                
+                totalCost += batchQuantity * batchUnitPrice;
+                totalQuantity += batchQuantity;
+                
+                console.log(`Batch ${batchData.batchNumber}: quantity=${batchQuantity}, unitPrice=${batchUnitPrice}`);
+              }
+            } catch (error) {
+              console.error(`Błąd podczas pobierania danych partii ${batchReservation.batchId}:`, error);
+            }
+          }
+          
+          // Oblicz średnią ważoną cenę jednostkową
+          if (totalQuantity > 0) {
+            const averagePrice = totalCost / totalQuantity;
+            // Sprawdź czy cena się zmieniła, z zaokrągleniem do 2 miejsc po przecinku
+            const currentPriceRounded = Math.round(material.unitPrice * 100) / 100;
+            const newPriceRounded = Math.round(averagePrice * 100) / 100;
+            
+            if (currentPriceRounded !== newPriceRounded) {
+              material.unitPrice = averagePrice;
+              materialsChanged = true;
+              console.log(`Zaktualizowano cenę dla ${material.name}: ${averagePrice.toFixed(2)} €`);
+            }
+          }
+        }
+      }
+      
+      // Aktualizuj stan materiałów tylko jeśli faktycznie nastąpiła zmiana cen
+      if (materialsChanged) {
+        setMaterials(updatedMaterials);
+      }
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji cen materiałów:', error);
+    }
+  }, [task, task?.materialBatches, materials]);
+  
+  // Aktualizuj ceny materiałów tylko przy załadowaniu zadania lub zmianie zarezerwowanych partii
+  // Używamy ref, aby śledzić czy to pierwsze wywołanie po zmianie danych
+  const initialLoadRef = useRef(true);
+  
+  useEffect(() => {
+    if (task && task.materialBatches) {
+      // Wykonaj aktualizację cen tylko przy pierwszym załadowaniu
+      // lub kiedy faktycznie zmienia się struktura materialBatches
+      if (initialLoadRef.current) {
+        updateMaterialPricesFromBatches();
+        initialLoadRef.current = false;
+      }
+    }
+    
+    // Reset flagi gdy zmienią się materiały
+    return () => {
+      if (task && task.materialBatches) {
+        initialLoadRef.current = true;
+      }
+    };
+  }, [task, task?.materialBatches, updateMaterialPricesFromBatches]);
+
   // Renderuj stronę
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -1671,8 +1974,20 @@ const TaskDetailsPage = () => {
                                 materialQuantities[material.id] || 0
                               )}
                             </TableCell>
-                            <TableCell>{unitPrice.toFixed(2)} €</TableCell>
-                            <TableCell>{cost.toFixed(2)} €</TableCell>
+                            <TableCell>
+                              {reservedBatches && reservedBatches.length > 0 ? (
+                                unitPrice.toFixed(2) + ' €'
+                              ) : (
+                                '—'
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {reservedBatches && reservedBatches.length > 0 ? (
+                                cost.toFixed(2) + ' €'
+                              ) : (
+                                '—'
+                              )}
+                            </TableCell>
                             <TableCell>
                               {reservedBatches && reservedBatches.length > 0 ? (
                                 <Box>
@@ -1745,9 +2060,17 @@ const TaskDetailsPage = () => {
                 <Typography variant="body1">
                   <strong>Całkowity koszt materiałów:</strong> {
                     materials.reduce((sum, material) => {
-                      const quantity = materialQuantities[material.id] || material.quantity || 0;
-                      const unitPrice = material.unitPrice || 0;
-                      return sum + (quantity * unitPrice);
+                      // Sprawdź czy dla tego materiału są zarezerwowane partie
+                      const materialId = material.inventoryItemId || material.id;
+                      const reservedBatches = task.materialBatches && task.materialBatches[materialId];
+                      
+                      // Uwzględnij koszt tylko jeśli materiał ma zarezerwowane partie
+                      if (reservedBatches && reservedBatches.length > 0) {
+                        const quantity = materialQuantities[material.id] || material.quantity || 0;
+                        const unitPrice = material.unitPrice || 0;
+                        return sum + (quantity * unitPrice);
+                      }
+                      return sum;
                     }, 0).toFixed(2)
                   } €
                 </Typography>
@@ -1755,9 +2078,17 @@ const TaskDetailsPage = () => {
                   <strong>Koszt materiałów na jednostkę:</strong> {
                     task.quantity ? 
                     (materials.reduce((sum, material) => {
-                      const quantity = materialQuantities[material.id] || material.quantity || 0;
-                      const unitPrice = material.unitPrice || 0;
-                      return sum + (quantity * unitPrice);
+                      // Sprawdź czy dla tego materiału są zarezerwowane partie
+                      const materialId = material.inventoryItemId || material.id;
+                      const reservedBatches = task.materialBatches && task.materialBatches[materialId];
+                      
+                      // Uwzględnij koszt tylko jeśli materiał ma zarezerwowane partie
+                      if (reservedBatches && reservedBatches.length > 0) {
+                        const quantity = materialQuantities[material.id] || material.quantity || 0;
+                        const unitPrice = material.unitPrice || 0;
+                        return sum + (quantity * unitPrice);
+                      }
+                      return sum;
                     }, 0) / task.quantity).toFixed(2) : '0.00'
                   } €/{task.unit}
                 </Typography>

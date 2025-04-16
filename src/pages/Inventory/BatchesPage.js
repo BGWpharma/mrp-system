@@ -512,7 +512,33 @@ const BatchesPage = () => {
                           {batch.quantity} {item.unit}
                         </TableCell>
                         <TableCell>
-                          {batch.unitPrice ? `${batch.unitPrice.toFixed(2)} EUR` : '-'}
+                          {(() => {
+                            // Jeśli nie ma ceny, wyświetl "-"
+                            if (!batch.unitPrice) return '-';
+                            
+                            // Podstawowy format ceny
+                            let priceDisplay = `${parseFloat(batch.unitPrice).toFixed(2)} EUR`;
+                            
+                            // Jeśli mamy informacje o cenie bazowej i dodatkowym koszcie
+                            if (batch.baseUnitPrice !== undefined && batch.additionalCostPerUnit !== undefined) {
+                              const basePrice = parseFloat(batch.baseUnitPrice).toFixed(2);
+                              const additionalCost = parseFloat(batch.additionalCostPerUnit).toFixed(2);
+                              
+                              // Wyświetl rozszerzone informacje o cenie
+                              return (
+                                <Tooltip title={`Cena bazowa: ${basePrice} EUR + Koszt dodatkowy: ${additionalCost} EUR`}>
+                                  <Box>
+                                    <Typography variant="body2">{priceDisplay}</Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                      (baza: {basePrice} + dod. koszt: {additionalCost})
+                                    </Typography>
+                                  </Box>
+                                </Tooltip>
+                              );
+                            }
+                            
+                            return priceDisplay;
+                          })()}
                         </TableCell>
                         <TableCell>
                           <Chip 
@@ -525,6 +551,64 @@ const BatchesPage = () => {
                         <TableCell>
                           {(() => {
                             let source = '-';
+                            
+                            // Sprawdź czy partia pochodzi z zamówienia zakupu (PO)
+                            if (batch.source === 'purchase' || (batch.sourceDetails && batch.sourceDetails.sourceType === 'purchase')) {
+                              // Jeśli mamy szczegółowe dane o PO
+                              if (batch.purchaseOrderDetails) {
+                                const po = batch.purchaseOrderDetails;
+                                return (
+                                  <Box>
+                                    <Typography variant="body2">
+                                      <strong>Z zamówienia zakupu:</strong>
+                                    </Typography>
+                                    <Typography variant="body2">
+                                      PO: {po.number || '-'}
+                                    </Typography>
+                                    {po.supplier && (
+                                      <Typography variant="body2" color="text.secondary">
+                                        Dostawca: {po.supplier.name || '-'}
+                                      </Typography>
+                                    )}
+                                    {po.orderDate && (
+                                      <Typography variant="body2" color="text.secondary" fontSize="0.8rem">
+                                        Data zamówienia: {typeof po.orderDate === 'string' 
+                                          ? new Date(po.orderDate).toLocaleDateString('pl-PL') 
+                                          : po.orderDate instanceof Date 
+                                            ? po.orderDate.toLocaleDateString('pl-PL')
+                                            : po.orderDate && po.orderDate.toDate
+                                              ? po.orderDate.toDate().toLocaleDateString('pl-PL')
+                                              : '-'}
+                                      </Typography>
+                                    )}
+                                    {po.id && (
+                                      <Button 
+                                        size="small" 
+                                        variant="outlined" 
+                                        color="primary"
+                                        component={Link}
+                                        to={`/purchase-orders/${po.id}`}
+                                        sx={{ mt: 1, fontSize: '0.7rem', py: 0.3 }}
+                                      >
+                                        Szczegóły PO
+                                      </Button>
+                                    )}
+                                  </Box>
+                                );
+                              }
+                              
+                              // Fallback dla starszych rekordów bez szczegółów PO
+                              source = 'Z zamówienia zakupu';
+                              if (batch.orderNumber) {
+                                source += ` (PO: ${batch.orderNumber})`;
+                              }
+                              if (batch.sourceDetails && batch.sourceDetails.supplierName) {
+                                source += ` od ${batch.sourceDetails.supplierName}`;
+                              }
+                              return source;
+                            }
+                            
+                            // Produkcja - wyświetlanie informacji o MO i CO
                             if (batch.source === 'Produkcja' || batch.source === 'production') {
                               source = 'Z produkcji';
                               // Dodaj informacje o MO i CO, jeśli są dostępne
@@ -537,6 +621,7 @@ const BatchesPage = () => {
                             } else if (batch.source) {
                               source = batch.source;
                             }
+                            
                             return source;
                           })()}
                         </TableCell>
@@ -614,14 +699,64 @@ const BatchesPage = () => {
                 <strong>Dostępna ilość:</strong> {selectedBatch.quantity} {item?.unit || 'szt.'}
               </Typography>
               
+              {/* Dodaj informacje o cenie jednostkowej z rozbiciem na bazową i dodatkowe koszty */}
+              {selectedBatch.unitPrice > 0 && (
+                <Typography variant="body2" gutterBottom>
+                  <strong>Cena jednostkowa:</strong> {parseFloat(selectedBatch.unitPrice).toFixed(2)} EUR
+                  {selectedBatch.baseUnitPrice !== undefined && selectedBatch.additionalCostPerUnit !== undefined && (
+                    <Box component="span" sx={{ color: 'text.secondary', fontSize: '0.9em' }}>
+                      {` (baza: ${parseFloat(selectedBatch.baseUnitPrice).toFixed(2)} EUR + dodatkowy koszt: ${parseFloat(selectedBatch.additionalCostPerUnit).toFixed(2)} EUR)`}
+                    </Box>
+                  )}
+                </Typography>
+              )}
+              
               {/* Dodaj informacje o pochodzeniu partii, jeśli są dostępne */}
-              {(selectedBatch.moNumber || selectedBatch.orderNumber || selectedBatch.source) && (
+              {(selectedBatch.moNumber || selectedBatch.orderNumber || selectedBatch.source || selectedBatch.purchaseOrderDetails) && (
                 <>
                   <Typography variant="subtitle2" sx={{ mt: 1 }}>
                     Informacje o pochodzeniu:
                   </Typography>
                   
-                  {selectedBatch.source && (
+                  {/* Szczegóły PO */}
+                  {selectedBatch.purchaseOrderDetails && (
+                    <Box sx={{ mt: 1, p: 1, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+                      <Typography variant="body2" gutterBottom>
+                        <strong>Zamówienie zakupu:</strong> {selectedBatch.purchaseOrderDetails.number || '-'}
+                      </Typography>
+                      {selectedBatch.purchaseOrderDetails.supplier && (
+                        <Typography variant="body2" gutterBottom>
+                          <strong>Dostawca:</strong> {selectedBatch.purchaseOrderDetails.supplier.name || '-'}
+                        </Typography>
+                      )}
+                      {selectedBatch.purchaseOrderDetails.orderDate && (
+                        <Typography variant="body2" gutterBottom>
+                          <strong>Data zamówienia:</strong> {typeof selectedBatch.purchaseOrderDetails.orderDate === 'string' 
+                            ? new Date(selectedBatch.purchaseOrderDetails.orderDate).toLocaleDateString('pl-PL') 
+                            : selectedBatch.purchaseOrderDetails.orderDate instanceof Date 
+                              ? selectedBatch.purchaseOrderDetails.orderDate.toLocaleDateString('pl-PL')
+                              : selectedBatch.purchaseOrderDetails.orderDate && selectedBatch.purchaseOrderDetails.orderDate.toDate
+                                ? selectedBatch.purchaseOrderDetails.orderDate.toDate().toLocaleDateString('pl-PL')
+                                : '-'}
+                        </Typography>
+                      )}
+                      {selectedBatch.purchaseOrderDetails.id && (
+                        <Button 
+                          size="small" 
+                          variant="outlined" 
+                          color="primary"
+                          component={Link}
+                          to={`/purchase-orders/${selectedBatch.purchaseOrderDetails.id}`}
+                          sx={{ mt: 1 }}
+                          onClick={closeTransferDialog}
+                        >
+                          Zobacz szczegóły PO
+                        </Button>
+                      )}
+                    </Box>
+                  )}
+                  
+                  {selectedBatch.source && !selectedBatch.purchaseOrderDetails && (
                     <Typography variant="body2" gutterBottom>
                       <strong>Źródło:</strong> {selectedBatch.source === 'production' ? 'Z produkcji' : selectedBatch.source}
                     </Typography>

@@ -18,6 +18,37 @@ import { createNotification } from './notificationService';
 const PURCHASE_ORDERS_COLLECTION = 'purchaseOrders';
 const SUPPLIERS_COLLECTION = 'suppliers';
 
+/**
+ * Pomocnicza funkcja do bezpiecznej konwersji różnych formatów dat na ISO string
+ * Obsługuje Timestamp, Date, string ISO i null
+ */
+const safeConvertDate = (dateField) => {
+  if (!dateField) return null;
+  
+  try {
+    // Jeśli to Timestamp z Firebase
+    if (dateField && dateField.toDate && typeof dateField.toDate === 'function') {
+      return dateField.toDate().toISOString();
+    }
+    
+    // Jeśli to już string ISO
+    if (typeof dateField === 'string') {
+      return dateField;
+    }
+    
+    // Jeśli to obiekt Date
+    if (dateField instanceof Date) {
+      return dateField.toISOString();
+    }
+    
+    // Inne przypadki - spróbuj skonwertować lub zwróć null
+    return null;
+  } catch (error) {
+    console.error("Błąd podczas konwersji daty:", error, dateField);
+    return null;
+  }
+};
+
 // Funkcje do obsługi zamówień zakupowych
 export const getAllPurchaseOrders = async () => {
   try {
@@ -73,11 +104,11 @@ export const getAllPurchaseOrders = async () => {
         ...poData,
         supplier: supplierData,
         totalGross: totalGross,
-        // Konwersja Timestamp na ISO string (dla kompatybilności z istniejącym kodem)
-        orderDate: poData.orderDate ? poData.orderDate.toDate().toISOString() : null,
-        expectedDeliveryDate: poData.expectedDeliveryDate ? poData.expectedDeliveryDate.toDate().toISOString() : null,
-        createdAt: poData.createdAt ? poData.createdAt.toDate().toISOString() : null,
-        updatedAt: poData.updatedAt ? poData.updatedAt.toDate().toISOString() : null
+        // Bezpieczna konwersja dat zamiast bezpośredniego wywołania toDate()
+        orderDate: safeConvertDate(poData.orderDate),
+        expectedDeliveryDate: safeConvertDate(poData.expectedDeliveryDate),
+        createdAt: safeConvertDate(poData.createdAt),
+        updatedAt: safeConvertDate(poData.updatedAt)
       });
     }
     
@@ -108,34 +139,6 @@ export const getPurchaseOrderById = async (id) => {
       }
     }
     
-    // Bezpieczna konwersja dat - obsługuje zarówno Timestamp, jak i stringi ISO
-    const safeConvertDate = (dateField) => {
-      if (!dateField) return null;
-      
-      try {
-        // Jeśli to Timestamp z Firebase
-        if (dateField.toDate && typeof dateField.toDate === 'function') {
-          return dateField.toDate().toISOString();
-        }
-        
-        // Jeśli to już string ISO
-        if (typeof dateField === 'string') {
-          return new Date(dateField).toISOString();
-        }
-        
-        // Jeśli to obiekt Date
-        if (dateField instanceof Date) {
-          return dateField.toISOString();
-        }
-        
-        // Inne przypadki - spróbuj skonwertować
-        return new Date(dateField).toISOString();
-      } catch (error) {
-        console.error("Błąd podczas konwersji daty:", error);
-        return new Date().toISOString(); // Domyślnie bieżąca data
-      }
-    };
-    
     // Pastewniamy, że wszystkie pola są poprawnie przekształcone
     const result = {
       id: purchaseOrderDoc.id,
@@ -151,7 +154,7 @@ export const getPurchaseOrderById = async (id) => {
       deliveryAddress: poData.deliveryAddress || '',
       notes: poData.notes || '',
       status: poData.status || 'draft',
-      // Bezpieczna konwersja dat
+      // Bezpieczna konwersja dat z wykorzystaniem globalnej funkcji safeConvertDate
       orderDate: safeConvertDate(poData.orderDate),
       expectedDeliveryDate: safeConvertDate(poData.expectedDeliveryDate),
       createdAt: safeConvertDate(poData.createdAt),
@@ -264,6 +267,27 @@ export const createPurchaseOrder = async (purchaseOrderData, userId) => {
     // Zapisujemy tylko ID dostawcy, a nie cały obiekt - z zabezpieczeniem przed undefined
     const supplierId = supplier?.id || null;
     
+    // Bezpieczna konwersja dat do obiektów Date
+    const safeConvertToDate = (value) => {
+      if (!value) return null;
+      
+      try {
+        // Jeśli to już obiekt Date, zwróć go
+        if (value instanceof Date) return value;
+        
+        // Jeśli to string, konwertuj na Date
+        if (typeof value === 'string') return new Date(value);
+        
+        // Jeśli to Timestamp, użyj toDate()
+        if (value && value.toDate && typeof value.toDate === 'function') return value.toDate();
+        
+        return null;
+      } catch (error) {
+        console.error("Błąd konwersji daty:", error);
+        return null;
+      }
+    };
+    
     // Przygotuj obiekt zamówienia zakupowego
     const newPurchaseOrder = {
       number,
@@ -276,8 +300,8 @@ export const createPurchaseOrder = async (purchaseOrderData, userId) => {
       currency,
       status,
       targetWarehouseId,
-      orderDate: typeof orderDate === 'string' ? new Date(orderDate) : orderDate,
-      expectedDeliveryDate: expectedDeliveryDate ? (typeof expectedDeliveryDate === 'string' ? new Date(expectedDeliveryDate) : expectedDeliveryDate) : null,
+      orderDate: safeConvertToDate(orderDate) || new Date(),
+      expectedDeliveryDate: safeConvertToDate(expectedDeliveryDate),
       deliveryAddress,
       notes,
       createdBy: userId,
@@ -294,8 +318,8 @@ export const createPurchaseOrder = async (purchaseOrderData, userId) => {
       id: docRef.id,
       ...newPurchaseOrder,
       supplier: supplier, // Dodajemy pełny obiekt dostawcy dla interfejsu
-      orderDate: typeof newPurchaseOrder.orderDate === 'object' ? newPurchaseOrder.orderDate.toISOString() : newPurchaseOrder.orderDate,
-      expectedDeliveryDate: newPurchaseOrder.expectedDeliveryDate ? (typeof newPurchaseOrder.expectedDeliveryDate === 'object' ? newPurchaseOrder.expectedDeliveryDate.toISOString() : newPurchaseOrder.expectedDeliveryDate) : null,
+      orderDate: safeConvertDate(newPurchaseOrder.orderDate),
+      expectedDeliveryDate: safeConvertDate(newPurchaseOrder.expectedDeliveryDate),
       createdAt: new Date().toISOString(), // serverTimestamp nie zwraca wartości od razu
       updatedAt: new Date().toISOString()
     };
@@ -308,198 +332,53 @@ export const createPurchaseOrder = async (purchaseOrderData, userId) => {
   }
 };
 
-export const updatePurchaseOrder = async (purchaseOrderId, updateData, userId) => {
+/**
+ * Aktualizuje istniejące zamówienie zakupowe
+ * @param {string} purchaseOrderId - ID zamówienia, które ma być zaktualizowane
+ * @param {Object} updatedData - Dane do aktualizacji
+ * @returns {Promise<Object>} - Zaktualizowane zamówienie
+ */
+export const updatePurchaseOrder = async (purchaseOrderId, updatedData, userId = null) => {
   try {
-    // Sprawdź, czy zamówienie istnieje
+    if (!purchaseOrderId) {
+      throw new Error('ID zamówienia zakupowego jest wymagane');
+    }
+
+    // Pobierz referencję do dokumentu
     const purchaseOrderRef = doc(db, PURCHASE_ORDERS_COLLECTION, purchaseOrderId);
-    const purchaseOrderSnap = await getDoc(purchaseOrderRef);
     
-    if (!purchaseOrderSnap.exists()) {
-      throw new Error(`Zamówienie zakupowe o ID ${purchaseOrderId} nie istnieje`);
-    }
+    // Pobierz aktualne dane zamówienia
+    const poDoc = await getDoc(purchaseOrderRef);
     
-    const existingPO = purchaseOrderSnap.data();
-    
-    const { 
-      supplier,
-      items = [], 
-      additionalCostsItems = [],
-      additionalCosts,
-      status,
-      targetWarehouseId,
-      orderDate,
-      expectedDeliveryDate,
-      deliveryAddress,
-      notes,
-      currency,
-      totalValue,
-      totalGross,
-      totalVat
-    } = updateData;
-    
-    // Bezpieczne pobieranie ID dostawcy
-    const supplierId = supplier?.id || null;
-    
-    // Obliczamy wartości VAT i brutto jeśli nie zostały dostarczone
-    let calculatedTotalValue = totalValue;
-    let calculatedTotalGross = totalGross;
-    let calculatedTotalVat = totalVat;
-    
-    if (!calculatedTotalValue || !calculatedTotalGross || !calculatedTotalVat) {
-      // Obliczanie wartości netto i VAT dla pozycji produktów
-      let itemsNetTotal = 0;
-      let itemsVatTotal = 0;
-      
-      for (const item of items) {
-        const itemNet = parseFloat(item.totalPrice) || 0;
-        itemsNetTotal += itemNet;
-    
-        // Obliczanie VAT dla pozycji na podstawie jej indywidualnej stawki VAT
-        const vatRate = typeof item.vatRate === 'number' ? item.vatRate : 0;
-        const itemVat = (itemNet * vatRate) / 100;
-        itemsVatTotal += itemVat;
-      }
-      
-      // Obliczanie wartości netto i VAT dla dodatkowych kosztów
-      let additionalCostsNetTotal = 0;
-      let additionalCostsVatTotal = 0;
-      
-      for (const cost of additionalCostsItems) {
-        const costNet = parseFloat(cost.value) || 0;
-        additionalCostsNetTotal += costNet;
-    
-        // Obliczanie VAT dla dodatkowego kosztu na podstawie jego indywidualnej stawki VAT
-        const vatRate = typeof cost.vatRate === 'number' ? cost.vatRate : 0;
-        const costVat = (costNet * vatRate) / 100;
-        additionalCostsVatTotal += costVat;
-      }
-      
-      // Dla wstecznej kompatybilności - obsługa starego pola additionalCosts
-      if (additionalCosts > 0 && (!additionalCostsItems || additionalCostsItems.length === 0)) {
-        additionalCostsNetTotal += parseFloat(additionalCosts) || 0;
-      }
-      
-      // Suma wartości netto: produkty + dodatkowe koszty
-      calculatedTotalValue = itemsNetTotal + additionalCostsNetTotal;
-      
-      // Suma VAT: VAT od produktów + VAT od dodatkowych kosztów
-      calculatedTotalVat = itemsVatTotal + additionalCostsVatTotal;
-      
-      // Wartość brutto: suma netto + suma VAT
-      calculatedTotalGross = calculatedTotalValue + calculatedTotalVat;
-    }
-    
-    // Przygotuj dane do aktualizacji
-    const updateFields = {
-      supplierId,
-      items,
-      additionalCostsItems,
-      targetWarehouseId,
-      deliveryAddress,
-      notes,
-      currency,
-      totalValue: calculatedTotalValue,
-      totalGross: calculatedTotalGross,
-      totalVat: calculatedTotalVat,
-      updatedBy: userId,
-      updatedAt: serverTimestamp()
-    };
-    
-    // Dodaj datę zamówienia jeśli została dostarczona
-    if (orderDate) {
-      updateFields.orderDate = typeof orderDate === 'string' ? new Date(orderDate) : orderDate;
-    }
-    
-    // Dodaj przewidywaną datę dostawy jeśli została dostarczona
-    if (expectedDeliveryDate) {
-      updateFields.expectedDeliveryDate = typeof expectedDeliveryDate === 'string' ? new Date(expectedDeliveryDate) : expectedDeliveryDate;
-    }
-    
-    // Aktualizuj status i historię statusów jeśli status się zmienił
-    if (status && status !== existingPO.status) {
-      updateFields.status = status;
-      
-      // Pobierz istniejącą historię statusów lub utwórz nową
-      const existingStatusHistory = existingPO.statusHistory || [];
-      
-      // Dodaj nowy wpis do historii statusów
-      const statusHistoryEntry = {
-        status,
-        date: new Date(),
-        userId
-      };
-      
-      updateFields.statusHistory = [...existingStatusHistory, statusHistoryEntry];
-    
-      // Wyślij powiadomienie o zmianie statusu
-      try {
-        await createNotification({
-          title: 'Zmiana statusu zamówienia',
-          content: `Zamówienie ${existingPO.number || purchaseOrderId} zmieniło status na: ${status}`,
-          type: 'purchaseOrder',
-          objectId: purchaseOrderId,
-          createdBy: userId
-        });
-      } catch (notificationError) {
-        console.error('Błąd podczas wysyłania powiadomienia:', notificationError);
-        // Kontynuuj mimo błędu powiadomienia
-      }
+    if (!poDoc.exists()) {
+      throw new Error(`Nie znaleziono zamówienia zakupowego o ID ${purchaseOrderId}`);
     }
     
     // Aktualizuj dokument
-    await updateDoc(purchaseOrderRef, updateFields);
-    
-    // Pobierz zaktualizowane dane zamówienia
-    const updatedDocSnap = await getDoc(purchaseOrderRef);
-    
-    if (!updatedDocSnap.exists()) {
-      throw new Error(`Nie można pobrać zaktualizowanego zamówienia o ID ${purchaseOrderId}`);
-    }
-    
-    const updatedData = updatedDocSnap.data();
-    
-    // Pobierz dane dostawcy jeśli jest ID dostawcy
-    let supplierData = null;
-    if (updatedData.supplierId) {
-      try {
-        const supplierDoc = await getDoc(doc(db, SUPPLIERS_COLLECTION, updatedData.supplierId));
-      if (supplierDoc.exists()) {
-        supplierData = { id: supplierDoc.id, ...supplierDoc.data() };
-      }
-      } catch (supplierError) {
-        console.error('Błąd podczas pobierania danych dostawcy:', supplierError);
-        // Kontynuuj mimo błędu pobierania dostawcy
-      }
-    }
-    
-    // Bezpieczna konwersja dat na string
-    const safeToISOString = (dateObj) => {
-      if (!dateObj) return null;
-      if (typeof dateObj === 'string') return dateObj;
-      if (dateObj instanceof Date) return dateObj.toISOString();
-      if (dateObj.toDate && typeof dateObj.toDate === 'function') {
-        try {
-          return dateObj.toDate().toISOString();
-        } catch (e) {
-          console.error('Nie można skonwertować timestamp na date:', e);
-          return null;
-        }
-      }
-      return null;
-    };
-    
-    // Zwróć zaktualizowany obiekt zamówienia zakupowego
-    return {
-      id: purchaseOrderId,
+    await updateDoc(purchaseOrderRef, {
       ...updatedData,
-      supplier: supplierData,
-      orderDate: safeToISOString(updatedData.orderDate),
-      expectedDeliveryDate: safeToISOString(updatedData.expectedDeliveryDate),
-      createdAt: safeToISOString(updatedData.createdAt),
-      updatedAt: safeToISOString(updatedData.updatedAt)
-    };
+      updatedAt: serverTimestamp(),
+      updatedBy: userId || 'system'
+    });
+    
+    // Jeśli zaktualizowano dodatkowe koszty, zaktualizuj również powiązane partie
+    const hasAdditionalCostsUpdate = updatedData.additionalCostsItems !== undefined || 
+                                     updatedData.additionalCosts !== undefined;
+    
+    if (hasAdditionalCostsUpdate) {
+      console.log('Wykryto aktualizację dodatkowych kosztów, aktualizuję ceny partii');
+      // Pobierz pełne dane po aktualizacji
+      const updatedPoDoc = await getDoc(purchaseOrderRef);
+      const updatedPoData = updatedPoDoc.data();
+      
+      // Aktualizuj ceny w powiązanych partiach
+      await updateBatchPricesWithAdditionalCosts(purchaseOrderId, updatedPoData, userId || 'system');
+    }
+    
+    // Pobierz zaktualizowane dane
+    return await getPurchaseOrderById(purchaseOrderId);
   } catch (error) {
-    console.error('Błąd podczas aktualizacji zamówienia zakupowego:', error);
+    console.error(`Błąd podczas aktualizacji zamówienia ${purchaseOrderId}:`, error);
     throw error;
   }
 };
@@ -557,25 +436,25 @@ export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, user
       // Jeśli status zmieniany jest na "delivered" (dostarczone)
       // dodaj pole z datą i godziną dostarczenia
       if (newStatus === PURCHASE_ORDER_STATUSES.DELIVERED) {
-        const now = new Date();
         updateFields.deliveredAt = serverTimestamp();
         updateFields.deliveredBy = userId;
-        console.log(`Zamówienie ${purchaseOrderId} oznaczone jako dostarczone w dniu ${now.toLocaleDateString()} o godzinie ${now.toLocaleTimeString()}`);
+        console.log(`Zamówienie ${purchaseOrderId} oznaczone jako dostarczone w dniu ${new Date().toLocaleDateString()} o godzinie ${new Date().toLocaleTimeString()}`);
       }
       
       await updateDoc(poRef, updateFields);
       
       // Jeśli zaimportowano usługę powiadomień, utwórz powiadomienie o zmianie statusu
       try {
-        const { createStatusChangeNotification } = require('./notificationService');
-        await createStatusChangeNotification(
+        await createNotification({
           userId,
-          'purchaseOrder',
-          purchaseOrderId,
-          poData.number || purchaseOrderId.substring(0, 8),
-          oldStatus || 'Szkic',
-          newStatus
-        );
+          type: 'statusChange',
+          entityType: 'purchaseOrder',
+          entityId: purchaseOrderId,
+          entityName: poData.number || purchaseOrderId.substring(0, 8),
+          oldStatus: oldStatus || 'Szkic',
+          newStatus: newStatus,
+          createdAt: new Date().toISOString()
+        });
       } catch (notificationError) {
         console.warn('Nie udało się utworzyć powiadomienia:', notificationError);
       }
@@ -616,11 +495,11 @@ export const getPurchaseOrdersByStatus = async (status) => {
         id: docRef.id,
         ...poData,
         supplier: supplierData,
-        // Konwersja Timestamp na ISO string (dla kompatybilności z istniejącym kodem)
-        orderDate: poData.orderDate ? poData.orderDate.toDate().toISOString() : null,
-        expectedDeliveryDate: poData.expectedDeliveryDate ? poData.expectedDeliveryDate.toDate().toISOString() : null,
-        createdAt: poData.createdAt ? poData.createdAt.toDate().toISOString() : null,
-        updatedAt: poData.updatedAt ? poData.updatedAt.toDate().toISOString() : null
+        // Bezpieczna konwersja dat zamiast bezpośredniego wywołania toDate()
+        orderDate: safeConvertDate(poData.orderDate),
+        expectedDeliveryDate: safeConvertDate(poData.expectedDeliveryDate),
+        createdAt: safeConvertDate(poData.createdAt),
+        updatedAt: safeConvertDate(poData.updatedAt)
       });
     }
     
@@ -658,11 +537,11 @@ export const getPurchaseOrdersBySupplier = async (supplierId) => {
         id: docRef.id,
         ...poData,
         supplier: supplierData,
-        // Konwersja Timestamp na ISO string (dla kompatybilności z istniejącym kodem)
-        orderDate: poData.orderDate ? poData.orderDate.toDate().toISOString() : null,
-        expectedDeliveryDate: poData.expectedDeliveryDate ? poData.expectedDeliveryDate.toDate().toISOString() : null,
-        createdAt: poData.createdAt ? poData.createdAt.toDate().toISOString() : null,
-        updatedAt: poData.updatedAt ? poData.updatedAt.toDate().toISOString() : null
+        // Bezpieczna konwersja dat zamiast bezpośredniego wywołania toDate()
+        orderDate: safeConvertDate(poData.orderDate),
+        expectedDeliveryDate: safeConvertDate(poData.expectedDeliveryDate),
+        createdAt: safeConvertDate(poData.createdAt),
+        updatedAt: safeConvertDate(poData.updatedAt)
       });
     }
     
@@ -1062,6 +941,161 @@ export const updatePurchaseOrderItems = async (purchaseOrderId, updatedItems, us
     };
   } catch (error) {
     console.error('Błąd podczas aktualizacji pozycji zamówienia zakupowego:', error);
+    throw error;
+  }
+};
+
+/**
+ * Aktualizuje ceny jednostkowe partii powiązanych z zamówieniem zakupu po dodaniu dodatkowych kosztów
+ * @param {string} purchaseOrderId - ID zamówienia zakupowego
+ * @param {Object} poData - Dane zamówienia zakupowego
+ * @param {string} userId - ID użytkownika dokonującego aktualizacji
+ */
+const updateBatchPricesWithAdditionalCosts = async (purchaseOrderId, poData, userId) => {
+  try {
+    console.log(`Aktualizuję ceny partii dla zamówienia ${purchaseOrderId}`);
+    
+    // Oblicz łączne dodatkowe koszty
+    let additionalCostsTotal = 0;
+    
+    // Z nowego formatu additionalCostsItems
+    if (poData.additionalCostsItems && Array.isArray(poData.additionalCostsItems)) {
+      additionalCostsTotal = poData.additionalCostsItems.reduce((sum, cost) => {
+        return sum + (parseFloat(cost.value) || 0);
+      }, 0);
+    } 
+    // Ze starego pola additionalCosts (dla kompatybilności)
+    else if (poData.additionalCosts) {
+      additionalCostsTotal = parseFloat(poData.additionalCosts) || 0;
+    }
+    
+    // Jeśli brak dodatkowych kosztów, nie ma potrzeby aktualizacji
+    if (additionalCostsTotal <= 0) {
+      console.log(`Brak dodatkowych kosztów do rozliczenia w zamówieniu ${purchaseOrderId}`);
+      return;
+    }
+    
+    // Oblicz całkowitą ilość produktów w zamówieniu
+    let totalProductQuantity = 0;
+    if (poData.items && Array.isArray(poData.items)) {
+      // Obliczamy tylko na podstawie rzeczywistej otrzymanej ilości
+      totalProductQuantity = poData.items.reduce((sum, item) => {
+        // Użyj pola received, jeśli jest dostępne, w przeciwnym razie quantity
+        const quantity = item.received !== undefined ? parseFloat(item.received) : parseFloat(item.quantity);
+        return sum + (quantity || 0);
+      }, 0);
+    }
+    
+    // Jeśli brak produktów, nie ma potrzeby aktualizacji
+    if (totalProductQuantity <= 0) {
+      console.log(`Brak produktów do podziału kosztów w zamówieniu ${purchaseOrderId}`);
+      return;
+    }
+    
+    // Oblicz dodatkowy koszt na jednostkę
+    const additionalCostPerUnit = additionalCostsTotal / totalProductQuantity;
+    
+    console.log(`Obliczony dodatkowy koszt na jednostkę: ${additionalCostPerUnit}`);
+    
+    // Pobierz wszystkie partie magazynowe powiązane z tym zamówieniem
+    const { collection, query, where, getDocs, doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+    const firebaseConfig = await import('./firebase/config');
+    const db = firebaseConfig.db;
+    const INVENTORY_BATCHES_COLLECTION = 'inventoryBatches'; // Używamy bezpośrednio nazwy kolekcji
+    
+    // Spróbuj znaleźć partie używając obu modeli danych
+    let batchesToUpdate = [];
+    
+    // 1. Szukaj partii z polem purchaseOrderDetails.id równym ID zamówienia
+    const batchesQuery = query(
+      collection(db, INVENTORY_BATCHES_COLLECTION),
+      where('purchaseOrderDetails.id', '==', purchaseOrderId)
+    );
+    
+    const batchesSnapshot = await getDocs(batchesQuery);
+    batchesSnapshot.forEach(doc => {
+      batchesToUpdate.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+    
+    // 2. Szukaj partii używając starszego modelu danych
+    if (batchesToUpdate.length === 0) {
+      const oldFormatQuery = query(
+        collection(db, INVENTORY_BATCHES_COLLECTION),
+        where('sourceDetails.orderId', '==', purchaseOrderId)
+      );
+      
+      const oldFormatSnapshot = await getDocs(oldFormatQuery);
+      oldFormatSnapshot.forEach(doc => {
+        batchesToUpdate.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+    }
+    
+    console.log(`Znaleziono ${batchesToUpdate.length} partii powiązanych z zamówieniem ${purchaseOrderId}`);
+    
+    // Jeśli nie znaleziono partii, zakończ
+    if (batchesToUpdate.length === 0) {
+      console.log(`Nie znaleziono partii powiązanych z zamówieniem ${purchaseOrderId}`);
+      return;
+    }
+    
+    // Aktualizuj każdą partię
+    const updatePromises = [];
+    
+    for (const batchData of batchesToUpdate) {
+      const batchRef = doc(db, INVENTORY_BATCHES_COLLECTION, batchData.id);
+      
+      // Zachowaj oryginalną cenę jako baseUnitPrice, jeśli nie jest już ustawiona
+      const baseUnitPrice = batchData.baseUnitPrice !== undefined 
+        ? batchData.baseUnitPrice 
+        : batchData.unitPrice || 0;
+        
+      // Ustawienie nowej ceny jednostkowej
+      const newUnitPrice = parseFloat(baseUnitPrice) + additionalCostPerUnit;
+      
+      console.log(`Aktualizuję partię ${batchData.id}: basePrice=${baseUnitPrice}, additionalCost=${additionalCostPerUnit}, newPrice=${newUnitPrice}`);
+      
+      // Aktualizuj dokument partii
+      updatePromises.push(updateDoc(batchRef, {
+        baseUnitPrice: parseFloat(baseUnitPrice),
+        additionalCostPerUnit: additionalCostPerUnit,
+        unitPrice: newUnitPrice,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      }));
+    }
+    
+    await Promise.all(updatePromises);
+    console.log(`Zaktualizowano ceny ${updatePromises.length} partii`);
+    
+  } catch (error) {
+    console.error('Błąd podczas aktualizacji cen partii:', error);
+    // Dodamy szczegóły błędu, aby łatwiej zdiagnozować problem w przyszłości
+    console.error('Szczegóły błędu:', error.message, error.stack);
+    // Nie rzucamy błędu dalej, aby nie przerywać procesu aktualizacji PO
+  }
+};
+
+// Eksportuję nową funkcję
+export const updateBatchesForPurchaseOrder = async (purchaseOrderId, userId) => {
+  try {
+    // Pobierz dane zamówienia
+    const poData = await getPurchaseOrderById(purchaseOrderId);
+    if (!poData) {
+      throw new Error(`Nie znaleziono zamówienia o ID ${purchaseOrderId}`);
+    }
+    
+    // Aktualizuj ceny partii
+    await updateBatchPricesWithAdditionalCosts(purchaseOrderId, poData, userId);
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Błąd podczas aktualizacji partii dla zamówienia:', error);
     throw error;
   }
 }; 

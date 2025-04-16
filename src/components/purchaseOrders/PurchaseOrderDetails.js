@@ -4,7 +4,7 @@ import {
   Container, Typography, Paper, Button, Box, Chip, Grid, Divider, 
   Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  FormControl, InputLabel, Select, MenuItem, TextField
+  FormControl, InputLabel, Select, MenuItem, TextField, CircularProgress, IconButton
 } from '@mui/material';
 import { 
   Edit as EditIcon, 
@@ -17,7 +17,9 @@ import {
   Person as PersonIcon,
   LocationOn as LocationOnIcon,
   Email as EmailIcon,
-  Phone as PhoneIcon
+  Phone as PhoneIcon,
+  MoreVert as MoreVertIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -26,6 +28,7 @@ import {
   deletePurchaseOrder,
   updatePurchaseOrderStatus,
   updatePurchaseOrder,
+  updateBatchesForPurchaseOrder,
   PURCHASE_ORDER_STATUSES,
   translateStatus
 } from '../../services/purchaseOrderService';
@@ -51,6 +54,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
   const [invoiceLinkDialogOpen, setInvoiceLinkDialogOpen] = useState(false);
   const [invoiceLink, setInvoiceLink] = useState('');
   const [userNames, setUserNames] = useState({});
+  const [menuAnchorRef, setMenuAnchorRef] = useState(null);
   
   const printRef = useRef(null);
   
@@ -265,6 +269,16 @@ const PurchaseOrderDetails = ({ orderId }) => {
     } catch (error) {
       console.error('Błąd podczas zapisywania linku do faktury:', error);
       showError('Nie udało się zapisać linku do faktury');
+    }
+  };
+  
+  const handleUpdateBatchPrices = async () => {
+    try {
+      await updateBatchesForPurchaseOrder(orderId, currentUser?.uid);
+      showSuccess('Ceny partii zostały zaktualizowane na podstawie aktualnych kosztów dodatkowych');
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji cen partii:', error);
+      showError('Nie udało się zaktualizować cen partii: ' + error.message);
     }
   };
   
@@ -571,336 +585,408 @@ const PurchaseOrderDetails = ({ orderId }) => {
     };
   };
   
+  // Sprawdzamy czy zamówienie ma dodatkowe koszty do rozliczenia
+  const hasDynamicFields = purchaseOrder?.additionalCostsItems?.length > 0 || 
+                          (purchaseOrder?.additionalCosts && parseFloat(purchaseOrder.additionalCosts) > 0);
+  
   return (
-    <Box>
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between' }}>
-        <Button 
-          variant="outlined" 
-          startIcon={<ArrowBackIcon />} 
-          onClick={() => navigate('/purchase-orders')}
-        >
-          Powrót do listy
-        </Button>
-        <Box>
-          <Button 
-            variant="outlined" 
-            startIcon={<PrintIcon />} 
-            onClick={handleDirectPrint}
-            sx={{ mr: 1 }}
-          >
-            Drukuj
-          </Button>
-          <Button 
-            variant="outlined" 
-            startIcon={<DescriptionIcon />} 
-            onClick={handleInvoiceLinkDialogOpen}
-            sx={{ mr: 1 }}
-          >
-            {purchaseOrder.invoiceLink ? 'Zmień link do faktury' : 'Dodaj link do faktury'}
-          </Button>
-          <Button 
-            variant="outlined" 
-            startIcon={<EditIcon />} 
-            onClick={handleEditClick}
-            sx={{ mr: 1 }}
-          >
-            Edytuj
-          </Button>
-          <Button 
-            variant="outlined" 
-            color="error" 
-            startIcon={<DeleteIcon />} 
-            onClick={handleDeleteClick}
-          >
-            Usuń
-          </Button>
+    <Container maxWidth="lg" sx={{ my: 4 }}>
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
+          <CircularProgress />
         </Box>
-      </Box>
-      
-      <Box 
-        ref={printRef} 
-        sx={{ 
-          mb: 3,
-          '@media print': {
-            padding: 0,
-            margin: 0
-          }
-        }}
-      >
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="h5" component="h1">
-                  Zamówienie {purchaseOrder.number}
-                  <Box component="span" sx={{ ml: 2 }}>
-                    {getStatusChip(purchaseOrder.status)}
-                  </Box>
-                </Typography>
-              </Box>
-              
-              <Typography variant="body1" gutterBottom>
-                <strong>Data zamówienia:</strong> {formatDate(purchaseOrder.orderDate)}
-              </Typography>
-              
-              <Typography variant="body1" gutterBottom>
-                <strong>Oczekiwana data dostawy:</strong> {formatDate(purchaseOrder.expectedDeliveryDate)}
-              </Typography>
-              
-              {purchaseOrder.status === PURCHASE_ORDER_STATUSES.DELIVERED && (
-                <Typography variant="body1" gutterBottom>
-                  <strong>Data dostawy:</strong> {formatDate(purchaseOrder.deliveredAt)}
-                </Typography>
-              )}
-              
-              {purchaseOrder.invoiceLink && (
-                <Typography variant="body1" gutterBottom>
-                  <strong>Faktura:</strong>{' '}
-                  <Link href={purchaseOrder.invoiceLink} target="_blank" rel="noopener noreferrer">
-                    Zobacz fakturę
-                  </Link>
-                </Typography>
-              )}
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <Typography variant="h6" gutterBottom>Dostawca</Typography>
-              
-              {purchaseOrder.supplier ? (
-                <>
-                  <Typography variant="body1" gutterBottom>
-                    <strong>{purchaseOrder.supplier.name}</strong>
-                  </Typography>
-                  <Typography variant="body2" gutterBottom>
-                    {purchaseOrder.supplier.contactPerson && (
-                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                        <PersonIcon sx={{ mr: 1, fontSize: 16 }} />
-                        {purchaseOrder.supplier.contactPerson}
-                      </Box>
-                    )}
-                    
-                    {/* Adres główny dostawcy */}
-                    {getSupplierMainAddress(purchaseOrder.supplier) && (
-                      <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 1 }}>
-                        <LocationOnIcon sx={{ mr: 1, fontSize: 16, mt: 0.5 }} />
-                        <span>{formatAddress(getSupplierMainAddress(purchaseOrder.supplier))}</span>
-                      </Box>
-                    )}
-                    
-                    {purchaseOrder.supplier.email && (
-                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                        <EmailIcon sx={{ mr: 1, fontSize: 16 }} />
-                        <a href={`mailto:${purchaseOrder.supplier.email}`}>{purchaseOrder.supplier.email}</a>
-                      </Box>
-                    )}
-                    
-                    {purchaseOrder.supplier.phone && (
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <PhoneIcon sx={{ mr: 1, fontSize: 16 }} />
-                        <a href={`tel:${purchaseOrder.supplier.phone}`}>{purchaseOrder.supplier.phone}</a>
-                      </Box>
-                    )}
-                  </Typography>
-                </>
-              ) : (
-                <Typography variant="body2">
-                  Brak danych dostawcy
-                </Typography>
-              )}
-            </Grid>
-          </Grid>
-        </Paper>
-        
-        {/* Historia zmian statusu */}
-        {purchaseOrder.statusHistory && purchaseOrder.statusHistory.length > 0 && (
-          <Paper sx={{ p: 3, mb: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Historia zmian statusu
+      ) : purchaseOrder ? (
+        <>
+          <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Button
+              component={Link}
+              to="/purchase-orders"
+              startIcon={<ArrowBackIcon />}
+              variant="outlined"
+            >
+              Powrót do listy
+            </Button>
+            <Typography variant="h4" component="h1">
+              Zamówienie {purchaseOrder.number}
             </Typography>
-            
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Data i godzina</TableCell>
-                  <TableCell>Poprzedni status</TableCell>
-                  <TableCell>Nowy status</TableCell>
-                  <TableCell>Kto zmienił</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {[...purchaseOrder.statusHistory].reverse().map((change, index) => (
-                  <TableRow key={index}>
-                    <TableCell>
-                      {change.changedAt ? new Date(change.changedAt).toLocaleString('pl') : 'Brak daty'}
-                    </TableCell>
-                    <TableCell>{translateStatus(change.oldStatus)}</TableCell>
-                    <TableCell>{translateStatus(change.newStatus)}</TableCell>
-                    <TableCell>{getUserName(change.changedBy)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Paper>
-        )}
-        
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Typography variant="h6" gutterBottom>Elementy zamówienia</Typography>
-          
-          <TableContainer sx={{ mb: 3 }}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Nazwa produktu</TableCell>
-                  <TableCell align="right">Ilość</TableCell>
-                  <TableCell>Jednostka</TableCell>
-                  <TableCell align="right">Cena jedn.</TableCell>
-                  <TableCell align="right">Wartość netto</TableCell>
-                  <TableCell align="right">Odebrano</TableCell>
-                  {/* Ukrywamy kolumnę akcji przy drukowaniu */}
-                  <TableCell sx={{ '@media print': { display: 'none' } }}></TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {purchaseOrder.items?.map((item, index) => {
-                  // Oblicz procent realizacji
-                  const received = parseFloat(item.received || 0);
-                  const quantity = parseFloat(item.quantity || 0);
-                  const fulfilledPercentage = quantity > 0 ? (received / quantity) * 100 : 0;
-                  
-                  // Określ kolor tła dla wiersza
-                  let rowColor = 'inherit'; // Domyślny kolor
-                  if (fulfilledPercentage >= 100) {
-                    rowColor = 'rgba(76, 175, 80, 0.1)'; // Lekko zielony dla w pełni odebranych
-                  } else if (fulfilledPercentage > 0) {
-                    rowColor = 'rgba(255, 152, 0, 0.1)'; // Lekko pomarańczowy dla częściowo odebranych
-                  }
-                  
-                  return (
-                    <TableRow 
-                      key={index}
-                      sx={{ backgroundColor: rowColor }}
-                    >
-                      <TableCell>{item.name}</TableCell>
-                      <TableCell align="right">{item.quantity}</TableCell>
-                      <TableCell>{item.unit}</TableCell>
-                      <TableCell align="right">{formatCurrency(item.unitPrice, purchaseOrder.currency)}</TableCell>
-                      <TableCell align="right">{formatCurrency(item.totalPrice, purchaseOrder.currency)}</TableCell>
-                      <TableCell align="right">
-                        {received} {received > 0 && `(${fulfilledPercentage.toFixed(0)}%)`}
-                      </TableCell>
-                      {/* Ukrywamy przycisk akcji przy drukowaniu */}
-                      <TableCell align="right" sx={{ '@media print': { display: 'none' } }}>
-                        {canReceiveItems && item.inventoryItemId && 
-                         (parseFloat(item.received || 0) < parseFloat(item.quantity || 0)) && (
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            startIcon={<InventoryIcon />}
-                            onClick={() => handleReceiveClick(item)}
-                          >
-                            Przyjmij
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
-              {purchaseOrder.notes && (
-                <>
-                  <Typography variant="subtitle1" gutterBottom>Uwagi:</Typography>
-                  <Paper variant="outlined" sx={{ p: 2, bgcolor: 'background.paper' }}>
-                    <Typography variant="body2">
-                      {purchaseOrder.notes}
-                    </Typography>
-                  </Paper>
-                </>
+            <Box>
+              <Button
+                variant="outlined"
+                onClick={handleDirectPrint}
+                startIcon={<PrintIcon />}
+                sx={{ mr: 1 }}
+              >
+                Drukuj
+              </Button>
+              
+              {hasDynamicFields && (
+                <Button
+                  variant="outlined"
+                  color="success"
+                  onClick={handleUpdateBatchPrices}
+                  startIcon={<RefreshIcon />}
+                  sx={{ mr: 1 }}
+                >
+                  Aktualizuj ceny partii
+                </Button>
               )}
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                <Typography variant="body1" gutterBottom>
-                  <strong>Wartość produktów netto:</strong> {formatCurrency(purchaseOrder.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0), purchaseOrder.currency)}
-                </Typography>
-                
-                {/* Sekcja VAT dla produktów */}
-                {purchaseOrder.items.length > 0 && (
-                  <>
-                    <Typography variant="subtitle2" gutterBottom>
-                      VAT od produktów:
+              
+              <Button
+                component={Link}
+                to={`/purchase-orders/${orderId}/edit`}
+                variant="contained"
+                startIcon={<EditIcon />}
+                sx={{ mr: 1 }}
+              >
+                Edytuj
+              </Button>
+              
+              <IconButton
+                color="primary"
+                aria-label="menu"
+                ref={menuAnchorRef}
+                onClick={(event) => setMenuAnchorRef(event.currentTarget)}
+              >
+                <MoreVertIcon />
+              </IconButton>
+            </Box>
+          </Box>
+          
+          <Box 
+            ref={printRef} 
+            sx={{ 
+              mb: 3,
+              '@media print': {
+                padding: 0,
+                margin: 0
+              }
+            }}
+          >
+            <Paper sx={{ p: 3, mb: 3 }}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="h5" component="h1">
+                      Zamówienie {purchaseOrder.number}
+                      <Box component="span" sx={{ ml: 2 }}>
+                        {getStatusChip(purchaseOrder.status)}
+                      </Box>
                     </Typography>
-                    {/* Grupowanie pozycji według stawki VAT */}
-                    {Array.from(new Set(purchaseOrder.items.map(item => item.vatRate))).sort((a, b) => a - b).map(vatRate => {
-                      if (vatRate === undefined) return null;
-                      
-                      const itemsWithSameVat = purchaseOrder.items.filter(item => item.vatRate === vatRate);
-                      const sumNet = itemsWithSameVat.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0);
-                      const vatValue = typeof vatRate === 'number' ? (sumNet * vatRate) / 100 : 0;
-                      
-                      return (
-                        <Typography key={vatRate} variant="body2" gutterBottom sx={{ pl: 2 }}>
-                          Stawka {vatRate}%: <strong>{formatCurrency(vatValue, purchaseOrder.currency)}</strong> (od {formatCurrency(sumNet, purchaseOrder.currency)})
-                        </Typography>
-                      );
-                    })}
-                  </>
-                )}
-                
-                {/* Sekcja dodatkowych kosztów z VAT */}
-                {purchaseOrder.additionalCostsItems?.length > 0 && (
-                  <>
-                    <Typography variant="subtitle1" gutterBottom>
-                      <strong>Dodatkowe koszty:</strong>
+                  </Box>
+                  
+                  <Typography variant="body1" gutterBottom>
+                    <strong>Data zamówienia:</strong> {formatDate(purchaseOrder.orderDate)}
+                  </Typography>
+                  
+                  <Typography variant="body1" gutterBottom>
+                    <strong>Oczekiwana data dostawy:</strong> {formatDate(purchaseOrder.expectedDeliveryDate)}
+                  </Typography>
+                  
+                  {purchaseOrder.status === PURCHASE_ORDER_STATUSES.DELIVERED && (
+                    <Typography variant="body1" gutterBottom>
+                      <strong>Data dostawy:</strong> {formatDate(purchaseOrder.deliveredAt)}
                     </Typography>
-                    {purchaseOrder.additionalCostsItems.map((cost, index) => (
-                      <Typography key={index} variant="body2" gutterBottom sx={{ pl: 2 }}>
-                        {cost.description || `Dodatkowy koszt ${index+1}`}: <strong>{formatCurrency(parseFloat(cost.value) || 0, purchaseOrder.currency)}</strong>
-                        {typeof cost.vatRate === 'number' && cost.vatRate > 0 && (
-                          <span> + VAT {cost.vatRate}%: <strong>{formatCurrency(((parseFloat(cost.value) || 0) * cost.vatRate) / 100, purchaseOrder.currency)}</strong></span>
-                        )}
-                      </Typography>
-                    ))}
-                  </>
-                )}
+                  )}
+                  
+                  {purchaseOrder.invoiceLink && (
+                    <Typography variant="body1" gutterBottom>
+                      <strong>Faktura:</strong>{' '}
+                      <Link href={purchaseOrder.invoiceLink} target="_blank" rel="noopener noreferrer">
+                        Zobacz fakturę
+                      </Link>
+                    </Typography>
+                  )}
+                </Grid>
                 
-                {/* Podsumowanie */}
-                {(() => {
-                  const vatValues = calculateVATValues(purchaseOrder.items, purchaseOrder.additionalCostsItems);
-                  return (
+                <Grid item xs={12} md={6}>
+                  <Typography variant="h6" gutterBottom>Dostawca</Typography>
+                  
+                  {purchaseOrder.supplier ? (
                     <>
-                      <Typography variant="subtitle1" gutterBottom>
-                        <strong>Wartość netto razem:</strong> {formatCurrency(vatValues.totalNet, purchaseOrder.currency)}
+                      <Typography variant="body1" gutterBottom>
+                        <strong>{purchaseOrder.supplier.name}</strong>
                       </Typography>
-                      <Typography variant="subtitle1" gutterBottom>
-                        <strong>Suma podatku VAT:</strong> {formatCurrency(vatValues.totalVat, purchaseOrder.currency)}
-                      </Typography>
-                      <Typography variant="h6" sx={{ mt: 1 }}>
-                        <strong>Wartość brutto:</strong> {formatCurrency(vatValues.totalGross, purchaseOrder.currency)}
+                      <Typography variant="body2" gutterBottom>
+                        {purchaseOrder.supplier.contactPerson && (
+                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                            <PersonIcon sx={{ mr: 1, fontSize: 16 }} />
+                            {purchaseOrder.supplier.contactPerson}
+                          </Box>
+                        )}
+                        
+                        {/* Adres główny dostawcy */}
+                        {getSupplierMainAddress(purchaseOrder.supplier) && (
+                          <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 1 }}>
+                            <LocationOnIcon sx={{ mr: 1, fontSize: 16, mt: 0.5 }} />
+                            <span>{formatAddress(getSupplierMainAddress(purchaseOrder.supplier))}</span>
+                          </Box>
+                        )}
+                        
+                        {purchaseOrder.supplier.email && (
+                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                            <EmailIcon sx={{ mr: 1, fontSize: 16 }} />
+                            <a href={`mailto:${purchaseOrder.supplier.email}`}>{purchaseOrder.supplier.email}</a>
+                          </Box>
+                        )}
+                        
+                        {purchaseOrder.supplier.phone && (
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <PhoneIcon sx={{ mr: 1, fontSize: 16 }} />
+                            <a href={`tel:${purchaseOrder.supplier.phone}`}>{purchaseOrder.supplier.phone}</a>
+                          </Box>
+                        )}
                       </Typography>
                     </>
-                  );
-                })()}
-              </Box>
-            </Grid>
-          </Grid>
-        </Paper>
-      </Box>
-      
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end', '@media print': { display: 'none' } }}>
-        <Button 
-          color="error"
-          variant="outlined" 
-          startIcon={<DeleteIcon />} 
-          onClick={handleDeleteClick}
-        >
-          Usuń zamówienie
-        </Button>
-      </Box>
+                  ) : (
+                    <Typography variant="body2">
+                      Brak danych dostawcy
+                    </Typography>
+                  )}
+                </Grid>
+              </Grid>
+            </Paper>
+            
+            {/* Historia zmian statusu */}
+            {purchaseOrder.statusHistory && purchaseOrder.statusHistory.length > 0 && (
+              <Paper sx={{ p: 3, mb: 3 }}>
+                <Typography variant="h6" gutterBottom>
+                  Historia zmian statusu
+                </Typography>
+                
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Data i godzina</TableCell>
+                      <TableCell>Poprzedni status</TableCell>
+                      <TableCell>Nowy status</TableCell>
+                      <TableCell>Kto zmienił</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {[...purchaseOrder.statusHistory].reverse().map((change, index) => (
+                      <TableRow key={index}>
+                        <TableCell>
+                          {change.changedAt ? new Date(change.changedAt).toLocaleString('pl') : 'Brak daty'}
+                        </TableCell>
+                        <TableCell>{translateStatus(change.oldStatus)}</TableCell>
+                        <TableCell>{translateStatus(change.newStatus)}</TableCell>
+                        <TableCell>{getUserName(change.changedBy)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Paper>
+            )}
+            
+            <Paper sx={{ p: 3, mb: 3 }}>
+              <Typography variant="h6" gutterBottom>Elementy zamówienia</Typography>
+              
+              <TableContainer sx={{ mb: 3 }}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Nazwa produktu</TableCell>
+                      <TableCell align="right">Ilość</TableCell>
+                      <TableCell>Jednostka</TableCell>
+                      <TableCell align="right">Cena jedn.</TableCell>
+                      <TableCell align="right">Wartość netto</TableCell>
+                      <TableCell align="right">Odebrano</TableCell>
+                      {/* Ukrywamy kolumnę akcji przy drukowaniu */}
+                      <TableCell sx={{ '@media print': { display: 'none' } }}></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {purchaseOrder.items?.map((item, index) => {
+                      // Oblicz procent realizacji
+                      const received = parseFloat(item.received || 0);
+                      const quantity = parseFloat(item.quantity || 0);
+                      const fulfilledPercentage = quantity > 0 ? (received / quantity) * 100 : 0;
+                      
+                      // Określ kolor tła dla wiersza
+                      let rowColor = 'inherit'; // Domyślny kolor
+                      if (fulfilledPercentage >= 100) {
+                        rowColor = 'rgba(76, 175, 80, 0.1)'; // Lekko zielony dla w pełni odebranych
+                      } else if (fulfilledPercentage > 0) {
+                        rowColor = 'rgba(255, 152, 0, 0.1)'; // Lekko pomarańczowy dla częściowo odebranych
+                      }
+                      
+                      return (
+                        <TableRow 
+                          key={index}
+                          sx={{ backgroundColor: rowColor }}
+                        >
+                          <TableCell>{item.name}</TableCell>
+                          <TableCell align="right">{item.quantity}</TableCell>
+                          <TableCell>{item.unit}</TableCell>
+                          <TableCell align="right">{formatCurrency(item.unitPrice, purchaseOrder.currency)}</TableCell>
+                          <TableCell align="right">{formatCurrency(item.totalPrice, purchaseOrder.currency)}</TableCell>
+                          <TableCell align="right">
+                            {received} {received > 0 && `(${fulfilledPercentage.toFixed(0)}%)`}
+                          </TableCell>
+                          {/* Ukrywamy przycisk akcji przy drukowaniu */}
+                          <TableCell align="right" sx={{ '@media print': { display: 'none' } }}>
+                            {canReceiveItems && item.inventoryItemId && 
+                             (parseFloat(item.received || 0) < parseFloat(item.quantity || 0)) && (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<InventoryIcon />}
+                                onClick={() => handleReceiveClick(item)}
+                              >
+                                Przyjmij
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  {purchaseOrder.notes && (
+                    <>
+                      <Typography variant="subtitle1" gutterBottom>Uwagi:</Typography>
+                      <Paper variant="outlined" sx={{ p: 2, bgcolor: 'background.paper' }}>
+                        <Typography variant="body2">
+                          {purchaseOrder.notes}
+                        </Typography>
+                      </Paper>
+                    </>
+                  )}
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                    <Typography variant="body1" gutterBottom>
+                      <strong>Wartość produktów netto:</strong> {formatCurrency(purchaseOrder.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0), purchaseOrder.currency)}
+                    </Typography>
+                    
+                    {/* Sekcja VAT dla produktów */}
+                    {purchaseOrder.items.length > 0 && (
+                      <>
+                        <Typography variant="subtitle2" gutterBottom>
+                          VAT od produktów:
+                        </Typography>
+                        {/* Grupowanie pozycji według stawki VAT */}
+                        {Array.from(new Set(purchaseOrder.items.map(item => item.vatRate))).sort((a, b) => a - b).map(vatRate => {
+                          if (vatRate === undefined) return null;
+                          
+                          const itemsWithSameVat = purchaseOrder.items.filter(item => item.vatRate === vatRate);
+                          const sumNet = itemsWithSameVat.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0);
+                          const vatValue = typeof vatRate === 'number' ? (sumNet * vatRate) / 100 : 0;
+                          
+                          return (
+                            <Typography key={vatRate} variant="body2" gutterBottom sx={{ pl: 2 }}>
+                              Stawka {vatRate}%: <strong>{formatCurrency(vatValue, purchaseOrder.currency)}</strong> (od {formatCurrency(sumNet, purchaseOrder.currency)})
+                            </Typography>
+                          );
+                        })}
+                      </>
+                    )}
+                    
+                    {/* Sekcja dodatkowych kosztów z VAT */}
+                    {purchaseOrder.additionalCostsItems?.length > 0 && (
+                      <>
+                        <Typography variant="subtitle1" gutterBottom>
+                          <strong>Dodatkowe koszty:</strong>
+                        </Typography>
+                        {purchaseOrder.additionalCostsItems.map((cost, index) => (
+                          <Typography key={index} variant="body2" gutterBottom sx={{ pl: 2 }}>
+                            {cost.description || `Dodatkowy koszt ${index+1}`}: <strong>{formatCurrency(parseFloat(cost.value) || 0, purchaseOrder.currency)}</strong>
+                            {typeof cost.vatRate === 'number' && cost.vatRate > 0 && (
+                              <span> + VAT {cost.vatRate}%: <strong>{formatCurrency(((parseFloat(cost.value) || 0) * cost.vatRate) / 100, purchaseOrder.currency)}</strong></span>
+                            )}
+                          </Typography>
+                        ))}
+                      </>
+                    )}
+                    
+                    {/* Podsumowanie */}
+                    {(() => {
+                      const vatValues = calculateVATValues(purchaseOrder.items, purchaseOrder.additionalCostsItems);
+                      return (
+                        <>
+                          <Typography variant="subtitle1" gutterBottom>
+                            <strong>Wartość netto razem:</strong> {formatCurrency(vatValues.totalNet, purchaseOrder.currency)}
+                          </Typography>
+                          <Typography variant="subtitle1" gutterBottom>
+                            <strong>Suma podatku VAT:</strong> {formatCurrency(vatValues.totalVat, purchaseOrder.currency)}
+                          </Typography>
+                          <Typography variant="h6" sx={{ mt: 1 }}>
+                            <strong>Wartość brutto:</strong> {formatCurrency(vatValues.totalGross, purchaseOrder.currency)}
+                          </Typography>
+                        </>
+                      );
+                    })()}
+                  </Box>
+                </Grid>
+              </Grid>
+            </Paper>
+          </Box>
+          
+          <Paper sx={{ mb: 3, p: 3, borderRadius: 2 }}>
+            <Typography variant="h6" gutterBottom>
+              Dodatkowe koszty
+            </Typography>
+            
+            {purchaseOrder.additionalCostsItems && purchaseOrder.additionalCostsItems.length > 0 ? (
+              <>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Opis</TableCell>
+                      <TableCell align="right">Kwota</TableCell>
+                      <TableCell align="right">Stawka VAT</TableCell>
+                      <TableCell align="right">VAT</TableCell>
+                      <TableCell align="right">Razem brutto</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {purchaseOrder.additionalCostsItems.map((cost, index) => {
+                      const costValue = parseFloat(cost.value) || 0;
+                      const vatRate = typeof cost.vatRate === 'number' ? cost.vatRate : 0;
+                      const vatValue = (costValue * vatRate) / 100;
+                      const grossValue = costValue + vatValue;
+                      
+                      return (
+                        <TableRow key={cost.id || index}>
+                          <TableCell>{cost.description || `Dodatkowy koszt ${index+1}`}</TableCell>
+                          <TableCell align="right">{formatCurrency(costValue, purchaseOrder.currency)}</TableCell>
+                          <TableCell align="right">{vatRate}%</TableCell>
+                          <TableCell align="right">{formatCurrency(vatValue, purchaseOrder.currency)}</TableCell>
+                          <TableCell align="right">{formatCurrency(grossValue, purchaseOrder.currency)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+                
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={handleUpdateBatchPrices}
+                    startIcon={<RefreshIcon />}
+                  >
+                    Zaktualizuj ceny partii
+                  </Button>
+                </Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, textAlign: 'right' }}>
+                  Kliknij by zaktualizować ceny LOT-ów powiązanych z tym zamówieniem
+                </Typography>
+              </>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                Brak dodatkowych kosztów
+              </Typography>
+            )}
+          </Paper>
+        </>
+      ) : (
+        <Typography>Nie znaleziono zamówienia</Typography>
+      )}
       
       {/* Dialog usuwania */}
       <Dialog
@@ -999,7 +1085,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
           <Button onClick={handleInvoiceLinkSave} color="primary">Zapisz</Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </Container>
   );
 };
 

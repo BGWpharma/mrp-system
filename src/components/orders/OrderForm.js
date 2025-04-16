@@ -577,8 +577,8 @@ const OrderForm = ({ orderId }) => {
   const calculateTotal = () => {
     const subtotal = calculateSubtotal();
     const shippingCost = parseFloat(orderData.shippingCost) || 0;
-    const purchaseOrdersTotal = calculatePurchaseOrdersTotal();
-    return subtotal + shippingCost + purchaseOrdersTotal;
+    // Nie uwzględniamy wartości PO w całkowitej wartości zamówienia
+    return subtotal + shippingCost;
   };
 
   const handleDeliveryProofUpload = async (e) => {
@@ -1842,28 +1842,28 @@ const OrderForm = ({ orderId }) => {
           <Divider sx={{ mb: 2 }} />
           
           <Grid container spacing={2}>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={4}>
               <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
                 <Typography variant="subtitle2" color="text.secondary">Wartość produktów:</Typography>
                 <Typography variant="h6" fontWeight="bold">{formatCurrency(calculateSubtotal())}</Typography>
               </Paper>
             </Grid>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={4}>
               <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
                 <Typography variant="subtitle2" color="text.secondary">Koszt dostawy:</Typography>
                 <Typography variant="h6" fontWeight="bold">{formatCurrency(parseFloat(orderData.shippingCost) || 0)}</Typography>
               </Paper>
             </Grid>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+                <Typography variant="subtitle2" color="text.secondary">Wartość całkowita zamówienia:</Typography>
+                <Typography variant="h6" fontWeight="bold">{formatCurrency(calculateSubtotal() + (parseFloat(orderData.shippingCost) || 0))}</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={4}>
               <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
                 <Typography variant="subtitle2" color="text.secondary">Wartość zamówień zakupu:</Typography>
                 <Typography variant="h6" fontWeight="bold" color="warning.main">{formatCurrency(calculatePurchaseOrdersTotal())}</Typography>
-              </Paper>
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
-                <Typography variant="subtitle2" color="text.secondary">Łączna wartość:</Typography>
-                <Typography variant="h6" fontWeight="bold" color="primary.main">{formatCurrency(calculateTotal())}</Typography>
               </Paper>
             </Grid>
           </Grid>
