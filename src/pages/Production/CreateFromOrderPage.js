@@ -489,7 +489,6 @@ const CreateFromOrderPage = () => {
           estimatedDuration: estimatedDuration,
           autoReserveMaterials: taskForm.autoReserveMaterials, // Przekazanie informacji o automatycznej rezerwacji
           workstationId: workstationId, // ID stanowiska produkcyjnego
-          lotNumber: `LOT-${selectedOrder.orderNumber || new Date().toISOString().slice(0, 10).replace(/-/g, '')}`, // Domyślny LOT na podstawie numeru zamówienia
           expiryDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)) // Domyślna data ważności - 1 rok
         };
         
@@ -820,7 +819,6 @@ const CreateFromOrderPage = () => {
           estimatedDuration: estimatedDuration,
           autoReserveMaterials: taskForm.autoReserveMaterials, // Przekazanie informacji o automatycznej rezerwacji
           workstationId: workstationId, // ID stanowiska produkcyjnego
-          lotNumber: `LOT-${selectedOrder.orderNumber || new Date().toISOString().slice(0, 10).replace(/-/g, '')}`, // Domyślny LOT na podstawie numeru zamówienia
           expiryDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)) // Domyślna data ważności - 1 rok
         };
         

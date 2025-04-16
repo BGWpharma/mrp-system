@@ -17,13 +17,8 @@ import {
   CircularProgress,
   Divider,
   Container,
-  FormLabel,
-  RadioGroup,
-  FormControlLabel,
-  Radio,
   Alert,
-  AlertTitle,
-  Switch
+  AlertTitle
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -31,28 +26,20 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { pl } from 'date-fns/locale';
 import {
   Save as SaveIcon,
-  ArrowBack as ArrowBackIcon,
-  Calculate as CalculateIcon
+  ArrowBack as ArrowBackIcon
 } from '@mui/icons-material';
 import {
   createTask,
   updateTask,
-  getTaskById,
-  reserveMaterialsForTask
+  getTaskById
 } from '../../services/productionService';
 import { getAllRecipes, getRecipeById } from '../../services/recipeService';
 import {
   getAllInventoryItems,
-  getInventoryItemById,
-  getIngredientPrices,
-  getProductsWithEarliestExpiry,
-  getProductsFIFO,
-  bookInventoryForTask
+  getInventoryItemById
 } from '../../services/inventoryService';
-import { calculateManufacturingOrderCosts, calculateEstimatedProductionTime } from '../../utils/costCalculator';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import { formatCurrency } from '../../utils/formatters';
 import { getAllWorkstations } from '../../services/workstationService';
 import { generateLOTNumber } from '../../utils/numberGenerators';
 
@@ -84,24 +71,9 @@ const TaskForm = ({ taskId }) => {
     notes: '',
     moNumber: '',
     workstationId: '', // ID stanowiska produkcyjnego
-    autoReserveMaterials: true, // domyślnie włączone automatyczne rezerwowanie materiałów
     lotNumber: '', // Numer partii produktu (LOT)
     expiryDate: null // Data ważności produktu
   });
-
-  // Dodajemy stan dla kalkulacji kosztów
-  const [costCalculation, setCostCalculation] = useState(null);
-  const [calculatingCosts, setCalculatingCosts] = useState(false);
-
-  // Dodajemy stan dla wybranego produktu z magazynu
-  const [selectedProduct, setSelectedProduct] = useState(null);
-
-  // Dodaj nowy stan dla zarezerwowanych składników
-  const [bookedIngredients, setBookedIngredients] = useState([]);
-  const [showBookingDetails, setShowBookingDetails] = useState(false);
-  
-  // Dodaj stan dla metody rezerwacji
-  const [reservationMethod, setReservationMethod] = useState('fifo'); // 'expiry' lub 'fifo'
 
   const [recipeYieldError, setRecipeYieldError] = useState(false);
 
@@ -188,7 +160,10 @@ const TaskForm = ({ taskId }) => {
       if (task.inventoryProductId) {
         const inventoryItem = await getInventoryItemById(task.inventoryProductId);
         if (inventoryItem) {
-          setSelectedProduct(inventoryItem);
+          setTaskData(prev => ({
+            ...prev,
+            inventoryProductId: inventoryItem.id
+          }));
         }
       }
       
@@ -235,47 +210,18 @@ const TaskForm = ({ taskId }) => {
           taskData.endDate : new Date(taskData.endDate)
       };
       
-      // Przygotuj dane zadania z kosztami
-      let taskDataWithCosts = { ...formattedData };
-      if (costCalculation) {
-        taskDataWithCosts = {
-          ...taskDataWithCosts,
-          costs: costCalculation
-        };
-      }
-      
       let savedTaskId;
       
       if (taskId) {
         // Aktualizacja zadania
-        await updateTask(taskId, taskDataWithCosts, currentUser.uid);
+        await updateTask(taskId, formattedData, currentUser.uid);
         savedTaskId = taskId;
         showSuccess('Zadanie zostało zaktualizowane');
       } else {
         // Utworzenie nowego zadania
-        const newTask = await createTask(taskDataWithCosts, currentUser.uid);
+        const newTask = await createTask(formattedData, currentUser.uid);
         savedTaskId = newTask.id;
         showSuccess('Zadanie zostało utworzone');
-        
-        // Dokonaj faktycznej rezerwacji składników tylko po utworzeniu nowego zadania
-        if (taskData.materials && taskData.materials.length > 0) {
-          try {
-            // Zarezerwuj składniki faktycznie po utworzeniu zadania
-            const bookingResult = await reserveMaterialsForTask(savedTaskId, taskData.materials, reservationMethod);
-            if (bookingResult.success) {
-              showSuccess('Materiały zostały zarezerwowane dla zadania');
-            } else if (bookingResult.errors && bookingResult.errors.length > 0) {
-              let errorMsg = 'Zadanie zostało utworzone, ale nie wszystkie materiały zostały zarezerwowane:';
-              bookingResult.errors.forEach(err => {
-                errorMsg += '\n- ' + err;
-              });
-              showError(errorMsg);
-            }
-          } catch (bookingError) {
-            showError(`Zadanie zostało utworzone, ale wystąpił błąd podczas rezerwacji materiałów: ${bookingError.message}`);
-            console.error('Error booking ingredients:', bookingError);
-          }
-        }
       }
       
       navigate('/production');
@@ -386,28 +332,59 @@ const TaskForm = ({ taskId }) => {
   };
 
   const handleEndDateChange = (newDate) => {
-    setTaskData(prev => {
-      // Oblicz czas trwania w minutach na podstawie różnicy między datą rozpoczęcia a zakończenia
-      const startDate = prev.scheduledDate || new Date();
-      const durationMs = newDate.getTime() - startDate.getTime();
-      const durationMinutes = Math.round(durationMs / (1000 * 60));
-      
-      return {
-        ...prev,
-        endDate: newDate,
-        estimatedDuration: durationMinutes > 0 ? durationMinutes : prev.estimatedDuration
-      };
+    // Oblicz czas produkcji w minutach na podstawie różnicy między datą rozpoczęcia a zakończenia
+    const startTime = taskData.scheduledDate.getTime();
+    const endTime = newDate.getTime();
+    const durationInMinutes = Math.max(0, (endTime - startTime) / (60 * 1000));
+    
+    setTaskData({
+      ...taskData,
+      endDate: newDate,
+      estimatedDuration: durationInMinutes
     });
   };
 
-  const handleDurationChange = (e) => {
-    const duration = parseInt(e.target.value);
-    if (!isNaN(duration) && duration > 0) {
-      // Aktualizacja endDate na podstawie scheduledDate i podanego czasu trwania
-      const endDate = new Date(taskData.scheduledDate.getTime() + duration * 60 * 1000);
+  // Dodajemy pole do ustawiania czasu produkcji na jednostkę
+  const handleProductionTimePerUnitChange = (e) => {
+    const newProductionTime = e.target.value === '' ? '' : Number(e.target.value);
+    
+    setTaskData(prev => ({
+      ...prev,
+      productionTimePerUnit: newProductionTime
+    }));
+    
+    // Aktualizuj szacowany czas produkcji tylko jeśli mamy właściwą ilość
+    if (newProductionTime !== '' && taskData.quantity && taskData.quantity > 0) {
+      const estimatedTimeMinutes = newProductionTime * taskData.quantity;
+      
       setTaskData(prev => ({
         ...prev,
-        estimatedDuration: duration,
+        estimatedDuration: estimatedTimeMinutes
+      }));
+      
+      // Zaktualizuj datę zakończenia
+      if (taskData.scheduledDate) {
+        const startDate = new Date(taskData.scheduledDate);
+        const endDate = new Date(startDate.getTime() + (estimatedTimeMinutes * 60 * 1000));
+        setTaskData(prev => ({
+          ...prev,
+          endDate
+        }));
+      }
+    }
+  };
+
+  const handleDurationChange = (e) => {
+    const durationInHours = parseFloat(e.target.value);
+    if (!isNaN(durationInHours) && durationInHours >= 0) {
+      // Przelicz godziny na minuty i zapisz w stanie
+      const durationInMinutes = durationInHours * 60;
+      
+      // Aktualizacja endDate na podstawie scheduledDate i podanego czasu trwania w minutach
+      const endDate = new Date(taskData.scheduledDate.getTime() + durationInMinutes * 60 * 1000);
+      setTaskData(prev => ({
+        ...prev,
+        estimatedDuration: durationInMinutes,
         endDate: endDate
       }));
     } else {
@@ -472,319 +449,6 @@ const TaskForm = ({ taskId }) => {
     }
   };
 
-  // Funkcja do kalkulacji kosztów zadania produkcyjnego
-  const handleCalculateCosts = async () => {
-    try {
-      setCalculatingCosts(true);
-      
-      // Sprawdź, czy zadanie ma przypisaną recepturę
-      if (!taskData.recipeId) {
-        showError('Zadanie musi mieć przypisaną recepturę, aby obliczyć koszty');
-        setCalculatingCosts(false);
-        return;
-      }
-      
-      // Pobierz szczegóły receptury
-      const recipe = await getRecipeById(taskData.recipeId);
-      
-      // Sprawdź, czy receptura ma zdefiniowane składniki
-      if (!recipe.ingredients || recipe.ingredients.length === 0) {
-        showError('Receptura musi mieć zdefiniowane składniki, aby obliczyć koszty');
-        setCalculatingCosts(false);
-        return;
-      }
-      
-      // Pobierz ID składników z receptury
-      const ingredientIds = recipe.ingredients
-        .filter(ing => ing.id)
-        .map(ing => ing.id);
-      
-      // Sprawdź, czy mamy jakiekolwiek składniki
-      if (ingredientIds.length === 0) {
-        showError('Receptura musi mieć prawidłowo zdefiniowane składniki, aby obliczyć koszty');
-        setCalculatingCosts(false);
-        return;
-      }
-      
-      // Pobierz ceny składników
-      const pricesMap = await getIngredientPrices(ingredientIds);
-      
-      // Uaktualnij recepturę o czas produkcji z formularza, jeśli został zmieniony
-      if (taskData.productionTimePerUnit) {
-        recipe.productionTimePerUnit = parseFloat(taskData.productionTimePerUnit);
-      }
-      
-      // Skonfiguruj opcje kalkulacji
-      const options = {
-        overheadRate: recipe.overheadRate || 10, // domyślne narzuty 10%
-        // jeśli mamy productionTimePerUnit w taskData, użyj go zamiast wartości z receptury
-        productionTimePerUnit: taskData.productionTimePerUnit || recipe.productionTimePerUnit || 0
-      };
-      
-      // Oblicz koszty
-      const costData = calculateManufacturingOrderCosts({ 
-        ...taskData,
-        // Upewnij się, że przekazujemy aktualny czas produkcji
-        productionTimePerUnit: taskData.productionTimePerUnit || recipe.productionTimePerUnit || 0
-      }, recipe, pricesMap, [], options);
-      
-      // Ustaw obliczone koszty w stanie
-      setCostCalculation(costData);
-      showSuccess('Koszty zostały obliczone');
-    } catch (error) {
-      console.error('Błąd podczas obliczania kosztów:', error);
-      showError('Błąd podczas obliczania kosztów: ' + error.message);
-    } finally {
-      setCalculatingCosts(false);
-    }
-  };
-
-  // Funkcja obsługująca wybór produktu z magazynu
-  const handleProductSelect = (event, newValue) => {
-    setSelectedProduct(newValue);
-    if (newValue) {
-      setTaskData(prev => ({
-        ...prev,
-        productName: newValue.name,
-        unit: newValue.unit || 'szt.',
-        inventoryProductId: newValue.id
-      }));
-    } else {
-      // Jeśli usunięto wybór produktu, usuń też ID produktu z magazynu
-      setTaskData(prev => {
-        const updatedData = { ...prev };
-        delete updatedData.inventoryProductId;
-        return updatedData;
-      });
-    }
-  };
-
-  // Modyfikuję funkcję handleBookIngredients, aby obsługiwała różne metody rezerwacji
-  const handleBookIngredients = async () => {
-    if (!taskData.recipeId) {
-      showError('Wybierz recepturę, aby zaplanować składniki');
-      return;
-    }
-
-    // Sprawdź, czy quantity jest prawidłową liczbą
-    const taskQuantity = parseFloat(taskData.quantity);
-    if (isNaN(taskQuantity) || taskQuantity <= 0) {
-      showError('Podaj prawidłową ilość produktu do wyprodukowania (liczba większa od zera)');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      // Pobierz szczegóły receptury
-      const recipe = await getRecipeById(taskData.recipeId);
-      
-      if (!recipe || !recipe.ingredients || recipe.ingredients.length === 0) {
-        showError('Receptura nie zawiera składników');
-        setLoading(false);
-        return;
-      }
-
-      // Sprawdź, czy yield jest prawidłową liczbą
-      let recipeYield = 1;
-      if (recipe.yield) {
-        if (typeof recipe.yield === 'object' && recipe.yield.quantity) {
-          recipeYield = parseFloat(recipe.yield.quantity);
-        } else if (typeof recipe.yield === 'number') {
-          recipeYield = recipe.yield;
-        } else if (typeof recipe.yield === 'string') {
-          recipeYield = parseFloat(recipe.yield);
-        }
-      }
-      
-      if (isNaN(recipeYield) || recipeYield <= 0) {
-        showError('Receptura ma nieprawidłową wydajność. Sprawdź dane receptury.');
-        setRecipeYieldError(true);
-        setLoading(false);
-        return;
-      } else {
-        setRecipeYieldError(false);
-      }
-      
-      // Przygotuj listę materiałów do zadania, ale bez faktycznej rezerwacji
-      const materialsForTask = [];
-      const tempBookedIngredients = []; // Tylko do pokazania, bez faktycznej rezerwacji
-      const missingIngredients = []; // Lista składników, których nie ma w magazynie
-      let hasErrors = false;
-      let hasWarnings = false;
-      
-      // Dla każdego składnika z receptury
-      for (const ingredient of recipe.ingredients) {
-        if (!ingredient.id) {
-          // Pomiń składniki, które nie są powiązane z magazynem
-          continue;
-        }
-        
-        // Sprawdź, czy ilość składnika jest prawidłową liczbą
-        const ingredientQuantity = parseFloat(ingredient.quantity);
-        if (isNaN(ingredientQuantity)) {
-          showError(`Składnik ${ingredient.name} ma nieprawidłową ilość. Sprawdź dane receptury.`);
-          continue;
-        }
-        
-        // Oblicz ilość potrzebną do produkcji
-        let requiredQuantity = (ingredientQuantity * taskQuantity) / recipeYield;
-        
-        // Dodatkowa walidacja - upewnij się, że requiredQuantity jest dodatnie
-        if (requiredQuantity <= 0) {
-          showError(`Obliczona ilość dla składnika ${ingredient.name} jest nieprawidłowa (${requiredQuantity}). Sprawdź dane receptury.`);
-          continue;
-        }
-        
-        try {
-          // Sprawdź czy składnik istnieje w magazynie
-          try {
-            const item = await getInventoryItemById(ingredient.id);
-            
-            // Dodaj do listy materiałów do zadania
-            materialsForTask.push({
-              id: ingredient.id,
-              name: ingredient.name,
-              quantity: requiredQuantity,
-              unit: ingredient.unit || item.unit,
-              category: ingredient.category || item.category
-            });
-            
-            // Tylko sprawdź, czy jest wystarczająca ilość
-            if (item.quantity < requiredQuantity) {
-              hasWarnings = true;
-              showError(`Niewystarczająca ilość składnika ${ingredient.name} w magazynie. Dostępne: ${item.quantity} ${item.unit}, wymagane: ${requiredQuantity.toFixed(2)} ${item.unit}`);
-            }
-            
-            // Pobierz batche (partie) składnika zgodnie z wybraną metodą
-            let batches = [];
-            try {
-              if (reservationMethod === 'expiry') {
-                batches = await getProductsWithEarliestExpiry(ingredient.id, requiredQuantity);
-              } else {
-                batches = await getProductsFIFO(ingredient.id, requiredQuantity);
-              }
-            } catch (error) {
-              console.warn(`Nie można pobrać partii dla ${ingredient.name}:`, error);
-            }
-            
-            // Dodaj do listy zarezerwowanych składników (tylko do pokazania)
-            tempBookedIngredients.push({
-              id: ingredient.id,
-              name: ingredient.name,
-              quantity: requiredQuantity,
-              unit: item.unit,
-              batches: batches.map(b => ({
-                ...b,
-                selectedQuantity: b.selectedQuantity || b.quantity
-              }))
-            });
-            
-          } catch (error) {
-            // Składnik nie istnieje w magazynie, dodajemy do listy brakujących
-            console.warn(`Składnik ${ingredient.name} (ID: ${ingredient.id}) nie istnieje w magazynie:`, error);
-            missingIngredients.push({
-              name: ingredient.name,
-              id: ingredient.id,
-              quantity: requiredQuantity,
-              unit: ingredient.unit || 'szt.'
-            });
-            
-            // Mimo to dodaj do listy materiałów, ale oznacz jako brakujący
-            materialsForTask.push({
-              id: ingredient.id,
-              name: ingredient.name,
-              quantity: requiredQuantity,
-              unit: ingredient.unit || 'szt.',
-              category: ingredient.category || 'Surowce',
-              missing: true  // Oznacz jako brakujący
-            });
-            
-            hasWarnings = true;
-          }
-        } catch (error) {
-          hasErrors = true;
-          const errorMessage = error.message || 'Nieznany błąd';
-          showError(`Błąd przy sprawdzaniu składnika ${ingredient.name}: ${errorMessage}`);
-          console.error(`Błąd przy sprawdzaniu składnika ${ingredient.name}:`, error);
-        }
-      }
-      
-      if (materialsForTask.length > 0) {
-        // Zapisz listę materiałów do formularza, aby została zapisana z zadaniem
-        setTaskData(prev => ({
-          ...prev,
-          materials: materialsForTask
-        }));
-        
-        // Ustawienie tymczasowo zarezerwowanych składników do wyświetlenia
-        setBookedIngredients(tempBookedIngredients);
-        setShowBookingDetails(true);
-        
-        if (missingIngredients.length > 0) {
-          showWarning(`Uwaga: ${missingIngredients.length} składnik(ów) nie istnieje w magazynie. Dodaj je do magazynu przed rozpoczęciem produkcji.`);
-          // Wyświetl listę brakujących składników
-          missingIngredients.forEach(ingredient => {
-            showWarning(`Brakujący składnik: ${ingredient.name}, potrzeba: ${ingredient.quantity} ${ingredient.unit}`);
-          });
-        }
-        
-        if (hasErrors) {
-          showError('Niektóre składniki mogą być niedostępne. Sprawdź komunikaty powyżej.');
-        } else if (hasWarnings) {
-          showWarning('Zadanie zostało zaplanowane, ale niektóre składniki są niedostępne lub brakujące. Zadanie można zapisać, ale rezerwacja materiałów może być niepełna.');
-        } else {
-          showSuccess('Zaplanowano wszystkie materiały na zadanie produkcyjne. Materiały zostaną zarezerwowane po zapisaniu zadania.');
-        }
-      } else {
-        showError('Nie udało się zaplanować żadnego materiału. Sprawdź dane receptury i dostępność w magazynie.');
-      }
-    } catch (error) {
-      const errorMessage = error.message || 'Nieznany błąd';
-      showError('Błąd podczas planowania materiałów: ' + errorMessage);
-      console.error('Error planning materials:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Dodajemy pole do ustawiania czasu produkcji na jednostkę
-  const handleProductionTimePerUnitChange = (e) => {
-    const newProductionTime = e.target.value === '' ? '' : Number(e.target.value);
-    
-    setTaskData(prev => ({
-      ...prev,
-      productionTimePerUnit: newProductionTime
-    }));
-    
-    // Aktualizuj szacowany czas produkcji tylko jeśli mamy właściwą ilość
-    if (newProductionTime !== '' && taskData.quantity && taskData.quantity > 0) {
-      const estimatedTimeMinutes = newProductionTime * taskData.quantity;
-      
-      setTaskData(prev => ({
-        ...prev,
-        estimatedDuration: estimatedTimeMinutes
-      }));
-      
-      // Zaktualizuj datę zakończenia
-      if (taskData.scheduledDate) {
-        const startDate = new Date(taskData.scheduledDate);
-        const endDate = new Date(startDate.getTime() + (estimatedTimeMinutes * 60 * 1000));
-        setTaskData(prev => ({
-          ...prev,
-          endDate
-        }));
-      }
-    }
-  };
-  
-  // Obsługa zmiany opcji automatycznej rezerwacji materiałów
-  const handleAutoReserveMaterialsChange = (e) => {
-    setTaskData(prev => ({
-      ...prev,
-      autoReserveMaterials: e.target.checked
-    }));
-  };
-
   // Dodajemy funkcję do generowania numeru LOT
   const generateLot = async () => {
     try {
@@ -806,8 +470,8 @@ const TaskForm = ({ taskId }) => {
 
   return (
     <Container maxWidth="md">
-      <Paper elevation={3} sx={{ p: 3, mt: 3 }}>
-        <Typography variant="h5" component="h1" gutterBottom>
+      <Paper elevation={3} sx={{ p: 3, mt: 3, mb: 3 }}>
+        <Typography variant="h5" component="h1" gutterBottom sx={{ mb: 3, color: 'primary.main', fontWeight: 'bold' }}>
           {taskId && taskId !== 'new' ? 'Edytuj zadanie produkcyjne' : 'Nowe zadanie produkcyjne'}
         </Typography>
         
@@ -823,424 +487,333 @@ const TaskForm = ({ taskId }) => {
                 Wybrana receptura ma nieprawidłową wydajność. Przejdź do edycji receptury i napraw wartość wydajności.
               </Alert>
             )}
-            <Grid container spacing={3}>
-              <Grid item xs={12}>
-                <TextField
-                  required
-                  label="Nazwa zadania"
-                  name="name"
-                  value={taskData.name}
-                  onChange={handleChange}
-                  fullWidth
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  label="Opis"
-                  name="description"
-                  value={taskData.description || ''}
-                  onChange={handleChange}
-                  fullWidth
-                  multiline
-                  rows={2}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <FormControl fullWidth>
-                  <InputLabel id="recipe-label">Receptura</InputLabel>
-                  <Select
-                    labelId="recipe-label"
-                    id="recipe"
-                    name="recipeId"
-                    value={taskData.recipeId || ''}
-                    onChange={handleRecipeChange}
-                    label="Receptura"
-                  >
-                    <MenuItem value="">
-                      <em>Brak</em>
-                    </MenuItem>
-                    {recipes.map((recipe) => (
-                      <MenuItem key={recipe.id} value={recipe.id}>
-                        {recipe.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12}>
-                <Autocomplete
-                  id="inventory-product"
-                  options={inventoryProducts}
-                  getOptionLabel={(option) => option.name}
-                  value={selectedProduct}
-                  onChange={handleProductSelect}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Produkt z magazynu (opcjonalnie)"
-                      helperText="Wybierz istniejący produkt z magazynu lub pozostaw puste, aby utworzyć nowy"
-                    />
-                  )}
-                />
-              </Grid>
-              <Grid item xs={12} sm={8}>
-                <TextField
-                  fullWidth
-                  label="Nazwa produktu"
-                  name="productName"
-                  value={taskData.productName || ''}
-                  onChange={handleChange}
-                  required
-                  disabled={!!selectedProduct}
-                  helperText={selectedProduct ? "Nazwa produktu pobrana z magazynu" : ""}
-                />
-              </Grid>
-              <Grid item xs={8}>
-                <TextField
-                  label="Ilość"
-                  name="quantity"
-                  type="number"
-                  value={taskData.quantity || ''}
-                  onChange={handleQuantityChange}
-                  fullWidth
-                  required
-                  inputProps={{ min: 0, step: 0.01 }}
-                />
-              </Grid>
-              <Grid item xs={4}>
-                <FormControl fullWidth>
-                  <InputLabel>Jednostka</InputLabel>
-                  <Select
-                    name="unit"
-                    value={taskData.unit}
+            
+            {/* Sekcja podstawowych informacji */}
+            <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'medium', color: 'primary.main' }}>
+                Podstawowe informacje
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <TextField
+                    required
+                    label="Nazwa zadania"
+                    name="name"
+                    value={taskData.name}
                     onChange={handleChange}
-                    label="Jednostka"
-                  >
-                    <MenuItem value="szt.">szt.</MenuItem>
-                    <MenuItem value="kg">kg</MenuItem>
-                    <MenuItem value="caps">caps</MenuItem>
-                  </Select>
-                </FormControl>
+                    fullWidth
+                    variant="outlined"
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    label="Opis"
+                    name="description"
+                    value={taskData.description || ''}
+                    onChange={handleChange}
+                    fullWidth
+                    multiline
+                    rows={2}
+                    variant="outlined"
+                  />
+                </Grid>
               </Grid>
-              <Grid item xs={6}>
-                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
-                  <DateTimePicker
-                    label="Data rozpoczęcia"
-                    value={taskData.scheduledDate}
-                    onChange={handleDateChange}
-                    slotProps={{
-                      textField: {
-                        fullWidth: true,
-                        required: true
+            </Paper>
+            
+            {/* Sekcja produktu i receptury */}
+            <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'medium', color: 'primary.main' }}>
+                Produkt i receptura
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <FormControl fullWidth variant="outlined">
+                    <InputLabel id="recipe-label">Receptura</InputLabel>
+                    <Select
+                      labelId="recipe-label"
+                      id="recipe"
+                      name="recipeId"
+                      value={taskData.recipeId || ''}
+                      onChange={handleRecipeChange}
+                      label="Receptura"
+                    >
+                      <MenuItem value="">
+                        <em>Brak</em>
+                      </MenuItem>
+                      {recipes.map((recipe) => (
+                        <MenuItem key={recipe.id} value={recipe.id}>
+                          {recipe.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12}>
+                  <Autocomplete
+                    id="inventory-product"
+                    options={inventoryProducts}
+                    getOptionLabel={(option) => option.name}
+                    value={taskData.inventoryProductId ? { id: taskData.inventoryProductId, name: taskData.productName } : null}
+                    onChange={(event, newValue) => {
+                      if (newValue) {
+                        setTaskData(prev => ({
+                          ...prev,
+                          productName: newValue.name,
+                          unit: newValue.unit || 'szt.',
+                          inventoryProductId: newValue.id
+                        }));
+                      } else {
+                        setTaskData(prev => {
+                          const updatedData = { ...prev };
+                          delete updatedData.inventoryProductId;
+                          return updatedData;
+                        });
                       }
                     }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Produkt z magazynu (opcjonalnie)"
+                        variant="outlined"
+                        helperText="Wybierz istniejący produkt z magazynu lub pozostaw puste, aby utworzyć nowy"
+                      />
+                    )}
                   />
-                </LocalizationProvider>
-              </Grid>
-              <Grid item xs={6}>
-                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
-                  <DateTimePicker
-                    label="Data zakończenia"
-                    value={taskData.endDate}
-                    onChange={handleEndDateChange}
-                    minDate={taskData.scheduledDate}
-                    slotProps={{
-                      textField: {
-                        fullWidth: true,
-                        required: true
-                      }
-                    }}
-                  />
-                </LocalizationProvider>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Szacowany czas produkcji (godziny)"
-                  name="estimatedDuration"
-                  value={taskData.estimatedDuration}
-                  onChange={handleDurationChange}
-                  type="number"
-                  InputProps={{ inputProps: { min: 0 } }}
-                  helperText={`Całkowity szacowany czas produkcji (${
-                    typeof taskData.estimatedDuration === 'number' 
-                      ? (taskData.estimatedDuration).toFixed(1) 
-                      : parseFloat(taskData.estimatedDuration || 0).toFixed(1)
-                  } godz.)`}
-                />
-              </Grid>
-              <Grid item xs={6}>
-                <FormControl fullWidth>
-                  <InputLabel>Priorytet</InputLabel>
-                  <Select
-                    name="priority"
-                    value={taskData.priority || 'Normalny'}
-                    onChange={handleChange}
-                    label="Priorytet"
-                  >
-                    <MenuItem value="Niski">Niski</MenuItem>
-                    <MenuItem value="Normalny">Normalny</MenuItem>
-                    <MenuItem value="Wysoki">Wysoki</MenuItem>
-                    <MenuItem value="Krytyczny">Krytyczny</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={6}>
-                <FormControl fullWidth>
-                  <InputLabel>Status</InputLabel>
-                  <Select
-                    name="status"
-                    value={taskData.status || 'Zaplanowane'}
-                    onChange={handleChange}
-                    label="Status"
-                  >
-                    <MenuItem value="Zaplanowane">Zaplanowane</MenuItem>
-                    <MenuItem value="W trakcie">W trakcie</MenuItem>
-                    <MenuItem value="Zakończone">Zakończone</MenuItem>
-                    <MenuItem value="Anulowane">Anulowane</MenuItem>
-                  </Select>
-                  <FormHelperText>Status zadania produkcyjnego</FormHelperText>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Czas produkcji na jednostkę (min)"
-                  name="productionTimePerUnit"
-                  value={taskData.productionTimePerUnit}
-                  onChange={handleProductionTimePerUnitChange}
-                  type="number"
-                  InputProps={{ inputProps: { min: 0, step: 0.1 } }}
-                  helperText="Czas produkcji dla 1 sztuki w minutach"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={taskData.autoReserveMaterials}
-                      onChange={handleAutoReserveMaterialsChange}
-                      name="autoReserveMaterials"
-                      color="primary"
-                    />
-                  }
-                  label="Automatycznie zarezerwuj materiały"
-                />
-                <FormHelperText>
-                  Zaznacz, jeśli chcesz automatycznie zarezerwować materiały po utworzeniu zadania
-                </FormHelperText>
-              </Grid>
-              <Grid item xs={6}>
-                <FormControl fullWidth>
-                  <InputLabel>Stanowisko produkcyjne</InputLabel>
-                  <Select
-                    name="workstationId"
-                    value={taskData.workstationId || ''}
-                    onChange={handleChange}
-                    label="Stanowisko produkcyjne"
-                  >
-                    <MenuItem value="">
-                      <em>Brak</em>
-                    </MenuItem>
-                    {workstations.map((workstation) => (
-                      <MenuItem key={workstation.id} value={workstation.id}>
-                        {workstation.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  <FormHelperText>Wybierz stanowisko produkcyjne dla tego zadania</FormHelperText>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12}>
-                <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>
-                  Dane partii produktu końcowego
-                </Typography>
-                <Divider sx={{ mb: 2 }} />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+                </Grid>
+                <Grid item xs={12} sm={8}>
                   <TextField
                     fullWidth
-                    label="Numer LOT"
-                    name="lotNumber"
-                    value={taskData.lotNumber || ''}
+                    label="Nazwa produktu"
+                    name="productName"
+                    value={taskData.productName || ''}
                     onChange={handleChange}
-                    helperText="Określ numer partii (LOT) dla produktu końcowego"
+                    required
+                    variant="outlined"
+                    disabled={!!taskData.inventoryProductId}
+                    helperText={taskData.inventoryProductId ? "Nazwa produktu pobrana z magazynu" : ""}
                   />
-                  <Button 
-                    variant="outlined" 
-                    onClick={generateLot}
-                    sx={{ mt: 2, ml: 1, height: 56 }}
-                  >
-                    Generuj
-                  </Button>
-                </Box>
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
-                  <DateTimePicker
-                    label="Data ważności"
-                    value={taskData.expiryDate}
-                    onChange={(date) => setTaskData({...taskData, expiryDate: date})}
-                    slotProps={{
-                      textField: {
-                        fullWidth: true,
-                        helperText: "Określ datę ważności produktu końcowego"
-                      }
-                    }}
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <FormControl fullWidth variant="outlined">
+                    <InputLabel>Jednostka</InputLabel>
+                    <Select
+                      name="unit"
+                      value={taskData.unit}
+                      onChange={handleChange}
+                      label="Jednostka"
+                    >
+                      <MenuItem value="szt.">szt.</MenuItem>
+                      <MenuItem value="kg">kg</MenuItem>
+                      <MenuItem value="caps">caps</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    label="Ilość"
+                    name="quantity"
+                    type="number"
+                    value={taskData.quantity || ''}
+                    onChange={handleQuantityChange}
+                    fullWidth
+                    required
+                    variant="outlined"
+                    inputProps={{ min: 0, step: 0.01 }}
                   />
-                </LocalizationProvider>
+                </Grid>
               </Grid>
-            </Grid>
-
-            {/* Sekcja kosztów */}
-            {costCalculation && (
-              <Grid item xs={12}>
-                <Paper sx={{ p: 2, mt: 2 }}>
-                  <Typography variant="h6" gutterBottom>
-                    Koszty produkcji
-                  </Typography>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} md={6}>
-                      <Typography variant="subtitle2">Koszty materiałów:</Typography>
-                      <Typography variant="body1">{formatCurrency(costCalculation.materialCost, 'EUR')}</Typography>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <Typography variant="subtitle2">Koszty robocizny:</Typography>
-                      <Typography variant="body1">{formatCurrency(costCalculation.actualLaborCost, 'EUR')}</Typography>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <Typography variant="subtitle2">Koszty maszyn:</Typography>
-                      <Typography variant="body1">{formatCurrency(costCalculation.machineCost, 'EUR')}</Typography>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <Typography variant="subtitle2">Koszty pośrednie (narzut):</Typography>
-                      <Typography variant="body1">{formatCurrency(costCalculation.overheadCost, 'EUR')}</Typography>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <Typography variant="subtitle2">Czas pracy (min):</Typography>
-                      <Typography variant="body1">{costCalculation.plannedWorkTime || 0} min ({(costCalculation.plannedWorkTime / 60).toFixed(1)} godz.)</Typography>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <Typography variant="subtitle2">Czas na sztukę:</Typography>
-                      <Typography variant="body1">{taskData.productionTimePerUnit || 0} min/szt.</Typography>
-                    </Grid>
-                    <Grid item xs={12}>
-                      <Divider sx={{ my: 1 }} />
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <Typography variant="subtitle2">Całkowity koszt produkcji:</Typography>
-                      <Typography variant="h6" color="primary">{formatCurrency(costCalculation.totalProductionCost, 'EUR')}</Typography>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <Typography variant="subtitle2">Koszt jednostkowy:</Typography>
-                      <Typography variant="h6" color="primary">{formatCurrency(costCalculation.unitCost, 'EUR')}/szt.</Typography>
-                    </Grid>
-                  </Grid>
-                </Paper>
+            </Paper>
+            
+            {/* Sekcja harmonogramu */}
+            <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'medium', color: 'primary.main' }}>
+                Harmonogram produkcji
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                    <DateTimePicker
+                      label="Data rozpoczęcia"
+                      value={taskData.scheduledDate}
+                      onChange={handleDateChange}
+                      slotProps={{
+                        textField: {
+                          fullWidth: true,
+                          required: true,
+                          variant: "outlined"
+                        }
+                      }}
+                    />
+                  </LocalizationProvider>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                    <DateTimePicker
+                      label="Data zakończenia"
+                      value={taskData.endDate}
+                      onChange={handleEndDateChange}
+                      minDate={taskData.scheduledDate}
+                      slotProps={{
+                        textField: {
+                          fullWidth: true,
+                          required: true,
+                          variant: "outlined"
+                        }
+                      }}
+                    />
+                  </LocalizationProvider>
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="Czas produkcji na jednostkę (min)"
+                    name="productionTimePerUnit"
+                    value={taskData.productionTimePerUnit}
+                    onChange={handleProductionTimePerUnitChange}
+                    type="number"
+                    variant="outlined"
+                    InputProps={{ inputProps: { min: 0, step: 0.1 } }}
+                    helperText="Czas produkcji dla 1 sztuki w minutach"
+                  />
+                </Grid>
               </Grid>
-            )}
-
-            {/* Wybór metody rezerwacji */}
-            <FormControl component="fieldset" sx={{ mb: 2, mt: 2 }}>
-              <FormLabel component="legend">Metoda rezerwacji składników</FormLabel>
-              <RadioGroup
-                row
-                name="reservationMethod"
-                value={reservationMethod}
-                onChange={(e) => setReservationMethod(e.target.value)}
-              >
-                <FormControlLabel 
-                  value="fifo" 
-                  control={<Radio />} 
-                  label="FIFO (First In, First Out)" 
-                />
-                <FormControlLabel 
-                  value="expiry" 
-                  control={<Radio />} 
-                  label="Według daty ważności (najkrótszej)" 
-                />
-              </RadioGroup>
-            </FormControl>
-
-            {/* Przycisk do bookowania składników */}
-            <Button
-              variant="outlined"
-              color="secondary"
-              onClick={handleBookIngredients}
-              disabled={!taskData.recipeId || loading}
-            >
-              Zarezerwuj składniki
-            </Button>
-
-            {/* Wyświetl szczegóły zarezerwowanych składników */}
-            {showBookingDetails && bookedIngredients.length > 0 && (
-              <Box mt={3} p={2} border={1} borderColor="divider" borderRadius={1}>
-                <Typography variant="h6" gutterBottom>
-                  Zarezerwowane składniki:
-                </Typography>
-                {bookedIngredients.map((ingredient, index) => (
-                  <Box key={index} mb={1}>
-                    <Typography>
-                      {ingredient.name}: {ingredient.quantity.toFixed(2)} {ingredient.unit}
-                    </Typography>
-                    {ingredient.batches && ingredient.batches.length > 0 && (
-                      <Box ml={2}>
-                        <Typography variant="body2" color="textSecondary">
-                          Partie:
-                        </Typography>
-                        {ingredient.batches.map((batch, batchIndex) => (
-                          <Typography key={batchIndex} variant="body2" color="textSecondary" ml={2}>
-                            • {batch.batchNumber || 'Bez numeru'}: {batch.selectedQuantity.toFixed(2)} {ingredient.unit}
-                            {batch.expiryDate && ` (Ważne do: ${new Date(batch.expiryDate.seconds * 1000).toLocaleDateString()})`}
-                          </Typography>
-                        ))}
-                      </Box>
-                    )}
+            </Paper>
+            
+            {/* Sekcja statusu i priorytetów */}
+            <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'medium', color: 'primary.main' }}>
+                Status i priorytet
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth variant="outlined">
+                    <InputLabel>Status</InputLabel>
+                    <Select
+                      name="status"
+                      value={taskData.status || 'Zaplanowane'}
+                      onChange={handleChange}
+                      label="Status"
+                    >
+                      <MenuItem value="Zaplanowane">Zaplanowane</MenuItem>
+                      <MenuItem value="W trakcie">W trakcie</MenuItem>
+                      <MenuItem value="Zakończone">Zakończone</MenuItem>
+                      <MenuItem value="Anulowane">Anulowane</MenuItem>
+                    </Select>
+                    <FormHelperText>Status zadania produkcyjnego</FormHelperText>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth variant="outlined">
+                    <InputLabel>Priorytet</InputLabel>
+                    <Select
+                      name="priority"
+                      value={taskData.priority || 'Normalny'}
+                      onChange={handleChange}
+                      label="Priorytet"
+                    >
+                      <MenuItem value="Niski">Niski</MenuItem>
+                      <MenuItem value="Normalny">Normalny</MenuItem>
+                      <MenuItem value="Wysoki">Wysoki</MenuItem>
+                      <MenuItem value="Krytyczny">Krytyczny</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12}>
+                  <FormControl fullWidth variant="outlined">
+                    <InputLabel>Stanowisko produkcyjne</InputLabel>
+                    <Select
+                      name="workstationId"
+                      value={taskData.workstationId || ''}
+                      onChange={handleChange}
+                      label="Stanowisko produkcyjne"
+                    >
+                      <MenuItem value="">
+                        <em>Brak</em>
+                      </MenuItem>
+                      {workstations.map((workstation) => (
+                        <MenuItem key={workstation.id} value={workstation.id}>
+                          {workstation.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </Grid>
+            </Paper>
+            
+            {/* Sekcja partii produktu końcowego */}
+            <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'medium', color: 'primary.main' }}>
+                Dane partii produktu końcowego
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+                    <TextField
+                      fullWidth
+                      label="Numer LOT"
+                      name="lotNumber"
+                      value={taskData.lotNumber || ''}
+                      onChange={handleChange}
+                      variant="outlined"
+                      helperText="Określ numer partii (LOT) dla produktu końcowego"
+                    />
+                    <Button 
+                      variant="contained" 
+                      onClick={generateLot}
+                      sx={{ mt: 2, ml: 1, height: 56 }}
+                    >
+                      Generuj
+                    </Button>
                   </Box>
-                ))}
-              </Box>
-            )}
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                    <DateTimePicker
+                      label="Data ważności"
+                      value={taskData.expiryDate}
+                      onChange={(date) => setTaskData({...taskData, expiryDate: date})}
+                      slotProps={{
+                        textField: {
+                          fullWidth: true,
+                          variant: "outlined",
+                          helperText: "Określ datę ważności produktu końcowego"
+                        }
+                      }}
+                    />
+                  </LocalizationProvider>
+                </Grid>
+              </Grid>
+            </Paper>
 
-            {/* Przycisk do obliczania kosztów */}
-            <Grid item xs={12}>
-              <Button
-                variant="outlined"
-                color="primary"
-                startIcon={<CalculateIcon />}
-                onClick={handleCalculateCosts}
-                disabled={!taskData.recipeId || calculatingCosts || !taskData.quantity}
-                sx={{ mt: 2 }}
-              >
-                {calculatingCosts ? 'Obliczanie...' : 'Oblicz koszty'}
-              </Button>
-            </Grid>
-
-            <Box sx={{ mt: 4, mb: 2 }}>
-              <Divider>
-                <Typography variant="h6">Dodatkowe informacje</Typography>
-              </Divider>
-            </Box>
-
-            <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" sx={{ mb: 2 }}>Notatki</Typography>
-              <TextField
-                name="notes"
-                value={taskData.notes || ''}
-                onChange={handleChange}
-                fullWidth
-                multiline
-                rows={4}
-                placeholder="Dodatkowe uwagi, instrukcje dla operatorów, informacje o materiałach..."
-              />
+            {/* Sekcja dodatkowych informacji */}
+            <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'medium', color: 'primary.main' }}>
+                Dodatkowe informacje
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <TextField
+                    name="notes"
+                    value={taskData.notes || ''}
+                    onChange={handleChange}
+                    fullWidth
+                    multiline
+                    rows={4}
+                    variant="outlined"
+                    placeholder="Dodatkowe uwagi, instrukcje dla operatorów, informacje o materiałach..."
+                    label="Notatki"
+                  />
+                </Grid>
+              </Grid>
             </Paper>
 
             <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Button 
                 startIcon={<ArrowBackIcon />} 
                 onClick={() => navigate('/production')}
+                variant="outlined"
+                size="large"
               >
                 Powrót
               </Button>
@@ -1250,6 +823,7 @@ const TaskForm = ({ taskId }) => {
                 color="primary"
                 disabled={saving}
                 startIcon={<SaveIcon />}
+                size="large"
               >
                 {saving ? 'Zapisywanie...' : 'Zapisz'}
               </Button>

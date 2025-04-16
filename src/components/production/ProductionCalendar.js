@@ -954,17 +954,55 @@ const ProductionCalendar = () => {
       maxWidth: '100%',
       overflow: 'hidden'
     }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+      {/* Nagłówek kalendarza */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center' }}>
           <CalendarIcon sx={{ mr: 1 }} />
           Kalendarz produkcji
         </Typography>
-        
-        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+      </Box>
+      
+      {/* Pasek narzędziowy - podzielony na logiczne sekcje */}
+      <Box sx={{ 
+        display: 'flex', 
+        flexWrap: 'wrap', 
+        gap: 1, 
+        mb: 2, 
+        pb: 2, 
+        borderBottom: '1px solid #e0e0e0',
+        justifyContent: 'space-between'
+      }}>
+        {/* Grupa 1: Nawigacja i zakres dat */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Button 
+            variant="outlined" 
+            size="small" 
+            onClick={() => handleNavigation('prev')}
+            sx={{ minWidth: 50, height: 36 }}
+          >
+            &lt;
+          </Button>
+          <Button 
+            variant="outlined" 
+            size="small" 
+            onClick={() => handleNavigation('next')}
+            sx={{ minWidth: 50, height: 36 }}
+          >
+            &gt;
+          </Button>
+          <Button 
+            variant="contained" 
+            size="small" 
+            onClick={() => handleNavigation('today')}
+            sx={{ mx: 1, height: 36 }}
+          >
+            Dziś
+          </Button>
+          
           <Button
             variant="outlined"
             onClick={handleDateRangeMenuClick}
-            sx={{ mr: 1 }}
+            sx={{ height: 36 }}
             startIcon={<CalendarIcon />}
             size="small"
           >
@@ -972,189 +1010,17 @@ const ProductionCalendar = () => {
               ? `${format(startDate, 'dd.MM.yyyy')} - ${format(endDate, 'dd.MM.yyyy')}`
               : 'Wybierz zakres dat'}
           </Button>
-          
-          <Menu
-            anchorEl={dateRangeMenuAnchor}
-            open={Boolean(dateRangeMenuAnchor)}
-            onClose={handleDateRangeMenuClose}
-            PaperProps={{
-              sx: { minWidth: '300px', p: 1 }
-            }}
-          >
-            <Box sx={{ p: 1 }}>
-              <Typography variant="subtitle2" gutterBottom>
-                Szybki wybór zakresu
-              </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-                <Chip 
-                  label="Dziś" 
-                  onClick={() => applyPredefinedRange('today')} 
-                  color="primary" 
-                  variant="outlined" 
-                  size="small" 
-                />
-                <Chip 
-                  label="Ten tydzień" 
-                  onClick={() => applyPredefinedRange('thisWeek')} 
-                  color="primary" 
-                  variant="outlined" 
-                  size="small" 
-                />
-                <Chip 
-                  label="Ten miesiąc" 
-                  onClick={() => applyPredefinedRange('thisMonth')} 
-                  color="primary" 
-                  variant="outlined" 
-                  size="small" 
-                />
-                <Chip 
-                  label="Następny miesiąc" 
-                  onClick={() => applyPredefinedRange('nextMonth')} 
-                  color="primary" 
-                  variant="outlined" 
-                  size="small" 
-                />
-                <Chip 
-                  label="Następne 30 dni" 
-                  onClick={() => applyPredefinedRange('next30Days')} 
-                  color="primary" 
-                  variant="outlined" 
-                  size="small" 
-                />
-                <Chip 
-                  label="Następne 90 dni" 
-                  onClick={() => applyPredefinedRange('next90Days')} 
-                  color="primary" 
-                  variant="outlined" 
-                  size="small" 
-                />
-              </Box>
-              
-              <Typography variant="subtitle2" gutterBottom>
-                Niestandardowy zakres dat
-              </Typography>
-              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                  <DatePicker
-                    label="Data początkowa"
-                    value={startDate}
-                    onChange={(newValue) => setStartDate(newValue)}
-                    sx={{ mr: 1, flex: 1 }}
-                    format="dd.MM.yyyy"
-                  />
-                  <Typography sx={{ mx: 1 }}>-</Typography>
-                  <DatePicker
-                    label="Data końcowa"
-                    value={endDate}
-                    minDate={startDate}
-                    onChange={(newValue) => setEndDate(newValue)}
-                    sx={{ flex: 1 }}
-                    format="dd.MM.yyyy"
-                  />
-                </Box>
-              </LocalizationProvider>
-              
-              <Button 
-                variant="contained" 
-                fullWidth 
-                onClick={applyCustomDateRange}
-              >
-                Zastosuj zakres
-              </Button>
-            </Box>
-          </Menu>
+        </Box>
 
-          <FormControlLabel
-            control={
-              <Switch
-                checked={useWorkstationColors}
-                onChange={(e) => setUseWorkstationColors(e.target.checked)}
-                color="primary"
-              />
-            }
-            label="Kolory stanowisk"
-            sx={{ mr: 1 }}
-          />
-          
-          <FormControlLabel
-            control={
-              <Switch
-                checked={editable}
-                onChange={handleEditableToggle}
-                color="primary"
-              />
-            }
-            label="Tryb edycji"
-            sx={{ mr: 1 }}
-          />
-          
-          {view.startsWith('resourceTimeline') && (
-            <>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={eventResizableFromStart}
-                    onChange={handleResizableFromStartToggle}
-                    color="primary"
-                    disabled={!editable}
-                  />
-                }
-                label="Rozciąganie od początku"
-                sx={{ mr: 1 }}
-              />
-              
-              <Button
-                variant="outlined"
-                onClick={handleDetailMenuClick}
-                sx={{ mr: 1 }}
-                size="small"
-              >
-                Szczegółowość: {ganttDetail === 'hour' ? 'Godzina' : ganttDetail === 'day' ? 'Dzień' : 'Tydzień'}
-              </Button>
-              
-              <Menu
-                anchorEl={detailMenuAnchor}
-                open={Boolean(detailMenuAnchor)}
-                onClose={handleDetailMenuClose}
-              >
-                <MenuItem 
-                  onClick={() => handleGanttDetailChange('hour')}
-                  selected={ganttDetail === 'hour'}
-                >
-                  Godzina
-                </MenuItem>
-                <MenuItem 
-                  onClick={() => handleGanttDetailChange('day')}
-                  selected={ganttDetail === 'day'}
-                >
-                  Dzień
-                </MenuItem>
-                <MenuItem 
-                  onClick={() => handleGanttDetailChange('week')}
-                  selected={ganttDetail === 'week'}
-                >
-                  Tydzień
-                </MenuItem>
-              </Menu>
-            </>
-          )}
-          
-          <Button
-            variant="outlined"
-            startIcon={<FilterListIcon />}
-            onClick={handleFilterMenuClick}
-            sx={{ mr: 1 }}
-          >
-            Filtruj
-          </Button>
-          
+        {/* Grupa 2: Zmiana widoku */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="body2" sx={{ mr: 1 }}>Widok:</Typography>
           <ToggleButtonGroup
             value={view.startsWith('resourceTimeline') ? 'gantt' : view}
             exclusive
             onChange={handleViewChange}
             aria-label="widok kalendarza"
             size="small"
-            sx={{ mr: 1 }}
           >
             <ToggleButton value="timeGridDay" aria-label="dzień">
               <Tooltip title="Dzień">
@@ -1185,40 +1051,182 @@ const ProductionCalendar = () => {
             </ToggleButton>
           </ToggleButtonGroup>
         </Box>
-      </Box>
-      
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
-          {useWorkstationColors && workstations.length > 0 ? (
-            <>
-              <Typography variant="body2" sx={{ mr: 1 }}>
-                Legenda stanowisk:
-              </Typography>
-              {workstations.map(workstation => (
-                <Chip
-                  key={workstation.id}
-                  size="small"
-                  label={workstation.name}
-                  sx={{
-                    backgroundColor: workstation.color || '#2196f3',
-                    color: theme => theme.palette.getContrastText(workstation.color || '#2196f3'),
-                    opacity: selectedWorkstations[workstation.id] ? 1 : 0.3
-                  }}
-                />
-              ))}
-            </>
-          ) : (
-            <>
-              <Typography variant="body2" sx={{ mr: 1 }}>
-                Legenda statusów:
-              </Typography>
-              <Chip size="small" label="Zaplanowane" sx={{ backgroundColor: '#3788d8', color: '#fff' }} />
-              <Chip size="small" label="W trakcie" sx={{ backgroundColor: '#f39c12', color: '#fff' }} />
-              <Chip size="small" label="Zakończone" sx={{ backgroundColor: '#2ecc71', color: '#fff' }} />
-              <Chip size="small" label="Anulowane" sx={{ backgroundColor: '#e74c3c', color: '#fff' }} />
-            </>
+
+        {/* Grupa 3: Filtry i opcje */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={useWorkstationColors}
+                onChange={(e) => setUseWorkstationColors(e.target.checked)}
+                color="primary"
+                size="small"
+              />
+            }
+            label={<Typography variant="body2">Kolory stanowisk</Typography>}
+          />
+          
+          {view.startsWith('resourceTimeline') && (
+            <Button
+              variant="outlined"
+              onClick={handleDetailMenuClick}
+              sx={{ height: 36 }}
+              size="small"
+            >
+              Szczegółowość: {ganttDetail === 'hour' ? 'Godzina' : ganttDetail === 'day' ? 'Dzień' : 'Tydzień'}
+            </Button>
           )}
         </Box>
+      </Box>
+      
+      {/* Menu i dialogu pozostają bez zmian */}
+      <Menu
+        anchorEl={dateRangeMenuAnchor}
+        open={Boolean(dateRangeMenuAnchor)}
+        onClose={handleDateRangeMenuClose}
+        PaperProps={{
+          sx: { minWidth: '300px', p: 1 }
+        }}
+      >
+        <Box sx={{ p: 1 }}>
+          <Typography variant="subtitle2" gutterBottom>
+            Szybki wybór zakresu
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+            <Chip 
+              label="Dziś" 
+              onClick={() => applyPredefinedRange('today')} 
+              color="primary" 
+              variant="outlined" 
+              size="small" 
+            />
+            <Chip 
+              label="Ten tydzień" 
+              onClick={() => applyPredefinedRange('thisWeek')} 
+              color="primary" 
+              variant="outlined" 
+              size="small" 
+            />
+            <Chip 
+              label="Ten miesiąc" 
+              onClick={() => applyPredefinedRange('thisMonth')} 
+              color="primary" 
+              variant="outlined" 
+              size="small" 
+            />
+            <Chip 
+              label="Następny miesiąc" 
+              onClick={() => applyPredefinedRange('nextMonth')} 
+              color="primary" 
+              variant="outlined" 
+              size="small" 
+            />
+            <Chip 
+              label="Następne 30 dni" 
+              onClick={() => applyPredefinedRange('next30Days')} 
+              color="primary" 
+              variant="outlined" 
+              size="small" 
+            />
+            <Chip 
+              label="Następne 90 dni" 
+              onClick={() => applyPredefinedRange('next90Days')} 
+              color="primary" 
+              variant="outlined" 
+              size="small" 
+            />
+          </Box>
+          
+          <Typography variant="subtitle2" gutterBottom>
+            Niestandardowy zakres dat
+          </Typography>
+          <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <DatePicker
+                label="Data początkowa"
+                value={startDate}
+                onChange={(newValue) => setStartDate(newValue)}
+                sx={{ mr: 1, flex: 1 }}
+                format="dd.MM.yyyy"
+              />
+              <Typography sx={{ mx: 1 }}>-</Typography>
+              <DatePicker
+                label="Data końcowa"
+                value={endDate}
+                minDate={startDate}
+                onChange={(newValue) => setEndDate(newValue)}
+                sx={{ flex: 1 }}
+                format="dd.MM.yyyy"
+              />
+            </Box>
+          </LocalizationProvider>
+          
+          <Button 
+            variant="contained" 
+            fullWidth 
+            onClick={applyCustomDateRange}
+          >
+            Zastosuj zakres
+          </Button>
+        </Box>
+      </Menu>
+
+      <Menu
+        anchorEl={detailMenuAnchor}
+        open={Boolean(detailMenuAnchor)}
+        onClose={handleDetailMenuClose}
+      >
+        <MenuItem 
+          onClick={() => handleGanttDetailChange('hour')}
+          selected={ganttDetail === 'hour'}
+        >
+          Godzina
+        </MenuItem>
+        <MenuItem 
+          onClick={() => handleGanttDetailChange('day')}
+          selected={ganttDetail === 'day'}
+        >
+          Dzień
+        </MenuItem>
+        <MenuItem 
+          onClick={() => handleGanttDetailChange('week')}
+          selected={ganttDetail === 'week'}
+        >
+          Tydzień
+        </MenuItem>
+      </Menu>
+      
+      {/* Legenda statusów/stanowisk */}
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', mb: 2 }}>
+        {useWorkstationColors && workstations.length > 0 ? (
+          <>
+            <Typography variant="body2" sx={{ mr: 1, fontWeight: 'bold' }}>
+              Legenda stanowisk:
+            </Typography>
+            {workstations.map(workstation => (
+              <Chip
+                key={workstation.id}
+                size="small"
+                label={workstation.name}
+                sx={{
+                  backgroundColor: workstation.color || '#2196f3',
+                  color: theme => theme.palette.getContrastText(workstation.color || '#2196f3'),
+                  opacity: selectedWorkstations[workstation.id] ? 1 : 0.3
+                }}
+              />
+            ))}
+          </>
+        ) : (
+          <>
+            <Typography variant="body2" sx={{ mr: 1, fontWeight: 'bold' }}>
+              Legenda statusów:
+            </Typography>
+            <Chip size="small" label="Zaplanowane" sx={{ backgroundColor: '#3788d8', color: '#fff' }} />
+            <Chip size="small" label="W trakcie" sx={{ backgroundColor: '#f39c12', color: '#fff' }} />
+            <Chip size="small" label="Zakończone" sx={{ backgroundColor: '#2ecc71', color: '#fff' }} />
+            <Chip size="small" label="Anulowane" sx={{ backgroundColor: '#e74c3c', color: '#fff' }} />
+          </>
+        )}
       </Box>
       
       {loading && (
@@ -1236,33 +1244,8 @@ const ProductionCalendar = () => {
         display: 'flex',
         flexDirection: 'column'
       }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <Button 
-            variant="outlined" 
-            size="small" 
-            onClick={() => handleNavigation('prev')}
-            sx={{ minWidth: 40, px: 1 }}
-          >
-            &lt;
-          </Button>
-          <Button 
-            variant="outlined" 
-            size="small" 
-            onClick={() => handleNavigation('next')}
-            sx={{ minWidth: 40, px: 1, mx: 1 }}
-          >
-            &gt;
-          </Button>
-          <Button 
-            variant="outlined" 
-            size="small" 
-            onClick={() => handleNavigation('today')}
-            sx={{ mx: 1 }}
-          >
-            Dziś
-          </Button>
-          
-          <Typography variant="h6" sx={{ flexGrow: 1, textAlign: 'center' }}>
+        <Box sx={{ textAlign: 'center', mb: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
             {getCalendarTitle()}
           </Typography>
         </Box>
@@ -1445,8 +1428,8 @@ const ProductionCalendar = () => {
           locale={plLocale}
           height="100%"
           allDaySlot={true}
-          slotMinTime="06:00:00"
-          slotMaxTime="22:00:00"
+          slotMinTime="00:00:00"
+          slotMaxTime="23:59:59"
           slotDuration="01:00:00"
           businessHours={{
             daysOfWeek: [1, 2, 3, 4, 5],
@@ -1564,7 +1547,6 @@ const ProductionCalendar = () => {
               slotMinWidth: 100,
               slotDuration: { hours: 1 },
               snapDuration: { minutes: 15 },
-              columnHeaderFormat: { weekday: 'long', day: 'numeric', month: 'long' },
               headerToolbar: false // Wyłączenie domyślnego nagłówka
             },
             resourceTimelineWeek: {
@@ -1573,7 +1555,6 @@ const ProductionCalendar = () => {
               ],
               slotMinWidth: 100,
               slotDuration: { days: 1 },
-              columnHeaderFormat: { weekday: 'short', day: 'numeric', month: 'short' },
               headerToolbar: false // Wyłączenie domyślnego nagłówka
             },
             resourceTimelineMonth: {
@@ -1584,7 +1565,6 @@ const ProductionCalendar = () => {
               duration: { months: 1 },
               slotMinWidth: 60,
               slotDuration: { days: 1 },
-              columnHeaderFormat: { weekday: 'short', day: 'numeric' },
               headerToolbar: false // Wyłączenie domyślnego nagłówka
             },
             resourceTimelineYear: {
@@ -1594,7 +1574,6 @@ const ProductionCalendar = () => {
               },
               slotMinWidth: 40,
               slotDuration: { weeks: 1 },
-              columnHeaderFormat: { month: 'long' },
               headerToolbar: false // Wyłączenie domyślnego nagłówka
             }
           }}
