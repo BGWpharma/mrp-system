@@ -18,7 +18,13 @@ import {
   Divider,
   Container,
   Alert,
-  AlertTitle
+  AlertTitle,
+  Chip,
+  IconButton,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondary
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -26,7 +32,10 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { pl } from 'date-fns/locale';
 import {
   Save as SaveIcon,
-  ArrowBack as ArrowBackIcon
+  ArrowBack as ArrowBackIcon,
+  Add as AddIcon,
+  Delete as DeleteIcon,
+  Link as LinkIcon
 } from '@mui/icons-material';
 import {
   createTask,
@@ -38,6 +47,7 @@ import {
   getAllInventoryItems,
   getInventoryItemById
 } from '../../services/inventoryService';
+import { getAllPurchaseOrders } from '../../services/purchaseOrderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { getAllWorkstations } from '../../services/workstationService';
@@ -54,6 +64,8 @@ const TaskForm = ({ taskId }) => {
   const navigate = useNavigate();
   
   const [workstations, setWorkstations] = useState([]);
+  const [purchaseOrders, setPurchaseOrders] = useState([]);
+  const [selectedPurchaseOrder, setSelectedPurchaseOrder] = useState(null);
   
   const [taskData, setTaskData] = useState({
     name: '',
@@ -72,7 +84,8 @@ const TaskForm = ({ taskId }) => {
     moNumber: '',
     workstationId: '', // ID stanowiska produkcyjnego
     lotNumber: '', // Numer partii produktu (LOT)
-    expiryDate: null // Data ważności produktu
+    expiryDate: null, // Data ważności produktu
+    linkedPurchaseOrders: [] // Powiązane zamówienia zakupowe
   });
 
   const [recipeYieldError, setRecipeYieldError] = useState(false);
@@ -84,6 +97,7 @@ const TaskForm = ({ taskId }) => {
         await fetchRecipes();
         await fetchInventoryProducts();
         await fetchWorkstations(); // Pobierz stanowiska produkcyjne
+        await fetchPurchaseOrders(); // Pobierz zamówienia zakupowe
         
         if (taskId && taskId !== 'new') {
           await fetchTask();
@@ -132,6 +146,25 @@ const TaskForm = ({ taskId }) => {
     }
   };
 
+  const fetchPurchaseOrders = async () => {
+    try {
+      const poData = await getAllPurchaseOrders();
+      
+      // Filtrujemy tylko zamówienia o statusie innym niż "anulowane" i "zakończone"
+      const filteredPOs = poData.filter(po => 
+        po.status !== 'canceled' && 
+        po.status !== 'closed' && 
+        po.status !== 'returned'
+      );
+      
+      console.log('Pobrano zamówienia zakupowe:', filteredPOs);
+      setPurchaseOrders(filteredPOs);
+    } catch (error) {
+      showError('Błąd podczas pobierania zamówień zakupowych: ' + error.message);
+      console.error('Error fetching purchase orders:', error);
+    }
+  };
+
   const fetchTask = async () => {
     try {
       const task = await getTaskById(taskId);
@@ -150,7 +183,8 @@ const TaskForm = ({ taskId }) => {
         expiryDate: task.expiryDate ? 
           (task.expiryDate instanceof Date ? task.expiryDate :
            task.expiryDate.toDate ? task.expiryDate.toDate() : 
-           new Date(task.expiryDate)) : null
+           new Date(task.expiryDate)) : null,
+        linkedPurchaseOrders: task.linkedPurchaseOrders || []
       };
       
       console.log('Pobrane zadanie z przetworzonymi datami:', taskWithParsedDates);
@@ -462,6 +496,44 @@ const TaskForm = ({ taskId }) => {
       console.error('Błąd podczas generowania numeru LOT:', error);
       showError('Nie udało się wygenerować numeru LOT');
     }
+  };
+
+  // Dodawanie powiązania z zamówieniem zakupowym
+  const handleAddPurchaseOrderLink = () => {
+    if (!selectedPurchaseOrder) {
+      showError('Wybierz zamówienie zakupowe do powiązania');
+      return;
+    }
+    
+    // Sprawdź, czy zamówienie nie jest już powiązane
+    if (taskData.linkedPurchaseOrders && taskData.linkedPurchaseOrders.some(po => po.id === selectedPurchaseOrder.id)) {
+      showWarning('To zamówienie jest już powiązane z tym zadaniem');
+      return;
+    }
+    
+    setTaskData(prev => ({
+      ...prev,
+      linkedPurchaseOrders: [
+        ...(prev.linkedPurchaseOrders || []),
+        {
+          id: selectedPurchaseOrder.id,
+          number: selectedPurchaseOrder.number,
+          supplierName: selectedPurchaseOrder.supplier?.name || 'Nieznany dostawca'
+        }
+      ]
+    }));
+    
+    setSelectedPurchaseOrder(null);
+  };
+  
+  // Usuwanie powiązania z zamówieniem zakupowym
+  const handleRemovePurchaseOrderLink = (poId) => {
+    setTaskData(prev => ({
+      ...prev,
+      linkedPurchaseOrders: prev.linkedPurchaseOrders && prev.linkedPurchaseOrders.length > 0
+        ? prev.linkedPurchaseOrders.filter(po => po.id !== poId)
+        : []
+    }));
   };
 
   if (loading) {
@@ -804,6 +876,75 @@ const TaskForm = ({ taskId }) => {
                     placeholder="Dodatkowe uwagi, instrukcje dla operatorów, informacje o materiałach..."
                     label="Notatki"
                   />
+                </Grid>
+              </Grid>
+            </Paper>
+
+            {/* Sekcja powiązanych zamówień zakupowych */}
+            <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'medium', color: 'primary.main' }}>
+                Powiązane zamówienia komponentów
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+                    <Autocomplete
+                      value={selectedPurchaseOrder}
+                      onChange={(event, newValue) => {
+                        setSelectedPurchaseOrder(newValue);
+                      }}
+                      options={purchaseOrders}
+                      getOptionLabel={(option) => `${option.number} - ${option.supplier?.name || 'Brak dostawcy'}`}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Wybierz zamówienie zakupowe"
+                          variant="outlined"
+                          fullWidth
+                        />
+                      )}
+                      sx={{ flexGrow: 1, mr: 1 }}
+                    />
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      onClick={handleAddPurchaseOrderLink}
+                      startIcon={<LinkIcon />}
+                      sx={{ height: 56 }}
+                    >
+                      Powiąż
+                    </Button>
+                  </Box>
+                </Grid>
+                
+                <Grid item xs={12}>
+                  {taskData.linkedPurchaseOrders && taskData.linkedPurchaseOrders.length > 0 ? (
+                    <List>
+                      {taskData.linkedPurchaseOrders.map((po) => (
+                        <ListItem
+                          key={po.id}
+                          secondaryAction={
+                            <IconButton 
+                              edge="end" 
+                              aria-label="delete"
+                              onClick={() => handleRemovePurchaseOrderLink(po.id)}
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          }
+                        >
+                          <ListItemText
+                            primary={po.number}
+                            secondary={po.supplierName}
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                      Brak powiązanych zamówień zakupowych
+                    </Typography>
+                  )}
                 </Grid>
               </Grid>
             </Paper>

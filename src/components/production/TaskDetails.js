@@ -21,9 +21,10 @@ const TaskDetails = ({ task }) => {
   // Sprawdź czy zadanie ma powiązane zamówienie klienta lub zamówienia zakupu
   const hasCustomerOrder = Boolean(task?.orderId);
   const hasPurchaseOrders = Boolean(task?.purchaseOrders && task.purchaseOrders.length > 0);
+  const hasLinkedPurchaseOrders = Boolean(task?.linkedPurchaseOrders && task.linkedPurchaseOrders.length > 0);
   
   // Jeśli nie ma żadnych powiązanych zamówień, nie renderuj sekcji dla zamówień
-  const hasRelatedOrders = hasCustomerOrder || hasPurchaseOrders;
+  const hasRelatedOrders = hasCustomerOrder || hasPurchaseOrders || hasLinkedPurchaseOrders;
   
   // Sprawdź czy zadanie ma zdefiniowany LOT lub datę ważności
   const hasProductBatchInfo = Boolean(task?.lotNumber || task?.expiryDate);
@@ -45,10 +46,11 @@ const TaskDetails = ({ task }) => {
     fetchWorkstation();
   }, [task?.workstationId, showError]);
   
-  // Wyświetl debugowe informacje o purchaseOrders
+  // Wyświetl debugowe informacje o purchaseOrders i linkedPurchaseOrders
   useEffect(() => {
     if (task) {
       console.log('Task Details - purchaseOrders:', task.purchaseOrders);
+      console.log('Task Details - linkedPurchaseOrders:', task.linkedPurchaseOrders);
     }
   }, [task]);
   
@@ -92,11 +94,12 @@ const TaskDetails = ({ task }) => {
             <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'medium' }}>
               Zamówienia komponentów
             </Typography>
-            {hasPurchaseOrders ? (
+            {(hasPurchaseOrders || hasLinkedPurchaseOrders) ? (
               <Box sx={{ display: 'flex', flexWrap: 'wrap' }}>
-                {task.purchaseOrders.map((po, index) => (
+                {/* Zamówienia automatyczne z purchaseOrders */}
+                {task.purchaseOrders && task.purchaseOrders.map((po, index) => (
                   <Button
-                    key={index}
+                    key={`po-${index}`}
                     variant="outlined"
                     size="small"
                     component={RouterLink}
@@ -105,6 +108,21 @@ const TaskDetails = ({ task }) => {
                     sx={{ mr: 1, mb: 1 }}
                   >
                     {po.number || po.poNumber || po.id}
+                  </Button>
+                ))}
+                
+                {/* Ręcznie powiązane zamówienia z linkedPurchaseOrders */}
+                {task.linkedPurchaseOrders && task.linkedPurchaseOrders.map((po, index) => (
+                  <Button
+                    key={`linked-po-${index}`}
+                    variant="outlined"
+                    size="small"
+                    component={RouterLink}
+                    to={`/purchase-orders/${po.id}`}
+                    startIcon={<ShoppingBasketIcon />}
+                    sx={{ mr: 1, mb: 1, borderColor: 'secondary.main', color: 'secondary.main' }}
+                  >
+                    {po.number || po.id}
                   </Button>
                 ))}
               </Box>

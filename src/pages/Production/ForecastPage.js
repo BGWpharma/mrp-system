@@ -217,22 +217,30 @@ const ForecastPage = () => {
       // Oblicz potrzebne ilości materiałów na podstawie zadań produkcyjnych
       const materialRequirements = {};
       
-      // Porównaj te dane z bazy z tym co widzimy w UI w szczegółach zadania
-      const realMaterialNeeds = {
-        'Jabłko': 2, // 2 sztuki na jednostkę (widoczne w UI)
-        'Mąka': 1, // 1 sztuka na jednostkę (widoczne w UI)
-        'RAWBW-Sucralose Suralose': 2.07 // Prawidłowa wartość dla sukralozy
-      };
-      
-      // Funkcja korygująca nieprawidłowe ilości
-      const correctMaterialQuantity = (material, taskQuantity) => {
-        // Jeśli znamy prawidłowe zapotrzebowanie, użyj go
-        if (realMaterialNeeds[material.name]) {
-          return realMaterialNeeds[material.name];
+      // Funkcja korygująca nieprawidłowe ilości - wyciąga wartość na jednostkę produktu
+      const correctMaterialQuantity = (material, taskQuantity, task) => {
+        // Sprawdź, czy materiał ma prawidłowo określoną ilość na jednostkę produktu
+        if (material.quantityPerUnit && material.quantityPerUnit > 0) {
+          console.log(`${material.name}: użyto jawnie określonej wartości quantityPerUnit: ${material.quantityPerUnit}`);
+          return material.quantityPerUnit;
         }
         
-        // W przeciwnym razie podziel przez ilość zadania, ponieważ wartości są zbyt duże
-        return material.quantity / taskQuantity;
+        // Sprawdź, czy materiał ma oznaczenie, że jest dla całego zadania
+        if (material.isFullTaskQuantity || material.isTotal) {
+          const valuePerUnit = material.quantity / taskQuantity;
+          console.log(`${material.name}: ilość dla całego zadania podzielona: ${material.quantity} / ${taskQuantity} = ${valuePerUnit}`);
+          return valuePerUnit;
+        }
+        
+        // W zadaniach produkcyjnych przechowujemy wartości całkowite dla zadania, więc dzielimy przez ilość
+        if (taskQuantity > 0) {
+          const valuePerUnit = material.quantity / taskQuantity;
+          console.log(`${material.name}: wykryto wartość całkowitą: ${material.quantity} / ${taskQuantity} = ${valuePerUnit}`);
+          return valuePerUnit;
+        }
+        
+        // Jeśli nic innego nie zadziała, użyj oryginalnej wartości (może być błędna)
+        return material.quantity;
       };
       
       for (const task of finalFilteredTasks) {
@@ -275,34 +283,13 @@ const ForecastPage = () => {
             continue;
           }
           
-          // Sprawdź, czy nie ma dodatkowego mnożnika w danych
-          if (material.unitsPerProduct && material.unitsPerProduct > 0) {
-            materialQuantity = material.unitsPerProduct;
-          }
+          // Wyciągnij ilość materiału na jednostkę produktu
+          const materialQuantityPerUnit = correctMaterialQuantity(material, taskQuantity, task);
           
-          console.log(`Obliczanie dla materiału ${material.name}: ilość = ${materialQuantity}, ilość zadania = ${taskQuantity}`);
+          // Oblicz całkowitą potrzebną ilość
+          const requiredQuantity = materialQuantityPerUnit * taskQuantity;
           
-          // Sprawdź wartość materialQuantity - jeśli jest za duża, może być dla całego zadania, a nie na jednostkę
-          const quantityPerUnit = material.perUnit || material.quantityPerUnit;
-          if (quantityPerUnit && quantityPerUnit > 0) {
-            // Jeśli jest explicit określona ilość na jednostkę, użyj jej
-            materialQuantity = quantityPerUnit;
-            console.log(`Użyto określonej ilości na jednostkę: ${materialQuantity}`);
-          } else if (material.isFullTaskQuantity || material.isTotal) {
-            // Jeśli jest oznaczone, że ilość jest dla całego zadania
-            materialQuantity = materialQuantity / taskQuantity;
-            console.log(`Ilość dla całego zadania podzielona: ${materialQuantity}`);
-          } else if (materialQuantity > 20 && taskQuantity > 1) {
-            // Podwyższamy próg heurystyki do 20 (jak w productionService.js)
-            // Wymuś korektę ilości materiału dla znanych składników (heurystyka)
-            const correctedQuantity = correctMaterialQuantity(material, taskQuantity);
-            console.log(`Zastosowano korektę ilości z ${materialQuantity} na ${correctedQuantity}`);
-            materialQuantity = correctedQuantity;
-          }
-          
-          const requiredQuantity = materialQuantity * taskQuantity;
-          
-          console.log(`Ostateczne obliczenie dla ${material.name}: ${materialQuantity} × ${taskQuantity} = ${requiredQuantity}`);
+          console.log(`Ostateczne obliczenie dla ${material.name}: ${materialQuantityPerUnit} × ${taskQuantity} = ${requiredQuantity}`);
           
           // Dodaj lub zaktualizuj materiał w wymaganiach
           if (!materialRequirements[materialId]) {
@@ -313,7 +300,8 @@ const ForecastPage = () => {
               unit: material.unit || 'szt.',
               requiredQuantity: 0,
               availableQuantity: 0,
-              tasks: [] // Lista zadań, w których materiał jest używany
+              tasks: [], // Lista zadań, w których materiał jest używany
+              perUnitQuantity: materialQuantityPerUnit // Zapamiętaj ilość na jednostkę
             };
           }
           
@@ -673,13 +661,12 @@ const ForecastPage = () => {
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell width="25%">Materiał</TableCell>
-                  <TableCell width="15%">Kategoria</TableCell>
-                  <TableCell align="right" width="10%">Dostępna ilość</TableCell>
-                  <TableCell align="right" width="10%">Potrzebna ilość</TableCell>
-                  <TableCell align="right" width="10%">Bilans</TableCell>
-                  <TableCell align="right" width="10%">Szacowany koszt</TableCell>
-                  <TableCell width="10%">Status</TableCell>
+                  <TableCell width="30%">Materiał</TableCell>
+                  <TableCell align="right" width="12%">Dostępna ilość</TableCell>
+                  <TableCell align="right" width="12%">Potrzebna ilość</TableCell>
+                  <TableCell align="right" width="12%">Bilans</TableCell>
+                  <TableCell align="right" width="12%">Szacowany koszt</TableCell>
+                  <TableCell width="12%">Status</TableCell>
                   <TableCell align="center" width="10%">Akcje</TableCell>
                 </TableRow>
               </TableHead>
@@ -697,7 +684,6 @@ const ForecastPage = () => {
                         {item.tasks && item.tasks.length > 0 && renderTasksForMaterial(item.tasks)}
                       </Box>
                     </TableCell>
-                    <TableCell>{item.category}</TableCell>
                     <TableCell align="right">{item.availableQuantity} {item.unit}</TableCell>
                     <TableCell align="right">{item.requiredQuantity} {item.unit}</TableCell>
                     <TableCell align="right">
