@@ -669,9 +669,6 @@ ${';'.repeat(4)}\n`;
                   <TableCell>Składnik</TableCell>
                   <TableCell align="right">Ilość</TableCell>
                   <TableCell>Jednostka</TableCell>
-                  <TableCell>Sprawdzone</TableCell>
-                  <TableCell>Wstawione w mieszalnik</TableCell>
-                  <TableCell>Zrobione</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -700,9 +697,6 @@ ${';'.repeat(4)}\n`;
                       <TableCell>{ingredient.name}</TableCell>
                       <TableCell align="right">{ingredient.quantity.toFixed(4)}</TableCell>
                       <TableCell>{ingredient.unit}</TableCell>
-                      <TableCell></TableCell>
-                      <TableCell></TableCell>
-                      <TableCell></TableCell>
                     </TableRow>
                   ))
                 ))}
