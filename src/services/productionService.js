@@ -1763,11 +1763,11 @@ import {
         const existingReservation = currentReservations.find(r => r.materialId === requiredMaterial.id);
         const alreadyReservedQty = existingReservation ? existingReservation.reservedQuantity : 0;
         
-        // Zaokrąglij wymaganą ilość do 3 miejsc po przecinku
-        const requiredQuantity = parseFloat(parseFloat(requiredMaterial.quantity).toFixed(3));
+        // Zaokrąglij wymaganą ilość do 10 miejsc po przecinku
+        const requiredQuantity = parseFloat(parseFloat(requiredMaterial.quantity).toFixed(10));
         
         // Oblicz ile jeszcze potrzeba zarezerwować
-        let remainingToReserve = parseFloat((requiredQuantity - alreadyReservedQty).toFixed(3));
+        let remainingToReserve = parseFloat((requiredQuantity - alreadyReservedQty).toFixed(10));
         
         if (remainingToReserve <= 0) {
           console.log(`Materiał ${requiredMaterial.name} jest już w pełni zarezerwowany.`);
@@ -1864,8 +1864,8 @@ import {
             
             // Oblicz ile można zarezerwować z tej partii
             const toReserve = Math.min(remainingToReserve, availableQty);
-            // Zaokrąglij rezerwowaną ilość do 3 miejsc po przecinku
-            const reserveAmount = parseFloat(toReserve.toFixed(3));
+            // Zaokrąglij rezerwowaną ilość do 10 miejsc po przecinku
+            const reserveAmount = parseFloat(toReserve.toFixed(10));
             
             if (reserveAmount <= 0) {
               console.warn(`Partia ${batch.batchId} nie ma dostępnej ilości.`);
@@ -2083,27 +2083,10 @@ import {
       updates.completionDate = serverTimestamp();
       updates.readyForInventory = true; // Oznaczamy jako gotowe do dodania do magazynu, ale nie dodajemy automatycznie
       
-      // Jeśli zadanie jest zakończone, anuluj rezerwacje materiałów
-      if (task.materials && task.materials.length > 0) {
-        for (const material of task.materials) {
-          try {
-            // Pobierz ID materiału (może być przechowywany jako id lub inventoryItemId)
-            const materialId = material.id || material.inventoryItemId;
-            
-            if (!materialId) {
-              console.warn(`Materiał ${material.name} nie ma poprawnego ID, pomijam anulowanie rezerwacji`);
-              continue;
-            }
-            
-            // Anuluj rezerwację materiału
-            await cancelBooking(materialId, material.quantity, taskId, userId);
-            console.log(`Anulowano rezerwację ${material.quantity} ${material.unit || 'szt.'} materiału ${material.name} po zakończeniu zadania`);
-          } catch (error) {
-            console.error(`Błąd przy anulowaniu rezerwacji materiału ${material.name}:`, error);
-            // Kontynuuj anulowanie rezerwacji pozostałych materiałów mimo błędu
-          }
-        }
-      }
+      // USUNIĘTO: automatyczne anulowanie rezerwacji po zakończeniu zadania
+      // Rezerwacje będą anulowane dopiero po potwierdzeniu zużycia materiałów
+      // Materiały pozostają zarezerwowane, dopóki użytkownik nie potwierdzi ich zużycia
+      console.log(`Zadanie ${taskId} zostało zakończone. Rezerwacje materiałów pozostają aktywne do momentu potwierdzenia zużycia.`);
     }
     
     await updateDoc(taskRef, updates);

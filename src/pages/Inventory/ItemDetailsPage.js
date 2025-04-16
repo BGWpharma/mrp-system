@@ -43,7 +43,7 @@ import {
   FilterList as FilterIcon,
   Delete as DeleteIcon
 } from '@mui/icons-material';
-import { getInventoryItemById, getItemTransactions, getItemBatches, getSupplierPrices, deleteReservation, cleanupDeletedTaskReservations, getReservationsGroupedByTask } from '../../services/inventoryService';
+import { getInventoryItemById, getItemTransactions, getItemBatches, getSupplierPrices, deleteReservation, cleanupDeletedTaskReservations, getReservationsGroupedByTask, cleanupItemReservations } from '../../services/inventoryService';
 import { getAllSuppliers } from '../../services/supplierService';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
@@ -250,14 +250,15 @@ const ItemDetailsPage = () => {
   const filterAndSortReservations = (filterValue, field, order, data = reservations) => {
     let filtered = [...data];
     
-    // Filtrowanie - w nowej strukturze nie mamy pola fulfilled, więc pomijamy filtrowanie
+    // Filtrowanie według statusu rezerwacji
     if (filterValue === 'active') {
-      // Wszystkie rezerwacje są aktywne w nowej strukturze
-      filtered = filtered;
+      // Pokaż tylko aktywne rezerwacje (bez statusu lub ze statusem różnym od 'completed')
+      filtered = filtered.filter(reservation => !reservation.status || reservation.status !== 'completed');
     } else if (filterValue === 'fulfilled') {
-      // Nie mamy zrealizowanych rezerwacji w nowej strukturze
-      filtered = [];
+      // Pokaż tylko zakończone rezerwacje (ze statusem 'completed')
+      filtered = filtered.filter(reservation => reservation.status === 'completed');
     }
+    // Dla filterValue === 'all', pokazujemy wszystkie rezerwacje
     
     // Sortowanie
     filtered.sort((a, b) => {
@@ -345,6 +346,32 @@ const ItemDetailsPage = () => {
       
       if (result.count > 0) {
         showSuccess(`Usunięto ${result.count} rezerwacji z usuniętych zadań produkcyjnych.`);
+      } else {
+        showSuccess('Nie znaleziono rezerwacji do wyczyszczenia.');
+      }
+      
+      // Odśwież dane po aktualizacji
+      await fetchReservations(item);
+    } catch (error) {
+      console.error('Błąd podczas czyszczenia rezerwacji:', error);
+      showError('Wystąpił błąd podczas czyszczenia rezerwacji');
+    } finally {
+      setUpdatingReservations(false);
+    }
+  };
+
+  // Funkcja do czyszczenia wszystkich rezerwacji dla produktu
+  const handleCleanupAllItemReservations = async () => {
+    if (!window.confirm('Czy na pewno chcesz usunąć WSZYSTKIE rezerwacje dla tego produktu? Ta operacja jest nieodwracalna i wpłynie na zadania produkcyjne korzystające z tego surowca.')) {
+      return;
+    }
+    
+    setUpdatingReservations(true);
+    try {
+      const result = await cleanupItemReservations(item.id, currentUser.uid);
+      
+      if (result.count > 0) {
+        showSuccess(`Usunięto wszystkie ${result.count} rezerwacji dla produktu.`);
       } else {
         showSuccess('Nie znaleziono rezerwacji do wyczyszczenia.');
       }
@@ -858,24 +885,33 @@ const ItemDetailsPage = () => {
         </TabPanel>
 
         <TabPanel value={tabValue} index={3}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="h6">Rezerwacje produktu</Typography>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
               <Button 
-                startIcon={<RefreshIcon />} 
+                startIcon={updatingReservations ? <CircularProgress size={20} /> : <RefreshIcon />} 
                 onClick={() => fetchReservations(item)}
                 variant="outlined"
-                size="small"
+                disabled={updatingReservations}
                 sx={{ mr: 2 }}
               >
                 Odśwież
               </Button>
               <Button 
                 startIcon={updatingReservations ? <CircularProgress size={20} /> : <DeleteIcon />} 
-                onClick={handleCleanupDeletedTaskReservations}
+                onClick={handleCleanupAllItemReservations}
                 variant="outlined"
                 color="error"
-                size="small"
+                disabled={updatingReservations}
+                sx={{ mr: 2 }}
+              >
+                {updatingReservations ? 'Czyszczenie...' : 'Usuń wszystkie rezerwacje'}
+              </Button>
+              <Button 
+                startIcon={updatingReservations ? <CircularProgress size={20} /> : <DeleteIcon />} 
+                onClick={handleCleanupDeletedTaskReservations}
+                variant="outlined"
+                color="warning"
                 disabled={updatingReservations}
                 sx={{ mr: 2 }}
               >
@@ -890,8 +926,8 @@ const ItemDetailsPage = () => {
                   label="Filtruj"
                 >
                   <MenuItem value="all">Wszystkie</MenuItem>
-                  <MenuItem value="active">Aktywne</MenuItem>
-                  <MenuItem value="fulfilled">Zrealizowane</MenuItem>
+                  <MenuItem value="active">Tylko aktywne</MenuItem>
+                  <MenuItem value="fulfilled">Tylko zakończone</MenuItem>
                 </Select>
               </FormControl>
             </Box>
@@ -904,39 +940,35 @@ const ItemDetailsPage = () => {
               <Table sx={{ '& thead th': { fontWeight: 'bold', bgcolor: '#f8f9fa' } }}>
                 <TableHead>
                   <TableRow>
-                    <TableCell 
-                      onClick={() => handleSort('createdAt')}
-                      sx={{ cursor: 'pointer' }}
-                    >
-                      Data rezerwacji {sortField === 'createdAt' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        Data rezerwacji
+                        <IconButton size="small" onClick={() => handleSort('createdAt')}>
+                          <SortIcon />
+                        </IconButton>
+                      </Box>
                     </TableCell>
-                    <TableCell 
-                      onClick={() => handleSort('quantity')}
-                      sx={{ cursor: 'pointer' }}
-                    >
-                      Ilość {sortField === 'quantity' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        Ilość
+                        <IconButton size="small" onClick={() => handleSort('quantity')}>
+                          <SortIcon />
+                        </IconButton>
+                      </Box>
                     </TableCell>
-                    <TableCell 
-                      onClick={() => handleSort('taskName')}
-                      sx={{ cursor: 'pointer' }}
-                    >
-                      Zadanie produkcyjne {sortField === 'taskName' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        Zadanie produkcyjne
+                        <IconButton size="small" onClick={() => handleSort('taskNumber')}>
+                          <SortIcon />
+                        </IconButton>
+                      </Box>
                     </TableCell>
-                    <TableCell 
-                      onClick={() => handleSort('taskNumber')}
-                      sx={{ cursor: 'pointer' }}
-                    >
-                      Nr MO {sortField === 'taskNumber' && (sortOrder === 'asc' ? '↑' : '↓')}
-                    </TableCell>
-                    <TableCell 
-                      onClick={() => handleSort('clientName')}
-                      sx={{ cursor: 'pointer' }}
-                    >
-                      Klient {sortField === 'clientName' && (sortOrder === 'asc' ? '↑' : '↓')}
-                    </TableCell>
+                    <TableCell>Nr MO</TableCell>
+                    <TableCell>Klient</TableCell>
                     <TableCell>Partia</TableCell>
                     <TableCell>Status</TableCell>
-                    <TableCell>Akcje</TableCell>
+                    <TableCell align="right">Akcje</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -965,28 +997,20 @@ const ItemDetailsPage = () => {
                           {reservation.clientName || '—'}
                         </TableCell>
                         <TableCell>
-                          {reservation.batches && reservation.batches.length > 0 ? (
-                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                              {reservation.batches.map((batch, index) => (
-                                <Chip 
-                                  key={index}
-                                  label={`${batch.batchNumber} (${batch.quantity} ${item.unit})`}
-                                  size="small"
-                                  color="info"
-                                  variant="outlined"
-                                />
-                              ))}
+                          {reservation.batches?.map((batch, batchIndex) => (
+                            <Box key={batchIndex} sx={{ mb: 1 }}>
+                              {batch.batchNumber}
                             </Box>
-                          ) : '—'}
+                          )) || '—'}
                         </TableCell>
                         <TableCell>
                           <Chip 
-                            label="Aktywna"
-                            color="primary" 
-                            size="small" 
+                            label={reservation.status === 'completed' ? 'Zakończona' : 'Aktywna'} 
+                            color={reservation.status === 'completed' ? 'default' : 'secondary'} 
+                            size="small"
                           />
                         </TableCell>
-                        <TableCell>
+                        <TableCell align="right">
                           <Box>
                             <IconButton 
                               size="small" 

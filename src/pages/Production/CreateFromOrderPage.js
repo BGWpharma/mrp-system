@@ -77,7 +77,7 @@ const CreateFromOrderPage = () => {
     description: '',
     status: 'Zaplanowane',
     reservationMethod: 'fifo', // 'expiry' - wg daty ważności, 'fifo' - FIFO
-    autoReserveMaterials: true // Domyślnie włączone automatyczne rezerwowanie surowców
+    autoReserveMaterials: false // Domyślnie wyłączone automatyczne rezerwowanie surowców
   });
   
   useEffect(() => {
@@ -241,7 +241,7 @@ const CreateFromOrderPage = () => {
         description: `Zadanie utworzone na podstawie zamówienia klienta ${verifiedOrderData.customer?.name || '(brak danych)'}`,
         status: 'Zaplanowane',
         reservationMethod: 'fifo',
-        autoReserveMaterials: true
+        autoReserveMaterials: false
       });
       
       // Inicjalizacja zaznaczonych elementów

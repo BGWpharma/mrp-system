@@ -55,7 +55,7 @@ import {
   DeleteForever as DeleteForeverIcon,
   ViewColumn as ViewColumnIcon,
 } from '@mui/icons-material';
-import { getAllInventoryItems, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, getItemBatches, updateReservation, updateReservationTasks, cleanupDeletedTaskReservations, deleteReservation } from '../../services/inventoryService';
+import { getAllInventoryItems, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, getItemBatches, updateReservation, updateReservationTasks, cleanupDeletedTaskReservations, deleteReservation, getInventoryItemById, recalculateAllInventoryQuantities, cleanupMicroReservations } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
 import { toast } from 'react-hot-toast';
@@ -200,6 +200,9 @@ const InventoryList = () => {
   const fetchInventoryItems = async () => {
     setLoading(true);
     try {
+      // Najpierw wyczyść mikrorezerwacje
+      await cleanupMicroReservations();
+      
       const items = await getAllInventoryItems(selectedWarehouse || null);
       setInventoryItems(items);
       setFilteredItems(items);

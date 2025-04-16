@@ -557,46 +557,27 @@ const TaskDetailsPage = () => {
   };
 
   const handleStopProduction = async () => {
+    if (!completedQuantity) {
+      showError('Podaj ilość wyprodukowaną');
+      return;
+    }
+    
+    const quantity = parseFloat(completedQuantity);
+    
+    if (isNaN(quantity) || quantity <= 0) {
+      showError('Ilość wyprodukowana musi być liczbą większą od zera');
+      return;
+    }
+    
+    setLoading(true);
+    
     try {
-      setProductionError(null);
-      
-      if (!completedQuantity) {
-        setProductionError('Podaj wyprodukowaną ilość');
-        return;
-      }
-
-      const quantity = parseFloat(completedQuantity);
-      
-      if (isNaN(quantity) || quantity < 0) {
-        setProductionError('Nieprawidłowa ilość');
-        return;
-      }
-      
-      if (!productionStartTime || !productionEndTime) {
-        setProductionError('Podaj przedział czasowy produkcji');
-        return;
-      }
-      
-      if (productionEndTime < productionStartTime) {
-        setProductionError('Czas zakończenia nie może być wcześniejszy niż czas rozpoczęcia');
-        return;
-      }
-      
-      // Oblicz czas trwania w minutach
-      const durationMs = productionEndTime.getTime() - productionStartTime.getTime();
-      const durationMinutes = Math.round(durationMs / (1000 * 60));
-      
-      if (durationMinutes <= 0) {
-        setProductionError('Przedział czasowy musi być dłuższy niż 0 minut');
-        return;
-      }
-
-      // Przekazujemy czas trwania w minutach oraz daty rozpoczęcia i zakończenia
       const result = await stopProduction(
         id, 
         quantity, 
-        durationMinutes, 
-        currentUser.uid, 
+        timeSpent || 0,
+        currentUser.uid,
+        // Przekaż informacje o czasie
         {
           startTime: productionStartTime.toISOString(),
           endTime: productionEndTime.toISOString()
@@ -604,23 +585,20 @@ const TaskDetailsPage = () => {
       );
       
       setStopProductionDialogOpen(false);
-      showSuccess(result.isCompleted ? 
-        'Produkcja zakończona. Zadanie zostało ukończone.' : 
-        'Sesja produkcyjna zapisana. Możesz kontynuować produkcję później.'
-      );
       
-      // Resetuj stan formularza
-      setCompletedQuantity('');
-      setProductionStartTime(new Date());
-      setProductionEndTime(new Date());
+      if (result.isCompleted) {
+        showSuccess('Zadanie zostało zakończone');
+        showInfo('Rezerwacje materiałów pozostają aktywne do momentu potwierdzenia zużycia materiałów. Przejdź do zakładki "Zużycie materiałów", aby je potwierdzić.');
+      } else {
+        showSuccess('Produkcja została wstrzymana');
+      }
       
-      // Odśwież dane
-      await fetchTask();
-      // Po zaktualizowaniu zadania, odśwież także historię produkcji
-      await fetchProductionHistory();
+      fetchTask(); // Odśwież dane zadania
     } catch (error) {
-      showError('Błąd podczas zatrzymywania produkcji: ' + error.message);
       console.error('Error stopping production:', error);
+      showError('Błąd podczas zatrzymywania produkcji: ' + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 

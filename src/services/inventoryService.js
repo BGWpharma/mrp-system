@@ -14,7 +14,8 @@ import {
     increment,
     Timestamp,
     setDoc,
-    writeBatch
+    writeBatch,
+    limit
   } from 'firebase/firestore';
   import { db } from './firebase/config';
   import { generateLOTNumber } from '../utils/numberGenerators';
@@ -1448,26 +1449,42 @@ import {
   // Anulowanie bookowania produktu
   export const cancelBooking = async (itemId, quantity, taskId, userId) => {
     try {
+      // UWAGA: Ta funkcja jest wywoływana w confirmMaterialConsumption (po potwierdzeniu zużycia), 
+      // a nie automatycznie przy zmianie statusu zadania na 'Zakończone'
+      
       // Pobierz aktualny stan produktu
       const item = await getInventoryItemById(itemId);
       
       // Sprawdź, czy jest wystarczająca ilość zarezerwowana
       if (!item.bookedQuantity || item.bookedQuantity < quantity) {
-        // Zamiast rzucać błąd, zwracamy sukces i logujemy informację
-        console.warn(`Anulowanie rezerwacji dla ${item.name}: zarezerwowano tylko ${item.bookedQuantity || 0} ${item.unit}, próbowano anulować ${quantity} ${item.unit}`);
-        return {
-          success: true,
-          message: `Anulowano rezerwację ${Math.min(item.bookedQuantity || 0, quantity)} ${item.unit} produktu ${item.name}`
-        };
+        // Jeśli różnica jest bardzo mała (błąd zaokrąglenia), wyzeruj bookedQuantity
+        if (item.bookedQuantity > 0 && Math.abs(item.bookedQuantity - quantity) < 0.00001) {
+          // Aktualizuj pole bookedQuantity w produkcie - całkowite wyzerowanie
+          const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
+          await updateDoc(itemRef, {
+            bookedQuantity: 0, // Zerujemy całkowicie
+            updatedAt: serverTimestamp(),
+            updatedBy: userId
+          });
+          
+          console.log(`Zerowanie rezerwacji dla ${item.name} z powodu minimalnej różnicy zaokrąglenia: ${item.bookedQuantity} vs ${quantity}`);
+        } else {
+          // Zamiast rzucać błąd, zwracamy sukces i logujemy informację
+          console.warn(`Anulowanie rezerwacji dla ${item.name}: zarezerwowano tylko ${item.bookedQuantity || 0} ${item.unit}, próbowano anulować ${quantity} ${item.unit}`);
+          return {
+            success: true,
+            message: `Anulowano rezerwację ${Math.min(item.bookedQuantity || 0, quantity)} ${item.unit} produktu ${item.name}`
+          };
+        }
+      } else {
+        // Aktualizuj pole bookedQuantity w produkcie
+        const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
+        await updateDoc(itemRef, {
+          bookedQuantity: increment(-quantity),
+          updatedAt: serverTimestamp(),
+          updatedBy: userId
+        });
       }
-      
-      // Aktualizuj pole bookedQuantity w produkcie
-      const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
-      await updateDoc(itemRef, {
-        bookedQuantity: increment(-quantity),
-        updatedAt: serverTimestamp(),
-        updatedBy: userId
-      });
       
       // Pobierz dane zadania produkcyjnego
       let taskNumber = '';
@@ -1475,41 +1492,69 @@ import {
       let clientName = '';
       let clientId = '';
       
-      if (taskId) {
+      try {
         const taskRef = doc(db, 'productionTasks', taskId);
         const taskDoc = await getDoc(taskRef);
         
         if (taskDoc.exists()) {
           const taskData = taskDoc.data();
           taskName = taskData.name || '';
-          taskNumber = taskData.number || '';
-          clientName = taskData.clientName || '';
-          clientId = taskData.clientId || '';
+          taskNumber = taskData.moNumber || taskData.number || '';
+          clientName = taskData.clientName || taskData.customer?.name || '';
+          clientId = taskData.clientId || taskData.customer?.id || '';
         }
+      } catch (error) {
+        console.warn(`Nie udało się pobrać danych zadania ${taskId}:`, error);
+        // Kontynuuj mimo błędu
       }
       
-      // Dodaj wpis w transakcjach
-      const transactionRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
-      await addDoc(transactionRef, {
+      // Dodaj transakcję anulowania rezerwacji (booking_cancel)
+      const transactionData = {
         itemId,
-        itemName: item.name,
-        quantity,
         type: 'booking_cancel',
-        reason: 'Anulowanie rezerwacji',
-        referenceId: taskId,
-        taskId: taskId,
-        taskName: taskName,
-        taskNumber: taskNumber,
-        clientName: clientName,
-        clientId: clientId,
-        notes: `Anulowano rezerwację dla zadania produkcyjnego MO: ${taskNumber || taskId}`,
+        quantity,
+        date: new Date().toISOString(),
+        reference: `Zadanie: ${taskId}`,
+        notes: `Anulowanie rezerwacji materiału`,
+        userId,
         createdAt: serverTimestamp(),
-        createdBy: userId
+        updatedAt: serverTimestamp(),
+        referenceId: taskId,
+        taskName,
+        taskNumber,
+        clientName,
+        clientId
+      };
+      
+      await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
+      
+      // Znajdź i zaktualizuj status wszystkich rezerwacji dla tego zadania na "completed"
+      const bookingRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
+      const bookingQuery = query(
+        bookingRef,
+        where('itemId', '==', itemId),
+        where('referenceId', '==', taskId),
+        where('type', '==', 'booking')
+      );
+      
+      const bookingSnapshot = await getDocs(bookingQuery);
+      const batch = writeBatch(db);
+      
+      bookingSnapshot.forEach((bookingDoc) => {
+        const bookingRef = doc(db, INVENTORY_TRANSACTIONS_COLLECTION, bookingDoc.id);
+        batch.update(bookingRef, { 
+          status: 'completed',
+          updatedAt: serverTimestamp(),
+          completedAt: serverTimestamp()
+        });
       });
+      
+      await batch.commit();
+      console.log(`Zaktualizowano status rezerwacji dla zadania ${taskId} na "completed"`);
       
       // Emituj zdarzenie o zmianie stanu magazynu
       const event = new CustomEvent('inventory-updated', { 
-        detail: { itemId, action: 'booking_cancel', quantity }
+        detail: { itemId, action: 'booking-cancelled' }
       });
       window.dispatchEvent(event);
       
@@ -1518,7 +1563,7 @@ import {
         message: `Anulowano rezerwację ${quantity} ${item.unit} produktu ${item.name}`
       };
     } catch (error) {
-      console.error('Błąd podczas anulowania rezerwacji produktu:', error);
+      console.error('Error cancelling booking:', error);
       throw error;
     }
   };
@@ -3470,7 +3515,8 @@ import {
             totalQuantity: 0,
             batches: [],
             createdAt: transaction.createdAt,
-            updatedAt: transaction.updatedAt
+            updatedAt: transaction.updatedAt,
+            status: transaction.status || 'active' // Dodajemy status rezerwacji
           };
         }
         
@@ -3483,7 +3529,8 @@ import {
             batchId: transaction.batchId,
             batchNumber: transaction.batchNumber || 'Bez numeru',
             quantity: parseFloat(transaction.quantity) || 0,
-            reservationId: transaction.id
+            reservationId: transaction.id,
+            status: transaction.status || 'active' // Dodajemy status rezerwacji dla partii
           });
         }
       });
@@ -3493,5 +3540,178 @@ import {
     } catch (error) {
       console.error('Błąd podczas pobierania zgrupowanych rezerwacji:', error);
       throw error;
+    }
+  };
+
+  // Funkcja czyszcząca mikrorezerwacje (bardzo małe wartości zaokrągleń)
+  export const cleanupMicroReservations = async () => {
+    try {
+      console.log('Rozpoczynam czyszczenie mikrorezerwacji...');
+      
+      // Pobierz wszystkie transakcje rezerwacji
+      const transactionsRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
+      const q = query(
+        transactionsRef,
+        where('type', '==', 'booking')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const microReservations = [];
+      
+      // Znajdź rezerwacje z bardzo małymi wartościami (błędy zaokrągleń)
+      for (const doc of querySnapshot.docs) {
+        const reservation = doc.data();
+        const quantity = reservation.quantity || 0;
+        
+        // Jeśli ilość jest bliska zeru lub mniejsza niż 0.00001, oznacz do usunięcia
+        if (quantity < 0.00001) {
+          microReservations.push({
+            id: doc.id,
+            ...reservation
+          });
+        }
+      }
+      
+      console.log(`Znaleziono ${microReservations.length} mikrorezerwacji do usunięcia`);
+      
+      // Usuń mikrorezerwacje i zaktualizuj bookedQuantity w produktach
+      for (const reservation of microReservations) {
+        try {
+          // Pobierz informacje o produkcie
+          const itemId = reservation.itemId;
+          if (!itemId) continue;
+          
+          // Zaktualizuj stan magazynowy - zmniejsz ilość zarezerwowaną
+          const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
+          const itemDoc = await getDoc(itemRef);
+          
+          if (itemDoc.exists()) {
+            const itemData = itemDoc.data();
+            const bookedQuantity = itemData.bookedQuantity || 0;
+            
+            // Oblicz nową wartość bookedQuantity (odejmij mikrorezerwację)
+            const newBookedQuantity = Math.max(0, bookedQuantity - reservation.quantity);
+            
+            // Aktualizuj pozycję magazynową
+            await updateDoc(itemRef, {
+              bookedQuantity: newBookedQuantity,
+              updatedAt: serverTimestamp()
+            });
+            
+            console.log(`Zaktualizowano bookedQuantity dla ${itemId}: ${bookedQuantity} -> ${newBookedQuantity}`);
+          }
+          
+          // Usuń rezerwację
+          const reservationRef = doc(db, INVENTORY_TRANSACTIONS_COLLECTION, reservation.id);
+          await deleteDoc(reservationRef);
+          
+          console.log(`Usunięto mikrorezerwację ${reservation.id} o wartości ${reservation.quantity}`);
+        } catch (error) {
+          console.error(`Błąd podczas usuwania mikrorezerwacji ${reservation.id}:`, error);
+        }
+      }
+      
+      // Emituj zdarzenie o zmianie stanu magazynu
+      if (microReservations.length > 0) {
+        const event = new CustomEvent('inventory-updated', { 
+          detail: { action: 'cleanup-microreservations' }
+        });
+        window.dispatchEvent(event);
+      }
+      
+      return {
+        success: true,
+        message: `Usunięto ${microReservations.length} mikrorezerwacji`,
+        count: microReservations.length
+      };
+    } catch (error) {
+      console.error('Błąd podczas czyszczenia mikrorezerwacji:', error);
+      return {
+        success: false,
+        message: `Błąd podczas czyszczenia mikrorezerwacji: ${error.message}`,
+        error
+      };
+    }
+  };
+
+  /**
+   * Czyści wszystkie rezerwacje dla konkretnego produktu
+   * @param {string} itemId - ID przedmiotu
+   * @param {string} userId - ID użytkownika wykonującego operację
+   * @returns {Promise<Object>} - Informacja o rezultacie operacji
+   */
+  export const cleanupItemReservations = async (itemId, userId) => {
+    try {
+      console.log(`Rozpoczynam czyszczenie rezerwacji dla produktu ${itemId}...`);
+      
+      // Pobierz wszystkie rezerwacje (transakcje booking) dla tego produktu
+      const transactionsRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
+      const q = query(
+        transactionsRef,
+        where('type', '==', 'booking'),
+        where('itemId', '==', itemId)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const reservations = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      if (reservations.length === 0) {
+        console.log(`Nie znaleziono rezerwacji dla produktu ${itemId}`);
+        return { success: true, message: 'Brak rezerwacji do wyczyszczenia', count: 0 };
+      }
+      
+      const deletedReservations = [];
+      const errors = [];
+      
+      // Dla każdej rezerwacji produktu
+      for (const reservation of reservations) {
+        try {
+          // Usuń rezerwację
+          const reservationRef = doc(db, INVENTORY_TRANSACTIONS_COLLECTION, reservation.id);
+          await deleteDoc(reservationRef);
+          
+          console.log(`Usunięto rezerwację ${reservation.id} dla produktu ${itemId}`);
+          deletedReservations.push(reservation);
+        } catch (error) {
+          console.error(`Błąd podczas usuwania rezerwacji ${reservation.id}:`, error);
+          errors.push({
+            id: reservation.id,
+            error: error.message
+          });
+        }
+      }
+      
+      // Zaktualizuj całkowicie bookedQuantity produktu na 0
+      const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
+      await updateDoc(itemRef, {
+        bookedQuantity: 0,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId || 'system'
+      });
+      
+      console.log(`Wyzerowano bookedQuantity dla produktu ${itemId}`);
+      
+      // Emituj zdarzenie o zmianie stanu magazynu
+      const event = new CustomEvent('inventory-updated', { 
+        detail: { action: 'cleanup-item-reservations', itemId }
+      });
+      window.dispatchEvent(event);
+      
+      return {
+        success: true,
+        message: `Usunięto ${deletedReservations.length} rezerwacji dla produktu`,
+        count: deletedReservations.length,
+        errors: errors.length > 0 ? errors : undefined
+      };
+    } catch (error) {
+      console.error(`Błąd podczas czyszczenia rezerwacji dla produktu ${itemId}:`, error);
+      return {
+        success: false,
+        message: `Błąd podczas czyszczenia rezerwacji: ${error.message}`,
+        error
+      };
     }
   };

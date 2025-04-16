@@ -316,11 +316,11 @@ const ConsumptionPage = () => {
         </Alert>
       ) : task.status === 'Zakończone' ? (
         <Alert severity="warning" sx={{ mb: 3 }}>
-          Zadanie jest oznaczone jako zakończone, ale zużycie materiałów nie zostało jeszcze potwierdzone. Potwierdź zużycie materiałów.
+          Zadanie jest oznaczone jako zakończone, ale zużycie materiałów nie zostało jeszcze potwierdzone. Potwierdź zużycie materiałów, aby zwolnić rezerwacje z magazynu. Rezerwacje materiałów pozostają aktywne do momentu potwierdzenia zużycia.
         </Alert>
       ) : (
         <Alert severity="info" sx={{ mb: 3 }}>
-          Potwierdź faktyczne zużycie materiałów dla tego zadania. W razie potrzeby możesz dostosować ilości przed potwierdzeniem.
+          Potwierdź faktyczne zużycie materiałów dla tego zadania. W razie potrzeby możesz dostosować ilości przed potwierdzeniem. Rezerwacje materiałów pozostaną aktywne do momentu potwierdzenia zużycia.
         </Alert>
       )}
       
