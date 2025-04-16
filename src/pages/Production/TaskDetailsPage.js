@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Container,
@@ -1670,7 +1670,6 @@ const TaskDetailsPage = () => {
     try {
       // Tworzymy kopię materiałów, aby je zaktualizować
       const updatedMaterials = [...materials];
-      let materialsChanged = false;
       
       // Dla każdego materiału z przypisanymi partiami, obliczamy aktualną cenę
       for (const material of updatedMaterials) {
@@ -1702,49 +1701,25 @@ const TaskDetailsPage = () => {
           // Oblicz średnią ważoną cenę jednostkową
           if (totalQuantity > 0) {
             const averagePrice = totalCost / totalQuantity;
-            // Sprawdź czy cena się zmieniła, z zaokrągleniem do 2 miejsc po przecinku
-            const currentPriceRounded = Math.round(material.unitPrice * 100) / 100;
-            const newPriceRounded = Math.round(averagePrice * 100) / 100;
-            
-            if (currentPriceRounded !== newPriceRounded) {
-              material.unitPrice = averagePrice;
-              materialsChanged = true;
-              console.log(`Zaktualizowano cenę dla ${material.name}: ${averagePrice.toFixed(2)} €`);
-            }
+            material.unitPrice = averagePrice;
+            console.log(`Zaktualizowano cenę dla ${material.name}: ${averagePrice.toFixed(2)} €`);
           }
         }
       }
       
-      // Aktualizuj stan materiałów tylko jeśli faktycznie nastąpiła zmiana cen
-      if (materialsChanged) {
-        setMaterials(updatedMaterials);
-      }
+      // Aktualizuj stan materiałów z nowymi cenami
+      setMaterials(updatedMaterials);
     } catch (error) {
       console.error('Błąd podczas aktualizacji cen materiałów:', error);
     }
-  }, [task, task?.materialBatches, materials]);
+  }, [task?.id, task?.materialBatches]);
   
-  // Aktualizuj ceny materiałów tylko przy załadowaniu zadania lub zmianie zarezerwowanych partii
-  // Używamy ref, aby śledzić czy to pierwsze wywołanie po zmianie danych
-  const initialLoadRef = useRef(true);
-  
+  // Aktualizuj ceny materiałów przy każdym załadowaniu zadania lub zmianie zarezerwowanych partii
   useEffect(() => {
     if (task && task.materialBatches) {
-      // Wykonaj aktualizację cen tylko przy pierwszym załadowaniu
-      // lub kiedy faktycznie zmienia się struktura materialBatches
-      if (initialLoadRef.current) {
-        updateMaterialPricesFromBatches();
-        initialLoadRef.current = false;
-      }
+      updateMaterialPricesFromBatches();
     }
-    
-    // Reset flagi gdy zmienią się materiały
-    return () => {
-      if (task && task.materialBatches) {
-        initialLoadRef.current = true;
-      }
-    };
-  }, [task, task?.materialBatches, updateMaterialPricesFromBatches]);
+  }, [task?.id, task?.materialBatches, updateMaterialPricesFromBatches]);
 
   // Renderuj stronę
     return (
@@ -2066,9 +2041,9 @@ const TaskDetailsPage = () => {
                       
                       // Uwzględnij koszt tylko jeśli materiał ma zarezerwowane partie
                       if (reservedBatches && reservedBatches.length > 0) {
-                        const quantity = materialQuantities[material.id] || material.quantity || 0;
-                        const unitPrice = material.unitPrice || 0;
-                        return sum + (quantity * unitPrice);
+                      const quantity = materialQuantities[material.id] || material.quantity || 0;
+                      const unitPrice = material.unitPrice || 0;
+                      return sum + (quantity * unitPrice);
                       }
                       return sum;
                     }, 0).toFixed(2)
@@ -2084,9 +2059,9 @@ const TaskDetailsPage = () => {
                       
                       // Uwzględnij koszt tylko jeśli materiał ma zarezerwowane partie
                       if (reservedBatches && reservedBatches.length > 0) {
-                        const quantity = materialQuantities[material.id] || material.quantity || 0;
-                        const unitPrice = material.unitPrice || 0;
-                        return sum + (quantity * unitPrice);
+                      const quantity = materialQuantities[material.id] || material.quantity || 0;
+                      const unitPrice = material.unitPrice || 0;
+                      return sum + (quantity * unitPrice);
                       }
                       return sum;
                     }, 0) / task.quantity).toFixed(2) : '0.00'
