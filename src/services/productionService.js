@@ -13,7 +13,11 @@ import {
     serverTimestamp,
     Timestamp,
     setDoc,
-    increment
+    increment,
+    arrayUnion,
+    limit,
+    onSnapshot,
+    writeBatch
   } from 'firebase/firestore';
   import { db } from './firebase/config';
   import { format } from 'date-fns';
@@ -2298,7 +2302,7 @@ import {
         0
       );
       
-      // Aktualizuj dane zadania
+      // Aktualizuj zadanie produkcyjne
       await updateDoc(taskRef, {
         productionSessions,
         totalCompletedQuantity,
@@ -2312,6 +2316,73 @@ import {
       };
     } catch (error) {
       console.error('Błąd podczas aktualizacji sesji produkcyjnej:', error);
+      throw error;
+    }
+  };
+
+  // Funkcja do ręcznego dodawania sesji produkcyjnej
+  export const addProductionSession = async (taskId, sessionData) => {
+    try {
+      // Pobierz dane zadania
+      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+      const taskDoc = await getDoc(taskRef);
+      
+      if (!taskDoc.exists()) {
+        throw new Error('Zadanie produkcyjne nie istnieje');
+      }
+      
+      const task = taskDoc.data();
+      const productionSessions = [...(task.productionSessions || [])];
+      
+      // Dodaj nową sesję produkcyjną
+      const newSession = {
+        startDate: sessionData.startTime,
+        endDate: sessionData.endTime,
+        completedQuantity: sessionData.quantity,
+        timeSpent: sessionData.timeSpent,
+        createdBy: sessionData.userId,
+        createdAt: new Date().toISOString() // Używamy zwykłej daty zamiast serverTimestamp()
+      };
+      
+      productionSessions.push(newSession);
+      
+      // Oblicz całkowitą wyprodukowaną ilość
+      const totalCompletedQuantity = productionSessions.reduce(
+        (sum, session) => sum + (parseFloat(session.completedQuantity) || 0), 
+        0
+      );
+      
+      // Aktualizuj zadanie produkcyjne
+      await updateDoc(taskRef, {
+        productionSessions,
+        totalCompletedQuantity,
+        updatedAt: serverTimestamp(),
+        updatedBy: sessionData.userId
+      });
+      
+      // Dodaj wpis w kolekcji productionHistory
+      const sessionId = `${taskId}_session_${productionSessions.length - 1}`;
+      const historyItem = {
+        taskId,
+        sessionIndex: productionSessions.length - 1,
+        startTime: sessionData.startTime,
+        endTime: sessionData.endTime,
+        timeSpent: sessionData.timeSpent,
+        quantity: sessionData.quantity,
+        userId: sessionData.userId,
+        createdAt: serverTimestamp()
+      };
+      
+      await setDoc(doc(db, 'productionHistory', sessionId), historyItem);
+      
+      // Zwróć dane
+      return {
+        success: true,
+        message: 'Sesja produkcyjna została dodana',
+        sessionId
+      };
+    } catch (error) {
+      console.error('Błąd podczas dodawania sesji produkcyjnej:', error);
       throw error;
     }
   };
@@ -2586,5 +2657,90 @@ import {
         message: `Błąd podczas inicjalizacji pól kosztów: ${error.message}`,
         error: error.toString()
       };
+    }
+  };
+
+  // Funkcja do usuwania sesji produkcyjnej
+  export const deleteProductionSession = async (sessionId, userId) => {
+    try {
+      // Pobierz dane sesji produkcyjnej
+      const sessionRef = doc(db, 'productionHistory', sessionId);
+      const sessionDoc = await getDoc(sessionRef);
+      
+      if (!sessionDoc.exists()) {
+        throw new Error('Sesja produkcyjna nie istnieje');
+      }
+      
+      const sessionData = sessionDoc.data();
+      const taskId = sessionData.taskId;
+      const sessionIndex = sessionData.sessionIndex;
+      
+      // Pobierz dane zadania
+      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+      const taskDoc = await getDoc(taskRef);
+      
+      if (!taskDoc.exists()) {
+        throw new Error('Zadanie produkcyjne nie istnieje');
+      }
+      
+      const task = taskDoc.data();
+      
+      // Upewnij się, że tablica sesji istnieje
+      const productionSessions = [...(task.productionSessions || [])];
+      
+      // Sprawdź, czy sesja istnieje w tablicy sesji zadania
+      if (!productionSessions[sessionIndex]) {
+        throw new Error('Sesja produkcyjna nie została znaleziona w zadaniu');
+      }
+      
+      // Usuń sesję z tablicy produkcyjnej
+      productionSessions.splice(sessionIndex, 1);
+      
+      // Oblicz całkowitą wyprodukowaną ilość
+      const totalCompletedQuantity = productionSessions.reduce(
+        (sum, session) => sum + (parseFloat(session.completedQuantity) || 0), 
+        0
+      );
+      
+      // Aktualizuj zadanie produkcyjne
+      await updateDoc(taskRef, {
+        productionSessions,
+        totalCompletedQuantity,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      });
+      
+      // Usuń dokument z kolekcji productionHistory
+      await deleteDoc(sessionRef);
+      
+      // Zaktualizuj indeksy pozostałych sesji w kolekcji productionHistory
+      for (let i = sessionIndex; i < productionSessions.length; i++) {
+        const oldSessionId = `${taskId}_session_${i + 1}`;
+        const newSessionId = `${taskId}_session_${i}`;
+        
+        // Sprawdź czy istnieje dokument sesji o starym indeksie
+        const oldSessionRef = doc(db, 'productionHistory', oldSessionId);
+        const oldSessionDoc = await getDoc(oldSessionRef);
+        
+        if (oldSessionDoc.exists()) {
+          // Stwórz nowy dokument sesji z zaktualizowanym indeksem
+          const oldSessionData = oldSessionDoc.data();
+          await setDoc(doc(db, 'productionHistory', newSessionId), {
+            ...oldSessionData,
+            sessionIndex: i
+          });
+          
+          // Usuń stary dokument sesji
+          await deleteDoc(oldSessionRef);
+        }
+      }
+      
+      return {
+        success: true,
+        message: 'Sesja produkcyjna została usunięta'
+      };
+    } catch (error) {
+      console.error('Błąd podczas usuwania sesji produkcyjnej:', error);
+      throw error;
     }
   };

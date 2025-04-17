@@ -34,7 +34,8 @@ import {
   Alert,
   ToggleButtonGroup,
   ToggleButton,
-  Checkbox
+  Checkbox,
+  TableContainer
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -130,6 +131,9 @@ const OrderForm = ({ orderId }) => {
   const [driveLink, setDriveLink] = useState('');
   const [refreshingPOs, setRefreshingPOs] = useState(false); // Dodana zmienna stanu dla odświeżania zamówień zakupu
   const [refreshingPTs, setRefreshingPTs] = useState(false); // Dodana zmienna stanu dla odświeżania danych kosztów produkcji
+
+  // Dodatkowe zmienne stanu dla obsługi dodatkowych kosztów
+  const [additionalCostsItems, setAdditionalCostsItems] = useState([]);
 
   const { currentUser } = useAuth();
   const { showSuccess, showError, showInfo } = useNotification();
@@ -237,7 +241,9 @@ const OrderForm = ({ orderId }) => {
             orderDate: formatDateForInput(orderDate),
             deadline: expectedDeliveryDate ? formatDateForInput(expectedDeliveryDate) : '',
             deliveryDate: deliveryDate ? formatDateForInput(deliveryDate) : '',
-            linkedPurchaseOrders: validLinkedPOs
+            linkedPurchaseOrders: validLinkedPOs,
+            // Inicjalizacja pustą tablicą, jeśli w zamówieniu nie ma dodatkowych kosztów
+            additionalCostsItems: fetchedOrder.additionalCostsItems || []
           });
           
           setLinkedPurchaseOrders(validLinkedPOs);
@@ -269,14 +275,16 @@ const OrderForm = ({ orderId }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!validateForm()) {
-      showError('Formularz zawiera błędy. Sprawdź wprowadzone dane.');
+    const errors = validateForm();
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      window.scrollTo(0, 0); // Przewiń do góry, aby użytkownik widział błędy
       return;
     }
     
-    setSaving(true);
-    
     try {
+      setSaving(true);
+      
       // Przekształć dane formularza w format oczekiwany przez API
       const orderDataToSave = {
         ...orderData,
@@ -298,17 +306,21 @@ const OrderForm = ({ orderId }) => {
         })
       };
       
+      let savedOrderId;
+      
       if (orderId) {
         await updateOrder(orderId, orderDataToSave, currentUser.uid);
+        savedOrderId = orderId;
         showSuccess('Zamówienie zostało zaktualizowane');
       } else {
-        await createOrder(orderDataToSave, currentUser.uid);
+        savedOrderId = await createOrder(orderDataToSave, currentUser.uid);
         showSuccess('Zamówienie zostało utworzone');
       }
-      navigate('/orders');
+      
+      navigate(`/orders/${savedOrderId}`);
     } catch (error) {
-      showError('Błąd podczas zapisywania zamówienia: ' + error.message);
-      console.error('Error saving order:', error);
+      console.error('Błąd podczas zapisywania zamówienia:', error);
+      showError(`Wystąpił błąd: ${error.message}`);
     } finally {
       setSaving(false);
     }
@@ -641,11 +653,76 @@ const OrderForm = ({ orderId }) => {
     }, 0);
   };
 
+  // Funkcja dodawania nowego dodatkowego kosztu
+  const handleAddAdditionalCost = (isDiscount = false) => {
+    const newCost = {
+      id: Date.now().toString(), // Unikalny identyfikator
+      description: isDiscount ? 'Rabat' : 'Dodatkowy koszt',
+      value: isDiscount ? 0 : 0,
+      vatRate: 23 // Domyślna stawka VAT
+    };
+    
+    setOrderData(prev => ({
+      ...prev,
+      additionalCostsItems: [...(prev.additionalCostsItems || []), newCost]
+    }));
+  };
+  
+  // Funkcja obsługi zmiany dodatkowych kosztów
+  const handleAdditionalCostChange = (id, field, value) => {
+    const updatedCosts = (orderData.additionalCostsItems || []).map(item => {
+      if (item.id === id) {
+        // Dla pola vatRate upewnij się, że nie jest undefined
+        if (field === 'vatRate' && value === undefined) {
+          value = 23; // Domyślna wartość VAT
+        }
+        return { ...item, [field]: field === 'value' ? parseFloat(value) || 0 : value };
+      }
+      return item;
+    });
+    
+    setOrderData(prev => ({ ...prev, additionalCostsItems: updatedCosts }));
+  };
+  
+  // Funkcja usuwania pozycji dodatkowych kosztów
+  const handleRemoveAdditionalCost = (id) => {
+    setOrderData(prev => ({
+      ...prev,
+      additionalCostsItems: (prev.additionalCostsItems || []).filter(item => item.id !== id)
+    }));
+  };
+  
+  // Funkcja obliczająca sumę dodatkowych kosztów (dodatnich)
+  const calculateAdditionalCosts = () => {
+    if (!orderData.additionalCostsItems || orderData.additionalCostsItems.length === 0) {
+      return 0;
+    }
+    
+    return orderData.additionalCostsItems.reduce((sum, cost) => {
+      const value = parseFloat(cost.value) || 0;
+      return sum + (value > 0 ? value : 0);
+    }, 0);
+  };
+
+  // Funkcja obliczająca sumę rabatów (wartości ujemne)
+  const calculateDiscounts = () => {
+    if (!orderData.additionalCostsItems || orderData.additionalCostsItems.length === 0) {
+      return 0;
+    }
+    
+    return Math.abs(orderData.additionalCostsItems.reduce((sum, cost) => {
+      const value = parseFloat(cost.value) || 0;
+      return sum + (value < 0 ? value : 0);
+    }, 0));
+  };
+
   const calculateTotal = () => {
     const subtotal = calculateSubtotal();
     const shippingCost = parseFloat(orderData.shippingCost) || 0;
+    const additionalCosts = calculateAdditionalCosts();
+    const discounts = calculateDiscounts();
     // Nie uwzględniamy wartości PO w całkowitej wartości zamówienia
-    return subtotal + shippingCost;
+    return subtotal + shippingCost + additionalCosts - discounts;
   };
 
   const handleDeliveryProofUpload = async (e) => {
@@ -1807,6 +1884,117 @@ const OrderForm = ({ orderId }) => {
           </Box>
         </Paper>
 
+        {/* Sekcja dodatkowych kosztów */}
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">Dodatkowe koszty</Typography>
+            <Box>
+              <Button
+                startIcon={<AddIcon />}
+                variant="outlined"
+                onClick={() => handleAddAdditionalCost(false)}
+                size="small"
+                sx={{ mr: 1 }}
+              >
+                Dodaj koszt
+              </Button>
+              <Button
+                startIcon={<AddIcon />}
+                variant="outlined"
+                onClick={() => handleAddAdditionalCost(true)}
+                size="small"
+                color="secondary"
+              >
+                Dodaj rabat
+              </Button>
+            </Box>
+          </Box>
+          
+          {orderData.additionalCostsItems && orderData.additionalCostsItems.length > 0 ? (
+            <TableContainer component={Paper} sx={{ mb: 2 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Opis</TableCell>
+                    <TableCell align="right">Kwota</TableCell>
+                    <TableCell align="right">VAT</TableCell>
+                    <TableCell width="50px"></TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {orderData.additionalCostsItems.map((cost) => (
+                    <TableRow 
+                      key={cost.id}
+                      sx={{ 
+                        bgcolor: parseFloat(cost.value) < 0 ? 'rgba(156, 39, 176, 0.08)' : 'inherit'
+                      }}
+                    >
+                      <TableCell>
+                        <TextField
+                          value={cost.description || ''}
+                          onChange={(e) => handleAdditionalCostChange(cost.id, 'description', e.target.value)}
+                          variant="standard"
+                          fullWidth
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        <TextField
+                          value={cost.value || 0}
+                          onChange={(e) => handleAdditionalCostChange(cost.id, 'value', e.target.value)}
+                          variant="standard"
+                          type="number"
+                          InputProps={{
+                            startAdornment: <InputAdornment position="start">{orderData.currency || 'EUR'}</InputAdornment>,
+                            sx: { color: parseFloat(cost.value) < 0 ? 'secondary.main' : 'inherit' }
+                          }}
+                          inputProps={{ step: 0.01 }}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        <TextField
+                          value={cost.vatRate || 0}
+                          onChange={(e) => handleAdditionalCostChange(cost.id, 'vatRate', e.target.value)}
+                          variant="standard"
+                          type="number"
+                          InputProps={{
+                            endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                          }}
+                          inputProps={{ min: 0, max: 100, step: 1 }}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleRemoveAdditionalCost(cost.id)}
+                          color="error"
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          ) : (
+            <Typography variant="body2" color="text.secondary" sx={{ my: 2 }}>
+              Brak dodatkowych kosztów. Kliknij "Dodaj koszt", aby dodać opłaty jak cła, transport, ubezpieczenie itp. Możesz również dodać rabaty wprowadzając wartość ujemną.
+            </Typography>
+          )}
+          
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+            <Typography variant="subtitle1" fontWeight="bold">
+              Suma dodatkowych kosztów: {formatCurrency(calculateAdditionalCosts())}
+              {calculateDiscounts() > 0 && (
+                <> | Suma rabatów: <span style={{ color: '#9c27b0' }}>{formatCurrency(calculateDiscounts())}</span></>
+              )}
+            </Typography>
+          </Box>
+        </Paper>
+
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>Uwagi</Typography>
           <TextField
@@ -2025,25 +2213,39 @@ const OrderForm = ({ orderId }) => {
           <Divider sx={{ mb: 2 }} />
           
           <Grid container spacing={2}>
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={3}>
               <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
                 <Typography variant="subtitle2" color="text.secondary">Wartość produktów:</Typography>
                 <Typography variant="h6" fontWeight="bold">{formatCurrency(calculateSubtotal())}</Typography>
               </Paper>
             </Grid>
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={3}>
               <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
                 <Typography variant="subtitle2" color="text.secondary">Koszt dostawy:</Typography>
                 <Typography variant="h6" fontWeight="bold">{formatCurrency(parseFloat(orderData.shippingCost) || 0)}</Typography>
               </Paper>
             </Grid>
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={3}>
               <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
-                <Typography variant="subtitle2" color="text.secondary">Wartość całkowita zamówienia:</Typography>
-                <Typography variant="h6" fontWeight="bold">{formatCurrency(calculateSubtotal() + (parseFloat(orderData.shippingCost) || 0))}</Typography>
+                <Typography variant="subtitle2" color="text.secondary">Dodatkowe koszty:</Typography>
+                <Typography variant="h6" fontWeight="bold">{formatCurrency(calculateAdditionalCosts())}</Typography>
               </Paper>
             </Grid>
-            <Grid item xs={12} md={4}>
+            {calculateDiscounts() > 0 && (
+              <Grid item xs={12} md={3}>
+                <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+                  <Typography variant="subtitle2" color="text.secondary">Rabaty:</Typography>
+                  <Typography variant="h6" fontWeight="bold" color="secondary">- {formatCurrency(calculateDiscounts())}</Typography>
+                </Paper>
+              </Grid>
+            )}
+            <Grid item xs={12} md={3}>
+              <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+                <Typography variant="subtitle2" color="text.secondary">Wartość całkowita zamówienia:</Typography>
+                <Typography variant="h6" fontWeight="bold">{formatCurrency(calculateTotal())}</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={3}>
               <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
                 <Typography variant="subtitle2" color="text.secondary">Wartość zamówień zakupu:</Typography>
                 <Typography variant="h6" fontWeight="bold" color="warning.main">{formatCurrency(calculatePurchaseOrdersTotal())}</Typography>

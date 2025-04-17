@@ -757,7 +757,8 @@ export const DEFAULT_ORDER = {
   shippingMethod: '',
   shippingCost: 0,
   deliveryProof: null,
-  shippingAddress: ''
+  shippingAddress: '',
+  additionalCostsItems: [] // Inicjalizacja pustej tablicy dla dodatkowych kosztów
 };
 
 // Dodaj nową funkcję do aktualizacji listy zadań produkcyjnych

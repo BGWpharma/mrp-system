@@ -645,8 +645,20 @@ const OrderDetails = () => {
                   // Koszt dostawy
                   const shippingCost = parseFloat(order.shippingCost) || 0;
                   
+                  // Dodatkowe koszty (tylko pozytywne)
+                  const additionalCosts = order.additionalCostsItems ? 
+                    order.additionalCostsItems
+                      .filter(cost => parseFloat(cost.value) > 0)
+                      .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0) : 0;
+                  
+                  // Rabaty (wartości ujemne) - jako wartość pozytywna do odjęcia
+                  const discounts = order.additionalCostsItems ? 
+                    Math.abs(order.additionalCostsItems
+                      .filter(cost => parseFloat(cost.value) < 0)
+                      .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)) : 0;
+                  
                   // Łączna wartość
-                  const total = productsValue + shippingCost;
+                  const total = productsValue + shippingCost + additionalCosts - discounts;
                   
                   return formatCurrency(total);
                 })()}
@@ -817,6 +829,76 @@ const OrderDetails = () => {
                 {formatCurrency(order.shippingCost || 0)}
               </TableCell>
             </TableRow>
+            
+            {/* Dodatkowe koszty (tylko jeśli istnieją) */}
+            {order.additionalCostsItems && order.additionalCostsItems.length > 0 && (
+              <>
+                {/* Wyświetl pozytywne koszty (dodatnie) */}
+                {order.additionalCostsItems.some(cost => parseFloat(cost.value) > 0) && (
+                  <>
+                    {order.additionalCostsItems
+                      .filter(cost => parseFloat(cost.value) > 0)
+                      .map((cost, index) => (
+                        <TableRow key={`cost-${cost.id || index}`}>
+                          <TableCell colSpan={2} />
+                          <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                            {cost.description || `Dodatkowy koszt ${index + 1}`}:
+                          </TableCell>
+                          <TableCell align="right">
+                            {formatCurrency(parseFloat(cost.value) || 0)}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    }
+                    <TableRow>
+                      <TableCell colSpan={2} />
+                      <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                        Suma dodatkowych kosztów:
+                      </TableCell>
+                      <TableCell align="right">
+                        {formatCurrency(order.additionalCostsItems
+                          .filter(cost => parseFloat(cost.value) > 0)
+                          .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  </>
+                )}
+                
+                {/* Wyświetl rabaty (wartości ujemne) */}
+                {order.additionalCostsItems.some(cost => parseFloat(cost.value) < 0) && (
+                  <>
+                    {order.additionalCostsItems
+                      .filter(cost => parseFloat(cost.value) < 0)
+                      .map((cost, index) => (
+                        <TableRow key={`discount-${cost.id || index}`}>
+                          <TableCell colSpan={2} />
+                          <TableCell align="right" sx={{ fontWeight: 'bold', color: 'secondary.main' }}>
+                            {cost.description || `Rabat ${index + 1}`}:
+                          </TableCell>
+                          <TableCell align="right" sx={{ color: 'secondary.main' }}>
+                            {formatCurrency(Math.abs(parseFloat(cost.value)) || 0)}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    }
+                    <TableRow>
+                      <TableCell colSpan={2} />
+                      <TableCell align="right" sx={{ fontWeight: 'bold', color: 'secondary.main' }}>
+                        Suma rabatów:
+                      </TableCell>
+                      <TableCell align="right" sx={{ color: 'secondary.main' }}>
+                        {formatCurrency(Math.abs(order.additionalCostsItems
+                          .filter(cost => parseFloat(cost.value) < 0)
+                          .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
+                        ))}
+                      </TableCell>
+                    </TableRow>
+                  </>
+                )}
+              </>
+            )}
+            
             {(order.linkedPurchaseOrders && order.linkedPurchaseOrders.length > 0) && (
               <TableRow>
                 <TableCell colSpan={2} />
@@ -876,8 +958,20 @@ const OrderDetails = () => {
                   // Koszt dostawy
                   const shippingCost = parseFloat(order.shippingCost) || 0;
                   
+                  // Dodatkowe koszty (tylko pozytywne)
+                  const additionalCosts = order.additionalCostsItems ? 
+                    order.additionalCostsItems
+                      .filter(cost => parseFloat(cost.value) > 0)
+                      .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0) : 0;
+                  
+                  // Rabaty (wartości ujemne) - jako wartość pozytywna do odjęcia
+                  const discounts = order.additionalCostsItems ? 
+                    Math.abs(order.additionalCostsItems
+                      .filter(cost => parseFloat(cost.value) < 0)
+                      .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)) : 0;
+                  
                   // Łączna wartość
-                  const total = productsValue + shippingCost;
+                  const total = productsValue + shippingCost + additionalCosts - discounts;
                   
                   return formatCurrency(total);
                 })()}

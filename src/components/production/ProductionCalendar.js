@@ -24,7 +24,9 @@ import {
   ViewModule as MonthIcon,
   BarChart as GanttIcon,
   ArrowDropDown as ArrowDropDownIcon,
-  FilterList as FilterListIcon
+  FilterList as FilterListIcon,
+  Business as BusinessIcon,
+  Work as WorkIcon
 } from '@mui/icons-material';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -61,6 +63,7 @@ const ProductionCalendar = () => {
   const [filterMenuAnchor, setFilterMenuAnchor] = useState(null);
   const [ganttDetail, setGanttDetail] = useState('day');
   const [detailMenuAnchor, setDetailMenuAnchor] = useState(null);
+  const [ganttGroupBy, setGanttGroupBy] = useState('workstation');
   const calendarRef = useRef(null);
   const navigate = useNavigate();
   const { showError, showSuccess } = useNotification();
@@ -317,104 +320,136 @@ const ProductionCalendar = () => {
   };
 
   const getCalendarEvents = () => {
-    console.log('Generowanie wydarzeń kalendarza z zadań:', tasks);
+    if (!tasks || tasks.length === 0) {
+      return [];
+    }
     
-    const filteredTasks = tasks.filter(task => {
-      if (!task.workstationId) return true;
-      return selectedWorkstations[task.workstationId];
-    });
-    
-    return filteredTasks.map(task => {
-      // Konwersja Timestamp z Firestore na obiekt Date
+    return tasks.map(task => {
+      // Sprawdź czy zadanie ma przypisane stanowisko
+      const workstationId = task.workstationId;
+      
+      // Wyznacz kolor w zależności od statusu lub stanowiska
+      const color = useWorkstationColors && workstationId
+        ? getTaskColor(task)
+        : getStatusColor(task.status);
+      
+      // Przygotuj szczegóły zadania
+      const title = task.name || `${task.productName} (${task.moNumber})`;
+      
+      // Daty rozpoczęcia i zakończenia zadania
       let startDate = task.scheduledDate;
-      let endDate = task.endDate || task.scheduledDate;
+      let endDate = task.endDate || task.estimatedEndDate;
       
-      console.log('Zadanie przed konwersją dat:', task.id, task.name, 'startDate:', startDate, 'endDate:', endDate);
-      
-      // Sprawdź, czy mamy do czynienia z obiektem Timestamp z Firestore
-      if (startDate && typeof startDate.toDate === 'function') {
-        startDate = startDate.toDate();
-      } else if (typeof startDate === 'string') {
-        startDate = new Date(startDate);
-      } else if (!startDate) {
-        console.warn('Zadanie bez daty rozpoczęcia:', task);
-        // Ustawiamy domyślną datę na dziś, aby zadanie było widoczne
-        startDate = new Date();
+      // Konwersja dat do formatu ISO String (jeśli są to obiekty date)
+      if (startDate && typeof startDate !== 'string') {
+        if (startDate.toDate) {
+          startDate = startDate.toDate().toISOString();
+        } else if (startDate instanceof Date) {
+          startDate = startDate.toISOString();
+        }
       }
       
-      if (endDate && typeof endDate.toDate === 'function') {
-        endDate = endDate.toDate();
-      } else if (typeof endDate === 'string') {
-        endDate = new Date(endDate);
-      } else if (!endDate) {
-        // Jeśli endDate nie jest ustawiony, użyj startDate
-        endDate = new Date(startDate);
+      if (endDate && typeof endDate !== 'string') {
+        if (endDate.toDate) {
+          endDate = endDate.toDate().toISOString();
+        } else if (endDate instanceof Date) {
+          endDate = endDate.toISOString();
+        }
       }
       
-      // Jeśli endDate jest taki sam jak startDate lub nie jest ustawiony,
-      // dodaj 1 godzinę do endDate, aby zadanie było widoczne na wykresie Gantta
-      if (!endDate || (endDate && startDate && endDate.getTime() === startDate.getTime())) {
-        endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+      // Określ zasób, do którego przypisane jest zadanie, w zależności od trybu grupowania
+      let resourceId;
+      
+      if (ganttGroupBy === 'workstation') {
+        // Gdy grupujemy według stanowisk, przypisz do wybranego stanowiska
+        resourceId = workstationId;
+      } else if (ganttGroupBy === 'order') {
+        // Gdy grupujemy według zamówień, przypisz do odpowiedniego zamówienia
+        resourceId = task.orderId || 'no-order';
       }
       
-      console.log('Zadanie po konwersji dat:', task.id, task.name, 'startDate:', startDate, 'endDate:', endDate);
-      
-      // Używamy numeru MO jako tytułu wydarzenia, jeśli jest dostępny
-      const title = task.moNumber ? `${task.moNumber} - ${task.productName || ''}` : task.name;
-      
-      const taskColor = getTaskColor(task);
-      
+      // Zwróć obiekt zdarzenia
       return {
         id: task.id,
         title: title,
         start: startDate,
         end: endDate,
-        backgroundColor: taskColor,
-        borderColor: taskColor,
+        backgroundColor: color,
+        borderColor: color,
+        textColor: getContrastYIQ(color),
         extendedProps: {
-          moNumber: task.moNumber,
-          productName: task.productName,
-          quantity: task.quantity,
-          unit: task.unit,
-          status: task.status,
-          estimatedDuration: task.estimatedDuration || '',
-          workstationId: task.workstationId,
-          resourceId: task.id // Używamy ID zadania jako resourceId dla wykresu Gantta
+          task: task
         },
-        resourceId: task.id, // Dla widoku resourceTimeline - używamy ID zadania
-        editable: canEditTask(task), // Określa, czy konkretne zadanie może być edytowane
-        durationEditable: canEditTask(task), // Określa, czy czas trwania może być zmieniony
-        startEditable: canEditTask(task), // Określa, czy data rozpoczęcia może być zmieniona
-        resizableFromStart: eventResizableFromStart && canEditTask(task) // Rozciąganie od początku
+        resourceId: resourceId,
+        editable: canEditTask(task) && editable
       };
+    }).filter(event => {
+      // Filtruj zdarzenia, które nie mają resourceId, jeśli jesteśmy w widoku zasobów
+      if (view.includes('resourceTimeline')) {
+        return event.resourceId !== undefined;
+      }
+      return true;
     });
   };
 
   // Przygotowanie zasobów dla wykresu Gantta
   const getResources = () => {
-    // Zbieramy unikalne zadania z użyciem mapy zamiast tablicy, aby uniknąć duplikatów
-    const uniqueResources = new Map();
+    // Jeśli brak workstations lub tasks, zwróć pustą tablicę
+    if (!workstations || workstations.length === 0) {
+      return [];
+    }
     
-    const filteredTasks = tasks.filter(task => {
-      if (!task.workstationId) return true;
-      return selectedWorkstations[task.workstationId];
-    });
-    
-    // Dodajemy każde zadanie jako zasób
-    filteredTasks.forEach(task => {
-      if (!uniqueResources.has(task.id)) {
-        uniqueResources.set(task.id, {
-          id: task.id,
-          title: task.moNumber ? `${task.moNumber} - ${task.productName || ''}` : task.name
+    // Jeśli grupujemy według stanowisk
+    if (ganttGroupBy === 'workstation') {
+      // Filtruj stanowiska według zaznaczonych w filtrze
+      return workstations
+        .filter(workstation => selectedWorkstations[workstation.id])
+        .map(workstation => ({
+          id: workstation.id,
+          title: workstation.name,
+          businessHours: workstation.businessHours || {
+            daysOfWeek: [1, 2, 3, 4, 5], // Poniedziałek-piątek
+            startTime: '08:00',
+            endTime: '16:00'
+          }
+        }));
+    } 
+    // Jeśli grupujemy według zamówień
+    else if (ganttGroupBy === 'order') {
+      // Pobierz unikalne zamówienia z zadań
+      const uniqueOrders = new Map();
+      
+      tasks.forEach(task => {
+        // Sprawdź czy zadanie ma przypisany numer zamówienia
+        if (task.orderId) {
+          // Jeśli zamówienie nie było jeszcze dodane, dodaj je
+          if (!uniqueOrders.has(task.orderId)) {
+            uniqueOrders.set(task.orderId, {
+              id: task.orderId,
+              title: `Zamówienie ${task.orderNumber || task.orderId}`,
+              // Możemy dodać więcej informacji o zamówieniu, jeśli są dostępne
+              customerId: task.customerId,
+              customerName: task.customerName
+            });
+          }
+        }
+      });
+      
+      // Jeśli nie ma zamówień lub wszystkie zadania są bez zamówień, 
+      // dodaj kategorię "Bez zamówienia"
+      if (uniqueOrders.size === 0 || tasks.some(task => !task.orderId)) {
+        uniqueOrders.set('no-order', {
+          id: 'no-order',
+          title: 'Bez zamówienia'
         });
       }
-    });
+      
+      // Zwróć listę zamówień jako zasoby
+      return Array.from(uniqueOrders.values());
+    }
     
-    // Konwertujemy mapę z powrotem na tablicę
-    const resources = Array.from(uniqueResources.values());
-    
-    console.log('Zasoby dla wykresu Gantta:', resources);
-    return resources;
+    // Domyślnie, jeśli wartość ganttGroupBy jest nieprawidłowa
+    return [];
   };
 
   // Komponent renderujący zawartość zdarzenia w kalendarzu
@@ -889,8 +924,8 @@ const ProductionCalendar = () => {
   };
 
   const handleGanttDetailChange = (detail) => {
-    setGanttDetail(detail);
     handleDetailMenuClose();
+    setGanttDetail(detail);
     
     if (calendarRef.current) {
       try {
@@ -943,6 +978,76 @@ const ProductionCalendar = () => {
         showError('Wystąpił błąd podczas zmiany widoku: ' + error.message);
       }
     }
+  };
+
+  // Funkcja do przełączania grupowania Gantta
+  const handleGanttGroupByChange = () => {
+    // Przełącz między 'workstation' a 'order'
+    const newGroupBy = ganttGroupBy === 'workstation' ? 'order' : 'workstation';
+    setGanttGroupBy(newGroupBy);
+    
+    // Odśwież widok kalendarza, jeśli jest to widok Gantta
+    if (view.includes('resourceTimeline') && calendarRef.current) {
+      // Daj czas na aktualizację stanu
+      setTimeout(() => {
+        try {
+          const calendarApi = calendarRef.current.getApi();
+          calendarApi.refetchResources();
+        } catch (error) {
+          console.error('Błąd podczas odświeżania zasobów:', error);
+        }
+      }, 0);
+    }
+  };
+
+  // Funkcja do określania koloru stanowiska
+  const getWorkstationColor = (workstationId) => {
+    // Znajdź stanowisko o podanym ID
+    const workstation = workstations.find(w => w.id === workstationId);
+    
+    // Jeśli znaleziono stanowisko i ma określony kolor, użyj go
+    if (workstation && workstation.color) {
+      return workstation.color;
+    }
+    
+    // Domyślne kolory dla stanowisk, jeśli nie mają określonego koloru
+    const defaultColors = {
+      'WCT00003': '#2196f3', // Powder
+      'WCT00006': '#4caf50', // Pills
+      'WCT00009': '#f50057', // Contract Line
+      'WCT00012': '#ff9800', // Filling
+      'WCT00015': '#9c27b0'  // Packaging
+    };
+    
+    // Jeśli istnieje domyślny kolor dla danego stanowiska, użyj go
+    if (defaultColors[workstationId]) {
+      return defaultColors[workstationId];
+    }
+    
+    // Domyślny kolor, jeśli nie znaleziono żadnego dopasowania
+    return '#7986cb';
+  };
+  
+  // Funkcja do określania koloru tekstu na podstawie koloru tła
+  const getContrastYIQ = (hexcolor) => {
+    // Usuń # z początku kodu koloru, jeśli istnieje
+    hexcolor = hexcolor.replace('#', '');
+    
+    // Konwertuj 3-cyfrowy kod koloru na 6-cyfrowy
+    if (hexcolor.length === 3) {
+      hexcolor = hexcolor[0] + hexcolor[0] + hexcolor[1] + hexcolor[1] + hexcolor[2] + hexcolor[2];
+    }
+    
+    // Konwertuj kolor hex na RGB
+    const r = parseInt(hexcolor.substr(0, 2), 16);
+    const g = parseInt(hexcolor.substr(2, 2), 16);
+    const b = parseInt(hexcolor.substr(4, 2), 16);
+    
+    // Oblicz jasność koloru używając YIQ
+    const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+    
+    // Zwróć biały dla ciemnych kolorów, czarny dla jasnych
+    return (yiq >= 128) ? '#000000' : '#ffffff';
   };
 
   return (
@@ -1016,7 +1121,7 @@ const ProductionCalendar = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Typography variant="body2" sx={{ mr: 1 }}>Widok:</Typography>
           <ToggleButtonGroup
-            value={view.startsWith('resourceTimeline') ? 'gantt' : view}
+            value={view.includes('resourceTimeline') ? 'gantt' : view}
             exclusive
             onChange={handleViewChange}
             aria-label="widok kalendarza"
@@ -1077,6 +1182,19 @@ const ProductionCalendar = () => {
             </Button>
           )}
         </Box>
+
+        {/* Przycisk przełączający tryb widoku Gantt */}
+        {view.includes('resourceTimeline') && (
+          <Button
+            variant="outlined"
+            size="small"
+            sx={{ ml: 1 }}
+            onClick={handleGanttGroupByChange}
+            startIcon={ganttGroupBy === 'workstation' ? <BusinessIcon /> : <WorkIcon />}
+          >
+            {ganttGroupBy === 'workstation' ? 'Stanowiska' : 'Zamówienia'}
+          </Button>
+        )}
       </Box>
       
       {/* Menu i dialogu pozostają bez zmian */}

@@ -1,73 +1,79 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
-  Container,
-  Paper,
   Typography,
+  Paper,
   Grid,
-  Button,
-  Divider,
-  Box,
   Chip,
-  CircularProgress,
-  IconButton,
+  Box,
+  Button,
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions,
   DialogContentText,
-  TextField,
-  TableContainer,
+  DialogActions,
   Table,
-  TableHead,
   TableBody,
-  TableRow,
   TableCell,
-  Alert,
-  Stack,
-  Select,
-  MenuItem,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  CircularProgress,
+  IconButton,
   FormControl,
   InputLabel,
-  Tabs,
-  Tab,
+  Select,
+  MenuItem,
+  FormControlLabel,
+  Checkbox,
+  FormLabel,
   RadioGroup,
   Radio,
-  FormControlLabel,
-  FormLabel,
-  Checkbox,
-  ListItem,
+  Alert,
+  Tooltip,
+  Divider,
   List,
+  ListItem,
+  ListItemIcon,
   ListItemText,
-  ListItemSecondaryAction,
+  ListItemButton,
+  Card,
+  CardContent,
+  CardActions,
+  Collapse,
+  Tabs,
+  Tab,
+  Stack,
+  Avatar,
+  Container,
   Accordion,
   AccordionSummary,
-  AccordionDetails,
-  Tooltip
+  AccordionDetails
 } from '@mui/material';
 import {
   Edit as EditIcon,
-  ArrowBack as ArrowBackIcon,
-  PlayArrow as StartIcon,
-  Stop as StopIcon,
-  CheckCircle as CompleteIcon,
   Delete as DeleteIcon,
-  Settings as SettingsIcon,
   Save as SaveIcon,
-  Check as CheckIcon,
   Cancel as CancelIcon,
-  Inventory as InventoryIcon,
   Warning as WarningIcon,
-  Receipt as ReceiptIcon,
-  Add as AddIcon,
-  SaveAlt as SaveAltIcon,
-  Info as InfoIcon,
-  BookmarkAdd as BookmarkAddIcon,
-  ExpandMore as ExpandMoreIcon,
+  CheckCircle as CheckCircleIcon,
+  Inventory as InventoryIcon,
+  PlayArrow as PlayArrowIcon,
+  Stop as StopIcon,
   Print as PrintIcon,
-  Inventory2 as PackagingIcon
+  Business as BusinessIcon,
+  Schedule as ScheduleIcon,
+  History as HistoryIcon,
+  Add as AddIcon,
+  ArrowBack as ArrowBackIcon,
+  Settings as SettingsIcon,
+  Check as CheckIcon,
+  Inventory2 as PackagingIcon,
+  BookmarkAdd as BookmarkAddIcon,
+  ExpandMore as ExpandMoreIcon
 } from '@mui/icons-material';
-import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession } from '../../services/productionService';
+import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession, addProductionSession, deleteProductionSession } from '../../services/productionService';
 import { getItemBatches, bookInventoryForTask, cancelBooking, getBatchReservations, getAllInventoryItems, getInventoryItemById, getInventoryBatch } from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -82,58 +88,55 @@ import { getUsersDisplayNames } from '../../services/userService';
 const TaskDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
   const { showSuccess, showError, showInfo } = useNotification();
+  const { currentUser } = useAuth();
+  
   const [task, setTask] = useState(null);
   const [loading, setLoading] = useState(true);
   const [alert, setAlert] = useState({ open: false, severity: 'success', message: '' });
-  
-  // Stan dla dialogu konsumpcji materiałów
   const [consumptionDialogOpen, setConsumptionDialogOpen] = useState(false);
   const [confirmationDialogOpen, setConfirmationDialogOpen] = useState(false);
+  const [deleteDialog, setDeleteDialog] = useState(false);
   const [materials, setMaterials] = useState([]);
-  const [editMode, setEditMode] = useState(false);
-  const [materialQuantities, setMaterialQuantities] = useState({});
-  const [errors, setErrors] = useState({});
-
+  const [batches, setBatches] = useState([]);
   const [stopProductionDialogOpen, setStopProductionDialogOpen] = useState(false);
-  const [completedQuantity, setCompletedQuantity] = useState('');
-  const [timeSpent, setTimeSpent] = useState('');
+  const [productionData, setProductionData] = useState({
+    completedQuantity: '',
+    timeSpent: '',
+    startTime: new Date(),
+    endTime: new Date(),
+    error: null
+  });
+  const [materialQuantities, setMaterialQuantities] = useState({});
+  const [selectedBatches, setSelectedBatches] = useState({});
+  const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [reserveDialogOpen, setReserveDialogOpen] = useState(false);
+  const [reservationMethod, setReservationMethod] = useState('fifo');
+  const [manualBatchQuantities, setManualBatchQuantities] = useState({});
+  const [reservationErrors, setReservationErrors] = useState({});
+  const [packagingDialogOpen, setPackagingDialogOpen] = useState(false);
+  const [packagingItems, setPackagingItems] = useState([]);
+  const [loadingPackaging, setLoadingPackaging] = useState(false);
+  const [selectedPackaging, setSelectedPackaging] = useState({});
+  const [packagingQuantities, setPackagingQuantities] = useState({});
+  const [userNames, setUserNames] = useState({});
   const [productionHistory, setProductionHistory] = useState([]);
-  const [productionError, setProductionError] = useState(null);
   const [editingHistoryItem, setEditingHistoryItem] = useState(null);
   const [editedHistoryItem, setEditedHistoryItem] = useState({
     quantity: 0,
     startTime: new Date(),
-    endTime: new Date()
+    endTime: new Date(),
   });
-
-  const [deleteDialog, setDeleteDialog] = useState(false);
-  const [quantity, setQuantity] = useState(0);
-  const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
-
-  const [productionStartTime, setProductionStartTime] = useState(new Date());
-  const [productionEndTime, setProductionEndTime] = useState(new Date());
-
-  // Stany dla rezerwacji surowców
-  const [reserveDialogOpen, setReserveDialogOpen] = useState(false);
-  const [reservationMethod, setReservationMethod] = useState('fifo');
+  const [addHistoryDialogOpen, setAddHistoryDialogOpen] = useState(false);
   const [reservingMaterials, setReservingMaterials] = useState(false);
-  
-  // Nowe stany dla ręcznego wyboru partii
-  const [availableBatches, setAvailableBatches] = useState({});
-  const [selectedBatches, setSelectedBatches] = useState({});
+
   const [materialBatchesLoading, setMaterialBatchesLoading] = useState(false);
   const [manualBatchSelectionActive, setManualBatchSelectionActive] = useState(false);
   const [expandedMaterial, setExpandedMaterial] = useState(null);
-
-  const [userNames, setUserNames] = useState({});
-
-  // Nowy stan dla dodawania opakowań
-  const [packagingDialogOpen, setPackagingDialogOpen] = useState(false);
-  const [availablePackaging, setAvailablePackaging] = useState([]);
-  const [selectedPackaging, setSelectedPackaging] = useState([]);
-  const [loadingPackaging, setLoadingPackaging] = useState(false);
+  const [deleteHistoryItem, setDeleteHistoryItem] = useState(null);
+  const [deleteHistoryDialogOpen, setDeleteHistoryDialogOpen] = useState(false);
 
   const fetchTask = async () => {
     try {
@@ -406,7 +409,7 @@ const TaskDetailsPage = () => {
           <Button 
             variant="contained" 
             color="warning" 
-            startIcon={<StartIcon />}
+            startIcon={<PlayArrowIcon />}
             onClick={() => handleStatusChange('W trakcie')}
           >
             Rozpocznij produkcję
@@ -557,12 +560,12 @@ const TaskDetailsPage = () => {
   };
 
   const handleStopProduction = async () => {
-    if (!completedQuantity) {
+    if (!productionData.completedQuantity) {
       showError('Podaj ilość wyprodukowaną');
       return;
     }
     
-    const quantity = parseFloat(completedQuantity);
+    const quantity = parseFloat(productionData.completedQuantity);
     
     if (isNaN(quantity) || quantity <= 0) {
       showError('Ilość wyprodukowana musi być liczbą większą od zera');
@@ -575,12 +578,12 @@ const TaskDetailsPage = () => {
       const result = await stopProduction(
         id, 
         quantity, 
-        timeSpent || 0,
+        productionData.timeSpent || 0,
         currentUser.uid,
         // Przekaż informacje o czasie
         {
-          startTime: productionStartTime.toISOString(),
-          endTime: productionEndTime.toISOString()
+          startTime: productionData.startTime.toISOString(),
+          endTime: productionData.endTime.toISOString()
         }
       );
       
@@ -671,7 +674,7 @@ const TaskDetailsPage = () => {
         }
       }
       
-      setAvailableBatches(batchesData);
+      setBatches(batchesData);
       setSelectedBatches(initialSelectedBatches);
     } catch (error) {
       console.error('Błąd podczas pobierania partii dla materiałów:', error);
@@ -687,7 +690,7 @@ const TaskDetailsPage = () => {
     setReservationMethod(newMethod);
     
     // Jeśli wybrano ręczną metodę, pobierz partie
-    if (newMethod === 'manual' && Object.keys(availableBatches).length === 0) {
+    if (newMethod === 'manual' && Object.keys(batches).length === 0) {
       fetchBatchesForMaterials();
       setManualBatchSelectionActive(true);
     } else {
@@ -711,7 +714,7 @@ const TaskDetailsPage = () => {
         }
       } else if (quantity > 0) {
         // Dodaj nową partię
-        const batch = availableBatches[materialId].find(b => b.id === batchId);
+        const batch = batches[materialId].find(b => b.id === batchId);
         if (batch) {
           materialBatches.push({
             batchId: batchId,
@@ -939,7 +942,7 @@ const TaskDetailsPage = () => {
           const materialId = material.inventoryItemId || material.id;
           if (!materialId) return null;
           
-          let materialBatches = availableBatches[materialId] || [];
+          let materialBatches = batches[materialId] || [];
           const selectedMaterialBatches = selectedBatches[materialId] || [];
           const totalSelectedQuantity = selectedMaterialBatches.reduce((sum, batch) => sum + batch.quantity, 0);
           const isComplete = totalSelectedQuantity >= material.quantity;
@@ -1085,7 +1088,30 @@ const TaskDetailsPage = () => {
 
   // Funkcja zwracająca nazwę użytkownika zamiast ID
   const getUserName = (userId) => {
-    return userNames[userId] || userId || 'System';
+    if (!userId) return 'System';
+    
+    // Jeśli mamy już nazwę użytkownika w stanie, użyj jej
+    if (userNames[userId]) {
+      return userNames[userId];
+    }
+    
+    // Jeśli ID jest dłuższe niż 10 znaków, zwróć skróconą wersję
+    if (userId.length > 10) {
+      // Pobierz dane użytkownika asynchronicznie
+      getUsersDisplayNames([userId]).then(names => {
+        if (names && names[userId]) {
+          setUserNames(prev => ({
+            ...prev,
+            [userId]: names[userId]
+          }));
+        }
+      });
+      
+      // Tymczasowo zwróć skróconą wersję ID
+      return `${userId.substring(0, 5)}...${userId.substring(userId.length - 4)}`;
+    }
+    
+    return userId;
   };
 
   // Dodaj funkcję do generowania i pobierania raportu materiałów i LOT-ów
@@ -1337,7 +1363,7 @@ const TaskDetailsPage = () => {
       // Filtrujemy tylko opakowania
       const packagingItems = allItems.filter(item => item.category === 'Opakowania');
       
-      setAvailablePackaging(packagingItems.map(item => ({
+      setPackagingItems(packagingItems.map(item => ({
         ...item,
         selected: false,
         quantity: 0,
@@ -1359,14 +1385,14 @@ const TaskDetailsPage = () => {
   
   // Obsługa zmiany ilości wybranego opakowania
   const handlePackagingQuantityChange = (id, value) => {
-    setAvailablePackaging(prev => prev.map(item => 
+    setPackagingItems(prev => prev.map(item => 
       item.id === id ? { ...item, quantity: parseFloat(value) || 0, selected: parseFloat(value) > 0 } : item
     ));
   };
   
   // Obsługa wyboru/odznaczenia opakowania
   const handlePackagingSelection = (id, selected) => {
-    setAvailablePackaging(prev => prev.map(item => 
+    setPackagingItems(prev => prev.map(item => 
       item.id === id ? { ...item, selected } : item
     ));
   };
@@ -1377,7 +1403,7 @@ const TaskDetailsPage = () => {
       setLoadingPackaging(true);
       
       // Filtrujemy wybrane opakowania
-      const packagingToAdd = availablePackaging.filter(item => item.selected && item.quantity > 0);
+      const packagingToAdd = packagingItems.filter(item => item.selected && item.quantity > 0);
       
       if (packagingToAdd.length === 0) {
         showError('Nie wybrano żadnych opakowań do dodania');
@@ -1506,6 +1532,59 @@ const TaskDetailsPage = () => {
   // Funkcja anulująca edycję
   const handleCancelHistoryItemEdit = () => {
     setEditingHistoryItem(null);
+  };
+
+  // Funkcja do ręcznego dodawania sesji produkcyjnej
+  const handleAddHistoryItem = async () => {
+    try {
+      setLoading(true);
+      
+      // Walidacja danych
+      if (editedHistoryItem.endTime < editedHistoryItem.startTime) {
+        showError('Czas zakończenia nie może być wcześniejszy niż czas rozpoczęcia');
+        return;
+      }
+      
+      if (isNaN(editedHistoryItem.quantity) || editedHistoryItem.quantity <= 0) {
+        showError('Nieprawidłowa ilość');
+        return;
+      }
+      
+      // Obliczenie czasu trwania w minutach
+      const durationMs = editedHistoryItem.endTime.getTime() - editedHistoryItem.startTime.getTime();
+      const durationMinutes = Math.round(durationMs / (1000 * 60));
+      
+      if (durationMinutes <= 0) {
+        showError('Przedział czasowy musi być dłuższy niż 0 minut');
+        return;
+      }
+      
+      // Przygotuj dane do zapisania nowej sesji
+      const sessionData = {
+        quantity: parseFloat(editedHistoryItem.quantity),
+        timeSpent: durationMinutes,
+        startTime: editedHistoryItem.startTime.toISOString(),
+        endTime: editedHistoryItem.endTime.toISOString(),
+        userId: currentUser.uid
+      };
+      
+      // Wywołaj funkcję dodającą nową sesję produkcyjną
+      await addProductionSession(task.id, sessionData);
+      
+      showSuccess('Sesja produkcyjna została dodana');
+      
+      // Odśwież dane historii produkcji i zadania
+      await fetchProductionHistory();
+      await fetchTask();
+      
+      // Zamknij dialog
+      setAddHistoryDialogOpen(false);
+    } catch (error) {
+      console.error('Błąd podczas dodawania sesji produkcyjnej:', error);
+      showError('Nie udało się dodać sesji produkcyjnej: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Funkcja do drukowania szczegółów MO
@@ -1938,6 +2017,41 @@ const TaskDetailsPage = () => {
     );
   };
 
+  // Funkcja do usuwania wpisu historii produkcji
+  const handleDeleteHistoryItem = (item) => {
+    setDeleteHistoryItem(item);
+    setDeleteHistoryDialogOpen(true);
+  };
+  
+  // Funkcja do obsługi potwierdzenia usunięcia
+  const handleConfirmDeleteHistoryItem = async () => {
+    try {
+      setLoading(true);
+      
+      if (!deleteHistoryItem || !deleteHistoryItem.id) {
+        showError('Nie można usunąć sesji produkcyjnej: brak identyfikatora');
+        return;
+      }
+      
+      // Wywołaj funkcję usuwającą sesję produkcyjną
+      await deleteProductionSession(deleteHistoryItem.id, currentUser.uid);
+      
+      showSuccess('Sesja produkcyjna została usunięta');
+      
+      // Odśwież dane historii produkcji i zadania
+      await fetchProductionHistory();
+      await fetchTask();
+      
+    } catch (error) {
+      console.error('Błąd podczas usuwania sesji produkcyjnej:', error);
+      showError('Nie udało się usunąć sesji produkcyjnej: ' + error.message);
+    } finally {
+      setLoading(false);
+      setDeleteHistoryDialogOpen(false);
+      setDeleteHistoryItem(null);
+    }
+  };
+
   // Renderuj stronę
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -2254,6 +2368,26 @@ const TaskDetailsPage = () => {
                   Historia produkcji
                 </Typography>
                 
+                {/* Przycisk do dodawania ręcznego wpisu historii produkcji */}
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    startIcon={<AddIcon />}
+                    onClick={() => {
+                      setEditedHistoryItem({
+                        quantity: '',
+                        startTime: new Date(),
+                        endTime: new Date(),
+                      });
+                      setAddHistoryDialogOpen(true);
+                    }}
+                    size="small"
+                  >
+                    Dodaj wpis
+                  </Button>
+                </Box>
+                
                 {productionHistory.length === 0 ? (
                   <Typography variant="body2" color="text.secondary">
                     Brak historii produkcji dla tego zadania
@@ -2366,6 +2500,13 @@ const TaskDetailsPage = () => {
                                     title="Edytuj sesję produkcyjną"
                                   >
                                     <EditIcon />
+                                  </IconButton>
+                                  <IconButton 
+                                    color="error" 
+                                    onClick={() => handleDeleteHistoryItem(item)}
+                                    title="Usuń sesję produkcyjną"
+                                  >
+                                    <DeleteIcon />
                                   </IconButton>
                                 </TableCell>
                               </>
@@ -2518,14 +2659,14 @@ const TaskDetailsPage = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {availablePackaging.length === 0 ? (
+                  {packagingItems.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} align="center">
                         Brak dostępnych opakowań
                       </TableCell>
                     </TableRow>
                   ) : (
-                    availablePackaging.map((item) => (
+                    packagingItems.map((item) => (
                       <TableRow key={item.id}>
                         <TableCell padding="checkbox">
                           <Checkbox
@@ -2564,7 +2705,7 @@ const TaskDetailsPage = () => {
           <Button 
             onClick={handleAddPackagingToTask} 
             variant="contained"
-            disabled={loadingPackaging || availablePackaging.filter(item => item.selected && item.quantity > 0).length === 0}
+            disabled={loadingPackaging || packagingItems.filter(item => item.selected && item.quantity > 0).length === 0}
           >
             {loadingPackaging ? <CircularProgress size={24} /> : 'Dodaj opakowania'}
           </Button>
@@ -2584,17 +2725,17 @@ const TaskDetailsPage = () => {
             Wprowadź informacje o zakończonej sesji produkcyjnej
           </DialogContentText>
           
-          {productionError && (
+          {productionData.error && (
             <Alert severity="error" sx={{ mb: 2 }}>
-              {productionError}
+              {productionData.error}
             </Alert>
           )}
 
           <TextField
             label="Wyprodukowana ilość"
             type="number"
-            value={completedQuantity}
-            onChange={(e) => setCompletedQuantity(e.target.value)}
+            value={productionData.completedQuantity}
+            onChange={(e) => setProductionData({ ...productionData, completedQuantity: e.target.value })}
             fullWidth
             margin="dense"
             InputProps={{
@@ -2610,12 +2751,12 @@ const TaskDetailsPage = () => {
             <TextField
               label="Czas rozpoczęcia"
               type="datetime-local"
-              value={productionStartTime instanceof Date 
-                ? productionStartTime.toISOString().slice(0, 16) 
+              value={productionData.startTime instanceof Date 
+                ? productionData.startTime.toISOString().slice(0, 16) 
                 : ''}
               onChange={(e) => {
                 const newDate = e.target.value ? new Date(e.target.value) : new Date();
-                setProductionStartTime(newDate);
+                setProductionData({ ...productionData, startTime: newDate });
               }}
               fullWidth
               margin="dense"
@@ -2628,12 +2769,12 @@ const TaskDetailsPage = () => {
             <TextField
               label="Czas zakończenia"
               type="datetime-local"
-              value={productionEndTime instanceof Date 
-                ? productionEndTime.toISOString().slice(0, 16) 
+              value={productionData.endTime instanceof Date 
+                ? productionData.endTime.toISOString().slice(0, 16) 
                 : ''}
               onChange={(e) => {
                 const newDate = e.target.value ? new Date(e.target.value) : new Date();
-                setProductionEndTime(newDate);
+                setProductionData({ ...productionData, endTime: newDate });
               }}
               fullWidth
               margin="dense"
@@ -2643,9 +2784,9 @@ const TaskDetailsPage = () => {
               }}
             />
             
-            {productionStartTime && productionEndTime && (
+            {productionData.startTime && productionData.endTime && (
               <Typography variant="body2" color="textSecondary">
-                Czas trwania: {Math.round((productionEndTime.getTime() - productionStartTime.getTime()) / (1000 * 60))} minut
+                Czas trwania: {Math.round((productionData.endTime.getTime() - productionData.startTime.getTime()) / (1000 * 60))} minut
               </Typography>
             )}
           </Box>
@@ -2656,6 +2797,92 @@ const TaskDetailsPage = () => {
           </Button>
           <Button onClick={handleStopProduction} variant="contained">
             Zatwierdź
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog dodawania nowej sesji produkcyjnej */}
+      <Dialog
+        open={addHistoryDialogOpen}
+        onClose={() => setAddHistoryDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Dodaj nową sesję produkcyjną</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Wprowadź informacje o nowej sesji produkcyjnej.
+          </DialogContentText>
+          
+          <TextField
+            label="Ilość wyprodukowana"
+            type="number"
+            value={editedHistoryItem.quantity}
+            onChange={(e) => setEditedHistoryItem(prev => ({ ...prev, quantity: e.target.value }))}
+            fullWidth
+            margin="dense"
+            InputProps={{
+              endAdornment: <Typography variant="body2">{task?.unit || 'szt.'}</Typography>
+            }}
+          />
+          
+          <TextField
+            label="Czas rozpoczęcia"
+            type="datetime-local"
+            value={editedHistoryItem.startTime.toISOString().slice(0, 16)}
+            onChange={(e) => setEditedHistoryItem(prev => ({ ...prev, startTime: new Date(e.target.value) }))}
+            fullWidth
+            margin="dense"
+            InputLabelProps={{
+              shrink: true,
+            }}
+          />
+          
+          <TextField
+            label="Czas zakończenia"
+            type="datetime-local"
+            value={editedHistoryItem.endTime.toISOString().slice(0, 16)}
+            onChange={(e) => setEditedHistoryItem(prev => ({ ...prev, endTime: new Date(e.target.value) }))}
+            fullWidth
+            margin="dense"
+            InputLabelProps={{
+              shrink: true,
+            }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAddHistoryDialogOpen(false)}>
+            Anuluj
+          </Button>
+          <Button onClick={handleAddHistoryItem} variant="contained">
+            Dodaj sesję
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog usuwania sesji produkcyjnej */}
+      <Dialog
+        open={deleteHistoryDialogOpen}
+        onClose={() => setDeleteHistoryDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Potwierdź usunięcie sesji produkcyjnej</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Czy na pewno chcesz usunąć tę sesję produkcyjną? Ta operacja jest nieodwracalna.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteHistoryDialogOpen(false)}>
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleConfirmDeleteHistoryItem} 
+            variant="contained" 
+            color="error"
+          >
+            Usuń sesję
           </Button>
         </DialogActions>
       </Dialog>
