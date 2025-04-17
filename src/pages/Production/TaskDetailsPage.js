@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Container,
@@ -67,7 +67,7 @@ import {
   Print as PrintIcon,
   Inventory2 as PackagingIcon
 } from '@mui/icons-material';
-import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession, updateTaskCosts } from '../../services/productionService';
+import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession } from '../../services/productionService';
 import { getItemBatches, bookInventoryForTask, cancelBooking, getBatchReservations, getAllInventoryItems, getInventoryItemById, getInventoryBatch } from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -76,7 +76,7 @@ import { PRODUCTION_TASK_STATUSES, TIME_INTERVALS } from '../../utils/constants'
 import { format, parseISO } from 'date-fns';
 import TaskDetails from '../../components/production/TaskDetails';
 import { db } from '../../services/firebase/config';
-import { getDoc, doc, updateDoc, serverTimestamp, addDoc, onSnapshot, Timestamp, arrayUnion } from 'firebase/firestore';
+import { getDoc, doc, updateDoc, serverTimestamp, arrayUnion } from 'firebase/firestore';
 import { getUsersDisplayNames } from '../../services/userService';
 
 const TaskDetailsPage = () => {
@@ -129,13 +129,6 @@ const TaskDetailsPage = () => {
 
   const [userNames, setUserNames] = useState({});
 
-  // Stany związane z kosztami MO
-  const [totalMaterialCost, setTotalMaterialCost] = useState(0);
-  const [unitMaterialCost, setUnitMaterialCost] = useState(0);
-  
-  // Referencja do poprzedniego stanu materialBatches
-  const previousMaterialBatchesRef = useRef('');
-
   // Nowy stan dla dodawania opakowań
   const [packagingDialogOpen, setPackagingDialogOpen] = useState(false);
   const [availablePackaging, setAvailablePackaging] = useState([]);
@@ -149,29 +142,8 @@ const TaskDetailsPage = () => {
       const fetchedTask = await getTaskById(id);
       setTask(fetchedTask);
       
-      // Inicjalizacja kosztów zadania, jeśli są dostępne
-      if (fetchedTask.totalMaterialCost !== undefined) {
-        setTotalMaterialCost(fetchedTask.totalMaterialCost);
-        console.log("Ustawiono całkowity koszt materiałów z zadania:", fetchedTask.totalMaterialCost);
-      } else if (fetchedTask.materialCost !== undefined) {
-        // Dla wstecznej kompatybilności
-        setTotalMaterialCost(fetchedTask.materialCost);
-        console.log("Ustawiono całkowity koszt materiałów z pola materialCost:", fetchedTask.materialCost);
-      }
-      
-      if (fetchedTask.unitMaterialCost !== undefined) {
-        setUnitMaterialCost(fetchedTask.unitMaterialCost);
-        console.log("Ustawiono jednostkowy koszt materiałów z zadania:", fetchedTask.unitMaterialCost);
-      }
-      
       // Inicjalizacja materiałów, jeśli zadanie ma materiały
       if (fetchedTask?.materials?.length > 0) {
-        console.log("Materiały z zadania:", fetchedTask.materials.map(m => ({ 
-          name: m.name, 
-          unitPrice: m.unitPrice, 
-          quantity: m.quantity 
-        })));
-        
         // Dla każdego materiału pobierz aktualne informacje o cenie
         const materialPromises = fetchedTask.materials.map(async (material) => {
           let updatedMaterial = { ...material };
@@ -181,17 +153,7 @@ const TaskDetailsPage = () => {
             try {
               const inventoryItem = await getInventoryItemById(material.inventoryItemId);
               if (inventoryItem) {
-                const inventoryPrice = inventoryItem.unitPrice || inventoryItem.price || 0;
-                
-                // Zachowaj wyższą cenę - z zadania lub z magazynu
-                const existingPrice = material.unitPrice || 0;
-                
-                if (existingPrice > inventoryPrice && existingPrice > 0.1) {
-                  console.log(`Zachowuję wyższą cenę materiału "${material.name}": ${existingPrice} (z zadania) vs ${inventoryPrice} (z magazynu)`);
-                  updatedMaterial.unitPrice = existingPrice;
-                } else {
-                  updatedMaterial.unitPrice = inventoryPrice;
-                }
+                updatedMaterial.unitPrice = inventoryItem.unitPrice || inventoryItem.price || 0;
               }
             } catch (error) {
               console.error(`Błąd podczas pobierania ceny dla materiału ${material.name}:`, error);
@@ -482,7 +444,8 @@ const TaskDetailsPage = () => {
       // Jeśli produkt jest powiązany z pozycją w magazynie, przenieś do formularza przyjęcia
       if (task.inventoryProductId) {
         // Przekieruj do strony przyjęcia towaru z parametrami
-        const unitPrice = 0; // Usunięto odwołanie do task.itemPrice
+        const unitPrice = task.costs && task.quantity ? 
+          Number(task.costs.totalCost / task.quantity) : 0;
         
         // Użyj LOT z zadania produkcyjnego, jeśli jest dostępny,
         // w przeciwnym przypadku wygeneruj na podstawie numeru MO
@@ -942,9 +905,6 @@ const TaskDetailsPage = () => {
       const updatedTask = await getTaskById(id);
       console.log("Zaktualizowane dane zadania:", updatedTask);
       setTask(updatedTask);
-      
-      // Oblicz koszty materiałów po zaktualizowaniu zadania
-      await updateMaterialPricesFromBatches();
       
       setReserveDialogOpen(false);
     } catch (error) {
@@ -1703,157 +1663,280 @@ const TaskDetailsPage = () => {
     printWindow.document.close();
   };
 
-  // Funkcja do aktualizacji cen materiałów na podstawie zarezerwowanych partii
+  // Funkcja do pobierania aktualnych cen partii i aktualizacji cen materiałów
   const updateMaterialPricesFromBatches = useCallback(async () => {
+    if (!task || !task.materialBatches) return;
+    
     try {
-      if (!task || !task.id || !task.materialBatches) {
-        console.warn("Brak zadania, identyfikatora zadania lub partii materiałów");
-        return;
-      }
+      // Tworzymy kopię materiałów, aby je zaktualizować
+      const updatedMaterials = [...materials];
+      let hasChanges = false;
       
-      // Sprawdź, czy dokument zadania istnieje
-      const taskDocRef = doc(db, 'productionTasks', task.id);
-      const taskSnapshot = await getDoc(taskDocRef);
-      
-      if (!taskSnapshot.exists()) {
-        console.warn(`Dokument zadania o ID ${task.id} nie istnieje`);
-        return;
-      }
-      
-      let newMaterials = [...(task.materials || [])];
-      let totalMaterialCost = 0;
-      let materialPricesChanged = false;
-      
-      // Przetwarzanie wszystkich partii materiałów z zadania
-      for (const materialId in task.materialBatches) {
-        const batches = task.materialBatches[materialId] || [];
+      // Dla każdego materiału z przypisanymi partiami, obliczamy aktualną cenę
+      for (const material of updatedMaterials) {
+        const materialId = material.inventoryItemId || material.id;
+        const reservedBatches = task.materialBatches && task.materialBatches[materialId];
         
-        for (const batch of batches) {
-          const materialIndex = newMaterials.findIndex(m => 
-            (m.inventoryItemId === materialId) || (m.id === materialId)
-          );
+        if (reservedBatches && reservedBatches.length > 0) {
+          let totalCost = 0;
+          let totalQuantity = 0;
           
-          if (materialIndex !== -1) {
-            // Pobierz aktualne dane partii
+          // Pobierz aktualne dane każdej partii i oblicz średnią ważoną cenę
+          for (const batchReservation of reservedBatches) {
             try {
-              const batchData = await getInventoryBatch(batch.batchId);
+              const batchData = await getInventoryBatch(batchReservation.batchId);
               if (batchData) {
-                console.log(`Dane partii ${batch.batchId} (${batchData.batchNumber || 'bez numeru'}):`, 
-                  { unitPrice: batchData.unitPrice, baseUnitPrice: batchData.baseUnitPrice, additionalCostPerUnit: batchData.additionalCostPerUnit });
+                const batchQuantity = parseFloat(batchReservation.quantity) || 0;
+                const batchUnitPrice = parseFloat(batchData.unitPrice) || 0;
                 
-                const batchQuantity = parseFloat(batch.quantity) || 0;
+                totalCost += batchQuantity * batchUnitPrice;
+                totalQuantity += batchQuantity;
                 
-                // Upewnij się, że używamy pełnej ceny (z dodatkowymi kosztami) a nie tylko ceny bazowej
-                let batchUnitPrice = parseFloat(batchData.unitPrice) || 0;
-                
-                // Zabezpieczenie przed stratą danych - jeśli cena z partii jest podejrzanie niska,
-                // a materiał ma już wyższą cenę, zachowaj wyższą cenę
-                const existingUnitPrice = newMaterials[materialIndex].unitPrice || 0;
-                if (batchUnitPrice < 0.1 && existingUnitPrice > batchUnitPrice) {
-                  console.warn(`Wykryto podejrzanie niską cenę partii (${batchUnitPrice}). Zachowuję istniejącą cenę (${existingUnitPrice}).`);
-                  batchUnitPrice = existingUnitPrice;
-                }
-                
-                // Sprawdź czy cena zawiera dodatkowe koszty
-                if (batchData.baseUnitPrice !== undefined && batchData.additionalCostPerUnit !== undefined) {
-                  const basePrice = parseFloat(batchData.baseUnitPrice) || 0;
-                  const additionalCost = parseFloat(batchData.additionalCostPerUnit) || 0;
-                  
-                  // Upewnij się, że unitPrice faktycznie zawiera dodatkowe koszty
-                  const expectedPrice = basePrice + additionalCost;
-                  if (Math.abs(batchUnitPrice - expectedPrice) > 0.01) {
-                    console.warn(`Cena jednostkowa (${batchUnitPrice}) nie zgadza się z sumą ceny bazowej i dodatkowych kosztów (${expectedPrice}). Używam prawidłowej wartości.`);
-                    batchUnitPrice = expectedPrice;
-                  }
-                }
-                
-                const oldUnitPrice = newMaterials[materialIndex].unitPrice || 0;
-                
-                // Log porównawczy cen
-                console.log(`Materiał ${newMaterials[materialIndex].name}: cena obecna=${oldUnitPrice}, nowa cena=${batchUnitPrice}`);
-                
-                if (oldUnitPrice !== batchUnitPrice) {
-                  newMaterials[materialIndex].unitPrice = batchUnitPrice;
-                  materialPricesChanged = true;
-                }
-                
-                totalMaterialCost += (batchUnitPrice * batchQuantity);
+                console.log(`Batch ${batchData.batchNumber}: quantity=${batchQuantity}, unitPrice=${batchUnitPrice}`);
               }
             } catch (error) {
-              console.error(`Błąd podczas pobierania danych partii ${batch.batchId}:`, error);
+              console.error(`Błąd podczas pobierania danych partii ${batchReservation.batchId}:`, error);
+            }
+          }
+          
+          // Oblicz średnią ważoną cenę jednostkową
+          if (totalQuantity > 0) {
+            const averagePrice = totalCost / totalQuantity;
+            // Sprawdź czy cena się zmieniła przed aktualizacją
+            if (Math.abs(material.unitPrice - averagePrice) > 0.001) {
+            material.unitPrice = averagePrice;
+              hasChanges = true;
+            console.log(`Zaktualizowano cenę dla ${material.name}: ${averagePrice.toFixed(2)} €`);
             }
           }
         }
       }
       
-      // Aktualizuj tylko jeśli ceny materiałów się zmieniły
-      if (materialPricesChanged) {
-        const currentTotalMaterialCost = task.totalMaterialCost || 0;
-        const currentUnitMaterialCost = task.unitMaterialCost || 0;
+      // Aktualizuj stan materiałów tylko jeśli wykryto zmiany
+      if (hasChanges) {
+      setMaterials(updatedMaterials);
         
-        const newUnitMaterialCost = task.quantity > 0 ? totalMaterialCost / task.quantity : 0;
-        
-        // Aktualizuj tylko jeśli wartości kosztów się zmieniły
-        if (currentTotalMaterialCost !== totalMaterialCost || currentUnitMaterialCost !== newUnitMaterialCost) {
-          // Przygotuj obiekt historii kosztów
-          const costHistoryItem = {
-            timestamp: new Date().toISOString(), // Używamy ISO string zamiast serverTimestamp()
-            userId: currentUser.uid,
-            userName: currentUser.displayName || 'Użytkownik',
-            previousTotalCost: currentTotalMaterialCost,
-            newTotalCost: totalMaterialCost,
-            previousUnitCost: currentUnitMaterialCost,
-            newUnitCost: newUnitMaterialCost,
-            reason: 'Aktualizacja cen materiałów'
-          };
+        // Wywołujemy aktualizację kosztów w bazie, ale dopiero po ukończeniu aktualizacji interfejsu
+        if (task && updatedMaterials.length > 0) {
+          // Oblicz całkowity koszt materiałów
+          const totalMaterialCost = updatedMaterials.reduce((sum, material) => {
+            // Sprawdź czy dla tego materiału są zarezerwowane partie
+            const materialId = material.inventoryItemId || material.id;
+            const reservedBatches = task.materialBatches && task.materialBatches[materialId];
+            
+            // Uwzględnij koszt tylko jeśli materiał ma zarezerwowane partie
+            if (reservedBatches && reservedBatches.length > 0) {
+              const quantity = materialQuantities[material.id] || material.quantity || 0;
+              const unitPrice = material.unitPrice || 0;
+              return sum + (quantity * unitPrice);
+            }
+            return sum;
+          }, 0);
           
-          // Pobierz istniejącą historię kosztów lub utwórz pustą tablicę
-          const costHistory = task.costHistory || [];
-          costHistory.push(costHistoryItem);
+          // Oblicz koszt materiałów na jednostkę
+          const unitMaterialCost = task.quantity ? (totalMaterialCost / task.quantity) : 0;
           
-          // Przygotuj dane do aktualizacji
-          const updateData = {
-            materials: newMaterials,
-            totalMaterialCost: totalMaterialCost,
-            unitMaterialCost: newUnitMaterialCost,
-            costLastUpdatedAt: serverTimestamp(),
-            costLastUpdatedBy: currentUser.uid,
-            costHistory: costHistory,
-            updatedAt: serverTimestamp(),
-            updatedBy: currentUser.uid
-          };
-          
-          // Zaktualizuj dokument w bazie danych
-          await updateDoc(taskDocRef, updateData);
-          
-          // Aktualizuj również stan lokalny
-          setTotalMaterialCost(totalMaterialCost);
-          setUnitMaterialCost(newUnitMaterialCost);
-          setMaterials(newMaterials);
-          
-          console.log("Zaktualizowano koszty materiałów dla zadania", task.id);
-          console.log("Nowy koszt całkowity:", totalMaterialCost);
-          console.log("Nowy koszt jednostkowy:", newUnitMaterialCost);
+          // Sprawdź czy koszty się rzeczywiście zmieniły
+          if (
+            Math.abs((task.totalMaterialCost || 0) - totalMaterialCost) > 0.01 ||
+            Math.abs((task.unitMaterialCost || 0) - unitMaterialCost) > 0.01
+          ) {
+            try {
+              // Wykonaj aktualizację w bazie danych
+              const taskRef = doc(db, 'productionTasks', id);
+              await updateDoc(taskRef, {
+                totalMaterialCost,
+                unitMaterialCost,
+                costLastUpdatedAt: serverTimestamp(),
+                costLastUpdatedBy: currentUser.uid,
+                updatedAt: serverTimestamp(),
+                updatedBy: currentUser.uid,
+                // Dodaj wpis do historii kosztów
+                costHistory: arrayUnion({
+                  timestamp: new Date().toISOString(),
+                  userId: currentUser.uid,
+                  userName: currentUser.displayName || currentUser.email || 'System',
+                  previousTotalCost: task.totalMaterialCost || 0,
+                  newTotalCost: totalMaterialCost,
+                  previousUnitCost: task.unitMaterialCost || 0,
+                  newUnitCost: unitMaterialCost,
+                  reason: 'Automatyczna aktualizacja kosztów materiałów na podstawie cen partii'
+                })
+              });
+              
+              console.log(`Zaktualizowano koszty materiałów w zadaniu: ${totalMaterialCost.toFixed(2)} € (${unitMaterialCost.toFixed(2)} €/${task.unit})`);
+              showSuccess('Koszty materiałów zostały automatycznie zaktualizowane');
+              
+              // Odśwież dane zadania, aby wyświetlić zaktualizowane koszty
+              const updatedTask = await getTaskById(id);
+              setTask(updatedTask);
+            } catch (error) {
+              console.error('Błąd podczas aktualizacji kosztów materiałów:', error);
+              showError('Nie udało się zaktualizować kosztów materiałów: ' + error.message);
+            }
+          }
         }
       }
     } catch (error) {
-      console.error("Błąd podczas aktualizacji cen materiałów:", error);
-      showError("Wystąpił błąd podczas aktualizacji kosztów materiałów: " + error.message);
+      console.error('Błąd podczas aktualizacji cen materiałów:', error);
     }
-  }, [task, currentUser, showError]);
+  }, [task, materials, materialQuantities, id, currentUser, showSuccess, showError]);
   
-  // Aktualizuj ceny materiałów tylko przy zmianie materialBatches
+  // Aktualizuj ceny materiałów przy każdym załadowaniu zadania lub zmianie zarezerwowanych partii
   useEffect(() => {
-    if (task && task.materialBatches && !loading) {
-      // Używamy referencji z komponentu, nie tworzymy nowej wewnątrz efektu
-      const materialBatchesStr = JSON.stringify(task.materialBatches);
+    if (task && task.materialBatches) {
+      // Używamy referencji do funkcji z pamięcią podręczną useCallback
+      let isMounted = true;
+      const updatePrices = async () => {
+        if (isMounted) {
+          await updateMaterialPricesFromBatches();
+        }
+      };
       
-      if (previousMaterialBatchesRef.current !== materialBatchesStr) {
-        updateMaterialPricesFromBatches();
-        previousMaterialBatchesRef.current = materialBatchesStr;
-      }
+      updatePrices();
+      
+      return () => {
+        isMounted = false;
+      };
     }
-  }, [task?.materialBatches, updateMaterialPricesFromBatches, task, loading]);
+  }, [task?.id, updateMaterialPricesFromBatches, task?.materialBatches ? JSON.stringify(Object.keys(task.materialBatches)) : '']);
+
+  // Funkcja do ręcznej aktualizacji kosztów materiałów w bazie danych
+  const updateMaterialCostsManually = useCallback(async () => {
+    if (!task || !materials.length) return;
+    
+    try {
+      // Oblicz całkowity koszt materiałów
+      const totalMaterialCost = materials.reduce((sum, material) => {
+        // Sprawdź czy dla tego materiału są zarezerwowane partie
+        const materialId = material.inventoryItemId || material.id;
+        const reservedBatches = task.materialBatches && task.materialBatches[materialId];
+        
+        // Uwzględnij koszt tylko jeśli materiał ma zarezerwowane partie
+        if (reservedBatches && reservedBatches.length > 0) {
+          const quantity = materialQuantities[material.id] || material.quantity || 0;
+          const unitPrice = material.unitPrice || 0;
+          return sum + (quantity * unitPrice);
+        }
+        return sum;
+      }, 0);
+      
+      // Oblicz koszt materiałów na jednostkę
+      const unitMaterialCost = task.quantity ? (totalMaterialCost / task.quantity) : 0;
+      
+      // Sprawdź czy koszty się rzeczywiście zmieniły
+      if (
+        Math.abs((task.totalMaterialCost || 0) - totalMaterialCost) <= 0.01 &&
+        Math.abs((task.unitMaterialCost || 0) - unitMaterialCost) <= 0.01
+      ) {
+        showInfo('Koszty materiałów nie zmieniły się znacząco, pomijam aktualizację w bazie danych');
+        return;
+      }
+      
+      // Wykonaj aktualizację w bazie danych
+      const taskRef = doc(db, 'productionTasks', id);
+      await updateDoc(taskRef, {
+        totalMaterialCost,
+        unitMaterialCost,
+        costLastUpdatedAt: serverTimestamp(),
+        costLastUpdatedBy: currentUser.uid,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid,
+        // Dodaj wpis do historii kosztów
+        costHistory: arrayUnion({
+          timestamp: new Date().toISOString(),
+          userId: currentUser.uid,
+          userName: currentUser.displayName || currentUser.email || 'System',
+          previousTotalCost: task.totalMaterialCost || 0,
+          newTotalCost: totalMaterialCost,
+          previousUnitCost: task.unitMaterialCost || 0,
+          newUnitCost: unitMaterialCost,
+          reason: 'Ręczna aktualizacja kosztów materiałów'
+        })
+      });
+      
+      console.log(`Zaktualizowano koszty materiałów w zadaniu: ${totalMaterialCost.toFixed(2)} € (${unitMaterialCost.toFixed(2)} €/${task.unit})`);
+      showSuccess('Koszty materiałów zostały zaktualizowane w bazie danych');
+      
+      // Odśwież dane zadania, aby wyświetlić zaktualizowane koszty
+      const updatedTask = await getTaskById(id);
+      setTask(updatedTask);
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji kosztów materiałów:', error);
+      showError('Nie udało się zaktualizować kosztów materiałów: ' + error.message);
+    }
+  }, [id, task, materials, materialQuantities, currentUser, showSuccess, showError, showInfo]);
+
+  // Dodaj przycisk do ręcznej aktualizacji kosztów w podsumowaniu kosztów materiałów
+  const renderMaterialCostsSummary = () => {
+    // Oblicz całkowity koszt materiałów
+    const totalMaterialCost = materials.reduce((sum, material) => {
+      // Sprawdź czy dla tego materiału są zarezerwowane partie
+      const materialId = material.inventoryItemId || material.id;
+      const reservedBatches = task.materialBatches && task.materialBatches[materialId];
+      
+      // Uwzględnij koszt tylko jeśli materiał ma zarezerwowane partie
+      if (reservedBatches && reservedBatches.length > 0) {
+        const quantity = materialQuantities[material.id] || material.quantity || 0;
+        const unitPrice = material.unitPrice || 0;
+        return sum + (quantity * unitPrice);
+      }
+      return sum;
+    }, 0);
+    
+    // Oblicz koszt materiałów na jednostkę
+    const unitMaterialCost = task.quantity ? (totalMaterialCost / task.quantity) : 0;
+    
+    // Sprawdź czy koszty uległy zmianie
+    const costChanged = 
+      Math.abs((task.totalMaterialCost || 0) - totalMaterialCost) > 0.01 ||
+      Math.abs((task.unitMaterialCost || 0) - unitMaterialCost) > 0.01;
+    
+    return (
+      <Box sx={{ mt: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={6}>
+            <Typography variant="h6">Podsumowanie kosztów materiałów</Typography>
+            {costChanged && (
+              <Alert severity="info" sx={{ mt: 1 }}>
+                Koszty materiałów są aktualizowane automatycznie. Możesz również zaktualizować je ręcznie.
+              </Alert>
+            )}
+          </Grid>
+          <Grid item xs={12} md={6} sx={{ textAlign: 'right' }}>
+            <Typography variant="body1">
+              <strong>Całkowity koszt materiałów:</strong> {totalMaterialCost.toFixed(2)} €
+              {task.totalMaterialCost !== undefined && costChanged && (
+                <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                  (W bazie: {task.totalMaterialCost.toFixed(2)} €)
+                </Typography>
+              )}
+            </Typography>
+            <Typography variant="body1">
+              <strong>Koszt materiałów na jednostkę:</strong> {unitMaterialCost.toFixed(2)} €/{task.unit}
+              {task.unitMaterialCost !== undefined && costChanged && (
+                <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                  (W bazie: {task.unitMaterialCost.toFixed(2)} €/{task.unit})
+                </Typography>
+              )}
+            </Typography>
+            {costChanged && (
+              <Button 
+                variant="outlined" 
+                color="primary" 
+                startIcon={<SaveIcon />}
+                onClick={updateMaterialCostsManually}
+                sx={{ mt: 1 }}
+                size="small"
+              >
+                Aktualizuj ręcznie
+              </Button>
+            )}
+          </Grid>
+        </Grid>
+      </Box>
+    );
+  };
 
   // Renderuj stronę
     return (
@@ -2160,35 +2243,7 @@ const TaskDetailsPage = () => {
           </TableContainer>
           
           {/* Podsumowanie kosztów materiałów */}
-          <Box sx={{ mt: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <Typography variant="h6">Podsumowanie kosztów materiałów</Typography>
-              </Grid>
-              <Grid item xs={12} md={6} sx={{ textAlign: 'right' }}>
-                <Typography variant="body1">
-                  <strong>Całkowity koszt materiałów:</strong>{' '}
-                  <Box component="span" sx={{ 
-                    fontWeight: 'bold', 
-                    color: 'primary.main',
-                    fontSize: '1.1rem'
-                  }}>
-                    {totalMaterialCost.toFixed(2)} €
-                  </Box>
-                </Typography>
-                <Typography variant="body1" sx={{ mt: 1 }}>
-                  <strong>Koszt materiałów na jednostkę:</strong>{' '}
-                  <Box component="span" sx={{ 
-                    fontWeight: 'bold', 
-                    color: 'primary.main',
-                    fontSize: '1.1rem'
-                  }}>
-                    {unitMaterialCost.toFixed(2)} €/{task.unit}
-                  </Box>
-                </Typography>
-              </Grid>
-            </Grid>
-                  </Box>
+          {renderMaterialCostsSummary()}
         </Paper>
             </Grid>
             

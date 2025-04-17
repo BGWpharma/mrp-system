@@ -192,6 +192,7 @@ import {
         unitMaterialCost: 0, // Inicjalizacja kosztu jednostkowego materiałów
         costLastUpdatedAt: serverTimestamp(), // Data inicjalizacji kosztów
         costLastUpdatedBy: userId, // Użytkownik inicjalizujący koszty
+        orderItemId: taskData.orderItemId || null, // Dodaj identyfikator pozycji zamówienia, jeśli dostępne
         costHistory: [{
           timestamp: new Date().toISOString(), // Używamy ISO string zamiast serverTimestamp()
           userId: userId,
@@ -504,11 +505,13 @@ import {
                 ...productionTasks[taskIndex],
                 status: updates.status,
                 updatedAt: new Date().toISOString(),
-                ...(updates.completionDate ? { completionDate: updates.completionDate } : {})
+                ...(updates.completionDate ? { completionDate: updates.completionDate } : {}),
+                // Zachowaj orderItemId, jeśli istnieje
+                orderItemId: productionTasks[taskIndex].orderItemId || task.orderItemId || null
               };
               
               await updateDoc(orderRef, {
-                productionTasks,
+                productionTasks: productionTasks,
                 updatedAt: serverTimestamp(),
                 updatedBy: userId
               });
@@ -888,7 +891,9 @@ import {
                 finalQuantity: finalQuantity,
                 inventoryBatchId: batchRef.id,
                 inventoryItemId: inventoryItemId,
-                updatedAt: new Date().toISOString()
+                updatedAt: new Date().toISOString(),
+                // Zachowaj orderItemId, jeśli istnieje
+                orderItemId: productionTasks[taskIndex].orderItemId || taskData.orderItemId || null
               };
               
               // Zaktualizuj zamówienie
@@ -934,7 +939,9 @@ import {
                   finalQuantity: finalQuantity,
                   inventoryBatchId: batchRef.id,
                   inventoryItemId: inventoryItemId,
-                  updatedAt: new Date().toISOString()
+                  updatedAt: new Date().toISOString(),
+                  // Zachowaj orderItemId, jeśli istnieje
+                  orderItemId: productionTasks[taskIndex].orderItemId || taskData.orderItemId || null
                 };
                 
                 // Zaktualizuj zamówienie

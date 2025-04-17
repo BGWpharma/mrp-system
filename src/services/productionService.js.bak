@@ -26,9 +26,9 @@ import {
     getAllInventoryItems,
     bookInventoryForTask,
     cancelBooking,
-    addInventoryItem,
-    getInventoryBatches,
-    recalculateItemQuantity
+    getItemBatches,
+    recalculateItemQuantity,
+    getInventoryBatch
   } from './inventoryService';
   
   const PRODUCTION_TASKS_COLLECTION = 'productionTasks';
@@ -64,7 +64,7 @@ import {
       if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) {
         console.error('Nieprawidłowy format daty:', startDate, endDate);
         throw new Error('Nieprawidłowy format daty');
-      
+      }
       
       // Pobierz wszystkie zadania bez filtrowania na poziomie zapytania
       const q = query(
@@ -156,7 +156,7 @@ import {
       }));
       console.log(`Pobrano ${allTasks.length} zadań (awaryjnie)`);
       return allTasks;
-    
+    }
   };
   
   // Pobieranie zadania po ID
@@ -171,7 +171,7 @@ import {
       };
     } else {
       throw new Error('Zadanie produkcyjne nie istnieje');
-    
+    }
   };
   
   // Tworzenie nowego zadania produkcyjnego
@@ -187,7 +187,21 @@ import {
         createdBy: userId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        autoReserveMaterials // Zapisz informację o tym, czy materiały zostały automatycznie zarezerwowane
+        autoReserveMaterials, // Zapisz informację o tym, czy materiały zostały automatycznie zarezerwowane
+        totalMaterialCost: 0, // Inicjalizacja kosztu całkowitego materiałów
+        unitMaterialCost: 0, // Inicjalizacja kosztu jednostkowego materiałów
+        costLastUpdatedAt: serverTimestamp(), // Data inicjalizacji kosztów
+        costLastUpdatedBy: userId, // Użytkownik inicjalizujący koszty
+        costHistory: [{
+          timestamp: new Date().toISOString(), // Używamy ISO string zamiast serverTimestamp()
+          userId: userId,
+          userName: 'System',
+          previousTotalCost: 0,
+          newTotalCost: 0,
+          previousUnitCost: 0,
+          newUnitCost: 0,
+          reason: 'Inicjalizacja kosztów przy tworzeniu zadania'
+        }]
       };
       
       // Jeśli nie podano daty zakończenia, ustaw ją na 1 godzinę po dacie rozpoczęcia
@@ -198,14 +212,337 @@ import {
         
         const endDate = new Date(scheduledDate.getTime() + 60 * 60 * 1000); // +1 godzina
         taskWithMeta.endDate = endDate;
+      }
       
+      // Jeśli określono numer LOT, użyj go, w przeciwnym razie wygeneruj domyślny numer LOT na podstawie MO
+      if (!taskWithMeta.lotNumber) {
+        taskWithMeta.lotNumber = `LOT-${moNumber}`;
+      }
+      
+      // Jeśli nie określono daty ważności, ustaw domyślnie na rok od teraz
+      if (!taskWithMeta.expiryDate) {
+        const defaultExpiryDate = new Date();
+        defaultExpiryDate.setFullYear(defaultExpiryDate.getFullYear() + 1);
+        taskWithMeta.expiryDate = defaultExpiryDate;
+      }
       
       // Zapisz zadanie w bazie danych
       console.log(`Tworzenie zadania z numerem MO: ${moNumber}`);
       const docRef = await addDoc(collection(db, PRODUCTION_TASKS_COLLECTION), taskWithMeta);
+      const newTaskId = docRef.id;
+      
+      console.log('Utworzono nowe zadanie produkcyjne:', newTaskId);
+      
+      // Dodaj zadanie do zamówienia, jeśli jest związane z zamówieniem
+      if (taskWithMeta.orderId) {
+        try {
+          // Importuj wymaganą funkcję
+          const { addProductionTaskToOrder } = await import('./orderService');
+          
+          // Przygotowanie danych zadania do zapisania w zamówieniu
+          const taskDataForOrder = {
+            id: newTaskId,
+            moNumber: moNumber,
+            name: taskWithMeta.name,
+            status: taskWithMeta.status,
+            productName: taskWithMeta.productName,
+            quantity: taskWithMeta.quantity,
+            unit: taskWithMeta.unit,
+            orderItemId: taskWithMeta.orderItemId // Dodanie ID pozycji zamówienia do powiązania
+          };
+          
+          // Dodaj zadanie do zamówienia
+          await addProductionTaskToOrder(taskWithMeta.orderId, taskDataForOrder);
+          console.log(`Zadanie ${newTaskId} zostało dodane do zamówienia ${taskWithMeta.orderId}`);
+          
+          // Jeśli zadanie ma przypisane ID pozycji zamówienia, zaktualizuj też tę pozycję
+          if (taskWithMeta.orderItemId) {
+            try {
+              // Pobierz dane zamówienia
+              const orderRef = doc(db, 'orders', taskWithMeta.orderId);
+              const orderDoc = await getDoc(orderRef);
+              
+              if (orderDoc.exists()) {
+                const orderData = orderDoc.data();
+                if (orderData.items && Array.isArray(orderData.items)) {
+                  // Znajdź pozycję w zamówieniu
+                  const itemIndex = orderData.items.findIndex(item => item.id === taskWithMeta.orderItemId);
+                  
+                  if (itemIndex !== -1) {
+                    // Zaktualizuj informacje o przypisanym zadaniu produkcyjnym
+                    const updatedItems = [...orderData.items];
+                    updatedItems[itemIndex] = {
+                      ...updatedItems[itemIndex],
+                      productionTaskId: newTaskId,
+                      productionAssigned: true
+                    };
+                    
+                    // Zapisz zmiany w zamówieniu
+                    await updateDoc(orderRef, {
+                      items: updatedItems,
+// src/services/productionService.js
+import { 
+    collection, 
+    doc, 
+    addDoc, 
+    updateDoc, 
+    getDoc, 
+    getDocs, 
+    deleteDoc, 
+    query, 
+    where,
+    orderBy,
+    serverTimestamp,
+    Timestamp,
+    setDoc,
+    increment
+  } from 'firebase/firestore';
+  import { db } from './firebase/config';
+  import { format } from 'date-fns';
+  import { generateMONumber, generateLOTNumber } from '../utils/numberGenerators';
+  import { 
+    getInventoryItemByName, 
+    getInventoryItemById,
+    receiveInventory, 
+    createInventoryItem, 
+    getAllInventoryItems,
+    bookInventoryForTask,
+    cancelBooking,
+    getItemBatches,
+    recalculateItemQuantity,
+    getInventoryBatch
+  } from './inventoryService';
+  
+  const PRODUCTION_TASKS_COLLECTION = 'productionTasks';
+  
+  // Pobieranie wszystkich zadań produkcyjnych
+  export const getAllTasks = async () => {
+    const tasksRef = collection(db, PRODUCTION_TASKS_COLLECTION);
+    const q = query(tasksRef, orderBy('scheduledDate', 'asc'));
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  };
+  
+  // Pobieranie zadań produkcyjnych na dany okres
+  export const getTasksByDateRange = async (startDate, endDate) => {
+    const tasksRef = collection(db, PRODUCTION_TASKS_COLLECTION);
+    
+    // Konwersja stringów dat na obiekty Date
+    let startDateTime, endDateTime;
+    
+    try {
+      startDateTime = new Date(startDate);
+      endDateTime = new Date(endDate);
+      
+      console.log('Konwersja dat w getTasksByDateRange:', 
+        'startDate:', startDate, '→', startDateTime, 
+        'endDate:', endDate, '→', endDateTime);
+      
+      // Sprawdzenie, czy daty są poprawne
+      if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) {
+        console.error('Nieprawidłowy format daty:', startDate, endDate);
+        throw new Error('Nieprawidłowy format daty');
+      }
+      
+      // Pobierz wszystkie zadania bez filtrowania na poziomie zapytania
+      const q = query(
+        tasksRef,
+        orderBy('scheduledDate', 'asc')
+      );
+      
+      console.log('Wykonywanie zapytania do bazy danych...');
+      const querySnapshot = await getDocs(q);
+      console.log(`Pobrano ${querySnapshot.docs.length} zadań przed filtrowaniem`);
+      
+      const allTasks = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      console.log('Wszystkie zadania przed filtrowaniem:', allTasks);
+      
+      // Filtrujemy po stronie klienta, aby uwzględnić wszystkie możliwe przypadki
+      const filteredTasks = allTasks.filter(task => {
+        // Konwertuj daty zadania
+        let taskStartDate, taskEndDate;
+        
+        // Obsługa daty rozpoczęcia
+        if (task.scheduledDate) {
+          if (task.scheduledDate instanceof Timestamp) {
+            taskStartDate = task.scheduledDate.toDate();
+          } else if (typeof task.scheduledDate === 'string') {
+            taskStartDate = new Date(task.scheduledDate);
+          } else if (task.scheduledDate instanceof Date) {
+            taskStartDate = task.scheduledDate;
+          } else {
+            console.warn(`Nieprawidłowy format daty rozpoczęcia dla zadania ${task.id}:`, task.scheduledDate);
+            taskStartDate = new Date(); // Domyślna data
+          }
+        } else {
+          console.warn(`Brak daty rozpoczęcia dla zadania ${task.id}`);
+          taskStartDate = new Date(); // Domyślna data
+        }
+        
+        // Obsługa daty zakończenia
+        if (task.endDate) {
+          if (task.endDate instanceof Timestamp) {
+            taskEndDate = task.endDate.toDate();
+          } else if (typeof task.endDate === 'string') {
+            taskEndDate = new Date(task.endDate);
+          } else if (task.endDate instanceof Date) {
+            taskEndDate = task.endDate;
+          } else {
+            console.warn(`Nieprawidłowy format daty zakończenia dla zadania ${task.id}:`, task.endDate);
+            // Jeśli data zakończenia jest nieprawidłowa, ustaw ją na 1 godzinę po dacie rozpoczęcia
+            taskEndDate = new Date(taskStartDate.getTime() + 60 * 60 * 1000);
+          }
+        } else {
+          // Jeśli nie ma daty zakończenia, ustaw na 1 godzinę po dacie rozpoczęcia
+          taskEndDate = new Date(taskStartDate.getTime() + 60 * 60 * 1000);
+        }
+        
+        // Sprawdź, czy zadanie mieści się w wybranym zakresie dat
+        // Zadanie powinno zostać uwzględnione, jeśli:
+        // - jego początek lub koniec znajduje się w zakresie dat
+        // - lub obejmuje cały zakres dat (zaczyna się przed i kończy po zakresie)
+        const startsBeforeRangeEnds = taskStartDate <= endDateTime;
+        const endsAfterRangeStarts = taskEndDate >= startDateTime;
+        
+        const isVisible = startsBeforeRangeEnds && endsAfterRangeStarts;
+        
+        console.log('Sprawdzanie widoczności zadania:', task.id, task.name, 
+          'startDate:', taskStartDate, 
+          'endDate:', taskEndDate,
+          'startDateTime:', startDateTime,
+          'endDateTime:', endDateTime,
+          'Widoczne?', isVisible);
+        
+        return isVisible;
+      });
+      
+      console.log(`Po filtrowaniu pozostało ${filteredTasks.length} zadań`);
+      return filteredTasks;
+    } catch (error) {
+      console.error('Error parsing dates:', error);
+      // W przypadku błędu zwróć wszystkie zadania
+      console.log('Błąd podczas przetwarzania dat, pobieranie wszystkich zadań...');
+      const q = query(tasksRef, orderBy('scheduledDate', 'asc'));
+      const querySnapshot = await getDocs(q);
+      const allTasks = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      console.log(`Pobrano ${allTasks.length} zadań (awaryjnie)`);
+      return allTasks;
+    }
+  };
+  
+  // Pobieranie zadania po ID
+  export const getTaskById = async (taskId) => {
+    const docRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      return {
+        id: docSnap.id,
+        ...docSnap.data()
+      };
+    } else {
+      throw new Error('Zadanie produkcyjne nie istnieje');
+    }
+  };
+  
+  // Tworzenie nowego zadania produkcyjnego
+  export const createTask = async (taskData, userId, autoReserveMaterials = true) => {
+    try {
+      // Wygeneruj numer MO
+      const moNumber = await generateMONumber();
+      
+      // Przygotuj dane zadania z metadanymi
+      const taskWithMeta = {
+        ...taskData,
+        moNumber, // Dodaj numer MO
+        createdBy: userId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        autoReserveMaterials, // Zapisz informację o tym, czy materiały zostały automatycznie zarezerwowane
+        totalMaterialCost: 0, // Inicjalizacja kosztu całkowitego materiałów
+        unitMaterialCost: 0, // Inicjalizacja kosztu jednostkowego materiałów
+        costLastUpdatedAt: serverTimestamp(), // Data inicjalizacji kosztów
+        costLastUpdatedBy: userId, // Użytkownik inicjalizujący koszty
+        costHistory: [{
+          timestamp: new Date().toISOString(), // Używamy ISO string zamiast serverTimestamp()
+          userId: userId,
+          userName: 'System',
+          previousTotalCost: 0,
+          newTotalCost: 0,
+          previousUnitCost: 0,
+          newUnitCost: 0,
+          reason: 'Inicjalizacja kosztów przy tworzeniu zadania'
+        }]
+      };
+      
+      // Jeśli nie podano daty zakończenia, ustaw ją na 1 godzinę po dacie rozpoczęcia
+      if (!taskWithMeta.endDate && taskWithMeta.scheduledDate) {
+        const scheduledDate = taskWithMeta.scheduledDate instanceof Date 
+          ? taskWithMeta.scheduledDate 
+          : new Date(taskWithMeta.scheduledDate);
+        
+        const endDate = new Date(scheduledDate.getTime() + 60 * 60 * 1000); // +1 godzina
+        taskWithMeta.endDate = endDate;
+      }
+      
+      // Jeśli określono numer LOT, użyj go, w przeciwnym razie wygeneruj domyślny numer LOT na podstawie MO
+      if (!taskWithMeta.lotNumber) {
+        taskWithMeta.lotNumber = `LOT-${moNumber}`;
+      }
+      
+      // Jeśli nie określono daty ważności, ustaw domyślnie na rok od teraz
+      if (!taskWithMeta.expiryDate) {
+        const defaultExpiryDate = new Date();
+        defaultExpiryDate.setFullYear(defaultExpiryDate.getFullYear() + 1);
+        taskWithMeta.expiryDate = defaultExpiryDate;
+      }
+      
+      // Zapisz zadanie w bazie danych
+      console.log(`Tworzenie zadania z numerem MO: ${moNumber}`);
+      const docRef = await addDoc(collection(db, PRODUCTION_TASKS_COLLECTION), taskWithMeta);
+      const newTaskId = docRef.id;
+      
+      console.log('Utworzono nowe zadanie produkcyjne:', newTaskId);
+      
+      // Dodaj zadanie do zamówienia, jeśli jest związane z zamówieniem
+      if (taskWithMeta.orderId) {
+        try {
+          // Importuj wymaganą funkcję
+          const { addProductionTaskToOrder } = await import('./orderService');
+          
+          // Przygotowanie danych zadania do zapisania w zamówieniu
+          const taskDataForOrder = {
+            id: newTaskId,
+            moNumber: moNumber,
+            name: taskWithMeta.name,
+            status: taskWithMeta.status,
+            productName: taskWithMeta.productName,
+            quantity: taskWithMeta.quantity,
+            unit: taskWithMeta.unit,
+            orderItemId: taskWithMeta.orderItemId // Dodanie ID pozycji zamówienia do powiązania
+          };
+          
+          // Dodaj zadanie do zamówienia
+          await addProductionTaskToOrder(taskWithMeta.orderId, taskDataForOrder);
+          console.log(`Zadanie ${newTaskId} zostało dodane do zamówienia ${taskWithMeta.orderId}`);
+        } catch (orderError) {
+          console.error('Błąd podczas dodawania zadania do zamówienia:', orderError);
+        }
+      }
       
       // Teraz, gdy zadanie zostało utworzone, zarezerwuj materiały
-      const missingMaterials = []; // Lista materiałów, których nie ma w magazynie
+      const missingMaterials = [];
       
       // Rezerwuj materiały tylko jeśli autoReserveMaterials jest true
       if (autoReserveMaterials && taskWithMeta.materials && taskWithMeta.materials.length > 0) {
@@ -221,7 +558,7 @@ import {
               missingMaterials.push(material.name);
               console.log(`Pomijam rezerwację brakującego materiału: ${material.name}`);
               continue;
-            
+            }
             
             // Sprawdź dostępność i zarezerwuj materiał z określoną metodą rezerwacji
             const materialId = material.inventoryItemId || material.id;
@@ -230,15 +567,15 @@ import {
               await bookInventoryForTask(materialId, material.quantity, docRef.id, userId, reservationMethod);
             } else {
               console.warn(`Materiał ${material.name} nie ma przypisanego ID pozycji magazynowej, pomijam rezerwację`);
-            
+            }
           } catch (error) {
             console.error(`Błąd przy rezerwacji materiału ${material.name}:`, error);
             // Kontynuuj rezerwację pozostałych materiałów mimo błędu
-          
-        
+          }
+        }
       } else if (!autoReserveMaterials) {
         console.log(`Pominięto automatyczną rezerwację materiałów dla MO: ${moNumber} zgodnie z wyborem użytkownika`);
-      
+      }
       
       // Jeśli były brakujące materiały, dodaj informację do zadania
       if (missingMaterials.length > 0) {
@@ -247,7 +584,7 @@ import {
           missingMaterials,
           updatedAt: serverTimestamp()
         });
-      
+      }
       
       return {
         id: docRef.id,
@@ -257,35 +594,99 @@ import {
     } catch (error) {
       console.error('Error creating task:', error);
       throw error;
-    
+    }
   };
   
   // Aktualizacja zadania produkcyjnego
   export const updateTask = async (taskId, taskData, userId) => {
-    // Upewnij się, że endDate jest ustawiona
-    if (!taskData.endDate) {
-      // Jeśli nie ma endDate, ustaw na 1 godzinę po scheduledDate
-      const scheduledDate = taskData.scheduledDate instanceof Date 
-        ? taskData.scheduledDate 
-        : new Date(taskData.scheduledDate);
+    try {
+      // Pobierz aktualne dane zadania, aby zachować pola kosztów jeśli nie są aktualizowane
+      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+      const taskDoc = await getDoc(taskRef);
       
-      taskData.endDate = new Date(scheduledDate.getTime() + 60 * 60 * 1000);
-    
-    
-    const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
-    
-    const updatedTask = {
-      ...taskData,
-      updatedAt: serverTimestamp(),
-      updatedBy: userId
-    };
-    
-    await updateDoc(taskRef, updatedTask);
-    
-    return {
-      id: taskId,
-      ...updatedTask
-    };
+      if (!taskDoc.exists()) {
+        throw new Error('Zadanie nie istnieje');
+      }
+      
+      const currentTask = taskDoc.data();
+      
+      // Upewnij się, że endDate jest ustawiona
+      if (!taskData.endDate) {
+        // Jeśli nie ma endDate, ustaw na 1 godzinę po scheduledDate
+        const scheduledDate = taskData.scheduledDate instanceof Date 
+          ? taskData.scheduledDate 
+          : new Date(taskData.scheduledDate);
+        
+        taskData.endDate = new Date(scheduledDate.getTime() + 60 * 60 * 1000);
+      }
+      
+      // Zachowaj pola kosztów, jeśli nie są aktualizowane
+      if (taskData.totalMaterialCost === undefined && currentTask.totalMaterialCost !== undefined) {
+        taskData.totalMaterialCost = currentTask.totalMaterialCost;
+      }
+      
+      if (taskData.unitMaterialCost === undefined && currentTask.unitMaterialCost !== undefined) {
+        taskData.unitMaterialCost = currentTask.unitMaterialCost;
+      }
+      
+      if (taskData.costLastUpdatedAt === undefined && currentTask.costLastUpdatedAt !== undefined) {
+        taskData.costLastUpdatedAt = currentTask.costLastUpdatedAt;
+      }
+      
+      if (taskData.costLastUpdatedBy === undefined && currentTask.costLastUpdatedBy !== undefined) {
+        taskData.costLastUpdatedBy = currentTask.costLastUpdatedBy;
+      }
+      
+      if (taskData.costHistory === undefined && currentTask.costHistory !== undefined) {
+        taskData.costHistory = currentTask.costHistory;
+      }
+      
+      // Jeśli pola kosztów nadal nie istnieją, zainicjuj je wartościami domyślnymi
+      if (taskData.totalMaterialCost === undefined) {
+        taskData.totalMaterialCost = 0;
+      }
+      
+      if (taskData.unitMaterialCost === undefined) {
+        taskData.unitMaterialCost = 0;
+      }
+      
+      if (taskData.costLastUpdatedAt === undefined) {
+        taskData.costLastUpdatedAt = serverTimestamp();
+      }
+      
+      if (taskData.costLastUpdatedBy === undefined) {
+        taskData.costLastUpdatedBy = userId;
+      }
+      
+      if (taskData.costHistory === undefined) {
+        taskData.costHistory = [{
+          timestamp: new Date().toISOString(), // Używamy ISO string zamiast serverTimestamp()
+          userId: userId,
+          userName: 'System',
+          previousTotalCost: 0,
+          newTotalCost: 0,
+          previousUnitCost: 0,
+          newUnitCost: 0,
+          reason: 'Inicjalizacja kosztów podczas aktualizacji zadania'
+        }];
+      }
+      
+      const updatedTask = {
+        ...taskData,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      };
+      
+      await updateDoc(taskRef, updatedTask);
+      
+      return {
+        id: taskId,
+        ...updatedTask
+      };
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji zadania:', error);
+      throw error;
+    }
   };
   
   // Aktualizacja statusu zadania
@@ -297,7 +698,7 @@ import {
       
       if (!taskDoc.exists()) {
         throw new Error('Zadanie nie istnieje');
-      
+      }
       
       const task = taskDoc.data();
       const oldStatus = task.status;
@@ -305,7 +706,7 @@ import {
       // Jeśli status się nie zmienił, nie rób nic
       if (oldStatus === newStatus) {
         return { success: true, message: `Status zadania jest już ustawiony na ${oldStatus}` };
-      
+      }
       
       // Przygotuj aktualizację
       const updates = {
@@ -319,13 +720,13 @@ import {
             newStatus: newStatus,
             changedBy: userId,
             changedAt: new Date().toISOString()
-          
+          }
         ]
       };
       
       if (newStatus === 'W trakcie') {
         updates.startDate = new Date().toISOString();
-      
+      }
       else if (newStatus === 'Zakończone') {
         updates.completionDate = new Date().toISOString();
         
@@ -342,9 +743,9 @@ import {
             // Jeśli zadanie ma potwierdzenie zużycia materiałów lub nie ma materiałów,
             // oznaczamy je jako gotowe do dodania, ale nie dodajemy automatycznie
             console.log(`Zadanie ${taskId} oznaczono jako gotowe do dodania do magazynu`);
-          
-        
-      
+          }
+        }
+      }
       
       await updateDoc(taskRef, updates);
       
@@ -363,7 +764,7 @@ import {
           );
         } catch (notificationError) {
           console.warn('Nie udało się utworzyć powiadomienia:', notificationError);
-        
+        }
         
         // Jeśli zadanie jest powiązane z zamówieniem klienta, zaktualizuj informacje w zamówieniu
         if (task.orderId) {
@@ -377,7 +778,7 @@ import {
             if (!orderDoc.exists()) {
               console.error(`Zamówienie o ID ${task.orderId} nie istnieje`);
               return { success: true, message: `Status zadania zmieniony na ${updates.status}, ale zamówienie nie istnieje` };
-            
+            }
             
             const orderData = orderDoc.data();
             const productionTasks = orderData.productionTasks || [];
@@ -424,19 +825,19 @@ import {
               });
               
               console.log(`Zaktualizowano status zadania ${taskId} w zamówieniu ${task.orderId}`);
-            
+            }
           } catch (orderUpdateError) {
             console.error(`Błąd podczas aktualizacji zadania w zamówieniu: ${orderUpdateError.message}`, orderUpdateError);
             // Nie przerywamy głównej operacji, jeśli aktualizacja zamówienia się nie powiedzie
-          
-        
-      
+          }
+        }
+      }
       
       return { success: true, message: `Status zadania zmieniony na ${updates.status}` };
     } catch (error) {
       console.error('Błąd podczas aktualizacji statusu zadania:', error);
       throw error;
-    
+    }
   };
   
   // Usuwanie zadania produkcyjnego
@@ -448,22 +849,45 @@ import {
       
       if (!taskSnapshot.exists()) {
         throw new Error('Zadanie nie istnieje');
-      
+      }
       
       const task = taskSnapshot.data();
       
-      // Jeśli zadanie jest w stanie "Zaplanowane" i ma materiały, anuluj rezerwacje
-      if (task.status === 'Zaplanowane' && task.materials && task.materials.length > 0) {
+      // Anuluj rezerwacje materiałów bez względu na stan zadania
+      if (task.materials && task.materials.length > 0) {
         for (const material of task.materials) {
           try {
+            if (!material.id && !material.inventoryItemId) {
+              console.warn(`Materiał ${material.name} nie ma ID, pomijam anulowanie rezerwacji`);
+              continue;
+            }
             // Anuluj rezerwację materiału
-            await cancelBooking(material.id, material.quantity, taskId, task.createdBy || 'system');
+            const materialId = material.inventoryItemId || material.id;
+            await cancelBooking(materialId, material.quantity, taskId, task.createdBy || 'system');
+            console.log(`Anulowano rezerwację materiału ${material.name} dla usuniętego zadania`);
           } catch (error) {
             console.error(`Błąd przy anulowaniu rezerwacji materiału ${material.name}:`, error);
             // Kontynuuj anulowanie rezerwacji pozostałych materiałów mimo błędu
-          
-        
+          }
+        }
+      }
       
+      // Usuń wszystkie rezerwacje związane z tym zadaniem z kolekcji transakcji
+      try {
+        const { cleanupTaskReservations, cleanupDeletedTaskReservations } = await import('./inventoryService');
+        
+        // Najpierw wyczyść konkretne rezerwacje dla tego zadania
+        await cleanupTaskReservations(taskId);
+        console.log(`Usunięto wszystkie rezerwacje związane z zadaniem ${taskId}`);
+        
+        // Dodatkowo uruchom pełne czyszczenie rezerwacji z usuniętych zadań
+        // to zapewni że wszystkie rezerwacje będą usunięte, nawet jeśli pojedyncze anulowanie się nie powiodło
+        await cleanupDeletedTaskReservations();
+        console.log(`Wykonano pełne czyszczenie rezerwacji z usuniętych zadań`);
+      } catch (error) {
+        console.error(`Błąd podczas usuwania rezerwacji dla zadania ${taskId}:`, error);
+        // Kontynuuj usuwanie zadania mimo błędu
+      }
       
       // Sprawdź, czy zadanie ma powiązane partie w magazynie
       const batchesRef = collection(db, 'inventoryBatches');
@@ -503,8 +927,8 @@ import {
         } catch (orderError) {
           console.error(`Błąd podczas usuwania zadania ${taskId} z zamówienia ${task.orderId}:`, orderError);
           // Kontynuuj usuwanie zadania mimo błędu
-        
-      
+        }
+      }
       
       // Na końcu usuń samo zadanie
       await deleteDoc(taskRef);
@@ -513,7 +937,7 @@ import {
     } catch (error) {
       console.error('Błąd podczas usuwania zadania produkcyjnego:', error);
       throw error;
-    
+    }
   };
   
   // Pobieranie zadań według statusu
@@ -524,7 +948,7 @@ import {
     if (!status) {
       console.error('Błąd: status nie może być pusty');
       return [];
-    
+    }
     
     try {
       const tasksRef = collection(db, PRODUCTION_TASKS_COLLECTION);
@@ -560,55 +984,37 @@ import {
     } catch (error) {
       console.error(`Błąd podczas pobierania zadań o statusie "${status}":`, error);
       throw error;
-    
+    }
   };
   
   // Dodanie produktu z zadania produkcyjnego do magazynu jako partii
   export const addTaskProductToInventory = async (taskId, userId, inventoryParams = {}) => {
-    const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
-    
-    // Pobierz aktualne dane zadania
-    const taskDoc = await getDoc(taskRef);
-    if (!taskDoc.exists()) {
-      throw new Error('Zadanie nie istnieje');
-    
-    
-    const taskData = taskDoc.data();
-    
-    // Sprawdź, czy zadanie jest zakończone i gotowe do dodania do magazynu
-    if (taskData.status !== 'Zakończone' || !taskData.readyForInventory) {
-      throw new Error('Zadanie nie jest gotowe do dodania do magazynu');
-    
-    
-    // Sprawdź, czy zadanie ma nazwę produktu i ilość
-    if (!taskData.productName || !taskData.quantity) {
-      throw new Error('Zadanie nie zawiera informacji o produkcie lub ilości');
-    
-    
     try {
-      let inventoryItem;
-      let inventoryItemId;
+      console.log(`Dodawanie produktu z zadania ${taskId} do magazynu`, inventoryParams);
       
-      // Jeśli zadanie ma powiązany produkt z magazynu, użyj go
-      if (taskData.inventoryProductId) {
-        inventoryItemId = taskData.inventoryProductId;
-        const itemRef = doc(db, 'inventory', inventoryItemId);
-        const itemDoc = await getDoc(itemRef);
-        
-        if (itemDoc.exists()) {
-          inventoryItem = itemDoc.data();
-        } else {
-          throw new Error(`Produkt o ID ${inventoryItemId} nie istnieje w magazynie`);
-        
-      } else {
-        // Spróbuj znaleźć produkt po nazwie
+      // Pobierz dane zadania
+      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+      const taskSnapshot = await getDoc(taskRef);
+      
+      if (!taskSnapshot.exists()) {
+        throw new Error(`Zadanie o ID ${taskId} nie istnieje`);
+      }
+      
+      const taskData = taskSnapshot.data();
+      
+      // Upewnij się, że zadanie posiada produkt i ilość
+      if (!taskData.productName || !taskData.quantity) {
+        throw new Error('Zadanie nie zawiera informacji o produkcie lub ilości');
+      }
+      
+      // Sprawdź, czy zadanie ma powiązany produkt w magazynie
+      let inventoryItemId = taskData.inventoryProductId;
+      let inventoryItem = null;
+      
+      if (!inventoryItemId) {
+        // Jeśli nie ma określonego produktu, spróbuj znaleźć go według nazwy
         const inventoryRef = collection(db, 'inventory');
-        const q = query(
-          inventoryRef,
-          where('name', '==', taskData.productName),
-          where('category', '==', 'Gotowe produkty')
-        );
-        
+        const q = query(inventoryRef, where('name', '==', taskData.productName));
         const querySnapshot = await getDocs(q);
         
         if (!querySnapshot.empty) {
@@ -652,20 +1058,40 @@ import {
             updatedAt: serverTimestamp(),
             updatedBy: userId
           });
-        
+        }
+      }
       
-      
-      // Użyj parametrów przekazanych z formularza lub wartości domyślnych
+      // Użyj parametrów przekazanych z formularza lub wartości z zadania produkcyjnego
       const finalQuantity = inventoryParams.finalQuantity ? parseFloat(inventoryParams.finalQuantity) : taskData.quantity;
-      const lotNumber = inventoryParams.lotNumber || (taskData.moNumber ? 
-        `LOT-${taskData.moNumber}` : 
-        `LOT-PROD-${taskId.substring(0, 6)}`);
       
-      // Przygotuj datę ważności z przekazanych parametrów lub ustaw null
+      // Jeśli podano numer LOT z formularza - użyj go, 
+      // w innym przypadku sprawdź czy zadanie ma zdefiniowany LOT, 
+      // a jeśli nie, wygeneruj domyślny numer LOT
+      const lotNumber = inventoryParams.lotNumber || 
+                        taskData.lotNumber || 
+                        (taskData.moNumber ? `LOT-${taskData.moNumber}` : `LOT-PROD-${taskId.substring(0, 6)}`);
+      
+      // Przygotuj datę ważności - użyj przekazanej w parametrach, 
+      // lub z zadania produkcyjnego, lub ustaw null
       let expiryDate = null;
       if (inventoryParams.expiryDate) {
         expiryDate = new Date(inventoryParams.expiryDate);
-      
+      } else if (taskData.expiryDate) {
+        // Konwertuj timestamp lub string na obiekt Date
+        try {
+          if (taskData.expiryDate instanceof Date) {
+            expiryDate = taskData.expiryDate;
+          } else if (taskData.expiryDate.toDate) {
+            // Firebase Timestamp
+            expiryDate = taskData.expiryDate.toDate();
+          } else {
+            // String z datą
+            expiryDate = new Date(taskData.expiryDate);
+          }
+        } catch (error) {
+          console.error('Błąd podczas konwersji daty ważności:', error);
+        }
+      }
       
       // Zbierz szczegóły dotyczące pochodzenia partii
       const sourceDetails = {
@@ -680,11 +1106,11 @@ import {
       
       if (taskData.moNumber) {
         sourceNotes += ` (MO: ${taskData.moNumber})`;
-      
+      }
       
       if (taskData.orderNumber) {
         sourceNotes += ` (CO: ${taskData.orderNumber})`;
-      
+      }
       
       // Dodaj partię do magazynu
       const batchRef = doc(collection(db, 'inventoryBatches'));
@@ -705,7 +1131,7 @@ import {
         orderId: taskData.orderId || null,
         sourceDetails: sourceDetails,
         notes: sourceNotes,
-        unitPrice: taskData.costs ? (taskData.costs.totalCost / finalQuantity) : 0,
+        unitPrice: 0, // Ustaw cenę jednostkową na 0
         createdAt: serverTimestamp(),
         createdBy: userId
       };
@@ -783,17 +1209,43 @@ import {
                 updatedBy: userId
               });
               
+              // Jeśli zadanie jest powiązane z konkretną pozycją w zamówieniu, zaktualizuj tę pozycję
+              if (taskData.orderItemId && orderData.items) {
+                const itemIndex = orderData.items.findIndex(item => item.id === taskData.orderItemId);
+                
+                if (itemIndex !== -1) {
+                  // Zaktualizuj pozycję w zamówieniu z informacją o LOT i partii
+                  const updatedItems = [...orderData.items];
+                  updatedItems[itemIndex] = {
+                    ...updatedItems[itemIndex],
+                    lotNumber: lotNumber,
+                    inventoryBatchId: batchRef.id,
+                    productionTaskId: taskId,
+                    productionCompleted: true
+                  };
+                  
+                  // Zaktualizuj pozycje w zamówieniu
+                  await updateDoc(orderRef, {
+                    items: updatedItems,
+                    updatedAt: serverTimestamp(),
+                    updatedBy: userId
+                  });
+                  
+                  console.log(`Zaktualizowano pozycję ${taskData.orderItemId} w zamówieniu ${taskData.orderNumber} z informacją o produkcji`);
+                }
+              }
+              
               console.log(`Zaktualizowano informacje o partii LOT w zamówieniu ${taskData.orderNumber}`);
             } else {
               console.warn(`Nie znaleziono zadania ${taskId} w zamówieniu ${taskData.orderId}`);
-            
+            }
           } else {
             console.warn(`Zamówienie o ID ${taskData.orderId} nie istnieje`);
-          
+          }
         } catch (orderError) {
           console.error(`Błąd podczas aktualizacji informacji o partii w zamówieniu: ${orderError.message}`, orderError);
           // Nie przerywamy głównej operacji, jeśli aktualizacja zamówienia się nie powiedzie
-        
+        }
       } else {
         // Jeśli zadanie nie ma powiązanego zamówienia klienta, sprawdź czy ma OrderId w polu sourceDetails
         if (taskData.sourceDetails && taskData.sourceDetails.orderId) {
@@ -829,14 +1281,40 @@ import {
                   updatedBy: userId
                 });
                 
+                // Jeśli zadanie jest powiązane z konkretną pozycją w zamówieniu, zaktualizuj tę pozycję
+                if (taskData.orderItemId && orderData.items) {
+                  const itemIndex = orderData.items.findIndex(item => item.id === taskData.orderItemId);
+                  
+                  if (itemIndex !== -1) {
+                    // Zaktualizuj pozycję w zamówieniu z informacją o LOT i partii
+                    const updatedItems = [...orderData.items];
+                    updatedItems[itemIndex] = {
+                      ...updatedItems[itemIndex],
+                      lotNumber: lotNumber,
+                      inventoryBatchId: batchRef.id,
+                      productionTaskId: taskId,
+                      productionAssigned: true
+                    };
+                    
+                    // Zaktualizuj pozycje w zamówieniu
+                    await updateDoc(orderRef, {
+                      items: updatedItems,
+                      updatedAt: serverTimestamp(),
+                      updatedBy: userId
+                    });
+                    
+                    console.log(`Zaktualizowano pozycję ${taskData.orderItemId} w zamówieniu ${taskData.sourceDetails.orderNumber} z informacją o produkcji`);
+                  }
+                }
+                
                 console.log(`Zaktualizowano informacje o partii LOT w zamówieniu ze źródła ${taskData.sourceDetails.orderNumber}`);
-              
-            
+              }
+            }
           } catch (sourceOrderError) {
             console.error(`Błąd podczas aktualizacji informacji o partii w zamówieniu źródłowym: ${sourceOrderError.message}`, sourceOrderError);
-          
-        
-      
+          }
+        }
+      }
       
       return {
         success: true,
@@ -848,14 +1326,19 @@ import {
       console.error('Błąd podczas dodawania produktu do magazynu:', error);
       
       // Zaktualizuj zadanie z informacją o błędzie
-      await updateDoc(taskRef, {
-        inventoryError: error.message,
-        updatedAt: serverTimestamp(),
-        updatedBy: userId
-      });
+      try {
+        const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+        await updateDoc(taskRef, {
+          inventoryError: error.message,
+          updatedAt: serverTimestamp(),
+          updatedBy: userId
+        });
+      } catch (updateError) {
+        console.error('Błąd podczas aktualizacji zadania z informacją o błędzie:', updateError);
+      }
       
       throw error;
-    
+    }
   };
 
   // Pobiera dane prognozy zapotrzebowania materiałów
@@ -883,12 +1366,12 @@ import {
           // Sprawdzamy tylko zakres dat, bez wykluczania wstrzymanych zadań
           return taskDate >= startDate && taskDate <= endDate;
         });
-      
+      }
       
       if (!materials) {
         console.log('Brak przekazanych materiałów, pobieram wszystkie materiały z magazynu');
         materials = await getAllInventoryItems();
-      
+      }
       
       console.log(`Znaleziono ${tasks.length} zadań i ${materials ? materials.length : 0} materiałów`);
       
@@ -896,7 +1379,7 @@ import {
       if (!tasks || tasks.length === 0) {
         console.warn('Brak zadań do prognozy zapotrzebowania materiałów');
         return [];
-      
+      }
       
       // Oblicz potrzebne ilości materiałów na podstawie zadań produkcyjnych
       const materialRequirements = {};
@@ -911,7 +1394,7 @@ import {
         if (!task.materials || task.materials.length === 0) {
           console.log(`Zadanie ${task.id} (${task.name || 'bez nazwy'}) nie ma materiałów, pomijam`);
           continue;
-        
+        }
         
         console.log(`Analizuję zadanie ${task.id} (${task.name || 'bez nazwy'}), liczba materiałów: ${task.materials.length}`);
         
@@ -922,7 +1405,7 @@ import {
           if (!materialId) {
             console.warn('Materiał bez ID, pomijam', material);
             continue;
-          
+          }
           
           // Konwertuj quantity na liczbę i upewnij się, że jest poprawna
           let materialQuantity = parseFloat(material.quantity) || 0;
@@ -931,7 +1414,7 @@ import {
           if (materialQuantity <= 0) {
             console.warn(`Materiał ${material.name} ma nieprawidłową ilość: ${material.quantity}`);
             continue;
-          
+          }
           
           // Dodatkowa logika dla określenia rzeczywistej ilości materiału na jednostkę produktu
           const quantityPerUnit = material.perUnit || material.quantityPerUnit;
@@ -949,7 +1432,7 @@ import {
             // Heurystyka: jeśli ilość materiału jest znacznie większa niż 1 i mamy więcej niż 1 jednostkę produktu,
             // zakładamy, że jest to ilość dla całego zadania
             materialQuantity = materialQuantity / taskQuantity;
-          
+          }
           
           const requiredQuantity = materialQuantity * taskQuantity;
           
@@ -964,18 +1447,18 @@ import {
               availableQuantity: 0,
               perUnit: materialQuantity // Zapamiętaj ilość na jednostkę produktu
             };
-          
+          }
           
           materialRequirements[materialId].requiredQuantity += requiredQuantity;
-        
-      
+        }
+      }
       
       // Uzupełnij dostępne ilości z magazynu
       for (const material of materials) {
         if (materialRequirements[material.id]) {
           materialRequirements[material.id].availableQuantity = parseFloat(material.quantity) || 0;
-        
-      
+        }
+      }
       
       // Przekształć obiekt do tablicy i upewnij się, że wartości są liczbowe
       const result = Object.values(materialRequirements).map(item => ({
@@ -989,7 +1472,7 @@ import {
         console.warn('Brak materiałów w prognozie zapotrzebowania');
       } else {
         console.log(`Znaleziono ${result.length} materiałów w prognozie zapotrzebowania`);
-      
+      }
       
       // Posortuj według zapotrzebowania (od największego)
       result.sort((a, b) => b.requiredQuantity - a.requiredQuantity);
@@ -998,7 +1481,7 @@ import {
     } catch (error) {
       console.error('Błąd podczas pobierania danych prognozy:', error);
       throw error;
-    
+    }
   };
 
   // Generuje raport materiałowy do pobrania
@@ -1016,10 +1499,10 @@ import {
           console.error('Nie udało się pobrać danych prognozy. Generuję pusty raport.');
           showEmptyReportAlert();
           return null;
-        
+        }
         
         forecastData = refreshedData;
-      
+      }
 
       // Konwertuj daty do czytelnego formatu
       const formattedStartDate = format(startDate, 'dd.MM.yyyy');
@@ -1076,7 +1559,7 @@ import {
       console.error('Błąd podczas generowania raportu materiałowego:', error);
       alert('Wystąpił błąd podczas generowania raportu. Spróbuj ponownie.');
       return null;
-    
+    }
   };
   
   // Pomocnicza funkcja do wyświetlania komunikatu o pustym raporcie
@@ -1108,7 +1591,7 @@ import {
     } catch (error) {
       console.error('Błąd podczas pobierania zaplanowanych zadań:', error);
       throw error;
-    
+    }
   };
 
   // Pobiera dane do raportów produkcyjnych
@@ -1133,7 +1616,7 @@ import {
           taskDate = new Date(task.startDate);
         } else if (task.scheduledDate) {
           taskDate = new Date(task.scheduledDate);
-        
+        }
         
         if (!taskDate) return false;
         
@@ -1142,7 +1625,7 @@ import {
     } catch (error) {
       console.error('Błąd podczas pobierania danych raportów:', error);
       throw error;
-    
+    }
   };
 
   // Pobiera statystyki dla ukończonych zadań
@@ -1171,7 +1654,7 @@ import {
           avgProductionTime: 0,
           materialsUsage: []
         };
-      
+      }
       
       // Obliczanie statystyk
       let totalItems = 0;
@@ -1193,13 +1676,13 @@ import {
           
           // Zapisz czas produkcji w zadaniu
           task.productionTime = productionTime.toFixed(1);
-        
+        }
         
         // Produktywność według kategorii
         const category = task.category || 'Inne';
         if (!productivityByCategory[category]) {
           productivityByCategory[category] = 0;
-        
+        }
         productivityByCategory[category] += task.quantity || 0;
         
         // Dzienny wynik
@@ -1207,9 +1690,9 @@ import {
           const dateStr = new Date(task.completionDate).toISOString().split('T')[0];
           if (!dailyOutput[dateStr]) {
             dailyOutput[dateStr] = 0;
-          
+          }
           dailyOutput[dateStr] += task.quantity || 0;
-        
+        }
         
         // Zużycie materiałów
         if (task.materials && task.materials.length > 0) {
@@ -1227,13 +1710,13 @@ import {
                 usedQuantity: 0,
                 usageCount: 0
               };
-            
+            }
             
             materialUsage[material.id].usedQuantity += actualQuantity;
             materialUsage[material.id].usageCount += 1;
-          
-        
-      
+          }
+        }
+      }
       
       // Przekształć materiały do formatu tablicy i oblicz średnie zużycie
       const materialsUsage = Object.values(materialUsage).map(material => {
@@ -1256,7 +1739,7 @@ import {
     } catch (error) {
       console.error('Błąd podczas pobierania statystyk zadań:', error);
       throw error;
-    
+    }
   };
 
   // Generuje raport produkcyjny do pobrania
@@ -1273,7 +1756,7 @@ import {
     } catch (error) {
       console.error('Błąd podczas generowania raportu produkcyjnego:', error);
       throw error;
-    
+    }
   };
 
   // Aktualizuje faktyczne zużycie materiałów po zakończeniu produkcji
@@ -1284,7 +1767,7 @@ import {
       
       if (!taskSnapshot.exists()) {
         throw new Error('Zadanie nie istnieje');
-      
+      }
       
       const task = {
         id: taskSnapshot.id,
@@ -1328,12 +1811,12 @@ import {
               notes: `Korekta zużycia materiału w zadaniu produkcyjnym: ${task.name || taskId}`,
               createdAt: serverTimestamp()
             });
-          
+          }
           
           // Przelicz ilość dla danego materiału
           await recalculateItemQuantity(materialId);
-        
-      
+        }
+      }
       
       // Aktualizacja faktycznego zużycia i zresetowanie potwierdzenia
       const updates = {
@@ -1344,7 +1827,7 @@ import {
       // Aktualizuj pole usedBatches tylko jeśli trzeba
       if (wasConfirmedBefore) {
         updates.usedBatches = {}; // Wyczyść informacje o zużytych partiach, jeśli były potwierdzone
-      
+      }
       
       await updateDoc(taskRef, updates);
       
@@ -1357,7 +1840,7 @@ import {
     } catch (error) {
       console.error('Błąd podczas aktualizacji zużycia materiałów:', error);
       throw error;
-    
+    }
   };
 
   // Potwierdza zużycie materiałów i aktualizuje stany magazynowe
@@ -1368,7 +1851,7 @@ import {
       
       if (!taskSnapshot.exists()) {
         throw new Error('Zadanie nie istnieje');
-      
+      }
       
       const task = {
         id: taskSnapshot.id,
@@ -1377,7 +1860,7 @@ import {
       
       if (task.materialConsumptionConfirmed) {
         throw new Error('Zużycie materiałów zostało już potwierdzone');
-      
+      }
       
       // Pobierz materiały
       const materials = task.materials || [];
@@ -1399,13 +1882,13 @@ import {
         // Sprawdź, czy consumedQuantity jest dodatnią liczbą
         if (isNaN(consumedQuantity) || consumedQuantity < 0) {
           throw new Error(`Zużycie materiału "${material.name}" jest nieprawidłowe (${consumedQuantity}). Musi być liczbą większą lub równą 0.`);
-        
+        }
         
         // Jeśli skorygowana ilość wynosi 0, pomijamy aktualizację partii dla tego materiału
         if (consumedQuantity === 0) {
           console.log(`Pomijam aktualizację partii dla materiału ${material.name} - zużycie wynosi 0`);
           continue;
-        
+        }
         
         // Pobierz aktualny stan magazynowy
         const inventoryRef = doc(db, 'inventory', materialId);
@@ -1443,7 +1926,7 @@ import {
             } else {
               // Użyj oryginalnych przypisanych partii
               assignedBatches = originalBatches;
-            
+            }
           } else {
             // Jeśli nie ma przypisanych partii, pobierz dostępne partie według FEFO
             console.log(`Przypisywanie partii dla materiału ${material.name} według FEFO`);
@@ -1456,18 +1939,44 @@ import {
             );
             
             const batchesSnapshot = await getDocs(q);
-            const availableBatches = batchesSnapshot.docs
-              .map(doc => ({
-                id: doc.id,
-                ...doc.data()
-              }))
-              .sort((a, b) => {
+            if (batchesSnapshot.empty) {
+              console.warn(`Brak dostępnych partii dla materiału: ${material.name}`);
+              const assignmentErrors = [];
+              assignmentErrors.push(`Brak dostępnych partii dla materiału: ${material.name}`);
+              throw new Error(`Brak dostępnych partii dla materiału: ${material.name}. ${assignmentErrors.join(", ")}`);
+              continue;
+            }
+            
+            const availableBatches = batchesSnapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            })).sort((a, b) => {
+              const dateA = a.expiryDate ? new Date(a.expiryDate) : new Date(9999, 11, 31);
+              const dateB = b.expiryDate ? new Date(b.expiryDate) : new Date(9999, 11, 31);
+              return dateA - dateB;
+            });
+            
+            console.log(`Znaleziono ${availableBatches.length} dostępnych partii dla materiału ${material.name}`);
+            
+            // Domyślna metoda rezerwacji to expiry (FEFO), chyba że określono inaczej
+            const methodOfReservation = 'expiry'; // Zastępuję niezdefiniowaną zmienną reservationMethod
+            if (methodOfReservation === 'fifo') {
+              availableBatches.sort((a, b) => {
+                const dateA = a.createdAt ? (a.createdAt instanceof Timestamp ? a.createdAt.toDate() : new Date(a.createdAt)) : new Date(0);
+                const dateB = b.createdAt ? (b.createdAt instanceof Timestamp ? b.createdAt.toDate() : new Date(b.createdAt)) : new Date(0);
+                return dateA - dateB;
+              });
+            } else {
+              // Według daty ważności (expiry)
+              availableBatches.sort((a, b) => {
                 const dateA = a.expiryDate ? new Date(a.expiryDate) : new Date(9999, 11, 31);
                 const dateB = b.expiryDate ? new Date(b.expiryDate) : new Date(9999, 11, 31);
                 return dateA - dateB;
               });
+            }
             
-            console.log(`Znaleziono ${availableBatches.length} dostępnych partii dla materiału ${material.name}`);
+            console.log(`Posortowane partie dla materiału ${material.name}:`, 
+                        availableBatches.map(b => `${b.batchId} (${b.quantity || 0} ${material.unit || 'szt.'})`));
             
             // Przypisz partie automatycznie według FEFO - użyj skorygowanej ilości
             let remainingQuantity = consumedQuantity;
@@ -1485,13 +1994,13 @@ import {
               });
               
               console.log(`Przypisano ${quantityFromBatch} z partii ${batch.batchNumber || batch.lotNumber || batch.id}`);
-            
+            }
             
             // Jeśli nie udało się przypisać wszystkich wymaganych ilości
             if (remainingQuantity > 0) {
               throw new Error(`Nie można znaleźć wystarczającej ilości partii dla materiału "${material.name}". Brakuje ${remainingQuantity} ${inventoryItem.unit || 'szt.'}`);
-            
-          
+            }
+          }
           
           console.log(`Przypisane partie dla materiału ${material.name}:`, assignedBatches);
           
@@ -1503,7 +2012,7 @@ import {
             if (batchAssignment.quantity <= 0) {
               console.log(`Pomijam aktualizację partii ${batchAssignment.batchId} - ilość do odjęcia wynosi ${batchAssignment.quantity}`);
               continue;
-            
+            }
             
             console.log(`Aktualizacja partii ${batchAssignment.batchId} - odejmowanie ${batchAssignment.quantity}`);
             
@@ -1527,7 +2036,7 @@ import {
               notes: `Materiał zużyty w zadaniu produkcyjnym: ${task.name || taskId}`,
               createdAt: serverTimestamp()
             });
-          
+          }
           
           // 3. Aktualizacja głównej pozycji magazynowej jest nadal potrzebna dla spójności danych,
           // ale teraz jest ona tylko konsekwencją zmian na poziomie partii, a nie oddzielną operacją
@@ -1548,27 +2057,27 @@ import {
               if (bookingQuantity > 0) {
                 await cancelBooking(materialId, bookingQuantity, taskId, task.createdBy || 'system');
                 console.log(`Anulowano rezerwację ${bookingQuantity} ${inventoryItem.unit} materiału ${material.name} po zatwierdzeniu zużycia`);
-              
-            
+              }
+            }
           } catch (error) {
             console.error(`Błąd przy anulowaniu rezerwacji materiału ${material.name}:`, error);
             // Kontynuuj mimo błędu anulowania rezerwacji
-          
-        
-      
+          }
+        }
+      }
       
       // Oznacz zużycie jako potwierdzone i zapisz informacje o wykorzystanych partiach
       const updates = {
         materialConsumptionConfirmed: true,
         materialConsumptionDate: new Date().toISOString(),
-        usedBatches: task.usedBatches || {
+        usedBatches: task.usedBatches || {}
       };
       
       // Jeśli zadanie miało status "Potwierdzenie zużycia", zmień na "Zakończone"
       if (task.status === 'Potwierdzenie zużycia') {
         updates.status = 'Zakończone';
         console.log(`Zadanie ${taskId} zmieniło status z "Potwierdzenie zużycia" na "Zakończone"`);
-      
+      }
       
       await updateDoc(taskRef, updates);
       
@@ -1579,91 +2088,379 @@ import {
         await updateDoc(taskRef, {
           readyForInventory: true
         });
-      
+      }
       
       return { success: true, message: 'Zużycie materiałów potwierdzone i stany magazynowe zaktualizowane' };
     } catch (error) {
       console.error('Błąd podczas potwierdzania zużycia materiałów:', error);
       throw error;
-    
+    }
   };
 
   // Zarezerwowanie składników dla zadania
-  export const reserveMaterialsForTask = async (taskId, materials, reservationMethod = 'auto') => {
+  export const reserveMaterialsForTask = async (taskId, userId, reservationMethod, selectedBatches = []) => {
     try {
-      console.log(`Bookowanie składników dla zadania ID: ${taskId}, metoda: ${reservationMethod}`);
-      console.log('Materiały do zarezerwowania:', materials);
+      console.log(`[DEBUG] Rozpoczynam rezerwację materiałów dla zadania ${taskId}, metoda=${reservationMethod}`);
       
-      if (!materials || materials.length === 0) {
-        return { success: true, message: 'Brak materiałów do zarezerwowania' };
-      
-      
-      // Pobierz dane zadania, aby mieć dostęp do numeru MO
+      // Pobierz dane zadania produkcyjnego
       const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
       const taskDoc = await getDoc(taskRef);
-      
       if (!taskDoc.exists()) {
-        throw new Error(`Zadanie o ID ${taskId} nie istnieje`);
+        throw new Error(`Nie znaleziono zadania o ID: ${taskId}`);
+      }
       
+      const task = { id: taskDoc.id, ...taskDoc.data() };
+      console.log("Pobrano zadanie:", task.moNumber || task.id);
       
-      const taskData = taskDoc.data();
-      const userId = getCurrentUserId();
+      // Sprawdź, czy istnieją nowe materiały, które nie są jeszcze zarezerwowane
+      const existingReservedMaterials = new Set();
       
-      const errors = [];
-      const reservedItems = [];
+      // Zbierz ID wszystkich już zarezerwowanych materiałów
+      if (task.materialBatches) {
+        Object.keys(task.materialBatches).forEach(materialId => {
+          existingReservedMaterials.add(materialId);
+        });
+      }
       
-      // Dla każdego materiału w zadaniu
-      for (const material of materials) {
-        if (!material.inventoryItemId) {
-          // Jeśli materiał nie ma przypisanego ID pozycji magazynowej, pomijamy go
-          console.log(`Materiał ${material.name} nie ma przypisanego ID pozycji magazynowej, pomijamy`);
-          continue;
-        
-        
-        try {
-          // Sprawdź, czy pozycja magazynowa istnieje
-          await getInventoryItemById(material.inventoryItemId);
-          
-          // Zarezerwuj materiał w magazynie
-          const result = await bookInventoryForTask(
-            material.inventoryItemId, 
-            material.quantity, 
-            taskId, 
-            userId, 
-            reservationMethod
-          );
-          
-          reservedItems.push({
-            itemId: material.inventoryItemId,
-            name: material.name,
-            quantity: material.quantity,
-            unit: material.unit
-          });
-        } catch (error) {
-          console.error(`Błąd podczas rezerwacji materiału ${material.name}:`, error);
-          errors.push(`Nie można zarezerwować materiału ${material.name}: ${error.message}`);
-        
+      // Sprawdź, czy są nowe materiały do zarezerwowania
+      let newMaterialsToReserve = [];
       
+      if (task.requiredMaterials && task.requiredMaterials.length > 0) {
+        newMaterialsToReserve = task.requiredMaterials.filter(material => {
+          return material.id && !existingReservedMaterials.has(material.id);
+        });
+      } else if (task.materials && task.materials.length > 0) {
+        newMaterialsToReserve = task.materials.filter(material => {
+          const materialId = material.inventoryItemId || material.id;
+          return materialId && !existingReservedMaterials.has(materialId);
+        });
+      }
       
-      // Zwróć informację o wyniku operacji
-      if (errors.length === 0) {
+      // Sprawdź, czy materiały są już zarezerwowane dla tego zadania i nie ma nowych materiałów
+      if (task.materialsReserved && newMaterialsToReserve.length === 0) {
+        console.log(`[DEBUG] Materiały dla zadania ${taskId} są już zarezerwowane i nie ma nowych materiałów. Pomijam ponowną rezerwację.`);
         return {
           success: true,
-          message: `Zarezerwowano wszystkie ${reservedItems.length} materiały dla zadania`,
-          reservedItems
+          message: 'Materiały są już zarezerwowane dla tego zadania',
+          reservedItems: []
         };
-      } else {
-        return {
-          success: false,
-          message: `Zarezerwowano częściowo materiały dla zadania (${reservedItems.length} z ${materials.length})`,
+      }
+      
+      // Jeśli są już zarezerwowane materiały, ale są też nowe do zarezerwowania
+      if (task.materialsReserved && newMaterialsToReserve.length > 0) {
+        console.log(`[DEBUG] Zadanie ma już zarezerwowane materiały, ale wykryto ${newMaterialsToReserve.length} nowych materiałów do zarezerwowania.`);
+      }
+      
+      // Reszta kodu pozostaje bez zmian...
+
+      // Jeśli nie ma wymaganych materiałów, nie rób nic
+      if (!task.requiredMaterials || task.requiredMaterials.length === 0) {
+        console.log("Brak wymaganych materiałów dla tego zadania.");
+        
+        // Sprawdź, czy są materiały w polu materials
+        if (task.materials && task.materials.length > 0) {
+          console.log("Znaleziono materiały w polu 'materials':", task.materials);
+          // Utwórz requiredMaterials na podstawie pola materials
+          const requiredMaterials = task.materials.map(material => ({
+            id: material.inventoryItemId || material.id,
+            name: material.name,
+            quantity: material.quantity,
+            unit: material.unit || 'szt.'
+          }));
+          
+          // Zaktualizuj zadanie z requiredMaterials
+          await updateDoc(taskRef, {
+            requiredMaterials: requiredMaterials
+          });
+          
+          console.log("Utworzono requiredMaterials na podstawie materials:", requiredMaterials);
+          task.requiredMaterials = requiredMaterials;
+        } else {
+          return { success: true, message: "Brak materiałów do zarezerwowania" };
+        }
+      }
+
+      // Pobierz aktualny stan rezerwacji
+      let currentReservations = [];
+      if (task.materialReservations && task.materialReservations.length > 0) {
+        currentReservations = [...task.materialReservations];
+        console.log("Istniejące rezerwacje materiałów:", currentReservations);
+      }
+
+      // Zainicjuj zmienne do śledzenia postępu i błędów
+      let reservationsSuccess = false;
+      let reservedItems = [];
+      let errors = [];
+
+      // Dla każdego wymaganego materiału
+      for (const requiredMaterial of task.requiredMaterials) {
+        // Jeśli zadanie ma już zarezerwowane materiały i ten materiał jest już zarezerwowany, pomiń go
+        if (task.materialsReserved && existingReservedMaterials.has(requiredMaterial.id)) {
+          console.log(`Materiał ${requiredMaterial.name} jest już zarezerwowany, pomijam.`);
+          continue;
+        }
+        
+        // Pomiń jeśli materiał jest już w pełni zarezerwowany
+        const existingReservation = currentReservations.find(r => r.materialId === requiredMaterial.id);
+        const alreadyReservedQty = existingReservation ? existingReservation.reservedQuantity : 0;
+        
+        // Zaokrąglij wymaganą ilość do 10 miejsc po przecinku
+        const requiredQuantity = parseFloat(parseFloat(requiredMaterial.quantity).toFixed(10));
+        
+        // Oblicz ile jeszcze potrzeba zarezerwować
+        let remainingToReserve = parseFloat((requiredQuantity - alreadyReservedQty).toFixed(10));
+        
+        if (remainingToReserve <= 0) {
+          console.log(`Materiał ${requiredMaterial.name} jest już w pełni zarezerwowany.`);
+          continue;
+        }
+
+        console.log(`Rezerwowanie materiału: ${requiredMaterial.name}, Wymagane: ${requiredQuantity}, 
+                   Już zarezerwowane: ${alreadyReservedQty}, Pozostało do zarezerwowania: ${remainingToReserve}`);
+
+        // Znajdź wybraną partię dla tego materiału
+        let materialBatches = selectedBatches.filter(b => b.materialId === requiredMaterial.id);
+        
+        // Jeśli nie wybrano ręcznie partii, a metoda to FIFO lub expiry, pobierz dostępne partie automatycznie
+        if (materialBatches.length === 0 && (reservationMethod === 'fifo' || reservationMethod === 'expiry')) {
+          console.log(`Automatyczne wybieranie partii dla materiału ${requiredMaterial.name} metodą ${reservationMethod}`);
+          
+          // Pobierz dostępne partie dla tego materiału
+          const batchesRef = collection(db, 'inventoryBatches');
+          const q = query(
+            batchesRef,
+            where('itemId', '==', requiredMaterial.id),
+            where('quantity', '>', 0)
+          );
+          
+          const batchesSnapshot = await getDocs(q);
+          if (batchesSnapshot.empty) {
+            console.warn(`Brak dostępnych partii dla materiału: ${requiredMaterial.name}`);
+            errors.push(`Brak dostępnych partii dla materiału: ${requiredMaterial.name}`);
+            continue;
+          }
+          
+          const availableBatches = batchesSnapshot.docs.map(doc => ({
+            id: doc.id,
+            batchId: doc.id,
+            ...doc.data(),
+            materialId: requiredMaterial.id
+          }));
+          
+          console.log(`Znaleziono ${availableBatches.length} dostępnych partii dla materiału ${requiredMaterial.name}`);
+          
+          // Sortuj partie według metody rezerwacji
+          if (reservationMethod === 'fifo') {
+            availableBatches.sort((a, b) => {
+              const dateA = a.createdAt ? (a.createdAt instanceof Timestamp ? a.createdAt.toDate() : new Date(a.createdAt)) : new Date(0);
+              const dateB = b.createdAt ? (b.createdAt instanceof Timestamp ? b.createdAt.toDate() : new Date(b.createdAt)) : new Date(0);
+              return dateA - dateB;
+            });
+          } else {
+            // Według daty ważności (expiry)
+            availableBatches.sort((a, b) => {
+              const dateA = a.expiryDate ? new Date(a.expiryDate) : new Date(9999, 11, 31);
+              const dateB = b.expiryDate ? new Date(b.expiryDate) : new Date(9999, 11, 31);
+              return dateA - dateB;
+            });
+          }
+          
+          console.log(`Posortowane partie dla materiału ${requiredMaterial.name}:`, 
+                      availableBatches.map(b => `${b.batchId} (${b.quantity || 0} ${requiredMaterial.unit || 'szt.'})`));
+          
+          // Dodaj partie do listy wybranych partii
+          materialBatches = availableBatches;
+        }
+        
+        if (materialBatches.length === 0) {
+          console.warn(`Nie wybrano partii dla materiału: ${requiredMaterial.name}`);
+          errors.push(`Nie wybrano partii dla materiału: ${requiredMaterial.name}`);
+          continue;
+        }
+
+        // Lista rezerwacji dla tego materiału
+        let materialReservations = [];
+        if (existingReservation && existingReservation.batches) {
+          materialReservations = [...existingReservation.batches];
+        }
+
+        // Dla każdej wybranej partii
+        for (const batch of materialBatches) {
+          if (remainingToReserve <= 0) break;
+
+          try {
+            // Pobierz aktualny stan partii dla logowania
+            const batchRef = doc(db, 'inventoryBatches', batch.batchId);
+            const batchDoc = await getDoc(batchRef);
+            if (!batchDoc.exists()) {
+              console.error(`Nie znaleziono partii o ID: ${batch.batchId}`);
+              errors.push(`Nie znaleziono partii o ID: ${batch.batchId}`);
+              continue;
+            }
+            
+            const batchData = batchDoc.data();
+            const availableQty = batchData.quantity || 0;
+            
+            console.log(`Partia ${batch.batchId}, Dostępna ilość: ${availableQty} ${requiredMaterial.unit || 'szt.'}`);
+            
+            // Oblicz ile można zarezerwować z tej partii
+            const toReserve = Math.min(remainingToReserve, availableQty);
+            // Zaokrąglij rezerwowaną ilość do 10 miejsc po przecinku
+            const reserveAmount = parseFloat(toReserve.toFixed(10));
+            
+            if (reserveAmount <= 0) {
+              console.warn(`Partia ${batch.batchId} nie ma dostępnej ilości.`);
+              continue;
+            }
+            
+            console.log(`Rezerwowanie ${reserveAmount} ${requiredMaterial.unit || 'szt.'} z partii ${batch.batchId}`);
+            
+            // Użyj funkcji bookInventoryForTask z inventoryService
+            const { bookInventoryForTask } = await import('../services/inventoryService');
+            const bookingResult = await bookInventoryForTask(
+              requiredMaterial.id,
+              reserveAmount,
+              taskId,
+              userId || 'system',
+              reservationMethod,
+              batch.batchId
+            );
+            
+            console.log(`Wynik rezerwacji partii ${batch.batchId}:`, bookingResult);
+            
+            if (bookingResult.success) {
+              try {
+                // Uwzględnij informacje z bookInventoryForTask
+                if (bookingResult.reservedBatches && bookingResult.reservedBatches.length > 0) {
+                  // Upewnij się, że mamy numery partii
+                  const enhancedBatches = bookingResult.reservedBatches.map(reservedBatch => {
+                    // Jeśli nie ma batchNumber, spróbuj pobrać z batchData
+                    if (!reservedBatch.batchNumber && batchData) {
+                      return {
+                        ...reservedBatch,
+                        batchNumber: batchData.batchNumber || batchData.lotNumber || `Partia ${reservedBatch.batchId.substring(0, 6)}`
+                      };
+                    }
+                    return reservedBatch;
+                  });
+                  
+                  materialReservations.push(...enhancedBatches);
+                }
+              } catch (batchError) {
+                console.error('Błąd podczas przetwarzania informacji o partiach:', batchError);
+              }
+              
+              remainingToReserve = parseFloat((remainingToReserve - reserveAmount).toFixed(3));
+              console.log(`Zarezerwowano ${reserveAmount} z partii ${batchData.batchNumber || batch.batchId}, 
+                         Pozostało do zarezerwowania: ${remainingToReserve}`);
+                         
+              // Dodaj do listy zarezerwowanych materiałów
+              reservedItems.push({
+                materialId: requiredMaterial.id,
+                itemId: requiredMaterial.id, // Dodaję itemId, ponieważ czasem używamy tego pola
+                name: requiredMaterial.name,
+                batchId: batch.batchId,
+                batchNumber: batchData.batchNumber || batchData.lotNumber || `Partia ${batch.batchId.substring(0, 6)}`,
+                quantity: reserveAmount
+              });
+              
+              reservationsSuccess = true;
+            } else {
+              console.error(`Błąd rezerwacji partii ${batch.batchId}:`, bookingResult.message || 'Nieznany błąd');
+              errors.push(bookingResult.message || `Nie można zarezerwować partii ${batch.batchId}`);
+            }
+          } catch (error) {
+            console.error(`Błąd podczas rezerwacji partii ${batch.batchId}:`, error);
+            errors.push(error.message || `Nieznany błąd podczas rezerwacji partii ${batch.batchId}`);
+          }
+        }
+      }
+
+      // Aktualizuj zadanie z informacjami o rezerwacjach
+      console.log("[DEBUG] Aktualizacja zadania z rezerwacjami:", JSON.stringify(currentReservations));
+      
+      // Przygotuj materialBatches do aktualizacji
+      let materialBatches = {};
+      
+      // Jeśli zadanie ma już zarezerwowane materiały, zachowaj istniejące rezerwacje partii
+      if (task.materialsReserved && task.materialBatches) {
+        materialBatches = { ...task.materialBatches };
+      }
+      
+      // Dodaj nowe rezerwacje partii
+      for (const item of reservedItems) {
+        if (item.batches && item.batches.length > 0) {
+          if (!materialBatches[item.materialId]) {
+            materialBatches[item.materialId] = [];
+          }
+          
+          // Dla każdej partii wybranej dla tego materiału
+          for (const batch of item.batches) {
+            // Dodaj partię do listy, tylko jeśli nie jest już dodana
+            const alreadyExists = materialBatches[item.materialId].some(
+              existing => existing.batchId === batch.batchId
+            );
+            
+            if (!alreadyExists) {
+              materialBatches[item.materialId].push({
+                batchId: batch.batchId,
+                quantity: batch.quantity,
+                batchNumber: batch.batchNumber
+              });
+            }
+          }
+        }
+      }
+      
+      // Jeśli z jakiegoś powodu materialBatches jest nadal puste, ale mamy reservedItems,
+      // zbudujmy materialBatches na podstawie reservedItems
+      if (Object.keys(materialBatches).length === 0 && reservedItems.length > 0) {
+        console.log("[DEBUG] Odtwarzanie materialBatches z reservedItems");
+        for (const item of reservedItems) {
+          if (!materialBatches[item.materialId]) {
+            materialBatches[item.materialId] = [];
+          }
+          materialBatches[item.materialId].push({
+            batchId: item.batchId,
+            quantity: item.quantity,
+            batchNumber: item.batchNumber
+          });
+          console.log(`[DEBUG] Dodano partię do ${item.name}:`, JSON.stringify(materialBatches[item.materialId]));
+        }
+      }
+      
+      console.log("[DEBUG] Przygotowane materialBatches do aktualizacji:", JSON.stringify(materialBatches));
+      
+      // Ustaw materialsReserved na true tylko jeśli wszystkie materiały zostały zarezerwowane
+      // lub jeśli było to już ustawione wcześniej
+      const allMaterialsReserved = task.materialsReserved || 
+        (task.requiredMaterials.length === reservedItems.length + existingReservedMaterials.size);
+      
+      await updateDoc(taskRef, {
+        materialReservations: currentReservations,
+        materialsReserved: allMaterialsReserved,
+        reservationComplete: allMaterialsReserved,
+        materialBatches: materialBatches  // Dodajemy aktualizację materialBatches
+      });
+      
+      console.log("[DEBUG] Zakończono aktualizację zadania z materialBatches");
+
+      if (errors.length > 0) {
+        return { 
+          success: reservationsSuccess, 
+          message: reservationsSuccess 
+            ? "Materiały zostały częściowo zarezerwowane" 
+            : "Wystąpiły problemy podczas rezerwowania materiałów",
           reservedItems,
           errors
         };
-      
+      }
+
+      return { success: true, message: "Materiały zostały zarezerwowane", reservedItems };
     } catch (error) {
-      console.error('Błąd podczas rezerwacji materiałów:', error);
-      throw error;
-    
+      console.error("Błąd podczas rezerwowania materiałów:", error);
+      return { success: false, message: "Wystąpił błąd podczas rezerwowania materiałów", error };
+    }
   };
 
   // Pomocnicza funkcja do pobierania aktualnego ID użytkownika
@@ -1727,28 +2524,11 @@ import {
       updates.completionDate = serverTimestamp();
       updates.readyForInventory = true; // Oznaczamy jako gotowe do dodania do magazynu, ale nie dodajemy automatycznie
       
-      // Jeśli zadanie jest zakończone, anuluj rezerwacje materiałów
-      if (task.materials && task.materials.length > 0) {
-        for (const material of task.materials) {
-          try {
-            // Pobierz ID materiału (może być przechowywany jako id lub inventoryItemId)
-            const materialId = material.id || material.inventoryItemId;
-            
-            if (!materialId) {
-              console.warn(`Materiał ${material.name} nie ma poprawnego ID, pomijam anulowanie rezerwacji`);
-              continue;
-            
-            
-            // Anuluj rezerwację materiału
-            await cancelBooking(materialId, material.quantity, taskId, userId);
-            console.log(`Anulowano rezerwację ${material.quantity} ${material.unit || 'szt.'} materiału ${material.name} po zakończeniu zadania`);
-          } catch (error) {
-            console.error(`Błąd przy anulowaniu rezerwacji materiału ${material.name}:`, error);
-            // Kontynuuj anulowanie rezerwacji pozostałych materiałów mimo błędu
-          
-        
-      
-    
+      // USUNIĘTO: automatyczne anulowanie rezerwacji po zakończeniu zadania
+      // Rezerwacje będą anulowane dopiero po potwierdzeniu zużycia materiałów
+      // Materiały pozostają zarezerwowane, dopóki użytkownik nie potwierdzi ich zużycia
+      console.log(`Zadanie ${taskId} zostało zakończone. Rezerwacje materiałów pozostają aktywne do momentu potwierdzenia zużycia.`);
+    }
     
     await updateDoc(taskRef, updates);
     
@@ -1765,10 +2545,131 @@ import {
     
     if (!taskDoc.exists()) {
       throw new Error('Zadanie nie istnieje');
-    
+    }
     
     const task = taskDoc.data();
-    return task.productionSessions || [];
+    const productionSessions = task.productionSessions || [];
+    
+    // Tworzymy wpisy w kolekcji productionHistory jeśli nie istnieją
+    // i upewniamy się, że zawierają wszystkie potrzebne dane
+    const historyCollectionRef = collection(db, 'productionHistory');
+    const historyItems = [];
+    
+    // Dla każdej sesji, sprawdź czy istnieje już w kolekcji productionHistory
+    for (const [index, session] of productionSessions.entries()) {
+      // Tworzymy unikalny identyfikator na podstawie ID zadania i indeksu sesji
+      // (dla zapewnienia kompatybilności z istniejącymi danymi)
+      const sessionId = `${taskId}_session_${index}`;
+      
+      // Sprawdzamy czy wpis już istnieje
+      const historyDocRef = doc(db, 'productionHistory', sessionId);
+      const historyDoc = await getDoc(historyDocRef);
+      
+      let historyItem;
+      
+      if (historyDoc.exists()) {
+        // Pobierz istniejący dokument
+        historyItem = {
+          id: historyDoc.id,
+          ...historyDoc.data()
+        };
+      } else {
+        // Utwórz nowy dokument w kolekcji productionHistory
+        const newHistoryItem = {
+          taskId,
+          sessionIndex: index,
+          startTime: session.startDate,
+          endTime: session.endDate,
+          timeSpent: session.timeSpent,
+          quantity: session.completedQuantity,
+          userId: session.createdBy,
+          createdAt: serverTimestamp()
+        };
+        
+        // Zapisz w bazie danych
+        await setDoc(doc(db, 'productionHistory', sessionId), newHistoryItem);
+        
+        historyItem = {
+          id: sessionId,
+          ...newHistoryItem
+        };
+      }
+      
+      historyItems.push(historyItem);
+    }
+    
+    return historyItems;
+  };
+
+  // Funkcja do aktualizacji sesji produkcyjnej
+  export const updateProductionSession = async (sessionId, updateData, userId) => {
+    try {
+      // Pobierz aktualne dane sesji
+      const sessionRef = doc(db, 'productionHistory', sessionId);
+      const sessionDoc = await getDoc(sessionRef);
+      
+      if (!sessionDoc.exists()) {
+        throw new Error('Sesja produkcyjna nie istnieje');
+      }
+      
+      const sessionData = sessionDoc.data();
+      const taskId = sessionData.taskId;
+      const sessionIndex = sessionData.sessionIndex;
+      
+      // Pobierz dane zadania
+      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+      const taskDoc = await getDoc(taskRef);
+      
+      if (!taskDoc.exists()) {
+        throw new Error('Zadanie produkcyjne nie istnieje');
+      }
+      
+      const task = taskDoc.data();
+      const productionSessions = [...(task.productionSessions || [])];
+      
+      // Sprawdź czy sesja istnieje w tablicy sesji zadania
+      if (!productionSessions[sessionIndex]) {
+        throw new Error('Sesja produkcyjna nie została znaleziona w zadaniu');
+      }
+      
+      // Aktualizuj dane w dokumencie productionHistory
+      await updateDoc(sessionRef, {
+        ...updateData,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      });
+      
+      // Aktualizuj dane w tablicy sesji zadania
+      productionSessions[sessionIndex] = {
+        ...productionSessions[sessionIndex],
+        startDate: updateData.startTime,
+        endDate: updateData.endTime,
+        timeSpent: updateData.timeSpent,
+        completedQuantity: updateData.quantity
+      };
+      
+      // Oblicz całkowitą wyprodukowaną ilość
+      const totalCompletedQuantity = productionSessions.reduce(
+        (sum, session) => sum + (session.completedQuantity || 0), 
+        0
+      );
+      
+      // Aktualizuj dane zadania
+      await updateDoc(taskRef, {
+        productionSessions,
+        totalCompletedQuantity,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      });
+      
+      return {
+        success: true,
+        message: 'Sesja produkcyjna została zaktualizowana'
+      };
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji sesji produkcyjnej:', error);
+      throw error;
+    }
   };
 
   // Generuje raport materiałów i LOTów dla zlecenia produkcyjnego (MO)
@@ -1776,18 +2677,19 @@ import {
     try {
       if (!taskId) {
         throw new Error('Nie podano ID zadania produkcyjnego');
-      
+      }
       
       // Pobierz dane zadania produkcyjnego
       const task = await getTaskById(taskId);
       
       if (!task) {
         throw new Error('Nie znaleziono zadania produkcyjnego');
-      
+      }
 
       // Pobierz szczegółowe dane partii dla wszystkich materiałów
       const batchesDetails = {};
       const materialIds = [];
+      const inventoryItemsDetails = {}; // Dodaj obiekt do przechowywania szczegółów elementów inwentarza
 
       // Zbierz wszystkie ID materiałów
       if (task.materials && task.materials.length > 0) {
@@ -1795,15 +2697,29 @@ import {
           const materialId = material.inventoryItemId || material.id;
           if (materialId) {
             materialIds.push(materialId);
-          
-        
-      
+          }
+        }
+      }
 
-      // Pobierz szczegóły partii dla wszystkich materiałów
+      // Pobierz szczegóły partii i elementów inwentarza dla wszystkich materiałów
       if (materialIds.length > 0) {
-        const { collection, query, where, getDocs } = await import('firebase/firestore');
-        const { db } = await import('./firebase/config');
+        const { collection, query, where, getDocs, doc, getDoc } = await import('firebase/firestore');
+        
+        // Pobierz szczegóły elementów inwentarza
+        for (const materialId of materialIds) {
+          try {
+            const itemRef = doc(db, 'inventory', materialId);
+            const itemSnap = await getDoc(itemRef);
+            
+            if (itemSnap.exists()) {
+              inventoryItemsDetails[materialId] = itemSnap.data();
+            }
+          } catch (error) {
+            console.error(`Błąd podczas pobierania szczegółów elementu inwentarza ${materialId}:`, error);
+          }
+        }
 
+        // Pobierz wszystkie partie dla materiałów
         for (const materialId of materialIds) {
           // Pobierz partie dla danego materiału
           const batchesRef = collection(db, 'inventoryBatches');
@@ -1819,292 +2735,301 @@ import {
               id: doc.id
             };
           });
-        
+        }
+      }
       
-      
-      // Importuj biblioteki jsPDF i autoTable
-      const { jsPDF } = await import('jspdf');
-      const autoTable = (await import('jspdf-autotable')).default;
-      
-      // Dodaj fontface dla obsługi polskich znaków
-      const addFonts = async () => {
-        try {
-          const standardFont = await import('../../public/fonts/Roboto-Regular-normal.js');
-          const boldFont = await import('../../public/fonts/Roboto-Bold-bold.js');
-          return true;
-        } catch (error) {
-          console.warn('Nie udało się załadować czcionek:', error);
-          return false;
-        
+      // Przygotuj wynik raportu
+      const result = {
+        task: {
+          id: task.id,
+          name: task.name,
+          moNumber: task.moNumber,
+          productName: task.productName,
+          quantity: task.quantity,
+          unit: task.unit,
+          scheduledDate: task.scheduledDate,
+          status: task.status
+        },
+        materials: []
       };
-
-      try {
-        await addFonts();
-      } catch (error) {
-        console.warn('Błąd ładowania czcionek:', error);
       
-      
-      // Utwórz dokument PDF
-      const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-      });
-
-      // Dodaj polskie czcionki jeśli są dostępne
-      try {
-        doc.addFont('Roboto-Regular', 'normal');
-        doc.addFont('Roboto-Bold', 'bold');
-        doc.setFont('Roboto-Regular', 'normal');
-      } catch (error) {
-        console.warn('Nie można ustawić czcionki z polskimi znakami:', error);
-      
-      
-      // Dodaj nagłówek dokumentu
-      doc.setFontSize(18);
-      doc.text('Rozpiska materialow i LOT-ow', 14, 15);
-      
-      // Dodaj informacje o zleceniu produkcyjnym
-      doc.setFontSize(12);
-      doc.text(`Zlecenie produkcyjne: ${task.moNumber || 'brak numeru'}`, 14, 25);
-      doc.text(`Nazwa: ${task.name || 'brak nazwy'}`, 14, 30);
-      doc.text(`Produkt: ${task.productName || 'brak produktu'}`, 14, 35);
-      doc.text(`Ilosc: ${task.quantity || 0} ${task.unit || 'szt.'}`, 14, 40);
-      
-      if (task.scheduledDate) {
-        const formattedDate = new Date(task.scheduledDate).toLocaleDateString('pl-PL');
-        doc.text(`Data planowana: ${formattedDate}`, 14, 45);
-      
-      
-      // Jeśli zadanie jest powiązane z zamówieniem klienta, dodaj informacje o zamówieniu
-      if (task.orderId && task.orderNumber) {
-        doc.text(`Zamowienie klienta: ${task.orderNumber}`, 14, 50);
-      
-      
-      // Jeśli zadanie ma przypisanego klienta, dodaj informacje o kliencie
-      if (task.customer && task.customer.name) {
-        doc.text(`Klient: ${task.customer.name}`, 14, 55);
-      
-      
-      // Dodaj sekcję materiałów
-      doc.setFontSize(14);
-      doc.text('Zestawienie materialow', 14, 65);
-      
-      // Przygotuj dane dla tabeli materiałów
-      const materialTableData = [];
-      const materialBatchTableData = [];
-      
+      // Przygotuj tabelę materiałów z aktualnymi cenami z partii
       if (task.materials && task.materials.length > 0) {
-        // Przygotuj dane dla tabeli materiałów
-        task.materials.forEach((material, index) => {
-          const actualUsage = task.actualMaterialUsage && task.actualMaterialUsage[material.id] !== undefined
-            ? task.actualMaterialUsage[material.id]
-            : material.quantity;
-          
-          materialTableData.push([
-            (index + 1).toString(),
-            material.name || 'brak nazwy',
-            material.category || 'brak kategorii',
-            material.quantity ? material.quantity.toFixed(2) : '0.00',
-            actualUsage ? actualUsage.toFixed(2) : '0.00',
-            material.unit || 'szt.',
-            (task.materialConsumptionConfirmed ? 'Tak' : 'Nie')
-          ]);
-          
-          // Pobierz i dodaj partie materiałów do drugiej tabeli
+        // Kopiuj materiały do wyniku
+        for (const material of task.materials) {
           const materialId = material.inventoryItemId || material.id;
-          if (task.materialBatches && task.materialBatches[materialId]) {
-            task.materialBatches[materialId].forEach(batch => {
-              let expiryDateStr = 'brak daty';
-              
-              // Sprawdź, czy mamy datę ważności bezpośrednio w batch
-              if (batch.expiryDate) {
-                try {
-                  const expiryDate = batch.expiryDate instanceof Date 
-                    ? batch.expiryDate 
-                    : new Date(batch.expiryDate);
-                  expiryDateStr = expiryDate.toLocaleDateString('pl-PL');
-                } catch (error) {
-                  console.error('Błąd podczas formatowania daty ważności:', error);
-                
-              
-              // Jeśli nie mamy daty w batch, sprawdź czy mamy szczegóły partii
-              else if (batch.batchId && batchesDetails[materialId] && batchesDetails[materialId][batch.batchId]) {
-                const batchDetail = batchesDetails[materialId][batch.batchId];
-                if (batchDetail.expiryDate) {
-                  try {
-                    // Konwertuj timestamp na datę
-                    const expiryDate = batchDetail.expiryDate.toDate 
-                      ? batchDetail.expiryDate.toDate() 
-                      : new Date(batchDetail.expiryDate);
-                    expiryDateStr = expiryDate.toLocaleDateString('pl-PL');
-                  } catch (error) {
-                    console.error('Błąd podczas formatowania daty z bazy danych:', error);
-                  
-                
-              
-              
-              materialBatchTableData.push([
-                (index + 1).toString(),
-                material.name || 'brak nazwy',
-                batch.batchNumber || batch.lotNumber || 'brak numeru',
-                batch.quantity ? batch.quantity.toFixed(2) : '0.00',
-                material.unit || 'szt.',
-                expiryDateStr
-              ]);
-            });
+          const materialBatches = task.materialBatches && task.materialBatches[materialId] || [];
           
-        });
+          // Pobierz szczegóły materiału z inwentarza
+          const inventoryDetails = inventoryItemsDetails[materialId] || {};
+          
+          // Oblicz średnią ważoną cenę jednostkową na podstawie zarezerwowanych partii
+          let totalCost = 0;
+          let totalQuantity = 0;
+          let averageUnitPrice = 0;
+          
+          // Przelicz cenę tylko jeśli są zarezerwowane partie
+          if (materialBatches.length > 0) {
+            for (const batch of materialBatches) {
+              // Pobierz aktualne dane partii (może zawierać zaktualizowaną cenę)
+              const batchDetails = batch.batchId && batchesDetails[materialId] && batchesDetails[materialId][batch.batchId];
+              
+              // Użyj aktualnej ceny z bazy danych, jeśli jest dostępna
+              const batchUnitPrice = batchDetails?.unitPrice || batch.unitPrice || 0;
+              const batchQuantity = parseFloat(batch.quantity) || 0;
+              
+              totalCost += batchUnitPrice * batchQuantity;
+              totalQuantity += batchQuantity;
+            }
+            
+            // Oblicz średnią ważoną cenę
+            if (totalQuantity > 0) {
+              averageUnitPrice = totalCost / totalQuantity;
+            }
+          }
+          
+          // Dodaj materiał do wyniku
+          result.materials.push({
+            id: material.id,
+            inventoryItemId: materialId,
+            name: material.name,
+            quantity: material.quantity,
+            unit: material.unit || inventoryDetails.unit || 'szt.',
+            category: material.category || inventoryDetails.category || '',
+            // Użyj średniej ważonej ceny jeśli jest dostępna, w przeciwnym razie użyj ceny z materiału lub inwentarza
+            unitPrice: averageUnitPrice || material.unitPrice || inventoryDetails.unitPrice || 0
+          });
+        }
+      }
       
+      // Przygotuj tabelę partii
+      result.batches = {};
       
-      // Dodaj tabelę materiałów
-      autoTable(doc, {
-        startY: 70,
-        head: [[
-          'L.p.',
-          'Material',
-          'Kategoria',
-          'Planowana ilosc',
-          'Rzeczywista ilosc',
-          'J.m.',
-          'Potwierdzony'
-        ]],
-        body: materialTableData,
-        headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-        alternateRowStyles: { fillColor: [245, 245, 245] },
-        styles: { fontSize: 8, cellPadding: 2 },
-        margin: { top: 70 },
-        tableLineWidth: 0.1,
-        tableLineColor: [0, 0, 0]
-      });
+      if (task.materialBatches) {
+        for (const [materialId, batches] of Object.entries(task.materialBatches)) {
+          if (!result.batches[materialId]) {
+            result.batches[materialId] = [];
+          }
+          
+          for (const batch of batches) {
+            // Pobierz aktualne dane partii z bazy danych
+            const batchDetails = batch.batchId && batchesDetails[materialId] && batchesDetails[materialId][batch.batchId];
+            
+            // Merge data from batch reservation with current batch details
+            result.batches[materialId].push({
+              batchId: batch.batchId,
+              batchNumber: batch.batchNumber || batchDetails?.batchNumber || 'Brak numeru',
+              quantity: batch.quantity,
+              expiryDate: batchDetails?.expiryDate || batch.expiryDate,
+              // Użyj aktualnej ceny z bazy danych, jeśli jest dostępna
+              unitPrice: batchDetails?.unitPrice || batch.unitPrice || 0
+            });
+          }
+        }
+      }
       
-      // Dodaj sekcję LOT-ów, tylko jeśli są dostępne dane
-      if (materialBatchTableData.length > 0) {
-        // Ustal pozycję początkową dla drugiej tabeli (poniżej pierwszej)
-        const firstTableEndY = doc.lastAutoTable.finalY + 10;
-        
-        doc.setFontSize(14);
-        doc.text('Przypisane partie (LOT)', 14, firstTableEndY);
-        
-        // Dodaj tabelę LOT-ów
-        autoTable(doc, {
-          startY: firstTableEndY + 5,
-          head: [[
-            'L.p.',
-            'Material',
-            'Numer LOT',
-            'Ilosc',
-            'J.m.',
-            'Data waznosci'
-          ]],
-          body: materialBatchTableData,
-          headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-          alternateRowStyles: { fillColor: [245, 245, 245] },
-          styles: { fontSize: 8, cellPadding: 2 },
-          margin: { top: firstTableEndY + 5 },
-          tableLineWidth: 0.1,
-          tableLineColor: [0, 0, 0]
-        });
-      
-      
-      // Dodaj stopkę
-      const pageCount = doc.internal.getNumberOfPages();
-      for(let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(8);
-        doc.text(
-          `Strona ${i} z ${pageCount}`,
-          doc.internal.pageSize.width / 2,
-          doc.internal.pageSize.height - 10,
-          { align: 'center' 
-        );
-        
-        // Dodaj datę wygenerowania
-        const currentDate = new Date().toLocaleDateString('pl-PL');
-        doc.text(
-          `Wygenerowano: ${currentDate}`,
-          doc.internal.pageSize.width - 20,
-          doc.internal.pageSize.height - 10,
-          { align: 'right' 
-        );
-      
-      
-      // Zwróć plik PDF jako Blob
-      const pdfBlob = doc.output('blob');
-      return pdfBlob;
+      return result;
     } catch (error) {
       console.error('Błąd podczas generowania raportu materiałów i LOT-ów:', error);
       throw error;
-    
+    }
   };
 
-  // Funkcja do powiązania zamówienia zakupowego z zadaniem produkcyjnym
-  export const linkPurchaseOrderToTask = async (taskId, purchaseOrder) => {
+  // Aktualizuje koszty zadania produkcyjnego
+  export const updateTaskCosts = async (taskId, costsData, userId) => {
     try {
       const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
-      const taskDoc = await getDoc(taskRef);
       
-      if (!taskDoc.exists()) {
-        throw new Error('Zadanie produkcyjne nie istnieje');
+      // Przygotuj dane do aktualizacji
+      const updatedData = {
+        materialCost: costsData.materialCost || 0,
+        unitMaterialCost: costsData.unitMaterialCost || 0,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      };
       
+      await updateDoc(taskRef, updatedData);
       
-      // Pobierz aktualną listę powiązanych zamówień lub zainicjuj pustą tablicę
-      const currentTask = taskDoc.data();
-      const currentPurchaseOrders = currentTask.purchaseOrders || [];
-      
-      // Sprawdź czy zamówienie nie jest już powiązane
-      const poExists = currentPurchaseOrders.some(po => po.id === purchaseOrder.id);
-      
-      if (poExists) {
-        throw new Error('To zamówienie zakupowe jest już powiązane z tym zadaniem');
-      
-      
-      // Dodaj nowe zamówienie do listy
-      const updatedPurchaseOrders = [
-        ...currentPurchaseOrders,
-        purchaseOrder
-      ];
-      
-      // Zaktualizuj dokument zadania
-      await updateDoc(taskRef, {
-        purchaseOrders: updatedPurchaseOrders,
-        updatedAt: serverTimestamp()
-      });
-      
-      return { success: true, message: 'Zamówienie zakupowe zostało powiązane z zadaniem' };
+      return {
+        success: true,
+        message: 'Koszty zadania zostały zaktualizowane'
+      };
     } catch (error) {
-      console.error('Błąd podczas wiązania zamówienia zakupowego z zadaniem:', error);
+      console.error('Błąd podczas aktualizacji kosztów zadania:', error);
       throw error;
-    
+    }
   };
 
-  // Funkcja do usunięcia powiązania zamówienia zakupowego z zadaniem
-  export const unlinkPurchaseOrderFromTask = async (taskId, purchaseOrderId) => {
+  // Funkcja do jednorazowej inicjalizacji brakujących pól kosztów w istniejących zadaniach
+  export const initializeMissingCostFields = async (userId) => {
     try {
-      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
-      const taskDoc = await getDoc(taskRef);
+      const tasksRef = collection(db, PRODUCTION_TASKS_COLLECTION);
+      const q = query(tasksRef);
+      const querySnapshot = await getDocs(q);
       
-      if (!taskDoc.exists()) {
-        throw new Error('Zadanie produkcyjne nie istnieje');
+      const updatedTasks = [];
+      const failedTasks = [];
       
+      console.log(`Znaleziono ${querySnapshot.docs.length} zadań produkcyjnych do sprawdzenia`);
       
-      // Pobierz aktualną listę powiązanych zamówień
-      const currentTask = taskDoc.data();
-      const currentPurchaseOrders = currentTask.purchaseOrders || [];
+      for (const doc of querySnapshot.docs) {
+        try {
+          const taskData = doc.data();
+          const taskId = doc.id;
+          
+          // Sprawdź czy zadanie ma już pola kosztów
+          const hasTotalMaterialCost = taskData.totalMaterialCost !== undefined;
+          const hasUnitMaterialCost = taskData.unitMaterialCost !== undefined;
+          const hasCostHistory = taskData.costHistory !== undefined;
+          
+          // Jeśli brakuje któregokolwiek pola, zaktualizuj zadanie
+          if (!hasTotalMaterialCost || !hasUnitMaterialCost || !hasCostHistory) {
+            console.log(`Inicjalizacja pól kosztów dla zadania ${taskId} (MO: ${taskData.moNumber || 'brak'})`);
+            
+            const updateData = {};
+            
+            if (!hasTotalMaterialCost) {
+              updateData.totalMaterialCost = 0;
+            }
+            
+            if (!hasUnitMaterialCost) {
+              updateData.unitMaterialCost = 0;
+            }
+            
+            if (!taskData.costLastUpdatedAt) {
+              updateData.costLastUpdatedAt = serverTimestamp();
+            }
+            
+            if (!taskData.costLastUpdatedBy) {
+              updateData.costLastUpdatedBy = userId;
+            }
+            
+            if (!hasCostHistory) {
+              updateData.costHistory = [{
+                timestamp: new Date().toISOString(), // Używamy ISO string zamiast serverTimestamp()
+                userId: userId,
+                userName: 'System',
+                previousTotalCost: 0,
+                newTotalCost: updateData.totalMaterialCost || taskData.totalMaterialCost || 0,
+                previousUnitCost: 0,
+                newUnitCost: updateData.unitMaterialCost || taskData.unitMaterialCost || 0,
+                reason: 'Migracja danych - inicjalizacja pól kosztów'
+              }];
+            }
+            
+            // Wykonaj aktualizację tylko jeśli są jakieś pola do zaktualizowania
+            if (Object.keys(updateData).length > 0) {
+              await updateDoc(doc(db, PRODUCTION_TASKS_COLLECTION, taskId), updateData);
+              updatedTasks.push(taskId);
+            }
+          }
+        } catch (error) {
+          console.error(`Błąd podczas aktualizacji zadania ${doc.id}:`, error);
+          failedTasks.push(doc.id);
+        }
+      }
       
-      // Usuń wskazane zamówienie z listy
-      const updatedPurchaseOrders = currentPurchaseOrders.filter(po => po.id !== purchaseOrderId);
-      
-      // Zaktualizuj dokument zadania
-      await updateDoc(taskRef, {
-        purchaseOrders: updatedPurchaseOrders,
-        updatedAt: serverTimestamp()
-      });
-      
-      return { success: true, message: 'Powiązanie zostało usunięte' };
+      return {
+        success: true,
+        message: `Zaktualizowano pola kosztów dla ${updatedTasks.length} zadań. Nie udało się zaktualizować ${failedTasks.length} zadań.`,
+        updatedTasks,
+        failedTasks
+      };
     } catch (error) {
-      console.error('Błąd podczas usuwania powiązania zamówienia zakupowego:', error);
-      throw error;
-    
+      console.error('Błąd podczas inicjalizacji pól kosztów:', error);
+      return {
+        success: false,
+        message: `Błąd podczas inicjalizacji pól kosztów: ${error.message}`,
+        error: error.toString()
+      };
+    }
   };
 
+  /**
+   * Przypisuje zadanie produkcyjne do konkretnej pozycji zamówienia
+   * @param {string} taskId - ID zadania produkcyjnego
+   * @param {string} orderId - ID zamówienia klienta
+   * @param {string} orderItemId - ID pozycji w zamówieniu
+   * @param {string} userId - ID użytkownika dokonującego zmiany
+   * @returns {Promise<object>} - Informacja o sukcesie lub błędzie
+   */
+  export const assignTaskToOrderItem = async (taskId, orderId, orderItemId, userId) => {
+    try {
+      // Pobierz dane zadania produkcyjnego
+      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+      const taskSnapshot = await getDoc(taskRef);
+      
+      if (!taskSnapshot.exists()) {
+        throw new Error(`Zadanie produkcyjne o ID ${taskId} nie istnieje`);
+      }
+      
+      // Pobierz dane zamówienia
+      const orderRef = doc(db, 'orders', orderId);
+      const orderSnapshot = await getDoc(orderRef);
+      
+      if (!orderSnapshot.exists()) {
+        throw new Error(`Zamówienie o ID ${orderId} nie istnieje`);
+      }
+      
+      const orderData = orderSnapshot.data();
+      
+      // Sprawdź czy pozycja istnieje w zamówieniu
+      if (!orderData.items || !orderData.items.some(item => item.id === orderItemId)) {
+        throw new Error(`Pozycja o ID ${orderItemId} nie istnieje w zamówieniu ${orderId}`);
+      }
+      
+      // Zaktualizuj zadanie produkcyjne z informacją o powiązanej pozycji zamówienia
+      await updateDoc(taskRef, {
+        orderItemId: orderItemId,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      });
+      
+      // Zaktualizuj listę zadań produkcyjnych w zamówieniu
+      const productionTasks = orderData.productionTasks || [];
+      const taskIndex = productionTasks.findIndex(task => task.id === taskId);
+      
+      if (taskIndex !== -1) {
+        // Jeśli zadanie już istnieje w liście, zaktualizuj je
+        productionTasks[taskIndex] = {
+          ...productionTasks[taskIndex],
+          orderItemId: orderItemId,
+          updatedAt: new Date().toISOString()
+        };
+      }
+      
+      // Zaktualizuj zamówienie
+      await updateDoc(orderRef, {
+        productionTasks: productionTasks,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      });
+      
+      // Zaktualizuj również pozycję zamówienia z informacją o przypisanym zadaniu
+      const updatedItems = [...orderData.items];
+      const itemIndex = updatedItems.findIndex(item => item.id === orderItemId);
+      
+      if (itemIndex !== -1) {
+        updatedItems[itemIndex] = {
+          ...updatedItems[itemIndex],
+          productionTaskId: taskId,
+          productionAssigned: true
+        };
+        
+        await updateDoc(orderRef, {
+          items: updatedItems,
+          updatedAt: serverTimestamp(),
+          updatedBy: userId
+        });
+      }
+      
+      return {
+        success: true,
+        message: `Zadanie produkcyjne ${taskId} zostało przypisane do pozycji ${orderItemId} w zamówieniu ${orderId}`
+      };
+    } catch (error) {
+      console.error('Błąd podczas przypisywania zadania do pozycji zamówienia:', error);
+      throw error;
+    }
+  };
+}

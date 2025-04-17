@@ -73,7 +73,7 @@ const OrderDetails = () => {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const { showError, showSuccess } = useNotification();
+  const { showError, showSuccess, showInfo } = useNotification();
   const navigate = useNavigate();
   const fileInputRef = React.useRef(null);
   const { currentUser } = useAuth();
@@ -124,6 +124,29 @@ const OrderDetails = () => {
     } catch (error) {
       showError('Błąd podczas odświeżania danych zamówienia: ' + error.message);
       console.error('Error refreshing order data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Funkcja do odświeżania danych o kosztach produkcji
+  const refreshProductionCosts = async () => {
+    try {
+      setLoading(true);
+      
+      // Pobierz aktualne dane zadań produkcyjnych
+      const refreshedOrderData = await getOrderById(orderId);
+      
+      if (refreshedOrderData.productionTasks && refreshedOrderData.productionTasks.length > 0) {
+        // Zaktualizuj dane zamówienia
+        setOrder(refreshedOrderData);
+        showSuccess('Dane kosztów produkcji zostały odświeżone');
+      } else {
+        showInfo('Brak zadań produkcyjnych do odświeżenia');
+      }
+    } catch (error) {
+      showError('Błąd podczas odświeżania danych kosztów produkcji: ' + error.message);
+      console.error('Error refreshing production costs:', error);
     } finally {
       setLoading(false);
     }
@@ -438,6 +461,26 @@ const OrderDetails = () => {
 
   // Funkcja do określania statusu produkcji dla danego elementu
   const getProductionStatus = (item, productionTasks) => {
+    // Sprawdź, czy element ma bezpośrednio przypisane zadanie produkcyjne
+    if (item.productionTaskId && item.productionStatus) {
+      const statusColor = getProductionStatusColor(item.productionStatus);
+      
+      // Stwórz chip z możliwością kliknięcia, który przeniesie do szczegółów zadania
+      return (
+        <Tooltip title={`Przejdź do zadania produkcyjnego ${item.productionTaskNumber || item.productionTaskId}`}>
+          <Chip
+            label={item.productionStatus}
+            size="small"
+            color={statusColor}
+            clickable
+            onClick={() => navigate(`/production/${item.productionTaskId}`)}
+            sx={{ cursor: 'pointer' }}
+          />
+        </Tooltip>
+      );
+    }
+    
+    // Tradycyjne sprawdzenie, jeśli nie ma bezpośredniego przypisania
     if (!productionTasks || !Array.isArray(productionTasks) || productionTasks.length === 0) {
       return <Chip label="Brak zadań" size="small" color="default" />;
     }
@@ -458,16 +501,41 @@ const OrderDetails = () => {
     const anyInProgress = tasksForItem.some(task => task.status === 'W trakcie' || task.status === 'Wstrzymane');
     const anyPlanned = tasksForItem.some(task => task.status === 'Zaplanowane');
 
+    // Jeśli jest tylko jedno zadanie, pokaż link do tego zadania
+    if (tasksForItem.length === 1) {
+      const task = tasksForItem[0];
+      let statusColor = 'default';
+      
+      if (task.status === 'Zakończone') statusColor = 'success';
+      else if (task.status === 'Anulowane') statusColor = 'error';
+      else if (task.status === 'W trakcie' || task.status === 'Wstrzymane') statusColor = 'warning';
+      else if (task.status === 'Zaplanowane') statusColor = 'primary';
+      
+      return (
+        <Tooltip title={`Przejdź do zadania produkcyjnego ${task.moNumber || task.id}`}>
+          <Chip
+            label={task.status}
+            size="small"
+            color={statusColor}
+            clickable
+            onClick={() => navigate(`/production/${task.id}`)}
+            sx={{ cursor: 'pointer' }}
+          />
+        </Tooltip>
+      );
+    }
+
+    // W przypadku wielu zadań, pokaż ogólny status
     if (allCompleted) {
-      return <Chip label="Zakończone" size="small" color="success" />;
+      return <Chip label={`Zakończone (${tasksForItem.length})`} size="small" color="success" />;
     } else if (allCancelled) {
-      return <Chip label="Anulowane" size="small" color="error" />;
+      return <Chip label={`Anulowane (${tasksForItem.length})`} size="small" color="error" />;
     } else if (anyInProgress) {
-      return <Chip label="W trakcie" size="small" color="warning" />;
+      return <Chip label={`W trakcie (${tasksForItem.length})`} size="small" color="warning" />;
     } else if (anyPlanned) {
-      return <Chip label="Zaplanowane" size="small" color="primary" />;
+      return <Chip label={`Zaplanowane (${tasksForItem.length})`} size="small" color="primary" />;
     } else {
-      return <Chip label="Mieszany" size="small" color="default" />;
+      return <Chip label={`Mieszany (${tasksForItem.length})`} size="small" color="default" />;
     }
   };
 
@@ -662,7 +730,21 @@ const OrderDetails = () => {
               <TableCell sx={{ color: 'inherit' }} align="right">Ilość</TableCell>
               <TableCell sx={{ color: 'inherit' }} align="right">Cena</TableCell>
               <TableCell sx={{ color: 'inherit' }} align="right">Wartość</TableCell>
+              <TableCell sx={{ color: 'inherit' }}>Lista cenowa</TableCell>
               <TableCell sx={{ color: 'inherit' }}>Status produkcji</TableCell>
+              <TableCell sx={{ color: 'inherit' }} align="right">
+                Koszt produkcji
+                <Tooltip title="Odśwież dane zadań produkcyjnych">
+                  <IconButton 
+                    size="small" 
+                    color="primary"
+                    onClick={refreshProductionCosts}
+                    sx={{ ml: 1, color: 'inherit' }}
+                  >
+                    <RefreshIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </TableCell>
               <TableCell sx={{ color: 'inherit' }}>Akcje</TableCell>
             </TableRow>
           </TableHead>
@@ -674,7 +756,35 @@ const OrderDetails = () => {
                 <TableCell align="right">{formatCurrency(item.price)}</TableCell>
                 <TableCell align="right">{formatCurrency(item.quantity * item.price)}</TableCell>
                 <TableCell>
+                  {item.fromPriceList ? (
+                    <Chip 
+                      label="Tak" 
+                      size="small" 
+                      color="success" 
+                      variant="outlined" 
+                    />
+                  ) : (
+                    <Chip 
+                      label="Nie" 
+                      size="small" 
+                      color="default" 
+                      variant="outlined" 
+                    />
+                  )}
+                </TableCell>
+                <TableCell>
                   {getProductionStatus(item, order.productionTasks)}
+                </TableCell>
+                <TableCell align="right">
+                  {item.productionTaskId && item.productionCost !== undefined ? (
+                    <Tooltip title="Koszt produkcji zadania">
+                      <Typography>
+                        {formatCurrency(item.productionCost)}
+                      </Typography>
+                    </Tooltip>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">-</Typography>
+                  )}
                 </TableCell>
                 <TableCell>
                   <Tooltip title="Drukuj etykietę">
@@ -1032,7 +1142,7 @@ const OrderDetails = () => {
           <Typography variant="h6">Zadania produkcyjne</Typography>
           <IconButton 
             color="primary" 
-            onClick={refreshOrderData} 
+            onClick={refreshProductionCosts} 
             title="Odśwież dane zadań produkcyjnych"
           >
             <RefreshIcon />

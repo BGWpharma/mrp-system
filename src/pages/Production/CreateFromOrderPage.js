@@ -429,6 +429,7 @@ const CreateFromOrderPage = () => {
           recipe: recipeData,
           orderId: selectedOrder.id, // Dodanie orderId do zadania
           orderNumber: selectedOrder.orderNumber || selectedOrder.id,
+          orderItemId: item.id, // Dodanie identyfikatora pozycji zamówienia
           customer: selectedOrder.customer || null,
           purchaseOrders: selectedOrder.linkedPurchaseOrders && selectedOrder.linkedPurchaseOrders.length > 0 
             ? selectedOrder.linkedPurchaseOrders.map(po => ({
@@ -451,8 +452,8 @@ const CreateFromOrderPage = () => {
         const newTask = await createTask(taskData, currentUser.uid, taskForm.autoReserveMaterials);
         
         if (newTask) {
-          // Dodaj zadanie do zamówienia
-          await addProductionTaskToOrder(selectedOrder.id, newTask);
+          // Dodaj zadanie do zamówienia, przekazując ID pozycji zamówienia
+          await addProductionTaskToOrder(selectedOrder.id, newTask, item.id);
           
           // Dodaj zadanie do listy utworzonych zadań
           setTasksCreated(prev => [...prev, newTask]);
@@ -700,6 +701,7 @@ const CreateFromOrderPage = () => {
           recipe: recipeData,
           orderId: selectedOrder.id, // Dodanie orderId do zadania
           orderNumber: selectedOrder.orderNumber || selectedOrder.id,
+          orderItemId: item.id, // Dodanie identyfikatora pozycji zamówienia
           customer: selectedOrder.customer || null,
           purchaseOrders: selectedOrder.linkedPurchaseOrders && selectedOrder.linkedPurchaseOrders.length > 0 
             ? selectedOrder.linkedPurchaseOrders.map(po => ({
@@ -722,8 +724,8 @@ const CreateFromOrderPage = () => {
         const newTask = await createTask(taskData, currentUser.uid, taskForm.autoReserveMaterials);
         
         if (newTask) {
-          // Dodaj zadanie do zamówienia
-          await addProductionTaskToOrder(selectedOrder.id, newTask);
+          // Dodaj zadanie do zamówienia, przekazując ID pozycji zamówienia
+          await addProductionTaskToOrder(selectedOrder.id, newTask, item.id);
           
           // Dodaj zadanie do listy utworzonych zadań
           setTasksCreated(prev => [...prev, newTask]);

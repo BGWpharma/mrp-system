@@ -761,7 +761,7 @@ export const DEFAULT_ORDER = {
 };
 
 // Dodaj nową funkcję do aktualizacji listy zadań produkcyjnych
-export const addProductionTaskToOrder = async (orderId, taskData) => {
+export const addProductionTaskToOrder = async (orderId, taskData, orderItemId = null) => {
   try {
     const orderRef = doc(db, ORDERS_COLLECTION, orderId);
     const orderDoc = await getDoc(orderRef);
@@ -782,7 +782,8 @@ export const addProductionTaskToOrder = async (orderId, taskData) => {
       createdAt: new Date().toISOString(), // Używamy zwykłej daty zamiast serverTimestamp
       productName: taskData.productName,
       quantity: taskData.quantity,
-      unit: taskData.unit
+      unit: taskData.unit,
+      orderItemId: orderItemId // Dodaj identyfikator pozycji zamówienia
     });
     
     // Zaktualizuj zamówienie
@@ -811,6 +812,10 @@ export const removeProductionTaskFromOrder = async (orderId, taskId) => {
     const order = orderDoc.data();
     const productionTasks = order.productionTasks || [];
     
+    // Zapisz informację o orderItemId przed usunięciem zadania
+    let removedTask = productionTasks.find(task => task.id === taskId);
+    let orderItemId = removedTask ? removedTask.orderItemId : null;
+    
     // Filtrujemy listę zadań, usuwając to z podanym ID
     const updatedTasks = productionTasks.filter(task => task.id !== taskId);
     
@@ -825,6 +830,26 @@ export const removeProductionTaskFromOrder = async (orderId, taskId) => {
       productionTasks: updatedTasks,
       updatedAt: serverTimestamp()
     });
+    
+    // Wyczyść powiązanie w zadaniu produkcyjnym, jeśli istnieje
+    try {
+      const taskRef = doc(db, 'productionTasks', taskId);
+      const taskDoc = await getDoc(taskRef);
+      
+      if (taskDoc.exists()) {
+        // Zaktualizuj zadanie produkcyjne - usuń powiązanie z zamówieniem
+        await updateDoc(taskRef, {
+          orderId: null,
+          orderNumber: null,
+          orderItemId: null,
+          updatedAt: serverTimestamp()
+        });
+        console.log(`Usunięto powiązanie z zamówieniem w zadaniu produkcyjnym ${taskId}`);
+      }
+    } catch (taskError) {
+      console.error(`Błąd podczas aktualizacji zadania produkcyjnego ${taskId}:`, taskError);
+      // Nie przerywamy głównej operacji, nawet jeśli aktualizacja zadania się nie powiedzie
+    }
     
     console.log(`Zadanie produkcyjne ${taskId} zostało usunięte z zamówienia ${orderId}`);
     return true;
@@ -855,6 +880,11 @@ export const updateProductionTaskInOrder = async (orderId, taskId, updateData, u
     
     if (taskIndex === -1) {
       throw new Error(`Zadanie o ID ${taskId} nie zostało znalezione w zamówieniu`);
+    }
+    
+    // Zachowaj orderItemId jeśli istnieje, a nie jest podany w updateData
+    if (!updateData.orderItemId && productionTasks[taskIndex].orderItemId) {
+      updateData.orderItemId = productionTasks[taskIndex].orderItemId;
     }
     
     // Zaktualizuj informacje o zadaniu, zachowując istniejące dane

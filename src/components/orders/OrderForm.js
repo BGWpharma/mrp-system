@@ -128,6 +128,8 @@ const OrderForm = ({ orderId }) => {
   const [loadingPurchaseOrders, setLoadingPurchaseOrders] = useState(false);
   const [driveLinkDialogOpen, setDriveLinkDialogOpen] = useState(false);
   const [driveLink, setDriveLink] = useState('');
+  const [refreshingPOs, setRefreshingPOs] = useState(false); // Dodana zmienna stanu dla odświeżania zamówień zakupu
+  const [refreshingPTs, setRefreshingPTs] = useState(false); // Dodana zmienna stanu dla odświeżania danych kosztów produkcji
 
   const { currentUser } = useAuth();
   const { showSuccess, showError, showInfo } = useNotification();
@@ -158,6 +160,53 @@ const OrderForm = ({ orderId }) => {
             
           if (!fetchedOrder.items || fetchedOrder.items.length === 0) {
             fetchedOrder.items = [{ ...DEFAULT_ORDER.items[0] }];
+          }
+          
+          // Przypisz informacje o zadaniach produkcyjnych do pozycji zamówienia
+          if (fetchedOrder.productionTasks && fetchedOrder.productionTasks.length > 0 && fetchedOrder.items.length > 0) {
+            const { getTaskById } = await import('../../services/productionService');
+            
+            for (let i = 0; i < fetchedOrder.items.length; i++) {
+              const item = fetchedOrder.items[i];
+              
+              // Znajdź odpowiednie zadanie produkcyjne dla tego elementu zamówienia
+              const matchingTask = fetchedOrder.productionTasks.find(task => 
+                // Sprawdź czy task ma przypisany orderItemId i czy jest to ID bieżącego elementu
+                (task.orderItemId && task.orderItemId === item.id) || 
+                // Lub sprawdź czy nazwy produktów się zgadzają
+                (task.productName === item.name && task.quantity === parseFloat(item.quantity))
+              );
+              
+              if (matchingTask) {
+                // Pobierz pełne dane zadania produkcyjnego, aby uzyskać aktualny koszt
+                try {
+                  const taskDetails = await getTaskById(matchingTask.id);
+                  
+                  // Aktualizuj informacje o zadaniu produkcyjnym w elemencie zamówienia
+                  fetchedOrder.items[i] = {
+                    ...item,
+                    productionTaskId: matchingTask.id,
+                    productionTaskNumber: matchingTask.moNumber || taskDetails.moNumber,
+                    productionStatus: matchingTask.status || taskDetails.status,
+                    // Pobierz koszt z newTotalCost, jeśli istnieje, w przeciwnym razie użyj totalMaterialCost lub 0
+                    productionCost: taskDetails.newTotalCost || matchingTask.totalMaterialCost || taskDetails.totalMaterialCost || 0
+                  };
+                  
+                  console.log(`Przypisano zadanie produkcyjne ${matchingTask.moNumber} do elementu zamówienia ${item.name} z kosztem ${fetchedOrder.items[i].productionCost}`);
+                } catch (error) {
+                  console.error(`Błąd podczas pobierania szczegółów zadania ${matchingTask.id}:`, error);
+                  
+                  // W przypadku błędu, użyj podstawowych danych z matchingTask
+                  fetchedOrder.items[i] = {
+                    ...item,
+                    productionTaskId: matchingTask.id,
+                    productionTaskNumber: matchingTask.moNumber,
+                    productionStatus: matchingTask.status,
+                    productionCost: matchingTask.totalMaterialCost || 0
+                  };
+                }
+              }
+            }
           }
           
           // Filtruj powiązane zamówienia zakupu, aby usunąć nieistniejące/usunięte
@@ -233,6 +282,20 @@ const OrderForm = ({ orderId }) => {
         ...orderData,
         // Konwertuj deadline na expectedDeliveryDate
         expectedDeliveryDate: orderData.deadline ? new Date(orderData.deadline) : null,
+        // Przetwórz elementy zamówienia, aby zachować informacje o zadaniach produkcyjnych
+        items: orderData.items.map(item => {
+          const itemToSave = { ...item };
+          
+          // Zachowaj informacje o zadaniach produkcyjnych, jeśli istnieją
+          if (item.productionTaskId) {
+            itemToSave.productionTaskId = item.productionTaskId;
+            itemToSave.productionTaskNumber = item.productionTaskNumber;
+            itemToSave.productionStatus = item.productionStatus;
+            itemToSave.productionCost = item.productionCost || 0;
+          }
+          
+          return itemToSave;
+        })
       };
       
       if (orderId) {
@@ -1019,11 +1082,12 @@ const OrderForm = ({ orderId }) => {
   };
 
   const handleRefreshPurchaseOrders = async () => {
+    if (!orderId) return;
+    
     try {
-      setLoading(true);
+      setRefreshingPOs(true);
       
       // Pobierz aktualne dane zamówienia z bazy danych
-      const { getOrderById } = await import('../../services/orderService');
       const { getPurchaseOrderById } = await import('../../services/purchaseOrderService');
       const updatedOrder = await getOrderById(orderId);
       
@@ -1126,11 +1190,74 @@ const OrderForm = ({ orderId }) => {
       }, 0);
       
       showSuccess('Zaktualizowano dane zamówień zakupu');
-      setLoading(false);
     } catch (error) {
       console.error('Błąd podczas odświeżania powiązanych zamówień zakupu:', error);
       showError('Nie udało się odświeżyć danych zamówień zakupu: ' + error.message);
-      setLoading(false);
+    } finally {
+      setRefreshingPOs(false);
+    }
+  };
+  
+  // Funkcja do odświeżania danych zadań produkcyjnych, w tym kosztów produkcji
+  const refreshProductionTasks = async () => {
+    if (!orderId) return;
+
+    try {
+      setRefreshingPTs(true);
+      const refreshedOrderData = await getOrderById(orderId);
+      
+      if (refreshedOrderData.productionTasks && refreshedOrderData.productionTasks.length > 0) {
+        // Aktualizujemy dane elementów zamówienia z nowymi kosztami produkcji
+        const updatedItems = [...orderData.items];
+        
+        // Dla każdego elementu zamówienia sprawdź, czy istnieje powiązane zadanie produkcyjne
+        for (let i = 0; i < updatedItems.length; i++) {
+          const item = updatedItems[i];
+          
+          // Znajdź odpowiednie zadanie produkcyjne dla tego elementu zamówienia
+          const matchingTask = refreshedOrderData.productionTasks.find(task => 
+            // Sprawdź czy task ma przypisany orderItemId i czy jest to ID bieżącego elementu
+            (task.orderItemId && task.orderItemId === item.id) || 
+            // Lub sprawdź czy nazwy produktów się zgadzają
+            (task.productName === item.name && task.quantity === item.quantity)
+          );
+          
+          if (matchingTask) {
+            // Pobierz szczegóły zadania produkcyjnego, aby uzyskać koszt
+            const { getTaskById } = await import('../../services/productionService');
+            const taskDetails = await getTaskById(matchingTask.id);
+            
+            console.log(`Pobrano szczegóły zadania produkcyjnego ${matchingTask.moNumber}:`, taskDetails);
+            
+            // Aktualizuj informacje o zadaniu produkcyjnym w elemencie zamówienia
+            updatedItems[i] = {
+              ...item,
+              productionTaskId: matchingTask.id,
+              productionTaskNumber: matchingTask.moNumber || taskDetails.moNumber,
+              productionStatus: matchingTask.status || taskDetails.status,
+              // Pobierz koszt z newTotalCost, jeśli istnieje, w przeciwnym razie użyj totalMaterialCost lub 0
+              productionCost: taskDetails.newTotalCost || matchingTask.totalMaterialCost || taskDetails.totalMaterialCost || 0
+            };
+            
+            console.log(`Przypisano zadanie produkcyjne ${matchingTask.moNumber} do elementu zamówienia ${item.name} z kosztem ${updatedItems[i].productionCost}`);
+          }
+        }
+        
+        setOrderData(prev => ({
+          ...prev,
+          items: updatedItems,
+          productionTasks: refreshedOrderData.productionTasks
+        }));
+        
+        showSuccess('Dane kosztów produkcji zostały odświeżone');
+      } else {
+        showInfo('Brak zadań produkcyjnych do odświeżenia');
+      }
+    } catch (error) {
+      showError('Błąd podczas odświeżania danych kosztów produkcji: ' + error.message);
+      console.error('Error refreshing production costs:', error);
+    } finally {
+      setRefreshingPTs(false);
     }
   };
 
@@ -1440,12 +1567,28 @@ const OrderForm = ({ orderId }) => {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell width="40%">Produkt</TableCell>
-                <TableCell width="15%">Ilość</TableCell>
-                <TableCell width="15%">Jednostka</TableCell>
-                <TableCell width="15%">Cena</TableCell>
-                <TableCell width="15%">Wartość</TableCell>
-                <TableCell width="10%"></TableCell>
+                <TableCell width="20%">Produkt</TableCell>
+                <TableCell width="10%">Ilość</TableCell>
+                <TableCell width="10%">Jednostka</TableCell>
+                <TableCell width="10%">Cena</TableCell>
+                <TableCell width="10%">Wartość</TableCell>
+                <TableCell width="10%">Lista cenowa</TableCell>
+                <TableCell width="10%">Produkcja</TableCell>
+                <TableCell width="10%" align="right">
+                  Koszt produkcji
+                  <Tooltip title="Odśwież dane kosztów produkcji">
+                    <IconButton 
+                      size="small" 
+                      color="primary" 
+                      onClick={refreshProductionTasks}
+                      disabled={refreshingPTs}
+                    >
+                      <RefreshIcon fontSize="small" />
+                      {refreshingPTs && <CircularProgress size={24} sx={{ position: 'absolute' }} />}
+                    </IconButton>
+                  </Tooltip>
+                </TableCell>
+                <TableCell width="5%"></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -1533,6 +1676,42 @@ const OrderForm = ({ orderId }) => {
                   </TableCell>
                   <TableCell>
                     {formatCurrency(item.quantity * item.price)}
+                  </TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={item.fromPriceList ? "Tak" : "Nie"} 
+                      size="small" 
+                      color={item.fromPriceList ? "success" : "default"}
+                      variant="outlined"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    {item.productionTaskId ? (
+                      <Tooltip title="Przejdź do zadania produkcyjnego">
+                        <Chip
+                          label={item.productionTaskNumber || `MO-${item.productionTaskId.substr(0, 6)}`}
+                          size="small"
+                          color={
+                            item.productionStatus === 'Zakończone' ? 'success' :
+                            item.productionStatus === 'W trakcie' ? 'warning' :
+                            item.productionStatus === 'Anulowane' ? 'error' :
+                            item.productionStatus === 'Zaplanowane' ? 'primary' : 'default'
+                          }
+                          onClick={() => navigate(`/production/${item.productionTaskId}`)}
+                          sx={{ cursor: 'pointer' }}
+                          icon={<EventNoteIcon />}
+                        />
+                      </Tooltip>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">-</Typography>
+                    )}
+                  </TableCell>
+                  <TableCell align="right">
+                    {item.productionTaskId && item.productionCost !== undefined ? (
+                      formatCurrency(item.productionCost)
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">-</Typography>
+                    )}
                   </TableCell>
                   <TableCell>
                     <IconButton 
