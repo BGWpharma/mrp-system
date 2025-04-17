@@ -40,6 +40,7 @@ const defaultColumnPreferences = {
     plannedStart: true,
     plannedEnd: true,
     cost: true,
+    totalCost: true,
     actions: true
   },
   // Dodaj inne widoki według potrzeb

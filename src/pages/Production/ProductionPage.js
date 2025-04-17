@@ -1,6 +1,6 @@
 // src/pages/Production/ProductionPage.js
 import React, { useState } from 'react';
-import { Container, Typography, Box, Tabs, Tab } from '@mui/material';
+import { Container, Typography, Box, Tabs, Tab, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, CircularProgress } from '@mui/material';
 import {
   FormatListBulleted as ListIcon,
   CalendarMonth as CalendarIcon,
@@ -10,7 +10,8 @@ import {
   ViewList as ViewListIcon,
   Description as FormsIcon,
   Business as BusinessIcon,
-  Calculate as CalculateIcon
+  Calculate as CalculateIcon,
+  AdminPanelSettings as AdminIcon
 } from '@mui/icons-material';
 import TaskList from '../../components/production/TaskList';
 import ProductionCalendar from '../../components/production/ProductionCalendar';
@@ -19,10 +20,18 @@ import ForecastPage from './ForecastPage';
 import FormsPage from './FormsPage';
 import WorkstationsPage from './WorkstationsPage';
 import CalculatorPage from './CalculatorPage';
+import { initializeMissingCostFields } from '../../services/productionService';
+import { useAuth } from '../../hooks/useAuth';
+import { useNotification } from '../../hooks/useNotification';
 
 const ProductionPage = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [viewMode, setViewMode] = useState('list');
+  const [adminDialogOpen, setAdminDialogOpen] = useState(false);
+  const [initializing, setInitializing] = useState(false);
+  const [initializationResult, setInitializationResult] = useState(null);
+  const { currentUser } = useAuth();
+  const { showSuccess, showError, showInfo } = useNotification();
   
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
@@ -31,6 +40,35 @@ const ProductionPage = () => {
   const handleViewModeChange = () => {
     setViewMode(viewMode === 'list' ? 'calendar' : 'list');
   };
+
+  const handleInitializeCostFields = async () => {
+    try {
+      setInitializing(true);
+      setInitializationResult(null);
+      
+      const result = await initializeMissingCostFields(currentUser.uid);
+      
+      setInitializationResult(result);
+      
+      if (result.success) {
+        showSuccess(result.message);
+      } else {
+        showError(result.message);
+      }
+    } catch (error) {
+      console.error('Błąd podczas inicjalizacji pól kosztów:', error);
+      showError('Wystąpił błąd podczas inicjalizacji pól kosztów: ' + error.message);
+      setInitializationResult({
+        success: false,
+        message: error.message,
+        error: error.toString()
+      });
+    } finally {
+      setInitializing(false);
+    }
+  };
+  
+  const isAdmin = currentUser && (currentUser.role === 'admin' || currentUser.isAdmin);
   
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -38,6 +76,18 @@ const ProductionPage = () => {
         <Typography variant="h5" gutterBottom>
           Produkcja
         </Typography>
+        
+        {isAdmin && (
+          <Button 
+            variant="outlined" 
+            color="secondary" 
+            startIcon={<AdminIcon />}
+            onClick={() => setAdminDialogOpen(true)}
+            sx={{ ml: 2 }}
+          >
+            Funkcje administracyjne
+          </Button>
+        )}
       </Box>
       
       <Tabs 
@@ -63,6 +113,51 @@ const ProductionPage = () => {
       {activeTab === 4 && <WorkstationsPage />}
       {activeTab === 5 && <ForecastPage />}
       {activeTab === 6 && <CalculatorPage />}
+      
+      {/* Dialog funkcji administracyjnych */}
+      <Dialog open={adminDialogOpen} onClose={() => setAdminDialogOpen(false)}>
+        <DialogTitle>Funkcje administracyjne</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Te funkcje przeznaczone są wyłącznie dla administratorów systemu. Wykonaj operacje ostrożnie, ponieważ mogą one wpłynąć na dane w całym systemie.
+          </DialogContentText>
+          
+          <Box sx={{ mt: 3 }}>
+            <Button 
+              variant="contained" 
+              color="primary" 
+              onClick={handleInitializeCostFields}
+              disabled={initializing}
+              fullWidth
+            >
+              {initializing ? <CircularProgress size={24} color="inherit" /> : 'Inicjalizuj pola kosztów w zadaniach produkcyjnych'}
+            </Button>
+            
+            {initializationResult && (
+              <Box sx={{ mt: 2, p: 2, bgcolor: initializationResult.success ? 'success.light' : 'error.light', borderRadius: 1 }}>
+                <Typography variant="body2" color="textPrimary">
+                  {initializationResult.message}
+                </Typography>
+                {initializationResult.updatedTasks && (
+                  <Typography variant="body2" color="textPrimary">
+                    Zaktualizowano zadania: {initializationResult.updatedTasks.length}
+                  </Typography>
+                )}
+                {initializationResult.failedTasks && initializationResult.failedTasks.length > 0 && (
+                  <Typography variant="body2" color="error">
+                    Nie udało się zaktualizować zadań: {initializationResult.failedTasks.length}
+                  </Typography>
+                )}
+              </Box>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAdminDialogOpen(false)} color="primary">
+            Zamknij
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

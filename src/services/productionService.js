@@ -187,7 +187,21 @@ import {
         createdBy: userId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        autoReserveMaterials // Zapisz informację o tym, czy materiały zostały automatycznie zarezerwowane
+        autoReserveMaterials, // Zapisz informację o tym, czy materiały zostały automatycznie zarezerwowane
+        totalMaterialCost: 0, // Inicjalizacja kosztu całkowitego materiałów
+        unitMaterialCost: 0, // Inicjalizacja kosztu jednostkowego materiałów
+        costLastUpdatedAt: serverTimestamp(), // Data inicjalizacji kosztów
+        costLastUpdatedBy: userId, // Użytkownik inicjalizujący koszty
+        costHistory: [{
+          timestamp: new Date().toISOString(), // Używamy ISO string zamiast serverTimestamp()
+          userId: userId,
+          userName: 'System',
+          previousTotalCost: 0,
+          newTotalCost: 0,
+          previousUnitCost: 0,
+          newUnitCost: 0,
+          reason: 'Inicjalizacja kosztów przy tworzeniu zadania'
+        }]
       };
       
       // Jeśli nie podano daty zakończenia, ustaw ją na 1 godzinę po dacie rozpoczęcia
@@ -274,30 +288,94 @@ import {
   
   // Aktualizacja zadania produkcyjnego
   export const updateTask = async (taskId, taskData, userId) => {
-    // Upewnij się, że endDate jest ustawiona
-    if (!taskData.endDate) {
-      // Jeśli nie ma endDate, ustaw na 1 godzinę po scheduledDate
-      const scheduledDate = taskData.scheduledDate instanceof Date 
-        ? taskData.scheduledDate 
-        : new Date(taskData.scheduledDate);
+    try {
+      // Pobierz aktualne dane zadania, aby zachować pola kosztów jeśli nie są aktualizowane
+      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+      const taskDoc = await getDoc(taskRef);
       
-      taskData.endDate = new Date(scheduledDate.getTime() + 60 * 60 * 1000);
+      if (!taskDoc.exists()) {
+        throw new Error('Zadanie nie istnieje');
+      }
+      
+      const currentTask = taskDoc.data();
+      
+      // Upewnij się, że endDate jest ustawiona
+      if (!taskData.endDate) {
+        // Jeśli nie ma endDate, ustaw na 1 godzinę po scheduledDate
+        const scheduledDate = taskData.scheduledDate instanceof Date 
+          ? taskData.scheduledDate 
+          : new Date(taskData.scheduledDate);
+        
+        taskData.endDate = new Date(scheduledDate.getTime() + 60 * 60 * 1000);
+      }
+      
+      // Zachowaj pola kosztów, jeśli nie są aktualizowane
+      if (taskData.totalMaterialCost === undefined && currentTask.totalMaterialCost !== undefined) {
+        taskData.totalMaterialCost = currentTask.totalMaterialCost;
+      }
+      
+      if (taskData.unitMaterialCost === undefined && currentTask.unitMaterialCost !== undefined) {
+        taskData.unitMaterialCost = currentTask.unitMaterialCost;
+      }
+      
+      if (taskData.costLastUpdatedAt === undefined && currentTask.costLastUpdatedAt !== undefined) {
+        taskData.costLastUpdatedAt = currentTask.costLastUpdatedAt;
+      }
+      
+      if (taskData.costLastUpdatedBy === undefined && currentTask.costLastUpdatedBy !== undefined) {
+        taskData.costLastUpdatedBy = currentTask.costLastUpdatedBy;
+      }
+      
+      if (taskData.costHistory === undefined && currentTask.costHistory !== undefined) {
+        taskData.costHistory = currentTask.costHistory;
+      }
+      
+      // Jeśli pola kosztów nadal nie istnieją, zainicjuj je wartościami domyślnymi
+      if (taskData.totalMaterialCost === undefined) {
+        taskData.totalMaterialCost = 0;
+      }
+      
+      if (taskData.unitMaterialCost === undefined) {
+        taskData.unitMaterialCost = 0;
+      }
+      
+      if (taskData.costLastUpdatedAt === undefined) {
+        taskData.costLastUpdatedAt = serverTimestamp();
+      }
+      
+      if (taskData.costLastUpdatedBy === undefined) {
+        taskData.costLastUpdatedBy = userId;
+      }
+      
+      if (taskData.costHistory === undefined) {
+        taskData.costHistory = [{
+          timestamp: new Date().toISOString(), // Używamy ISO string zamiast serverTimestamp()
+          userId: userId,
+          userName: 'System',
+          previousTotalCost: 0,
+          newTotalCost: 0,
+          previousUnitCost: 0,
+          newUnitCost: 0,
+          reason: 'Inicjalizacja kosztów podczas aktualizacji zadania'
+        }];
+      }
+      
+      const updatedTask = {
+        ...taskData,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      };
+      
+      await updateDoc(taskRef, updatedTask);
+      
+      return {
+        id: taskId,
+        ...updatedTask
+      };
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji zadania:', error);
+      throw error;
     }
-    
-    const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
-    
-    const updatedTask = {
-      ...taskData,
-      updatedAt: serverTimestamp(),
-      updatedBy: userId
-    };
-    
-    await updateDoc(taskRef, updatedTask);
-    
-    return {
-      id: taskId,
-      ...updatedTask
-    };
   };
   
   // Aktualizacja statusu zadania
@@ -742,7 +820,7 @@ import {
         orderId: taskData.orderId || null,
         sourceDetails: sourceDetails,
         notes: sourceNotes,
-        unitPrice: taskData.costs ? (taskData.costs.totalCost / finalQuantity) : 0,
+        unitPrice: 0, // Ustaw cenę jednostkową na 0
         createdAt: serverTimestamp(),
         createdBy: userId
       };
@@ -2263,8 +2341,7 @@ import {
       // Pobierz szczegóły partii i elementów inwentarza dla wszystkich materiałów
       if (materialIds.length > 0) {
         const { collection, query, where, getDocs, doc, getDoc } = await import('firebase/firestore');
-        const { db } = await import('./firebase/config');
-
+        
         // Pobierz szczegóły elementów inwentarza
         for (const materialId of materialIds) {
           try {
@@ -2392,5 +2469,115 @@ import {
     } catch (error) {
       console.error('Błąd podczas generowania raportu materiałów i LOT-ów:', error);
       throw error;
+    }
+  };
+
+  // Aktualizuje koszty zadania produkcyjnego
+  export const updateTaskCosts = async (taskId, costsData, userId) => {
+    try {
+      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+      
+      // Przygotuj dane do aktualizacji
+      const updatedData = {
+        materialCost: costsData.materialCost || 0,
+        unitMaterialCost: costsData.unitMaterialCost || 0,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      };
+      
+      await updateDoc(taskRef, updatedData);
+      
+      return {
+        success: true,
+        message: 'Koszty zadania zostały zaktualizowane'
+      };
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji kosztów zadania:', error);
+      throw error;
+    }
+  };
+
+  // Funkcja do jednorazowej inicjalizacji brakujących pól kosztów w istniejących zadaniach
+  export const initializeMissingCostFields = async (userId) => {
+    try {
+      const tasksRef = collection(db, PRODUCTION_TASKS_COLLECTION);
+      const q = query(tasksRef);
+      const querySnapshot = await getDocs(q);
+      
+      const updatedTasks = [];
+      const failedTasks = [];
+      
+      console.log(`Znaleziono ${querySnapshot.docs.length} zadań produkcyjnych do sprawdzenia`);
+      
+      for (const doc of querySnapshot.docs) {
+        try {
+          const taskData = doc.data();
+          const taskId = doc.id;
+          
+          // Sprawdź czy zadanie ma już pola kosztów
+          const hasTotalMaterialCost = taskData.totalMaterialCost !== undefined;
+          const hasUnitMaterialCost = taskData.unitMaterialCost !== undefined;
+          const hasCostHistory = taskData.costHistory !== undefined;
+          
+          // Jeśli brakuje któregokolwiek pola, zaktualizuj zadanie
+          if (!hasTotalMaterialCost || !hasUnitMaterialCost || !hasCostHistory) {
+            console.log(`Inicjalizacja pól kosztów dla zadania ${taskId} (MO: ${taskData.moNumber || 'brak'})`);
+            
+            const updateData = {};
+            
+            if (!hasTotalMaterialCost) {
+              updateData.totalMaterialCost = 0;
+            }
+            
+            if (!hasUnitMaterialCost) {
+              updateData.unitMaterialCost = 0;
+            }
+            
+            if (!taskData.costLastUpdatedAt) {
+              updateData.costLastUpdatedAt = serverTimestamp();
+            }
+            
+            if (!taskData.costLastUpdatedBy) {
+              updateData.costLastUpdatedBy = userId;
+            }
+            
+            if (!hasCostHistory) {
+              updateData.costHistory = [{
+                timestamp: new Date().toISOString(), // Używamy ISO string zamiast serverTimestamp()
+                userId: userId,
+                userName: 'System',
+                previousTotalCost: 0,
+                newTotalCost: updateData.totalMaterialCost || taskData.totalMaterialCost || 0,
+                previousUnitCost: 0,
+                newUnitCost: updateData.unitMaterialCost || taskData.unitMaterialCost || 0,
+                reason: 'Migracja danych - inicjalizacja pól kosztów'
+              }];
+            }
+            
+            // Wykonaj aktualizację tylko jeśli są jakieś pola do zaktualizowania
+            if (Object.keys(updateData).length > 0) {
+              await updateDoc(doc(db, PRODUCTION_TASKS_COLLECTION, taskId), updateData);
+              updatedTasks.push(taskId);
+            }
+          }
+        } catch (error) {
+          console.error(`Błąd podczas aktualizacji zadania ${doc.id}:`, error);
+          failedTasks.push(doc.id);
+        }
+      }
+      
+      return {
+        success: true,
+        message: `Zaktualizowano pola kosztów dla ${updatedTasks.length} zadań. Nie udało się zaktualizować ${failedTasks.length} zadań.`,
+        updatedTasks,
+        failedTasks
+      };
+    } catch (error) {
+      console.error('Błąd podczas inicjalizacji pól kosztów:', error);
+      return {
+        success: false,
+        message: `Błąd podczas inicjalizacji pól kosztów: ${error.message}`,
+        error: error.toString()
+      };
     }
   };

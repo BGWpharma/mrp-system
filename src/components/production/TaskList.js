@@ -623,7 +623,8 @@ const TaskList = () => {
                   {visibleColumns.materialsReserved && <TableCell>Surowce zarezerwowane</TableCell>}
                   {visibleColumns.plannedStart && <TableCell>Planowany start</TableCell>}
                   {visibleColumns.plannedEnd && <TableCell>Planowane zakończenie</TableCell>}
-                  {visibleColumns.cost && <TableCell>Koszt</TableCell>}
+                  {visibleColumns.cost && <TableCell>Koszt jednostkowy</TableCell>}
+                  {visibleColumns.totalCost && <TableCell>Koszt całkowity</TableCell>}
                   {visibleColumns.actions && <TableCell>Akcje</TableCell>}
                 </TableRow>
               </TableHead>
@@ -729,13 +730,16 @@ const TaskList = () => {
                       )}
                       {visibleColumns.cost && (
                         <TableCell>
-                          {task.totalValue ? (
-                            parseFloat(task.totalValue).toLocaleString('pl-PL') + ' EUR'
-                          ) : task.costs ? (
-                            task.costs.totalCost.toLocaleString('pl-PL') + ' EUR'
-                          ) : (
-                            '-'
-                          )}
+                          {task.unitMaterialCost !== undefined ? 
+                            `${parseFloat(task.unitMaterialCost).toFixed(2)} €` : 
+                            (task.totalMaterialCost !== undefined && task.quantity ? 
+                              `${(parseFloat(task.totalMaterialCost) / parseFloat(task.quantity)).toFixed(2)} €` : '-')}
+                        </TableCell>
+                      )}
+                      {visibleColumns.totalCost && (
+                        <TableCell>
+                          {task.totalMaterialCost !== undefined ? 
+                            `${parseFloat(task.totalMaterialCost).toFixed(2)} €` : '-'}
                         </TableCell>
                       )}
                       {visibleColumns.actions && (
@@ -832,7 +836,11 @@ const TaskList = () => {
         </MenuItem>
         <MenuItem onClick={() => toggleColumnVisibility('cost')}>
           <Checkbox checked={visibleColumns.cost} />
-          <ListItemText primary="Koszt" />
+          <ListItemText primary="Koszt jednostkowy" />
+        </MenuItem>
+        <MenuItem onClick={() => toggleColumnVisibility('totalCost')}>
+          <Checkbox checked={visibleColumns.totalCost} />
+          <ListItemText primary="Koszt całkowity" />
         </MenuItem>
         <MenuItem onClick={() => toggleColumnVisibility('actions')}>
           <Checkbox checked={visibleColumns.actions} />

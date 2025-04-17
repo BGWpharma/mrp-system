@@ -365,44 +365,6 @@ const CreateFromOrderPage = () => {
           ? { recipeId: recipe.id, recipeName: recipe.name }
           : {};
         
-        // Oblicz koszt produkcji jeśli mamy recepturę
-        let costs = null;
-        
-        if (recipe) {
-          try {
-            // Przygotuj dane zadania dla kalkulatora kosztów
-            const taskForCostCalc = {
-              quantity: item.quantity,
-              unit: normalizedUnit
-            };
-            
-            // Pobierz ID składników z receptury
-            const ingredientIds = recipe.ingredients
-              .filter(ing => ing.id)
-              .map(ing => ing.id);
-              
-            if (ingredientIds.length > 0) {
-              // Pobierz ceny składników
-              const pricesMap = await getIngredientPrices(ingredientIds);
-              
-              // Oblicz koszty
-              const costData = calculateManufacturingOrderCosts(taskForCostCalc, recipe, pricesMap);
-              
-              // Zapisz całkowity koszt produkcji (zamiast kosztu jednostkowego)
-              costs = {
-                materialCost: costData.materialCost,
-                laborCost: costData.actualLaborCost,
-                machineCost: costData.machineCost,
-                overheadCost: costData.overheadCost,
-                unitCost: costData.unitCost,
-                totalCost: costData.totalProductionCost
-              };
-            }
-          } catch (error) {
-            console.error('Błąd podczas obliczania kosztów:', error);
-          }
-        }
-        
         // Oblicz planowany czas produkcji na podstawie danych z receptury
         let productionTimePerUnit = 0;
         let estimatedDuration = 0;
@@ -415,9 +377,8 @@ const CreateFromOrderPage = () => {
           estimatedDuration = totalProductionTimeMinutes / 60;
         }
         
-        // Określ cenę jednostkową i wartość całkowitą
+        // Określ cenę jednostkową
         const itemPrice = item.price || 0;
-        const totalValue = (item.price || 0) * item.quantity;
         
         // Uzyskaj datę początku produkcji z wyboru użytkownika lub wartości domyślnej
         const productDate = productDates[item.id] 
@@ -466,13 +427,6 @@ const CreateFromOrderPage = () => {
           createdBy: currentUser.uid,
           createdAt: new Date().toISOString(),
           recipe: recipeData,
-          costs: {
-            ...costs,
-            // Dodaj koszt z zamówienia klienta jako całkowity koszt
-            totalCost: itemPrice * item.quantity || totalValue || costs?.totalCost || 0
-          },
-          itemPrice: itemPrice,
-          totalValue: totalValue,
           orderId: selectedOrder.id, // Dodanie orderId do zadania
           orderNumber: selectedOrder.orderNumber || selectedOrder.id,
           customer: selectedOrder.customer || null,
@@ -671,18 +625,6 @@ const CreateFromOrderPage = () => {
         // Przygotuj materiały na podstawie receptury
         let materials = [];
         let recipeData = {};
-        let costs = {
-          materialCost: 0,
-          laborCost: 0,
-          machineCost: 0,
-          overheadCost: 0,
-          totalCost: 0,
-          unitCost: 0
-        };
-        
-        // Ustaw cenę elementu na podstawie listy cen lub kosztu procesowego receptury
-        let itemPrice = item.price || 0;
-        let totalValue = (item.price || 0) * item.quantity;
         
         if (recipe) {
           materials = createMaterialsFromRecipe(recipe, item.quantity);
@@ -692,49 +634,6 @@ const CreateFromOrderPage = () => {
             recipeName: recipe.name,
             recipeIngredients: recipe.ingredients || []
           };
-          
-          // Sprawdź, czy element ma cenę z listy cenowej
-          if (item.fromPriceList !== true && recipe.processingCostPerUnit) {
-            // Jeśli nie ma ceny z listy cenowej, a receptura ma koszt procesowy, użyj go
-            console.log(`Użycie kosztu procesowego ${recipe.processingCostPerUnit} EUR dla produktu ${item.name}`);
-            itemPrice = recipe.processingCostPerUnit;
-            totalValue = recipe.processingCostPerUnit * item.quantity;
-          }
-        }
-        
-        if (recipe) {
-          try {
-            // Przygotuj dane zadania dla kalkulatora kosztów
-            const taskForCostCalc = {
-              quantity: item.quantity,
-              unit: normalizedUnit
-            };
-            
-            // Pobierz ID składników z receptury
-            const ingredientIds = recipe.ingredients
-              .filter(ing => ing.id)
-              .map(ing => ing.id);
-              
-            if (ingredientIds.length > 0) {
-              // Pobierz ceny składników
-              const pricesMap = await getIngredientPrices(ingredientIds);
-              
-              // Oblicz koszty
-              const costData = calculateManufacturingOrderCosts(taskForCostCalc, recipe, pricesMap);
-              
-              // Zapisz całkowity koszt produkcji (zamiast kosztu jednostkowego)
-              costs = {
-                materialCost: costData.materialCost,
-                laborCost: costData.actualLaborCost,
-                machineCost: costData.machineCost,
-                overheadCost: costData.overheadCost,
-                unitCost: costData.unitCost,
-                totalCost: costData.totalProductionCost
-              };
-            }
-          } catch (error) {
-            console.error('Błąd podczas obliczania kosztów:', error);
-          }
         }
         
         // Oblicz planowany czas produkcji na podstawie danych z receptury
@@ -748,6 +647,9 @@ const CreateFromOrderPage = () => {
           // Konwersja na godziny
           estimatedDuration = totalProductionTimeMinutes / 60;
         }
+        
+        // Określ cenę jednostkową
+        const itemPrice = item.price || 0;
         
         // Uzyskaj datę początku produkcji z wyboru użytkownika lub wartości domyślnej
         const productDate = productDates[item.id] 
@@ -796,13 +698,6 @@ const CreateFromOrderPage = () => {
           createdBy: currentUser.uid,
           createdAt: new Date().toISOString(),
           recipe: recipeData,
-          costs: {
-            ...costs,
-            // Dodaj koszt z zamówienia klienta jako całkowity koszt
-            totalCost: itemPrice * item.quantity || totalValue || costs?.totalCost || 0
-          },
-          itemPrice: itemPrice,
-          totalValue: totalValue,
           orderId: selectedOrder.id, // Dodanie orderId do zadania
           orderNumber: selectedOrder.orderNumber || selectedOrder.id,
           customer: selectedOrder.customer || null,
