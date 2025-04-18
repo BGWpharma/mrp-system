@@ -67,7 +67,8 @@ import {
   PAYMENT_METHODS,
   DEFAULT_ORDER,
   uploadDeliveryProof,
-  deleteDeliveryProof
+  deleteDeliveryProof,
+  calculateOrderTotal
 } from '../../services/orderService';
 import { getAllInventoryItems, getIngredientPrices } from '../../services/inventoryService';
 import { getAllCustomers, createCustomer } from '../../services/customerService';
@@ -247,6 +248,11 @@ const OrderForm = ({ orderId }) => {
           });
           
           setLinkedPurchaseOrders(validLinkedPOs);
+          
+          // Zweryfikuj, czy powiązane zadania produkcyjne istnieją
+          const verifiedOrder = await verifyProductionTasks(fetchedOrder);
+          
+          setOrderData(verifiedOrder);
         }
         
         const fetchedCustomers = await getAllCustomers();
@@ -285,35 +291,39 @@ const OrderForm = ({ orderId }) => {
     try {
       setSaving(true);
       
-      // Przekształć dane formularza w format oczekiwany przez API
-      const orderDataToSave = {
-        ...orderData,
-        // Konwertuj deadline na expectedDeliveryDate
-        expectedDeliveryDate: orderData.deadline ? new Date(orderData.deadline) : null,
-        // Przetwórz elementy zamówienia, aby zachować informacje o zadaniach produkcyjnych
-        items: orderData.items.map(item => {
-          const itemToSave = { ...item };
-          
-          // Zachowaj informacje o zadaniach produkcyjnych, jeśli istnieją
-          if (item.productionTaskId) {
-            itemToSave.productionTaskId = item.productionTaskId;
-            itemToSave.productionTaskNumber = item.productionTaskNumber;
-            itemToSave.productionStatus = item.productionStatus;
-            itemToSave.productionCost = item.productionCost || 0;
-          }
-          
-          return itemToSave;
-        })
+      // Walidacja podstawowa
+      if (!validateForm()) {
+        setSaving(false);
+        return;
+      }
+      
+      // Zweryfikuj, czy powiązane zadania produkcyjne istnieją przed zapisaniem
+      const verifiedOrderData = await verifyProductionTasks(orderData);
+      
+      // Przygotuj dane zamówienia do zapisania
+      const orderToSave = {
+        ...verifiedOrderData,
+        items: verifiedOrderData.items.map(item => ({ ...item })),
+        totalValue: calculateOrderTotal(verifiedOrderData.items) + parseFloat(verifiedOrderData.shippingCost || 0),
+        // Upewniamy się, że daty są poprawne
+        orderDate: verifiedOrderData.orderDate ? new Date(verifiedOrderData.orderDate) : new Date(),
+        expectedDeliveryDate: verifiedOrderData.expectedDeliveryDate ? new Date(verifiedOrderData.expectedDeliveryDate) : null,
+        deliveryDate: verifiedOrderData.deliveryDate ? new Date(verifiedOrderData.deliveryDate) : null
       };
+
+      // Usuń puste pozycje zamówienia
+      orderToSave.items = orderToSave.items.filter(item => 
+        item.name && item.quantity && item.quantity > 0
+      );
       
       let savedOrderId;
       
       if (orderId) {
-        await updateOrder(orderId, orderDataToSave, currentUser.uid);
+        await updateOrder(orderId, orderToSave, currentUser.uid);
         savedOrderId = orderId;
         showSuccess('Zamówienie zostało zaktualizowane');
       } else {
-        savedOrderId = await createOrder(orderDataToSave, currentUser.uid);
+        savedOrderId = await createOrder(orderToSave, currentUser.uid);
         showSuccess('Zamówienie zostało utworzone');
       }
       
@@ -653,6 +663,32 @@ const OrderForm = ({ orderId }) => {
     }, 0);
   };
 
+  // Funkcja obliczająca sumę wartości pozycji z uwzględnieniem kosztów produkcji dla pozycji spoza listy cenowej
+  const calculateItemTotalValue = (item) => {
+    // Podstawowa wartość pozycji
+    const itemValue = (parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0);
+    
+    // Jeśli produkt jest z listy cenowej, zwracamy tylko wartość pozycji
+    if (item.fromPriceList) {
+      return itemValue;
+    }
+    
+    // Jeśli produkt nie jest z listy cenowej i ma koszt produkcji, dodajemy go
+    if (item.productionTaskId && item.productionCost !== undefined) {
+      return itemValue + parseFloat(item.productionCost || 0);
+    }
+    
+    // Domyślnie zwracamy tylko wartość pozycji
+    return itemValue;
+  };
+
+  // Funkcja obliczająca sumę wartości wszystkich pozycji z uwzględnieniem kosztów produkcji gdzie to odpowiednie
+  const calculateTotalItemsValue = () => {
+    return orderData.items.reduce((sum, item) => {
+      return sum + calculateItemTotalValue(item);
+    }, 0);
+  };
+
   // Funkcja dodawania nowego dodatkowego kosztu
   const handleAddAdditionalCost = (isDiscount = false) => {
     const newCost = {
@@ -717,7 +753,7 @@ const OrderForm = ({ orderId }) => {
   };
 
   const calculateTotal = () => {
-    const subtotal = calculateSubtotal();
+    const subtotal = calculateTotalItemsValue();
     const shippingCost = parseFloat(orderData.shippingCost) || 0;
     const additionalCosts = calculateAdditionalCosts();
     const discounts = calculateDiscounts();
@@ -1475,6 +1511,77 @@ const OrderForm = ({ orderId }) => {
     return url && url.includes('drive.google.com');
   };
 
+  // Funkcja sprawdzająca czy zadania produkcyjne istnieją i usuwająca nieistniejące referencje
+  const verifyProductionTasks = async (orderToVerify) => {
+    if (!orderToVerify || !orderToVerify.productionTasks || orderToVerify.productionTasks.length === 0) {
+      return orderToVerify;
+    }
+
+    try {
+      const { getTaskById } = await import('../../services/productionService');
+      const { removeProductionTaskFromOrder } = await import('../../services/orderService');
+      
+      const verifiedTasks = [];
+      const tasksToRemove = [];
+      
+      // Sprawdź każde zadanie produkcyjne
+      for (const task of orderToVerify.productionTasks) {
+        try {
+          // Próba pobrania zadania z bazy
+          await getTaskById(task.id);
+          verifiedTasks.push(task);
+        } catch (error) {
+          console.error(`Błąd podczas weryfikacji zadania ${task.id}:`, error);
+          tasksToRemove.push(task);
+          
+          // Aktualizuj też powiązane elementy zamówienia
+          if (orderToVerify.items) {
+            orderToVerify.items = orderToVerify.items.map(item => {
+              if (item.productionTaskId === task.id) {
+                return {
+                  ...item,
+                  productionTaskId: null,
+                  productionTaskNumber: null,
+                  productionStatus: null,
+                  productionCost: 0
+                };
+              }
+              return item;
+            });
+          }
+        }
+      }
+      
+      // Jeśli znaleziono nieistniejące zadania, usuń ich referencje z zamówienia
+      if (tasksToRemove.length > 0) {
+        if (orderToVerify.id) {
+          for (const task of tasksToRemove) {
+            try {
+              await removeProductionTaskFromOrder(orderToVerify.id, task.id);
+              console.log(`Usunięto nieistniejące zadanie ${task.id} (${task.moNumber}) z zamówienia ${orderToVerify.id}`);
+            } catch (error) {
+              console.error(`Błąd podczas usuwania referencji do zadania ${task.id}:`, error);
+            }
+          }
+        }
+        
+        // Zaktualizuj dane zamówienia lokalnie
+        const updatedOrder = {
+          ...orderToVerify,
+          productionTasks: verifiedTasks
+        };
+        
+        showInfo(`Usunięto ${tasksToRemove.length} nieistniejących zadań produkcyjnych z zamówienia.`);
+        return updatedOrder;
+      }
+      
+      return orderToVerify;
+    } catch (error) {
+      console.error('Błąd podczas weryfikacji zadań produkcyjnych:', error);
+      return orderToVerify;
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
@@ -1665,6 +1772,7 @@ const OrderForm = ({ orderId }) => {
                     </IconButton>
                   </Tooltip>
                 </TableCell>
+                <TableCell width="10%">Suma wartości pozycji</TableCell>
                 <TableCell width="5%"></TableCell>
               </TableRow>
             </TableHead>
@@ -1791,6 +1899,9 @@ const OrderForm = ({ orderId }) => {
                     )}
                   </TableCell>
                   <TableCell>
+                    {formatCurrency(calculateItemTotalValue(item))}
+                  </TableCell>
+                  <TableCell>
                     <IconButton 
                       color="error" 
                       onClick={() => removeItem(index)}
@@ -1806,7 +1917,7 @@ const OrderForm = ({ orderId }) => {
           
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-              Suma: {formatCurrency(calculateSubtotal())}
+              Suma: {formatCurrency(calculateTotalItemsValue())}
             </Typography>
           </Box>
         </Paper>

@@ -172,7 +172,16 @@ export const getOrderById = async (id) => {
       totalProductsValue = processedOrder.items.reduce((sum, item) => {
         const quantity = parseFloat(item.quantity) || 0;
         const price = parseFloat(item.price) || 0;
-        return sum + (quantity * price);
+        const itemValue = quantity * price;
+        
+        // Jeśli produkt nie jest z listy cenowej i ma koszt produkcji, dodajemy go do wartości
+        if (item.fromPriceList !== true && item.productionTaskId && item.productionCost !== undefined) {
+          const productionCost = parseFloat(item.productionCost || 0);
+          return sum + itemValue + productionCost;
+        }
+        
+        // W przeciwnym razie tylko standardowa wartość
+        return sum + itemValue;
       }, 0);
     }
     
@@ -211,7 +220,7 @@ export const getOrderById = async (id) => {
     processedOrder.productsValue = totalProductsValue;
     processedOrder.shippingCost = shippingCost;
     processedOrder.purchaseOrdersValue = poTotalGross;
-    processedOrder.totalValue = totalProductsValue + shippingCost + poTotalGross;
+    processedOrder.totalValue = totalProductsValue + shippingCost;
     
     console.log("Przetworzone dane zamówienia:", processedOrder);
     return processedOrder;
@@ -222,26 +231,22 @@ export const getOrderById = async (id) => {
 };
 
 /**
- * Tworzy nowe zamówienie
+ * Tworzy nowe zamówienie klienta
  */
 export const createOrder = async (orderData, userId) => {
   try {
+    // Walidacja danych zamówienia
+    validateOrderData(orderData);
+    
     // Wygeneruj numer CO z afiksem klienta, jeśli istnieje
     const customerAffix = orderData.customer && orderData.customer.orderAffix ? orderData.customer.orderAffix : '';
     const orderNumber = await generateCONumber(customerAffix);
     
-    // Oblicz łączną wartość zamówienia, jeśli nie została obliczona
-    let totalValue = orderData.totalValue;
-    if (!totalValue && orderData.items && orderData.items.length > 0) {
-      totalValue = orderData.items.reduce((sum, item) => {
-        return sum + (item.quantity * item.price || 0);
-      }, 0);
-      
-      // Dodaj koszt wysyłki, jeśli istnieje
-      if (orderData.shippingCost) {
-        totalValue += parseFloat(orderData.shippingCost) || 0;
-      }
-    }
+    // Obliczanie wartości zamówienia z uwzględnieniem kosztów produkcji dla pozycji spoza listy cenowej
+    const calculatedTotalValue = calculateOrderTotal(orderData.items);
+    
+    // Upewnij się, że mamy wartość totalValue - użyj przekazanej lub oblicz
+    const totalValue = parseFloat(orderData.totalValue) || calculatedTotalValue;
     
     // Upewnij się, że data zamówienia jest poprawna
     let orderDate = orderData.orderDate;
@@ -257,16 +262,25 @@ export const createOrder = async (orderData, userId) => {
       }
     }
     
+    // Tworzenie dokumentu zamówienia
     const orderWithMeta = {
       ...orderData,
       orderNumber,
-      totalValue: totalValue || 0,
-      orderDate: orderDate,
-      productionTasks: [], // Inicjalizacja pustej listy zadań produkcyjnych
+      totalValue,
+      orderDate: Timestamp.fromDate(orderDate),
+      productionTasks: orderData.productionTasks || [], // Inicjalizacja listy zadań produkcyjnych
       status: orderData.status || 'Nowe',
       createdBy: userId,
       createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
+      updatedBy: userId,
+      updatedAt: serverTimestamp(),
+      // Konwersja pozostałych dat na timestampy Firestore
+      expectedDeliveryDate: orderData.expectedDeliveryDate 
+        ? Timestamp.fromDate(new Date(orderData.expectedDeliveryDate)) 
+        : null,
+      deliveryDate: orderData.deliveryDate 
+        ? Timestamp.fromDate(new Date(orderData.deliveryDate)) 
+        : null
     };
     
     const docRef = await addDoc(collection(db, ORDERS_COLLECTION), orderWithMeta);
@@ -319,8 +333,11 @@ export const updateOrder = async (orderId, orderData, userId) => {
     // Walidacja danych zamówienia
     validateOrderData(orderData);
     
-    // Obliczanie wartości zamówienia
-    const totalValue = calculateOrderTotal(orderData.items);
+    // Obliczanie wartości zamówienia z uwzględnieniem kosztów produkcji dla pozycji spoza listy cenowej
+    const calculatedTotalValue = calculateOrderTotal(orderData.items);
+    
+    // Upewnij się, że mamy wartość totalValue - użyj przekazanej lub oblicz
+    const totalValue = parseFloat(orderData.totalValue) || calculatedTotalValue;
     
     const updatedOrder = {
       ...orderData,
@@ -601,7 +618,7 @@ export const getOrdersStats = async (forDashboard = false) => {
       }
       
       // Aktualizacja całkowitej wartości
-      stats.totalValue += fullOrderValue;
+      stats.totalValue += parseFloat(order.totalValue || fullOrderValue);
       
       // Aktualizacja statystyk miesięcznych
       const date = order.orderDate ? new Date(order.orderDate) : new Date();
@@ -617,7 +634,7 @@ export const getOrdersStats = async (forDashboard = false) => {
       }
       
       stats.byMonth[monthKey].count++;
-      stats.byMonth[monthKey].value += fullOrderValue;
+      stats.byMonth[monthKey].value += parseFloat(order.totalValue || fullOrderValue);
     }
     
     // Sortuj zamówienia według daty (najnowsze pierwsze)
@@ -634,8 +651,8 @@ export const getOrdersStats = async (forDashboard = false) => {
       date: order.orderDate,
       status: order.status,
       value: order.value || 0,
-      calculatedTotalValue: order.calculatedTotalValue || order.totalValue || 0,
-      totalValue: order.calculatedTotalValue || order.totalValue || 0
+      calculatedTotalValue: order.calculatedTotalValue || 0,
+      totalValue: parseFloat(order.totalValue || order.calculatedTotalValue || 0)
     }));
     
     console.log('Statystyki zamówień zostały obliczone', stats);
@@ -690,7 +707,7 @@ const validateOrderData = (orderData) => {
 /**
  * Oblicza łączną wartość zamówienia
  */
-const calculateOrderTotal = (items) => {
+export const calculateOrderTotal = (items) => {
   if (!items || !Array.isArray(items)) {
     return 0;
   }
@@ -698,7 +715,16 @@ const calculateOrderTotal = (items) => {
   return items.reduce((sum, item) => {
     const price = parseFloat(item.price) || 0;
     const quantity = parseFloat(item.quantity) || 0;
-    return sum + (price * quantity);
+    const itemValue = price * quantity;
+    
+    // Jeśli produkt nie jest z listy cenowej i ma koszt produkcji, dodajemy go do wartości
+    if (item.fromPriceList !== true && item.productionTaskId && item.productionCost !== undefined) {
+      const productionCost = parseFloat(item.productionCost || 0);
+      return sum + itemValue + productionCost;
+    }
+    
+    // W przeciwnym razie tylko standardowa wartość
+    return sum + itemValue;
   }, 0);
 };
 
@@ -908,6 +934,59 @@ export const updateProductionTaskInOrder = async (orderId, taskId, updateData, u
     };
   } catch (error) {
     console.error('Błąd podczas aktualizacji zadania produkcyjnego w zamówieniu:', error);
+    throw error;
+  }
+};
+
+/**
+ * Wyszukuje zamówienia po numerze
+ * @param {string} orderNumber - Fragment numeru zamówienia do wyszukania
+ * @param {boolean} onlyCustomerOrders - Czy wyszukiwać tylko zamówienia klienta (nie zamówienia zakupu)
+ */
+export const searchOrdersByNumber = async (orderNumber, onlyCustomerOrders = true) => {
+  try {
+    if (!orderNumber) {
+      return [];
+    }
+    
+    // Pobierz wszystkie zamówienia
+    // Nie możemy filtrować bezpośrednio po numerze zamówienia w zapytaniu, bo Firestore nie obsługuje pełnotekstowego wyszukiwania
+    const ordersQuery = query(
+      collection(db, ORDERS_COLLECTION),
+      orderBy('orderDate', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(ordersQuery);
+    
+    const orders = [];
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      
+      // Sprawdź, czy numer zamówienia zawiera szukany fragment
+      if (data.orderNumber && data.orderNumber.toLowerCase().includes(orderNumber.toLowerCase())) {
+        // Jeśli szukamy tylko zamówień klienta, filtrujemy zamówienia zakupu
+        if (onlyCustomerOrders && data.type === 'purchase') {
+          return;
+        }
+        
+        // Konwertuj daty z Timestamp na Date
+        const orderWithDates = {
+          id: doc.id,
+          ...data,
+          orderDate: data.orderDate && typeof data.orderDate.toDate === 'function' ? data.orderDate.toDate() : data.orderDate,
+          expectedDeliveryDate: data.expectedDeliveryDate && typeof data.expectedDeliveryDate.toDate === 'function' ? data.expectedDeliveryDate.toDate() : data.expectedDeliveryDate,
+          deliveryDate: data.deliveryDate && typeof data.deliveryDate.toDate === 'function' ? data.deliveryDate.toDate() : data.deliveryDate,
+          createdAt: data.createdAt && typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate() : data.createdAt,
+          updatedAt: data.updatedAt && typeof data.updatedAt.toDate === 'function' ? data.updatedAt.toDate() : data.updatedAt
+        };
+        
+        orders.push(orderWithDates);
+      }
+    });
+    
+    return orders;
+  } catch (error) {
+    console.error('Błąd podczas wyszukiwania zamówień:', error);
     throw error;
   }
 }; 

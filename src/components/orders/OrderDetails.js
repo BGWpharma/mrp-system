@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
+import { useNavigate, useParams, Link as RouterLink, useLocation } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -68,8 +68,99 @@ import { db } from '../../services/firebase/config';
 import { getDoc, doc } from 'firebase/firestore';
 import { getUsersDisplayNames } from '../../services/userService';
 
+// Funkcja obliczająca sumę wartości pozycji z uwzględnieniem kosztów produkcji dla pozycji spoza listy cenowej
+const calculateItemTotalValue = (item) => {
+  // Podstawowa wartość pozycji
+  const itemValue = (parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0);
+  
+  // Jeśli produkt jest z listy cenowej, zwracamy tylko wartość pozycji
+  if (item.fromPriceList) {
+    return itemValue;
+  }
+  
+  // Jeśli produkt nie jest z listy cenowej i ma koszt produkcji, dodajemy go
+  if (item.productionTaskId && item.productionCost !== undefined) {
+    return itemValue + parseFloat(item.productionCost || 0);
+  }
+  
+  // Domyślnie zwracamy tylko wartość pozycji
+  return itemValue;
+};
+
+// Funkcja sprawdzająca czy zadania produkcyjne istnieją i usuwająca nieistniejące referencje
+const verifyProductionTasks = async (orderToVerify) => {
+  if (!orderToVerify || !orderToVerify.productionTasks || orderToVerify.productionTasks.length === 0) {
+    return { order: orderToVerify, removedCount: 0 };
+  }
+
+  try {
+    const { getTaskById } = await import('../../services/productionService');
+    const { removeProductionTaskFromOrder } = await import('../../services/orderService');
+    
+    const verifiedTasks = [];
+    const tasksToRemove = [];
+    
+    // Sprawdź każde zadanie produkcyjne
+    for (const task of orderToVerify.productionTasks) {
+      try {
+        // Próba pobrania zadania z bazy
+        const taskDoc = await getTaskById(task.id);
+        // Jeśli dotarliśmy tutaj, zadanie istnieje
+        verifiedTasks.push(task);
+      } catch (error) {
+        console.error(`Błąd podczas weryfikacji zadania ${task.id}:`, error);
+        tasksToRemove.push(task);
+        
+        // Aktualizuj też powiązane elementy zamówienia
+        if (orderToVerify.items) {
+          orderToVerify.items = orderToVerify.items.map(item => {
+            if (item.productionTaskId === task.id) {
+              return {
+                ...item,
+                productionTaskId: null,
+                productionTaskNumber: null,
+                productionStatus: null,
+                productionCost: 0
+              };
+            }
+            return item;
+          });
+        }
+      }
+    }
+    
+    // Jeśli znaleziono nieistniejące zadania, usuń ich referencje z zamówienia
+    if (tasksToRemove.length > 0) {
+      if (orderToVerify.id) {
+        for (const task of tasksToRemove) {
+          try {
+            await removeProductionTaskFromOrder(orderToVerify.id, task.id);
+            console.log(`Usunięto nieistniejące zadanie ${task.id} (${task.moNumber || 'bez numeru'}) z zamówienia ${orderToVerify.id}`);
+          } catch (error) {
+            console.error(`Błąd podczas usuwania referencji do zadania ${task.id}:`, error);
+          }
+        }
+      }
+      
+      // Zaktualizuj dane zamówienia lokalnie
+      const updatedOrder = {
+        ...orderToVerify,
+        productionTasks: verifiedTasks
+      };
+      
+      return { order: updatedOrder, removedCount: tasksToRemove.length };
+    }
+    
+    return { order: orderToVerify, removedCount: 0 };
+  } catch (error) {
+    console.error('Błąd podczas weryfikacji zadań produkcyjnych:', error);
+    return { order: orderToVerify, removedCount: 0 };
+  }
+};
+
 const OrderDetails = () => {
   const { orderId } = useParams();
+  const location = useLocation();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -88,22 +179,58 @@ const OrderDetails = () => {
   const [selectedItemForLabel, setSelectedItemForLabel] = useState(null);
 
   useEffect(() => {
-    const fetchOrderDetails = async () => {
+    const fetchOrderDetails = async (retries = 3, delay = 1000) => {
       try {
         setLoading(true);
+        
+        // Sprawdź, czy jesteśmy na właściwej trasie dla zamówień klientów
+        if (location.pathname.includes('/purchase-orders/')) {
+          console.log('Jesteśmy na stronie zamówienia zakupowego, pomijam pobieranie zamówienia klienta.');
+          setLoading(false);
+          return;
+        }
+        
         const orderData = await getOrderById(orderId);
-        setOrder(orderData);
+        
+        // Zweryfikuj, czy powiązane zadania produkcyjne istnieją
+        const { order: verifiedOrder, removedCount } = await verifyProductionTasks(orderData);
+        
+        if (removedCount > 0) {
+          showInfo(`Usunięto ${removedCount} nieistniejących zadań produkcyjnych z zamówienia.`);
+        }
+        
+        // Sprawdź, czy wartość zamówienia jest ujemna - jeśli tak, odśwież dane
+        if (verifiedOrder.totalValue < 0) {
+          console.log("Wykryto ujemną wartość zamówienia:", verifiedOrder.totalValue);
+          setOrder(verifiedOrder);
+          setTimeout(() => refreshOrderData(), 500); // Odśwież dane zamówienia z małym opóźnieniem
+          return;
+        }
+        
+        setOrder(verifiedOrder);
         
         // Jeśli zamówienie ma historię zmian statusu, pobierz dane użytkowników
-        if (orderData.statusHistory && orderData.statusHistory.length > 0) {
-          const userIds = orderData.statusHistory.map(change => change.changedBy).filter(id => id);
+        if (verifiedOrder.statusHistory && verifiedOrder.statusHistory.length > 0) {
+          const userIds = verifiedOrder.statusHistory.map(change => change.changedBy).filter(id => id);
           const uniqueUserIds = [...new Set(userIds)];
           const names = await getUsersDisplayNames(uniqueUserIds);
           setUserNames(names);
         }
       } catch (error) {
-        showError('Błąd podczas pobierania szczegółów zamówienia: ' + error.message);
-        console.error('Error fetching order details:', error);
+        // Sprawdź, czy nie jesteśmy na stronie zamówienia zakupowego
+        if (!location.pathname.includes('/purchase-orders/')) {
+          console.error('Error fetching order details:', error);
+          
+          // Jeśli mamy jeszcze próby, spróbuj ponownie po opóźnieniu
+          if (retries > 0) {
+            console.log(`Ponowna próba pobierania danych zamówienia za ${delay}ms, pozostało prób: ${retries}`);
+            setTimeout(() => {
+              fetchOrderDetails(retries - 1, delay * 1.5);
+            }, delay);
+          } else {
+            showError('Błąd podczas pobierania szczegółów zamówienia: ' + error.message);
+          }
+        }
       } finally {
         setLoading(false);
       }
@@ -112,27 +239,61 @@ const OrderDetails = () => {
     if (orderId) {
       fetchOrderDetails();
     }
-  }, [orderId, showError, navigate]);
+  }, [orderId, showError, navigate, location.pathname]);
 
   // Funkcja do ręcznego odświeżania danych zamówienia
-  const refreshOrderData = async () => {
+  const refreshOrderData = async (retries = 3, delay = 1000) => {
     try {
       setLoading(true);
-      const refreshedOrderData = await getOrderById(orderId);
-      setOrder(refreshedOrderData);
+      
+      // Sprawdź, czy jesteśmy na właściwej trasie dla zamówień klientów
+      if (location.pathname.includes('/purchase-orders/')) {
+        console.log('Jesteśmy na stronie zamówienia zakupowego, pomijam odświeżanie zamówienia klienta.');
+        setLoading(false);
+        return;
+      }
+      
+      const freshOrder = await getOrderById(orderId);
+      
+      // Zweryfikuj, czy powiązane zadania produkcyjne istnieją
+      const { order: verifiedOrder, removedCount } = await verifyProductionTasks(freshOrder);
+      
+      if (removedCount > 0) {
+        showInfo(`Usunięto ${removedCount} nieistniejących zadań produkcyjnych z zamówienia.`);
+      }
+      
+      setOrder(verifiedOrder);
       showSuccess('Dane zamówienia zostały odświeżone');
     } catch (error) {
-      showError('Błąd podczas odświeżania danych zamówienia: ' + error.message);
-      console.error('Error refreshing order data:', error);
+      if (!location.pathname.includes('/purchase-orders/')) {
+        console.error('Error refreshing order data:', error);
+        
+        // Jeśli mamy jeszcze próby, spróbuj ponownie po opóźnieniu
+        if (retries > 0) {
+          console.log(`Ponowna próba odświeżania danych zamówienia za ${delay}ms, pozostało prób: ${retries}`);
+          setTimeout(() => {
+            refreshOrderData(retries - 1, delay * 1.5);
+          }, delay);
+        } else {
+          showError('Błąd podczas odświeżania danych zamówienia: ' + error.message);
+        }
+      }
     } finally {
       setLoading(false);
     }
   };
 
   // Funkcja do odświeżania danych o kosztach produkcji
-  const refreshProductionCosts = async () => {
+  const refreshProductionCosts = async (retries = 3, delay = 1000) => {
     try {
       setLoading(true);
+      
+      // Sprawdź, czy jesteśmy na właściwej trasie dla zamówień klientów
+      if (location.pathname.includes('/purchase-orders/')) {
+        console.log('Jesteśmy na stronie zamówienia zakupowego, pomijam odświeżanie kosztów produkcji.');
+        setLoading(false);
+        return;
+      }
       
       // Pobierz aktualne dane zadań produkcyjnych
       const refreshedOrderData = await getOrderById(orderId);
@@ -145,8 +306,19 @@ const OrderDetails = () => {
         showInfo('Brak zadań produkcyjnych do odświeżenia');
       }
     } catch (error) {
-      showError('Błąd podczas odświeżania danych kosztów produkcji: ' + error.message);
-      console.error('Error refreshing production costs:', error);
+      if (!location.pathname.includes('/purchase-orders/')) {
+        console.error('Error refreshing production costs:', error);
+        
+        // Jeśli mamy jeszcze próby, spróbuj ponownie po opóźnieniu
+        if (retries > 0) {
+          console.log(`Ponowna próba odświeżania kosztów produkcji za ${delay}ms, pozostało prób: ${retries}`);
+          setTimeout(() => {
+            refreshProductionCosts(retries - 1, delay * 1.5);
+          }, delay);
+        } else {
+          showError('Błąd podczas odświeżania danych kosztów produkcji: ' + error.message);
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -547,6 +719,11 @@ const OrderDetails = () => {
     );
   }
 
+  // Jeśli jesteśmy na ścieżce zamówienia zakupowego, nie renderujemy nic
+  if (location.pathname.includes('/purchase-orders/')) {
+    return null;
+  }
+
   if (!order) {
     return (
       <Box sx={{ textAlign: 'center', mt: 4 }}>
@@ -565,870 +742,801 @@ const OrderDetails = () => {
   }
 
   return (
-    <Box sx={{ pb: 4 }}>
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Button 
-          startIcon={<ArrowBackIcon />} 
-          onClick={handleBackClick}
-        >
-          Powrót
-        </Button>
-        <Typography variant="h5">
-          Zamówienie {order.orderNumber || order.id.substring(0, 8).toUpperCase()}
-        </Typography>
-        <Box>
+    <div>
+      <Box sx={{ pb: 4 }}>
+        <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Button 
-            startIcon={<EditIcon />} 
-            variant="outlined"
-            onClick={handleEditClick}
-            sx={{ mr: 1 }}
+            startIcon={<ArrowBackIcon />} 
+            onClick={handleBackClick}
           >
-            Edytuj
+            Powrót
           </Button>
-          <Button 
-            startIcon={<PrintIcon />} 
-            variant="outlined"
-            onClick={handlePrintInvoice}
-            sx={{ mr: 1 }}
-          >
-            Drukuj
-          </Button>
-          <Button 
-            startIcon={<LabelIcon />} 
-            variant="outlined"
-            onClick={() => setLabelDialogOpen(true)}
-          >
-            Drukuj etykietę
-          </Button>
+          <Typography variant="h5">
+            Zamówienie {order.orderNumber || order.id.substring(0, 8).toUpperCase()}
+          </Typography>
+          <Box>
+            <Button 
+              startIcon={<EditIcon />} 
+              variant="outlined"
+              onClick={handleEditClick}
+              sx={{ mr: 1 }}
+            >
+              Edytuj
+            </Button>
+            <Button 
+              startIcon={<PrintIcon />} 
+              variant="outlined"
+              onClick={handlePrintInvoice}
+              sx={{ mr: 1 }}
+            >
+              Drukuj
+            </Button>
+            <Button 
+              startIcon={<LabelIcon />} 
+              variant="outlined"
+              onClick={() => setLabelDialogOpen(true)}
+            >
+              Drukuj etykietę
+            </Button>
+          </Box>
         </Box>
-      </Box>
 
-      {/* Status i informacje podstawowe */}
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Grid container spacing={3}>
-          <Grid item xs={12} sm={6}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6" sx={{ mr: 2 }}>Status:</Typography>
-              <Chip 
-                label={order.status} 
-                color={getStatusChipColor(order.status)}
-                size="medium"
-              />
-            </Box>
-            <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <EventNoteIcon sx={{ mr: 1 }} fontSize="small" />
-              Data zamówienia: {formatTimestamp(order.orderDate, true)}
-            </Typography>
-            {order.expectedDeliveryDate && (
-              <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <ScheduleIcon sx={{ mr: 1 }} fontSize="small" />
-                Oczekiwana dostawa: {formatTimestamp(order.expectedDeliveryDate, true)}
-              </Typography>
-            )}
-            {order.deliveryDate && (
-              <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center' }}>
-                <LocalShippingIcon sx={{ mr: 1 }} fontSize="small" />
-                Dostarczone: {formatTimestamp(order.deliveryDate, true)}
-              </Typography>
-            )}
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', flexDirection: 'column', height: '100%' }}>
-              <Typography variant="h6" align="right">
-                Łączna wartość:
-              </Typography>
-              <Typography variant="h4" align="right" color="primary.main" sx={{ fontWeight: 'bold' }}>
-                {(() => {
-                  // Oblicz wartość produktów
-                  const productsValue = order.items?.reduce((sum, item) => sum + (item.price * item.quantity), 0) || 0;
-                  
-                  // Koszt dostawy
-                  const shippingCost = parseFloat(order.shippingCost) || 0;
-                  
-                  // Dodatkowe koszty (tylko pozytywne)
-                  const additionalCosts = order.additionalCostsItems ? 
-                    order.additionalCostsItems
-                      .filter(cost => parseFloat(cost.value) > 0)
-                      .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0) : 0;
-                  
-                  // Rabaty (wartości ujemne) - jako wartość pozytywna do odjęcia
-                  const discounts = order.additionalCostsItems ? 
-                    Math.abs(order.additionalCostsItems
-                      .filter(cost => parseFloat(cost.value) < 0)
-                      .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)) : 0;
-                  
-                  // Łączna wartość
-                  const total = productsValue + shippingCost + additionalCosts - discounts;
-                  
-                  return formatCurrency(total);
-                })()}
-              </Typography>
-            </Box>
-          </Grid>
-        </Grid>
-      </Paper>
-
-      {/* Informacje o kliencie i płatności */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3, height: '100%' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6">Dane klienta</Typography>
-              <IconButton 
-                size="small" 
-                color="primary"
-                onClick={handleSendEmail}
-                disabled={!order.customer?.email}
-              >
-                <EmailIcon />
-              </IconButton>
-            </Box>
-            <Divider sx={{ mb: 2 }} />
-            <Typography variant="h6" sx={{ mb: 1 }}>{order.customer?.name || 'Brak nazwy klienta'}</Typography>
-            <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <PersonIcon sx={{ mr: 1 }} fontSize="small" />
-              Email: {order.customer?.email || '-'}
-            </Typography>
-            <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <PhoneIcon sx={{ mr: 1 }} fontSize="small" />
-              Telefon: {order.customer?.phone || '-'}
-            </Typography>
-            <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center' }}>
-              <LocationOnIcon sx={{ mr: 1 }} fontSize="small" />
-              Adres dostawy: {order.customer?.shippingAddress || '-'}
-            </Typography>
-          </Paper>
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3, height: '100%' }}>
-            <Typography variant="h6" sx={{ mb: 2 }}>Płatność i dostawa</Typography>
-            <Divider sx={{ mb: 2 }} />
-            <Grid container spacing={2}>
-              <Grid item xs={6}>
-                <Typography variant="subtitle2">Metoda płatności:</Typography>
-                <Typography variant="body1" sx={{ mb: 1 }}>{order.paymentMethod || '-'}</Typography>
-                
-                <Typography variant="subtitle2">Status płatności:</Typography>
+        {/* Status i informacje podstawowe */}
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Grid container spacing={3}>
+            <Grid item xs={12} sm={6}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6" sx={{ mr: 2 }}>Status:</Typography>
                 <Chip 
-                  label={order.paymentStatus || 'Nieopłacone'} 
-                  color={order.paymentStatus === 'Opłacone' ? 'success' : order.paymentStatus === 'Opłacone częściowo' ? 'warning' : 'error'}
-                  size="small"
-                  sx={{ mt: 0.5 }}
+                  label={order.status} 
+                  color={getStatusChipColor(order.status)}
+                  size="medium"
                 />
-              </Grid>
-              <Grid item xs={6}>
-                <Typography variant="subtitle2">Metoda dostawy:</Typography>
-                <Typography variant="body1" sx={{ mb: 1 }}>{order.shippingMethod || '-'}</Typography>
-                
-                <Typography variant="subtitle2">Koszt dostawy:</Typography>
-                <Typography variant="body1">{formatCurrency(order.shippingCost || 0)}</Typography>
-              </Grid>
+              </Box>
+              <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <EventNoteIcon sx={{ mr: 1 }} fontSize="small" />
+                Data zamówienia: {formatTimestamp(order.orderDate, true)}
+              </Typography>
+              {order.expectedDeliveryDate && (
+                <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                  <ScheduleIcon sx={{ mr: 1 }} fontSize="small" />
+                  Oczekiwana dostawa: {formatTimestamp(order.expectedDeliveryDate, true)}
+                </Typography>
+              )}
+              {order.deliveryDate && (
+                <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center' }}>
+                  <LocalShippingIcon sx={{ mr: 1 }} fontSize="small" />
+                  Dostarczone: {formatTimestamp(order.deliveryDate, true)}
+                </Typography>
+              )}
             </Grid>
-          </Paper>
+            <Grid item xs={12} sm={6}>
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', flexDirection: 'column', height: '100%' }}>
+                <Typography variant="h6" align="right">
+                  Łączna wartość:
+                </Typography>
+                <Typography variant="h4" align="right" color="primary.main" sx={{ fontWeight: 'bold' }}>
+                  {(() => {
+                    // Oblicz wartość produktów
+                    const productsValue = order.items?.reduce((sum, item) => sum + calculateItemTotalValue(item), 0) || 0;
+                    
+                    // Koszt dostawy
+                    const shippingCost = parseFloat(order.shippingCost) || 0;
+                    
+                    // Dodatkowe koszty (tylko pozytywne)
+                    const additionalCosts = order.additionalCostsItems ? 
+                      order.additionalCostsItems
+                        .filter(cost => parseFloat(cost.value) > 0)
+                        .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0) : 0;
+                    
+                    // Rabaty (wartości ujemne) - jako wartość pozytywna do odjęcia
+                    const discounts = order.additionalCostsItems ? 
+                      Math.abs(order.additionalCostsItems
+                        .filter(cost => parseFloat(cost.value) < 0)
+                        .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)) : 0;
+                    
+                    // Łączna wartość bez uwzględnienia PO
+                    const total = productsValue + shippingCost + additionalCosts - discounts;
+                    
+                    return formatCurrency(total);
+                  })()}
+                </Typography>
+                <Box sx={{ mt: 1, display: 'flex', justifyContent: 'flex-end' }}>
+                  <Tooltip title="Odśwież dane zamówienia">
+                    <IconButton
+                      size="small"
+                      color="primary"
+                      onClick={refreshOrderData}
+                    >
+                      <RefreshIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+              </Box>
+            </Grid>
+          </Grid>
+        </Paper>
+
+        {/* Informacje o kliencie i płatności */}
+        <Grid container spacing={3} sx={{ mb: 3 }}>
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 3, height: '100%' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6">Dane klienta</Typography>
+                <IconButton 
+                  size="small" 
+                  color="primary"
+                  onClick={handleSendEmail}
+                  disabled={!order.customer?.email}
+                >
+                  <EmailIcon />
+                </IconButton>
+              </Box>
+              <Divider sx={{ mb: 2 }} />
+              <Typography variant="h6" sx={{ mb: 1 }}>{order.customer?.name || 'Brak nazwy klienta'}</Typography>
+              <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <PersonIcon sx={{ mr: 1 }} fontSize="small" />
+                Email: {order.customer?.email || '-'}
+              </Typography>
+              <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <PhoneIcon sx={{ mr: 1 }} fontSize="small" />
+                Telefon: {order.customer?.phone || '-'}
+              </Typography>
+              <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center' }}>
+                <LocationOnIcon sx={{ mr: 1 }} fontSize="small" />
+                Adres dostawy: {order.customer?.shippingAddress || '-'}
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 3, height: '100%' }}>
+              <Typography variant="h6" sx={{ mb: 2 }}>Płatność i dostawa</Typography>
+              <Divider sx={{ mb: 2 }} />
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <Typography variant="subtitle2">Metoda płatności:</Typography>
+                  <Typography variant="body1" sx={{ mb: 1 }}>{order.paymentMethod || '-'}</Typography>
+                  
+                  <Typography variant="subtitle2">Status płatności:</Typography>
+                  <Chip 
+                    label={order.paymentStatus || 'Nieopłacone'} 
+                    color={order.paymentStatus === 'Opłacone' ? 'success' : order.paymentStatus === 'Opłacone częściowo' ? 'warning' : 'error'}
+                    size="small"
+                    sx={{ mt: 0.5 }}
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="subtitle2">Metoda dostawy:</Typography>
+                  <Typography variant="body1" sx={{ mb: 1 }}>{order.shippingMethod || '-'}</Typography>
+                  
+                  <Typography variant="subtitle2">Koszt dostawy:</Typography>
+                  <Typography variant="body1">{formatCurrency(order.shippingCost || 0)}</Typography>
+                </Grid>
+              </Grid>
+            </Paper>
+          </Grid>
         </Grid>
-      </Grid>
 
-      {/* Wyświetlenie historii zmian statusu */}
-      {renderStatusHistory()}
+        {/* Wyświetlenie historii zmian statusu */}
+        {renderStatusHistory()}
 
-      {/* Lista produktów */}
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>Produkty</Typography>
-        <Divider sx={{ mb: 2 }} />
-        <Table>
-          <TableHead>
-            <TableRow sx={{ bgcolor: 'primary.main', color: 'primary.contrastText' }}>
-              <TableCell sx={{ color: 'inherit' }}>Produkt</TableCell>
-              <TableCell sx={{ color: 'inherit' }} align="right">Ilość</TableCell>
-              <TableCell sx={{ color: 'inherit' }} align="right">Cena</TableCell>
-              <TableCell sx={{ color: 'inherit' }} align="right">Wartość</TableCell>
-              <TableCell sx={{ color: 'inherit' }}>Lista cenowa</TableCell>
-              <TableCell sx={{ color: 'inherit' }}>Status produkcji</TableCell>
-              <TableCell sx={{ color: 'inherit' }} align="right">
-                Koszt produkcji
-                <Tooltip title="Odśwież dane zadań produkcyjnych">
-                  <IconButton 
-                    size="small" 
-                    color="primary"
-                    onClick={refreshProductionCosts}
-                    sx={{ ml: 1, color: 'inherit' }}
-                  >
-                    <RefreshIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              </TableCell>
-              <TableCell sx={{ color: 'inherit' }}>Akcje</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {order.items && order.items.map((item, index) => (
-              <TableRow key={index} sx={{ '&:nth-of-type(odd)': { bgcolor: 'action.hover' } }}>
-                <TableCell>{item.name}</TableCell>
-                <TableCell align="right">{item.quantity} {item.unit}</TableCell>
-                <TableCell align="right">{formatCurrency(item.price)}</TableCell>
-                <TableCell align="right">{formatCurrency(item.quantity * item.price)}</TableCell>
-                <TableCell>
-                  {item.fromPriceList ? (
-                    <Chip 
-                      label="Tak" 
-                      size="small" 
-                      color="success" 
-                      variant="outlined" 
-                    />
-                  ) : (
-                    <Chip 
-                      label="Nie" 
-                      size="small" 
-                      color="default" 
-                      variant="outlined" 
-                    />
-                  )}
-                </TableCell>
-                <TableCell>
-                  {getProductionStatus(item, order.productionTasks)}
-                </TableCell>
-                <TableCell align="right">
-                  {item.productionTaskId && item.productionCost !== undefined ? (
-                    <Tooltip title="Koszt produkcji zadania">
-                      <Typography>
-                        {formatCurrency(item.productionCost)}
-                      </Typography>
-                    </Tooltip>
-                  ) : (
-                    <Typography variant="body2" color="text.secondary">-</Typography>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <Tooltip title="Drukuj etykietę">
+        {/* Lista produktów */}
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>Produkty</Typography>
+          <Divider sx={{ mb: 2 }} />
+          <Table>
+            <TableHead>
+              <TableRow sx={{ bgcolor: 'primary.main', color: 'primary.contrastText' }}>
+                <TableCell sx={{ color: 'inherit' }}>Produkt</TableCell>
+                <TableCell sx={{ color: 'inherit' }} align="right">Ilość</TableCell>
+                <TableCell sx={{ color: 'inherit' }} align="right">Cena</TableCell>
+                <TableCell sx={{ color: 'inherit' }} align="right">Wartość</TableCell>
+                <TableCell sx={{ color: 'inherit' }}>Lista cenowa</TableCell>
+                <TableCell sx={{ color: 'inherit' }}>Status produkcji</TableCell>
+                <TableCell sx={{ color: 'inherit' }} align="right">
+                  Koszt produkcji
+                  <Tooltip title="Odśwież dane zadań produkcyjnych">
                     <IconButton 
                       size="small" 
                       color="primary"
-                      onClick={() => handleLabelDialogOpen(item)}
+                      onClick={refreshProductionCosts}
+                      sx={{ ml: 1, color: 'inherit' }}
                     >
-                      <LabelIcon />
+                      <RefreshIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
                 </TableCell>
+                <TableCell sx={{ color: 'inherit' }} align="right">Suma wartości pozycji</TableCell>
+                <TableCell sx={{ color: 'inherit' }}>Akcje</TableCell>
               </TableRow>
-            ))}
-            <TableRow>
-              <TableCell colSpan={2} />
-              <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                Suma częściowa:
-              </TableCell>
-              <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                {formatCurrency(order.items?.reduce((sum, item) => sum + item.price * item.quantity, 0) || 0)}
-              </TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell colSpan={2} />
-              <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                Koszt dostawy:
-              </TableCell>
-              <TableCell align="right">
-                {formatCurrency(order.shippingCost || 0)}
-              </TableCell>
-            </TableRow>
-            
-            {/* Dodatkowe koszty (tylko jeśli istnieją) */}
-            {order.additionalCostsItems && order.additionalCostsItems.length > 0 && (
-              <>
-                {/* Wyświetl pozytywne koszty (dodatnie) */}
-                {order.additionalCostsItems.some(cost => parseFloat(cost.value) > 0) && (
-                  <>
-                    {order.additionalCostsItems
-                      .filter(cost => parseFloat(cost.value) > 0)
-                      .map((cost, index) => (
-                        <TableRow key={`cost-${cost.id || index}`}>
-                          <TableCell colSpan={2} />
-                          <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                            {cost.description || `Dodatkowy koszt ${index + 1}`}:
-                          </TableCell>
-                          <TableCell align="right">
-                            {formatCurrency(parseFloat(cost.value) || 0)}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    }
-                    <TableRow>
-                      <TableCell colSpan={2} />
-                      <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                        Suma dodatkowych kosztów:
-                      </TableCell>
-                      <TableCell align="right">
-                        {formatCurrency(order.additionalCostsItems
-                          .filter(cost => parseFloat(cost.value) > 0)
-                          .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  </>
-                )}
-                
-                {/* Wyświetl rabaty (wartości ujemne) */}
-                {order.additionalCostsItems.some(cost => parseFloat(cost.value) < 0) && (
-                  <>
-                    {order.additionalCostsItems
-                      .filter(cost => parseFloat(cost.value) < 0)
-                      .map((cost, index) => (
-                        <TableRow key={`discount-${cost.id || index}`}>
-                          <TableCell colSpan={2} />
-                          <TableCell align="right" sx={{ fontWeight: 'bold', color: 'secondary.main' }}>
-                            {cost.description || `Rabat ${index + 1}`}:
-                          </TableCell>
-                          <TableCell align="right" sx={{ color: 'secondary.main' }}>
-                            {formatCurrency(Math.abs(parseFloat(cost.value)) || 0)}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    }
-                    <TableRow>
-                      <TableCell colSpan={2} />
-                      <TableCell align="right" sx={{ fontWeight: 'bold', color: 'secondary.main' }}>
-                        Suma rabatów:
-                      </TableCell>
-                      <TableCell align="right" sx={{ color: 'secondary.main' }}>
-                        {formatCurrency(Math.abs(order.additionalCostsItems
-                          .filter(cost => parseFloat(cost.value) < 0)
-                          .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
-                        ))}
-                      </TableCell>
-                    </TableRow>
-                  </>
-                )}
-              </>
-            )}
-            
-            {(order.linkedPurchaseOrders && order.linkedPurchaseOrders.length > 0) && (
+            </TableHead>
+            <TableBody>
+              {order.items && order.items.map((item, index) => (
+                <TableRow key={index} sx={{ '&:nth-of-type(odd)': { bgcolor: 'action.hover' } }}>
+                  <TableCell>{item.name}</TableCell>
+                  <TableCell align="right">{item.quantity} {item.unit}</TableCell>
+                  <TableCell align="right">{formatCurrency(item.price)}</TableCell>
+                  <TableCell align="right">{formatCurrency(item.quantity * item.price)}</TableCell>
+                  <TableCell>
+                    {item.fromPriceList ? (
+                      <Chip 
+                        label="Tak" 
+                        size="small" 
+                        color="success" 
+                        variant="outlined" 
+                      />
+                    ) : (
+                      <Chip 
+                        label="Nie" 
+                        size="small" 
+                        color="default" 
+                        variant="outlined" 
+                      />
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {getProductionStatus(item, order.productionTasks)}
+                  </TableCell>
+                  <TableCell align="right">
+                    {item.productionTaskId && item.productionCost !== undefined ? (
+                      <Tooltip title="Koszt produkcji zadania">
+                        <Typography>
+                          {formatCurrency(item.productionCost)}
+                        </Typography>
+                      </Tooltip>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">-</Typography>
+                    )}
+                  </TableCell>
+                  <TableCell align="right">
+                    {formatCurrency(calculateItemTotalValue(item))}
+                  </TableCell>
+                  <TableCell>
+                    <Tooltip title="Drukuj etykietę">
+                      <IconButton 
+                        size="small" 
+                        color="primary"
+                        onClick={() => handleLabelDialogOpen(item)}
+                      >
+                        <LabelIcon />
+                      </IconButton>
+                    </Tooltip>
+                  </TableCell>
+                </TableRow>
+              ))}
               <TableRow>
                 <TableCell colSpan={2} />
                 <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                  Wartość zamówień zakupu (brutto):
+                  Suma częściowa:
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                  {formatCurrency(order.items?.reduce((sum, item) => sum + calculateItemTotalValue(item), 0) || 0)}
+                </TableCell>
+                <TableCell colSpan={3} />
+                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                  {formatCurrency(order.items?.reduce((sum, item) => sum + calculateItemTotalValue(item), 0) || 0)}
+                </TableCell>
+                <TableCell />
+              </TableRow>
+              <TableRow>
+                <TableCell colSpan={2} />
+                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                  Koszt dostawy:
                 </TableCell>
                 <TableCell align="right">
-                  {(() => {
-                    // Obliczanie łącznej wartości brutto wszystkich zamówień zakupu
-                    const totalGross = order.linkedPurchaseOrders.reduce((sum, po) => {
-                      try {
-                        // Jeśli zamówienie ma już wartość brutto, używamy jej
-                        if (po.totalGross !== undefined && po.totalGross !== null) {
-                          return sum + parseFloat(po.totalGross);
-                        }
-                        
-                        // W przeciwnym razie obliczamy wartość brutto
-                        const productsValue = parseFloat(po.value) || 0;
-                        const vatRate = parseFloat(po.vatRate) || 23;
-                        const vatValue = (productsValue * vatRate) / 100;
-                        
-                        // Sprawdź zarówno nowy jak i stary format dodatkowych kosztów
-                        let additionalCosts = 0;
-                        if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
-                          additionalCosts = po.additionalCostsItems.reduce((costsSum, cost) => {
-                            return costsSum + (parseFloat(cost.value) || 0);
-                          }, 0);
-                        } else if (po.additionalCosts !== undefined) {
-                          additionalCosts = typeof po.additionalCosts === 'number' ? po.additionalCosts : parseFloat(po.additionalCosts) || 0;
-                        }
-                        
-                        // Wartość brutto: produkty + VAT + dodatkowe koszty
-                        const grossValue = productsValue + vatValue + additionalCosts;
-                        
-                        return sum + grossValue;
-                      } catch (error) {
-                        console.error('Błąd podczas obliczania wartości PO:', error);
-                        return sum;
+                  {formatCurrency(order.shippingCost || 0)}
+                </TableCell>
+              </TableRow>
+              
+              {/* Dodatkowe koszty (tylko jeśli istnieją) */}
+              {order.additionalCostsItems && order.additionalCostsItems.length > 0 && (
+                <>
+                  {/* Wyświetl pozytywne koszty (dodatnie) */}
+                  {order.additionalCostsItems.some(cost => parseFloat(cost.value) > 0) && (
+                    <>
+                      {order.additionalCostsItems
+                        .filter(cost => parseFloat(cost.value) > 0)
+                        .map((cost, index) => (
+                          <TableRow key={`cost-${cost.id || index}`}>
+                            <TableCell colSpan={2} />
+                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                              {cost.description || `Dodatkowy koszt ${index + 1}`}:
+                            </TableCell>
+                            <TableCell align="right">
+                              {formatCurrency(parseFloat(cost.value) || 0)}
+                            </TableCell>
+                          </TableRow>
+                        ))
                       }
-                    }, 0);
+                      <TableRow>
+                        <TableCell colSpan={2} />
+                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                          Suma dodatkowych kosztów:
+                        </TableCell>
+                        <TableCell align="right">
+                          {formatCurrency(order.additionalCostsItems
+                            .filter(cost => parseFloat(cost.value) > 0)
+                            .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    </>
+                  )}
+                  
+                  {/* Wyświetl rabaty (wartości ujemne) */}
+                  {order.additionalCostsItems.some(cost => parseFloat(cost.value) < 0) && (
+                    <>
+                      {order.additionalCostsItems
+                        .filter(cost => parseFloat(cost.value) < 0)
+                        .map((cost, index) => (
+                          <TableRow key={`discount-${cost.id || index}`}>
+                            <TableCell colSpan={2} />
+                            <TableCell align="right" sx={{ fontWeight: 'bold', color: 'secondary.main' }}>
+                              {cost.description || `Rabat ${index + 1}`}:
+                            </TableCell>
+                            <TableCell align="right" sx={{ color: 'secondary.main' }}>
+                              {formatCurrency(Math.abs(parseFloat(cost.value)) || 0)}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      }
+                      <TableRow>
+                        <TableCell colSpan={2} />
+                        <TableCell align="right" sx={{ fontWeight: 'bold', color: 'secondary.main' }}>
+                          Suma rabatów:
+                        </TableCell>
+                        <TableCell align="right" sx={{ color: 'secondary.main' }}>
+                          {formatCurrency(Math.abs(order.additionalCostsItems
+                            .filter(cost => parseFloat(cost.value) < 0)
+                            .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
+                          ))}
+                        </TableCell>
+                      </TableRow>
+                    </>
+                  )}
+                </>
+              )}
+              
+              <TableRow>
+                <TableCell colSpan={2} />
+                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                  Razem:
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 'bold', fontSize: '1.2rem' }}>
+                  {(() => {
+                    // Oblicz wartość zamówienia jako sumę produktów, kosztów dostawy i dodatkowych kosztów
+                    const productsValue = order.items?.reduce((sum, item) => sum + calculateItemTotalValue(item), 0) || 0;
+                    const shippingCost = parseFloat(order.shippingCost) || 0;
                     
-                    return formatCurrency(totalGross);
+                    // Dodatkowe koszty (tylko pozytywne)
+                    const additionalCosts = order.additionalCostsItems ? 
+                      order.additionalCostsItems
+                        .filter(cost => parseFloat(cost.value) > 0)
+                        .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0) : 0;
+                    
+                    // Rabaty (wartości ujemne) - jako wartość pozytywna do odjęcia
+                    const discounts = order.additionalCostsItems ? 
+                      Math.abs(order.additionalCostsItems
+                        .filter(cost => parseFloat(cost.value) < 0)
+                        .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)) : 0;
+                    
+                    // Łączna wartość
+                    const total = productsValue + shippingCost + additionalCosts - discounts;
+                    
+                    return formatCurrency(total);
                   })()}
                 </TableCell>
               </TableRow>
-            )}
-            <TableRow>
-              <TableCell colSpan={2} />
-              <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                Razem:
-              </TableCell>
-              <TableCell align="right" sx={{ fontWeight: 'bold', fontSize: '1.2rem' }}>
-                {(() => {
-                  // Oblicz wartość produktów
-                  const productsValue = order.items?.reduce((sum, item) => sum + (item.price * item.quantity), 0) || 0;
-                  
-                  // Koszt dostawy
-                  const shippingCost = parseFloat(order.shippingCost) || 0;
-                  
-                  // Dodatkowe koszty (tylko pozytywne)
-                  const additionalCosts = order.additionalCostsItems ? 
-                    order.additionalCostsItems
-                      .filter(cost => parseFloat(cost.value) > 0)
-                      .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0) : 0;
-                  
-                  // Rabaty (wartości ujemne) - jako wartość pozytywna do odjęcia
-                  const discounts = order.additionalCostsItems ? 
-                    Math.abs(order.additionalCostsItems
-                      .filter(cost => parseFloat(cost.value) < 0)
-                      .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)) : 0;
-                  
-                  // Łączna wartość
-                  const total = productsValue + shippingCost + additionalCosts - discounts;
-                  
-                  return formatCurrency(total);
-                })()}
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
-      </Paper>
+            </TableBody>
+          </Table>
+        </Paper>
 
-      {/* Sekcja dowodu dostawy */}
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>Dowód dostawy</Typography>
-        <Divider sx={{ mb: 2 }} />
-        
-        {order.deliveryProof ? (
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            {isImageUrl(order.deliveryProof) ? (
-              <Box sx={{ width: '100%', maxWidth: 600, mb: 2 }}>
-                <img 
-                  src={order.deliveryProof} 
-                  alt="Dowód dostawy" 
-                  style={{ width: '100%', height: 'auto', borderRadius: 4 }} 
-                />
-              </Box>
-            ) : isGoogleDriveLink(order.deliveryProof) ? (
-              <Box sx={{ width: '100%', maxWidth: 600, mb: 2, p: 3, border: '1px dashed', borderColor: 'divider', borderRadius: 1 }}>
-                <Typography variant="h6" align="center" gutterBottom>
-                  <LinkIcon color="primary" sx={{ verticalAlign: 'middle', mr: 1 }} />
-                  Link do Google Drive
-                </Typography>
-                <Typography variant="body2" color="text.secondary" gutterBottom align="center">
-                  {order.deliveryProof}
-                </Typography>
-              </Box>
-            ) : (
-              <Box sx={{ width: '100%', maxWidth: 600, mb: 2 }}>
-                <Alert severity="info">
-                  Dokument w formacie, który nie może być wyświetlony w przeglądarce. 
-                  Kliknij przycisk "Otwórz", aby wyświetlić dokument.
-                </Alert>
-              </Box>
-            )}
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <Button 
-                variant="outlined"
-                startIcon={<OpenInNewIcon />}
-                href={order.deliveryProof}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Otwórz
-              </Button>
-              <Button 
-                variant="outlined" 
-                color="error" 
-                startIcon={<DeleteIcon />}
-                onClick={handleDeleteDeliveryProof}
-                disabled={uploading}
-              >
-                Usuń
-              </Button>
-            </Box>
-          </Box>
-        ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <Typography variant="body1" sx={{ mb: 2 }}>
-              Brak załączonego dowodu dostawy. Dodaj skan, zdjęcie lub link do dokumentu potwierdzającego dostawę.
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <input
-                ref={fileInputRef}
-                accept="image/*, application/pdf"
-                style={{ display: 'none' }}
-                id="delivery-proof-upload"
-                type="file"
-                onChange={handleDeliveryProofUpload}
-              />
-              <label htmlFor="delivery-proof-upload">
-                <Button
-                  variant="contained"
-                  component="span"
-                  startIcon={<UploadIcon />}
+        {/* Sekcja dowodu dostawy */}
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>Dowód dostawy</Typography>
+          <Divider sx={{ mb: 2 }} />
+          
+          {order.deliveryProof ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              {isImageUrl(order.deliveryProof) ? (
+                <Box sx={{ width: '100%', maxWidth: 600, mb: 2 }}>
+                  <img 
+                    src={order.deliveryProof} 
+                    alt="Dowód dostawy" 
+                    style={{ width: '100%', height: 'auto', borderRadius: 4 }} 
+                  />
+                </Box>
+              ) : isGoogleDriveLink(order.deliveryProof) ? (
+                <Box sx={{ width: '100%', maxWidth: 600, mb: 2, p: 3, border: '1px dashed', borderColor: 'divider', borderRadius: 1 }}>
+                  <Typography variant="h6" align="center" gutterBottom>
+                    <LinkIcon color="primary" sx={{ verticalAlign: 'middle', mr: 1 }} />
+                    Link do Google Drive
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" gutterBottom align="center">
+                    {order.deliveryProof}
+                  </Typography>
+                </Box>
+              ) : (
+                <Box sx={{ width: '100%', maxWidth: 600, mb: 2 }}>
+                  <Alert severity="info">
+                    Dokument w formacie, który nie może być wyświetlony w przeglądarce. 
+                    Kliknij przycisk "Otwórz", aby wyświetlić dokument.
+                  </Alert>
+                </Box>
+              )}
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <Button 
+                  variant="outlined"
+                  startIcon={<OpenInNewIcon />}
+                  href={order.deliveryProof}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Otwórz
+                </Button>
+                <Button 
+                  variant="outlined" 
+                  color="error" 
+                  startIcon={<DeleteIcon />}
+                  onClick={handleDeleteDeliveryProof}
                   disabled={uploading}
                 >
-                  {uploading ? 'Przesyłanie...' : 'Dodaj plik'}
+                  Usuń
                 </Button>
-              </label>
-              <Button
-                variant="outlined"
-                startIcon={<LinkIcon />}
-                onClick={handleDriveLinkDialogOpen}
+              </Box>
+            </Box>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <Typography variant="body1" sx={{ mb: 2 }}>
+                Brak załączonego dowodu dostawy. Dodaj skan, zdjęcie lub link do dokumentu potwierdzającego dostawę.
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <input
+                  ref={fileInputRef}
+                  accept="image/*, application/pdf"
+                  style={{ display: 'none' }}
+                  id="delivery-proof-upload"
+                  type="file"
+                  onChange={handleDeliveryProofUpload}
+                />
+                <label htmlFor="delivery-proof-upload">
+                  <Button
+                    variant="contained"
+                    component="span"
+                    startIcon={<UploadIcon />}
+                    disabled={uploading}
+                  >
+                    {uploading ? 'Przesyłanie...' : 'Dodaj plik'}
+                  </Button>
+                </label>
+                <Button
+                  variant="outlined"
+                  startIcon={<LinkIcon />}
+                  onClick={handleDriveLinkDialogOpen}
+                >
+                  Dodaj link Google Drive
+                </Button>
+              </Box>
+            </Box>
+          )}
+        </Paper>
+
+        {/* Uwagi */}
+        {order.notes && (
+          <Paper sx={{ p: 3, mb: 3 }}>
+            <Typography variant="h6" sx={{ mb: 2 }}>Uwagi</Typography>
+            <Divider sx={{ mb: 2 }} />
+            <Typography variant="body1">
+              {order.notes}
+            </Typography>
+          </Paper>
+        )}
+        
+        {/* Powiązane zamówienia zakupu */}
+        {order && (
+          <Paper sx={{ p: 3, mb: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6">Powiązane zamówienia zakupu</Typography>
+              <Button 
+                variant="outlined" 
+                startIcon={<PlaylistAddIcon />} 
+                onClick={handleAssignPurchaseOrder}
               >
-                Dodaj link Google Drive
+                Przypisz PO
               </Button>
             </Box>
-          </Box>
+            <Divider sx={{ mb: 2 }} />
+            
+            {order.linkedPurchaseOrders && order.linkedPurchaseOrders.length > 0 ? (
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Numer zamówienia</TableCell>
+                    <TableCell>Dostawca</TableCell>
+                    <TableCell>Ilość pozycji</TableCell>
+                    <TableCell align="right">Wartość brutto</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell align="right">Akcje</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {order.linkedPurchaseOrders.map((po, index) => (
+                    <TableRow key={index}>
+                      <TableCell>
+                        <Chip 
+                          label={po.number} 
+                          color="primary" 
+                          variant="outlined" 
+                          size="small"
+                          sx={{ fontWeight: 'bold' }}
+                        />
+                      </TableCell>
+                      <TableCell>{po.supplier}</TableCell>
+                      <TableCell>{po.items}</TableCell>
+                      <TableCell align="right">
+                        {(() => {
+                          try {
+                            // Jeśli zamówienie ma już wartość brutto, używamy jej
+                            if (po.totalGross !== undefined && po.totalGross !== null) {
+                              return formatCurrency(parseFloat(po.totalGross));
+                            }
+                            
+                            // W przeciwnym razie obliczamy wartość brutto
+                            const productsValue = parseFloat(po.value) || 0;
+                            const vatRate = parseFloat(po.vatRate) || 23;
+                            const vatValue = (productsValue * vatRate) / 100;
+                            
+                            // Sprawdzenie różnych formatów dodatkowych kosztów
+                            let additionalCosts = 0;
+                            if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
+                              additionalCosts = po.additionalCostsItems.reduce((costsSum, cost) => {
+                                return costsSum + (parseFloat(cost.value) || 0);
+                              }, 0);
+                            } else if (po.additionalCosts !== undefined) {
+                              additionalCosts = typeof po.additionalCosts === 'number' ? po.additionalCosts : parseFloat(po.additionalCosts) || 0;
+                            }
+                            
+                            // Wartość brutto: produkty + VAT + dodatkowe koszty
+                            const grossValue = productsValue + vatValue + additionalCosts;
+                            
+                            return formatCurrency(grossValue);
+                          } catch (error) {
+                            console.error('Błąd podczas obliczania wartości PO:', error);
+                            return formatCurrency(0);
+                          }
+                        })()}
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={po.status || "Robocze"} 
+                          color={
+                            po.status === 'completed' ? 'success' : 
+                            po.status === 'in_progress' ? 'warning' : 
+                            'default'
+                          }
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => navigate(`/purchase-orders/${po.id}`)}
+                        >
+                          Szczegóły
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <Typography variant="body1" color="text.secondary">
+                Brak powiązanych zamówień zakupu
+              </Typography>
+            )}
+          </Paper>
         )}
-      </Paper>
 
-      {/* Uwagi */}
-      {order.notes && (
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>Uwagi</Typography>
-          <Divider sx={{ mb: 2 }} />
-          <Typography variant="body1">
-            {order.notes}
-          </Typography>
-        </Paper>
-      )}
-      
-      {/* Powiązane zamówienia zakupu */}
-      {order && (
         <Paper sx={{ p: 3, mb: 3 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">Powiązane zamówienia zakupu</Typography>
-            <Button 
-              variant="outlined" 
-              startIcon={<PlaylistAddIcon />} 
-              onClick={handleAssignPurchaseOrder}
+            <Typography variant="h6">Zadania produkcyjne</Typography>
+            <IconButton 
+              color="primary" 
+              onClick={refreshProductionCosts} 
+              title="Odśwież dane zadań produkcyjnych"
             >
-              Przypisz PO
-            </Button>
+              <RefreshIcon />
+            </IconButton>
           </Box>
           <Divider sx={{ mb: 2 }} />
           
-          {order.linkedPurchaseOrders && order.linkedPurchaseOrders.length > 0 ? (
+          {!order.productionTasks || order.productionTasks.length === 0 ? (
+            <Typography variant="body1" color="text.secondary">
+              Brak powiązanych zadań produkcyjnych
+            </Typography>
+          ) : (
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Numer zamówienia</TableCell>
-                  <TableCell>Dostawca</TableCell>
-                  <TableCell>Ilość pozycji</TableCell>
-                  <TableCell align="right">Wartość brutto</TableCell>
+                  <TableCell>Nr MO</TableCell>
+                  <TableCell>Nazwa zadania</TableCell>
+                  <TableCell>Produkt</TableCell>
+                  <TableCell>Ilość</TableCell>
                   <TableCell>Status</TableCell>
+                  <TableCell>Numer partii</TableCell>
                   <TableCell align="right">Akcje</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {order.linkedPurchaseOrders.map((po, index) => (
-                  <TableRow key={index}>
+                {order.productionTasks.map((task) => (
+                  <TableRow key={task.id}>
+                    <TableCell>{task.moNumber}</TableCell>
+                    <TableCell>{task.name}</TableCell>
+                    <TableCell>{task.productName}</TableCell>
+                    <TableCell>{task.quantity} {task.unit}</TableCell>
                     <TableCell>
                       <Chip 
-                        label={po.number} 
-                        color="primary" 
-                        variant="outlined" 
+                        label={task.status} 
+                        color={getProductionStatusColor(task.status)}
                         size="small"
-                        sx={{ fontWeight: 'bold' }}
                       />
-                    </TableCell>
-                    <TableCell>{po.supplier}</TableCell>
-                    <TableCell>{po.items}</TableCell>
-                    <TableCell align="right">
-                      {(() => {
-                        try {
-                          // Jeśli zamówienie ma już wartość brutto, używamy jej
-                          if (po.totalGross !== undefined && po.totalGross !== null) {
-                            return formatCurrency(parseFloat(po.totalGross));
-                          }
-                          
-                          // W przeciwnym razie obliczamy wartość brutto
-                          const productsValue = parseFloat(po.value) || 0;
-                          const vatRate = parseFloat(po.vatRate) || 23;
-                          const vatValue = (productsValue * vatRate) / 100;
-                          
-                          // Sprawdzenie różnych formatów dodatkowych kosztów
-                          let additionalCosts = 0;
-                          if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
-                            additionalCosts = po.additionalCostsItems.reduce((costsSum, cost) => {
-                              return costsSum + (parseFloat(cost.value) || 0);
-                            }, 0);
-                          } else if (po.additionalCosts !== undefined) {
-                            additionalCosts = typeof po.additionalCosts === 'number' ? po.additionalCosts : parseFloat(po.additionalCosts) || 0;
-                          }
-                          
-                          // Wartość brutto: produkty + VAT + dodatkowe koszty
-                          const grossValue = productsValue + vatValue + additionalCosts;
-                          
-                          return formatCurrency(grossValue);
-                        } catch (error) {
-                          console.error('Błąd podczas obliczania wartości PO:', error);
-                          return formatCurrency(0);
-                        }
-                      })()}
                     </TableCell>
                     <TableCell>
-                      <Chip 
-                        label={po.status || "Robocze"} 
-                        color={
-                          po.status === 'completed' ? 'success' : 
-                          po.status === 'in_progress' ? 'warning' : 
-                          'default'
-                        }
-                        size="small"
-                      />
+                      {task.lotNumber ? (
+                        <Tooltip title="Numer partii produkcyjnej">
+                          <Chip
+                            label={task.lotNumber}
+                            color="success"
+                            size="small"
+                            variant="outlined"
+                          />
+                        </Tooltip>
+                      ) : task.status === 'Zakończone' ? (
+                        <Chip
+                          label="Brak numeru LOT"
+                          color="warning"
+                          size="small"
+                          variant="outlined"
+                        />
+                      ) : null}
                     </TableCell>
                     <TableCell align="right">
                       <Button
-                        variant="outlined"
                         size="small"
-                        onClick={() => navigate(`/purchase-orders/${po.id}`)}
+                        component={RouterLink}
+                        to={`/production/tasks/${task.id}`}
+                        variant="outlined"
                       >
                         Szczegóły
                       </Button>
                     </TableCell>
                   </TableRow>
                 ))}
-                
-                {/* Podsumowanie wartości */}
-                <TableRow>
-                  <TableCell colSpan={3} align="right" sx={{ fontWeight: 'bold' }}>
-                    Łączna wartość brutto zamówień zakupu:
-                  </TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                    {(() => {
-                      // Obliczanie łącznej wartości brutto wszystkich zamówień zakupu
-                      const totalGross = order.linkedPurchaseOrders.reduce((sum, po) => {
-                        try {
-                          // Jeśli zamówienie ma już wartość brutto, używamy jej
-                          if (po.totalGross !== undefined && po.totalGross !== null) {
-                            return sum + parseFloat(po.totalGross);
-                          }
-                          
-                          // W przeciwnym razie obliczamy wartość brutto
-                          const productsValue = parseFloat(po.value) || 0;
-                          const vatRate = parseFloat(po.vatRate) || 23;
-                          const vatValue = (productsValue * vatRate) / 100;
-                          
-                          // Sprawdź zarówno nowy jak i stary format dodatkowych kosztów
-                          let additionalCosts = 0;
-                          if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
-                            additionalCosts = po.additionalCostsItems.reduce((costsSum, cost) => {
-                              return costsSum + (parseFloat(cost.value) || 0);
-                            }, 0);
-                          } else if (po.additionalCosts !== undefined) {
-                            additionalCosts = typeof po.additionalCosts === 'number' ? po.additionalCosts : parseFloat(po.additionalCosts) || 0;
-                          }
-                          
-                          return sum + productsValue + vatValue + additionalCosts;
-                        } catch (error) {
-                          console.error('Błąd podczas obliczania wartości PO:', error);
-                          return sum;
-                        }
-                      }, 0);
-                      
-                      return formatCurrency(totalGross);
-                    })()}
-                  </TableCell>
-                  <TableCell colSpan={2} />
-                </TableRow>
               </TableBody>
             </Table>
-          ) : (
-            <Typography variant="body1" color="text.secondary">
-              Brak powiązanych zamówień zakupu
-            </Typography>
           )}
         </Paper>
-      )}
 
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6">Zadania produkcyjne</Typography>
-          <IconButton 
-            color="primary" 
-            onClick={refreshProductionCosts} 
-            title="Odśwież dane zadań produkcyjnych"
-          >
-            <RefreshIcon />
-          </IconButton>
-        </Box>
-        <Divider sx={{ mb: 2 }} />
-        
-        {!order.productionTasks || order.productionTasks.length === 0 ? (
-          <Typography variant="body1" color="text.secondary">
-            Brak powiązanych zadań produkcyjnych
-          </Typography>
-        ) : (
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Nr MO</TableCell>
-                <TableCell>Nazwa zadania</TableCell>
-                <TableCell>Produkt</TableCell>
-                <TableCell>Ilość</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Numer partii</TableCell>
-                <TableCell align="right">Akcje</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {order.productionTasks.map((task) => (
-                <TableRow key={task.id}>
-                  <TableCell>{task.moNumber}</TableCell>
-                  <TableCell>{task.name}</TableCell>
-                  <TableCell>{task.productName}</TableCell>
-                  <TableCell>{task.quantity} {task.unit}</TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={task.status} 
-                      color={getProductionStatusColor(task.status)}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    {task.lotNumber ? (
-                      <Tooltip title="Numer partii produkcyjnej">
-                        <Chip
-                          label={task.lotNumber}
-                          color="success"
-                          size="small"
-                          variant="outlined"
-                        />
-                      </Tooltip>
-                    ) : task.status === 'Zakończone' ? (
-                      <Chip
-                        label="Brak numeru LOT"
-                        color="warning"
-                        size="small"
-                        variant="outlined"
-                      />
-                    ) : null}
-                  </TableCell>
-                  <TableCell align="right">
-                    <Button
-                      size="small"
-                      component={RouterLink}
-                      to={`/production/tasks/${task.id}`}
-                      variant="outlined"
-                    >
-                      Szczegóły
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </Paper>
+        {/* Dialog wyboru zamówienia zakupowego */}
+        <Dialog open={openPurchaseOrderDialog} onClose={handleClosePurchaseOrderDialog} maxWidth="md" fullWidth>
+          <DialogTitle>Przypisz zamówienie zakupowe</DialogTitle>
+          <DialogContent>
+            {loadingPurchaseOrders ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                <CircularProgress />
+              </Box>
+            ) : availablePurchaseOrders.length > 0 ? (
+              <Box sx={{ mt: 2 }}>
+                <FormControl fullWidth>
+                  <InputLabel>Wybierz zamówienie zakupowe</InputLabel>
+                  <Select
+                    value={selectedPurchaseOrderId}
+                    onChange={handlePurchaseOrderSelection}
+                    label="Wybierz zamówienie zakupowe"
+                  >
+                    {availablePurchaseOrders.map(po => (
+                      <MenuItem key={po.id} value={po.id}>
+                        {po.number} - {po.supplier?.name || 'Nieznany dostawca'} - Wartość: {po.totalGross} {po.currency || 'EUR'}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+            ) : (
+              <Typography variant="body1" sx={{ mt: 2 }}>
+                Brak dostępnych zamówień zakupowych, które można przypisać.
+              </Typography>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleClosePurchaseOrderDialog}>Anuluj</Button>
+            <Button 
+              onClick={handleAssignSelected} 
+              variant="contained" 
+              disabled={!selectedPurchaseOrderId || loadingPurchaseOrders}
+            >
+              Przypisz
+            </Button>
+          </DialogActions>
+        </Dialog>
 
-      {/* Dialog wyboru zamówienia zakupowego */}
-      <Dialog open={openPurchaseOrderDialog} onClose={handleClosePurchaseOrderDialog} maxWidth="md" fullWidth>
-        <DialogTitle>Przypisz zamówienie zakupowe</DialogTitle>
-        <DialogContent>
-          {loadingPurchaseOrders ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-              <CircularProgress />
-            </Box>
-          ) : availablePurchaseOrders.length > 0 ? (
-            <Box sx={{ mt: 2 }}>
-              <FormControl fullWidth>
-                <InputLabel>Wybierz zamówienie zakupowe</InputLabel>
+        {/* Dialog do wprowadzania linku Google Drive */}
+        <Dialog open={driveLinkDialogOpen} onClose={handleDriveLinkDialogClose}>
+          <DialogTitle>Dodaj link do Google Drive</DialogTitle>
+          <DialogContent>
+            <DialogContentText sx={{ mb: 2 }}>
+              Wprowadź link do dokumentu w Google Drive, który będzie służył jako dowód dostawy.
+            </DialogContentText>
+            <TextField
+              autoFocus
+              margin="dense"
+              id="drive-link"
+              label="Link do Google Drive"
+              type="url"
+              fullWidth
+              variant="outlined"
+              value={driveLink}
+              onChange={handleDriveLinkChange}
+              placeholder="https://drive.google.com/file/d/..."
+              helperText="Link musi pochodzić z Google Drive i być publicznie dostępny"
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleDriveLinkDialogClose}>Anuluj</Button>
+            <Button onClick={handleDriveLinkSubmit} variant="contained">Dodaj</Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Dialog wyboru etykiety produktu */}
+        <Dialog open={labelDialogOpen} onClose={handleLabelDialogClose}>
+          <DialogTitle>Wybierz produkt do etykiety</DialogTitle>
+          <DialogContent>
+            {selectedItemForLabel ? (
+              <DialogContentText>
+                Wybrano produkt: {selectedItemForLabel.name}
+              </DialogContentText>
+            ) : (
+              <DialogContentText>
+                Wybierz produkt z listy dla którego chcesz wydrukować etykietę:
+              </DialogContentText>
+            )}
+            
+            {!selectedItemForLabel && (
+              <FormControl fullWidth sx={{ mt: 2 }}>
+                <InputLabel>Produkt</InputLabel>
                 <Select
-                  value={selectedPurchaseOrderId}
-                  onChange={handlePurchaseOrderSelection}
-                  label="Wybierz zamówienie zakupowe"
+                  value={selectedItemForLabel?.id || ''}
+                  onChange={(e) => {
+                    const selected = order.items.find(item => item.id === e.target.value);
+                    setSelectedItemForLabel(selected);
+                  }}
+                  label="Produkt"
                 >
-                  {availablePurchaseOrders.map(po => (
-                    <MenuItem key={po.id} value={po.id}>
-                      {po.number} - {po.supplier?.name || 'Nieznany dostawca'} - Wartość: {po.totalGross} {po.currency || 'EUR'}
+                  {order.items && order.items.map((item, index) => (
+                    <MenuItem key={index} value={item.id || index}>
+                      {item.name} ({item.quantity} {item.unit})
                     </MenuItem>
                   ))}
                 </Select>
               </FormControl>
-            </Box>
-          ) : (
-            <Typography variant="body1" sx={{ mt: 2 }}>
-              Brak dostępnych zamówień zakupowych, które można przypisać.
-            </Typography>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClosePurchaseOrderDialog}>Anuluj</Button>
-          <Button 
-            onClick={handleAssignSelected} 
-            variant="contained" 
-            disabled={!selectedPurchaseOrderId || loadingPurchaseOrders}
-          >
-            Przypisz
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Dialog do wprowadzania linku Google Drive */}
-      <Dialog open={driveLinkDialogOpen} onClose={handleDriveLinkDialogClose}>
-        <DialogTitle>Dodaj link do Google Drive</DialogTitle>
-        <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
-            Wprowadź link do dokumentu w Google Drive, który będzie służył jako dowód dostawy.
-          </DialogContentText>
-          <TextField
-            autoFocus
-            margin="dense"
-            id="drive-link"
-            label="Link do Google Drive"
-            type="url"
-            fullWidth
-            variant="outlined"
-            value={driveLink}
-            onChange={handleDriveLinkChange}
-            placeholder="https://drive.google.com/file/d/..."
-            helperText="Link musi pochodzić z Google Drive i być publicznie dostępny"
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleDriveLinkDialogClose}>Anuluj</Button>
-          <Button onClick={handleDriveLinkSubmit} variant="contained">Dodaj</Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Dialog wyboru etykiety produktu */}
-      <Dialog open={labelDialogOpen} onClose={handleLabelDialogClose}>
-        <DialogTitle>Wybierz produkt do etykiety</DialogTitle>
-        <DialogContent>
-          {selectedItemForLabel ? (
-            <DialogContentText>
-              Wybrano produkt: {selectedItemForLabel.name}
-            </DialogContentText>
-          ) : (
-            <DialogContentText>
-              Wybierz produkt z listy dla którego chcesz wydrukować etykietę:
-            </DialogContentText>
-          )}
-          
-          {!selectedItemForLabel && (
-            <FormControl fullWidth sx={{ mt: 2 }}>
-              <InputLabel>Produkt</InputLabel>
-              <Select
-                value={selectedItemForLabel?.id || ''}
-                onChange={(e) => {
-                  const selected = order.items.find(item => item.id === e.target.value);
-                  setSelectedItemForLabel(selected);
-                }}
-                label="Produkt"
-              >
-                {order.items && order.items.map((item, index) => (
-                  <MenuItem key={index} value={item.id || index}>
-                    {item.name} ({item.quantity} {item.unit})
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleLabelDialogClose}>Anuluj</Button>
-          <Button 
-            onClick={handlePrintLabel} 
-            variant="contained" 
-            color="primary" 
-            disabled={!selectedItemForLabel}
-            startIcon={<LabelIcon />}
-          >
-            Drukuj etykietę
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleLabelDialogClose}>Anuluj</Button>
+            <Button 
+              onClick={handlePrintLabel} 
+              variant="contained" 
+              color="primary" 
+              disabled={!selectedItemForLabel}
+              startIcon={<LabelIcon />}
+            >
+              Drukuj etykietę
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </Box>
+    </div>
   );
 };
 

@@ -193,7 +193,7 @@ const OrdersList = () => {
         
         return {
             ...fullOrderData,
-          totalValue: totalValue,
+          totalValue: parseFloat(fullOrderData.totalValue) || totalValue,
           productsValue: subtotal,
           purchaseOrdersValue: poTotal,
           shippingCost: shippingCost
@@ -232,7 +232,7 @@ const OrdersList = () => {
           
           return {
             ...order,
-            totalValue: totalValue,
+            totalValue: parseFloat(order.totalValue) || totalValue,
             productsValue: subtotal,
             purchaseOrdersValue: 0,
             shippingCost: shippingCost
@@ -558,7 +558,7 @@ const OrdersList = () => {
       const shippingCost = parseFloat(updatedOrder.shippingCost) || 0;
       
       // Łączna wartość zamówienia
-      const totalValue = subtotal + shippingCost + poTotal;
+      const totalValue = parseFloat(updatedOrder.totalValue) || subtotal + shippingCost + poTotal;
       
       console.log(`Zaktualizowane wartości zamówienia ${order.id}: produkty=${subtotal}, dostawa=${shippingCost}, PO=${poTotal}, razem=${totalValue}`);
       
@@ -980,7 +980,7 @@ const OrdersList = () => {
                               </Typography>
                               {order.purchaseOrdersValue > 0 && (
                                 <Typography variant="caption" color="text.secondary">
-                                  (w tym PO: {formatCurrency(order.purchaseOrdersValue || 0)})
+                                  (PO: {formatCurrency(order.purchaseOrdersValue || 0)})
                                 </Typography>
                               )}
                             </Box>
@@ -1229,7 +1229,10 @@ const OrdersList = () => {
                                         <Grid item xs={12}>
                                           <Divider sx={{ my: 1 }} />
                                           <Typography variant="subtitle1" fontWeight="bold">
-                                            Łączna wartość: {formatCurrency(order.totalValue || 0)}
+                                            Łączna wartość: {formatCurrency((order.productsValue || 0) + (order.shippingCost || 0))}
+                                          </Typography>
+                                          <Typography variant="body2" color="text.secondary">
+                                            (bez wartości PO)
                                           </Typography>
                                         </Grid>
                                       </Grid>

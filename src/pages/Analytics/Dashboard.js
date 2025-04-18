@@ -219,7 +219,7 @@ const Dashboard = () => {
                           </ListItemIcon>
                           <ListItemText
                             primary={String(order.orderNumber || `Zamówienie ${order.id ? order.id.substring(0, 8) : ''}`)}
-                            secondary={`${formatCurrency(order.calculatedTotalValue || order.totalValue || order.value || 0)} - ${formatTimestamp(order.date, false)}`}
+                            secondary={`${formatCurrency(order.totalValue || 0)} - ${formatTimestamp(order.date, false)}`}
                           />
                           <Chip
                             label={String(order.status || 'Brak statusu')}
