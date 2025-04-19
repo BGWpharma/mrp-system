@@ -368,9 +368,12 @@ const ProductionCalendar = () => {
         resourceId = task.orderId || 'no-order';
       }
       
+      // Tworzenie unikalnego ID dla zadania, uwzględniając MO w ramach jednego CO
+      const uniqueId = task.id;
+      
       // Zwróć obiekt zdarzenia
       return {
-        id: task.id,
+        id: uniqueId,
         title: title,
         start: startDate,
         end: endDate,
@@ -378,10 +381,13 @@ const ProductionCalendar = () => {
         borderColor: color,
         textColor: getContrastYIQ(color),
         extendedProps: {
-          task: task
+          task: task,
+          moNumber: task.moNumber, // Dodajemy numer MO do extendedProps
+          orderId: task.orderId    // Dodajemy ID zamówienia do extendedProps
         },
         resourceId: resourceId,
-        editable: canEditTask(task) && editable
+        editable: canEditTask(task) && editable,
+        groupId: task.orderId ? `order-${task.orderId}` : null // Dodanie groupId dla zadań z tego samego zamówienia
       };
     }).filter(event => {
       // Filtruj zdarzenia, które nie mają resourceId, jeśli jesteśmy w widoku zasobów
@@ -810,7 +816,8 @@ const ProductionCalendar = () => {
       setLoading(true);
       const { event } = info;
       const taskId = event.id;
-      
+      const taskData = event.extendedProps.task;
+    
       // Przygotowanie danych do aktualizacji
       const updateData = {
         endDate: event.end
@@ -822,6 +829,10 @@ const ProductionCalendar = () => {
       }
       
       console.log(`Zmieniono rozmiar zadania: ${taskId}`, updateData);
+      
+      // Sprawdź czy zadanie jest częścią zamówienia i ma przypisany orderId
+      const orderId = taskData.orderId;
+      console.log(`Zadanie należy do zamówienia: ${orderId || 'brak'}`);
       
       // Aktualizacja zadania w bazie danych
       await updateTask(taskId, updateData, 'system');
@@ -1537,7 +1548,6 @@ const ProductionCalendar = () => {
           headerToolbar={false}
           events={getCalendarEvents()}
           resources={getResources()}
-          resourceLabelText="Zadania"
           eventContent={renderEventContent}
           eventClick={handleEventClick}
           dateClick={null}
@@ -1566,7 +1576,7 @@ const ProductionCalendar = () => {
           droppable={editable}
           eventDrop={handleEventDrop}
           eventResize={handleEventResize}
-          eventOverlap={false}
+          eventOverlap={true}
           snapDuration="00:15:00"
           slotLabelFormat={{
             hour: '2-digit',
@@ -1580,7 +1590,7 @@ const ProductionCalendar = () => {
             minute: '2-digit',
             hour12: false
           }}
-          slotEventOverlap={false}
+          slotEventOverlap={true}
           resourceAreaHeaderContent="Zadania produkcyjne"
           resourcesInitiallyExpanded={true}
           stickyHeaderDates={true}
