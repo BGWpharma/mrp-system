@@ -17,7 +17,9 @@ let dataCache = {
   productionTasks: { data: null, timestamp: null },
   recipes: { data: null, timestamp: null },
   suppliers: { data: null, timestamp: null },
-  purchaseOrders: { data: null, timestamp: null }
+  purchaseOrders: { data: null, timestamp: null },
+  materialBatches: { data: null, timestamp: null },
+  batchReservations: { data: null, timestamp: null }
 };
 
 // Czas ważności bufora w milisekundach (10 minut)
@@ -696,49 +698,72 @@ export const analyzeRecipes = (recipes) => {
 
 /**
  * Wzbogaca dane biznesowe o analizę dla asystenta AI
- * @param {Object} dataContext - Kontekst danych z systemu MRP
+ * @param {Object} businessData - Kontekst danych z systemu MRP
  * @returns {Object} - Wzbogacony kontekst danych z analizą
  */
-export const enrichBusinessDataWithAnalysis = (dataContext) => {
-  const enrichedData = { ...dataContext };
+export const enrichBusinessDataWithAnalysis = (businessData) => {
+  console.log('Rozpoczynam wzbogacanie danych o analizy...', businessData);
+  
+  // Kopia obiektu danych, aby uniknąć modyfikacji oryginalnych danych
+  const enrichedData = { 
+    ...businessData,
+    data: { ...businessData.data },
+    analysis: {} 
+  };
   
   // Dodaj analizy, jeśli dostępne są odpowiednie dane
-  if (dataContext.data) {
+  if (businessData.data) {
     // Analiza stanów magazynowych
-    if (dataContext.data.inventory && dataContext.data.inventory.length > 0) {
-      enrichedData.analysis = enrichedData.analysis || {};
-      enrichedData.analysis.inventory = analyzeInventory(dataContext.data.inventory);
+    if (businessData.data.inventory && businessData.data.inventory.length > 0) {
+      console.log(`Analizuję stan magazynowy (${businessData.data.inventory.length} pozycji)`);
+      enrichedData.analysis.inventory = analyzeInventory(businessData.data.inventory);
     }
     
     // Analiza zamówień klientów
-    if (dataContext.data.orders && dataContext.data.orders.length > 0) {
-      enrichedData.analysis = enrichedData.analysis || {};
-      enrichedData.analysis.orders = analyzeOrders(dataContext.data.orders);
+    if (businessData.data.orders && businessData.data.orders.length > 0) {
+      console.log(`Analizuję zamówienia klientów (${businessData.data.orders.length} zamówień)`);
+      enrichedData.analysis.orders = analyzeOrders(businessData.data.orders);
     }
     
     // Analiza zadań produkcyjnych
-    if (dataContext.data.productionTasks && dataContext.data.productionTasks.length > 0) {
-      enrichedData.analysis = enrichedData.analysis || {};
-      enrichedData.analysis.production = analyzeProductionTasks(dataContext.data.productionTasks);
+    if (businessData.data.productionTasks && businessData.data.productionTasks.length > 0) {
+      console.log(`Analizuję zadania produkcyjne (${businessData.data.productionTasks.length} zadań)`);
+      enrichedData.analysis.production = analyzeProductionTasks(businessData.data.productionTasks);
+    }
+    
+    // Analiza dostawców
+    if (businessData.data.suppliers && businessData.data.suppliers.length > 0) {
+      console.log(`Analizuję dostawców (${businessData.data.suppliers.length} dostawców)`);
+      enrichedData.analysis.suppliers = analyzeSuppliers(businessData.data.suppliers);
     }
     
     // Analiza zamówień od dostawców
-    if (dataContext.data.purchaseOrders && dataContext.data.purchaseOrders.length > 0) {
-      enrichedData.analysis = enrichedData.analysis || {};
-      enrichedData.analysis.purchaseOrders = analyzePurchaseOrders(dataContext.data.purchaseOrders);
+    if (businessData.data.purchaseOrders && businessData.data.purchaseOrders.length > 0) {
+      console.log(`Analizuję zamówienia zakupowe (${businessData.data.purchaseOrders.length} zamówień)`);
+      enrichedData.analysis.purchaseOrders = analyzePurchaseOrders(businessData.data.purchaseOrders);
     }
     
     // Analiza receptur
-    if (dataContext.data.recipes && dataContext.data.recipes.length > 0) {
-      enrichedData.analysis = enrichedData.analysis || {};
-      enrichedData.analysis.recipes = analyzeRecipes(dataContext.data.recipes);
+    if (businessData.data.recipes && businessData.data.recipes.length > 0) {
+      console.log(`Analizuję receptury (${businessData.data.recipes.length} receptur)`);
+      enrichedData.analysis.recipes = analyzeRecipes(businessData.data.recipes);
+    }
+    
+    // Analiza partii materiałów
+    if (businessData.data.materialBatches && businessData.data.materialBatches.length > 0) {
+      console.log(`Analizuję partie materiałów (${businessData.data.materialBatches.length} partii)`);
+      // TODO: Zaimplementować analizę partii materiałów w przyszłości
+      enrichedData.analysis.materialBatches = {
+        totalBatches: businessData.data.materialBatches.length,
+        batchesWithPO: businessData.data.materialBatches.filter(batch => batch.purchaseOrderDetails).length
+      };
     }
   }
   
-  // Dodajemy logowanie dla komponentów i składników
-  const recepturesWithComponentsCount = dataContext.data.recipes?.filter(r => r.components && r.components.length > 0).length || 0;
-  const recepturesWithIngredientsCount = dataContext.data.recipes?.filter(r => r.ingredients && r.ingredients.length > 0).length || 0;
-  console.log(`Receptury z komponentami: ${recepturesWithComponentsCount}, z ingredients: ${recepturesWithIngredientsCount}`);
+  console.log('Zakończono dodawanie analiz do danych biznesowych');
+  
+  // Aktualizuj informacje o kompletności danych, dodając informacje o dostępnych analizach
+  enrichedData.hasAnalysis = Object.keys(enrichedData.analysis).length > 0;
   
   return enrichedData;
 };
@@ -820,198 +845,218 @@ const extractRecipeNameFromQuery = (query) => {
 };
 
 /**
- * Przygotowuje zbiór danych biznesowych dla zapytania AI
- * @param {string} query - Zapytanie użytkownika
- * @returns {Promise<Object>} - Kontekst danych biznesowych
+ * Pobiera dane o partiach materiałów i ich powiązaniach z zamówieniami zakupowymi
+ * @returns {Promise<Array>} - Lista partii materiałów z powiązaniami
  */
-export const prepareBusinessDataForAI = async (query) => {
-  const dataContext = {
-    timestamp: new Date().toISOString(),
-    query: query,
-    data: {}
-  };
-  
-  console.log('Przygotowuję dane biznesowe dla zapytania:', query);
-  
-  // Ustawiam wszystkie typy danych jako wymagane niezależnie od zapytania
-  const queryLowerCase = query.toLowerCase();
-  let needsAllData = queryLowerCase.includes('wszystk') || 
-                     queryLowerCase.includes('wszystkie') ||
-                     queryLowerCase.includes('całość');
-  
-  // Ustawiam wszystkie typy danych jako potrzebne, żeby GPT-4o zawsze miał dostęp do pełnego kontekstu danych
-  let isGPT4oRequest = true; // Wszystkie żądania będą traktowane jako GPT-4o
-  
-  // Jeśli to żądanie dla GPT-4o, ustawiamy flagę needsAllData na true
-  if (isGPT4oRequest) {
-    console.log('Wykryto zapytanie dla GPT-4o - pobieram pełen zestaw danych');
-    needsAllData = true;
-  }
-  
-  // Używam zmiennych let zamiast const, aby można było je zmodyfikować później
-  let needsInventoryData = needsAllData || queryLowerCase.includes('magazyn') || 
-                          queryLowerCase.includes('stan') ||
-                          queryLowerCase.includes('produkt') ||
-                          queryLowerCase.includes('towar');
-  
-  let needsOrdersData = needsAllData || queryLowerCase.includes('zamówieni') || 
-                        queryLowerCase.includes('klient') ||
-                        queryLowerCase.includes('sprzedaż') ||
-                        queryLowerCase.includes('co');
-  
-  let needsProductionData = needsAllData || queryLowerCase.includes('produkcj') || 
-                           queryLowerCase.includes('zadani') ||
-                           queryLowerCase.includes('wytwarzani') ||
-                           queryLowerCase.includes('mo ') ||
-                           queryLowerCase.includes('zleceni');
-  
-  let needsSupplierData = needsAllData || queryLowerCase.includes('dostaw') || 
-                         queryLowerCase.includes('zakup');
-                         
-  let needsPurchaseOrdersData = needsAllData || queryLowerCase.includes('po') ||
-                         queryLowerCase.includes('zamówieni zakup');
-  
-  let needsRecipesData = needsAllData || queryLowerCase.includes('receptur') || 
-                        queryLowerCase.includes('przepis') ||
-                        queryLowerCase.includes('komponent') ||
-                        queryLowerCase.includes('składnik');
-
-  let needsCMRData = needsAllData || queryLowerCase.includes('cmr') ||
-                     queryLowerCase.includes('transport') ||
-                     queryLowerCase.includes('przewóz');
-  
-  let needsExpiryData = needsAllData || queryLowerCase.includes('termin') ||
-                       queryLowerCase.includes('ważności') ||
-                       queryLowerCase.includes('przydatności');
-  
-  // Jeśli zapytanie zawiera prośbę o "wszystkie dane", pobierz wszystkie typy danych
-  let shouldFetchAll = needsAllData || queryLowerCase.includes('po mo co') || 
-      queryLowerCase.includes('wszystkie dane') || 
-      queryLowerCase.includes('wszystkich danych');
-  
-  if (shouldFetchAll) {
-    console.log('Wykryto zapytanie o wszystkie dane biznesowe lub żądanie GPT-4o');
-    // Ustawiam wszystkie flagi na true, jeśli potrzebujemy wszystkich danych
-    needsInventoryData = true;
-    needsOrdersData = true;
-    needsProductionData = true;
-    needsSupplierData = true;
-    needsPurchaseOrdersData = true;
-    needsRecipesData = true;
-    needsCMRData = true;
-    needsExpiryData = true;
-  }
-  
-  // Pobierz tylko potrzebne dane
+export const getBatchesWithPOData = async () => {
   try {
-    console.log('Rozpoczynam pobieranie danych biznesowych dla GPT-4o');
-    
-    // Lista obietnic do równoległego pobierania danych
-    const dataFetchPromises = [];
-    
-    if (needsInventoryData) {
-      console.log('Pobieram dane magazynowe...');
-      const inventoryPromise = getDataWithCache('inventory', getInventoryItems, { limit: 150 })
-        .then(data => {
-          dataContext.data.inventory = data;
-          console.log(`Pobrano ${data.length} pozycji magazynowych`);
-        })
-        .catch(err => {
-          console.error('Błąd podczas pobierania danych magazynowych:', err);
-          dataContext.data.inventory = [];
-        });
+    return getDataWithCache('materialBatches', async () => {
+      // Pobierz wszystkie partie magazynowe
+      const batchesQuery = query(
+        collection(db, 'inventoryBatches'),
+        limit(200) // Limit dla wydajności
+      );
       
-      dataFetchPromises.push(inventoryPromise);
-    }
-    
-    if (needsOrdersData) {
-      console.log('Pobieram dane zamówień klientów (CO)...');
-      const ordersPromise = getDataWithCache('orders', getCustomerOrders, { limit: 100 })
-        .then(data => {
-          dataContext.data.orders = data;
-          console.log(`Pobrano ${data.length} zamówień klientów`);
-        })
-        .catch(err => {
-          console.error('Błąd podczas pobierania danych zamówień klientów:', err);
-          dataContext.data.orders = [];
-        });
+      const batchesSnapshot = await getDocs(batchesQuery);
+      const batches = batchesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
       
-      dataFetchPromises.push(ordersPromise);
-    }
-    
-    if (needsProductionData) {
-      console.log('Pobieram dane zadań produkcyjnych (MO)...');
-      const productionPromise = getDataWithCache('productionTasks', getProductionTasks, { limit: 100 })
-        .then(data => {
-          dataContext.data.productionTasks = data;
-          console.log(`Pobrano ${data.length} zadań produkcyjnych`);
-        })
-        .catch(err => {
-          console.error('Błąd podczas pobierania danych produkcyjnych:', err);
-          console.error('Szczegóły błędu:', err.message, err.stack);
-          dataContext.data.productionTasks = [];
-        });
+      // Filtruj partie, które mają powiązania z zamówieniami zakupowymi
+      const batchesWithPO = batches.filter(batch => 
+        batch.purchaseOrderDetails && batch.purchaseOrderDetails.id
+      );
       
-      dataFetchPromises.push(productionPromise);
-    }
-    
-    if (needsSupplierData) {
-      console.log('Pobieram dane dostawców...');
-      const suppliersPromise = getDataWithCache('suppliers', getSuppliers, { limit: 80 })
-        .then(data => {
-          dataContext.data.suppliers = data;
-          console.log(`Pobrano ${data.length} dostawców`);
-        })
-        .catch(err => {
-          console.error('Błąd podczas pobierania danych dostawców:', err);
-          dataContext.data.suppliers = [];
-        });
-      
-      dataFetchPromises.push(suppliersPromise);
-    }
-    
-    if (needsRecipesData) {
-      console.log('Pobieram dane receptur...');
-      const recipesPromise = getDataWithCache('recipes', getRecipes, { limit: 150 })
-        .then(data => {
-          dataContext.data.recipes = data;
-          console.log(`Pobrano ${data.length} receptur`);
-        })
-        .catch(err => {
-          console.error('Błąd podczas pobierania danych receptur:', err);
-          dataContext.data.recipes = [];
-        });
-      
-      dataFetchPromises.push(recipesPromise);
-    }
-    
-    if (needsPurchaseOrdersData) {
-      console.log('Pobieram dane zamówień zakupu (PO)...');
-      const purchaseOrdersPromise = getDataWithCache('purchaseOrders', getPurchaseOrders, { limit: 100 })
-        .then(data => {
-          dataContext.data.purchaseOrders = data;
-          console.log(`Pobrano ${data.length} zamówień zakupu`);
-        })
-        .catch(err => {
-          console.error('Błąd podczas pobierania danych zamówień zakupu:', err);
-          dataContext.data.purchaseOrders = [];
-        });
-      
-      dataFetchPromises.push(purchaseOrdersPromise);
-    }
-    
-    // Oczekiwanie na zakończenie wszystkich pobrań danych
-    if (dataFetchPromises.length > 0) {
-      await Promise.allSettled(dataFetchPromises);
-      console.log('Zakończono pobieranie wszystkich danych biznesowych dla GPT-4o');
-    }
-  } catch (err) {
-    console.error('Błąd podczas przygotowywania danych biznesowych:', err);
-    console.error('Szczegóły błędu:', err.message, err.stack);
+      return batchesWithPO;
+    });
+  } catch (error) {
+    console.error('Błąd podczas pobierania danych o partiach materiałów:', error);
+    return [];
   }
+};
+
+/**
+ * Pobiera informacje o rezerwacjach partii materiałów dla zadań produkcyjnych
+ * @returns {Promise<Object>} - Mapa rezerwacji dla ID partii
+ */
+export const getBatchReservationsMap = async () => {
+  try {
+    return getDataWithCache('batchReservations', async () => {
+      // Pobierz wszystkie zadania produkcyjne
+      const tasksQuery = query(
+        collection(db, 'productionTasks'),
+        limit(100) // Limit dla wydajności
+      );
+      
+      const tasksSnapshot = await getDocs(tasksQuery);
+      const tasks = tasksSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // Przygotuj mapę rezerwacji dla każdej partii
+      const batchReservations = {};
+      
+      // Przeanalizuj zadania produkcyjne i ich rezerwacje materiałów
+      tasks.forEach(task => {
+        if (task.materialBatches) {
+          Object.entries(task.materialBatches).forEach(([materialId, batches]) => {
+            batches.forEach(batchInfo => {
+              if (!batchReservations[batchInfo.batchId]) {
+                batchReservations[batchInfo.batchId] = [];
+              }
+              
+              batchReservations[batchInfo.batchId].push({
+                taskId: task.id,
+                moNumber: task.moNumber,
+                quantity: batchInfo.quantity,
+                materialId,
+                reservedAt: batchInfo.reservedAt || null
+              });
+            });
+          });
+        }
+      });
+      
+      return batchReservations;
+    });
+  } catch (error) {
+    console.error('Błąd podczas pobierania danych o rezerwacjach materiałów:', error);
+    return {};
+  }
+};
+
+/**
+ * Pobiera pełne dane o partiach materiałów wraz z ich rezerwacjami
+ * @returns {Promise<Object>} - Obiekt zawierający partie materiałów i rezerwacje
+ */
+export const getFullBatchesData = async () => {
+  try {
+    // Pobierz partie z powiązanymi PO
+    const batches = await getBatchesWithPOData();
+    
+    // Pobierz mapę rezerwacji
+    const reservationsMap = await getBatchReservationsMap();
+    
+    // Połącz dane
+    const enrichedBatches = batches.map(batch => ({
+      ...batch,
+      reservations: reservationsMap[batch.id] || []
+    }));
+    
+    return {
+      batches: enrichedBatches,
+      reservations: reservationsMap
+    };
+  } catch (error) {
+    console.error('Błąd podczas pobierania pełnych danych o partiach:', error);
+    return { batches: [], reservations: {} };
+  }
+};
+
+/**
+ * Przygotowuje dane biznesowe dla AI
+ * @returns {Promise<Object>} - Dane biznesowe przetworzone dla AI
+ */
+export const prepareBusinessDataForAI = async () => {
+  console.log('Pobieranie danych biznesowych dla AI...');
   
-  // Wzbogać dane analizą
-  return enrichBusinessDataWithAnalysis(dataContext);
+  try {
+    // Pobierz podsumowanie systemu MRP
+    const summaryData = await getMRPSystemSummary();
+    
+    // Pobierz dane o stanach magazynowych
+    const inventoryItems = await getInventoryItems();
+    console.log('Pobieram dane z bazy dla inventory');
+    
+    // Pobierz dane o zamówieniach klientów
+    const customerOrders = await getCustomerOrders();
+    console.log('Pobieram dane z bazy dla orders');
+    
+    // Pobierz dane o zadaniach produkcyjnych
+    const productionTasks = await getProductionTasks();
+    console.log('Pobieram dane z bazy dla productionTasks');
+    
+    // Pobierz dane o dostawcach
+    const suppliers = await getSuppliers();
+    console.log('Pobieram dane z bazy dla suppliers');
+    
+    // Pobierz dane o recepturach
+    const recipes = await getRecipes();
+    
+    // Pobierz dane o zamówieniach zakupu
+    const purchaseOrders = await getPurchaseOrders();
+    console.log('Pobieram dane z bazy dla purchaseOrders');
+    
+    // Pobierz dane o partiach materiałów i ich powiązaniach z PO oraz MO
+    const materialBatchesData = await getFullBatchesData();
+    console.log('Pobieram dane z bazy dla materialBatches');
+    console.log('Pobieram dane z bazy dla batchReservations');
+    
+    // Przygotuj obiekt z danymi bazowymi
+    const businessData = {
+      data: {
+        inventory: inventoryItems,
+        orders: customerOrders,
+        productionTasks: productionTasks,
+        suppliers: suppliers,
+        recipes: recipes,
+        purchaseOrders: purchaseOrders,
+        materialBatches: materialBatchesData?.batches || [],
+        batchReservations: materialBatchesData?.reservations || []
+      },
+      summary: summaryData,
+      timestamp: new Date().toISOString(),
+      dataCompleteness: {
+        inventory: inventoryItems?.length > 0,
+        orders: customerOrders?.length > 0,
+        productionTasks: productionTasks?.length > 0,
+        suppliers: suppliers?.length > 0,
+        recipes: recipes?.length > 0,
+        purchaseOrders: purchaseOrders?.length > 0,
+        materialBatches: (materialBatchesData?.batches?.length || 0) > 0,
+        batchReservations: (materialBatchesData?.reservations?.length || 0) > 0
+      }
+    };
+    
+    // Wzbogać dane o analizy
+    const enrichedData = enrichBusinessDataWithAnalysis(businessData);
+    
+    // Dodaj informację, do jakich danych mamy dostęp w tej sesji
+    enrichedData.accessibleDataFields = Object.keys(businessData.dataCompleteness)
+      .filter(key => businessData.dataCompleteness[key])
+      .map(key => key);
+      
+    // Dodaj informację o kolekcjach, które nie są dostępne w tej sesji
+    enrichedData.unavailableDataFields = Object.keys(businessData.dataCompleteness)
+      .filter(key => !businessData.dataCompleteness[key])
+      .map(key => key);
+    
+    return enrichedData;
+  } catch (error) {
+    console.error('Błąd podczas przygotowywania danych dla AI:', error);
+    return {
+      error: 'Wystąpił błąd podczas pobierania danych biznesowych',
+      errorDetails: error.message,
+      timestamp: new Date().toISOString(),
+      dataCompleteness: {
+        inventory: false,
+        orders: false,
+        productionTasks: false,
+        suppliers: false,
+        recipes: false,
+        purchaseOrders: false,
+        materialBatches: false,
+        batchReservations: false
+      },
+      accessibleDataFields: [],
+      unavailableDataFields: [
+        'inventory', 'orders', 'productionTasks', 'suppliers', 
+        'recipes', 'purchaseOrders', 'materialBatches', 'batchReservations'
+      ]
+    };
+  }
 };
 
 /**

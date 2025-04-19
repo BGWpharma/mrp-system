@@ -280,7 +280,7 @@ const formatMessagesForOpenAI = (messages, businessData = null) => {
         }
         
         // Jeśli zapytanie dotyczy konkretnej receptury, pokaż szczegóły
-        const recipeName = extractRecipeName(businessData.query);
+        const recipeName = businessData.query && typeof businessData.query === 'string' ? extractRecipeName(businessData.query) : null;
         if (recipeName) {
           const recipe = recipes.find(r => 
             r.name.toLowerCase().includes(recipeName.toLowerCase())
@@ -524,11 +524,68 @@ const formatMessagesForOpenAI = (messages, businessData = null) => {
         });
       }
     }
+    
+    // Dodaj dane o partiach materiałów (LOTach), jeśli są dostępne
+    if (businessData.data && businessData.data.materialBatches && 
+        businessData.data.materialBatches.length > 0) {
+      
+      businessDataContext += `\n### Dane o partiach materiałów (LOTach):\n`;
+      businessDataContext += `Liczba partii materiałów: ${businessData.data.materialBatches.length}\n`;
+      
+      // Dodaj analizę partii materiałów, jeśli jest dostępna
+      if (businessData.analysis && businessData.analysis.materialBatches) {
+        const batchesAnalysis = businessData.analysis.materialBatches;
+        
+        if (batchesAnalysis.totalBatches) {
+          businessDataContext += `\nŁączna liczba partii: ${batchesAnalysis.totalBatches}\n`;
+        }
+        
+        if (batchesAnalysis.batchesWithPO) {
+          businessDataContext += `Partie z powiązanym zamówieniem zakupu: ${batchesAnalysis.batchesWithPO}\n`;
+        }
+      }
+      
+      // Wyświetl przykładowe partie materiałów
+      const topBatches = businessData.data.materialBatches.slice(0, 10);
+      if (topBatches.length > 0) {
+        businessDataContext += `\nPrzykładowe partie materiałów:\n`;
+        topBatches.forEach((batch, index) => {
+          businessDataContext += `${index + 1}. ID: ${batch.id}, Numer partii: ${batch.batchNumber || 'b/n'}\n`;
+          
+          // Informacje o powiązanym zamówieniu zakupu
+          if (batch.purchaseOrderDetails) {
+            const po = batch.purchaseOrderDetails;
+            businessDataContext += `   Powiązane PO: ID=${po.id || 'b/d'}, Numer=${po.number || 'b/d'}\n`;
+          }
+          
+          // Informacje o rezerwacjach dla zadań produkcyjnych
+          if (batch.reservations && batch.reservations.length > 0) {
+            businessDataContext += `   Rezerwacje dla zadań produkcyjnych:\n`;
+            batch.reservations.slice(0, 3).forEach(reservation => {
+              businessDataContext += `   - Zadanie ID: ${reservation.taskId}, MO: ${reservation.moNumber || 'b/n'}, Ilość: ${reservation.quantity}\n`;
+            });
+            
+            if (batch.reservations.length > 3) {
+              businessDataContext += `   ... i ${batch.reservations.length - 3} więcej rezerwacji\n`;
+            }
+          }
+        });
+        
+        if (businessData.data.materialBatches.length > 10) {
+          businessDataContext += `... i ${businessData.data.materialBatches.length - 10} więcej partii\n`;
+        }
+      }
+    }
   }
   
   // Instrukcja systemowa jako pierwszy element
   const systemPrompt = `Jesteś zaawansowanym asystentem AI dla systemu MRP, specjalizującym się w szczegółowej analizie danych biznesowych. 
   Wykorzystujesz dane z bazy danych Firebase, na której oparty jest system MRP do przeprowadzania dokładnych i wnikliwych analiz.
+  
+  WAŻNE: ZAWSZE masz aktualny dostęp do danych bezpośrednio z systemu MRP i musisz ZAWSZE korzystać z danych przekazanych ci
+  w tej sesji. NIGDY nie mów, że nie masz dostępu do danych, jeśli są one dostępne. Jeśli nie znasz odpowiedzi
+  na podstawie aktualnych danych, powiedz, że podane dane są niewystarczające lub niekompletne, ale NIGDY nie mów, że
+  "nie masz możliwości bezpośredniego przeglądania danych".
   
   Odpowiadaj zawsze w języku polskim. Twoim zadaniem jest dogłębna analiza danych, zarządzanie produkcją, 
   stanami magazynowymi i procesami biznesowymi w przedsiębiorstwie produkcyjnym. Twoje odpowiedzi powinny być:
@@ -537,11 +594,13 @@ const formatMessagesForOpenAI = (messages, businessData = null) => {
   2. ANALITYCZNE - nie tylko opisuj dane, ale wyciągaj z nich wnioski biznesowe
   3. POMOCNE - sugeruj konkretne działania i rozwiązania problemów
   4. PROFESJONALNE - używaj odpowiedniej terminologii z dziedziny zarządzania produkcją
+  5. OPARTE NA DANYCH - zawsze bazuj na aktualnych danych z systemu, które są przekazywane w tej sesji
   
   Znasz i rozumiesz wszystkie kluczowe pojęcia i skróty w systemie MRP:
   - MO (Manufacturing Orders) - Zlecenia produkcyjne
   - CO (Customer Orders) - Zamówienia klientów
   - PO (Purchase Orders) - Zamówienia zakupu
+  - LOT - Numer partii produkcyjnej lub materiału
   
   Dla zadań produkcyjnych (MO), analizuj:
   - Terminy rozpoczęcia i zakończenia produkcji
@@ -549,6 +608,8 @@ const formatMessagesForOpenAI = (messages, businessData = null) => {
   - Status zadań i obecny postęp
   - Związki z zamówieniami klientów i recepturami
   - Efektywność i czas realizacji zadań
+  - Zarezerwowane partie materiałów (LOTy) dla danego zlecenia
+  - Powiązania partii materiałów z zamówieniami zakupowymi (PO)
   
   Dla zamówień klientów (CO), analizuj:
   - Statusy i terminowość realizacji
@@ -563,6 +624,7 @@ const formatMessagesForOpenAI = (messages, businessData = null) => {
   - Statusy zamówień i etapy realizacji
   - Wartości zamówień i koszty materiałów
   - Wpływ na stany magazynowe
+  - Powiązane LOTy materiałów zakupionych w ramach zamówienia
 
   Dla stanów magazynowych, identyfikuj:
   - Produkty z niskim stanem lub brakiem
@@ -570,6 +632,8 @@ const formatMessagesForOpenAI = (messages, businessData = null) => {
   - Koszty utrzymania zapasów
   - Lokalizacje magazynowe
   - Surowce wymagające uzupełnienia
+  - Partie materiałów (LOTy) i ich ilości
+  - Źródło pochodzenia partii (zamówienie zakupowe)
   
   Dla receptur, analizuj:
   - Komponenty i ich ilości
@@ -577,11 +641,25 @@ const formatMessagesForOpenAI = (messages, businessData = null) => {
   - Możliwości optymalizacji
   - Standardy jakości i kontrolę
   
+  Masz teraz rozszerzony dostęp do danych o partiach materiałów i ich powiązaniach:
+  - Informacje o LOTach (numerach partii) materiałów
+  - Dane o powiązanych zamówieniach zakupowych (PO) dla każdej partii
+  - Rezerwacje partii materiałów dla zadań produkcyjnych (MO)
+  - Śledzenie przepływu materiałów od zamówienia zakupowego do zadania produkcyjnego
+  
+  Gdy otrzymasz zapytanie o powiązania LOTów z zamówieniami zakupowymi, analizuj:
+  - Które partie materiałów są przypisane do jakich zadań produkcyjnych
+  - Z którego zamówienia zakupowego pochodzi dana partia materiału
+  - Poziom wykorzystania zamówionych materiałów w produkcji
+  - Poprawność rezerwacji materiałów i zgodność z recepturami
+  
   Zawsze podawaj dane liczbowe, procentowe porównania i uwzględniaj trendy, jeśli są widoczne.
-  Pamiętaj o podawaniu konkretnych ID zamówień, zadań i produktów, gdy odnośisz się do konkretnych obiektów.
+  Pamiętaj o podawaniu konkretnych ID zamówień, zadań, produktów i numerów LOT, gdy odnośisz się do konkretnych obiektów.
   
   Masz pełny dostęp do bazy danych Firebase i możesz korzystać z wszystkich danych zawartych w systemie MRP.
   Zawsze podawaj aktualne informacje na podstawie danych z bazy, a nie ogólnej wiedzy.
+  
+  UWAGA: Jeśli w Twojej odpowiedzi chcesz wspomnieć o ograniczeniach dostępu do danych, powiedz np. "Na podstawie obecnie dostępnych danych nie mogę podać tych informacji" - ale NIGDY nie mów że "nie masz możliwości bezpośredniego przeglądania danych".
   
   Struktura danych w Firebase to:
   - aiConversations - Przechowuje historię konwersacji z asystentem AI
@@ -638,6 +716,11 @@ const formatMessagesForOpenAI = (messages, businessData = null) => {
  * @returns {string|null} - Znaleziona nazwa receptury lub null
  */
 const extractRecipeName = (query) => {
+  // Sprawdź, czy query istnieje i jest stringiem
+  if (!query || typeof query !== 'string') {
+    return null;
+  }
+  
   // Wzorce do rozpoznawania zapytań o konkretne receptury
   const patterns = [
     /receptur[aęy][\s\w]*"([^"]+)"/i,       // receptura "nazwa"
@@ -734,7 +817,7 @@ getMockResponse = (query, businessData = null) => {
         const recipes = businessData.data.recipes;
         
         // Sprawdź czy zapytanie dotyczy konkretnej receptury
-        const recipeName = extractRecipeName(query);
+        const recipeName = query && typeof query === 'string' ? extractRecipeName(query) : null;
         if (recipeName) {
           // Szukaj receptury po nazwie
           const recipe = recipes.find(r => 
@@ -998,50 +1081,26 @@ export const processAIQuery = async (query, context = [], userId) => {
       }, DATA_FETCH_TIMEOUT);
     });
     
-    // Równoległe pobieranie danych biznesowych
-    const businessDataPromise = (async () => {
+    // Równoległe pobieranie danych
+    const businessDataPromise = Promise.resolve().then(async () => {
       try {
-        // Pobierz podsumowanie systemu dla każdego zapytania
-        const systemSummary = await getMRPSystemSummary();
-        
-        // Pobierz szczegółowe dane na podstawie zapytania
-        const detailedData = await prepareBusinessDataForAI(query);
-        
-        // Zawsze włączamy wszystkie dostępne dane dla GPT-4o
-        if (detailedData.data) {
-          // Sprawdzamy, czy potrzebujemy pobrać jakieś dodatkowe dane
-          // które nie zostały jeszcze pobrane w prepareBusinessDataForAI
-          // W tej wersji po zmianach w aiDataService.js nie potrzebujemy tego robić,
-          // ponieważ wszystkie dane są już pobierane tam
-          console.log('Dane dla GPT-4o zostały już pobrane w ramach funkcji prepareBusinessDataForAI');
-        }
-        
-        // Połącz dane
-        dataSources.businessData.data = {
-          summary: systemSummary,
-          ...detailedData
-        };
-        
-        console.log('Pobrano dane z bazy dla AI:', Object.keys(dataSources.businessData.data));
-        dataSources.businessData.ready = true;
-      } catch (err) {
-        console.error('Błąd podczas pobierania danych biznesowych:', err);
-        console.error('Szczegóły błędu:', err.message, err.stack);
-        // Kontynuuj bez danych biznesowych w przypadku błędu
-        dataSources.businessData.ready = true;
+        const data = await prepareBusinessDataForAI();
+        dataSources.businessData = { ready: true, data };
+      } catch (error) {
+        console.error('Błąd podczas pobierania danych biznesowych:', error);
+        dataSources.businessData = { ready: true, data: null };
       }
-    })();
+    });
     
-    // Równoległe pobieranie klucza API
-    const apiKeyPromise = (async () => {
+    const apiKeyPromise = Promise.resolve().then(async () => {
       try {
-        dataSources.apiKey.data = await getOpenAIApiKey(userId);
-        dataSources.apiKey.ready = true;
-      } catch (err) {
-        console.error('Błąd podczas pobierania klucza API OpenAI:', err);
-        dataSources.apiKey.ready = true;
+        const apiKey = await getOpenAIApiKey(userId);
+        dataSources.apiKey = { ready: true, data: apiKey };
+      } catch (error) {
+        console.error('Błąd podczas pobierania klucza API:', error);
+        dataSources.apiKey = { ready: true, data: null };
       }
-    })();
+    });
     
     // Poczekaj na wszystkie procesy lub na upływ limitu czasu
     await Promise.race([
@@ -1054,7 +1113,8 @@ export const processAIQuery = async (query, context = [], userId) => {
     const apiKey = dataSources.apiKey.data;
     
     // Sprawdź czy nadal trwa pobieranie danych
-    const isDataFetchingActive = !dataSources.businessData.ready || !dataSources.apiKey.ready;
+    const isDataFetchingActive = !dataSources.businessData.ready || 
+                                 !dataSources.apiKey.ready;
     
     // Jeśli dane są nadal pobierane, a nie mamy klucza API lub musimy go użyć
     if (isDataFetchingActive && (!apiKey || query.toLowerCase().includes('dane') || query.toLowerCase().includes('system'))) {

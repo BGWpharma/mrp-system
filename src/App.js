@@ -80,6 +80,7 @@ import AIAssistantPage from './pages/AIAssistant/AIAssistantPage';
 import Navbar from './components/common/Navbar';
 import Sidebar from './components/common/Sidebar';
 import PrivateRoute from './components/common/PrivateRoute';
+import AdminRoute from './components/common/AdminRoute';
 
 // Styles
 import './assets/styles/global.css';
@@ -117,6 +118,10 @@ import PriceListsPage from './pages/Sales/PriceLists/PriceListsPage';
 import PriceListFormPage from './pages/Sales/PriceLists/PriceListFormPage';
 import PriceListDetailsPage from './pages/Sales/PriceLists/PriceListDetailsPage';
 
+// Admin Pages
+import UsersManagementPage from './pages/Admin/UsersManagementPage';
+import SystemManagementPage from './pages/Admin/SystemManagementPage';
+
 function App() {
   return (
     <Router>
@@ -130,6 +135,23 @@ function App() {
                 <Route path="/register" element={<Register />} />
                 
                 <Route path="/" element={<PrivateLayout><Dashboard /></PrivateLayout>} />
+                
+                {/* Admin Routes - dostępne tylko dla administratorów */}
+                <Route path="/admin/users" element={
+                  <AdminRoute>
+                    <PrivateLayout>
+                      <UsersManagementPage />
+                    </PrivateLayout>
+                  </AdminRoute>
+                } />
+                
+                <Route path="/admin/system" element={
+                  <AdminRoute>
+                    <PrivateLayout>
+                      <SystemManagementPage />
+                    </PrivateLayout>
+                  </AdminRoute>
+                } />
                 
                 {/* Recipes Routes */}
                 <Route path="/recipes" element={<PrivateLayout><RecipesPage /></PrivateLayout>} />

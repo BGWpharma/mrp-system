@@ -416,18 +416,7 @@ const TaskDetailsPage = () => {
           </Button>
         );
       case 'W trakcie':
-        return (
-          <>
-            <Button 
-              variant="contained" 
-              color="error" 
-              startIcon={<StopIcon />}
-              onClick={() => setStopProductionDialogOpen(true)}
-            >
-              Zatrzymaj produkcję
-            </Button>
-          </>
-        );
+        return null; // Usunięty przycisk "Zatrzymaj produkcję"
       default:
         return null;
     }

@@ -17,7 +17,8 @@ import {
   Avatar,
   Tooltip,
   Badge,
-  IconButton
+  IconButton,
+  ListSubheader
 } from '@mui/material';
 import { 
   Dashboard as DashboardIcon, 
@@ -51,10 +52,13 @@ import {
   Menu as MenuIcon,
   LocalShipping as ShippingIcon,
   SmartToy as AIAssistantIcon,
-  Calculate as CalculateIcon
+  Calculate as CalculateIcon,
+  People as PeopleIcon,
+  Settings as SettingsIcon
 } from '@mui/icons-material';
 import { getExpiringBatches, getExpiredBatches } from '../../services/inventoryService';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Styled components
 const StyledListItemButton = styled(ListItemButton)(({ theme, isheader, isactive }) => ({
@@ -109,6 +113,8 @@ const Sidebar = ({ onToggle }) => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(true);
   const [openSubmenu, setOpenSubmenu] = useState('');
   const [expiringItemsCount, setExpiringItemsCount] = useState(0);
+  const { currentUser } = useAuth();
+  const isAdmin = currentUser?.role === 'administrator';
   
   // Wywołujemy callback onToggle przy zmianie stanu sidebara
   useEffect(() => {

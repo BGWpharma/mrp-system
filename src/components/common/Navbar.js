@@ -20,7 +20,9 @@ import {
   List,
   ListItem,
   ListItemText,
-  Chip
+  Chip,
+  Divider,
+  ListItemIcon
 } from '@mui/material';
 import { 
   Notifications, 
@@ -31,7 +33,9 @@ import {
   Brightness4 as DarkModeIcon,
   Brightness7 as LightModeIcon,
   Apps as AppsIcon,
-  Translate as TranslateIcon
+  Translate as TranslateIcon,
+  People as PeopleIcon,
+  AdminPanelSettings as AdminIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -93,6 +97,8 @@ const Navbar = () => {
   const navigate = useNavigate();
   const searchTimeout = useRef(null);
   const searchResultsRef = useRef(null);
+  
+  const isAdmin = currentUser?.role === 'administrator';
   
   const handleMenu = (event) => {
     setAnchorEl(event.currentTarget);
@@ -528,24 +534,48 @@ const Navbar = () => {
           
           <NotificationsMenu />
           
-          <IconButton 
-            onClick={handleMenu} 
-            color="inherit" 
-            sx={{ 
-              ml: 2,
-              border: '2px solid',
-              borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
-              padding: '4px'
-            }}
-          >
-            <Avatar 
-              src={currentUser?.photoURL || ''} 
-              alt={currentUser?.displayName || 'User'}
-              sx={{ width: 32, height: 32 }}
+          <Box sx={{ position: 'relative', ml: 2 }}>
+            <IconButton 
+              onClick={handleMenu} 
+              color="inherit" 
+              sx={{ 
+                border: '2px solid',
+                borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+                padding: '4px'
+              }}
             >
-              {!currentUser?.photoURL && <Person />}
-            </Avatar>
-          </IconButton>
+              <Avatar 
+                src={currentUser?.photoURL || ''} 
+                alt={currentUser?.displayName || 'User'}
+                sx={{ width: 32, height: 32 }}
+              >
+                {!currentUser?.photoURL && <Person />}
+              </Avatar>
+            </IconButton>
+            
+            {isAdmin && (
+              <Tooltip title="Administrator">
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    bottom: -4,
+                    right: -4,
+                    backgroundColor: mode === 'dark' ? '#304FFE' : '#1565C0',
+                    borderRadius: '50%',
+                    width: 16,
+                    height: 16,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '1px solid',
+                    borderColor: mode === 'dark' ? '#1A1A2E' : '#fff',
+                  }}
+                >
+                  <AdminIcon fontSize="inherit" sx={{ fontSize: 10, color: '#fff' }} />
+                </Box>
+              </Tooltip>
+            )}
+          </Box>
           
           <Menu
             anchorEl={anchorEl}
@@ -561,16 +591,37 @@ const Navbar = () => {
                 backgroundImage: 'none',
                 border: '1px solid',
                 borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
-                minWidth: 180
+                minWidth: 200
               }
             }}
           >
             <MenuItem component={Link} to="/profile" onClick={handleClose}>
-              <Person fontSize="small" sx={{ mr: 1.5 }} />
-              Profil
+              <ListItemIcon><Person fontSize="small" /></ListItemIcon>
+              {isAdmin ? 'Profil administratora' : 'Profil'}
             </MenuItem>
+            
+            {isAdmin && (
+              <>
+                <Divider />
+                <Typography variant="caption" color="text.secondary" sx={{ px: 2, py: 1, display: 'block' }}>
+                  Administracja
+                </Typography>
+                
+                <MenuItem component={Link} to="/admin/users" onClick={handleClose}>
+                  <ListItemIcon><PeopleIcon fontSize="small" /></ListItemIcon>
+                  Użytkownicy
+                </MenuItem>
+                
+                <MenuItem component={Link} to="/admin/system" onClick={handleClose}>
+                  <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
+                  Narzędzia systemowe
+                </MenuItem>
+                <Divider />
+              </>
+            )}
+            
             <MenuItem onClick={handleLogout}>
-              <ExitToApp fontSize="small" sx={{ mr: 1.5 }} />
+              <ListItemIcon><ExitToApp fontSize="small" /></ListItemIcon>
               Wyloguj
             </MenuItem>
           </Menu>

@@ -148,3 +148,19 @@ Po uruchomieniu MVP, kolejne kroki rozwoju mogą obejmować:
 
 W przypadku pytań lub problemów, skontaktuj się z:
 [mateusz@bgwpahrma.com]
+
+## Limity wiadomości do asystenta AI
+
+W systemie wprowadzono limit liczby wiadomości, które użytkownik może wysłać do asystenta AI w ciągu miesiąca:
+- Administrator: 250 wiadomości miesięcznie
+- Pracownik: 50 wiadomości miesięcznie
+
+Limity są automatycznie odnawiane na początku każdego miesiąca. Informacja o dostępnych wiadomościach jest widoczna na stronie asystenta AI w formie paska postępu.
+
+### Zarządzanie limitami
+
+Limit wiadomości jest ustawiany automatycznie na podstawie roli użytkownika. Zmiana roli użytkownika z poziomu panelu administracyjnego (Pracownik ↔ Administrator) automatycznie aktualizuje limit wiadomości.
+
+### Migracja danych
+
+Dla istniejących użytkowników można uruchomić migrację limitów poprzez panel administracyjny w sekcji "Narzędzia systemowe". Migracja przypisuje limity na podstawie ról: administratorzy otrzymują 250 wiadomości, a pracownicy 50.

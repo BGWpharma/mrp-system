@@ -23,7 +23,9 @@ import {
   Alert,
   Snackbar,
   InputAdornment,
-  Collapse
+  Collapse,
+  LinearProgress,
+  Tooltip
 } from '@mui/material';
 import { 
   Send as SendIcon, 
@@ -39,6 +41,8 @@ import {
   Payments as PaymentsIcon,
   Error as ErrorIcon
 } from '@mui/icons-material';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../services/firebase/config';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../hooks/useNotification';
@@ -52,6 +56,7 @@ import {
   getOpenAIApiKey,
   saveOpenAIApiKey
 } from '../../services/aiAssistantService';
+import { checkAndUpdateAIMessageQuota } from '../../services/userService';
 import ApiKeyInstructions from './ApiKeyInstructions';
 import APIQuotaAlert from './APIQuotaAlert';
 
@@ -77,6 +82,7 @@ const AIAssistantPage = () => {
   const [openQuotaAlert, setOpenQuotaAlert] = useState(false);
   const [openQuotaDialog, setOpenQuotaDialog] = useState(false);
   const [processingInBackground, setProcessingInBackground] = useState(false);
+  const [aiMessageQuota, setAiMessageQuota] = useState({ remaining: 0, limit: 0 });
   const messagesEndRef = useRef(null);
 
   // Otwórz dialog z informacjami o przekroczeniu limitu
@@ -172,154 +178,170 @@ const AIAssistantPage = () => {
       return;
     }
 
-    // Zapisz wartość aktualnego inputa przed wyczyszczeniem
-    const currentInput = input.trim();
-    
-    // Wyczyść pole inputa i pokaż wskaźnik ładowania
-    setInput('');
-    setLoading(true);
-    
-    console.log('Wysyłanie wiadomości:', currentInput);
-
-    // Jeśli nie ma aktualnej konwersacji, utwórz nową
-    let conversationId = currentConversationId;
-    if (!conversationId) {
-      try {
-        console.log('Tworzenie nowej konwersacji...');
-        conversationId = await createConversation(currentUser.uid);
-        setCurrentConversationId(conversationId);
-      } catch (error) {
-        console.error('Błąd podczas tworzenia nowej konwersacji:', error);
-        showError('Nie udało się utworzyć nowej konwersacji');
-        setLoading(false);
+    try {
+      // Sprawdź limit wiadomości dla użytkownika
+      const quotaStatus = await checkAndUpdateAIMessageQuota(currentUser.uid);
+      
+      if (!quotaStatus.canSendMessage) {
+        showError(`Przekroczono miesięczny limit ${quotaStatus.limit} wiadomości do asystenta AI. Limit odnowi się na początku kolejnego miesiąca.`);
         return;
       }
-    }
-
-    try {
-      console.log('Konwersacja ID:', conversationId);
       
-      // Dodaj wiadomość użytkownika do bazy danych
-      console.log('Dodawanie wiadomości użytkownika do bazy danych...');
-      const userMessageId = await addMessageToConversation(conversationId, 'user', currentInput);
-      console.log('ID wiadomości użytkownika:', userMessageId);
-      
-      // Przygotuj wiadomość użytkownika do lokalnego wyświetlenia
-      const userMessage = { 
-        id: userMessageId,
-        role: 'user', 
-        content: currentInput, 
-        timestamp: new Date().toISOString() 
-      };
-      
-      // Dodaj wiadomość użytkownika do lokalnego stanu
-      setMessages(prevMessages => {
-        // Sprawdź, czy wiadomość już istnieje w stanie
-        const isDuplicate = prevMessages.some(msg => 
-          msg.content === currentInput && 
-          msg.role === 'user' &&
-          new Date(msg.timestamp).getTime() > Date.now() - 10000 // 10 sekund
-        );
-        
-        if (isDuplicate) {
-          console.log('Wykryto duplikat wiadomości - nie dodaję ponownie');
-          return prevMessages;
-        }
-        
-        return [...prevMessages, userMessage];
+      // Aktualizuj informacje o limicie
+      setAiMessageQuota({
+        remaining: quotaStatus.remaining,
+        limit: quotaStatus.limit
       });
       
-      // Przetwórz zapytanie i uzyskaj odpowiedź asystenta
-      console.log('Przetwarzanie zapytania przez AI...');
-      const aiResponse = await processAIQuery(currentInput, messages, currentUser.uid);
-      console.log('Uzyskano odpowiedź AI:', aiResponse ? 'tak' : 'nie');
+      // Zapisz wartość aktualnego inputa przed wyczyszczeniem
+      const currentInput = input.trim();
       
-      if (!aiResponse) {
-        console.error('Otrzymano pustą odpowiedź od asystenta AI');
-        showError('Nie otrzymano odpowiedzi od asystenta. Spróbuj ponownie później.');
-        setLoading(false);
-        return;
+      // Wyczyść pole inputa i pokaż wskaźnik ładowania
+      setInput('');
+      setLoading(true);
+      
+      console.log('Wysyłanie wiadomości:', currentInput);
+
+      // Jeśli nie ma aktualnej konwersacji, utwórz nową
+      let conversationId = currentConversationId;
+      if (!conversationId) {
+        try {
+          console.log('Tworzenie nowej konwersacji...');
+          conversationId = await createConversation(currentUser.uid);
+          setCurrentConversationId(conversationId);
+        } catch (error) {
+          console.error('Błąd podczas tworzenia nowej konwersacji:', error);
+          showError('Nie udało się utworzyć nowej konwersacji');
+          setLoading(false);
+          return;
+        }
       }
-      
-      // Sprawdź, czy odpowiedź to wiadomość o opóźnieniu
-      const isDelayedResponse = aiResponse.includes('Pracuję nad analizą danych') &&
-                               aiResponse.includes('Proszę o cierpliwość');
-      
-      // Dodaj odpowiedź asystenta do bazy danych
-      console.log('Dodawanie odpowiedzi asystenta do bazy danych...');
-      const assistantMessageId = await addMessageToConversation(conversationId, 'assistant', aiResponse);
-      console.log('ID wiadomości asystenta:', assistantMessageId);
-      
-      // Zaktualizuj lokalny stan o odpowiedź asystenta
-      const assistantMessage = { 
-        id: assistantMessageId,
-        role: 'assistant', 
-        content: aiResponse, 
-        timestamp: new Date().toISOString() 
-      };
-      
-      setMessages(prevMessages => [...prevMessages, assistantMessage]);
-      
-      // Jeśli mamy wiadomość o opóźnieniu, uruchom drugi proces pobierania
-      if (isDelayedResponse) {
-        console.log('Wykryto wiadomość o opóźnieniu, kontynuuję pobieranie danych...');
+
+      try {
+        console.log('Konwersacja ID:', conversationId);
         
-        // Ustaw flagę ładowania, ale nie blokuj interfejsu
-        setProcessingInBackground(true);
+        // Dodaj wiadomość użytkownika do bazy danych
+        console.log('Dodawanie wiadomości użytkownika do bazy danych...');
+        const userMessageId = await addMessageToConversation(conversationId, 'user', currentInput);
+        console.log('ID wiadomości użytkownika:', userMessageId);
         
-        // Uruchom pobieranie pełnej odpowiedzi w tle
-        setTimeout(async () => {
-          try {
-            // Drugie zapytanie AI z dłuższym limitem czasu
-            const fullResponse = await processAIQuery(currentInput, 
-                                                     messages.concat([assistantMessage]), 
-                                                     currentUser.uid,
-                                                     30000); // Dłuższy limit czasu
-            
-            if (fullResponse && fullResponse !== aiResponse) {
-              console.log('Otrzymano pełną odpowiedź AI po opóźnieniu');
-              
-              // Zaktualizuj odpowiedź w bazie danych
-              const updatedMessageId = await addMessageToConversation(
-                conversationId, 
-                'assistant', 
-                fullResponse
-              );
-              
-              // Zaktualizuj lokalny stan
-              const updatedMessage = {
-                id: updatedMessageId,
-                role: 'assistant',
-                content: fullResponse,
-                timestamp: new Date().toISOString(),
-                updatedFromDelayed: true
-              };
-              
-              setMessages(prevMessages => {
-                // Zastąp poprzednią odpowiedź z opóźnieniem
-                const filtered = prevMessages.filter(msg => 
-                  msg.id !== assistantMessageId
-                );
-                return [...filtered, updatedMessage];
-              });
-            }
-          } catch (error) {
-            console.error('Błąd podczas pobierania pełnej odpowiedzi:', error);
-          } finally {
-            setProcessingInBackground(false);
+        // Przygotuj wiadomość użytkownika do lokalnego wyświetlenia
+        const userMessage = { 
+          id: userMessageId,
+          role: 'user', 
+          content: currentInput, 
+          timestamp: new Date().toISOString() 
+        };
+        
+        // Dodaj wiadomość użytkownika do lokalnego stanu
+        setMessages(prevMessages => {
+          // Sprawdź, czy wiadomość już istnieje w stanie
+          const isDuplicate = prevMessages.some(msg => 
+            msg.content === currentInput && 
+            msg.role === 'user' &&
+            new Date(msg.timestamp).getTime() > Date.now() - 10000 // 10 sekund
+          );
+          
+          if (isDuplicate) {
+            console.log('Wykryto duplikat wiadomości - nie dodaję ponownie');
+            return prevMessages;
           }
-        }, 2000);
+          
+          return [...prevMessages, userMessage];
+        });
+        
+        // Przetwórz zapytanie i uzyskaj odpowiedź asystenta
+        console.log('Przetwarzanie zapytania przez AI...');
+        const aiResponse = await processAIQuery(currentInput, messages, currentUser.uid);
+        console.log('Uzyskano odpowiedź AI:', aiResponse ? 'tak' : 'nie');
+        
+        if (!aiResponse) {
+          console.error('Otrzymano pustą odpowiedź od asystenta AI');
+          showError('Nie otrzymano odpowiedzi od asystenta. Spróbuj ponownie później.');
+          setLoading(false);
+          return;
+        }
+        
+        // Sprawdź, czy odpowiedź to wiadomość o opóźnieniu
+        const isDelayedResponse = aiResponse.includes('Pracuję nad analizą danych') &&
+                                 aiResponse.includes('Proszę o cierpliwość');
+        
+        // Dodaj odpowiedź asystenta do bazy danych
+        console.log('Dodawanie odpowiedzi asystenta do bazy danych...');
+        const assistantMessageId = await addMessageToConversation(conversationId, 'assistant', aiResponse);
+        console.log('ID wiadomości asystenta:', assistantMessageId);
+        
+        // Zaktualizuj lokalny stan o odpowiedź asystenta
+        const assistantMessage = { 
+          id: assistantMessageId,
+          role: 'assistant', 
+          content: aiResponse, 
+          timestamp: new Date().toISOString() 
+        };
+        
+        setMessages(prevMessages => [...prevMessages, assistantMessage]);
+        
+        // Jeśli mamy wiadomość o opóźnieniu, uruchom drugi proces pobierania
+        if (isDelayedResponse) {
+          console.log('Wykryto wiadomość o opóźnieniu, kontynuuję pobieranie danych...');
+          
+          // Ustaw flagę ładowania, ale nie blokuj interfejsu
+          setProcessingInBackground(true);
+          
+          // Uruchom pobieranie pełnej odpowiedzi w tle
+          setTimeout(async () => {
+            try {
+              // Drugie zapytanie AI z dłuższym limitem czasu
+              const fullResponse = await processAIQuery(currentInput, 
+                                                       messages.concat([assistantMessage]), 
+                                                       currentUser.uid,
+                                                       30000); // Dłuższy limit czasu
+              
+              if (fullResponse && fullResponse !== aiResponse) {
+                console.log('Otrzymano pełną odpowiedź AI po opóźnieniu');
+                
+                // Zaktualizuj odpowiedź w bazie danych
+                const updatedMessageId = await addMessageToConversation(
+                  conversationId, 
+                  'assistant', 
+                  fullResponse
+                );
+                
+                // Zaktualizuj lokalny stan
+                const updatedMessage = {
+                  id: updatedMessageId,
+                  role: 'assistant',
+                  content: fullResponse,
+                  timestamp: new Date().toISOString(),
+                  updatedFromDelayed: true
+                };
+                
+                setMessages(prevMessages => {
+                  // Zastąp poprzednią odpowiedź z opóźnieniem
+                  const filtered = prevMessages.filter(msg => 
+                    msg.id !== assistantMessageId
+                  );
+                  return [...filtered, updatedMessage];
+                });
+              }
+            } catch (error) {
+              console.error('Błąd podczas pobierania pełnej odpowiedzi:', error);
+            } finally {
+              setProcessingInBackground(false);
+            }
+          }, 2000);
+        }
+        
+        // Odśwież listę konwersacji
+        console.log('Odświeżanie listy konwersacji...');
+        const updatedConversations = await getUserConversations(currentUser.uid);
+        setConversationHistory(updatedConversations);
+        
+      } catch (error) {
+        console.error('Błąd podczas komunikacji z asystentem:', error);
+        console.error('Szczegóły błędu:', error.message, error.stack);
+        showError('Wystąpił błąd podczas komunikacji z asystentem. Spróbuj ponownie.');
       }
-      
-      // Odśwież listę konwersacji
-      console.log('Odświeżanie listy konwersacji...');
-      const updatedConversations = await getUserConversations(currentUser.uid);
-      setConversationHistory(updatedConversations);
-      
-    } catch (error) {
-      console.error('Błąd podczas komunikacji z asystentem:', error);
-      console.error('Szczegóły błędu:', error.message, error.stack);
-      showError('Wystąpił błąd podczas komunikacji z asystentem. Spróbuj ponownie.');
     } finally {
       setLoading(false);
     }
@@ -468,8 +490,39 @@ const AIAssistantPage = () => {
     );
   };
 
+  // Dodaj brakujący kod do renderowania interfejsu - linijka przed zwracaniem głównego kontenera JSX
+  useEffect(() => {
+    const checkMessageQuota = async () => {
+      if (!currentUser?.uid) return;
+      
+      try {
+        // Pobierz aktualny stan limitu bez zwiększania licznika
+        const userRef = doc(db, 'users', currentUser.uid);
+        const userDoc = await getDoc(userRef);
+        
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          const isAdmin = userData.role === 'administrator';
+          const defaultLimit = isAdmin ? 250 : 50;
+          
+          const aiMessagesLimit = userData.aiMessagesLimit || defaultLimit;
+          const aiMessagesUsed = userData.aiMessagesUsed || 0;
+          
+          setAiMessageQuota({
+            remaining: aiMessagesLimit - aiMessagesUsed,
+            limit: aiMessagesLimit
+          });
+        }
+      } catch (error) {
+        console.error('Błąd podczas sprawdzania limitu wiadomości:', error);
+      }
+    };
+    
+    checkMessageQuota();
+  }, [currentUser]);
+
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h4">
           Asystent AI
@@ -728,6 +781,22 @@ const AIAssistantPage = () => {
           Przekroczono limit dostępnych środków. Uzupełnij konto OpenAI, aby kontynuować korzystanie z asystenta AI.
         </Alert>
       </Snackbar>
+      
+      {/* Wyświetlanie informacji o limicie wiadomości - dodaj przed polem inputa */}
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, mt: 2 }}>
+        <Tooltip title={`Pozostało ${aiMessageQuota.remaining} z ${aiMessageQuota.limit} wiadomości w tym miesiącu`}>
+          <Box sx={{ width: '100%', mr: 1 }}>
+            <LinearProgress 
+              variant="determinate" 
+              value={(aiMessageQuota.remaining / aiMessageQuota.limit) * 100} 
+              color={aiMessageQuota.remaining < 10 ? "error" : "primary"}
+            />
+          </Box>
+        </Tooltip>
+        <Typography variant="caption" color="text.secondary">
+          {aiMessageQuota.remaining}/{aiMessageQuota.limit}
+        </Typography>
+      </Box>
       
       <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2 }}>
         {/* Panel boczny z historią konwersacji */}

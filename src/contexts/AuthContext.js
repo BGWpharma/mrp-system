@@ -32,6 +32,7 @@ export const AuthProvider = ({ children }) => {
       ...userData,
       email,
       displayName: userData.displayName || email.split('@')[0],
+      role: 'pracownik', // Domyślna rola dla nowych użytkowników
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
@@ -52,11 +53,17 @@ export const AuthProvider = ({ children }) => {
     
     const userCredential = await signInWithPopup(auth, provider);
     
+    // Sprawdź, czy użytkownik już istnieje w bazie danych
+    const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
+    const isNewUser = !userDoc.exists();
+    
     // Aktualizuj dane użytkownika w Firestore za pomocą userService
     await updateUserData(userCredential.user.uid, {
       email: userCredential.user.email,
       displayName: userCredential.user.displayName,
       photoURL: userCredential.user.photoURL,
+      // Dodaj rolę tylko jeśli to nowy użytkownik lub nie ma jeszcze roli
+      ...(isNewUser || !userDoc.data()?.role ? { role: 'pracownik' } : {}),
       updatedAt: serverTimestamp()
     });
     
@@ -82,7 +89,8 @@ export const AuthProvider = ({ children }) => {
           await updateUserData(user.uid, {
             email: user.email,
             displayName: user.displayName,
-            photoURL: user.photoURL
+            photoURL: user.photoURL,
+            role: 'pracownik' // Domyślna rola dla nowych użytkowników
           });
           
           // Pobierz zaktualizowane dane

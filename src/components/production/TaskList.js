@@ -558,7 +558,7 @@ const TaskList = () => {
             color="primary" 
             startIcon={<AddIcon />}
             component={Link}
-            to="/production/tasks/new"
+            to="/production/create-from-order"
           >
             Nowe Zadanie
           </Button>
