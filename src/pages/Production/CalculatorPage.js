@@ -88,6 +88,10 @@ const CalculatorPage = () => {
     }
     
     try {
+      console.log(`[DEBUG] Rozpoczynam obliczenia dla receptury: ${selectedRecipe.name}`);
+      console.log(`[DEBUG] Objętość mieszalnika: ${mixerVolume} kg, Docelowa ilość: ${targetAmount}`);
+      console.log(`[DEBUG] Tryb kalkulacji: ${usePieces ? 'Sztuki' : 'Kilogramy'}`);
+      
       let mixingPlan = [];
       
       // Sprawdź, czy używamy trybu sztuk czy kilogramów
@@ -105,28 +109,27 @@ const CalculatorPage = () => {
           .filter(ing => ing.unit === 'kg')
           .reduce((sum, ing) => sum + ing.quantity, 0);
         
-        console.log(`Waga jednej sztuki produktu: ${singlePieceWeight.toFixed(2)} kg`);
+        console.log(`[DEBUG] Waga jednej sztuki produktu: ${singlePieceWeight.toFixed(6)} kg`);
         
         // Całkowita waga potrzebna do produkcji wszystkich sztuk
         const totalWeight = singlePieceWeight * targetAmount;
-        console.log(`Całkowita waga do wyprodukowania ${targetAmount} szt.: ${totalWeight.toFixed(2)} kg`);
+        console.log(`[DEBUG] Całkowita waga do wyprodukowania ${targetAmount} szt.: ${totalWeight.toFixed(6)} kg`);
         
         // Obliczenie liczby pełnych mieszań na podstawie całkowitej wagi
         const fullMixingsCount = Math.floor(totalWeight / mixerVolume);
+        console.log(`[DEBUG] Liczba pełnych mieszań: ${fullMixingsCount}, totalWeight/mixerVolume = ${(totalWeight/mixerVolume).toFixed(6)}`);
         
         // Obliczenie wagi pozostałej po pełnych mieszaniach
         const remainingWeight = totalWeight % mixerVolume;
+        console.log(`[DEBUG] Pozostała waga: ${remainingWeight.toFixed(6)} kg`);
         
         // Obliczenie liczby sztuk w każdym pełnym mieszaniu
-        const piecesPerFullMixing = Math.floor((mixerVolume / totalWeight) * targetAmount);
+        const piecesPerFullMixing = Math.round((mixerVolume / totalWeight) * targetAmount);
+        console.log(`[DEBUG] Liczba sztuk w pełnym mieszaniu: ${piecesPerFullMixing}, wzór: (${mixerVolume}/${totalWeight.toFixed(6)})*${targetAmount} = ${((mixerVolume / totalWeight) * targetAmount).toFixed(6)}`);
         
         // Liczba sztuk w ostatnim, niepełnym mieszaniu
         const piecesInLastMixing = targetAmount - (piecesPerFullMixing * fullMixingsCount);
-        
-        console.log(`Liczba pełnych mieszań: ${fullMixingsCount}, po ${piecesPerFullMixing} szt. w każdym`);
-        if (piecesInLastMixing > 0) {
-          console.log(`Ostatnie mieszanie: ${piecesInLastMixing} szt. (ok. ${remainingWeight.toFixed(2)} kg)`);
-        }
+        console.log(`[DEBUG] Sztuki w ostatnim mieszaniu: ${piecesInLastMixing} (${targetAmount} - ${piecesPerFullMixing} * ${fullMixingsCount})`);
         
         // Dodanie pełnych mieszań
         for (let i = 0; i < fullMixingsCount; i++) {
@@ -259,11 +262,11 @@ const CalculatorPage = () => {
       return [];
     }
     
-    console.log(`Wywołanie calculateIngredientsForBatch dla batchSize=${batchSize}, useProductPieces=${useProductPieces}`);
+    console.log(`[DEBUG] Wywołanie calculateIngredientsForBatch dla receptury ${recipe.name}, batchSize=${batchSize}, useProductPieces=${useProductPieces}`);
     
     // Pobierz wydajność receptury (ilość produktu z jednej pełnej realizacji receptury)
     const recipeYield = recipe.yield?.quantity || 1;
-    console.log(`Wydajność receptury (yield): ${recipeYield}`);
+    console.log(`[DEBUG] Wydajność receptury (yield): ${recipeYield}`);
     
     // Przefiltruj składniki, pomijając te z kategorią "Opakowania" lub 
     // których nazwy wskazują na opakowania (zawierają "PACK")
@@ -287,12 +290,15 @@ const CalculatorPage = () => {
       return !isPackaging && !isPackagingByName;
     });
     
+    console.log(`[DEBUG] Ilość składników po filtrowaniu: ${filteredIngredients.length}`);
+    
     // Oblicz współczynnik skalowania dla danej wielkości partii
     let scaleFactor;
     
     if (useProductPieces) {
       // Jeśli używamy sztuk, to batchSize to bezpośrednio liczba sztuk do wyprodukowania
       scaleFactor = batchSize;
+      console.log(`[DEBUG] Tryb sztuki: scaleFactor = ${scaleFactor}`);
     } else {
       // W trybie wagi (kg) obliczamy proporcję docelowej wagi do sumy wag składników
       // Najpierw obliczamy sumę wag składników w oryginalnej recepturze
@@ -304,16 +310,16 @@ const CalculatorPage = () => {
           return sum + quantity;
         }, 0);
       
-      console.log(`Suma wag składników w oryginalnej recepturze: ${originalTotalWeight.toFixed(5)} kg`);
+      console.log(`[DEBUG] Suma wag składników w oryginalnej recepturze: ${originalTotalWeight.toFixed(5)} kg`);
       
       if (originalTotalWeight <= 0) {
-        console.warn('Ostrzeżenie: Suma wag składników w recepturze wynosi 0 kg');
+        console.warn('[DEBUG] Ostrzeżenie: Suma wag składników w recepturze wynosi 0 kg');
         // Używamy współczynnika równego objętości mieszania (dla bezpieczeństwa)
         scaleFactor = batchSize;
       } else {
         // Oblicz współczynnik, aby suma wag równała się docelowej objętości
         scaleFactor = batchSize / originalTotalWeight;
-        console.log(`Tryb wagi: współczynnik skalowania: ${scaleFactor.toFixed(4)}`);
+        console.log(`[DEBUG] Tryb wagi: współczynnik skalowania: ${scaleFactor.toFixed(6)}`);
       }
     }
     
@@ -346,13 +352,14 @@ const CalculatorPage = () => {
       .filter(ing => ing.unit === 'kg')
       .reduce((sum, ing) => sum + ing.quantity, 0);
     
-    console.log(`Sumaryczna waga składników w kg: ${totalWeight}, oczekiwana objętość mieszania: ${batchSize}`);
+    console.log(`[DEBUG] Sumaryczna waga wszystkich składników w kg: ${totalWeight.toFixed(6)}, oczekiwana objętość mieszania: ${batchSize}`);
     
     // Dla trybu wagi, jeśli suma wag różni się od oczekiwanej objętości,
     // dostosuj proporcjonalnie wszystkie składniki
     if (!useProductPieces && Math.abs(totalWeight - batchSize) > 0.001) { // Zwiększona precyzja
-      console.log(`Dostosowanie składników aby osiągnąć dokładną objętość ${batchSize} kg`);
+      console.log(`[DEBUG] Dostosowanie składników aby osiągnąć dokładną objętość ${batchSize} kg, różnica: ${(totalWeight - batchSize).toFixed(6)}`);
       const adjustmentFactor = batchSize / totalWeight;
+      console.log(`[DEBUG] Współczynnik korekty: ${adjustmentFactor.toFixed(6)}`);
       
       // Zastosuj korektę do wszystkich składników
       calculatedIngredients.forEach(ing => {
@@ -366,7 +373,7 @@ const CalculatorPage = () => {
         .filter(ing => ing.unit === 'kg')
         .reduce((sum, ing) => sum + ing.quantity, 0);
       
-      console.log(`Suma wag po korekcie: ${adjustedTotalWeight} kg`);
+      console.log(`[DEBUG] Suma wag po korekcie: ${adjustedTotalWeight.toFixed(6)} kg`);
     }
     
     // Zaokrąglanie do wyświetlania dopiero na końcu procesu obliczeń
@@ -703,7 +710,7 @@ ${';'.repeat(4)}\n`;
               </TableBody>
             </Table>
           </TableContainer>
-          
+           
           <Alert severity="info" sx={{ mt: 2 }}>
             {calculationResult.isProductPieces ? (
               <>
@@ -725,4 +732,4 @@ ${';'.repeat(4)}\n`;
   );
 };
 
-export default CalculatorPage; 
+export default CalculatorPage;
