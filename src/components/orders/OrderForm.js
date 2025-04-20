@@ -304,7 +304,7 @@ const OrderForm = ({ orderId }) => {
       const orderToSave = {
         ...verifiedOrderData,
         items: verifiedOrderData.items.map(item => ({ ...item })),
-        totalValue: calculateOrderTotal(verifiedOrderData.items) + parseFloat(verifiedOrderData.shippingCost || 0),
+        totalValue: calculateTotal(), // Używamy funkcji która uwzględnia wszystkie składniki: produkty, dostawę, dodatkowe koszty i rabaty
         // Upewniamy się, że daty są poprawne
         orderDate: verifiedOrderData.orderDate ? new Date(verifiedOrderData.orderDate) : new Date(),
         expectedDeliveryDate: verifiedOrderData.expectedDeliveryDate ? new Date(verifiedOrderData.expectedDeliveryDate) : null,
@@ -1771,7 +1771,7 @@ const OrderForm = ({ orderId }) => {
           
           <TableContainer component={Paper} sx={{ mb: 2, boxShadow: 1, borderRadius: 1, overflow: 'hidden' }}>
             <Table>
-              <TableHead sx={{ bgcolor: 'grey.100' }}>
+              <TableHead sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'grey.100' }}>
                 <TableRow>
                   <TableCell width="20%">Produkt</TableCell>
                   <TableCell width="10%">Ilość</TableCell>
@@ -1802,10 +1802,10 @@ const OrderForm = ({ orderId }) => {
                 {orderData.items.map((item, index) => (
                   <TableRow key={index} sx={{ 
                     '&:nth-of-type(odd)': { 
-                      bgcolor: 'background.paper' 
+                      bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : 'background.paper' 
                     },
                     '&:nth-of-type(even)': { 
-                      bgcolor: 'grey.50' 
+                      bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'grey.50' 
                     },
                     '&:hover': {
                       bgcolor: 'action.hover'
@@ -2087,7 +2087,7 @@ const OrderForm = ({ orderId }) => {
           {orderData.additionalCostsItems && orderData.additionalCostsItems.length > 0 ? (
             <TableContainer component={Paper} sx={{ mb: 2, boxShadow: 1, borderRadius: 1, overflow: 'hidden' }}>
               <Table size="small">
-                <TableHead sx={{ bgcolor: 'grey.100' }}>
+                <TableHead sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'grey.100' }}>
                   <TableRow>
                     <TableCell>Opis</TableCell>
                     <TableCell align="right">Kwota</TableCell>
@@ -2100,7 +2100,9 @@ const OrderForm = ({ orderId }) => {
                     <TableRow 
                       key={cost.id}
                       sx={{ 
-                        bgcolor: parseFloat(cost.value) < 0 ? 'rgba(156, 39, 176, 0.08)' : 'inherit'
+                        bgcolor: theme => parseFloat(cost.value) < 0 
+                          ? 'rgba(156, 39, 176, 0.08)' 
+                          : (theme.palette.mode === 'dark' ? 'background.default' : 'inherit')
                       }}
                     >
                       <TableCell>
@@ -2320,7 +2322,7 @@ const OrderForm = ({ orderId }) => {
               </Box>
               <Table>
                 <TableHead>
-                  <TableRow sx={{ bgcolor: 'primary.light' }}>
+                  <TableRow sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'primary.light' }}>
                     <TableCell>Numer PO</TableCell>
                     <TableCell>Dostawca</TableCell>
                     <TableCell>Liczba pozycji</TableCell>
@@ -2331,7 +2333,9 @@ const OrderForm = ({ orderId }) => {
                 </TableHead>
                 <TableBody>
                   {linkedPurchaseOrders.map((po, index) => (
-                    <TableRow key={index} hover>
+                    <TableRow key={index} hover sx={{ 
+                      bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : 'inherit'
+                    }}>
                       <TableCell>
                         <Chip 
                           label={po.number} 
@@ -2390,39 +2394,39 @@ const OrderForm = ({ orderId }) => {
           
           <Grid container spacing={2}>
             <Grid item xs={12} md={3}>
-              <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+              <Paper sx={{ p: 2, bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default' }}>
                 <Typography variant="subtitle2" color="text.secondary">Wartość produktów:</Typography>
                 <Typography variant="h6" fontWeight="bold">{formatCurrency(calculateSubtotal())}</Typography>
               </Paper>
             </Grid>
             <Grid item xs={12} md={3}>
-              <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+              <Paper sx={{ p: 2, bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default' }}>
                 <Typography variant="subtitle2" color="text.secondary">Koszt dostawy:</Typography>
                 <Typography variant="h6" fontWeight="bold">{formatCurrency(parseFloat(orderData.shippingCost) || 0)}</Typography>
               </Paper>
             </Grid>
             <Grid item xs={12} md={3}>
-              <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+              <Paper sx={{ p: 2, bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default' }}>
                 <Typography variant="subtitle2" color="text.secondary">Dodatkowe koszty:</Typography>
                 <Typography variant="h6" fontWeight="bold">{formatCurrency(calculateAdditionalCosts())}</Typography>
               </Paper>
             </Grid>
             {calculateDiscounts() > 0 && (
               <Grid item xs={12} md={3}>
-                <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+                <Paper sx={{ p: 2, bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default' }}>
                   <Typography variant="subtitle2" color="text.secondary">Rabaty:</Typography>
                   <Typography variant="h6" fontWeight="bold" color="secondary">- {formatCurrency(calculateDiscounts())}</Typography>
                 </Paper>
               </Grid>
             )}
             <Grid item xs={12} md={3}>
-              <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+              <Paper sx={{ p: 2, bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default' }}>
                 <Typography variant="subtitle2" color="text.secondary">Wartość całkowita zamówienia:</Typography>
                 <Typography variant="h6" fontWeight="bold">{formatCurrency(calculateTotal())}</Typography>
               </Paper>
             </Grid>
             <Grid item xs={12} md={3}>
-              <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+              <Paper sx={{ p: 2, bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default' }}>
                 <Typography variant="subtitle2" color="text.secondary">Wartość zamówień zakupu:</Typography>
                 <Typography variant="h6" fontWeight="bold" color="warning.main">{formatCurrency(calculatePurchaseOrdersTotal())}</Typography>
               </Paper>
@@ -2443,7 +2447,7 @@ const OrderForm = ({ orderId }) => {
           
           <Table>
             <TableHead>
-              <TableRow>
+              <TableRow sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'grey.100' }}>
                 <TableCell>
                   <Checkbox 
                     checked={materialsForPO.every(m => m.selected !== false)}
@@ -2465,7 +2469,18 @@ const OrderForm = ({ orderId }) => {
             </TableHead>
             <TableBody>
               {materialsForPO.map((material, index) => (
-                <TableRow key={index}>
+                <TableRow key={index} sx={{ 
+                  bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : 'inherit',
+                  '&:nth-of-type(odd)': { 
+                    bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : 'background.paper' 
+                  },
+                  '&:nth-of-type(even)': { 
+                    bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'grey.50' 
+                  },
+                  '&:hover': {
+                    bgcolor: 'action.hover'
+                  }
+                }}>
                   <TableCell>
                     <Checkbox 
                       checked={material.selected !== false}

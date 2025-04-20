@@ -749,13 +749,33 @@ export const enrichBusinessDataWithAnalysis = (businessData) => {
       enrichedData.analysis.recipes = analyzeRecipes(businessData.data.recipes);
     }
     
+    // Logowanie dla receptur z komponentami i składnikami
+    if (businessData.data.recipes) {
+      const recipesWithComponents = businessData.data.recipes.filter(recipe => 
+        recipe.components && recipe.components.length > 0);
+      console.log(`Liczba receptur z komponentami: ${recipesWithComponents.length}`);
+      
+      const recipesWithIngredients = businessData.data.recipes.filter(recipe => 
+        recipe.ingredients && recipe.ingredients.length > 0);
+      console.log(`Liczba receptur ze składnikami: ${recipesWithIngredients.length}`);
+    }
+    
     // Analiza partii materiałów
     if (businessData.data.materialBatches && businessData.data.materialBatches.length > 0) {
       console.log(`Analizuję partie materiałów (${businessData.data.materialBatches.length} partii)`);
-      // TODO: Zaimplementować analizę partii materiałów w przyszłości
+      
+      // Podstawowa analiza partii materiałów
       enrichedData.analysis.materialBatches = {
         totalBatches: businessData.data.materialBatches.length,
-        batchesWithPO: businessData.data.materialBatches.filter(batch => batch.purchaseOrderDetails).length
+        batchesWithPO: businessData.data.materialBatches.filter(batch => batch.purchaseOrderDetails).length,
+        batchesWithReservations: businessData.data.materialBatches.filter(batch => 
+          batch.reservations && Object.keys(batch.reservations).length > 0).length,
+        availableBatches: businessData.data.materialBatches.filter(batch => 
+          batch.remainingQuantity > 0).length,
+        totalQuantity: businessData.data.materialBatches.reduce((sum, batch) => 
+          sum + (batch.quantity || 0), 0),
+        totalRemainingQuantity: businessData.data.materialBatches.reduce((sum, batch) => 
+          sum + (batch.remainingQuantity || 0), 0)
       };
     }
   }

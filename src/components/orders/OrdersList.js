@@ -667,24 +667,25 @@ const OrdersList = () => {
           updatedOrderData.linkedPurchaseOrders = updatedPOs;
         }
         
-        // Obliczamy wartość produktów
+        // Używamy wartości totalValue bezpośrednio z bazy danych, ponieważ zawiera już wszystkie składniki
+        // (produkty, koszty dostawy, dodatkowe koszty i rabaty)
+        const totalValue = parseFloat(updatedOrderData.totalValue) || 0;
+        
+        // Obliczamy wartość produktów tylko do wyświetlenia
         const subtotal = (updatedOrderData.items || []).reduce((sum, item) => {
           const quantity = parseFloat(item.quantity) || 0;
           const price = parseFloat(item.price) || 0;
           return sum + (quantity * price);
         }, 0);
         
-        // Dodanie kosztów dostawy
+        // Koszt dostawy
         const shippingCost = parseFloat(updatedOrderData.shippingCost) || 0;
         
-        // Łączna wartość zamówienia
-        const totalValue = subtotal + shippingCost + poTotal;
-        
-        console.log(`Zaktualizowane wartości zamówienia ${order.id}: produkty=${subtotal}, dostawa=${shippingCost}, PO=${poTotal}, razem=${totalValue}`);
+        console.log(`Zaktualizowane dane zamówienia ${order.id}: totalValue z bazy=${totalValue}, produkty=${subtotal}, dostawa=${shippingCost}, PO=${poTotal}`);
         
         return {
           ...updatedOrderData,
-          totalValue: totalValue,
+          totalValue: totalValue, // Używamy wartości totalValue z bazy danych
           productsValue: subtotal,
           purchaseOrdersValue: poTotal,
           shippingCost: shippingCost

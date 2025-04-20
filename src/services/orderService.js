@@ -216,11 +216,26 @@ export const getOrderById = async (id) => {
       }, 0);
     }
     
+    // Oblicz dodatkowe koszty i rabaty
+    let additionalCostsTotal = 0;
+    let discountsTotal = 0;
+    
+    if (processedOrder.additionalCostsItems && Array.isArray(processedOrder.additionalCostsItems)) {
+      processedOrder.additionalCostsItems.forEach(cost => {
+        const value = parseFloat(cost.value) || 0;
+        if (value > 0) {
+          additionalCostsTotal += value;
+        } else if (value < 0) {
+          discountsTotal += Math.abs(value);
+        }
+      });
+    }
+    
     // Aktualizacja łącznej wartości zamówienia
     processedOrder.productsValue = totalProductsValue;
     processedOrder.shippingCost = shippingCost;
     processedOrder.purchaseOrdersValue = poTotalGross;
-    processedOrder.totalValue = totalProductsValue + shippingCost;
+    processedOrder.totalValue = totalProductsValue + shippingCost + additionalCostsTotal - discountsTotal;
     
     console.log("Przetworzone dane zamówienia:", processedOrder);
     return processedOrder;
@@ -242,11 +257,9 @@ export const createOrder = async (orderData, userId) => {
     const customerAffix = orderData.customer && orderData.customer.orderAffix ? orderData.customer.orderAffix : '';
     const orderNumber = await generateCONumber(customerAffix);
     
-    // Obliczanie wartości zamówienia z uwzględnieniem kosztów produkcji dla pozycji spoza listy cenowej
-    const calculatedTotalValue = calculateOrderTotal(orderData.items);
-    
-    // Upewnij się, że mamy wartość totalValue - użyj przekazanej lub oblicz
-    const totalValue = parseFloat(orderData.totalValue) || calculatedTotalValue;
+    // Używamy wartości totalValue przekazanej w danych - ona już zawiera wszystkie składniki 
+    // (produkty, koszty dostawy, dodatkowe koszty i rabaty)
+    const totalValue = parseFloat(orderData.totalValue) || 0;
     
     // Upewnij się, że data zamówienia jest poprawna
     let orderDate = orderData.orderDate;
@@ -333,11 +346,9 @@ export const updateOrder = async (orderId, orderData, userId) => {
     // Walidacja danych zamówienia
     validateOrderData(orderData);
     
-    // Obliczanie wartości zamówienia z uwzględnieniem kosztów produkcji dla pozycji spoza listy cenowej
-    const calculatedTotalValue = calculateOrderTotal(orderData.items);
-    
-    // Upewnij się, że mamy wartość totalValue - użyj przekazanej lub oblicz
-    const totalValue = parseFloat(orderData.totalValue) || calculatedTotalValue;
+    // Używamy wartości totalValue przekazanej w danych - ona już zawiera wszystkie składniki
+    // (produkty, koszty dostawy, dodatkowe koszty i rabaty)
+    const totalValue = parseFloat(orderData.totalValue) || 0;
     
     const updatedOrder = {
       ...orderData,
@@ -707,12 +718,13 @@ const validateOrderData = (orderData) => {
 /**
  * Oblicza łączną wartość zamówienia
  */
-export const calculateOrderTotal = (items) => {
+export const calculateOrderTotal = (items, shippingCost = 0, additionalCostsItems = []) => {
   if (!items || !Array.isArray(items)) {
     return 0;
   }
   
-  return items.reduce((sum, item) => {
+  // Obliczamy wartość produktów
+  const itemsTotal = items.reduce((sum, item) => {
     const price = parseFloat(item.price) || 0;
     const quantity = parseFloat(item.quantity) || 0;
     const itemValue = price * quantity;
@@ -726,6 +738,29 @@ export const calculateOrderTotal = (items) => {
     // W przeciwnym razie tylko standardowa wartość
     return sum + itemValue;
   }, 0);
+  
+  // Dodajemy koszt dostawy
+  const totalWithShipping = itemsTotal + parseFloat(shippingCost || 0);
+  
+  // Jeśli nie ma dodatkowych kosztów, zwracamy wartość produktów + dostawa
+  if (!additionalCostsItems || !Array.isArray(additionalCostsItems) || additionalCostsItems.length === 0) {
+    return totalWithShipping;
+  }
+  
+  // Obliczamy dodatkowe koszty (tylko wartości dodatnie)
+  const additionalCosts = additionalCostsItems.reduce((sum, cost) => {
+    const value = parseFloat(cost.value) || 0;
+    return sum + (value > 0 ? value : 0);
+  }, 0);
+  
+  // Obliczamy rabaty (tylko wartości ujemne, przekształcone na wartości dodatnie)
+  const discounts = Math.abs(additionalCostsItems.reduce((sum, cost) => {
+    const value = parseFloat(cost.value) || 0;
+    return sum + (value < 0 ? value : 0);
+  }, 0));
+  
+  // Zwracamy łączną wartość
+  return totalWithShipping + additionalCosts - discounts;
 };
 
 /**
