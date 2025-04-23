@@ -71,8 +71,8 @@ export const RECIPE_STATUSES = {
   // Kategorie pozycji magazynowych
   export const INVENTORY_CATEGORIES = {
     RAW_MATERIALS: 'Surowce',
-    SEMI_PRODUCTS: 'Półprodukty',
-    PACKAGING: 'Opakowania',
+    SEMI_PRODUCTS: 'Opakowania zbiorcze',
+    PACKAGING: 'Opakowania jednostkowe',
     FINISHED_PRODUCTS: 'Gotowe produkty',
     OTHER: 'Inne'
   };

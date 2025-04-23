@@ -137,7 +137,14 @@ import {
       // Oblicz aktualne ilości i ceny dla każdego przedmiotu
       const itemsWithQuantities = await Promise.all(items.map(async item => {
         const itemBatches = batches.filter(batch => batch.itemId === item.id);
-        const currentQuantity = itemBatches.reduce((sum, batch) => sum + (parseFloat(batch.quantity) || 0), 0);
+        
+        // Filtruj partie według warehouseId, jeśli został podany
+        const filteredBatches = warehouseId 
+          ? itemBatches.filter(batch => batch.warehouseId === warehouseId)
+          : itemBatches;
+          
+        // Oblicz ilość na podstawie przefiltrowanych partii
+        const currentQuantity = filteredBatches.reduce((sum, batch) => sum + (parseFloat(batch.quantity) || 0), 0);
         
         // Znajdź najnowszą cenę z partii
         const validBatches = itemBatches.filter(batch => parseFloat(batch.quantity) > 0);
@@ -172,6 +179,7 @@ import {
         return {
           ...item,
           currentQuantity,
+          quantity: currentQuantity, // Dodajemy quantity jako alias dla currentQuantity
           unitPrice: latestPrice,
           minOrderQuantity: minOrderQuantity
         };

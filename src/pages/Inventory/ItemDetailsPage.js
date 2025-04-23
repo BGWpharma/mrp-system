@@ -43,7 +43,7 @@ import {
   FilterList as FilterIcon,
   Delete as DeleteIcon
 } from '@mui/icons-material';
-import { getInventoryItemById, getItemTransactions, getItemBatches, getSupplierPrices, deleteReservation, cleanupDeletedTaskReservations, getReservationsGroupedByTask, cleanupItemReservations } from '../../services/inventoryService';
+import { getInventoryItemById, getItemTransactions, getItemBatches, getSupplierPrices, deleteReservation, cleanupDeletedTaskReservations, getReservationsGroupedByTask, cleanupItemReservations, getAllWarehouses } from '../../services/inventoryService';
 import { getAllSuppliers } from '../../services/supplierService';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
@@ -104,7 +104,18 @@ const ItemDetailsPage = () => {
         
         // Pobierz partie
         const batchesData = await getItemBatches(id);
-        setBatches(batchesData);
+        
+        // Pobierz magazyny i dodaj nazwy magazynów do partii
+        const warehousesData = await getAllWarehouses();
+        const batchesWithWarehouseNames = batchesData.map(batch => {
+          const warehouse = warehousesData.find(w => w.id === batch.warehouseId);
+          return {
+            ...batch,
+            warehouseName: warehouse?.name || 'Magazyn podstawowy'
+          };
+        });
+        
+        setBatches(batchesWithWarehouseNames);
 
         // Pobierz ceny dostawców
         const supplierPricesData = await getSupplierPrices(id);
@@ -744,6 +755,7 @@ const ItemDetailsPage = () => {
                     <TableCell>Data ważności</TableCell>
                     <TableCell>Ilość</TableCell>
                     <TableCell>Status</TableCell>
+                    <TableCell>Lokalizacja</TableCell>
                     <TableCell>Data przyjęcia</TableCell>
                     <TableCell>Notatki</TableCell>
                   </TableRow>
@@ -830,6 +842,7 @@ const ItemDetailsPage = () => {
                             {status === 'valid' && batch.quantity > 0 && 'Dostępne'}
                             {batch.quantity <= 0 && 'Wydane'}
                           </TableCell>
+                          <TableCell>{batch.warehouseName || '-'}</TableCell>
                           <TableCell>{receivedDate.toLocaleDateString('pl-PL')}</TableCell>
                           <TableCell>{batch.notes || '-'}</TableCell>
                         </TableRow>

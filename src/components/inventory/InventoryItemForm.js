@@ -157,8 +157,8 @@ const InventoryItemForm = ({ itemId }) => {
               >
                 <MenuItem value="">Brak kategorii</MenuItem>
                 <MenuItem value="Surowce">Surowce</MenuItem>
-                <MenuItem value="Półprodukty">Półprodukty</MenuItem>
-                <MenuItem value="Opakowania">Opakowania</MenuItem>
+                <MenuItem value="Opakowania zbiorcze">Opakowania zbiorcze</MenuItem>
+                <MenuItem value="Opakowania jednostkowe">Opakowania jednostkowe</MenuItem>
                 <MenuItem value="Gotowe produkty">Gotowe produkty</MenuItem>
                 <MenuItem value="Inne">Inne</MenuItem>
               </Select>
