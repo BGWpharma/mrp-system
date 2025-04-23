@@ -94,6 +94,7 @@ import {
   getAllInventoryItems as getAllProducts 
 } from '../../services/inventoryService';
 import { getExchangeRate } from '../../services/exchangeRateService';
+import { getLastRecipeUsageInfo } from '../../services/orderService';
 
 const DEFAULT_ITEM = {
   id: '',
@@ -521,6 +522,7 @@ const OrderForm = ({ orderId }) => {
       let fromPriceList = false;
       let recipeId = isRecipe ? product.id : null;
       let minOrderQuantity = 0;
+      let lastUsageInfo = null;
       
       // Jeżeli mamy klienta, spróbuj pobrać cenę z listy cenowej
       if (orderData.customer?.id) {
@@ -590,6 +592,16 @@ const OrderForm = ({ orderId }) => {
                 const calculatedPrice = basePrice * (1 + margin / 100);
                 price = parseFloat(calculatedPrice.toFixed(2));
               }
+              
+              // Pobierz informacje o ostatnim użyciu receptury w zamówieniach
+              try {
+                lastUsageInfo = await getLastRecipeUsageInfo(recipe.id);
+                if (lastUsageInfo) {
+                  console.log('Znaleziono informacje o ostatnim użyciu receptury:', lastUsageInfo);
+                }
+              } catch (error) {
+                console.error('Błąd podczas pobierania informacji o ostatnim użyciu receptury:', error);
+              }
             }
           } catch (error) {
             console.error('Błąd podczas obliczania kosztu produkcji:', error);
@@ -613,6 +625,7 @@ const OrderForm = ({ orderId }) => {
         itemType,
         minOrderQuantity,
         originalUnit: unit,
+        lastUsageInfo: lastUsageInfo // Dodajemy informacje o ostatnim użyciu
       };
       
       setOrderData(prev => ({
@@ -1701,6 +1714,25 @@ const OrderForm = ({ orderId }) => {
     }
   };
 
+  // Funkcja pomocnicza do formatowania daty dla wyświetlenia
+  const formatDateToDisplay = (date) => {
+    if (!date) return '';
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('pl-PL');
+  };
+
+  // Funkcja pomocnicza do formatowania kwoty waluty
+  const formatCurrency = (amount) => {
+    if (amount === undefined || amount === null) return '';
+    return new Intl.NumberFormat('pl-PL', { 
+      style: 'currency', 
+      currency: 'EUR',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2 
+    }).format(amount);
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
@@ -1892,19 +1924,18 @@ const OrderForm = ({ orderId }) => {
             <Table>
               <TableHead sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'grey.100' }}>
                 <TableRow>
-                  <TableCell width="20%">Produkt</TableCell>
-                  <TableCell width="10%">Ilość</TableCell>
-                  <TableCell width="10%">Jednostka</TableCell>
-                  <TableCell width="10%">Cena</TableCell>
+                  <TableCell width="25%">Produkt / Receptura</TableCell>
+                  <TableCell width="8%">Ilość</TableCell>
+                  <TableCell width="8%">Jedn.</TableCell>
+                  <TableCell width="10%">Cena EUR</TableCell>
                   <TableCell width="10%">Wartość</TableCell>
-                  <TableCell width="10%">Lista cenowa</TableCell>
-                  <TableCell width="10%">Produkcja</TableCell>
-                  <TableCell width="10%" align="right">
-                    Koszt produkcji
-                    <Tooltip title="Odśwież dane kosztów produkcji">
+                  <TableCell width="5%">Z listy</TableCell>
+                  <TableCell width="10%">
+                    Zadanie produkcyjne
+                    <Tooltip title="Odśwież status zadań produkcyjnych">
                       <IconButton 
                         size="small" 
-                        color="primary" 
+                        color="primary"
                         onClick={refreshProductionTasks}
                         disabled={refreshingPTs}
                       >
@@ -1913,6 +1944,8 @@ const OrderForm = ({ orderId }) => {
                       </IconButton>
                     </Tooltip>
                   </TableCell>
+                  <TableCell width="10%">Koszt produkcji</TableCell>
+                  <TableCell width="10%">Ostatni koszt</TableCell>
                   <TableCell width="10%">Suma wartości pozycji</TableCell>
                   <TableCell width="5%"></TableCell>
                 </TableRow>
@@ -2058,6 +2091,22 @@ const OrderForm = ({ orderId }) => {
                         <Box sx={{ fontWeight: 'medium', color: 'text.secondary' }}>
                           {formatCurrency(item.productionCost)}
                         </Box>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">-</Typography>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {item.lastUsageInfo ? (
+                        <Tooltip title={`Data: ${formatDateToDisplay(item.lastUsageInfo.date)}, Ostatni koszt: ${formatCurrency(item.lastUsageInfo.cost)}`}>
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                            <Typography variant="caption" color="text.secondary">
+                              {formatDateToDisplay(item.lastUsageInfo.date)}
+                            </Typography>
+                            <Typography variant="body2" fontWeight="medium" sx={{ color: 'purple' }}>
+                              {formatCurrency(item.lastUsageInfo.cost)}
+                            </Typography>
+                          </Box>
+                        </Tooltip>
                       ) : (
                         <Typography variant="body2" color="text.secondary">-</Typography>
                       )}

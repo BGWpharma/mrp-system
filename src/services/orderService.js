@@ -915,4 +915,68 @@ export const searchOrdersByNumber = async (orderNumber, onlyCustomerOrders = tru
     console.error('Błąd podczas wyszukiwania zamówień:', error);
     throw error;
   }
+};
+
+/**
+ * Pobiera informacje o ostatnim użyciu receptury w zamówieniach
+ * @param {string} recipeId - ID receptury
+ * @returns {Promise<Object|null>} - Informacje o ostatnim użyciu receptury (zamówienie, koszt, data) lub null
+ */
+export const getLastRecipeUsageInfo = async (recipeId) => {
+  if (!recipeId) return null;
+  
+  try {
+    // Pobierz wszystkie zamówienia
+    const ordersRef = collection(db, ORDERS_COLLECTION);
+    const q = query(ordersRef, orderBy('orderDate', 'desc'));
+    const querySnapshot = await getDocs(q);
+    
+    // Przeszukaj wszystkie zamówienia w poszukiwaniu danej receptury
+    let lastUsageInfo = null;
+    
+    for (const doc of querySnapshot.docs) {
+      const order = {
+        id: doc.id,
+        ...doc.data()
+      };
+      
+      // Pominięcie gdy zamówienie nie ma pozycji lub jest anulowane
+      if (!order.items || !Array.isArray(order.items) || order.status === 'Anulowane') {
+        continue;
+      }
+      
+      // Szukaj pozycji z podaną recepturą
+      const recipeItem = order.items.find(item => 
+        (item.recipeId === recipeId || item.id === recipeId) && 
+        (item.isRecipe === true || item.itemType === 'recipe')
+      );
+      
+      if (recipeItem) {
+        // Znaleziono pozycję z daną recepturą
+        const orderDate = order.orderDate instanceof Date 
+          ? order.orderDate 
+          : order.orderDate?.toDate ? order.orderDate.toDate() : new Date(order.orderDate);
+        
+        lastUsageInfo = {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          orderDate: orderDate,
+          customerName: order.customer?.name || 'Nieznany',
+          quantity: recipeItem.quantity,
+          price: recipeItem.price,
+          cost: recipeItem.basePrice || recipeItem.productionCost || 0,
+          unit: recipeItem.unit || 'szt.',
+          totalValue: (recipeItem.quantity * recipeItem.price) || 0
+        };
+        
+        // Znaleziono - przerywamy pętlę
+        break;
+      }
+    }
+    
+    return lastUsageInfo;
+  } catch (error) {
+    console.error('Błąd podczas pobierania informacji o ostatnim użyciu receptury:', error);
+    return null;
+  }
 }; 
