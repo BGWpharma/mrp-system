@@ -2217,7 +2217,7 @@ import {
           location: batchData.warehouseId ? batchData.warehouseId : (inventoryItem.location || ''),
           lotNumber: batchData.lotNumber || '',
           batchNumber: batchData.batchNumber || '',
-          expiryDate: batchData.expiryDate,
+          expiryDate: batchData.expiryDate || null, // Zabezpieczenie przed undefined
           systemQuantity: batchData.quantity || 0,
           countedQuantity: itemData.countedQuantity || 0,
           discrepancy: (itemData.countedQuantity || 0) - (batchData.quantity || 0),
