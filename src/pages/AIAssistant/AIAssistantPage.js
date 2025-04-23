@@ -57,6 +57,7 @@ import {
   saveOpenAIApiKey
 } from '../../services/aiAssistantService';
 import { checkAndUpdateAIMessageQuota } from '../../services/userService';
+import { getSystemSettings } from '../../services/settingsService';
 import ApiKeyInstructions from './ApiKeyInstructions';
 import APIQuotaAlert from './APIQuotaAlert';
 
@@ -83,6 +84,7 @@ const AIAssistantPage = () => {
   const [openQuotaDialog, setOpenQuotaDialog] = useState(false);
   const [processingInBackground, setProcessingInBackground] = useState(false);
   const [aiMessageQuota, setAiMessageQuota] = useState({ remaining: 0, limit: 0 });
+  const [useGlobalApiKey, setUseGlobalApiKey] = useState(false);
   const messagesEndRef = useRef(null);
 
   // Otwórz dialog z informacjami o przekroczeniu limitu
@@ -122,11 +124,16 @@ const AIAssistantPage = () => {
       if (!currentUser?.uid) return;
       
       try {
+        // Sprawdź ustawienia systemowe
+        const systemSettings = await getSystemSettings();
+        setUseGlobalApiKey(systemSettings.useGlobalApiKey || false);
+        
+        // Pobierz klucz API (funkcja getOpenAIApiKey już sprawdza zarówno globalny jak i indywidualny klucz)
         const apiKey = await getOpenAIApiKey(currentUser.uid);
         setHasApiKey(!!apiKey);
         
-        // Jeśli nie ma klucza API, pokaż alert
-        if (!apiKey) {
+        // Jeśli nie ma klucza API i nie korzystamy z globalnego klucza, pokaż alert
+        if (!apiKey && !systemSettings.useGlobalApiKey) {
           setOpenAlert(true);
         }
       } catch (error) {
@@ -535,14 +542,16 @@ const AIAssistantPage = () => {
           >
             Instrukcje API
           </Button>
-          <Button 
-            variant="outlined" 
-            startIcon={<SettingsIcon />}
-            onClick={handleOpenSettings}
-            color={hasApiKey ? "primary" : "warning"}
-          >
-            {hasApiKey ? "Ustawienia API" : "Skonfiguruj API"}
-          </Button>
+          {!useGlobalApiKey && (
+            <Button 
+              variant="outlined" 
+              startIcon={<SettingsIcon />}
+              onClick={handleOpenSettings}
+              color={hasApiKey ? "primary" : "warning"}
+            >
+              {hasApiKey ? "Ustawienia API" : "Skonfiguruj API"}
+            </Button>
+          )}
         </Box>
       </Box>
       
@@ -798,6 +807,43 @@ const AIAssistantPage = () => {
         </Typography>
       </Box>
       
+      {/* Modyfikujemy alert dotyczący klucza API */}
+      {!hasApiKey && !useGlobalApiKey && (
+        <Alert 
+          severity="info" 
+          sx={{ mt: 3, maxWidth: '600px', width: '100%' }}
+          action={
+            <Button 
+              color="inherit" 
+              size="small" 
+              onClick={handleOpenSettings}
+            >
+              Konfiguruj
+            </Button>
+          }
+        >
+          Dla pełnej funkcjonalności asystenta AI, skonfiguruj klucz API OpenAI.
+          <Button
+            color="inherit"
+            size="small"
+            onClick={handleOpenInstructions}
+            sx={{ mt: 1, display: 'block' }}
+          >
+            Pokaż instrukcje
+          </Button>
+        </Alert>
+      )}
+      
+      {/* Informacja o używaniu globalnego klucza API */}
+      {useGlobalApiKey && (
+        <Alert 
+          severity="success" 
+          sx={{ mt: 3, maxWidth: '600px', width: '100%' }}
+        >
+          System korzysta z globalnego klucza API. Nie musisz konfigurować własnego klucza.
+        </Alert>
+      )}
+      
       <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2 }}>
         {/* Panel boczny z historią konwersacji */}
         <Paper 
@@ -957,7 +1003,7 @@ const AIAssistantPage = () => {
                   </Typography>
                 </Alert>
                 
-                {!hasApiKey && (
+                {!hasApiKey && !useGlobalApiKey && (
                   <Alert 
                     severity="info" 
                     sx={{ mt: 3, maxWidth: '600px', width: '100%' }}

@@ -18,12 +18,12 @@ import {
 } from '@mui/material';
 import {
   Settings as SettingsIcon,
-  Build as BuildIcon,
   Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../hooks/useNotification';
 import { migrateAIMessageLimits } from '../../services/migrationService';
+import APIKeySettings from '../../components/common/APIKeySettings';
 
 /**
  * Strona dla administratorów z narzędziami do zarządzania systemem
@@ -33,7 +33,7 @@ const SystemManagementPage = () => {
   const { showSuccess, showError } = useNotification();
   const [isLoading, setIsLoading] = useState(false);
   const [migrationResults, setMigrationResults] = useState(null);
-
+  
   // Funkcja do uruchomienia migracji limitów wiadomości AI
   const handleRunAILimitsMigration = async () => {
     try {
@@ -67,6 +67,9 @@ const SystemManagementPage = () => {
         </Typography>
         
         <Divider sx={{ my: 2 }} />
+        
+        {/* Sekcja konfiguracji Asystenta AI */}
+        <APIKeySettings />
         
         <Card sx={{ mb: 3 }}>
           <CardContent>

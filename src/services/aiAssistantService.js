@@ -24,6 +24,7 @@ import {
   getRecipes,
   getPurchaseOrders
 } from './aiDataService';
+import { getSystemSettings, getGlobalOpenAIApiKey } from './settingsService';
 
 // Deklaracja funkcji getMockResponse przed jej użyciem (hoisting)
 let getMockResponse;
@@ -38,6 +39,18 @@ const MAX_CONTEXT_MESSAGES = 15;
  */
 export const getOpenAIApiKey = async (userId) => {
   try {
+    // Najpierw sprawdzamy ustawienia systemowe
+    const systemSettings = await getSystemSettings();
+    
+    // Jeśli włączona jest opcja globalnego klucza API, pobieramy go
+    if (systemSettings.useGlobalApiKey) {
+      const globalApiKey = await getGlobalOpenAIApiKey();
+      if (globalApiKey) {
+        return globalApiKey;
+      }
+    }
+    
+    // Jeśli nie ma globalnego klucza lub nie jest używany, próbujemy pobrać klucz użytkownika
     const apiKeyRef = doc(db, 'settings', 'openai', 'users', userId);
     const apiKeyDoc = await getDoc(apiKeyRef);
     
