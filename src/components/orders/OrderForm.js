@@ -93,6 +93,7 @@ import {
 import { 
   getAllInventoryItems as getAllProducts 
 } from '../../services/inventoryService';
+import { getExchangeRate } from '../../services/exchangeRateService';
 
 const DEFAULT_ITEM = {
   id: '',
@@ -143,6 +144,8 @@ const OrderForm = ({ orderId }) => {
 
   const [costCalculation, setCostCalculation] = useState(null);
   const [calculatingCosts, setCalculatingCosts] = useState(false);
+  const [exchangeRates, setExchangeRates] = useState({ EUR: 1, PLN: 4.3, USD: 1.08 });
+  const [loadingRates, setLoadingRates] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -689,13 +692,78 @@ const OrderForm = ({ orderId }) => {
     }, 0);
   };
 
+  // Funkcja do pobierania kursów walut
+  const fetchExchangeRates = async () => {
+    try {
+      setLoadingRates(true);
+      // Pobierz wczorajszy kurs dla głównych walut
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      
+      const currencies = ['EUR', 'PLN', 'USD', 'GBP', 'CHF'];
+      const baseCurrency = 'EUR'; // EUR jako domyślna waluta bazowa dla CO
+      
+      const rates = {};
+      for (const currency of currencies) {
+        if (currency !== baseCurrency) {
+          const rate = await getExchangeRate(currency, baseCurrency, yesterday);
+          rates[currency] = rate;
+        }
+      }
+      
+      // Dodaj kurs 1 dla waluty bazowej
+      rates[baseCurrency] = 1;
+      
+      setExchangeRates(rates);
+      console.log('Pobrano kursy walut:', rates);
+      
+    } catch (error) {
+      console.error('Błąd podczas pobierania kursów walut:', error);
+      showError('Nie udało się pobrać kursów walut. Używam domyślnych wartości.');
+      
+      // Ustaw domyślne kursy w razie błędu
+      setExchangeRates({
+        EUR: 1,
+        PLN: 4.3,
+        USD: 1.08,
+        GBP: 0.85,
+        CHF: 0.96
+      });
+    } finally {
+      setLoadingRates(false);
+    }
+  };
+  
+  // Pobierz kursy walut przy starcie
+  useEffect(() => {
+    fetchExchangeRates();
+  }, []);
+  
+  // Funkcja do przeliczania wartości między walutami
+  const convertCurrency = (amount, fromCurrency, toCurrency) => {
+    if (!amount || amount === 0) return 0;
+    if (fromCurrency === toCurrency) return amount;
+    
+    const rate = exchangeRates[fromCurrency] / exchangeRates[toCurrency];
+    if (!rate) {
+      console.error(`Brak kursu dla pary walut ${fromCurrency}/${toCurrency}`);
+      return amount;
+    }
+    
+    // Wartość przeliczona bez zaokrąglania
+    return amount * rate;
+  };
+
   // Funkcja dodawania nowego dodatkowego kosztu
   const handleAddAdditionalCost = (isDiscount = false) => {
     const newCost = {
       id: Date.now().toString(), // Unikalny identyfikator
       description: isDiscount ? 'Rabat' : 'Dodatkowy koszt',
       value: isDiscount ? 0 : 0,
-      vatRate: 23 // Domyślna stawka VAT
+      vatRate: 23, // Domyślna stawka VAT
+      currency: 'EUR', // Domyślna waluta EUR
+      originalValue: 0, // Wartość w oryginalnej walucie
+      exchangeRate: 1 // Domyślny kurs wymiany
     };
     
     setOrderData(prev => ({
@@ -712,7 +780,58 @@ const OrderForm = ({ orderId }) => {
         if (field === 'vatRate' && value === undefined) {
           value = 23; // Domyślna wartość VAT
         }
-        return { ...item, [field]: field === 'value' ? parseFloat(value) || 0 : value };
+        
+        // Specjalna obsługa dla zmiany waluty
+        if (field === 'currency') {
+          const newCurrency = value;
+          const oldCurrency = item.currency || 'EUR';
+          
+          // Jeśli zmieniono walutę, przelicz wartość
+          if (newCurrency !== oldCurrency) {
+            const originalValue = parseFloat(item.originalValue) || parseFloat(item.value) || 0;
+            // Zapisz oryginalną wartość w nowej walucie
+            const newOriginalValue = originalValue;
+            // Przelicz wartość na EUR (waluta bazowa zamówienia)
+            const convertedValue = convertCurrency(originalValue, newCurrency, 'EUR');
+            
+            return { 
+              ...item, 
+              currency: newCurrency,
+              originalValue: newOriginalValue,
+              value: convertedValue,
+              exchangeRate: exchangeRates[newCurrency] || 1
+            };
+          }
+        }
+        
+        // Specjalna obsługa dla zmiany wartości
+        if (field === 'value') {
+          const newValue = parseFloat(value) || 0;
+          
+          // Jeśli waluta pozycji jest inna niż EUR (waluta bazowa)
+          if (item.currency && item.currency !== 'EUR') {
+            // Zapisz oryginalną wartość
+            const originalValue = newValue;
+            // Przelicz wartość na EUR
+            const convertedValue = convertCurrency(originalValue, item.currency, 'EUR');
+            
+            return { 
+              ...item, 
+              originalValue: originalValue,
+              value: convertedValue
+            };
+          } else {
+            // Jeśli waluta to EUR, obie wartości są takie same
+            return { 
+              ...item, 
+              originalValue: newValue,
+              value: newValue
+            };
+          }
+        }
+        
+        // Standardowa obsługa innych pól
+        return { ...item, [field]: value };
       }
       return item;
     });
@@ -2027,19 +2146,97 @@ const OrderForm = ({ orderId }) => {
               />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <TextField
-                name="shippingCost"
-                label="Koszt dostawy"
-                type="number"
-                value={orderData.shippingCost || 0}
-                onChange={handleChange}
-                fullWidth
-                InputProps={{
-                  startAdornment: <InputAdornment position="start">EUR</InputAdornment>,
-                }}
-                inputProps={{ min: 0, step: 0.01 }}
-                variant="outlined"
-              />
+              <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+                <TextField
+                  name="shippingCost"
+                  label="Koszt dostawy"
+                  type="number"
+                  value={orderData.shippingCostOriginal !== undefined ? orderData.shippingCostOriginal : orderData.shippingCost || 0}
+                  onChange={(e) => {
+                    const value = parseFloat(e.target.value) || 0;
+                    const currency = orderData.shippingCurrency || 'EUR';
+                    
+                    if (currency === 'EUR') {
+                      setOrderData(prev => ({
+                        ...prev,
+                        shippingCost: value,
+                        shippingCostOriginal: value
+                      }));
+                    } else {
+                      // Przeliczenie waluty na EUR
+                      const convertedValue = convertCurrency(value, currency, 'EUR');
+                      setOrderData(prev => ({
+                        ...prev,
+                        shippingCost: convertedValue,
+                        shippingCostOriginal: value
+                      }));
+                    }
+                  }}
+                  fullWidth
+                  inputProps={{ min: 0, step: 0.01 }}
+                  variant="outlined"
+                  sx={{ flex: 1, mr: 1 }}
+                />
+                <FormControl variant="outlined" sx={{ minWidth: 80 }}>
+                  <InputLabel>Waluta</InputLabel>
+                  <Select
+                    value={orderData.shippingCurrency || 'EUR'}
+                    onChange={(e) => {
+                      const newCurrency = e.target.value;
+                      const oldCurrency = orderData.shippingCurrency || 'EUR';
+                      const originalValue = orderData.shippingCostOriginal !== undefined ? 
+                        orderData.shippingCostOriginal : 
+                        orderData.shippingCost || 0;
+                      
+                      if (newCurrency === oldCurrency) {
+                        setOrderData(prev => ({
+                          ...prev,
+                          shippingCurrency: newCurrency
+                        }));
+                        return;
+                      }
+                      
+                      // Przelicz wartość na nową walutę
+                      if (newCurrency === 'EUR') {
+                        // Jeśli zmieniamy na EUR, używamy bezpośrednio przeliczonej wartości
+                        setOrderData(prev => ({
+                          ...prev,
+                          shippingCurrency: 'EUR',
+                          shippingCost: convertCurrency(originalValue, oldCurrency, 'EUR'),
+                          shippingCostOriginal: convertCurrency(originalValue, oldCurrency, 'EUR')
+                        }));
+                      } else if (oldCurrency === 'EUR') {
+                        // Jeśli zmieniamy z EUR na inną walutę
+                        setOrderData(prev => ({
+                          ...prev,
+                          shippingCurrency: newCurrency,
+                          shippingCost: convertCurrency(originalValue, 'EUR', newCurrency),
+                          shippingCostOriginal: originalValue
+                        }));
+                      } else {
+                        // Jeśli zmieniamy z jednej waluty obcej na inną
+                        const valueInEUR = convertCurrency(originalValue, oldCurrency, 'EUR');
+                        setOrderData(prev => ({
+                          ...prev,
+                          shippingCurrency: newCurrency,
+                          shippingCost: valueInEUR,
+                          shippingCostOriginal: convertCurrency(valueInEUR, 'EUR', newCurrency)
+                        }));
+                      }
+                    }}
+                    label="Waluta"
+                  >
+                    <MenuItem value="EUR">EUR</MenuItem>
+                    <MenuItem value="PLN">PLN</MenuItem>
+                    <MenuItem value="USD">USD</MenuItem>
+                  </Select>
+                </FormControl>
+              </Box>
+              {orderData.shippingCurrency && orderData.shippingCurrency !== 'EUR' && orderData.shippingCost > 0 && (
+                <Typography variant="caption" sx={{ display: 'block', mt: 1, fontStyle: 'italic' }}>
+                  {formatCurrency(parseFloat(orderData.shippingCostOriginal) || 0)} {orderData.shippingCurrency} = {formatCurrency(parseFloat(orderData.shippingCost) || 0)} EUR
+                </Typography>
+              )}
             </Grid>
           </Grid>
           
@@ -2084,95 +2281,115 @@ const OrderForm = ({ orderId }) => {
           
           <Divider sx={{ mb: 3 }} />
           
-          {orderData.additionalCostsItems && orderData.additionalCostsItems.length > 0 ? (
-            <TableContainer component={Paper} sx={{ mb: 2, boxShadow: 1, borderRadius: 1, overflow: 'hidden' }}>
+          {!orderData.additionalCostsItems || orderData.additionalCostsItems.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', mb: 2 }}>
+              Brak dodatkowych kosztów lub rabatów. Użyj przycisków powyżej, aby je dodać.
+            </Typography>
+          ) : (
+            <TableContainer>
               <Table size="small">
-                <TableHead sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'grey.100' }}>
+                <TableHead>
                   <TableRow>
                     <TableCell>Opis</TableCell>
                     <TableCell align="right">Kwota</TableCell>
+                    <TableCell align="right">Waluta</TableCell>
                     <TableCell align="right">VAT</TableCell>
                     <TableCell width="50px"></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {orderData.additionalCostsItems.map((cost) => (
-                    <TableRow 
-                      key={cost.id}
-                      sx={{ 
-                        bgcolor: theme => parseFloat(cost.value) < 0 
-                          ? 'rgba(156, 39, 176, 0.08)' 
-                          : (theme.palette.mode === 'dark' ? 'background.default' : 'inherit')
-                      }}
-                    >
+                    <TableRow key={cost.id}>
                       <TableCell>
                         <TextField
                           value={cost.description || ''}
                           onChange={(e) => handleAdditionalCostChange(cost.id, 'description', e.target.value)}
                           variant="standard"
                           fullWidth
-                          size="small"
+                          placeholder="Opis kosztu"
                         />
                       </TableCell>
                       <TableCell align="right">
                         <TextField
-                          value={cost.value || 0}
+                          type="number"
+                          value={cost.originalValue !== undefined ? cost.originalValue : cost.value}
                           onChange={(e) => handleAdditionalCostChange(cost.id, 'value', e.target.value)}
                           variant="standard"
-                          type="number"
-                          InputProps={{
-                            startAdornment: <InputAdornment position="start">{orderData.currency || 'EUR'}</InputAdornment>,
-                            sx: { color: parseFloat(cost.value) < 0 ? 'secondary.main' : 'inherit' }
-                          }}
-                          inputProps={{ step: 0.01 }}
-                          size="small"
+                          inputProps={{ step: '0.01', min: cost.description === 'Rabat' ? undefined : '0' }}
+                          sx={{ maxWidth: 120 }}
                         />
                       </TableCell>
                       <TableCell align="right">
-                        <TextField
-                          value={cost.vatRate || 0}
-                          onChange={(e) => handleAdditionalCostChange(cost.id, 'vatRate', e.target.value)}
-                          variant="standard"
-                          type="number"
-                          InputProps={{
-                            endAdornment: <InputAdornment position="end">%</InputAdornment>,
-                          }}
-                          inputProps={{ min: 0, max: 100, step: 1 }}
-                          size="small"
-                        />
+                        <FormControl variant="standard" sx={{ minWidth: 80 }}>
+                          <Select
+                            value={cost.currency || 'EUR'}
+                            onChange={(e) => handleAdditionalCostChange(cost.id, 'currency', e.target.value)}
+                            displayEmpty
+                          >
+                            <MenuItem value="EUR">EUR</MenuItem>
+                            <MenuItem value="PLN">PLN</MenuItem>
+                            <MenuItem value="USD">USD</MenuItem>
+                          </Select>
+                        </FormControl>
+                      </TableCell>
+                      <TableCell align="right">
+                        <FormControl variant="standard" sx={{ maxWidth: 80 }}>
+                          <Select
+                            value={cost.vatRate || 23}
+                            onChange={(e) => handleAdditionalCostChange(cost.id, 'vatRate', e.target.value)}
+                            displayEmpty
+                          >
+                            <MenuItem value={0}>0%</MenuItem>
+                            <MenuItem value={5}>5%</MenuItem>
+                            <MenuItem value={8}>8%</MenuItem>
+                            <MenuItem value={23}>23%</MenuItem>
+                          </Select>
+                        </FormControl>
                       </TableCell>
                       <TableCell>
-                        <IconButton
-                          size="small"
-                          onClick={() => handleRemoveAdditionalCost(cost.id)}
-                          color="error"
-                        >
-                          <DeleteIcon fontSize="small" />
+                        <IconButton size="small" color="error" onClick={() => handleRemoveAdditionalCost(cost.id)}>
+                          <DeleteIcon />
                         </IconButton>
                       </TableCell>
                     </TableRow>
                   ))}
+                  
+                  {/* Wiersz z podsumowaniem */}
+                  <TableRow>
+                    <TableCell colSpan={2} align="right" sx={{ fontWeight: 'bold' }}>
+                      Suma netto (w EUR):
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                      {formatCurrency(
+                        orderData.additionalCostsItems.reduce(
+                          (sum, cost) => sum + (parseFloat(cost.value) || 0), 
+                          0
+                        )
+                      )}
+                    </TableCell>
+                    <TableCell colSpan={2}></TableCell>
+                  </TableRow>
+                  
+                  {/* Informacja o kursach walut jeśli używane są różne waluty */}
+                  {orderData.additionalCostsItems.some(cost => cost.currency && cost.currency !== 'EUR') && (
+                    <TableRow>
+                      <TableCell colSpan={5} sx={{ py: 1 }}>
+                        <Typography variant="caption" sx={{ fontStyle: 'italic' }}>
+                          Wartości w walutach obcych zostały przeliczone według wczorajszego kursu: 
+                          {Object.entries(exchangeRates)
+                            .filter(([currency]) => currency !== 'EUR')
+                            .map(([currency, rate]) => ` ${currency}/EUR: ${rate.toFixed(6)}`)
+                            .join(', ')}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
-          ) : (
-            <Box sx={{ my: 2, p: 3, bgcolor: 'grey.50', borderRadius: 2, textAlign: 'center' }}>
-              <Typography variant="body2" color="text.secondary">
-                Brak dodatkowych kosztów. Kliknij "Dodaj koszt", aby dodać opłaty jak cła, transport, ubezpieczenie itp. Możesz również dodać rabaty wprowadzając wartość ujemną.
-              </Typography>
-            </Box>
           )}
-          
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-            <Typography variant="subtitle1" fontWeight="bold">
-              Suma dodatkowych kosztów: {formatCurrency(calculateAdditionalCosts())}
-              {calculateDiscounts() > 0 && (
-                <> | Suma rabatów: <span style={{ color: '#9c27b0' }}>{formatCurrency(calculateDiscounts())}</span></>
-              )}
-            </Typography>
-          </Box>
         </Paper>
-
+        
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>Uwagi</Typography>
           <TextField
