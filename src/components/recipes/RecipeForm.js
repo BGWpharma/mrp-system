@@ -84,7 +84,7 @@ const RecipeForm = ({ recipeId }) => {
   const [productData, setProductData] = useState({
     name: '',
     description: '',
-    category: '',
+    category: 'Gotowe produkty',
     unit: 'szt.',
     minStockLevel: 0,
     maxStockLevel: 0,
@@ -109,6 +109,7 @@ const RecipeForm = ({ recipeId }) => {
             ...prev,
             name: recipe.name,
             description: recipe.description || '',
+            category: 'Gotowe produkty',
             unit: recipe.yield?.unit || 'szt.',
             recipeId: recipeId
           }));
@@ -321,7 +322,7 @@ const RecipeForm = ({ recipeId }) => {
   // Funkcja do tworzenia produktu w magazynie
   const handleCreateProduct = async () => {
     if (!productData.name || !productData.warehouseId) {
-      showError('Nazwa produktu i lokalizacja są wymagane');
+      showError('SKU produktu i lokalizacja są wymagane');
       return;
     }
     
@@ -356,7 +357,7 @@ const RecipeForm = ({ recipeId }) => {
       // Utwórz produkt w magazynie
       const createdProduct = await createInventoryItem(newProductData, currentUser.uid);
       
-      showSuccess(`Produkt "${createdProduct.name}" został pomyślnie dodany do stanów "${selectedWarehouse?.name || 'wybranym'}"`);
+      showSuccess(`SKU produktu "${createdProduct.name}" został pomyślnie dodany do stanów "${selectedWarehouse?.name || 'wybranym'}"`);
       setCreateProductDialogOpen(false);
       
       // Odśwież listę składników, aby nowo utworzony produkt był widoczny
@@ -886,6 +887,9 @@ const RecipeForm = ({ recipeId }) => {
                 value={productData.category}
                 onChange={handleProductDataChange}
                 fullWidth
+                InputProps={{
+                  readOnly: true,
+                }}
               />
             </Grid>
             
@@ -900,8 +904,8 @@ const RecipeForm = ({ recipeId }) => {
                   onChange={handleProductDataChange}
                   label="Jednostka"
                 >
-                  <MenuItem value="szt.">sztuka</MenuItem>
-                  <MenuItem value="kg">kilogram</MenuItem>
+                  <MenuItem value="szt.">szt.</MenuItem>
+                  <MenuItem value="kg">kg</MenuItem>
                   <MenuItem value="caps">caps</MenuItem>
                 </Select>
               </FormControl>
