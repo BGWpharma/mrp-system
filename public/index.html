@@ -7,6 +7,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#000000" />
   <meta name="description" content="Web site created using create-react-app" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
   <!--
       manifest.json provides metadata used when your web app is installed on a
@@ -23,6 +26,38 @@
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
   <title>BGW-MRP</title>
+  <script>
+    function addTimestamp() {
+      const timestamp = new Date().getTime();
+      const scripts = document.getElementsByTagName('script');
+      const links = document.getElementsByTagName('link');
+      
+      for (let i = 0; i < scripts.length; i++) {
+        if (scripts[i].src) {
+          scripts[i].src = scripts[i].src + '?v=' + timestamp;
+        }
+      }
+      
+      for (let i = 0; i < links.length; i++) {
+        if (links[i].href) {
+          links[i].href = links[i].href + '?v=' + timestamp;
+        }
+      }
+    }
+    
+    window.onload = function() {
+      addTimestamp();
+      const currentVersion = localStorage.getItem('appVersion');
+      const newVersion = '1.0.0';
+      
+      if (currentVersion !== newVersion) {
+        localStorage.setItem('appVersion', newVersion);
+        if (currentVersion) {
+          window.location.reload(true);
+        }
+      }
+    };
+  </script>
 </head>
 
 <body>
