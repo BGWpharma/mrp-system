@@ -1,5 +1,5 @@
 // src/components/inventory/InventoryList.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { 
   Table, 
@@ -35,6 +35,8 @@ import {
   ListItemIcon,
   ListItemText,
   Checkbox,
+  Pagination,
+  TableFooter,
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -54,6 +56,7 @@ import {
   MoreVert as MoreVertIcon,
   DeleteForever as DeleteForeverIcon,
   ViewColumn as ViewColumnIcon,
+  Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { getAllInventoryItems, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, getItemBatches, updateReservation, updateReservationTasks, cleanupDeletedTaskReservations, deleteReservation, getInventoryItemById, recalculateAllInventoryQuantities, cleanupMicroReservations } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
@@ -74,6 +77,8 @@ const InventoryList = () => {
   const [inventoryItems, setInventoryItems] = useState([]);
   const [filteredItems, setFilteredItems] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [searchTimeout, setSearchTimeout] = useState(null);
   const [loading, setLoading] = useState(true);
   const [expiringCount, setExpiringCount] = useState(0);
   const [expiredCount, setExpiredCount] = useState(0);
@@ -128,23 +133,18 @@ const InventoryList = () => {
   
   // Zamiast lokalnego stanu, użyjmy kontekstu preferencji kolumn
   const [columnMenuAnchor, setColumnMenuAnchor] = useState(null);
-  // Usuń lokalny stan visibleColumns
-  // const [visibleColumns, setVisibleColumns] = useState({
-  //   name: true,
-  //   category: true,
-  //   totalQuantity: true,
-  //   reservedQuantity: true,
-  //   availableQuantity: true,
-  //   status: true,
-  //   location: true,
-  //   actions: true
-  // });
   
   // Użyj kontekstu preferencji kolumn
   const { getColumnPreferencesForView, updateColumnPreferences } = useColumnPreferences();
   // Pobierz preferencje dla widoku 'inventory'
   const visibleColumns = getColumnPreferencesForView('inventory');
 
+  // Dodaję zmienne dla paginacji
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
+  const [error, setError] = useState(null);
+  
   // Pobierz wszystkie pozycje przy montowaniu komponentu
   useEffect(() => {
     fetchInventoryItems();
@@ -164,24 +164,54 @@ const InventoryList = () => {
     };
   }, []);
 
-  // Filtruj pozycje przy zmianie searchTerm lub inventoryItems
-  useEffect(() => {
-    if (searchTerm.trim() === '') {
-      setFilteredItems(inventoryItems);
-    } else {
-      const filtered = inventoryItems.filter(item => 
-        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.category?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-      setFilteredItems(filtered);
+  // Funkcja do opóźnionego wyszukiwania (debounce)
+  const handleSearchChange = (event) => {
+    const value = event.target.value;
+    setSearchTerm(value);
+    
+    // Anuluj poprzedni timeout jeśli istnieje
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
     }
-  }, [searchTerm, inventoryItems]);
+    
+    // Ustaw nowy timeout
+    const newTimeout = setTimeout(() => {
+      setDebouncedSearchTerm(value);
+    }, 1000); // 1000ms opóźnienia
+    
+    setSearchTimeout(newTimeout);
+  };
+  
+  // Efekt dla opóźnionego terminu wyszukiwania
+  useEffect(() => {
+    // Wyczyść timeout przy odmontowaniu komponentu
+    return () => {
+      if (searchTimeout) {
+        clearTimeout(searchTimeout);
+      }
+    };
+  }, [searchTimeout]);
+  
+  // Efekt, który wykonuje wyszukiwanie po zmianie opóźnionego terminu
+  useEffect(() => {
+    // Gdy zmienia się wyszukiwane słowo po opóźnieniu, resetujemy stronę i pobieramy dane ponownie
+    if (page !== 1) {
+      setPage(1);
+    } else {
+      // Jeśli strona jest już 1, pobierz bezpośrednio
+      fetchInventoryItems();
+    }
+  }, [debouncedSearchTerm]);
 
   // Dodaj nowy useEffect do pobrania lokalizacji
   useEffect(() => {
     fetchWarehouses();
   }, []);
+
+  // Efekt, który ponownie pobiera dane po zmianie strony lub rozmiaru strony
+  useEffect(() => {
+    fetchInventoryItems();
+  }, [page, rowsPerPage]);
 
   // Przeniesiona funkcja fetchWarehouses
   const fetchWarehouses = async () => {
@@ -196,24 +226,50 @@ const InventoryList = () => {
     }
   };
 
-  // Zmodyfikuj funkcję fetchInventoryItems, aby uwzględniała filtrowanie po lokalizacji
+  // Zmodyfikuj funkcję fetchInventoryItems, aby uwzględniała paginację po stronie serwera
   const fetchInventoryItems = async () => {
     setLoading(true);
+    setError(null);
     try {
-      // Najpierw wyczyść mikrorezerwacje
+      // Wyczyść mikrorezerwacje
       await cleanupMicroReservations();
       
-      const items = await getAllInventoryItems(selectedWarehouse || null);
-      setInventoryItems(items);
-      setFilteredItems(items);
+      // Pobierz dane z paginacją na poziomie bazy danych
+      const response = await getAllInventoryItems(
+        selectedWarehouse || null, 
+        page, 
+        rowsPerPage,
+        debouncedSearchTerm  // Przekazujemy termin wyszukiwania do funkcji pobierającej dane
+      );
       
-      // Pobierz informacje o rezerwacjach dla każdego przedmiotu
-      const reservationPromises = items.map(item => fetchReservations(item));
-      await Promise.all(reservationPromises);
-      
+      // Sprawdź format odpowiedzi (nowy lub stary format dla kompatybilności)
+      if (response && response.items) {
+        // Nowy format z paginacją
+        setInventoryItems(response.items);
+        setFilteredItems(response.items);
+        setTotalCount(response.totalCount);
+        
+        // Pobierz informacje o rezerwacjach dla każdego przedmiotu
+        const reservationPromises = response.items.map(item => fetchReservations(item));
+        await Promise.all(reservationPromises);
+      } else {
+        // Stary format (tablica elementów) dla kompatybilności
+        setInventoryItems(response);
+        setFilteredItems(response);
+        
+        // Pobierz informacje o rezerwacjach dla każdego przedmiotu
+        const reservationPromises = response.map(item => fetchReservations(item));
+        await Promise.all(reservationPromises);
+        
+        // Dla starego formatu używamy długości listy jako totalCount
+        setTotalCount(response.length);
+      }
     } catch (error) {
       console.error('Error fetching inventory items:', error);
       showError('Błąd podczas pobierania pozycji ze stanów');
+      setError('Nie udało się pobrać danych. Spróbuj odświeżyć stronę lub skontaktuj się z administratorem.');
+      setFilteredItems([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
@@ -226,6 +282,8 @@ const InventoryList = () => {
   
   // Efekt, który ponownie pobiera dane po zmianie stanów
   useEffect(() => {
+    // Zmień magazyn i zresetuj stronę do 1
+    setPage(1);
     fetchInventoryItems();
   }, [selectedWarehouse]);
 
@@ -883,9 +941,19 @@ const InventoryList = () => {
     updateColumnPreferences('inventory', columnName, !visibleColumns[columnName]);
   };
 
-  if (loading) {
-    return <div>Ładowanie pozycji ze stanów...</div>;
-  }
+  // Funkcja obsługująca zmianę strony
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
+  
+  // Funkcja obsługująca zmianę liczby wierszy na stronie
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(1); // Resetuj stronę do 1 po zmianie ilości wierszy
+  };
+
+  // Oblicz liczbę stron na podstawie łącznej liczby pozycji
+  const pageCount = Math.ceil(totalCount / rowsPerPage);
 
   return (
     <div>
@@ -939,11 +1007,18 @@ const InventoryList = () => {
               label="Szukaj pozycji"
               variant="outlined"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={handleSearchChange}
               fullWidth
               InputProps={{
                 startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
+                endAdornment: loading && (
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <CircularProgress size={20} />
+                  </Box>
+                ),
               }}
+              disabled={loading}
+              placeholder="Wyszukaj po nazwie, opisie lub kategorii..."
             />
             <Tooltip title="Konfiguruj widoczne kolumny">
               <IconButton onClick={handleColumnMenuOpen} sx={{ ml: 1 }}>
@@ -952,142 +1027,226 @@ const InventoryList = () => {
             </Tooltip>
           </Box>
 
-          {filteredItems.length === 0 ? (
+          {loading ? (
+            // Podczas ładowania wyświetl CircularProgress w kontenerze o tej samej wysokości co tabela
+            <Box 
+              sx={{ 
+                display: 'flex', 
+                justifyContent: 'center', 
+                alignItems: 'center', 
+                minHeight: '300px',
+                border: '1px solid rgba(224, 224, 224, 0.2)',
+                borderRadius: 1,
+                mt: 3
+              }}
+            >
+              <CircularProgress />
+              <Typography variant="body1" sx={{ ml: 2 }}>
+                Ładowanie pozycji ze stanów...
+              </Typography>
+            </Box>
+          ) : error ? (
+            // Jeśli wystąpił błąd, pokaż komunikat
+            <Box 
+              sx={{ 
+                display: 'flex', 
+                justifyContent: 'center', 
+                alignItems: 'center', 
+                flexDirection: 'column',
+                minHeight: '300px',
+                border: '1px solid rgba(224, 224, 224, 0.2)',
+                borderRadius: 1,
+                mt: 3,
+                p: 3
+              }}
+            >
+              <Typography variant="h6" color="error">
+                Wystąpił błąd
+              </Typography>
+              <Typography variant="body1" sx={{ mt: 1, textAlign: 'center' }}>
+                {error}
+              </Typography>
+              <Button 
+                variant="contained" 
+                color="primary" 
+                onClick={fetchInventoryItems} 
+                sx={{ mt: 2 }}
+                startIcon={<RefreshIcon />}
+              >
+                Spróbuj ponownie
+              </Button>
+            </Box>
+          ) : filteredItems.length === 0 ? (
             <Typography variant="body1" align="center">
               Nie znaleziono pozycji ze stanów
             </Typography>
           ) : (
-            <TableContainer component={Paper} sx={{ mt: 3 }}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    {visibleColumns.name && <TableCell>SKU</TableCell>}
-                    {visibleColumns.category && <TableCell>Kategoria</TableCell>}
-                    {visibleColumns.totalQuantity && <TableCell>Ilość całkowita</TableCell>}
-                    {visibleColumns.reservedQuantity && <TableCell>Ilość zarezerwowana</TableCell>}
-                    {visibleColumns.availableQuantity && <TableCell>Ilość dostępna</TableCell>}
-                    {visibleColumns.status && <TableCell>Status</TableCell>}
-                    {visibleColumns.location && <TableCell>Lokalizacja</TableCell>}
-                    {visibleColumns.actions && <TableCell align="right">Akcje</TableCell>}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filteredItems.map((item) => {
-                    // Oblicz ilość dostępną (całkowita - zarezerwowana)
-                    const bookedQuantity = item.bookedQuantity || 0;
-                    const availableQuantity = item.quantity - bookedQuantity;
-                    
-                    return (
-                      <TableRow key={item.id}>
-                        {visibleColumns.name && (
-                          <TableCell>
-                            <Typography variant="body1">{item.name}</Typography>
-                            <Typography variant="body2" color="textSecondary">{item.description}</Typography>
-                            {(item.packingGroup || item.boxesPerPallet) && (
-                              <Box sx={{ mt: 0.5 }}>
-                                {item.packingGroup && (
-                                  <Chip
-                                    size="small"
-                                    label={`PG: ${item.packingGroup}`}
-                                    color="default"
-                                    sx={{ mr: 0.5 }}
-                                  />
-                                )}
-                                {item.boxesPerPallet && (
-                                  <Chip
-                                    size="small"
-                                    label={`${item.boxesPerPallet} kartonów/paletę`}
-                                    color="info"
-                                  />
-                                )}
-                              </Box>
-                            )}
-                          </TableCell>
-                        )}
-                        {visibleColumns.category && <TableCell>{item.category}</TableCell>}
-                        {visibleColumns.totalQuantity && (
-                          <TableCell>
-                            <Typography variant="body1">{item.quantity} {item.unit}</Typography>
-                          </TableCell>
-                        )}
-                        {visibleColumns.reservedQuantity && (
-                          <TableCell>
-                            <Typography 
-                              variant="body1" 
-                              color={bookedQuantity > 0 ? "secondary" : "textSecondary"}
-                              sx={{ cursor: bookedQuantity > 0 ? 'pointer' : 'default' }}
-                              onClick={bookedQuantity > 0 ? () => handleShowReservations(item) : undefined}
-                            >
-                              {bookedQuantity} {item.unit}
-                              {bookedQuantity > 0 && (
-                                <Tooltip title="Kliknij, aby zobaczyć szczegóły rezerwacji">
-                                  <ReservationIcon fontSize="small" sx={{ ml: 1 }} />
-                                </Tooltip>
+            <>
+              <TableContainer component={Paper} sx={{ mt: 3 }}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      {visibleColumns.name && <TableCell>SKU</TableCell>}
+                      {visibleColumns.category && <TableCell>Kategoria</TableCell>}
+                      {visibleColumns.totalQuantity && <TableCell>Ilość całkowita</TableCell>}
+                      {visibleColumns.reservedQuantity && <TableCell>Ilość zarezerwowana</TableCell>}
+                      {visibleColumns.availableQuantity && <TableCell>Ilość dostępna</TableCell>}
+                      {visibleColumns.status && <TableCell>Status</TableCell>}
+                      {visibleColumns.location && <TableCell>Lokalizacja</TableCell>}
+                      {visibleColumns.actions && <TableCell align="right">Akcje</TableCell>}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {filteredItems.map((item) => {
+                      // Oblicz ilość dostępną (całkowita - zarezerwowana)
+                      const bookedQuantity = item.bookedQuantity || 0;
+                      const availableQuantity = item.quantity - bookedQuantity;
+                      
+                      return (
+                        <TableRow key={item.id}>
+                          {visibleColumns.name && (
+                            <TableCell>
+                              <Typography variant="body1">{item.name}</Typography>
+                              <Typography variant="body2" color="textSecondary">{item.description}</Typography>
+                              {(item.packingGroup || item.boxesPerPallet) && (
+                                <Box sx={{ mt: 0.5 }}>
+                                  {item.packingGroup && (
+                                    <Chip
+                                      size="small"
+                                      label={`PG: ${item.packingGroup}`}
+                                      color="default"
+                                      sx={{ mr: 0.5 }}
+                                    />
+                                  )}
+                                  {item.boxesPerPallet && (
+                                    <Chip
+                                      size="small"
+                                      label={`${item.boxesPerPallet} kartonów/paletę`}
+                                      color="info"
+                                    />
+                                  )}
+                                </Box>
                               )}
-                            </Typography>
-                          </TableCell>
-                        )}
-                        {visibleColumns.availableQuantity && (
-                          <TableCell>
-                            <Typography 
-                              variant="body1" 
-                              color={availableQuantity < item.minStockLevel ? "error" : "primary"}
-                            >
-                              {availableQuantity} {item.unit}
-                            </Typography>
-                          </TableCell>
-                        )}
-                        {visibleColumns.status && (
-                          <TableCell>
-                            {getStockLevelIndicator(availableQuantity, item.minStockLevel, item.optimalStockLevel)}
-                          </TableCell>
-                        )}
-                        {visibleColumns.location && (
-                          <TableCell>
-                            {item.location || '-'}
-                          </TableCell>
-                        )}
-                        {visibleColumns.actions && (
-                          <TableCell align="right">
-                            <IconButton 
-                              component={RouterLink} 
-                              to={`/inventory/${item.id}`}
-                              color="secondary"
-                              title="Szczegóły"
-                            >
-                              <InfoIcon />
-                            </IconButton>
-                            <IconButton 
-                              component={RouterLink} 
-                              to={`/inventory/${item.id}/receive`}
-                              color="success"
-                              title="Przyjmij"
-                            >
-                              <ReceiveIcon />
-                            </IconButton>
-                            <IconButton 
-                              component={RouterLink} 
-                              to={`/inventory/${item.id}/issue`}
-                              color="warning"
-                              title="Wydaj"
-                            >
-                              <IssueIcon />
-                            </IconButton>
-                            <IconButton
-                              onClick={(e) => handleMenuOpen(e, item)}
-                              color="primary"
-                              title="Więcej akcji"
-                            >
-                              <MoreVertIcon />
-                            </IconButton>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                            </TableCell>
+                          )}
+                          {visibleColumns.category && <TableCell>{item.category}</TableCell>}
+                          {visibleColumns.totalQuantity && (
+                            <TableCell>
+                              <Typography variant="body1">{item.quantity} {item.unit}</Typography>
+                            </TableCell>
+                          )}
+                          {visibleColumns.reservedQuantity && (
+                            <TableCell>
+                              <Typography 
+                                variant="body1" 
+                                color={bookedQuantity > 0 ? "secondary" : "textSecondary"}
+                                sx={{ cursor: bookedQuantity > 0 ? 'pointer' : 'default' }}
+                                onClick={bookedQuantity > 0 ? () => handleShowReservations(item) : undefined}
+                              >
+                                {bookedQuantity} {item.unit}
+                                {bookedQuantity > 0 && (
+                                  <Tooltip title="Kliknij, aby zobaczyć szczegóły rezerwacji">
+                                    <ReservationIcon fontSize="small" sx={{ ml: 1 }} />
+                                  </Tooltip>
+                                )}
+                              </Typography>
+                            </TableCell>
+                          )}
+                          {visibleColumns.availableQuantity && (
+                            <TableCell>
+                              <Typography 
+                                variant="body1" 
+                                color={availableQuantity < item.minStockLevel ? "error" : "primary"}
+                              >
+                                {availableQuantity} {item.unit}
+                              </Typography>
+                            </TableCell>
+                          )}
+                          {visibleColumns.status && (
+                            <TableCell>
+                              {getStockLevelIndicator(availableQuantity, item.minStockLevel, item.optimalStockLevel)}
+                            </TableCell>
+                          )}
+                          {visibleColumns.location && (
+                            <TableCell>
+                              {item.location || '-'}
+                            </TableCell>
+                          )}
+                          {visibleColumns.actions && (
+                            <TableCell align="right">
+                              <IconButton 
+                                component={RouterLink} 
+                                to={`/inventory/${item.id}`}
+                                color="secondary"
+                                title="Szczegóły"
+                              >
+                                <InfoIcon />
+                              </IconButton>
+                              <IconButton 
+                                component={RouterLink} 
+                                to={`/inventory/${item.id}/receive`}
+                                color="success"
+                                title="Przyjmij"
+                              >
+                                <ReceiveIcon />
+                              </IconButton>
+                              <IconButton 
+                                component={RouterLink} 
+                                to={`/inventory/${item.id}/issue`}
+                                color="warning"
+                                title="Wydaj"
+                              >
+                                <IssueIcon />
+                              </IconButton>
+                              <IconButton
+                                onClick={(e) => handleMenuOpen(e, item)}
+                                color="primary"
+                                title="Więcej akcji"
+                              >
+                                <MoreVertIcon />
+                              </IconButton>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              
+              {/* Komponent paginacji */}
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', mt: 3 }}>
+                <FormControl variant="outlined" size="small" sx={{ mr: 2, minWidth: 120 }}>
+                  <InputLabel id="rows-per-page-label">Wierszy</InputLabel>
+                  <Select
+                    labelId="rows-per-page-label"
+                    id="rows-per-page"
+                    value={rowsPerPage}
+                    onChange={handleChangeRowsPerPage}
+                    label="Wierszy"
+                  >
+                    <MenuItem value={5}>5</MenuItem>
+                    <MenuItem value={10}>10</MenuItem>
+                    <MenuItem value={25}>25</MenuItem>
+                    <MenuItem value={50}>50</MenuItem>
+                  </Select>
+                </FormControl>
+                <Typography variant="body2" sx={{ mr: 2 }}>
+                  {totalCount > 0 
+                    ? `${(page - 1) * rowsPerPage + 1}-${Math.min(page * rowsPerPage, totalCount)} z ${totalCount}`
+                    : '0 z 0'}
+                </Typography>
+                <Pagination 
+                  count={pageCount} 
+                  page={page} 
+                  onChange={handleChangePage} 
+                  color="primary" 
+                  showFirstButton 
+                  showLastButton
+                  disabled={loading}
+                />
+              </Box>
+            </>
           )}
           
           {/* Menu konfiguracji kolumn */}
@@ -1139,15 +1298,15 @@ const InventoryList = () => {
             // Widok listy lokalizacji
             <>
               <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={() => handleOpenWarehouseDialog('add')}
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={() => handleOpenWarehouseDialog('add')}
                   startIcon={<AddIcon />}
-            >
+                >
                   Nowa lokalizacja
-            </Button>
-          </Box>
+                </Button>
+              </Box>
 
               <TableContainer component={Paper}>
                 <Table sx={{ minWidth: 650 }}>
@@ -1162,8 +1321,11 @@ const InventoryList = () => {
                   <TableBody>
                     {warehousesLoading ? (
                       <TableRow>
-                        <TableCell colSpan={4} align="center">
-                          <CircularProgress />
+                        <TableCell colSpan={4} align="center" sx={{ py: 4 }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                            <CircularProgress size={24} sx={{ mr: 2 }} />
+                            <Typography variant="body2">Ładowanie lokalizacji...</Typography>
+                          </Box>
                         </TableCell>
                       </TableRow>
                     ) : warehouses.length === 0 ? (
@@ -1238,8 +1400,11 @@ const InventoryList = () => {
                   <TableBody>
                     {warehouseItemsLoading ? (
                       <TableRow>
-                        <TableCell colSpan={6} align="center">
-                          <CircularProgress />
+                        <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                            <CircularProgress size={24} sx={{ mr: 2 }} />
+                            <Typography variant="body2">Ładowanie pozycji z lokalizacji...</Typography>
+                          </Box>
                         </TableCell>
                       </TableRow>
                     ) : warehouseItems.length === 0 ? (
@@ -1307,8 +1472,11 @@ const InventoryList = () => {
               <TableBody>
                 {groupsLoading ? (
                   <TableRow>
-                    <TableCell colSpan={4} align="center">
-                      <CircularProgress />
+                    <TableCell colSpan={4} align="center" sx={{ py: 4 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                        <CircularProgress size={24} sx={{ mr: 2 }} />
+                        <Typography variant="body2">Ładowanie grup...</Typography>
+                      </Box>
                     </TableCell>
                   </TableRow>
                 ) : groups.length === 0 ? (

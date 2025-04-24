@@ -472,7 +472,7 @@ const ItemDetailsPage = () => {
 
       {/* Sekcja głównych informacji */}
       <Paper elevation={3} sx={{ mb: 3, overflow: 'hidden', borderRadius: 2 }}>
-        <Box sx={{ p: 3, bgcolor: '#f8f9fa' }}>
+        <Box sx={{ p: 3, bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : '#f8f9fa' }}>
           <Typography variant="h4" gutterBottom fontWeight="bold">
             {item.name}
           </Typography>
@@ -485,7 +485,7 @@ const ItemDetailsPage = () => {
             {getStockLevelIndicator(item.quantity, item.minStock, item.maxStock)}
           </Box>
           {item.description && (
-            <Paper sx={{ p: 2, mb: 2, bgcolor: 'white', borderRadius: 1 }}>
+            <Paper sx={{ p: 2, mb: 2, bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'white', borderRadius: 1 }}>
               <Typography variant="body1">
               {item.description}
             </Typography>
@@ -500,8 +500,9 @@ const ItemDetailsPage = () => {
           flexWrap: 'wrap', 
           gap: 4, 
           justifyContent: 'space-between', 
-          borderTop: '1px solid #e0e0e0',
-          bgcolor: 'white'
+          borderTop: '1px solid',
+          borderColor: theme => theme.palette.mode === 'dark' ? 'divider' : '#e0e0e0',
+          bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : 'white'
         }}>
           <Box sx={{ 
             display: 'flex', 
@@ -581,8 +582,9 @@ const ItemDetailsPage = () => {
         <Box sx={{ 
           display: 'flex', 
           p: 2, 
-          borderTop: '1px solid #e0e0e0',
-          bgcolor: '#f8f9fa'
+          borderTop: '1px solid',
+          borderColor: theme => theme.palette.mode === 'dark' ? 'divider' : '#e0e0e0',
+          bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : '#f8f9fa'
         }}>
           <Button 
             variant="contained" 
@@ -637,7 +639,7 @@ const ItemDetailsPage = () => {
 
       {/* Główne zakładki */}
       <Paper elevation={3} sx={{ borderRadius: 2, overflow: 'hidden' }}>
-        <Box sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: '#f8f9fa' }}>
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : '#f8f9fa' }}>
           <Tabs 
             value={tabValue} 
             onChange={handleTabChange} 
@@ -658,40 +660,40 @@ const ItemDetailsPage = () => {
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
               <Paper elevation={1} sx={{ p: 2, mb: 3, borderRadius: 2 }}>
-                <Typography variant="h6" gutterBottom sx={{ borderBottom: '1px solid #e0e0e0', pb: 1, fontWeight: 'bold' }}>
+                <Typography variant="h6" gutterBottom sx={{ borderBottom: '1px solid', borderColor: theme => theme.palette.mode === 'dark' ? 'divider' : '#e0e0e0', pb: 1, fontWeight: 'bold' }}>
                   Parametry magazynowe
                 </Typography>
-              <TableContainer>
-                  <Table sx={{ '& td, & th': { borderBottom: '1px solid #f5f5f5', py: 1.5 } }}>
-                  <TableBody>
-                    <TableRow>
+                <TableContainer>
+                  <Table sx={{ '& td, & th': { borderBottom: '1px solid', borderColor: theme => theme.palette.mode === 'dark' ? 'divider' : '#f5f5f5', py: 1.5 } }}>
+                    <TableBody>
+                      <TableRow>
                         <TableCell component="th" sx={{ width: '40%', fontWeight: 'medium' }}>Minimalny stan</TableCell>
-                      <TableCell>{item.minStock ? `${item.minStock} ${item.unit}` : 'Nie określono'}</TableCell>
-                    </TableRow>
-                    <TableRow>
+                        <TableCell>{item.minStock ? `${item.minStock} ${item.unit}` : 'Nie określono'}</TableCell>
+                      </TableRow>
+                      <TableRow>
                         <TableCell component="th" sx={{ fontWeight: 'medium' }}>Maksymalny stan</TableCell>
-                      <TableCell>{item.maxStock ? `${item.maxStock} ${item.unit}` : 'Nie określono'}</TableCell>
-                    </TableRow>
-                    <TableRow>
+                        <TableCell>{item.maxStock ? `${item.maxStock} ${item.unit}` : 'Nie określono'}</TableCell>
+                      </TableRow>
+                      <TableRow>
                         <TableCell component="th" sx={{ fontWeight: 'medium' }}>Ilość kartonów na paletę</TableCell>
-                      <TableCell>{item.boxesPerPallet ? `${item.boxesPerPallet} szt.` : 'Nie określono'}</TableCell>
-                    </TableRow>
-                    <TableRow>
+                        <TableCell>{item.boxesPerPallet ? `${item.boxesPerPallet} szt.` : 'Nie określono'}</TableCell>
+                      </TableRow>
+                      <TableRow>
                         <TableCell component="th" sx={{ fontWeight: 'medium' }}>Ilość produktu per karton</TableCell>
-                      <TableCell>{item.itemsPerBox ? `${item.itemsPerBox} ${item.unit}` : 'Nie określono'}</TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                        <TableCell>{item.itemsPerBox ? `${item.itemsPerBox} ${item.unit}` : 'Nie określono'}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               </Paper>
 
               {supplierPrices.length > 0 && (
                 <Paper elevation={1} sx={{ p: 2, borderRadius: 2 }}>
-                  <Typography variant="h6" gutterBottom sx={{ borderBottom: '1px solid #e0e0e0', pb: 1, fontWeight: 'bold' }}>
+                  <Typography variant="h6" gutterBottom sx={{ borderBottom: '1px solid', borderColor: theme => theme.palette.mode === 'dark' ? 'divider' : '#e0e0e0', pb: 1, fontWeight: 'bold' }}>
                     Dostawcy i ceny
                   </Typography>
                   <TableContainer>
-                    <Table size="small" sx={{ '& th': { fontWeight: 'bold', bgcolor: '#f8f9fa' } }}>
+                    <Table size="small" sx={{ '& th': { fontWeight: 'bold', bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : '#f8f9fa' } }}>
                       <TableHead>
                         <TableRow>
                           <TableCell>Dostawca</TableCell>
@@ -722,14 +724,66 @@ const ItemDetailsPage = () => {
             </Grid>
             
             <Grid item xs={12} md={6}>
-              <Paper elevation={1} sx={{ p: 2, borderRadius: 2 }}>
-                <Typography variant="h6" gutterBottom sx={{ borderBottom: '1px solid #e0e0e0', pb: 1, fontWeight: 'bold' }}>
-                  Notatki
+              <Paper elevation={1} sx={{ p: 2, mb: 3, borderRadius: 2 }}>
+                <Typography variant="h6" gutterBottom sx={{ borderBottom: '1px solid', borderColor: theme => theme.palette.mode === 'dark' ? 'divider' : '#e0e0e0', pb: 1, fontWeight: 'bold' }}>
+                  Dane logistyczne
                 </Typography>
-                <Box sx={{ p: 2, bgcolor: '#fafafa', borderRadius: 1, minHeight: '200px' }}>
-                  <Typography variant="body1" style={{ whiteSpace: 'pre-line' }}>
-                {item.notes || 'Brak notatek'}
-              </Typography>
+                <TableContainer>
+                  <Table sx={{ '& td, & th': { borderBottom: '1px solid', borderColor: theme => theme.palette.mode === 'dark' ? 'divider' : '#f5f5f5', py: 1.5 } }}>
+                    <TableBody>
+                      <TableRow>
+                        <TableCell component="th" sx={{ width: '40%', fontWeight: 'medium' }}>Minimalny stan</TableCell>
+                        <TableCell>{item.minStock ? `${item.minStock} ${item.unit}` : 'Nie określono'}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>Maksymalny stan</TableCell>
+                        <TableCell>{item.maxStock ? `${item.maxStock} ${item.unit}` : 'Nie określono'}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>Ilość kartonów na paletę</TableCell>
+                        <TableCell>{item.boxesPerPallet ? `${item.boxesPerPallet} szt.` : 'Nie określono'}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>Ilość produktu per karton</TableCell>
+                        <TableCell>{item.itemsPerBox ? `${item.itemsPerBox} ${item.unit}` : 'Nie określono'}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Paper>
+
+              <Paper elevation={1} sx={{ p: 2, mb: 3, borderRadius: 2 }}>
+                <Typography variant="h6" gutterBottom sx={{ borderBottom: '1px solid', borderColor: theme => theme.palette.mode === 'dark' ? 'divider' : '#e0e0e0', pb: 1, fontWeight: 'bold' }}>
+                  Dane finansowe
+                </Typography>
+                <TableContainer>
+                  <Table sx={{ '& td, & th': { borderBottom: '1px solid', borderColor: theme => theme.palette.mode === 'dark' ? 'divider' : '#f5f5f5', py: 1.5 } }}>
+                    <TableBody>
+                      <TableRow>
+                        <TableCell component="th" sx={{ width: '40%', fontWeight: 'medium' }}>Cena</TableCell>
+                        <TableCell>{item.price ? `${item.price.toFixed(2)} ${item.currency || 'EUR'}` : 'Nie określono'}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>Min. ilość</TableCell>
+                        <TableCell>{item.minQuantity || 1} {item.unit}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>Czas dostawy</TableCell>
+                        <TableCell>{item.leadTime || 7} dni</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Paper>
+
+              <Paper elevation={1} sx={{ p: 2, mb: 3, borderRadius: 2 }}>
+                <Typography variant="h6" gutterBottom sx={{ borderBottom: '1px solid', borderColor: theme => theme.palette.mode === 'dark' ? 'divider' : '#e0e0e0', pb: 1, fontWeight: 'bold' }}>
+                  Opis i załączniki
+                </Typography>
+                <Box sx={{ p: 2, bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fafafa', borderRadius: 1, minHeight: '200px' }}>
+                  <Typography variant="body2">
+                    {item.description || 'Brak opisu produktu.'}
+                  </Typography>
                 </Box>
               </Paper>
             </Grid>
@@ -738,17 +792,24 @@ const ItemDetailsPage = () => {
 
         {/* Zawartość zakładki Partie */}
         <TabPanel value={tabValue} index={1}>
-          <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>
-            Partie i daty ważności
-          </Typography>
+          <Box sx={{
+            p: 2,
+            mb: 2,
+            borderRadius: 2,
+            bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'white'
+          }}>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>
+              Partie i daty ważności
+            </Typography>
+          </Box>
           
           {batches.length === 0 ? (
-            <Paper elevation={1} sx={{ p: 3, borderRadius: 2, textAlign: 'center', bgcolor: '#f8f9fa' }}>
+            <Paper elevation={1} sx={{ p: 3, borderRadius: 2, textAlign: 'center', bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : '#f8f9fa' }}>
             <Typography variant="body1">Brak zarejestrowanych partii dla tego produktu.</Typography>
             </Paper>
           ) : (
             <TableContainer component={Paper} sx={{ mt: 2, borderRadius: 2, overflow: 'hidden', elevation: 1 }}>
-              <Table sx={{ '& th': { fontWeight: 'bold', bgcolor: '#f8f9fa' } }}>
+              <Table sx={{ '& th': { fontWeight: 'bold', bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : '#f8f9fa' } }}>
                 <TableHead>
                   <TableRow>
                     <TableCell>Numer partii</TableCell>
@@ -792,9 +853,16 @@ const ItemDetailsPage = () => {
                           key={batch.id} 
                           hover
                           sx={{
-                            bgcolor: status === 'expired' ? 'rgba(255, 0, 0, 0.05)' : 
-                                    status === 'expiring' ? 'rgba(255, 152, 0, 0.05)' : 
-                                    'inherit'
+                            bgcolor: theme => 
+                              status === 'expired' 
+                                ? theme.palette.mode === 'dark' 
+                                  ? 'rgba(255, 50, 50, 0.15)' 
+                                  : 'rgba(255, 0, 0, 0.05)'
+                                : status === 'expiring'
+                                  ? theme.palette.mode === 'dark'
+                                    ? 'rgba(255, 180, 50, 0.15)'
+                                    : 'rgba(255, 152, 0, 0.05)'
+                                  : 'inherit'
                           }}
                         >
                           <TableCell sx={{ fontWeight: 'medium' }}>{batch.batchNumber || '-'}</TableCell>
@@ -855,7 +923,16 @@ const ItemDetailsPage = () => {
         </TabPanel>
 
         <TabPanel value={tabValue} index={2}>
-          <Typography variant="h6" gutterBottom>Historia transakcji</Typography>
+          <Box sx={{
+            p: 2,
+            mb: 2,
+            borderRadius: 2,
+            bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'white'
+          }}>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>
+              Historia transakcji
+            </Typography>
+          </Box>
           
           {transactions.length === 0 ? (
             <Typography variant="body1" align="center">
@@ -863,7 +940,7 @@ const ItemDetailsPage = () => {
             </Typography>
           ) : (
             <TableContainer>
-              <Table>
+              <Table sx={{ '& thead th': { fontWeight: 'bold', bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : '#f8f9fa' } }}>
                 <TableHead>
                   <TableRow>
                     <TableCell>Data</TableCell>
@@ -898,8 +975,8 @@ const ItemDetailsPage = () => {
         </TabPanel>
 
         <TabPanel value={tabValue} index={3}>
-          <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="h6">Rezerwacje produktu</Typography>
+          <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2, borderRadius: 2, bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'white' }}>
+            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Rezerwacje produktu</Typography>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
               <Button 
                 startIcon={updatingReservations ? <CircularProgress size={20} /> : <RefreshIcon />} 
@@ -950,7 +1027,7 @@ const ItemDetailsPage = () => {
             <Alert severity="info">Brak rezerwacji dla tego produktu.</Alert>
           ) : (
             <TableContainer component={Paper} elevation={0} variant="outlined">
-              <Table sx={{ '& thead th': { fontWeight: 'bold', bgcolor: '#f8f9fa' } }}>
+              <Table sx={{ '& thead th': { fontWeight: 'bold', bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : '#f8f9fa' } }}>
                 <TableHead>
                   <TableRow>
                     <TableCell>
