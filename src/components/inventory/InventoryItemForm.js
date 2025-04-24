@@ -139,7 +139,7 @@ const InventoryItemForm = ({ itemId }) => {
             <TextField
               required
               fullWidth
-              label="Nazwa"
+              label="SKU"
               name="name"
               value={itemData.name}
               onChange={handleChange}

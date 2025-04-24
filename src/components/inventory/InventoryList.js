@@ -961,7 +961,7 @@ const InventoryList = () => {
               <Table>
                 <TableHead>
                   <TableRow>
-                    {visibleColumns.name && <TableCell>Nazwa</TableCell>}
+                    {visibleColumns.name && <TableCell>SKU</TableCell>}
                     {visibleColumns.category && <TableCell>Kategoria</TableCell>}
                     {visibleColumns.totalQuantity && <TableCell>Ilość całkowita</TableCell>}
                     {visibleColumns.reservedQuantity && <TableCell>Ilość zarezerwowana</TableCell>}
@@ -1098,7 +1098,7 @@ const InventoryList = () => {
           >
             <MenuItem onClick={() => toggleColumnVisibility('name')}>
               <Checkbox checked={visibleColumns.name} />
-              <ListItemText primary="Nazwa" />
+              <ListItemText primary="SKU" />
             </MenuItem>
             <MenuItem onClick={() => toggleColumnVisibility('category')}>
               <Checkbox checked={visibleColumns.category} />
@@ -1227,7 +1227,7 @@ const InventoryList = () => {
                 <Table>
                   <TableHead>
                     <TableRow>
-                      <TableCell>Nazwa</TableCell>
+                      <TableCell>SKU</TableCell>
                       <TableCell>Kategoria</TableCell>
                       <TableCell>Jednostka</TableCell>
                       <TableCell align="right">Ilość</TableCell>
@@ -1384,7 +1384,7 @@ const InventoryList = () => {
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell>Nazwa</TableCell>
+                          <TableCell>SKU</TableCell>
                           <TableCell>Kategoria</TableCell>
                           <TableCell align="right">Akcje</TableCell>
                         </TableRow>
@@ -1423,7 +1423,7 @@ const InventoryList = () => {
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell>Nazwa</TableCell>
+                        <TableCell>SKU</TableCell>
                         <TableCell>Kategoria</TableCell>
                         <TableCell align="right">Akcje</TableCell>
                       </TableRow>

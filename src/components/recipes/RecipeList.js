@@ -219,9 +219,9 @@ const RecipeList = () => {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Nazwa</TableCell>
+                <TableCell>SKU</TableCell>
                 <TableCell>Opis</TableCell>
-            <TableCell>Klient</TableCell>
+                <TableCell>Klient</TableCell>
                 <TableCell>Ostatnia aktualizacja</TableCell>
                 <TableCell align="right">Akcje</TableCell>
               </TableRow>

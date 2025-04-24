@@ -550,11 +550,11 @@ const RecipeForm = ({ recipeId }) => {
               fullWidth
               required
               name="name"
-              label="Nazwa receptury"
+              label="SKU receptury"
               value={recipeData.name}
               onChange={handleChange}
               error={!recipeData.name}
-              helperText={!recipeData.name ? 'Nazwa jest wymagana' : ''}
+              helperText={!recipeData.name ? 'SKU jest wymagany' : ''}
             />
           </Grid>
           
@@ -733,7 +733,7 @@ const RecipeForm = ({ recipeId }) => {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Nazwa składnika</TableCell>
+                  <TableCell>SKU składnika</TableCell>
                   <TableCell>Ilość</TableCell>
                   <TableCell>Jednostka</TableCell>
                   <TableCell>Uwagi</TableCell>
@@ -836,13 +836,13 @@ const RecipeForm = ({ recipeId }) => {
             <Grid item xs={12} md={6}>
               <TextField
                 name="name"
-                label="Nazwa produktu"
+                label="SKU produktu"
                 value={productData.name}
                 onChange={handleProductDataChange}
                 fullWidth
                 required
                 error={!productData.name}
-                helperText={!productData.name ? 'Nazwa jest wymagana' : ''}
+                helperText={!productData.name ? 'SKU jest wymagany' : ''}
               />
             </Grid>
             
