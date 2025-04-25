@@ -543,201 +543,147 @@ const CreateFromOrderPage = () => {
     }
   };
 
-  // Funkcja tworząca zadania produkcyjne dla wybranych produktów
+  // Funkcja do tworzenia zadań produkcyjnych na podstawie wybranych produktów
   const createTasksFromSelectedProducts = async () => {
-    if (!selectedOrder) {
-      showError('Nie wybrano zamówienia');
-      return;
-    }
-    
-    if (!selectedOrder.items || selectedOrder.items.length === 0) {
-      showError('Zamówienie nie zawiera żadnych produktów');
-      return;
-    }
-    
-    let selectedProductItems = [];
-    
-    // Obsługa różnych formatów selectedItems
-    if (Array.isArray(selectedItems)) {
-      selectedProductItems = selectedItems.filter(item => item.selected);
-      if (selectedProductItems.length === 0) {
-        showError('Nie wybrano żadnych produktów do produkcji');
-        return;
-      }
-    } else {
-      // Przypadek gdy selectedItems jest obiektem z kluczami ID
-    const selectedKeys = Object.keys(selectedItems).filter(key => selectedItems[key]);
-    if (selectedKeys.length === 0) {
-      showError('Nie wybrano żadnych produktów do produkcji');
-        return;
-      }
-      
-      // Znajdź odpowiednie produkty na podstawie ID
-      for (const itemId of selectedKeys) {
-        const item = selectedOrder.items.find(item => item.id === itemId);
-        if (item) {
-          selectedProductItems.push(item);
-        }
-      }
-    }
-    
-    if (selectedProductItems.length === 0) {
-      showError('Nie znaleziono wybranych produktów w zamówieniu');
-      return;
-    }
-    
-    setCreatingTasks(true);
-    setTasksCreated([]);
-    
     try {
-      for (const item of selectedProductItems) {
-        let recipe = null;
-        
-        // Jeśli element jest recepturą, pobierz bezpośrednio recepturę z jej ID
-        if (item.isRecipe) {
-          try {
-            recipe = await getRecipeById(item.id);
-            console.log(`Pobrano recepturę bezpośrednio dla elementu ${item.name}:`, recipe);
-          } catch (recipeError) {
-            console.error(`Błąd podczas pobierania receptury dla ${item.name}:`, recipeError);
-            showError(`Nie udało się pobrać receptury dla ${item.name}`);
+      setCreatingTasks(true);
+      
+      // Sprawdź, czy cokolwiek jest zaznaczone
+      if (selectedItems.length === 0) {
+        showWarning('Nie wybrano żadnych produktów do wyprodukowania.');
+        setCreatingTasks(false);
+      return;
+    }
+    
+      // Tworzenie tablicy na utworzone zadania i listę błędów
+      const createdTasks = [];
+      const errors = [];
+      
+      // Przetwarzanie każdego zaznaczonego przedmiotu
+      for (const itemId of selectedItems) {
+        try {
+          // Znajdź przedmiot w zamówieniu
+          const orderItem = selectedOrder.items.find(item => item.id === itemId);
+          if (!orderItem) {
+            errors.push(`Nie znaleziono pozycji o ID ${itemId} w zamówieniu.`);
             continue;
           }
-        } 
-        // W przeciwnym razie spróbuj znaleźć recepturę na podstawie nazwy produktu
-        else {
-          recipe = findRecipeForProduct(item.name);
-          if (!recipe) {
-            console.log(`Nie znaleziono receptury dla produktu ${item.name}`);
-            showWarning(`Nie znaleziono receptury dla produktu ${item.name}. Zadanie zostanie utworzone bez receptury.`);
-          } else {
-            console.log(`Znaleziono recepturę dla produktu ${item.name}:`, recipe);
-          }
-        }
-        
-        let normalizedUnit = item.unit;
-        // Konwersja jednostek jeśli potrzebna
-        if (item.unit === 'kg' || item.unit === 'l') {
-          normalizedUnit = item.unit;
-        } else {
-          normalizedUnit = 'szt.';
-        }
-        
-        // Przygotuj materiały na podstawie receptury
-        let materials = [];
-        let recipeData = {};
-        
-        if (recipe) {
-          materials = createMaterialsFromRecipe(recipe, item.quantity);
           
-          recipeData = {
-            recipeId: recipe.id,
-            recipeName: recipe.name,
-            recipeIngredients: recipe.ingredients || []
-          };
-        }
-        
-        // Oblicz planowany czas produkcji na podstawie danych z receptury
+          // Sprawdź, czy produkt ma już przypisaną recepturę
+          let recipeId = orderItem.recipeId;
+          let recipeData = null;
+          
+          if (!recipeId) {
+            // Spróbuj znaleźć recepturę na podstawie nazwy produktu, jeśli nie ma przypisanej
+            const matchingRecipe = findRecipeForProduct(orderItem.name);
+            if (matchingRecipe) {
+              recipeId = matchingRecipe.id;
+              recipeData = matchingRecipe;
+            } else {
+              errors.push(`Brak receptury dla produktu ${orderItem.name}. Zadanie nie zostało utworzone.`);
+              continue;
+      }
+    } else {
+            // Pobierz dane receptury, jeśli mamy jej ID
+            try {
+              recipeData = await getRecipeById(recipeId);
+            } catch (recipeError) {
+              console.error(`Błąd pobierania receptury ${recipeId}:`, recipeError);
+            }
+          }
+          
+          // Jeśli znaleźliśmy recepturę, ale nie mamy jej danych, pobierz je
+          if (recipeId && !recipeData) {
+            try {
+              recipeData = await getRecipeById(recipeId);
+          } catch (recipeError) {
+              errors.push(`Błąd pobierania receptury dla produktu ${orderItem.name}: ${recipeError.message}`);
+            continue;
+          }
+          }
+          
+          // Określenie jednostki produktu
+          const unit = orderItem.unit || 'szt.';
+          
+          // Sprawdź, czy mamy datę dla tego produktu, jeśli nie - użyj domyślnej
+          const orderItemDate = productDates[itemId] || new Date();
+          
+          // Tworzenie nazwy zadania
+          const taskName = `Produkcja: ${orderItem.name} (zam. ${selectedOrder.orderNumber || selectedOrder.id.substring(0, 8)})`;
+          
+          // Utworzenie listy materiałów na podstawie receptury
+          const materials = recipeData ? createMaterialsFromRecipe(recipeData, orderItem.quantity) : [];
+          
+          // Sprawdź czy mamy czas produkcji z receptury
         let productionTimePerUnit = 0;
-        let estimatedDuration = 0;
-        
-        if (recipe && recipe.productionTimePerUnit) {
-          productionTimePerUnit = parseFloat(recipe.productionTimePerUnit);
-          // Całkowity czas produkcji w minutach
-          const totalProductionTimeMinutes = productionTimePerUnit * item.quantity;
-          // Konwersja na godziny
-          estimatedDuration = totalProductionTimeMinutes / 60;
-        }
-        
-        // Określ cenę jednostkową
-        const itemPrice = item.price || 0;
-        
-        // Uzyskaj datę początku produkcji z wyboru użytkownika lub wartości domyślnej
-        const productDate = productDates[item.id] 
-          ? new Date(productDates[item.id]) 
-          : selectedOrder.orderDate 
-            ? new Date(selectedOrder.orderDate) 
-            : new Date();
-            
-        // Domyślnie ustaw godzinę 8:00 rano, jeśli nie została określona przez użytkownika
-        if (!productDates[item.id]) {
-          productDate.setHours(8, 0, 0, 0);
-        }
-        
-        // Formatuj datę rozpoczęcia z aktualną godziną
-        const formattedStartDate = productDate.toISOString();
-        
-        // Oblicz datę zakończenia na podstawie czasu produkcji
-        let endDate = new Date(productDate);
-        
-        if (estimatedDuration > 0) {
-          // Dodaj odpowiednią liczbę godzin do daty rozpoczęcia
-          endDate.setHours(endDate.getHours() + Math.ceil(estimatedDuration));
-        } else {
-          // Jeśli nie ma czasu produkcji, domyślnie zadanie trwa 1 dzień
-          endDate.setDate(endDate.getDate() + 1);
-        }
-        
-        // Formatuj datę zakończenia z godziną
-        const formattedEndDate = endDate.toISOString();
-        
-        // Sprawdź, czy dla tego produktu wybrano stanowisko produkcyjne
-        const workstationId = selectedWorkstations[item.id] || null;
-        
-        // Przy tworzeniu obiektów zadań, dodajemy pola lotNumber i expiryDate:
+          if (recipeData && recipeData.productionTimePerUnit) {
+            productionTimePerUnit = parseFloat(recipeData.productionTimePerUnit);
+          }
+          
+          // Obliczenie szacowanego czasu trwania zadania
+          let estimatedDuration = 0;
+          if (productionTimePerUnit > 0) {
+            estimatedDuration = productionTimePerUnit * orderItem.quantity;
+          }
+          
+          // Sprawdź, czy dla tego elementu zostało wybrane stanowisko produkcyjne
+          let workstationId = selectedWorkstations[itemId] || '';
+          
+          // Jeśli nie wybrano stanowiska, a receptura ma domyślne stanowisko produkcyjne, użyj tego z receptury
+          if (!workstationId && recipeData && recipeData.defaultWorkstationId) {
+            workstationId = recipeData.defaultWorkstationId;
+          }
+          
+          // Dane zadania produkcyjnego
         const taskData = {
-          name: taskForm.name || `Produkcja ${item.name}`,
-          status: taskForm.status || 'Zaplanowane',
+            name: taskName,
+            description: `Zadanie produkcyjne utworzone automatycznie na podstawie zamówienia ${selectedOrder.orderNumber || selectedOrder.id} dla klienta ${selectedOrder.customer?.name || 'Nieznany'}.`,
+            recipeId: recipeId,
+            productName: orderItem.name,
+            quantity: orderItem.quantity,
+            unit: unit,
+            scheduledDate: new Date(orderItemDate),
+            endDate: new Date(new Date(orderItemDate).getTime() + (estimatedDuration * 60 * 1000)), // Dodaj szacowany czas trwania
+            estimatedDuration: estimatedDuration,
+            productionTimePerUnit: productionTimePerUnit,
           priority: taskForm.priority || 'Normalny',
-          scheduledDate: formattedStartDate,
-          endDate: formattedEndDate,
-          productName: item.name,
-          quantity: item.quantity,
-          unit: normalizedUnit,
+            status: taskForm.status || 'Zaplanowane',
+            notes: `Powiązane zamówienie klienta: ${selectedOrder.orderNumber || selectedOrder.id}`,
           materials: materials,
-          description: taskForm.description || `Zadanie utworzone z zamówienia klienta #${selectedOrder.orderNumber || selectedOrder.id}`,
-          createdBy: currentUser.uid,
-          createdAt: new Date().toISOString(),
-          recipe: recipeData,
-          orderId: selectedOrder.id, // Dodanie orderId do zadania
-          orderNumber: selectedOrder.orderNumber || selectedOrder.id,
-          orderItemId: item.id, // Dodanie identyfikatora pozycji zamówienia
-          customer: selectedOrder.customer || null,
-          purchaseOrders: selectedOrder.linkedPurchaseOrders && selectedOrder.linkedPurchaseOrders.length > 0 
-            ? selectedOrder.linkedPurchaseOrders.map(po => ({
-                id: po.id,
-                number: po.number || po.poNumber,
-                poNumber: po.poNumber || po.number
-              }))
-            : [], // Zapewnienie, że purchaseOrders jest zawsze tablicą, nawet jeśli puste
-          isEssential: true,
+            // Pola specyficzne dla zadania z zamówienia
+            orderItemId: itemId,
+            orderId: selectedOrder.id,
+            orderNumber: selectedOrder.orderNumber,
+            customerId: selectedOrder.customer?.id,
+            customerName: selectedOrder.customer?.name,
+            // Dodaj informacje o dodatkowym przetwarzaniu
+            postProcessingRequirements: orderItem.postProcessingRequirements || '',
+            packaging: orderItem.packaging || '',
+            workstationId: workstationId, // Przypisujemy stanowisko produkcyjne
+            // Dodajemy pole dla informacji o rezerwacji materiałów
           reservationMethod: taskForm.reservationMethod || 'fifo',
-          productionTimePerUnit: productionTimePerUnit,
-          estimatedDuration: estimatedDuration,
-          autoReserveMaterials: taskForm.autoReserveMaterials, // Przekazanie informacji o automatycznej rezerwacji
-          workstationId: workstationId, // ID stanowiska produkcyjnego
-          expiryDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)) // Domyślna data ważności - 1 rok
+            autoReserveMaterials: taskForm.autoReserveMaterials || false
         };
         
         // Utwórz zadanie produkcyjne
-        // Uwaga: funkcja createTask automatycznie rezerwuje materiały dla zadania
         const newTask = await createTask(taskData, currentUser.uid, taskForm.autoReserveMaterials);
         
         if (newTask) {
-          // Dodaj zadanie do zamówienia, przekazując ID pozycji zamówienia
-          await addProductionTaskToOrder(selectedOrder.id, newTask, item.id);
-          
           // Dodaj zadanie do listy utworzonych zadań
-          setTasksCreated(prev => [...prev, newTask]);
+            createdTasks.push(newTask);
+          }
+        } catch (error) {
+          console.error(`Błąd podczas tworzenia zadania ${itemId}:`, error);
+          errors.push(`Błąd podczas tworzenia zadania ${itemId}: ${error.message}`);
         }
       }
       
       // Pokaż sukces, jeśli utworzono przynajmniej jedno zadanie
-      if (tasksCreated.length > 0) {
-        showSuccess(`Utworzono ${tasksCreated.length} zadań produkcyjnych`);
+      if (createdTasks.length > 0) {
+        showSuccess(`Utworzono ${createdTasks.length} zadań produkcyjnych`);
         
         // Dodaj nowo utworzone zadania do listy istniejących zadań
-        setExistingTasks(prev => [...prev, ...tasksCreated]);
+        setExistingTasks(prev => [...prev, ...createdTasks]);
         
         // Odśwież szczegóły zamówienia, aby pokazać nowo utworzone zadania
         fetchOrderDetails(selectedOrder.id);

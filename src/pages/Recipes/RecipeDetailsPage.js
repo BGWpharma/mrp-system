@@ -48,7 +48,8 @@ import { useAuth } from '../../hooks/useAuth';
 import RecipeVersionComparison from '../../components/recipes/RecipeVersionComparison';
 import { createInventoryItem, getAllInventoryItems } from '../../services/inventoryService';
 import { db } from '../../services/firebase/config';
-import { collection, query, where, limit, getDocs } from 'firebase/firestore';
+import { collection, query, where, limit, getDocs, doc, getDoc, updateDoc, orderBy } from 'firebase/firestore';
+import { getAllWorkstations } from '../../services/workstationService';
 
 // TabPanel component for recipe detail tabs
 function TabPanel(props) {
@@ -86,27 +87,54 @@ const RecipeDetailsPage = () => {
   const [versionToRestore, setVersionToRestore] = useState(null);
   const [restoringVersion, setRestoringVersion] = useState(false);
   const [linking, setLinking] = useState(false);
+  const [workstations, setWorkstations] = useState([]);
 
   useEffect(() => {
     const fetchRecipeData = async () => {
       try {
         setLoading(true);
-        const recipeData = await getRecipeById(id);
-        setRecipe(recipeData);
-        
-        // Pobierz historię wersji
-        const versionsData = await getRecipeVersions(id);
-        setVersions(versionsData);
+        await fetchRecipe();
+        await fetchVersions();
+        await fetchWorkstations();
       } catch (error) {
-        showError('Błąd podczas pobierania receptury: ' + error.message);
-        console.error('Error fetching recipe details:', error);
+        console.error('Error fetching recipe data:', error);
+        showError('Błąd podczas pobierania danych receptury');
       } finally {
         setLoading(false);
       }
     };
-
+    
     fetchRecipeData();
-  }, [id, showError]);
+  }, [id]);
+
+  const fetchRecipe = async () => {
+    try {
+      const recipeData = await getRecipeById(id);
+      setRecipe(recipeData);
+    } catch (error) {
+      console.error('Error fetching recipe:', error);
+      showError('Błąd podczas pobierania receptury');
+    }
+  };
+
+  const fetchVersions = async () => {
+    try {
+      const versionsData = await getRecipeVersions(id);
+      setVersions(versionsData);
+    } catch (error) {
+      console.error('Error fetching versions:', error);
+      showError('Błąd podczas pobierania historii wersji receptury');
+    }
+  };
+
+  const fetchWorkstations = async () => {
+    try {
+      const workstationsData = await getAllWorkstations();
+      setWorkstations(workstationsData);
+    } catch (error) {
+      console.error('Błąd podczas pobierania stanowisk produkcyjnych:', error);
+    }
+  };
 
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
@@ -366,12 +394,9 @@ const RecipeDetailsPage = () => {
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
               <Typography variant="subtitle2" color="text.secondary">
-                Czas przygotowania: {recipe.prepTime ? `${recipe.prepTime} min` : 'Nie określono'}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="subtitle2" color="text.secondary">
-                Wydajność: {recipe.yield.quantity} {recipe.yield.unit}
+                Domyślne stanowisko produkcyjne: {recipe.defaultWorkstationId ? 
+                  workstations.find(w => w.id === recipe.defaultWorkstationId)?.name || 'Nieznane stanowisko' : 
+                  'Nie określono'}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>

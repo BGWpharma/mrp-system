@@ -322,30 +322,29 @@ const TaskForm = ({ taskId }) => {
         productionTimePerUnit = parseFloat(selectedRecipe.preparationTime);
       }
       
-      // Ustawienie szacowanego czasu trwania na podstawie czasu przygotowania z receptury
+      // Ustaw całkowitą szacowaną długość w zależności od ilości i czasu produkcji na jednostkę
       if (productionTimePerUnit > 0) {
-        const quantity = taskData.quantity || 1;
-        const estimatedTimeMinutes = productionTimePerUnit * quantity;
+        const quantity = parseFloat(taskData.quantity) || 0;
+        const estimatedDuration = (productionTimePerUnit * quantity).toFixed(2);
+        
         setTaskData(prev => ({
           ...prev,
-          productionTimePerUnit: productionTimePerUnit,
-          estimatedDuration: estimatedTimeMinutes
+          productionTimePerUnit,
+          estimatedDuration
         }));
-        
-        // Zaktualizuj datę zakończenia na podstawie szacowanego czasu
-        if (taskData.scheduledDate) {
-          const startDate = new Date(taskData.scheduledDate);
-          const endDate = new Date(startDate.getTime() + (estimatedTimeMinutes * 60 * 1000));
-          setTaskData(prev => ({
-            ...prev,
-            endDate
-          }));
-        }
+      }
+      
+      // Ustawienie domyślnego stanowiska produkcyjnego z receptury, jeśli zostało zdefiniowane
+      if (selectedRecipe.defaultWorkstationId) {
+        setTaskData(prev => ({
+          ...prev,
+          workstationId: selectedRecipe.defaultWorkstationId
+        }));
       }
       
     } catch (error) {
-      console.error('Error loading recipe details:', error);
-      showError('Błąd podczas ładowania szczegółów receptury');
+      showError('Błąd podczas pobierania receptury: ' + error.message);
+      console.error('Error fetching recipe:', error);
     }
   };
 

@@ -30,7 +30,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogContentText,
-  DialogActions
+  DialogActions,
+  FormHelperText
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -50,6 +51,7 @@ import { useNotification } from '../../hooks/useNotification';
 import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 import { getAllCustomers } from '../../services/customerService';
+import { getAllWorkstations } from '../../services/workstationService';
 
 const RecipeForm = ({ recipeId }) => {
   const { currentUser } = useAuth();
@@ -70,7 +72,8 @@ const RecipeForm = ({ recipeId }) => {
     status: 'Robocza',
     customerId: '',
     processingCostPerUnit: 0,
-    productionTimePerUnit: 0
+    productionTimePerUnit: 0,
+    defaultWorkstationId: ''
   });
 
   // Dodajemy stan dla składników z magazynu
@@ -96,6 +99,10 @@ const RecipeForm = ({ recipeId }) => {
   // Dodajemy stan dla listy klientów
   const [customers, setCustomers] = useState([]);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
+  
+  // Dodajemy stan dla listy stanowisk produkcyjnych
+  const [workstations, setWorkstations] = useState([]);
+  const [loadingWorkstations, setLoadingWorkstations] = useState(false);
 
   useEffect(() => {
     if (recipeId) {
@@ -175,9 +182,24 @@ const RecipeForm = ({ recipeId }) => {
       }
     };
     
+    // Pobierz listę stanowisk produkcyjnych
+    const fetchWorkstations = async () => {
+      try {
+        setLoadingWorkstations(true);
+        const workstationsData = await getAllWorkstations();
+        setWorkstations(workstationsData);
+      } catch (error) {
+        console.error('Błąd podczas pobierania stanowisk produkcyjnych:', error);
+        showError('Nie udało się pobrać listy stanowisk produkcyjnych');
+      } finally {
+        setLoadingWorkstations(false);
+      }
+    };
+    
     fetchInventoryItems();
     fetchWarehouses();
     fetchCustomers();
+    fetchWorkstations();
   }, [recipeId, showError, location.state]);
 
   const handleSubmit = async (e) => {
@@ -617,6 +639,28 @@ const RecipeForm = ({ recipeId }) => {
               fullWidth
               helperText="Czas potrzebny na wyprodukowanie jednej sztuki produktu"
             />
+          </Grid>
+          
+          <Grid item xs={12}>
+            <FormControl fullWidth>
+              <InputLabel>Domyślne stanowisko produkcyjne</InputLabel>
+              <Select
+                name="defaultWorkstationId"
+                value={recipeData.defaultWorkstationId || ''}
+                onChange={handleChange}
+                label="Domyślne stanowisko produkcyjne"
+              >
+                <MenuItem value="">
+                  <em>Brak</em>
+                </MenuItem>
+                {workstations.map((workstation) => (
+                  <MenuItem key={workstation.id} value={workstation.id}>
+                    {workstation.name}
+                  </MenuItem>
+                ))}
+              </Select>
+              <FormHelperText>Stanowisko będzie automatycznie przypisywane podczas generowania MO z CO</FormHelperText>
+            </FormControl>
           </Grid>
           
           {/* Ukrywamy pola wydajności, dodajemy ukryte pole input */}

@@ -243,11 +243,11 @@ import {
         
       } else {
         // Bez paginacji - stara logika, pobierz wszystkie
-        const querySnapshot = await getDocs(q);
+      const querySnapshot = await getDocs(q);
         let items = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
+        id: doc.id,
+        ...doc.data()
+      }));
         
         // Filtruj po terminie wyszukiwania (jeśli podany) dla kompatybilności ze starym kodem
         if (searchTerm && searchTerm.trim() !== '') {
@@ -259,82 +259,82 @@ import {
           );
         }
 
-        console.log('Pobrane pozycje przed obliczeniem ilości:', items);
+      console.log('Pobrane pozycje przed obliczeniem ilości:', items);
 
-        // Pobierz wszystkie partie dla wszystkich przedmiotów
-        const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
-        const batchesSnapshot = await getDocs(batchesRef);
-        const batches = batchesSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
+      // Pobierz wszystkie partie dla wszystkich przedmiotów
+      const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
+      const batchesSnapshot = await getDocs(batchesRef);
+      const batches = batchesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      console.log('Pobrane partie:', batches);
+
+      // Oblicz aktualne ilości i ceny dla każdego przedmiotu
+      const itemsWithQuantities = await Promise.all(items.map(async item => {
+        const itemBatches = batches.filter(batch => batch.itemId === item.id);
         
-        console.log('Pobrane partie:', batches);
-
-        // Oblicz aktualne ilości i ceny dla każdego przedmiotu
-        const itemsWithQuantities = await Promise.all(items.map(async item => {
-          const itemBatches = batches.filter(batch => batch.itemId === item.id);
+        // Filtruj partie według warehouseId, jeśli został podany
+        const filteredBatches = warehouseId 
+          ? itemBatches.filter(batch => batch.warehouseId === warehouseId)
+          : itemBatches;
           
-          // Filtruj partie według warehouseId, jeśli został podany
-          const filteredBatches = warehouseId 
-            ? itemBatches.filter(batch => batch.warehouseId === warehouseId)
-            : itemBatches;
-            
-          // Oblicz ilość na podstawie przefiltrowanych partii
-          const currentQuantity = filteredBatches.reduce((sum, batch) => sum + (parseFloat(batch.quantity) || 0), 0);
-          
-          // Znajdź najnowszą cenę z partii
-          const validBatches = itemBatches.filter(batch => parseFloat(batch.quantity) > 0);
-          let latestPrice = item.unitPrice || item.price || 0;
-          
-          if (validBatches.length > 0) {
-            const latestBatch = validBatches.reduce((latest, current) => {
-              const currentDate = current.date ? new Date(current.date.toDate()) : new Date(0);
-              const latestDate = latest.date ? new Date(latest.date.toDate()) : new Date(0);
-              return currentDate > latestDate ? current : latest;
-            });
-            latestPrice = latestBatch.unitPrice || latestBatch.price || latestPrice;
-          }
-          
-          // Pobierz ceny dostawców dla tego elementu i sprawdź minQuantity
-          let minOrderQuantity = item.minOrderQuantity;
-          try {
-            if (!minOrderQuantity) {
-              const prices = await getSupplierPrices(item.id);
-              if (prices && prices.length > 0) {
-                const defaultPrice = prices.find(p => p.isDefault) || prices[0];
-                if (defaultPrice && defaultPrice.minQuantity) {
-                  console.log(`[DEBUG] Używam minQuantity ${defaultPrice.minQuantity} jako minOrderQuantity dla ${item.name}`);
-                  minOrderQuantity = defaultPrice.minQuantity;
-                }
-              }
-            }
-          } catch (error) {
-            console.error(`Błąd podczas pobierania cen dostawców dla ${item.id}:`, error);
-          }
-
-          return {
-            ...item,
-            currentQuantity,
-            quantity: currentQuantity, // Dodajemy quantity jako alias dla currentQuantity
-            unitPrice: latestPrice,
-            minOrderQuantity: minOrderQuantity
-          };
-        }));
-
-        console.log('Pozycje po obliczeniu ilości:', itemsWithQuantities);
-
-        // Jeśli podano warehouseId, filtruj tylko przedmioty z danego magazynu
-        let finalItems = itemsWithQuantities;
-        if (warehouseId) {
-          finalItems = itemsWithQuantities.filter(item => {
-            const itemBatches = batches.filter(batch => 
-              batch.itemId === item.id && batch.warehouseId === warehouseId
-            );
-            return itemBatches.length > 0;
+        // Oblicz ilość na podstawie przefiltrowanych partii
+        const currentQuantity = filteredBatches.reduce((sum, batch) => sum + (parseFloat(batch.quantity) || 0), 0);
+        
+        // Znajdź najnowszą cenę z partii
+        const validBatches = itemBatches.filter(batch => parseFloat(batch.quantity) > 0);
+        let latestPrice = item.unitPrice || item.price || 0;
+        
+        if (validBatches.length > 0) {
+          const latestBatch = validBatches.reduce((latest, current) => {
+            const currentDate = current.date ? new Date(current.date.toDate()) : new Date(0);
+            const latestDate = latest.date ? new Date(latest.date.toDate()) : new Date(0);
+            return currentDate > latestDate ? current : latest;
           });
+          latestPrice = latestBatch.unitPrice || latestBatch.price || latestPrice;
         }
         
+        // Pobierz ceny dostawców dla tego elementu i sprawdź minQuantity
+        let minOrderQuantity = item.minOrderQuantity;
+        try {
+          if (!minOrderQuantity) {
+            const prices = await getSupplierPrices(item.id);
+            if (prices && prices.length > 0) {
+              const defaultPrice = prices.find(p => p.isDefault) || prices[0];
+              if (defaultPrice && defaultPrice.minQuantity) {
+                console.log(`[DEBUG] Używam minQuantity ${defaultPrice.minQuantity} jako minOrderQuantity dla ${item.name}`);
+                minOrderQuantity = defaultPrice.minQuantity;
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`Błąd podczas pobierania cen dostawców dla ${item.id}:`, error);
+        }
+
+        return {
+          ...item,
+          currentQuantity,
+          quantity: currentQuantity, // Dodajemy quantity jako alias dla currentQuantity
+          unitPrice: latestPrice,
+          minOrderQuantity: minOrderQuantity
+        };
+      }));
+
+      console.log('Pozycje po obliczeniu ilości:', itemsWithQuantities);
+
+      // Jeśli podano warehouseId, filtruj tylko przedmioty z danego magazynu
+        let finalItems = itemsWithQuantities;
+      if (warehouseId) {
+          finalItems = itemsWithQuantities.filter(item => {
+          const itemBatches = batches.filter(batch => 
+            batch.itemId === item.id && batch.warehouseId === warehouseId
+          );
+          return itemBatches.length > 0;
+        });
+      }
+      
         // Dla kompatybilności ze starym kodem, zwróć bezpośrednio tablicę wyników
         return finalItems;
       }
