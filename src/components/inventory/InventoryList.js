@@ -1,5 +1,5 @@
 // src/components/inventory/InventoryList.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { 
   Table, 
@@ -35,6 +35,7 @@ import {
   ListItemIcon,
   ListItemText,
   Checkbox,
+  Pagination
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -74,6 +75,9 @@ const InventoryList = () => {
   const [inventoryItems, setInventoryItems] = useState([]);
   const [filteredItems, setFilteredItems] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchCategory, setSearchCategory] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [debouncedSearchCategory, setDebouncedSearchCategory] = useState('');
   const [loading, setLoading] = useState(true);
   const [expiringCount, setExpiringCount] = useState(0);
   const [expiredCount, setExpiredCount] = useState(0);
@@ -145,38 +149,15 @@ const InventoryList = () => {
   // Pobierz preferencje dla widoku 'inventory'
   const visibleColumns = getColumnPreferencesForView('inventory');
 
-  // Pobierz wszystkie pozycje przy montowaniu komponentu
-  useEffect(() => {
-    fetchInventoryItems();
-    fetchExpiryData();
-    
-    // Dodaj nasłuchiwanie na zdarzenie aktualizacji stanów
-    const handleInventoryUpdate = () => {
-      console.log('Wykryto aktualizację stanów, odświeżam dane...');
-      fetchInventoryItems();
-    };
-    
-    window.addEventListener('inventory-updated', handleInventoryUpdate);
-    
-    // Usuń nasłuchiwanie przy odmontowaniu komponentu
-    return () => {
-      window.removeEventListener('inventory-updated', handleInventoryUpdate);
-    };
-  }, []);
+  // Dodaj stany dla paginacji
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
-  // Filtruj pozycje przy zmianie searchTerm lub inventoryItems
-  useEffect(() => {
-    if (searchTerm.trim() === '') {
-      setFilteredItems(inventoryItems);
-    } else {
-      const filtered = inventoryItems.filter(item => 
-        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.category?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-      setFilteredItems(filtered);
-    }
-  }, [searchTerm, inventoryItems]);
+  // Dodaj useRef dla timerów debouncing
+  const searchTermTimerRef = useRef(null);
+  const searchCategoryTimerRef = useRef(null);
 
   // Dodaj nowy useEffect do pobrania lokalizacji
   useEffect(() => {
@@ -196,20 +177,105 @@ const InventoryList = () => {
     }
   };
 
-  // Zmodyfikuj funkcję fetchInventoryItems, aby uwzględniała filtrowanie po lokalizacji
+  // Dodaj funkcję obsługującą zmianę wybranego stanów
+  const handleWarehouseChange = (event) => {
+    setSelectedWarehouse(event.target.value);
+  };
+
+  // Efekt, który ponownie pobiera dane po zmianie stanów
+  useEffect(() => {
+    fetchInventoryItems();
+  }, [selectedWarehouse]);
+
+  // Pobierz wszystkie pozycje przy montowaniu komponentu
+  useEffect(() => {
+    fetchInventoryItems();
+    fetchExpiryData();
+    
+    // Dodaj nasłuchiwanie na zdarzenie aktualizacji stanów
+    const handleInventoryUpdate = () => {
+      console.log('Wykryto aktualizację stanów, odświeżam dane...');
+      fetchInventoryItems();
+    };
+    
+    window.addEventListener('inventory-updated', handleInventoryUpdate);
+    
+    // Usuń nasłuchiwanie przy odmontowaniu komponentu
+    return () => {
+      window.removeEventListener('inventory-updated', handleInventoryUpdate);
+    };
+  }, []);
+
+  // Efekt, który resetuje stronę po zmianie wyszukiwania z debounce
+  useEffect(() => {
+    if (page !== 1) {
+      setPage(1);
+    } else {
+      fetchInventoryItems();
+    }
+  }, [debouncedSearchTerm, debouncedSearchCategory]);
+
+  // Dodaj efekt dla debounced search term
+  useEffect(() => {
+    if (searchTermTimerRef.current) {
+      clearTimeout(searchTermTimerRef.current);
+    }
+    
+    searchTermTimerRef.current = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 1000);
+
+    return () => {
+      if (searchTermTimerRef.current) {
+        clearTimeout(searchTermTimerRef.current);
+      }
+    };
+  }, [searchTerm]);
+
+  // Dodaj efekt dla debounced search category
+  useEffect(() => {
+    if (searchCategoryTimerRef.current) {
+      clearTimeout(searchCategoryTimerRef.current);
+    }
+    
+    searchCategoryTimerRef.current = setTimeout(() => {
+      setDebouncedSearchCategory(searchCategory);
+    }, 1000);
+
+    return () => {
+      if (searchCategoryTimerRef.current) {
+        clearTimeout(searchCategoryTimerRef.current);
+      }
+    };
+  }, [searchCategory]);
+
+  // Zmodyfikuj funkcję fetchInventoryItems, aby używała debounced wartości
   const fetchInventoryItems = async () => {
     setLoading(true);
     try {
       // Najpierw wyczyść mikrorezerwacje
       await cleanupMicroReservations();
       
-      const items = await getAllInventoryItems(selectedWarehouse || null);
-      setInventoryItems(items);
-      setFilteredItems(items);
+      // Wywołaj getAllInventoryItems z parametrami paginacji i wyszukiwania
+      const result = await getAllInventoryItems(
+        selectedWarehouse || null, 
+        page, 
+        pageSize, 
+        debouncedSearchTerm.trim() !== '' ? debouncedSearchTerm : null,
+        debouncedSearchCategory.trim() !== '' ? debouncedSearchCategory : null
+      );
       
-      // Pobierz informacje o rezerwacjach dla każdego przedmiotu
-      const reservationPromises = items.map(item => fetchReservations(item));
-      await Promise.all(reservationPromises);
+      // Jeśli wynik to obiekt z właściwościami items i totalCount, to używamy paginacji
+      if (result && result.items) {
+        setInventoryItems(result.items);
+        setFilteredItems(result.items);
+        setTotalItems(result.totalCount);
+        setTotalPages(Math.ceil(result.totalCount / pageSize));
+      } else {
+        // Stara logika dla kompatybilności
+        setInventoryItems(result);
+        setFilteredItems(result);
+      }
       
     } catch (error) {
       console.error('Error fetching inventory items:', error);
@@ -218,16 +284,22 @@ const InventoryList = () => {
       setLoading(false);
     }
   };
-  
-  // Dodaj funkcję obsługującą zmianę wybranego stanów
-  const handleWarehouseChange = (event) => {
-    setSelectedWarehouse(event.target.value);
+
+  // Obsługa zmiany strony
+  const handlePageChange = (event, newPage) => {
+    setPage(newPage);
   };
-  
-  // Efekt, który ponownie pobiera dane po zmianie stanów
+
+  // Obsługa zmiany rozmiaru strony
+  const handlePageSizeChange = (event) => {
+    setPageSize(parseInt(event.target.value, 10));
+    setPage(1); // Resetuj stronę po zmianie rozmiaru strony
+  };
+
+  // Efekt, który ponownie pobiera dane po zmianie strony lub rozmiaru strony
   useEffect(() => {
     fetchInventoryItems();
-  }, [selectedWarehouse]);
+  }, [page, pageSize]);
 
   const fetchExpiryData = async () => {
     try {
@@ -883,6 +955,23 @@ const InventoryList = () => {
     updateColumnPreferences('inventory', columnName, !visibleColumns[columnName]);
   };
 
+  // Modyfikuj funkcję handleSearchTermChange
+  const handleSearchTermChange = (e) => {
+    setSearchTerm(e.target.value);
+  };
+
+  // Dodaj funkcję handleSearchCategoryChange
+  const handleSearchCategoryChange = (e) => {
+    setSearchCategory(e.target.value);
+  };
+
+  // Modyfikuj funkcję handleSearch, aby bezpośrednio ustawiała wartości debounced
+  const handleSearch = () => {
+    setPage(1); // Zresetuj paginację
+    setDebouncedSearchTerm(searchTerm);
+    setDebouncedSearchCategory(searchCategory);
+  };
+
   if (loading) {
     return <div>Ładowanie pozycji ze stanów...</div>;
   }
@@ -934,160 +1023,213 @@ const InventoryList = () => {
       {/* Zawartość pierwszej zakładki - Stany */}
       {currentTab === 0 && (
         <>
-          <Box sx={{ display: 'flex', mb: 3 }}>
+          <Box sx={{ display: 'flex', mb: 3, flexWrap: 'wrap', gap: 2 }}>
             <TextField
-              label="Szukaj pozycji"
+              label="Szukaj SKU"
               variant="outlined"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              fullWidth
+              onChange={handleSearchTermChange}
+              size="small"
+              sx={{ flexGrow: 1, minWidth: '200px' }}
               InputProps={{
                 startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
               }}
             />
+            <TextField
+              label="Szukaj kategorii"
+              variant="outlined"
+              value={searchCategory}
+              onChange={handleSearchCategoryChange}
+              size="small"
+              sx={{ flexGrow: 1, minWidth: '200px' }}
+              InputProps={{
+                startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
+              }}
+            />
+            <Button 
+              variant="contained" 
+              onClick={handleSearch}
+              size="medium"
+            >
+              Szukaj teraz
+            </Button>
             <Tooltip title="Konfiguruj widoczne kolumny">
-              <IconButton onClick={handleColumnMenuOpen} sx={{ ml: 1 }}>
+              <IconButton onClick={handleColumnMenuOpen}>
                 <ViewColumnIcon />
               </IconButton>
             </Tooltip>
           </Box>
 
-          {filteredItems.length === 0 ? (
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : filteredItems.length === 0 ? (
             <Typography variant="body1" align="center">
               Nie znaleziono pozycji ze stanów
             </Typography>
           ) : (
-            <TableContainer component={Paper} sx={{ mt: 3 }}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    {visibleColumns.name && <TableCell>SKU</TableCell>}
-                    {visibleColumns.category && <TableCell>Kategoria</TableCell>}
-                    {visibleColumns.totalQuantity && <TableCell>Ilość całkowita</TableCell>}
-                    {visibleColumns.reservedQuantity && <TableCell>Ilość zarezerwowana</TableCell>}
-                    {visibleColumns.availableQuantity && <TableCell>Ilość dostępna</TableCell>}
-                    {visibleColumns.status && <TableCell>Status</TableCell>}
-                    {visibleColumns.location && <TableCell>Lokalizacja</TableCell>}
-                    {visibleColumns.actions && <TableCell align="right">Akcje</TableCell>}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filteredItems.map((item) => {
-                    // Oblicz ilość dostępną (całkowita - zarezerwowana)
-                    const bookedQuantity = item.bookedQuantity || 0;
-                    const availableQuantity = item.quantity - bookedQuantity;
-                    
-                    return (
-                      <TableRow key={item.id}>
-                        {visibleColumns.name && (
-                          <TableCell>
-                            <Typography variant="body1">{item.name}</Typography>
-                            <Typography variant="body2" color="textSecondary">{item.description}</Typography>
-                            {(item.packingGroup || item.boxesPerPallet) && (
-                              <Box sx={{ mt: 0.5 }}>
-                                {item.packingGroup && (
-                                  <Chip
-                                    size="small"
-                                    label={`PG: ${item.packingGroup}`}
-                                    color="default"
-                                    sx={{ mr: 0.5 }}
-                                  />
-                                )}
-                                {item.boxesPerPallet && (
-                                  <Chip
-                                    size="small"
-                                    label={`${item.boxesPerPallet} kartonów/paletę`}
-                                    color="info"
-                                  />
-                                )}
-                              </Box>
-                            )}
-                          </TableCell>
-                        )}
-                        {visibleColumns.category && <TableCell>{item.category}</TableCell>}
-                        {visibleColumns.totalQuantity && (
-                          <TableCell>
-                            <Typography variant="body1">{item.quantity} {item.unit}</Typography>
-                          </TableCell>
-                        )}
-                        {visibleColumns.reservedQuantity && (
-                          <TableCell>
-                            <Typography 
-                              variant="body1" 
-                              color={bookedQuantity > 0 ? "secondary" : "textSecondary"}
-                              sx={{ cursor: bookedQuantity > 0 ? 'pointer' : 'default' }}
-                              onClick={bookedQuantity > 0 ? () => handleShowReservations(item) : undefined}
-                            >
-                              {bookedQuantity} {item.unit}
-                              {bookedQuantity > 0 && (
-                                <Tooltip title="Kliknij, aby zobaczyć szczegóły rezerwacji">
-                                  <ReservationIcon fontSize="small" sx={{ ml: 1 }} />
-                                </Tooltip>
+            <>
+              <TableContainer component={Paper} sx={{ mt: 3 }}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      {visibleColumns.name && <TableCell>SKU</TableCell>}
+                      {visibleColumns.category && <TableCell>Kategoria</TableCell>}
+                      {visibleColumns.totalQuantity && <TableCell>Ilość całkowita</TableCell>}
+                      {visibleColumns.reservedQuantity && <TableCell>Ilość zarezerwowana</TableCell>}
+                      {visibleColumns.availableQuantity && <TableCell>Ilość dostępna</TableCell>}
+                      {visibleColumns.status && <TableCell>Status</TableCell>}
+                      {visibleColumns.location && <TableCell>Lokalizacja</TableCell>}
+                      {visibleColumns.actions && <TableCell align="right">Akcje</TableCell>}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {filteredItems.map((item) => {
+                      // Oblicz ilość dostępną (całkowita - zarezerwowana)
+                      const bookedQuantity = item.bookedQuantity || 0;
+                      const availableQuantity = item.quantity - bookedQuantity;
+                      
+                      return (
+                        <TableRow key={item.id}>
+                          {visibleColumns.name && (
+                            <TableCell>
+                              <Typography variant="body1">{item.name}</Typography>
+                              <Typography variant="body2" color="textSecondary">{item.description}</Typography>
+                              {(item.packingGroup || item.boxesPerPallet) && (
+                                <Box sx={{ mt: 0.5 }}>
+                                  {item.packingGroup && (
+                                    <Chip
+                                      size="small"
+                                      label={`PG: ${item.packingGroup}`}
+                                      color="default"
+                                      sx={{ mr: 0.5 }}
+                                    />
+                                  )}
+                                  {item.boxesPerPallet && (
+                                    <Chip
+                                      size="small"
+                                      label={`${item.boxesPerPallet} kartonów/paletę`}
+                                      color="info"
+                                    />
+                                  )}
+                                </Box>
                               )}
-                            </Typography>
-                          </TableCell>
-                        )}
-                        {visibleColumns.availableQuantity && (
-                          <TableCell>
-                            <Typography 
-                              variant="body1" 
-                              color={availableQuantity < item.minStockLevel ? "error" : "primary"}
-                            >
-                              {availableQuantity} {item.unit}
-                            </Typography>
-                          </TableCell>
-                        )}
-                        {visibleColumns.status && (
-                          <TableCell>
-                            {getStockLevelIndicator(availableQuantity, item.minStockLevel, item.optimalStockLevel)}
-                          </TableCell>
-                        )}
-                        {visibleColumns.location && (
-                          <TableCell>
-                            {item.location || '-'}
-                          </TableCell>
-                        )}
-                        {visibleColumns.actions && (
-                          <TableCell align="right">
-                            <IconButton 
-                              component={RouterLink} 
-                              to={`/inventory/${item.id}`}
-                              color="secondary"
-                              title="Szczegóły"
-                            >
-                              <InfoIcon />
-                            </IconButton>
-                            <IconButton 
-                              component={RouterLink} 
-                              to={`/inventory/${item.id}/receive`}
-                              color="success"
-                              title="Przyjmij"
-                            >
-                              <ReceiveIcon />
-                            </IconButton>
-                            <IconButton 
-                              component={RouterLink} 
-                              to={`/inventory/${item.id}/issue`}
-                              color="warning"
-                              title="Wydaj"
-                            >
-                              <IssueIcon />
-                            </IconButton>
-                            <IconButton
-                              onClick={(e) => handleMenuOpen(e, item)}
-                              color="primary"
-                              title="Więcej akcji"
-                            >
-                              <MoreVertIcon />
-                            </IconButton>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                            </TableCell>
+                          )}
+                          {visibleColumns.category && <TableCell>{item.category}</TableCell>}
+                          {visibleColumns.totalQuantity && (
+                            <TableCell>
+                              <Typography variant="body1">{item.quantity} {item.unit}</Typography>
+                            </TableCell>
+                          )}
+                          {visibleColumns.reservedQuantity && (
+                            <TableCell>
+                              <Typography 
+                                variant="body1" 
+                                color={bookedQuantity > 0 ? "secondary" : "textSecondary"}
+                                sx={{ cursor: bookedQuantity > 0 ? 'pointer' : 'default' }}
+                                onClick={bookedQuantity > 0 ? () => handleShowReservations(item) : undefined}
+                              >
+                                {bookedQuantity} {item.unit}
+                                {bookedQuantity > 0 && (
+                                  <Tooltip title="Kliknij, aby zobaczyć szczegóły rezerwacji">
+                                    <ReservationIcon fontSize="small" sx={{ ml: 1 }} />
+                                  </Tooltip>
+                                )}
+                              </Typography>
+                            </TableCell>
+                          )}
+                          {visibleColumns.availableQuantity && (
+                            <TableCell>
+                              <Typography 
+                                variant="body1" 
+                                color={availableQuantity < item.minStockLevel ? "error" : "primary"}
+                              >
+                                {availableQuantity} {item.unit}
+                              </Typography>
+                            </TableCell>
+                          )}
+                          {visibleColumns.status && (
+                            <TableCell>
+                              {getStockLevelIndicator(availableQuantity, item.minStockLevel, item.optimalStockLevel)}
+                            </TableCell>
+                          )}
+                          {visibleColumns.location && (
+                            <TableCell>
+                              {item.location || '-'}
+                            </TableCell>
+                          )}
+                          {visibleColumns.actions && (
+                            <TableCell align="right">
+                              <IconButton 
+                                component={RouterLink} 
+                                to={`/inventory/${item.id}`}
+                                color="secondary"
+                                title="Szczegóły"
+                              >
+                                <InfoIcon />
+                              </IconButton>
+                              <IconButton 
+                                component={RouterLink} 
+                                to={`/inventory/${item.id}/receive`}
+                                color="success"
+                                title="Przyjmij"
+                              >
+                                <ReceiveIcon />
+                              </IconButton>
+                              <IconButton 
+                                component={RouterLink} 
+                                to={`/inventory/${item.id}/issue`}
+                                color="warning"
+                                title="Wydaj"
+                              >
+                                <IssueIcon />
+                              </IconButton>
+                              <IconButton
+                                onClick={(e) => handleMenuOpen(e, item)}
+                                color="primary"
+                                title="Więcej akcji"
+                              >
+                                <MoreVertIcon />
+                              </IconButton>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+
+              {/* Dodaj kontrolki paginacji */}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Typography variant="body2" sx={{ mr: 2 }}>
+                    Pozycje na stronie:
+                  </Typography>
+                  <Select
+                    value={pageSize}
+                    onChange={handlePageSizeChange}
+                    size="small"
+                  >
+                    <MenuItem value={5}>5</MenuItem>
+                    <MenuItem value={10}>10</MenuItem>
+                    <MenuItem value={20}>20</MenuItem>
+                    <MenuItem value={50}>50</MenuItem>
+                  </Select>
+                </Box>
+                <Pagination 
+                  count={totalPages} 
+                  page={page} 
+                  onChange={handlePageChange} 
+                  color="primary" 
+                />
+                <Typography variant="body2">
+                  Wyświetlanie {filteredItems.length} z {totalItems} pozycji
+                </Typography>
+              </Box>
+            </>
           )}
           
           {/* Menu konfiguracji kolumn */}
