@@ -1,5 +1,5 @@
 // src/pages/Dashboard/Dashboard.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Container, 
@@ -18,7 +18,8 @@ import {
   Chip,
   LinearProgress,
   Icon,
-  CircularProgress
+  CircularProgress,
+  Skeleton
 } from '@mui/material';
 import {
   MenuBook as RecipesIcon,
@@ -32,7 +33,8 @@ import {
   ArrowDownward as ArrowDownIcon,
   Timeline as TimelineIcon,
   Storage as WarehouseIcon,
-  Business as WorkstationIcon
+  Business as WorkstationIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { getTasksByStatus } from '../../services/productionService';
 import { getAllRecipes } from '../../services/recipeService';
@@ -45,110 +47,147 @@ import { formatTimestamp } from '../../utils/dateUtils';
 
 const Dashboard = () => {
   const { currentUser } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [tasksLoading, setTasksLoading] = useState(true);
-  const [recipesLoading, setRecipesLoading] = useState(true);
-  const [ordersLoading, setOrdersLoading] = useState(true);
-  const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [recipesLoading, setRecipesLoading] = useState(false);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [tasks, setTasks] = useState([]);
   const [recipes, setRecipes] = useState([]);
   const [orderStats, setOrderStats] = useState(null);
   const [analyticsData, setAnalyticsData] = useState(null);
+  const [dataLoadStatus, setDataLoadStatus] = useState({
+    tasks: false,
+    recipes: false,
+    orders: false,
+    analytics: false
+  });
 
-  useEffect(() => {
-    // Pobieranie zadań produkcyjnych
-    const fetchTasks = async () => {
-      try {
-        setTasksLoading(true);
-        console.log('Próba pobrania zadań w trakcie...');
-        const tasksInProgress = await getTasksByStatus('W trakcie');
+  // Pobieranie zadań produkcyjnych - useCallback
+  const fetchTasks = useCallback(async () => {
+    try {
+      setTasksLoading(true);
+      console.log('Próba pobrania zadań w trakcie...');
+      const tasksInProgress = await getTasksByStatus('W trakcie');
+      
+      if (!tasksInProgress || tasksInProgress.length === 0) {
+        console.log('Brak zadań w trakcie, sprawdzam zadania zaplanowane...');
+        const plannedTasks = await getTasksByStatus('Zaplanowane');
         
-        if (!tasksInProgress || tasksInProgress.length === 0) {
-          console.log('Brak zadań w trakcie, sprawdzam zadania zaplanowane...');
-          const plannedTasks = await getTasksByStatus('Zaplanowane');
-          
-          if (plannedTasks && plannedTasks.length > 0) {
-            console.log('Znaleziono zadania zaplanowane, ale brak zadań w trakcie');
-            setTasks([]); 
-          } else {
-            console.log('Brak jakichkolwiek zadań produkcyjnych w bazie');
-            setTasks([]);
-          }
+        if (plannedTasks && plannedTasks.length > 0) {
+          console.log('Znaleziono zadania zaplanowane, ale brak zadań w trakcie');
+          setTasks([]); 
         } else {
-          console.log(`Ustawiam ${tasksInProgress.length} zadań w trakcie`);
-          setTasks(tasksInProgress);
+          console.log('Brak jakichkolwiek zadań produkcyjnych w bazie');
+          setTasks([]);
         }
-      } catch (error) {
-        console.error('Błąd podczas pobierania zadań:', error);
-        setTasks([]);
-      } finally {
-        setTasksLoading(false);
+      } else {
+        console.log(`Ustawiam ${tasksInProgress.length} zadań w trakcie`);
+        setTasks(tasksInProgress);
       }
-    };
-    
-    // Pobieranie receptur
-    const fetchRecipes = async () => {
-      try {
-        setRecipesLoading(true);
-        const allRecipes = await getAllRecipes();
-        console.log('Wszystkie receptury:', allRecipes);
-        setRecipes(allRecipes ? allRecipes.slice(0, 5) : []);
-      } catch (error) {
-        console.error('Błąd podczas pobierania receptur:', error);
-        setRecipes([]);
-      } finally {
-        setRecipesLoading(false);
-      }
-    };
-    
-    // Pobieranie statystyk zamówień
-    const fetchOrderStats = async () => {
-      try {
-        setOrdersLoading(true);
-        const stats = await getOrdersStats(true);
-        console.log('Statystyki zamówień:', stats);
-        setOrderStats(stats || null);
-      } catch (error) {
-        console.error('Błąd podczas pobierania statystyk zamówień:', error);
-        setOrderStats(null);
-      } finally {
-        setOrdersLoading(false);
-      }
-    };
-    
-    // Pobieranie danych analitycznych
-    const fetchAnalytics = async () => {
-      try {
-        setAnalyticsLoading(true);
-        const kpiData = await getKpiData();
-        console.log('Dane KPI:', kpiData);
-        setAnalyticsData(kpiData || null);
-      } catch (error) {
-        console.error('Błąd podczas pobierania danych KPI:', error);
-        setAnalyticsData(null);
-      } finally {
-        setAnalyticsLoading(false);
-      }
-    };
-    
-    // Uruchamiamy wszystkie pobierania równolegle
-    Promise.all([
-      fetchTasks(),
-      fetchRecipes(),
-      fetchOrderStats(),
-      fetchAnalytics()
-    ]).finally(() => {
-      setLoading(false);
-    });
-    
+      setDataLoadStatus(prev => ({ ...prev, tasks: true }));
+    } catch (error) {
+      console.error('Błąd podczas pobierania zadań:', error);
+      setTasks([]);
+    } finally {
+      setTasksLoading(false);
+    }
+  }, []);
+  
+  // Pobieranie receptur - useCallback
+  const fetchRecipes = useCallback(async () => {
+    try {
+      setRecipesLoading(true);
+      const allRecipes = await getAllRecipes();
+      console.log('Wszystkie receptury:', allRecipes);
+      setRecipes(allRecipes || []);
+      setDataLoadStatus(prev => ({ ...prev, recipes: true }));
+    } catch (error) {
+      console.error('Błąd podczas pobierania receptur:', error);
+      setRecipes([]);
+    } finally {
+      setRecipesLoading(false);
+    }
+  }, []);
+  
+  // Pobieranie statystyk zamówień - useCallback
+  const fetchOrderStats = useCallback(async () => {
+    try {
+      setOrdersLoading(true);
+      const stats = await getOrdersStats(true);
+      console.log('Statystyki zamówień:', stats);
+      setOrderStats(stats || null);
+      setDataLoadStatus(prev => ({ ...prev, orders: true }));
+    } catch (error) {
+      console.error('Błąd podczas pobierania statystyk zamówień:', error);
+      setOrderStats(null);
+    } finally {
+      setOrdersLoading(false);
+    }
+  }, []);
+  
+  // Pobieranie danych analitycznych - useCallback
+  const fetchAnalytics = useCallback(async () => {
+    try {
+      setAnalyticsLoading(true);
+      const kpiData = await getKpiData();
+      console.log('Dane KPI:', kpiData);
+      setAnalyticsData(kpiData || null);
+      setDataLoadStatus(prev => ({ ...prev, analytics: true }));
+    } catch (error) {
+      console.error('Błąd podczas pobierania danych KPI:', error);
+      setAnalyticsData(null);
+    } finally {
+      setAnalyticsLoading(false);
+    }
   }, []);
 
-  if (loading) {
-    return <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>Ładowanie danych...</Container>;
-  }
+  // Odświeżanie wszystkich sekcji danych naraz
+  const refreshAllData = useCallback(() => {
+    setLoading(true);
+    
+    // Rozdzielamy zapytania, aby zmniejszyć obciążenie równoczesne
+    fetchRecipes();
+    fetchAnalytics();
+    
+    // Małe opóźnienie dla lepszej wydajności
+    setTimeout(() => {
+      fetchOrderStats();
+      
+      setTimeout(() => {
+        fetchTasks();
+        setLoading(false);
+      }, 300);
+    }, 500);
+  }, [fetchRecipes, fetchAnalytics, fetchOrderStats, fetchTasks]);
+
+  // Pierwsze ładowanie danych - stopniowe
+  useEffect(() => {
+    setLoading(true);
+    
+    // Rozdzielamy zapytania, aby zmniejszyć obciążenie równoczesne
+    const loadData = async () => {
+      // Najpierw krytyczne dane dashboardu
+      await fetchRecipes();
+      await fetchAnalytics();
+      
+      // Po 500ms ładujemy zamówienia
+      setTimeout(async () => {
+        await fetchOrderStats();
+        
+        // Na końcu ładujemy zadania produkcyjne
+        setTimeout(async () => {
+          await fetchTasks();
+          setLoading(false);
+        }, 300);
+      }, 500);
+    };
+    
+    loadData();
+  }, [fetchRecipes, fetchAnalytics, fetchOrderStats, fetchTasks]);
 
   // Mapowanie statusów zamówień na kolory
-  const getStatusColor = (status) => {
+  const getStatusColor = useMemo(() => (status) => {
     switch (status) {
       case 'Nowe': return 'info';
       case 'W realizacji': return 'warning';
@@ -158,20 +197,49 @@ const Dashboard = () => {
       case 'Anulowane': return 'error';
       default: return 'default';
     }
-  };
+  }, []);
 
-  // Renderowanie wskaźnika ładowania sekcji
+  // Komponent dla ładowanej sekcji
   const SectionLoading = () => (
     <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
       <CircularProgress size={24} />
     </Box>
   );
 
+  // Komponent dla karty z przyciskiem odświeżania
+  const CardHeader = ({ title, isLoading, onRefresh, section }) => (
+    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+      <Typography variant="h6">{title}</Typography>
+      {isLoading ? (
+        <CircularProgress size={20} />
+      ) : (
+        <Button 
+          size="small" 
+          onClick={() => onRefresh(section)}
+          startIcon={<RefreshIcon />}
+        >
+          Odśwież
+        </Button>
+      )}
+    </Box>
+  );
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Typography variant="h4" gutterBottom>
-        Dashboard
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4" gutterBottom>
+          Dashboard
+        </Typography>
+        <Button 
+          startIcon={<RefreshIcon />}
+          onClick={refreshAllData}
+          variant="outlined"
+          disabled={loading}
+        >
+          {loading ? 'Odświeżanie...' : 'Odśwież wszystko'}
+          {loading && <CircularProgress size={16} sx={{ ml: 1 }} />}
+        </Button>
+      </Box>
       <Typography variant="subtitle1" sx={{ mb: 4 }}>
         Witaj, {currentUser.displayName || currentUser.email}
       </Typography>
@@ -183,9 +251,13 @@ const Dashboard = () => {
             <CardContent sx={{ textAlign: 'center', p: 3 }}>
               <RecipesIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
               <Typography variant="h6">Receptury</Typography>
-              <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
-                {recipes?.length || 0}
-              </Typography>
+              {recipesLoading ? (
+                <Skeleton variant="text" width="100%" height={40} />
+              ) : (
+                <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
+                  {recipes?.length || 0}
+                </Typography>
+              )}
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Typography variant="body2" color="text.secondary">
                   Zarządzaj recepturami i składnikami
@@ -215,9 +287,13 @@ const Dashboard = () => {
             <CardContent sx={{ textAlign: 'center', p: 3 }}>
               <ProductionIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
               <Typography variant="h6">Produkcja</Typography>
-              <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
-                {analyticsData?.production?.tasksInProgress || 0} aktywnych zadań
-              </Typography>
+              {analyticsLoading ? (
+                <Skeleton variant="text" width="100%" height={40} />
+              ) : (
+                <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
+                  {analyticsData?.production?.tasksInProgress || 0} aktywnych zadań
+                </Typography>
+              )}
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Typography variant="body2" color="text.secondary">
                   Planuj i zarządzaj produkcją
@@ -237,9 +313,13 @@ const Dashboard = () => {
             <CardContent sx={{ textAlign: 'center', p: 3 }}>
               <InventoryIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
               <Typography variant="h6">Stany Magazynowe</Typography>
-              <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
-                {analyticsData?.inventory?.totalItems || 0} produktów
-              </Typography>
+              {analyticsLoading ? (
+                <Skeleton variant="text" width="100%" height={40} />
+              ) : (
+                <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
+                  {analyticsData?.inventory?.totalItems || 0} produktów
+                </Typography>
+              )}
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Typography variant="body2" color="text.secondary">
                   Zarządzaj stanami magazynowymi
@@ -384,39 +464,61 @@ const Dashboard = () => {
               <Grid container spacing={3}>
                 <Grid item xs={12} md={4}>
                   <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'primary.light', borderRadius: 2, color: 'white' }}>
-                    <Typography variant="h3" sx={{ mb: 1 }}>
-                      {analyticsData?.production?.tasksInProgress || 0}
-                    </Typography>
-                    <Typography variant="body1">
-                      W trakcie
-                    </Typography>
+                    {analyticsLoading ? (
+                      <Skeleton variant="text" width="100%" height={60} />
+                    ) : (
+                      <>
+                        <Typography variant="h3" sx={{ mb: 1 }}>
+                          {analyticsData?.production?.tasksInProgress || 0}
+                        </Typography>
+                        <Typography variant="body1">
+                          W trakcie
+                        </Typography>
+                      </>
+                    )}
                   </Box>
                 </Grid>
                 
                 <Grid item xs={12} md={4}>
                   <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'success.light', borderRadius: 2, color: 'white' }}>
-                    <Typography variant="h3" sx={{ mb: 1 }}>
-                      {analyticsData?.production?.completedTasks || 0}
-                    </Typography>
-                    <Typography variant="body1">
-                      Ukończone
-                    </Typography>
+                    {analyticsLoading ? (
+                      <Skeleton variant="text" width="100%" height={60} />
+                    ) : (
+                      <>
+                        <Typography variant="h3" sx={{ mb: 1 }}>
+                          {analyticsData?.production?.completedTasks || 0}
+                        </Typography>
+                        <Typography variant="body1">
+                          Ukończone
+                        </Typography>
+                      </>
+                    )}
                   </Box>
                 </Grid>
                 
                 <Grid item xs={12} md={4}>
                   <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'info.light', borderRadius: 2, color: 'white' }}>
-                    <Typography variant="h3" sx={{ mb: 1 }}>
-                      {analyticsData?.sales?.totalOrders || 0}
-                    </Typography>
-                    <Typography variant="body1">
-                      Zamówienia
-                    </Typography>
+                    {analyticsLoading ? (
+                      <Skeleton variant="text" width="100%" height={60} />
+                    ) : (
+                      <>
+                        <Typography variant="h3" sx={{ mb: 1 }}>
+                          {analyticsData?.sales?.totalOrders || 0}
+                        </Typography>
+                        <Typography variant="body1">
+                          Zamówienia
+                        </Typography>
+                      </>
+                    )}
                   </Box>
                 </Grid>
               </Grid>
               
-              {tasks && tasks.length > 0 ? (
+              {tasksLoading ? (
+                <Box sx={{ mt: 3 }}>
+                  <Skeleton variant="rectangular" width="100%" height={120} />
+                </Box>
+              ) : tasks && tasks.length > 0 ? (
                 <Box sx={{ mt: 3 }}>
                   <List sx={{ bgcolor: 'background.paper', borderRadius: 2 }}>
                     {tasks.map((task) => (

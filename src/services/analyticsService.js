@@ -21,66 +21,101 @@ const INVENTORY_TRANSACTIONS_COLLECTION = 'inventoryTransactions';
 
 /**
  * Pobiera podstawowe dane statystyczne dla dashboardu
+ * @param {Object} options - opcje pobierania (jakie dane pobrać)
  */
-export const getKpiData = async () => {
+export const getKpiData = async (options = { sales: true, inventory: true, production: true }) => {
   try {
-    console.log('Pobieranie podstawowych danych statystycznych...');
+    console.log('Pobieranie podstawowych danych statystycznych...', options);
     
-    // Pobierz statystyki zamówień
-    const ordersStats = await getOrdersStats();
+    let result = {};
     
-    // Pobierz dane magazynowe
-    const items = await getAllInventoryItems();
-    const inventoryStats = {
-      totalItems: items?.length || 0,
-      totalValue: calculateInventoryValue(items)
-    };
-
-    // Pobierz dane produkcyjne
-    const tasksInProgress = await getTasksByStatus('W trakcie');
-    const completedTasks = await getTasksByStatus('Zakończone');
+    // Pobieranie równoległe wszystkich danych
+    const fetchPromises = [];
+    const fetchedData = {};
     
-    return {
-      // Statystyki sprzedaży
-      sales: {
-        totalOrders: ordersStats?.total || 0,
-        totalValue: ordersStats?.totalValue || 0,
-        ordersInProgress: ordersStats?.byStatus?.['W realizacji'] || 0,
-        completedOrders: ordersStats?.byStatus?.['Dostarczone'] || 0
-      },
+    if (options.sales) {
+      // Pobieranie statystyk zamówień
+      const salesPromise = getOrdersStats().then(ordersStats => {
+        fetchedData.ordersStats = ordersStats;
+      });
+      fetchPromises.push(salesPromise);
+    }
+    
+    if (options.inventory) {
+      // Pobieranie danych magazynowych
+      const inventoryPromise = getAllInventoryItems().then(items => {
+        fetchedData.inventoryItems = items;
+      });
+      fetchPromises.push(inventoryPromise);
+    }
+    
+    if (options.production) {
+      // Pobieranie danych produkcyjnych
+      const tasksInProgressPromise = getTasksByStatus('W trakcie').then(data => {
+        fetchedData.tasksInProgress = data;
+      });
+      fetchPromises.push(tasksInProgressPromise);
       
-      // Statystyki magazynowe
-      inventory: {
-        totalItems: inventoryStats.totalItems,
-        totalValue: inventoryStats.totalValue
-      },
-      
-      // Statystyki produkcyjne
-      production: {
-        tasksInProgress: tasksInProgress?.length || 0,
-        completedTasks: completedTasks?.length || 0
-      }
-    };
+      const completedTasksPromise = getTasksByStatus('Zakończone').then(data => {
+        fetchedData.completedTasks = data;
+      });
+      fetchPromises.push(completedTasksPromise);
+    }
+    
+    // Czekamy na zakończenie wszystkich zapytań
+    await Promise.all(fetchPromises);
+    
+    // Teraz budujemy obiekt z danymi na podstawie tego co udało się pobrać
+    if (options.sales && fetchedData.ordersStats) {
+      result.sales = {
+        totalOrders: fetchedData.ordersStats?.total || 0,
+        totalValue: fetchedData.ordersStats?.totalValue || 0,
+        ordersInProgress: fetchedData.ordersStats?.byStatus?.['W realizacji'] || 0,
+        completedOrders: fetchedData.ordersStats?.byStatus?.['Dostarczone'] || 0
+      };
+    }
+    
+    if (options.inventory && fetchedData.inventoryItems) {
+      const inventoryItems = fetchedData.inventoryItems;
+      result.inventory = {
+        totalItems: inventoryItems?.length || 0,
+        totalValue: calculateInventoryValue(inventoryItems)
+      };
+    }
+    
+    if (options.production) {
+      result.production = {
+        tasksInProgress: fetchedData.tasksInProgress?.length || 0,
+        completedTasks: fetchedData.completedTasks?.length || 0
+      };
+    }
+    
+    return result;
   } catch (error) {
-    console.error('Błąd podczas pobierania danych KPI:', error);
-    // Zwróć domyślne wartości w przypadku błędu
-    return {
-      sales: {
-        totalOrders: 0,
-        totalValue: 0,
-        ordersInProgress: 0,
-        completedOrders: 0
-      },
-      inventory: {
-        totalItems: 0,
-        totalValue: 0
-      },
-      production: {
-        tasksInProgress: 0,
-        completedTasks: 0
-      }
-    };
+    console.error('Błąd podczas pobierania danych statystycznych:', error);
+    throw error;
   }
+};
+
+/**
+ * Pobiera tylko dane związane ze sprzedażą
+ */
+export const getSalesKpiData = async () => {
+  return getKpiData({ sales: true, inventory: false, production: false });
+};
+
+/**
+ * Pobiera tylko dane związane z magazynem
+ */
+export const getInventoryKpiData = async () => {
+  return getKpiData({ sales: false, inventory: true, production: false });
+};
+
+/**
+ * Pobiera tylko dane związane z produkcją
+ */
+export const getProductionKpiData = async () => {
+  return getKpiData({ sales: false, inventory: false, production: true });
 };
 
 /**
