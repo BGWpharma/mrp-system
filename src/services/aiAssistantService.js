@@ -159,6 +159,28 @@ const formatMessagesForOpenAI = (messages, businessData = null) => {
       businessDataContext += `- Timestamp danych: ${summary.timestamp}\n`;
     }
     
+    // Dodaj dane o klientach, gdy są dostępne
+    if (businessData.data && businessData.data.customers && 
+        businessData.data.customers.length > 0) {
+      
+      businessDataContext += `\n### Dane o klientach (Customers):\n`;
+      const customers = businessData.data.customers;
+      businessDataContext += `Liczba pobranych klientów: ${customers.length}\n`;
+      
+      businessDataContext += `\nLista klientów (do 10 pierwszych):\n`;
+      const customerList = customers.slice(0, 10);
+      customerList.forEach((customer, index) => {
+        businessDataContext += `${index + 1}. ID: ${customer.id}, Nazwa: ${customer.name || 'Nieznany klient'}`;
+        if (customer.email) {
+          businessDataContext += `, Email: ${customer.email}`;
+        }
+        if (customer.phone) {
+          businessDataContext += `, Telefon: ${customer.phone}`;
+        }
+        businessDataContext += `\n`;
+      });
+    }
+    
     // Dodaj dane o produkcji zawsze, gdy są dostępne
     if (businessData.data && businessData.data.productionTasks && 
         businessData.data.productionTasks.length > 0) {
@@ -204,6 +226,39 @@ const formatMessagesForOpenAI = (messages, businessData = null) => {
           
           businessDataContext += `\n`;
         });
+      }
+      
+      // Dodaj informacje o czasie produkcji
+      businessDataContext += `\n### Informacje o czasie produkcji:\n`;
+      
+      // Sprawdź, czy mamy czas produkcji w recepturach
+      if (businessData.data && businessData.data.recipes && businessData.data.recipes.length > 0) {
+        const recipesWithProductionTime = businessData.data.recipes.filter(recipe => 
+          recipe.productionTimePerUnit && parseFloat(recipe.productionTimePerUnit) > 0
+        );
+        
+        if (recipesWithProductionTime.length > 0) {
+          businessDataContext += `Receptury z określonym czasem produkcji:\n`;
+          recipesWithProductionTime.slice(0, 5).forEach((recipe, index) => {
+            businessDataContext += `${index + 1}. ${recipe.name}: ${parseFloat(recipe.productionTimePerUnit).toFixed(2)} minut/szt.\n`;
+          });
+          
+          // Przykładowe obliczenie czasu produkcji
+          const sampleRecipe = recipesWithProductionTime[0];
+          const sampleQuantity = 100;
+          const totalTime = parseFloat(sampleRecipe.productionTimePerUnit) * sampleQuantity;
+          
+          businessDataContext += `\nPrzykład obliczenia czasu produkcji:\n`;
+          businessDataContext += `Dla receptury "${sampleRecipe.name}" wyprodukowanie ${sampleQuantity} szt. zajmie ${totalTime.toFixed(2)} minut (${(totalTime/60).toFixed(2)} godzin).\n`;
+          
+          // Informacja o interpretacji czasu produkcji
+          businessDataContext += `\nInterpretacja czasu produkcji:\n`;
+          businessDataContext += `- Każda receptura może mieć określony parametr productionTimePerUnit, który określa czas produkcji jednostki produktu w minutach\n`;
+          businessDataContext += `- Całkowity czas produkcji = productionTimePerUnit * ilość produktu\n`;
+          businessDataContext += `- Czas podany jest w minutach, można przeliczyć na godziny dzieląc przez 60\n`;
+        } else {
+          businessDataContext += `Brak receptur z określonym czasem produkcji w dostępnych danych.\n`;
+        }
       }
       
       // Dodaj szczegóły dotyczące zakończonych zadań
@@ -268,27 +323,63 @@ const formatMessagesForOpenAI = (messages, businessData = null) => {
         if (recipesAnalysis.recipesWithComponents > 0) {
           businessDataContext += `Receptury z komponentami: ${recipesAnalysis.recipesWithComponents}\n`;
           businessDataContext += `Średnia liczba komponentów na recepturę: ${recipesAnalysis.avgComponentsPerRecipe.toFixed(1)}\n`;
+          businessDataContext += `Liczba unikalnych komponentów we wszystkich recepturach: ${recipesAnalysis.uniqueComponentsCount || 0}\n`;
+          
+          // Dodaj informacje o najczęściej używanych komponentach
+          if (recipesAnalysis.topComponents && recipesAnalysis.topComponents.length > 0) {
+            businessDataContext += `\nNajczęściej używane komponenty:\n`;
+            recipesAnalysis.topComponents.slice(0, 5).forEach((comp, idx) => {
+              businessDataContext += `${idx + 1}. ${comp.name} - używany w ${comp.usageCount} recepturach\n`;
+            });
+          }
         }
         
-        // Wyświetl informacje o recepturach
-        if (recipesAnalysis.recentRecipes && recipesAnalysis.recentRecipes.length > 0) {
-          businessDataContext += `\nDostępne receptury (Top 10):\n`;
+        // Wyświetl informacje o wszystkich recepturach z pełnymi szczegółami
+        if (recipesAnalysis.fullRecipeDetails && recipesAnalysis.fullRecipeDetails.length > 0) {
+          businessDataContext += `\n### Pełna lista wszystkich receptur z komponentami:\n`;
           
-          // Pokaż więcej receptur (do 10)
-          const topRecipes = recipes.slice(0, 10).map(recipe => {
+          recipesAnalysis.fullRecipeDetails.forEach((recipe, index) => {
+            businessDataContext += `\n${index + 1}. Receptura: ${recipe.name}\n`;
+            businessDataContext += `   - ID: ${recipe.id}\n`;
+            businessDataContext += `   - Produkt: ${recipe.product}\n`;
+            businessDataContext += `   - Jednostka: ${recipe.unit}\n`;
+            if (recipe.description) {
+              businessDataContext += `   - Opis: ${recipe.description}\n`;
+            }
+            if (recipe.customerId) {
+              businessDataContext += `   - Klient: ${recipe.customerName || recipe.customerId}\n`;
+            }
+            
             const componentsCount = recipe.components?.length || 0;
             const ingredientsCount = recipe.ingredients?.length || 0;
-            return {
-              id: recipe.id,
-              name: recipe.name || 'Bez nazwy',
-              componentsCount: componentsCount + ingredientsCount,
-              product: recipe.productName || recipe.product?.name || 'Nieznany produkt',
-              unit: recipe.unit || 'szt.'
-            };
-          });
-          
-          topRecipes.forEach((recipe, index) => {
-            businessDataContext += `${index + 1}. ${recipe.name} (${recipe.product}) - ${recipe.componentsCount} komponentów\n`;
+            
+            // Pokaż komponenty receptury
+            if (componentsCount > 0) {
+              businessDataContext += `   - Komponenty (${componentsCount}):\n`;
+              recipe.components.forEach((comp, idx) => {
+                businessDataContext += `     * ${comp.name}: ${comp.quantity} ${comp.unit}${comp.notes ? ` (${comp.notes})` : ''}\n`;
+              });
+            }
+            
+            // Pokaż składniki receptury
+            if (ingredientsCount > 0) {
+              businessDataContext += `   - Składniki (${ingredientsCount}):\n`;
+              recipe.ingredients.forEach((ing, idx) => {
+                businessDataContext += `     * ${ing.name}: ${ing.quantity} ${ing.unit}${ing.notes ? ` (${ing.notes})` : ''}\n`;
+              });
+            }
+            
+            if (componentsCount === 0 && ingredientsCount === 0) {
+              businessDataContext += `   - Brak zdefiniowanych komponentów i składników\n`;
+            }
+            
+            // Dodatkowe informacje
+            if (recipe.notes) {
+              businessDataContext += `   - Uwagi: ${recipe.notes}\n`;
+            }
+            
+            businessDataContext += `   - Status: ${recipe.status}\n`;
+            businessDataContext += `   - Wersja: ${recipe.version}\n`;
           });
         }
         
@@ -1076,8 +1167,8 @@ export const addMessageToConversation = async (conversationId, role, content) =>
  * @returns {Promise<string>} - Odpowiedź asystenta
  */
 export const processAIQuery = async (query, context = [], userId) => {
-  // Limit czasu na pobranie danych (w milisekundach)
-  const DATA_FETCH_TIMEOUT = 8000;
+  // Limit czasu na pobranie danych (w milisekundach) - zwiększony na 20 sekund
+  const DATA_FETCH_TIMEOUT = 20000;
   
   // Źródła danych - bufor do śledzenia czy dane zostały pobrane
   const dataSources = {
@@ -1097,8 +1188,10 @@ export const processAIQuery = async (query, context = [], userId) => {
     // Równoległe pobieranie danych
     const businessDataPromise = Promise.resolve().then(async () => {
       try {
-        const data = await prepareBusinessDataForAI();
+        // Przekazujemy zapytanie użytkownika do funkcji pobierającej dane
+        const data = await prepareBusinessDataForAI(query);
         dataSources.businessData = { ready: true, data };
+        console.log('Dane biznesowe zostały pomyślnie pobrane z pełnymi szczegółami');
       } catch (error) {
         console.error('Błąd podczas pobierania danych biznesowych:', error);
         dataSources.businessData = { ready: true, data: null };
@@ -1132,7 +1225,7 @@ export const processAIQuery = async (query, context = [], userId) => {
     // Jeśli dane są nadal pobierane, a nie mamy klucza API lub musimy go użyć
     if (isDataFetchingActive && (!apiKey || query.toLowerCase().includes('dane') || query.toLowerCase().includes('system'))) {
       // Wygeneruj tymczasową odpowiedź
-      return `Pracuję nad analizą danych dla Twojego zapytania "${query}". Dane są obszerne i ich przetwarzanie chwilę potrwa. Proszę o cierpliwość, odpowiem jak najszybciej się da.`;
+      return `Pracuję nad szczegółową analizą danych dla Twojego zapytania "${query}". Pobieram wszystkie dostępne dane z systemu MRP, aby zapewnić pełne i dokładne informacje. To może potrwać chwilę ze względu na dużą ilość danych. Proszę o cierpliwość.`;
     }
     
     // Jeśli nie ma klucza API, używamy funkcji z danymi lokalnymi
@@ -1145,7 +1238,7 @@ export const processAIQuery = async (query, context = [], userId) => {
     const allMessages = [...context, { role: 'user', content: query }];
     const formattedMessages = formatMessagesForOpenAI(allMessages, businessData);
     
-    console.log('Wysyłam zapytanie do API OpenAI z danymi z Firebase...');
+    console.log('Wysyłam zapytanie do API OpenAI z pełnymi danymi z Firebase...');
     
     // Wywołanie API OpenAI
     try {

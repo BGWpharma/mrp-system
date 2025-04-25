@@ -9,6 +9,7 @@ import {
   startAfter,
   Timestamp 
 } from 'firebase/firestore';
+import { getAllCustomers } from './customerService';
 
 // Dodajemy buforowanie danych
 let dataCache = {
@@ -223,12 +224,30 @@ export const getSuppliers = async (options = {}) => {
 };
 
 /**
- * Pobiera receptury z bazy danych
+ * Pobiera receptury z bazy danych z pełnymi szczegółami
  * @param {Object} options - Opcje pobierania
  * @returns {Promise<Array>} - Lista receptur
  */
 export const getRecipes = async (options = {}) => {
-  return getCollectionData('recipes', options);
+  console.log('Pobieranie wszystkich receptur z pełnymi szczegółami...');
+  try {
+    // Domyślnie pobieramy wszystkie receptury bez limitów
+    const allRecipes = await getCollectionData('recipes', {
+      // Używamy sortowania po ostatniej aktualizacji żeby mieć najnowsze dane
+      orderBy: { field: 'updatedAt', direction: 'desc' }
+    });
+    
+    console.log(`Pobrano ${allRecipes.length} receptur`);
+    
+    // Pobieramy pełne dane komponentów dla każdej receptury, jeśli są dostępne
+    // Możemy tworzyć dodatkowe zapytania do bazy, jeśli mamy tylko referencje do komponentów
+    // ale na razie zakładamy, że receptury mają już włączone komponenty
+    
+    return allRecipes;
+  } catch (error) {
+    console.error('Błąd podczas pobierania receptur:', error);
+    return [];
+  }
 };
 
 /**
@@ -642,19 +661,49 @@ export const analyzeRecipes = (recipes) => {
     ? totalComponents / recipesWithComponents 
     : 0;
   
-  // Przygotuj informacje o kilku przykładowych recepturach
-  const recentRecipes = recipes.map(recipe => {
+  // Pełna lista wszystkich receptur z ich szczegółami
+  const fullRecipeDetails = recipes.map(recipe => {
     const componentsCount = (recipe.components?.length || 0) + (recipe.ingredients?.length || 0);
+    const components = recipe.components?.map(comp => ({
+      id: comp.id,
+      name: comp.name || comp.materialName || 'Nieznany komponent',
+      quantity: comp.quantity || 1,
+      unit: comp.unit || 'szt.',
+      materialId: comp.materialId || comp.id,
+      notes: comp.notes || ''
+    })) || [];
+    
+    const ingredients = recipe.ingredients?.map(ing => ({
+      id: ing.id,
+      name: ing.name || 'Nieznany składnik',
+      quantity: ing.quantity || 1,
+      unit: ing.unit || 'szt.',
+      materialId: ing.materialId || ing.id,
+      notes: ing.notes || ''
+    })) || [];
+    
     return {
       id: recipe.id,
       name: recipe.name || 'Bez nazwy',
+      description: recipe.description || '',
       product: recipe.productName || recipe.product?.name || 'Nieznany produkt',
-      componentsCount,
-      unit: recipe.unit || 'szt.'
+      productId: recipe.productId || recipe.product?.id || '',
+      unit: recipe.unit || 'szt.',
+      yield: recipe.yield || 1,
+      customerId: recipe.customerId || '',
+      customerName: recipe.customerName || '',
+      createdAt: recipe.createdAt || null,
+      updatedAt: recipe.updatedAt || null,
+      componentsCount: componentsCount,
+      components: components,
+      ingredients: ingredients,
+      version: recipe.version || 1,
+      notes: recipe.notes || '',
+      status: recipe.status || 'Aktywna'
     };
-  }).slice(0, 10);
+  });
   
-  // Przygotowanie danych o komponentach - widoczne na zrzutach ekranu
+  // Przygotowanie danych o komponentach
   const allComponents = recipes.flatMap(recipe => {
     const components = recipe.components?.map(comp => ({
       recipeId: recipe.id,
@@ -662,7 +711,9 @@ export const analyzeRecipes = (recipes) => {
       componentId: comp.id,
       componentName: comp.name || comp.materialName,
       quantity: comp.quantity || 1,
-      unit: comp.unit || 'szt.'
+      unit: comp.unit || 'szt.',
+      materialId: comp.materialId || comp.id,
+      notes: comp.notes || ''
     })) || [];
     
     const ingredients = recipe.ingredients?.map(ing => ({
@@ -671,28 +722,54 @@ export const analyzeRecipes = (recipes) => {
       ingredientId: ing.id,
       ingredientName: ing.name,
       quantity: ing.quantity || 1,
-      unit: ing.unit || 'szt.'
+      unit: ing.unit || 'szt.',
+      materialId: ing.materialId || ing.id,
+      notes: ing.notes || ''
     })) || [];
     
     return [...components, ...ingredients];
   });
   
-  // Receptury z dokładnymi ilościami - na podstawie zrzutów
-  const detailedRecipeComponents = [
-    { name: 'RAWSHA-OMEGA3 40/30 Omega 3 Epax 40/30 softgels', quantity: 88200, unit: 'kapsułek' },
-    { name: 'RAWSW-Sucralose Suralose', quantity: 0.00050000000000167, unit: 'kg' },
-    { name: 'BWSV-OJ-CAPS-90 Omega 3 Epax 90 caps', quantity: 980, unit: 'sztuk' },
-    { name: 'PACKBW-OMEGA 3 Doypack omega 3 90 caps', quantity: 980, unit: 'sztuk' },
-    { name: 'RAWSHA-NWPi WPi 90 native', quantity: 9.990000000000009, unit: 'kg' }
-  ];
+  // Analiza popularności komponentów (które są używane w wielu recepturach)
+  const componentUsage = {};
+  allComponents.forEach(comp => {
+    const componentId = comp.componentId || comp.ingredientId;
+    const componentName = comp.componentName || comp.ingredientName;
+    
+    if (!componentUsage[componentId]) {
+      componentUsage[componentId] = {
+        id: componentId,
+        name: componentName,
+        usageCount: 0,
+        recipes: []
+      };
+    }
+    
+    // Sprawdź czy dana receptura nie została już wcześniej dodana
+    if (!componentUsage[componentId].recipes.some(r => r.recipeId === comp.recipeId)) {
+      componentUsage[componentId].usageCount++;
+      componentUsage[componentId].recipes.push({
+        recipeId: comp.recipeId,
+        recipeName: comp.recipeName
+      });
+    }
+  });
+  
+  // Przygotuj listę TOP komponentów według użycia w recepturach
+  const topComponents = Object.values(componentUsage)
+    .sort((a, b) => b.usageCount - a.usageCount)
+    .slice(0, 10);
   
   return {
     totalRecipes: recipes.length,
     recipesWithComponents,
     avgComponentsPerRecipe,
-    recentRecipes,
+    // Dodajemy pełne dane wszystkich receptur
+    fullRecipeDetails,
     allComponents,
-    detailedRecipeComponents
+    topComponents,
+    // Liczba unikalnych komponentów używanych we wszystkich recepturach
+    uniqueComponentsCount: Object.keys(componentUsage).length
   };
 };
 
@@ -977,42 +1054,47 @@ export const getFullBatchesData = async () => {
 
 /**
  * Przygotowuje dane biznesowe dla AI
+ * @param {string} query - Zapytanie użytkownika
  * @returns {Promise<Object>} - Dane biznesowe przetworzone dla AI
  */
-export const prepareBusinessDataForAI = async () => {
-  console.log('Pobieranie danych biznesowych dla AI...');
+export const prepareBusinessDataForAI = async (query = '') => {
+  console.log('Pobieranie pełnych danych biznesowych dla AI...');
   
   try {
     // Pobierz podsumowanie systemu MRP
     const summaryData = await getMRPSystemSummary();
     
-    // Pobierz dane o stanach magazynowych
-    const inventoryItems = await getInventoryItems();
-    console.log('Pobieram dane z bazy dla inventory');
+    // Pobierz dane o stanach magazynowych - bez limitów
+    const inventoryItems = await getInventoryItems({ limit: null });
+    console.log(`Pobrano ${inventoryItems?.length || 0} elementów magazynowych`);
     
-    // Pobierz dane o zamówieniach klientów
-    const customerOrders = await getCustomerOrders();
-    console.log('Pobieram dane z bazy dla orders');
+    // Pobierz dane o zamówieniach klientów - bez limitów
+    const customerOrders = await getCustomerOrders({ limit: null });
+    console.log(`Pobrano ${customerOrders?.length || 0} zamówień klientów`);
     
-    // Pobierz dane o zadaniach produkcyjnych
-    const productionTasks = await getProductionTasks();
-    console.log('Pobieram dane z bazy dla productionTasks');
+    // Pobierz dane o zadaniach produkcyjnych - bez limitów
+    const productionTasks = await getProductionTasks({ limit: null });
+    console.log(`Pobrano ${productionTasks?.length || 0} zadań produkcyjnych`);
     
-    // Pobierz dane o dostawcach
-    const suppliers = await getSuppliers();
-    console.log('Pobieram dane z bazy dla suppliers');
+    // Pobierz dane o dostawcach - bez limitów
+    const suppliers = await getSuppliers({ limit: null });
+    console.log(`Pobrano ${suppliers?.length || 0} dostawców`);
     
-    // Pobierz dane o recepturach
+    // Pobierz dane o recepturach - bez limitów i z pełnymi szczegółami
     const recipes = await getRecipes();
+    console.log(`Pobrano ${recipes?.length || 0} receptur z pełnymi szczegółami`);
     
-    // Pobierz dane o zamówieniach zakupu
-    const purchaseOrders = await getPurchaseOrders();
-    console.log('Pobieram dane z bazy dla purchaseOrders');
+    // Pobierz dane o zamówieniach zakupu - bez limitów
+    const purchaseOrders = await getPurchaseOrders({ limit: null });
+    console.log(`Pobrano ${purchaseOrders?.length || 0} zamówień zakupowych`);
     
-    // Pobierz dane o partiach materiałów i ich powiązaniach z PO oraz MO
-    const materialBatchesData = await getFullBatchesData();
-    console.log('Pobieram dane z bazy dla materialBatches');
-    console.log('Pobieram dane z bazy dla batchReservations');
+    // Pobierz dane o klientach - bez limitów
+    const customers = await getAllCustomers();
+    console.log(`Pobrano ${customers?.length || 0} klientów`);
+    
+    // Pobierz dane o partiach materiałów i ich powiązaniach z PO oraz MO - bez limitów
+    const materialBatchesData = await getFullBatchesData({ limit: null });
+    console.log(`Pobrano ${materialBatchesData?.batches?.length || 0} partii materiałów i ${materialBatchesData?.reservations?.length || 0} rezerwacji`);
     
     // Przygotuj obiekt z danymi bazowymi
     const businessData = {
@@ -1024,7 +1106,8 @@ export const prepareBusinessDataForAI = async () => {
         recipes: recipes,
         purchaseOrders: purchaseOrders,
         materialBatches: materialBatchesData?.batches || [],
-        batchReservations: materialBatchesData?.reservations || []
+        batchReservations: materialBatchesData?.reservations || [],
+        customers: customers  // Dodajemy dane o klientach
       },
       summary: summaryData,
       timestamp: new Date().toISOString(),
@@ -1036,8 +1119,11 @@ export const prepareBusinessDataForAI = async () => {
         recipes: recipes?.length > 0,
         purchaseOrders: purchaseOrders?.length > 0,
         materialBatches: (materialBatchesData?.batches?.length || 0) > 0,
-        batchReservations: (materialBatchesData?.reservations?.length || 0) > 0
-      }
+        batchReservations: (materialBatchesData?.reservations?.length || 0) > 0,
+        customers: customers?.length > 0  // Dodajemy informację o dostępności danych klientów
+      },
+      // Przekazujemy zapytanie użytkownika, aby móc lepiej dopasować odpowiedź
+      query: query
     };
     
     // Wzbogać dane o analizy
@@ -1053,28 +1139,18 @@ export const prepareBusinessDataForAI = async () => {
       .filter(key => !businessData.dataCompleteness[key])
       .map(key => key);
     
+    // Zachowaj zapytanie użytkownika w wzbogaconych danych
+    enrichedData.query = query;
+    
     return enrichedData;
   } catch (error) {
-    console.error('Błąd podczas przygotowywania danych dla AI:', error);
+    console.error('Błąd podczas przygotowywania danych biznesowych dla AI:', error);
     return {
-      error: 'Wystąpił błąd podczas pobierania danych biznesowych',
-      errorDetails: error.message,
+      data: {},
+      summary: {},
+      error: error.message,
       timestamp: new Date().toISOString(),
-      dataCompleteness: {
-        inventory: false,
-        orders: false,
-        productionTasks: false,
-        suppliers: false,
-        recipes: false,
-        purchaseOrders: false,
-        materialBatches: false,
-        batchReservations: false
-      },
-      accessibleDataFields: [],
-      unavailableDataFields: [
-        'inventory', 'orders', 'productionTasks', 'suppliers', 
-        'recipes', 'purchaseOrders', 'materialBatches', 'batchReservations'
-      ]
+      query: query  // Zachowujemy zapytanie nawet w przypadku błędu
     };
   }
 };
