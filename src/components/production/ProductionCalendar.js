@@ -134,6 +134,24 @@ const ProductionCalendar = () => {
           const fetchedTasks = await getTasksByDateRange(rangeStartDate, rangeEndDate);
           console.log('Pobrano zadania:', fetchedTasks);
           setTasks(fetchedTasks);
+          
+          // Dodatkowe wymuszenie przerysowania
+          if (calendarRef.current) {
+            try {
+              const calendarApi = calendarRef.current.getApi();
+              calendarApi.updateSize();
+              
+              // Upewnij się, że kalendarz jest w odpowiednim widoku i z właściwym zakresem dat
+              if (customDateRange) {
+                calendarApi.setOption('visibleRange', {
+                  start: startDate,
+                  end: endDate
+                });
+              }
+            } catch (error) {
+              console.error("Błąd podczas aktualizacji kalendarza po pobraniu zadań:", error);
+            }
+          }
         } catch (error) {
           showError('Błąd podczas pobierania zadań: ' + error.message);
           console.error('Error fetching tasks:', error);
@@ -353,7 +371,7 @@ const ProductionCalendar = () => {
         if (endDate.toDate) {
           endDate = endDate.toDate().toISOString();
         } else if (endDate instanceof Date) {
-          endDate = endDate.toISOString();
+          endDate = startDate.toISOString();
         }
       }
       
@@ -620,155 +638,125 @@ const ProductionCalendar = () => {
     setDateRangeMenuAnchor(null);
   };
 
-  const applyPredefinedRange = (range) => {
-    let newStartDate, newEndDate;
-    const today = new Date();
-    
-    switch(range) {
-      case 'today':
-        newStartDate = today;
-        newEndDate = today;
-        break;
-      case 'thisWeek':
-        newStartDate = new Date(today);
-        newStartDate.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1));
-        newEndDate = new Date(newStartDate);
-        newEndDate.setDate(newStartDate.getDate() + 6);
-        break;
-      case 'thisMonth':
-        newStartDate = startOfMonth(today);
-        newEndDate = endOfMonth(today);
-        break;
-      case 'nextMonth':
-        newStartDate = startOfMonth(addMonths(today, 1));
-        newEndDate = endOfMonth(addMonths(today, 1));
-        break;
-      case 'next30Days':
-        newStartDate = today;
-        newEndDate = addDays(today, 30);
-        break;
-      case 'next90Days':
-        newStartDate = today;
-        newEndDate = addDays(today, 90);
-        break;
-      default:
-        return;
-    }
-    
-    try {
-      // Najpierw zamknij menu
-      handleDateRangeMenuClose();
-      
-      // Aktualizuj stany dat
-      setStartDate(newStartDate);
-      setEndDate(newEndDate);
-      
-      if (calendarRef.current) {
-        const calendarApi = calendarRef.current.getApi();
-        
-        // Oblicz różnicę między datami w dniach
-        const diffInDays = Math.ceil((newEndDate - newStartDate) / (1000 * 60 * 60 * 24));
-        
-        // Wybierz odpowiedni widok na podstawie różnicy w dniach
-        let viewToUse = view;
-        if (view.startsWith('resourceTimeline')) {
-          if (diffInDays <= 1) {
-            viewToUse = 'resourceTimelineDay';
-          } else if (diffInDays <= 7) {
-            viewToUse = 'resourceTimelineWeek';
-          } else if (diffInDays <= 31) {
-            viewToUse = 'resourceTimelineMonth';
-          } else {
-            viewToUse = 'resourceTimelineYear';
-          }
-          
-          // Tylko jeśli widok się zmienił, aktualizuj stan
-          if (viewToUse !== view) {
-            setGanttView(viewToUse);
-            setView(viewToUse);
-            
-            // Daj czas na zaktualizowanie stanu przed zmianą widoku
-            setTimeout(() => {
-              try {
-                calendarApi.changeView(viewToUse);
-              } catch (error) {
-                console.error('Błąd podczas zmiany widoku kalendarza:', error);
-              }
-            }, 0);
-          }
-        }
-        
-        // Przejdź do daty początkowej
-        calendarApi.gotoDate(newStartDate);
-        
-        // Pobierz zadania dla wybranego zakresu
-        fetchTasks({
-          startStr: newStartDate.toISOString(),
-          endStr: newEndDate.toISOString()
-        });
-      }
-      
-      // Ustaw customDateRange jako ostatni krok
-      setCustomDateRange(true);
-    } catch (error) {
-      console.error('Błąd podczas stosowania zakresu dat:', error);
-      showError('Wystąpił błąd podczas zmiany zakresu dat: ' + error.message);
-    }
-  };
-
+  // Kompletnie przepisana funkcja do zastosowania zakresu dat
   const applyCustomDateRange = () => {
     try {
       // Najpierw zamknij menu
       handleDateRangeMenuClose();
       
+      // Pokazujemy loader
+      setLoading(true);
+      
+      // Walidacja dat
+      if (!startDate || !endDate) {
+        showError('Wybierz prawidłowy zakres dat');
+        setLoading(false);
+        return;
+      }
+      
+      if (startDate > endDate) {
+        showError('Data początkowa nie może być późniejsza niż końcowa');
+        setLoading(false);
+        return;
+      }
+      
+      // Ustawienie końca dnia dla daty końcowej, aby zawierała cały dzień
+      const endDateWithTime = new Date(endDate.getTime());
+      endDateWithTime.setHours(23, 59, 59, 999);
+      
+      // Aktualizuj stany dat dla kolejnych zapytań
+      setEndDate(endDateWithTime);
+      
+      // Logging
+      console.log("Zastosowanie zakresu dat:", format(startDate, 'dd.MM.yyyy'), "-", format(endDateWithTime, 'dd.MM.yyyy'));
+      console.log("Daty ISO:", startDate.toISOString(), "-", endDateWithTime.toISOString());
+      
+      // Najprostsze rozwiązanie - całkowite zniszczenie i odbudowa komponentu
+      // bez zależności od wszystkich opcji konfiguracyjnych
       if (calendarRef.current) {
         const calendarApi = calendarRef.current.getApi();
         
-        // Oblicz różnicę między datami w dniach
-        const diffInDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+        // Aktualny stan
+        console.log("Aktualna widoczność kalendarza przed resetem:", 
+          calendarApi.view.activeStart, 
+          calendarApi.view.activeEnd,
+          "Typ widoku:", calendarApi.view.type
+        );
         
-        // Wybierz odpowiedni widok na podstawie różnicy w dniach
-        let viewToUse = view;
-        if (view.startsWith('resourceTimeline')) {
-          if (diffInDays <= 7) {
-            viewToUse = 'resourceTimelineWeek';
-          } else if (diffInDays <= 31) {
-            viewToUse = 'resourceTimelineMonth';
-          } else {
-            viewToUse = 'resourceTimelineYear';
-          }
-          
-          // Tylko jeśli widok się zmienił, aktualizuj stan
-          if (viewToUse !== view) {
-            setGanttView(viewToUse);
-            setView(viewToUse);
-            
-            // Daj czas na zaktualizowanie stanu przed zmianą widoku
-            setTimeout(() => {
-              try {
-                calendarApi.changeView(viewToUse);
-              } catch (error) {
-                console.error('Błąd podczas zmiany widoku kalendarza:', error);
-              }
-            }, 0);
-          }
+        // Włącz flagę customDateRange
+        setCustomDateRange(true);
+        
+        // Oblicz długość trwania w dniach (+1, aby uwzględnić dzień końcowy)
+        const durationDays = Math.ceil((endDateWithTime - startDate) / (1000 * 60 * 60 * 24)) + 1;
+        console.log("Długość trwania w dniach:", durationDays);
+        
+        // Wybór odpowiedniego widoku
+        let targetView = 'resourceTimelineMonth';
+        if (durationDays <= 1) {
+          targetView = 'resourceTimelineDay';
+        } else if (durationDays <= 7) {
+          targetView = 'resourceTimelineWeek';
         }
         
-        // Przejdź do daty początkowej
-        calendarApi.gotoDate(startDate);
-        
-        // Pobierz zadania dla wybranego zakresu
-        fetchTasks({
-          startStr: startDate.toISOString(),
-          endStr: endDate.toISOString()
-        });
+        // KOMPLETNY RESET KALENDARZA - znacznie radykalniejsze podejście
+        try {
+          // 1. Usuń wszystkie wydarzenia
+          calendarApi.removeAllEvents();
+          
+          // 2. Ustaw nowy widok i opcje
+          setView(targetView);
+          calendarApi.changeView(targetView);
+          
+          // 3. Ustaw domyślną durationę dla widoku (unikając konfliktu z slotDuration)
+          if (targetView === 'resourceTimelineMonth') {
+            calendarApi.setOption('duration', { days: durationDays });
+          }
+          
+          // 4. KLUCZOWE: Ustaw dokładny zakres dat (visibleRange jest nadrzędny wobec duration)
+          calendarApi.setOption('visibleRange', {
+            start: startDate,
+            end: endDateWithTime
+          });
+          
+          // 5. Przejdź do daty początkowej
+          calendarApi.gotoDate(startDate);
+          
+          // 6. Zaktualizuj widok
+          calendarApi.updateSize();
+          
+          // 7. Pobierz dane dla dokładnego zakresu
+          console.log("Pobieranie zadań dla wybranego zakresu:", startDate.toISOString(), "-", endDateWithTime.toISOString());
+          fetchTasks({
+            startStr: startDate.toISOString(),
+            endStr: endDateWithTime.toISOString()
+          });
+          
+          // Sprawdź końcowy stan po wszystkich zmianach
+          setTimeout(() => {
+            if (calendarRef.current) {
+              const api = calendarRef.current.getApi();
+              console.log("KOŃCOWY stan kalendarza:", 
+                api.view.activeStart, 
+                api.view.activeEnd,
+                "Widok:", api.view.type
+              );
+            }
+            
+            // Wyłącz loader
+            setLoading(false);
+          }, 250);
+        } catch (error) {
+          console.error("Błąd podczas resetowania kalendarza:", error);
+          setLoading(false);
+        }
+      } else {
+        console.error("Brak referencji do kalendarza");
+        setLoading(false);
       }
-      
-      // Ustaw customDateRange jako ostatni krok
-      setCustomDateRange(true);
     } catch (error) {
       console.error('Błąd podczas stosowania niestandardowego zakresu dat:', error);
       showError('Wystąpił błąd podczas zmiany zakresu dat: ' + error.message);
+      setLoading(false);
     }
   };
 
@@ -867,19 +855,10 @@ const ProductionCalendar = () => {
   // Funkcja do obsługi nawigacji kalendarza (prev, next, today buttons)
   const handleNavigation = (action) => {
     if (calendarRef.current) {
-      const calendarApi = calendarRef.current.getApi();
+      // Pokazujemy loader
+      setLoading(true);
       
-      // Jeśli mamy niestandardowy zakres dat, wyłącz niestandardowy zakres
-      // aby kalendarz funkcjonował normalnie
-      if (customDateRange) {
-        setCustomDateRange(false);
-        
-        // Przypisujemy nowe daty do startDate i endDate na podstawie aktualnego widoku
-        const currentViewStart = calendarApi.view.currentStart;
-        const currentViewEnd = calendarApi.view.currentEnd;
-        setStartDate(currentViewStart);
-        setEndDate(currentViewEnd);
-      }
+      const calendarApi = calendarRef.current.getApi();
       
       // Wykonaj akcję nawigacji
       if (action === 'prev') {
@@ -889,6 +868,24 @@ const ProductionCalendar = () => {
       } else if (action === 'today') {
         calendarApi.today();
       }
+      
+      // Aktualizuj daty po nawigacji
+      setTimeout(() => {
+        const viewStart = calendarApi.view.activeStart;
+        const viewEnd = calendarApi.view.activeEnd;
+        
+        // Aktualizuj stan dat
+        setStartDate(viewStart);
+        setEndDate(viewEnd);
+        
+        // Pobierz zadania dla nowego zakresu
+        fetchTasks({
+          startStr: viewStart.toISOString(),
+          endStr: viewEnd.toISOString()
+        });
+        
+        setLoading(false);
+      }, 100);
     }
   };
 
@@ -896,16 +893,24 @@ const ProductionCalendar = () => {
   const getCalendarTitle = () => {
     if (calendarRef.current) {
       try {
-        return calendarRef.current.getApi().view.title;
+        const calendarApi = calendarRef.current.getApi();
+        
+        // Dla widoku Gantt, jeśli mamy niestandardowy zakres dat,
+        // zwróć formatowany zakres dat zamiast automatycznego tytułu
+        if (view.includes('resourceTimeline') && customDateRange) {
+          return `${format(startDate, 'd MMMM yyyy', { locale: pl })} – ${format(endDate, 'd MMMM yyyy', { locale: pl })}`;
+        }
+        
+        return calendarApi.view.title;
       } catch (error) {
         console.error('Błąd podczas pobierania tytułu kalendarza:', error);
         return customDateRange 
-          ? `${format(startDate, 'dd.MM.yyyy')} - ${format(endDate, 'dd.MM.yyyy')}`
+          ? `${format(startDate, 'dd.MM.yyyy', { locale: pl })} - ${format(endDate, 'dd.MM.yyyy', { locale: pl })}`
           : '31 mar – 6 kwi 2025';
       }
     } else {
       return customDateRange 
-        ? `${format(startDate, 'dd.MM.yyyy')} - ${format(endDate, 'dd.MM.yyyy')}`
+        ? `${format(startDate, 'dd.MM.yyyy', { locale: pl })} - ${format(endDate, 'dd.MM.yyyy', { locale: pl })}`
         : '31 mar – 6 kwi 2025';
     }
   };
@@ -1011,6 +1016,74 @@ const ProductionCalendar = () => {
     }
   };
 
+  // Funkcja dostosowująca widok kalendarza do długiego zakresu dat
+  const adjustViewForDateRange = (startDate, endDate) => {
+    if (!calendarRef.current) return;
+    
+    try {
+      const diffInDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+      let viewToUse = view;
+      
+      // Wybierz odpowiedni widok na podstawie różnicy w dniach
+      if (diffInDays <= 1) {
+        viewToUse = 'resourceTimelineDay';
+      } else if (diffInDays <= 7) {
+        viewToUse = 'resourceTimelineWeek';
+      } else {
+        viewToUse = 'resourceTimelineMonth'; // Używamy widoku miesięcznego nawet dla dłuższych okresów
+      }
+      
+      // Jeśli widok się zmienił, zaktualizuj stan i widok kalendarza
+      if (viewToUse !== view) {
+        setGanttView(viewToUse);
+        setView(viewToUse);
+        
+        setTimeout(() => {
+          try {
+            const calendarApi = calendarRef.current.getApi();
+            calendarApi.changeView(viewToUse);
+            
+            // Ustaw dokładny zakres dat dla widoku - to jest kluczowe dla pokazania całego zakresu
+            calendarApi.setOption('visibleRange', {
+              start: startDate,
+              end: endDate
+            });
+            
+            // Dla widoków z dłuższymi zakresami, dostosuj szerokość slotu
+            if (diffInDays > 31) {
+              calendarApi.setOption('slotMinWidth', Math.max(40, Math.min(80, Math.floor(1200 / diffInDays))));
+            }
+            
+            // Wymuś renderowanie kalendarza
+            calendarApi.updateSize();
+            calendarApi.render();
+          } catch (error) {
+            console.error('Błąd podczas zmiany widoku kalendarza:', error);
+          }
+        }, 0);
+      } else {
+        // Nawet jeśli widok się nie zmienił, upewnij się, że zakres dat jest poprawnie ustawiony
+        setTimeout(() => {
+          try {
+            const calendarApi = calendarRef.current.getApi();
+            calendarApi.setOption('visibleRange', {
+              start: startDate,
+              end: endDate
+            });
+            
+            // Wymuś renderowanie kalendarza
+            calendarApi.updateSize();
+            calendarApi.render();
+          } catch (error) {
+            console.error('Błąd podczas ustawiania zakresu dat:', error);
+          }
+        }, 0);
+      }
+    } catch (error) {
+      console.error('Błąd podczas dostosowywania widoku do zakresu dat:', error);
+    }
+  };
+
   // Funkcja do określania koloru stanowiska
   const getWorkstationColor = (workstationId) => {
     // Znajdź stanowisko o podanym ID
@@ -1059,6 +1132,44 @@ const ProductionCalendar = () => {
     
     // Zwróć biały dla ciemnych kolorów, czarny dla jasnych
     return (yiq >= 128) ? '#000000' : '#ffffff';
+  };
+
+  // Dodajemy nową funkcję do bezpiecznego resetowania i ponownego inicjalizacji kalendarza
+  const resetCalendar = () => {
+    if (!calendarRef.current) return;
+    
+    try {
+      const calendarApi = calendarRef.current.getApi();
+      
+      // Resetowanie i ponowne renderowanie
+      calendarApi.removeAllEvents();
+      calendarApi.destroy();
+      
+      // Wymuszenie restartu całego komponentu kalendarza
+      setLoading(true);
+      
+      setTimeout(() => {
+        try {
+          // Re-inicjalizacja kalendarza
+          calendarApi.render();
+          calendarApi.changeView(view);
+          calendarApi.gotoDate(startDate);
+          
+          // Odśwież dane
+          fetchTasks({
+            startStr: startDate.toISOString(),
+            endStr: endDate.toISOString()
+          });
+        } catch (error) {
+          console.error("Błąd podczas ponownej inicjalizacji kalendarza:", error);
+        } finally {
+          setLoading(false);
+        }
+      }, 300);
+    } catch (error) {
+      console.error("Błąd podczas resetowania kalendarza:", error);
+      setLoading(false);
+    }
   };
 
   return (
@@ -1219,55 +1330,7 @@ const ProductionCalendar = () => {
       >
         <Box sx={{ p: 1 }}>
           <Typography variant="subtitle2" gutterBottom>
-            Szybki wybór zakresu
-          </Typography>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-            <Chip 
-              label="Dziś" 
-              onClick={() => applyPredefinedRange('today')} 
-              color="primary" 
-              variant="outlined" 
-              size="small" 
-            />
-            <Chip 
-              label="Ten tydzień" 
-              onClick={() => applyPredefinedRange('thisWeek')} 
-              color="primary" 
-              variant="outlined" 
-              size="small" 
-            />
-            <Chip 
-              label="Ten miesiąc" 
-              onClick={() => applyPredefinedRange('thisMonth')} 
-              color="primary" 
-              variant="outlined" 
-              size="small" 
-            />
-            <Chip 
-              label="Następny miesiąc" 
-              onClick={() => applyPredefinedRange('nextMonth')} 
-              color="primary" 
-              variant="outlined" 
-              size="small" 
-            />
-            <Chip 
-              label="Następne 30 dni" 
-              onClick={() => applyPredefinedRange('next30Days')} 
-              color="primary" 
-              variant="outlined" 
-              size="small" 
-            />
-            <Chip 
-              label="Następne 90 dni" 
-              onClick={() => applyPredefinedRange('next90Days')} 
-              color="primary" 
-              variant="outlined" 
-              size="small" 
-            />
-          </Box>
-          
-          <Typography variant="subtitle2" gutterBottom>
-            Niestandardowy zakres dat
+            Wybierz zakres dat
           </Typography>
           <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -1539,6 +1602,55 @@ const ProductionCalendar = () => {
               right: -4px;
               cursor: e-resize;
             }
+            /* Dostosowania dla widoku z wieloma miesiącami */
+            .fc-resource-timeline-divider {
+              width: 3px !important;
+            }
+            
+            .fc-col-header-cell {
+              text-align: center;
+            }
+            
+            .fc-timeline-slot-frame {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              min-height: 40px;
+            }
+            
+            .fc-scrollgrid-section-header {
+              z-index: 10;
+            }
+            
+            .fc-timeline-slot-cushion {
+              text-align: center;
+              width: 100%;
+            }
+            
+            /* Dodatkowe style dla nagłówków kolumn */
+            .fc-timeline-slot.fc-day-sun .fc-timeline-slot-frame,
+            .fc-timeline-slot.fc-day-sat .fc-timeline-slot-frame {
+              background-color: rgba(0,0,0,0.03);
+            }
+            
+            /* Oznaczenie pierwszego dnia miesiąca */
+            .fc-timeline-slot.fc-day-1 .fc-timeline-slot-frame {
+              border-left: 2px solid #2196f3;
+              background-color: rgba(33, 150, 243, 0.05);
+            }
+            
+            /* Zwiększenie kontrastu między komórkami */
+            .fc-timeline-slot {
+              border-right: 1px solid #ddd;
+            }
+            
+            /* Poprawka dla nagłówków miesiąca */
+            .fc-timeline-slot.fc-day-1 .fc-timeline-slot-cushion,
+            .fc-timeline-slot:first-child .fc-timeline-slot-cushion {
+              font-weight: bold;
+              color: #2196f3;
+            }
           `}
         </style>
         <FullCalendar
@@ -1552,13 +1664,20 @@ const ProductionCalendar = () => {
           eventClick={handleEventClick}
           dateClick={null}
           selectable={false}
-          datesSet={handleDatesSet}
+          datesSet={(dateInfo) => {
+            console.log("datesSet wywołany:", dateInfo.start, dateInfo.end, "isCustomDateRange:", customDateRange);
+            if (!customDateRange) {
+              handleDatesSet(dateInfo);
+            } else {
+              console.log("Ignoruję automatyczną zmianę zakresu - używam customDateRange");
+            }
+          }}
           locale={plLocale}
           height="100%"
           allDaySlot={true}
           slotMinTime="00:00:00"
           slotMaxTime="23:59:59"
-          slotDuration="01:00:00"
+          slotDuration={view === 'resourceTimelineDay' ? { hours: 1 } : { days: 1 }}
           businessHours={{
             daysOfWeek: [1, 2, 3, 4, 5],
             startTime: '08:00',
@@ -1596,16 +1715,16 @@ const ProductionCalendar = () => {
           stickyHeaderDates={true}
           stickyResourceAreaHeaderContent={true}
           expandRows={true}
-          dayHeaderFormat={{
-            weekday: 'short',
-            day: 'numeric',
-            month: 'numeric'
-          }}
-          titleFormat={{ 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-          }}
+          visibleRange={customDateRange ? {
+            start: startDate,
+            end: endDate
+          } : null}
+          duration={customDateRange ? {
+            days: Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1
+          } : undefined}
+          fixedWeekCount={false}
+          navLinks={false}
+          slotMinWidth={customDateRange && (endDate - startDate) / (1000 * 60 * 60 * 24) > 31 ? 40 : 60}
           slotLabelContent={(args) => {
             if (view.startsWith('resourceTimeline')) {
               const date = args.date;
@@ -1623,10 +1742,26 @@ const ProductionCalendar = () => {
                 );
               }
               
-              // Dla widoku tygodniowego (dni)
+              // Dla widoku tygodniowego lub miesięcznego (dni)
               if (view === 'resourceTimelineWeek' || view === 'resourceTimelineMonth') {
-                const weekday = new Intl.DateTimeFormat('pl', { weekday: 'short' }).format(date);
                 const day = date.getDate();
+                const weekday = new Intl.DateTimeFormat('pl', { weekday: 'short' }).format(date);
+                const month = new Intl.DateTimeFormat('pl', { month: 'short' }).format(date);
+                
+                // Dla pierwszego dnia miesiąca lub początku widoku, pokaż nazwę miesiąca
+                if (day === 1 || (day <= 3 && args.isLabeled)) {
+                  return (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 'bold' }}>
+                        {month}
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{day}</Typography>
+                      <Typography variant="caption" sx={{ textTransform: 'uppercase' }}>{weekday}</Typography>
+                    </Box>
+                  );
+                }
+                
+                // Dla pozostałych dni
                 return (
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{day}</Typography>
@@ -1634,23 +1769,21 @@ const ProductionCalendar = () => {
                   </Box>
                 );
               }
-              
-              // Dla widoku rocznego (tygodnie/miesiące)
-              if (view === 'resourceTimelineYear') {
-                if (date.getDate() === 1 || args.isLabeled) {
-                  const month = new Intl.DateTimeFormat('pl', { month: 'short' }).format(date);
-                  return (
-                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                      <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{month}</Typography>
-                      <Typography variant="caption">{date.getDate()}</Typography>
-                    </Box>
-                  );
-                }
-                return null;
-              }
             }
             return null;
           }}
+          dayCellDidMount={(arg) => {
+            // Dodaj oznaczenie miesiąca dla pierwszego dnia miesiąca
+            if (arg.date.getDate() === 1) {
+              const cellEl = arg.el;
+              cellEl.style.borderLeft = '2px solid #2196f3';
+              cellEl.style.backgroundColor = 'rgba(33, 150, 243, 0.05)';
+            }
+          }}
+          viewClassNames="custom-timeline-view"
+          dayHeaders={true}
+          datesAboveResources={true}
+          firstDay={1}
           views={{
             timeGridDay: {
               dayHeaderFormat: { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }
@@ -1659,52 +1792,35 @@ const ProductionCalendar = () => {
               dayHeaderFormat: { weekday: 'short', day: 'numeric', month: 'numeric' }
             },
             dayGridMonth: {
-              dayHeaderFormat: { weekday: 'short' },
-              dayCellContent: (args) => {
-                return (
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="body2">{args.date.getDate()}</Typography>
-                  </Box>
-                );
-              }
+              dayHeaderFormat: { weekday: 'short' }
             },
             resourceTimelineDay: {
+              slotDuration: { hours: 1 },
               slotLabelFormat: [
                 { hour: '2-digit', minute: '2-digit', hour12: false }
               ],
-              slotMinWidth: 100,
-              slotDuration: { hours: 1 },
-              snapDuration: { minutes: 15 },
-              headerToolbar: false // Wyłączenie domyślnego nagłówka
+              visibleRange: customDateRange ? { start: startDate, end: endDate } : null
             },
             resourceTimelineWeek: {
+              duration: { days: 7 },
+              slotDuration: { days: 1 },
               slotLabelFormat: [
                 { weekday: 'short', day: 'numeric', month: 'short' }
               ],
-              slotMinWidth: 100,
-              slotDuration: { days: 1 },
-              headerToolbar: false // Wyłączenie domyślnego nagłówka
+              visibleRange: customDateRange ? { start: startDate, end: endDate } : null
             },
             resourceTimelineMonth: {
-              slotLabelFormat: {
-                weekday: 'short', 
-                day: 'numeric'
-              },
-              duration: { months: 1 },
-              slotMinWidth: 60,
+              duration: customDateRange 
+                ? { days: Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1 } 
+                : { days: 30 },
               slotDuration: { days: 1 },
-              headerToolbar: false // Wyłączenie domyślnego nagłówka
-            },
-            resourceTimelineYear: {
-              slotLabelFormat: {
-                month: 'short',
-                day: 'numeric'
-              },
-              slotMinWidth: 40,
-              slotDuration: { weeks: 1 },
-              headerToolbar: false // Wyłączenie domyślnego nagłówka
+              slotLabelFormat: [
+                { day: 'numeric', weekday: 'short' }
+              ],
+              visibleRange: customDateRange ? { start: startDate, end: endDate } : null
             }
           }}
+          dayHeaderClassNames="custom-day-header"
         />
       </Box>
     </Paper>
