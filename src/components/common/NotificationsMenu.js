@@ -265,7 +265,7 @@ const NotificationsMenu = () => {
             <CircularProgress size={24} />
           </Box>
         ) : notifications.length > 0 ? (
-          <div>
+          <Box sx={{ width: '100%' }}>
             <List sx={{ p: 0 }}>
               {notifications.map((notification) => (
                 <ListItem 
@@ -326,7 +326,7 @@ const NotificationsMenu = () => {
                 Oznacz wszystkie jako przeczytane
               </Button>
             </Box>
-          </div>
+          </Box>
         ) : (
           <Box sx={{ p: 3, textAlign: 'center' }}>
             <Typography variant="body2" color="text.secondary">

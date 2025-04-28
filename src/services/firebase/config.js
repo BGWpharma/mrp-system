@@ -3,6 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore, enableIndexedDbPersistence } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
+import { getDatabase } from 'firebase/database';
 
 // Zastąp poniższe dane danymi z Twojego projektu Firebase
 const firebaseConfig = {
@@ -12,7 +13,8 @@ const firebaseConfig = {
     storageBucket: "bgw-mrp-system.appspot.com",
     messagingSenderId: "562543983508",
     appId: "1:562543983508:web:4c7f8e92b7989a2e446d81",
-    measurementId: "G-R30WP0YCY5"
+    measurementId: "G-R30WP0YCY5",
+    databaseURL: "https://bgw-mrp-system-default-rtdb.europe-west1.firebasedatabase.app"
 };
 
 // Inicjalizacja Firebase
@@ -20,6 +22,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
+const rtdb = getDatabase(app);
 
 // Włącz obsługę trybu offline
 enableIndexedDbPersistence(db)
@@ -36,4 +39,4 @@ enableIndexedDbPersistence(db)
     }
   });
 
-export { db, auth, storage };
+export { db, auth, storage, rtdb };

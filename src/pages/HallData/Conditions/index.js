@@ -1,52 +1,946 @@
-import React from 'react';
-import { Typography, Paper, Box, Container, Grid } from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { 
+  Typography, 
+  Paper, 
+  Box, 
+  Container, 
+  Grid, 
+  CircularProgress, 
+  FormControl, 
+  InputLabel, 
+  Select, 
+  MenuItem, 
+  Alert, 
+  Link,
+  Tabs,
+  Tab,
+  Button,
+  IconButton,
+  TextField,
+  Slider,
+  Divider,
+  Card,
+  CardContent,
+  useTheme,
+  useMediaQuery,
+  Stack,
+  Tooltip,
+  ToggleButtonGroup,
+  ToggleButton
+} from '@mui/material';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { LocalizationProvider, DateTimePicker } from '@mui/x-date-pickers';
+import { pl } from 'date-fns/locale';
+import { 
+  LineChart, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip as RechartsTooltip, 
+  Legend, 
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  ReferenceLine
+} from 'recharts';
+import { ref, onValue, get, query, orderByChild, limitToLast, startAt, endAt } from 'firebase/database';
+import { rtdb } from '../../../services/firebase/config';
+import { 
+  AccessTime as AccessTimeIcon,
+  Thermostat as ThermostatIcon,
+  Opacity as OpacityIcon,
+  Refresh as RefreshIcon,
+  DataUsage as DataUsageIcon,
+  DateRange as DateRangeIcon,
+  ShowChart as ShowChartIcon,
+  Timeline as TimelineIcon
+} from '@mui/icons-material';
+import { format, subHours, subDays, subWeeks, subMonths, isValid } from 'date-fns';
+
+// Predefiniowane zakresy czasu
+const TIME_RANGES = [
+  { label: 'Ostatnia godzina', value: 'hour', fn: () => subHours(new Date(), 1) },
+  { label: 'Ostatnie 6 godzin', value: '6hours', fn: () => subHours(new Date(), 6) },
+  { label: 'Ostatnie 12 godzin', value: '12hours', fn: () => subHours(new Date(), 12) },
+  { label: 'Dzisiaj', value: 'today', fn: () => new Date(new Date().setHours(0, 0, 0, 0)) },
+  { label: 'Ostatni dzień', value: 'day', fn: () => subDays(new Date(), 1) },
+  { label: 'Ostatni tydzień', value: 'week', fn: () => subWeeks(new Date(), 1) },
+  { label: 'Ostatni miesiąc', value: 'month', fn: () => subMonths(new Date(), 1) },
+  { label: 'Niestandardowy', value: 'custom', fn: () => null }
+];
 
 const HallDataConditionsPage = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [permissionError, setPermissionError] = useState(false);
+  const [indexError, setIndexError] = useState(false);
+  const [sensors, setSensors] = useState([]);
+  const [selectedSensor, setSelectedSensor] = useState('');
+  const [currentData, setCurrentData] = useState({
+    temperature: 0,
+    humidity: 0,
+    timestamp: null
+  });
+  const [historyData, setHistoryData] = useState([]);
+  
+  // Nowe stany do obsługi przedziałów czasowych
+  const [timeRange, setTimeRange] = useState('day');
+  const [startDate, setStartDate] = useState(subDays(new Date(), 1));
+  const [endDate, setEndDate] = useState(new Date());
+  const [chartType, setChartType] = useState('area');
+  const [isCustomRange, setIsCustomRange] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  
+  // Wykres - oś Y - min/max temperatura
+  const [tempMinMax, setTempMinMax] = useState({ min: 15, max: 30 });
+  // Wykres - oś Y - min/max wilgotność
+  const [humidityMinMax, setHumidityMinMax] = useState({ min: 20, max: 50 });
+
+  // Pobieranie listy dostępnych czujników
+  useEffect(() => {
+    setLoading(true);
+    const sensorsRef = ref(rtdb, 'sensors');
+    
+    onValue(sensorsRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const sensorsData = snapshot.val();
+        const sensorsList = Object.keys(sensorsData).map(key => ({
+          id: key,
+          name: key
+        }));
+        
+        setSensors(sensorsList);
+        
+        // Wybierz pierwszy czujnik automatycznie jeśli nie wybrano żadnego
+        if (sensorsList.length > 0 && !selectedSensor) {
+          setSelectedSensor(sensorsList[0].id);
+        }
+      } else {
+        // Brak danych czujników w bazie
+        setSensors([]);
+        setLoading(false);
+      }
+      setLoading(false);
+    }, (error) => {
+      console.error("Błąd podczas pobierania listy czujników:", error);
+      if (error.message && error.message.includes('permission_denied')) {
+        setPermissionError(true);
+      }
+      setError("Nie udało się pobrać listy czujników");
+      setLoading(false);
+    });
+  }, [selectedSensor]);
+
+  // Pobieranie aktualnych danych dla wybranego czujnika
+  useEffect(() => {
+    if (!selectedSensor) return;
+
+    const sensorRef = ref(rtdb, `sensors/${selectedSensor}`);
+    
+    onValue(sensorRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const sensorData = snapshot.val();
+        
+        // Pobierz ostatni odczyt
+        const lastReading = {
+          temperature: sensorData.temperature || 0,
+          humidity: sensorData.humidity || 0,
+          timestamp: sensorData.timestamp || new Date().toISOString()
+        };
+        
+        setCurrentData(lastReading);
+      } else {
+        setCurrentData({
+          temperature: 0,
+          humidity: 0,
+          timestamp: null
+        });
+      }
+    }, (error) => {
+      console.error("Błąd podczas pobierania aktualnych danych:", error);
+      if (error.message && error.message.includes('permission_denied')) {
+        setPermissionError(true);
+      }
+      setError("Nie udało się pobrać aktualnych danych");
+    });
+  }, [selectedSensor]);
+
+  // Aktualizacja przedziału czasu na podstawie wybranego zakresu
+  useEffect(() => {
+    if (timeRange === 'custom') {
+      setIsCustomRange(true);
+      // Nie aktualizujemy dat przy przejściu na niestandardowy zakres
+    } else {
+      setIsCustomRange(false);
+      const selectedRange = TIME_RANGES.find(range => range.value === timeRange);
+      if (selectedRange) {
+        setStartDate(selectedRange.fn());
+        setEndDate(new Date());
+      }
+    }
+  }, [timeRange]);
+
+  // Pobieranie historycznych danych z określonego przedziału czasowego
+  useEffect(() => {
+    if (!selectedSensor || !isValid(startDate) || !isValid(endDate)) return;
+    
+    setLoading(true);
+    
+    // Konwersja dat do formatu ISO do porównania z bazą danych
+    const startTimestamp = startDate.toISOString();
+    const endTimestamp = endDate.toISOString();
+    
+    // Pobierz historię odczytów z wybranego przedziału czasu
+    const historyRef = query(
+      ref(rtdb, 'history/' + selectedSensor),
+      orderByChild('timestamp'),
+      startAt(startTimestamp),
+      endAt(endTimestamp),
+      limitToLast(500) // Limit dla wydajności
+    );
+    
+    get(historyRef)
+      .then((snapshot) => {
+        if (snapshot.exists()) {
+          const historyData = [];
+          snapshot.forEach((childSnapshot) => {
+            const reading = childSnapshot.val();
+            // Konwertuj timestamp do formatu daty
+            try {
+              const date = new Date(reading.timestamp);
+              if (isValid(date)) {
+                historyData.push({
+                  time: format(date, 'HH:mm'),
+                  fullTime: format(date, 'dd.MM.yyyy HH:mm'),
+                  date: format(date, 'dd.MM'),
+                  timestamp: date,
+                  temperature: reading.temperature || 0,
+                  humidity: reading.humidity || 0
+                });
+              }
+            } catch (err) {
+              console.error("Problem z formatowaniem daty:", err);
+            }
+          });
+          
+          // Sortuj dane wg czasu
+          historyData.sort((a, b) => a.timestamp - b.timestamp);
+          
+          // Ustaw minimalną i maksymalną wartość dla osi Y
+          if (historyData.length > 0) {
+            // Temperatura
+            const temperatures = historyData.map(item => Number(item.temperature));
+            const minTemp = Math.floor(Math.min(...temperatures) - 1);
+            const maxTemp = Math.ceil(Math.max(...temperatures) + 1);
+            setTempMinMax({ min: minTemp, max: maxTemp });
+            
+            // Wilgotność
+            const humidities = historyData.map(item => Number(item.humidity));
+            const minHumidity = Math.floor(Math.min(...humidities) - 5);
+            const maxHumidity = Math.ceil(Math.max(...humidities) + 5);
+            setHumidityMinMax({ min: minHumidity, max: maxHumidity });
+          }
+          
+          setHistoryData(historyData);
+        } else {
+          setHistoryData([]);
+        }
+        setLoading(false);
+      })
+      .catch((error) => {
+        console.error("Błąd podczas pobierania historii:", error);
+        if (error.message && error.message.includes('permission_denied')) {
+          setPermissionError(true);
+        } else if (error.message && error.message.includes('Index not defined')) {
+          setIndexError(true);
+        }
+        setError("Nie udało się pobrać danych historycznych");
+        setLoading(false);
+      });
+  }, [selectedSensor, startDate, endDate, refreshTrigger]);
+
+  // Obsługa zmiany wybranego czujnika
+  const handleSensorChange = (event) => {
+    setSelectedSensor(event.target.value);
+  };
+
+  // Obsługa zmiany przedziału czasu
+  const handleTimeRangeChange = (event) => {
+    setTimeRange(event.target.value);
+  };
+
+  // Obsługa zmiany typu wykresu
+  const handleChartTypeChange = (event, newValue) => {
+    setChartType(newValue);
+  };
+
+  // Obsługa odświeżania danych
+  const handleRefresh = () => {
+    setRefreshTrigger(prev => prev + 1);
+  };
+
+  // Formatowanie daty i czasu
+  const formatDate = (timestamp) => {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    return date.toLocaleString('pl-PL');
+  };
+  
+  // Formatowanie etykiety dla tooltipa na wykresie
+  const formatTooltipLabel = (value, name) => {
+    if (name === 'temperature') {
+      return [`${Number(value).toFixed(1)}°C`, 'Temperatura'];
+    }
+    if (name === 'humidity') {
+      return [`${Number(value).toFixed(1)}%`, 'Wilgotność'];
+    }
+    return [value, name];
+  };
+  
+  // Konfiguracja osi X dla wykresu w zależności od przedziału czasu
+  const getXAxisConfig = () => {
+    // Jeśli mamy dane z wielu dni, używamy daty zamiast czasu
+    if (timeRange === 'week' || timeRange === 'month' || 
+        (timeRange === 'custom' && startDate && endDate && 
+         (endDate - startDate) > (24 * 60 * 60 * 1000))) {
+      return { dataKey: 'date', interval: Math.ceil(historyData.length / 10) };
+    }
+    
+    // W przeciwnym razie używamy czasu
+    return { dataKey: 'time', interval: Math.ceil(historyData.length / 15) };
+  };
+
+  if (permissionError) {
+    return (
+      <Container maxWidth="lg" sx={{ mt: 4 }}>
+        <Typography variant="h4" gutterBottom>Warunki</Typography>
+        <Paper elevation={3} sx={{ p: 3 }}>
+          <Alert severity="error" sx={{ mb: 3 }}>
+            <Typography variant="h6">Brak uprawnień do bazy danych Firebase</Typography>
+            <Typography paragraph>
+              Wykryto błąd "permission_denied" podczas dostępu do danych w Realtime Database.
+            </Typography>
+            <Typography variant="body2" paragraph>
+              Aby rozwiązać ten problem:
+            </Typography>
+            <ol>
+              <li>Zaloguj się do konsoli Firebase: <Link href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer">https://console.firebase.google.com/</Link></li>
+              <li>Wybierz projekt "bgw-mrp-system"</li>
+              <li>Przejdź do sekcji "Realtime Database"</li>
+              <li>Kliknij zakładkę "Reguły"</li>
+              <li>Zmień reguły, aby umożliwić odczyt danych (na potrzeby testów możesz ustawić dostęp publiczny):</li>
+            </ol>
+            <Box sx={{ bgcolor: 'background.paper', p: 2, borderRadius: 1, mb: 2 }}>
+              <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+{`{
+  "rules": {
+    ".read": true,
+    ".write": false
+  }
+}`}
+              </pre>
+            </Box>
+            <Typography variant="body2">
+              W środowisku produkcyjnym zaleca się bardziej rygorystyczne reguły bezpieczeństwa.
+            </Typography>
+          </Alert>
+        </Paper>
+      </Container>
+    );
+  }
+
+  if (indexError) {
+    return (
+      <Container maxWidth="lg" sx={{ mt: 4 }}>
+        <Typography variant="h4" gutterBottom>Warunki</Typography>
+        <Paper elevation={3} sx={{ p: 3 }}>
+          <Alert severity="error" sx={{ mb: 3 }}>
+            <Typography variant="h6">Brak zdefiniowanego indeksu w bazie danych Firebase</Typography>
+            <Typography paragraph>
+              Wykryto błąd: "Index not defined, add ".indexOn": "timestamp", for path "/history/Hala_produkcyjna_1", to the rules"
+            </Typography>
+            <Typography variant="body2" paragraph>
+              Aby rozwiązać ten problem, należy dodać indeks dla pola "timestamp" w regułach bazy danych:
+            </Typography>
+            <Box sx={{ bgcolor: 'background.paper', p: 2, borderRadius: 1, mb: 2 }}>
+              <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+{`{
+  "rules": {
+    ".read": true,
+    ".write": false,
+    "history": {
+      "$sensor_id": {
+        ".indexOn": ["timestamp"]
+      }
+    }
+  }
+}`}
+              </pre>
+            </Box>
+            <Typography variant="body2">
+              Wykonaj następujące kroki:
+            </Typography>
+            <ol>
+              <li>Zaloguj się do konsoli Firebase: <Link href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer">https://console.firebase.google.com/</Link></li>
+              <li>Wybierz projekt</li>
+              <li>Przejdź do sekcji "Realtime Database"</li>
+              <li>Kliknij zakładkę "Reguły"</li>
+              <li>Zaktualizuj reguły zgodnie z powyższym przykładem (gdzie $sensor_id to parametr reprezentujący dowolny identyfikator czujnika)</li>
+              <li>Kliknij "Publikuj"</li>
+            </ol>
+          </Alert>
+        </Paper>
+      </Container>
+    );
+  }
+
+  if (error) {
+    return (
+      <Container maxWidth="lg" sx={{ mt: 4 }}>
+        <Typography variant="h4" gutterBottom>Warunki</Typography>
+        <Paper elevation={3} sx={{ p: 3, textAlign: 'center' }}>
+          <Typography color="error">{error}</Typography>
+        </Paper>
+      </Container>
+    );
+  }
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4 }}>
-      <Typography variant="h4" gutterBottom>
-        Warunki
+      <Typography variant="h4" gutterBottom sx={{ 
+        fontWeight: 'bold', 
+        color: theme.palette.primary.main,
+        borderBottom: `2px solid ${theme.palette.primary.main}`,
+        pb: 1,
+        display: 'flex',
+        alignItems: 'center'
+      }}>
+        <ThermostatIcon sx={{ mr: 1 }} /> Warunki środowiskowe
       </Typography>
       
-      <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
-        <Typography variant="h6" gutterBottom>
-          Aktualne warunki na hali
-        </Typography>
+      {sensors.length === 0 && !loading ? (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          <Typography paragraph>
+            Brak danych z czujników w bazie Firebase. Upewnij się, że:
+          </Typography>
+          <ul>
+            <li>Masz skonfigurowaną bazę Firebase Realtime Database</li>
+            <li>Dane są zapisywane w strukturze <code>sensors/&#123;device_id&#125;</code></li>
+            <li>Dane historyczne są zapisywane w <code>history/&#123;device_id&#125;</code></li>
+          </ul>
+          <Typography variant="body2">
+            Przykładowa struktura danych:
+          </Typography>
+          <Box sx={{ bgcolor: 'background.paper', p: 2, borderRadius: 1, mt: 1 }}>
+            <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+{`{
+  "sensors": {
+    "Hala_produkcyjna_1": {
+      "device_id": "Hala_produkcyjna_1",
+      "humidity": 32.6,
+      "temperature": 22.4,
+      "timestamp": "2025-04-28T11:20:04"
+    }
+  },
+  "history": {
+    "Hala_produkcyjna_1": {
+      "-NzVx7Ty4Cxm23v45sW": {
+        "humidity": 32.6,
+        "temperature": 22.4,
+        "timestamp": "2025-04-28T11:20:04"
+      },
+      "-NzVw7Ty4Cxm23v45sW": {
+        "humidity": 32.1,
+        "temperature": 22.2,
+        "timestamp": "2025-04-28T11:15:04"
+      }
+    }
+  }
+}`}
+            </pre>
+          </Box>
+        </Alert>
+      ) : null}
+      
+      {/* Panel kontrolny - nowy układ */}
+      <Paper 
+        elevation={2} 
+        sx={{ 
+          p: 2, 
+          mb: 3, 
+          bgcolor: theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.8)' : 'rgba(240, 245, 250, 0.8)',
+          borderRadius: 2,
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 2,
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}
+      >
+        {/* Lewa strona - wybór czujnika */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 'medium', display: 'flex', alignItems: 'center' }}>
+            <DataUsageIcon sx={{ mr: 0.5, fontSize: 20, color: 'primary.main' }} />
+            Czujnik:
+          </Typography>
+          
+          {sensors.length > 0 && (
+            <FormControl size="small" sx={{ minWidth: 180 }}>
+              <Select
+                value={selectedSensor}
+                onChange={handleSensorChange}
+                displayEmpty
+                sx={{ 
+                  bgcolor: theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.9)',
+                  '& .MuiSelect-select': { py: 1 },
+                  borderRadius: '20px'
+                }}
+              >
+                {sensors.map((sensor) => (
+                  <MenuItem key={sensor.id} value={sensor.id}>
+                    {sensor.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+        </Box>
         
-        <Grid container spacing={3} sx={{ mt: 2 }}>
-          <Grid item xs={12} md={4}>
-            <Paper elevation={2} sx={{ p: 2, textAlign: 'center' }}>
-              <Typography variant="subtitle1" color="text.secondary">Temperatura</Typography>
-              <Typography variant="h4">22.5°C</Typography>
-            </Paper>
-          </Grid>
+        {/* Środek - wybór zakresu czasu */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 'medium', display: 'flex', alignItems: 'center' }}>
+            <AccessTimeIcon sx={{ mr: 0.5, fontSize: 20, color: 'primary.main' }} />
+            Zakres czasu:
+          </Typography>
           
-          <Grid item xs={12} md={4}>
-            <Paper elevation={2} sx={{ p: 2, textAlign: 'center' }}>
-              <Typography variant="subtitle1" color="text.secondary">Wilgotność</Typography>
-              <Typography variant="h4">48%</Typography>
-            </Paper>
-          </Grid>
+          <FormControl size="small" sx={{ minWidth: 180 }}>
+            <Select
+              value={timeRange}
+              onChange={handleTimeRangeChange}
+              displayEmpty
+              sx={{ 
+                bgcolor: theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.9)',
+                '& .MuiSelect-select': { py: 1 },
+                borderRadius: '20px'
+              }}
+            >
+              {TIME_RANGES.map((range) => (
+                <MenuItem key={range.value} value={range.value}>
+                  {range.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Box>
+        
+        {/* Prawa strona - typ wykresu i odświeżanie */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 'medium', display: 'flex', alignItems: 'center' }}>
+            <ShowChartIcon sx={{ mr: 0.5, fontSize: 20, color: 'primary.main' }} />
+            Widok:
+          </Typography>
           
-          <Grid item xs={12} md={4}>
-            <Paper elevation={2} sx={{ p: 2, textAlign: 'center' }}>
-              <Typography variant="subtitle1" color="text.secondary">Ciśnienie</Typography>
-              <Typography variant="h4">1013 hPa</Typography>
-            </Paper>
-          </Grid>
-        </Grid>
+          <ToggleButtonGroup
+            value={chartType}
+            exclusive
+            onChange={handleChartTypeChange}
+            size="small"
+            sx={{ 
+              bgcolor: theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.9)',
+              borderRadius: '20px'
+            }}
+          >
+            <ToggleButton value="line" aria-label="Linia">
+              <TimelineIcon fontSize="small" />
+              <Typography variant="caption" sx={{ ml: 0.5 }}>Linia</Typography>
+            </ToggleButton>
+            <ToggleButton value="area" aria-label="Obszar">
+              <ShowChartIcon fontSize="small" />
+              <Typography variant="caption" sx={{ ml: 0.5 }}>Obszar</Typography>
+            </ToggleButton>
+          </ToggleButtonGroup>
+          
+          <Tooltip title="Odśwież dane">
+            <IconButton 
+              onClick={handleRefresh} 
+              color="primary"
+              size="small"
+              sx={{ 
+                bgcolor: theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.9)',
+                '&:hover': { bgcolor: 'primary.main', color: 'white' },
+                ml: 1
+              }}
+            >
+              <RefreshIcon />
+            </IconButton>
+          </Tooltip>
+        </Box>
       </Paper>
       
-      <Paper elevation={3} sx={{ p: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Historia warunków
+      {/* Karty z danymi */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={12} md={6} lg={4}>
+          <Card 
+            elevation={3} 
+            sx={{ 
+              height: '100%',
+              background: `linear-gradient(135deg, ${theme.palette.background.paper} 0%, ${theme.palette.background.default} 100%)`,
+              border: `1px solid ${theme.palette.divider}`,
+              position: 'relative',
+              overflow: 'hidden',
+              borderRadius: 2
+            }}
+          >
+            <CardContent>
+              <Typography variant="h6" gutterBottom sx={{ 
+                display: 'flex', 
+                alignItems: 'center',
+                borderBottom: `1px solid ${theme.palette.divider}`,
+                pb: 1
+              }}>
+                <ThermostatIcon sx={{ mr: 1, color: '#e91e63' }} /> 
+                Temperatura
+              </Typography>
+              
+              {loading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                  <CircularProgress />
+                </Box>
+              ) : (
+                <Box sx={{ textAlign: 'center', position: 'relative', py: 4 }}>
+                  <Typography variant="h2" sx={{ 
+                    fontWeight: 'bold', 
+                    color: '#e91e63',
+                    textShadow: '0px 0px 5px rgba(233, 30, 99, 0.2)'
+                  }}>
+                    {currentData.temperature.toFixed(1)}°C
+                  </Typography>
+                  
+                  {currentData.timestamp && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                      Ostatni odczyt: {formatDate(currentData.timestamp)}
+                    </Typography>
+                  )}
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        <Grid item xs={12} md={6} lg={4}>
+          <Card 
+            elevation={3} 
+            sx={{ 
+              height: '100%',
+              background: `linear-gradient(135deg, ${theme.palette.background.paper} 0%, ${theme.palette.background.default} 100%)`,
+              border: `1px solid ${theme.palette.divider}`,
+              position: 'relative',
+              overflow: 'hidden',
+              borderRadius: 2
+            }}
+          >
+            <CardContent>
+              <Typography variant="h6" gutterBottom sx={{ 
+                display: 'flex', 
+                alignItems: 'center',
+                borderBottom: `1px solid ${theme.palette.divider}`,
+                pb: 1
+              }}>
+                <OpacityIcon sx={{ mr: 1, color: '#2196f3' }} /> 
+                Wilgotność
+              </Typography>
+              
+              {loading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                  <CircularProgress />
+                </Box>
+              ) : (
+                <Box sx={{ textAlign: 'center', position: 'relative', py: 4 }}>
+                  <Typography variant="h2" sx={{ 
+                    fontWeight: 'bold', 
+                    color: '#2196f3',
+                    textShadow: '0px 0px 5px rgba(33, 150, 243, 0.2)'
+                  }}>
+                    {currentData.humidity.toFixed(1)}%
+                  </Typography>
+                  
+                  {currentData.timestamp && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                      Ostatni odczyt: {formatDate(currentData.timestamp)}
+                    </Typography>
+                  )}
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        <Grid item xs={12} md={12} lg={4}>
+          <Card 
+            elevation={3} 
+            sx={{ 
+              height: '100%',
+              background: `linear-gradient(135deg, ${theme.palette.background.paper} 0%, ${theme.palette.background.default} 100%)`,
+              border: `1px solid ${theme.palette.divider}`,
+              position: 'relative',
+              overflow: 'hidden',
+              borderRadius: 2
+            }}
+          >
+            <CardContent>
+              <Typography variant="h6" gutterBottom sx={{ 
+                display: 'flex', 
+                alignItems: 'center',
+                borderBottom: `1px solid ${theme.palette.divider}`,
+                pb: 1
+              }}>
+                <DateRangeIcon sx={{ mr: 1 }} /> 
+                Zakres danych
+              </Typography>
+              
+              <Box sx={{ mt: 2 }}>
+                <LocalizationProvider dateAdapter={AdapterDateFns} locale={pl}>
+                  <Stack spacing={3}>
+                    <DateTimePicker
+                      label="Data początkowa"
+                      value={startDate}
+                      onChange={(newValue) => setStartDate(newValue)}
+                      disabled={!isCustomRange}
+                      slotProps={{ textField: { size: 'small', fullWidth: true } }}
+                    />
+                    <DateTimePicker
+                      label="Data końcowa"
+                      value={endDate}
+                      onChange={(newValue) => setEndDate(newValue)}
+                      disabled={!isCustomRange}
+                      slotProps={{ textField: { size: 'small', fullWidth: true } }}
+                    />
+                  </Stack>
+                </LocalizationProvider>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+      
+      {/* Wykresy historyczne */}
+      <Paper 
+        elevation={3} 
+        sx={{ 
+          p: 3, 
+          borderRadius: 2,
+          background: theme.palette.mode === 'dark' 
+            ? `linear-gradient(45deg, ${theme.palette.background.paper} 0%, rgba(30, 40, 60, 1) 100%)`
+            : `linear-gradient(45deg, ${theme.palette.background.paper} 0%, ${theme.palette.background.default} 100%)`
+        }}
+      >
+        <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', mb: 3, display: 'flex', alignItems: 'center' }}>
+          <ShowChartIcon sx={{ mr: 1 }} /> Historia odczytów
         </Typography>
         
-        <Box sx={{ height: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#f5f5f5', borderRadius: 1 }}>
-          <Typography variant="body1" color="text.secondary">
-            Tutaj będą wykresy historycznych warunków
-          </Typography>
-        </Box>
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px' }}>
+            <CircularProgress />
+          </Box>
+        ) : historyData.length === 0 ? (
+          <Box sx={{ 
+            height: '200px', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            flexDirection: 'column', 
+            bgcolor: 'rgba(0,0,0,0.03)', 
+            borderRadius: 1 
+          }}>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+              Brak danych historycznych
+            </Typography>
+            {selectedSensor && (
+              <Typography variant="body2" color="text.secondary">
+                Oczekiwana ścieżka w Firebase: <code>history/{selectedSensor}/[dane]</code>
+              </Typography>
+            )}
+          </Box>
+        ) : (
+          <>
+            <Typography variant="h6" gutterBottom sx={{ 
+              mt: 3, 
+              display: 'flex', 
+              alignItems: 'center',
+              color: '#e91e63'
+            }}>
+              <ThermostatIcon sx={{ mr: 1 }} /> Temperatura
+            </Typography>
+            <ResponsiveContainer width="100%" height={300}>
+              {chartType === 'line' ? (
+                <LineChart data={historyData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <defs>
+                    <linearGradient id="colorTemperature" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#e91e63" stopOpacity={0.8}/>
+                      <stop offset="95%" stopColor="#e91e63" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                  <XAxis {...getXAxisConfig()} stroke="#888" />
+                  <YAxis 
+                    domain={[tempMinMax.min, tempMinMax.max]} 
+                    label={{ value: '°C', angle: -90, position: 'insideLeft' }} 
+                    stroke="#888"
+                  />
+                  <RechartsTooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'rgba(255, 255, 255, 0.8)', 
+                      border: 'none',
+                      borderRadius: '4px',
+                      boxShadow: '0 0 10px rgba(0,0,0,0.1)'
+                    }} 
+                    formatter={(value) => [`${Number(value).toFixed(1)}°C`, 'Temperatura']}
+                    labelFormatter={(label) => {
+                      const item = historyData.find(item => item.time === label || item.date === label);
+                      return item ? item.fullTime : label;
+                    }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="temperature" 
+                    stroke="#e91e63" 
+                    strokeWidth={2}
+                    dot={{ r: 3, strokeWidth: 2 }}
+                    activeDot={{ r: 6, strokeWidth: 2 }} 
+                  />
+                </LineChart>
+              ) : (
+                <AreaChart data={historyData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <defs>
+                    <linearGradient id="colorTemperature" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#e91e63" stopOpacity={0.8}/>
+                      <stop offset="95%" stopColor="#e91e63" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                  <XAxis {...getXAxisConfig()} stroke="#888" />
+                  <YAxis 
+                    domain={[tempMinMax.min, tempMinMax.max]} 
+                    label={{ value: '°C', angle: -90, position: 'insideLeft' }} 
+                    stroke="#888"
+                  />
+                  <RechartsTooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'rgba(255, 255, 255, 0.8)', 
+                      border: 'none',
+                      borderRadius: '4px',
+                      boxShadow: '0 0 10px rgba(0,0,0,0.1)'
+                    }} 
+                    formatter={(value) => [`${Number(value).toFixed(1)}°C`, 'Temperatura']}
+                    labelFormatter={(label) => {
+                      const item = historyData.find(item => item.time === label || item.date === label);
+                      return item ? item.fullTime : label;
+                    }}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="temperature" 
+                    stroke="#e91e63" 
+                    fillOpacity={1} 
+                    fill="url(#colorTemperature)" 
+                    strokeWidth={2}
+                    activeDot={{ r: 6, strokeWidth: 2 }} 
+                  />
+                </AreaChart>
+              )}
+            </ResponsiveContainer>
+
+            <Typography variant="h6" gutterBottom sx={{ 
+              mt: 4, 
+              display: 'flex', 
+              alignItems: 'center',
+              color: '#2196f3'
+            }}>
+              <OpacityIcon sx={{ mr: 1 }} /> Wilgotność
+            </Typography>
+            <ResponsiveContainer width="100%" height={300}>
+              {chartType === 'line' ? (
+                <LineChart data={historyData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <defs>
+                    <linearGradient id="colorHumidity" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#2196f3" stopOpacity={0.8}/>
+                      <stop offset="95%" stopColor="#2196f3" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                  <XAxis {...getXAxisConfig()} stroke="#888" />
+                  <YAxis 
+                    domain={[humidityMinMax.min, humidityMinMax.max]} 
+                    label={{ value: '%', angle: -90, position: 'insideLeft' }} 
+                    stroke="#888"
+                  />
+                  <RechartsTooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'rgba(255, 255, 255, 0.8)', 
+                      border: 'none',
+                      borderRadius: '4px',
+                      boxShadow: '0 0 10px rgba(0,0,0,0.1)'
+                    }} 
+                    formatter={(value) => [`${Number(value).toFixed(1)}%`, 'Wilgotność']}
+                    labelFormatter={(label) => {
+                      const item = historyData.find(item => item.time === label || item.date === label);
+                      return item ? item.fullTime : label;
+                    }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="humidity" 
+                    stroke="#2196f3" 
+                    strokeWidth={2}
+                    dot={{ r: 3, strokeWidth: 2 }}
+                    activeDot={{ r: 6, strokeWidth: 2 }} 
+                  />
+                </LineChart>
+              ) : (
+                <AreaChart data={historyData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <defs>
+                    <linearGradient id="colorHumidity" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#2196f3" stopOpacity={0.8}/>
+                      <stop offset="95%" stopColor="#2196f3" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                  <XAxis {...getXAxisConfig()} stroke="#888" />
+                  <YAxis 
+                    domain={[humidityMinMax.min, humidityMinMax.max]} 
+                    label={{ value: '%', angle: -90, position: 'insideLeft' }} 
+                    stroke="#888"
+                  />
+                  <RechartsTooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'rgba(255, 255, 255, 0.8)', 
+                      border: 'none',
+                      borderRadius: '4px',
+                      boxShadow: '0 0 10px rgba(0,0,0,0.1)'
+                    }} 
+                    formatter={(value) => [`${Number(value).toFixed(1)}%`, 'Wilgotność']}
+                    labelFormatter={(label) => {
+                      const item = historyData.find(item => item.time === label || item.date === label);
+                      return item ? item.fullTime : label;
+                    }}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="humidity" 
+                    stroke="#2196f3" 
+                    fillOpacity={1} 
+                    fill="url(#colorHumidity)" 
+                    strokeWidth={2}
+                    activeDot={{ r: 6, strokeWidth: 2 }} 
+                  />
+                </AreaChart>
+              )}
+            </ResponsiveContainer>
+          </>
+        )}
       </Paper>
     </Container>
   );
