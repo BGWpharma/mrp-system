@@ -173,47 +173,81 @@ const OrderForm = ({ orderId }) => {
           
           // Przypisz informacje o zadaniach produkcyjnych do pozycji zamówienia
           if (fetchedOrder.productionTasks && fetchedOrder.productionTasks.length > 0 && fetchedOrder.items.length > 0) {
-            const { getTaskById } = await import('../../services/productionService');
+            const { getTaskById, updateTask } = await import('../../services/productionService');
+            
+            console.log("Ładowanie zadań produkcyjnych dla zamówienia:", orderId);
+            console.log("Elementy zamówienia:", fetchedOrder.items);
+            console.log("Zadania produkcyjne:", fetchedOrder.productionTasks);
             
             for (let i = 0; i < fetchedOrder.items.length; i++) {
               const item = fetchedOrder.items[i];
+              console.log(`Sprawdzanie elementu zamówienia ${i}:`, item);
               
-              // Znajdź odpowiednie zadanie produkcyjne dla tego elementu zamówienia
+              // Najpierw szukaj po orderItemId (najdokładniejsze dopasowanie)
               const matchingTask = fetchedOrder.productionTasks.find(task => 
-                // Sprawdź czy task ma przypisany orderItemId i czy jest to ID bieżącego elementu
-                (task.orderItemId && task.orderItemId === item.id) || 
-                // Lub sprawdź czy nazwy produktów się zgadzają
-                (task.productName === item.name && task.quantity === parseFloat(item.quantity))
+                task.orderItemId && task.orderItemId === item.id
               );
               
-              if (matchingTask) {
+              // Jeśli nie znaleziono po orderItemId, spróbuj dopasować po nazwie i ilości
+              const alternativeTask = !matchingTask ? fetchedOrder.productionTasks.find(task => 
+                task.productName === item.name && 
+                parseFloat(task.quantity) === parseFloat(item.quantity) &&
+                !fetchedOrder.productionTasks.some(t => t.orderItemId === item.id) // upewnij się, że zadanie nie jest już przypisane
+              ) : null;
+              
+              const taskToUse = matchingTask || alternativeTask;
+              
+              if (taskToUse) {
+                console.log(`Znaleziono dopasowane zadanie dla elementu ${item.name}:`, taskToUse);
+                
                 // Pobierz pełne dane zadania produkcyjnego, aby uzyskać aktualny koszt
                 try {
-                  const taskDetails = await getTaskById(matchingTask.id);
+                  const taskDetails = await getTaskById(taskToUse.id);
+                  
+                  // Zawsze aktualizuj orderItemId w zadaniu produkcyjnym, aby upewnić się, że jest poprawnie przypisane
+                  const currentOrderItemId = taskDetails.orderItemId;
+                  
+                  // Jeśli zadanie ma inny orderItemId niż bieżący element zamówienia, aktualizuj go
+                  if (currentOrderItemId !== item.id) {
+                    console.log(`Aktualizacja zadania ${taskToUse.id} - przypisywanie orderItemId: ${item.id} (było: ${currentOrderItemId || 'brak'})`);
+                    await updateTask(taskToUse.id, {
+                      orderItemId: item.id,
+                      orderId: orderId,
+                      orderNumber: fetchedOrder.orderNumber || null
+                    }, currentUser?.uid || 'system');
+                    
+                    // Zaktualizuj orderItemId w zadaniu produkcyjnym w zamówieniu
+                    const { updateProductionTaskInOrder } = await import('../../services/orderService');
+                    await updateProductionTaskInOrder(orderId, taskToUse.id, {
+                      orderItemId: item.id
+                    }, currentUser?.uid || 'system');
+                  }
                   
                   // Aktualizuj informacje o zadaniu produkcyjnym w elemencie zamówienia
                   fetchedOrder.items[i] = {
                     ...item,
-                    productionTaskId: matchingTask.id,
-                    productionTaskNumber: matchingTask.moNumber || taskDetails.moNumber,
-                    productionStatus: matchingTask.status || taskDetails.status,
+                    productionTaskId: taskToUse.id,
+                    productionTaskNumber: taskToUse.moNumber || taskDetails.moNumber,
+                    productionStatus: taskToUse.status || taskDetails.status,
                     // Pobierz koszt z newTotalCost, jeśli istnieje, w przeciwnym razie użyj totalMaterialCost lub 0
-                    productionCost: taskDetails.newTotalCost || matchingTask.totalMaterialCost || taskDetails.totalMaterialCost || 0
+                    productionCost: taskDetails.newTotalCost || taskToUse.totalMaterialCost || taskDetails.totalMaterialCost || 0
                   };
                   
-                  console.log(`Przypisano zadanie produkcyjne ${matchingTask.moNumber} do elementu zamówienia ${item.name} z kosztem ${fetchedOrder.items[i].productionCost}`);
+                  console.log(`Przypisano zadanie produkcyjne ${taskToUse.moNumber} do elementu zamówienia ${item.name} z kosztem ${fetchedOrder.items[i].productionCost}`);
                 } catch (error) {
-                  console.error(`Błąd podczas pobierania szczegółów zadania ${matchingTask.id}:`, error);
+                  console.error(`Błąd podczas pobierania szczegółów zadania ${taskToUse.id}:`, error);
                   
                   // W przypadku błędu, użyj podstawowych danych z matchingTask
                   fetchedOrder.items[i] = {
                     ...item,
-                    productionTaskId: matchingTask.id,
-                    productionTaskNumber: matchingTask.moNumber,
-                    productionStatus: matchingTask.status,
-                    productionCost: matchingTask.totalMaterialCost || 0
+                    productionTaskId: taskToUse.id,
+                    productionTaskNumber: taskToUse.moNumber,
+                    productionStatus: taskToUse.status,
+                    productionCost: taskToUse.totalMaterialCost || 0
                   };
                 }
+              } else {
+                console.log(`Nie znaleziono dopasowanego zadania dla elementu ${item.name}`);
               }
             }
           }
@@ -1455,36 +1489,72 @@ const OrderForm = ({ orderId }) => {
         // Aktualizujemy dane elementów zamówienia z nowymi kosztami produkcji
         const updatedItems = [...orderData.items];
         
+        console.log("Odświeżanie zadań produkcyjnych dla zamówienia:", orderId);
+        console.log("Elementy zamówienia:", updatedItems);
+        console.log("Zadania produkcyjne:", refreshedOrderData.productionTasks);
+        
         // Dla każdego elementu zamówienia sprawdź, czy istnieje powiązane zadanie produkcyjne
         for (let i = 0; i < updatedItems.length; i++) {
           const item = updatedItems[i];
+          console.log(`Sprawdzanie elementu zamówienia ${i}:`, item);
           
           // Znajdź odpowiednie zadanie produkcyjne dla tego elementu zamówienia
+          // Najpierw szukaj po orderItemId (najdokładniejsze dopasowanie)
           const matchingTask = refreshedOrderData.productionTasks.find(task => 
-            // Sprawdź czy task ma przypisany orderItemId i czy jest to ID bieżącego elementu
-            (task.orderItemId && task.orderItemId === item.id) || 
-            // Lub sprawdź czy nazwy produktów się zgadzają
-            (task.productName === item.name && task.quantity === item.quantity)
+            task.orderItemId && task.orderItemId === item.id
           );
           
-          if (matchingTask) {
-            // Pobierz szczegóły zadania produkcyjnego, aby uzyskać koszt
-            const { getTaskById } = await import('../../services/productionService');
-            const taskDetails = await getTaskById(matchingTask.id);
+          // Jeśli nie znaleziono po orderItemId, spróbuj dopasować po nazwie i ilości
+          const alternativeTask = !matchingTask ? refreshedOrderData.productionTasks.find(task => 
+            task.productName === item.name && 
+            parseFloat(task.quantity) === parseFloat(item.quantity) &&
+            !refreshedOrderData.productionTasks.some(t => t.orderItemId === item.id) // upewnij się, że zadanie nie jest już przypisane
+          ) : null;
+          
+          const taskToUse = matchingTask || alternativeTask;
+          
+          if (taskToUse) {
+            console.log(`Znaleziono dopasowane zadanie dla elementu ${item.name}:`, taskToUse);
             
-            console.log(`Pobrano szczegóły zadania produkcyjnego ${matchingTask.moNumber}:`, taskDetails);
+            // Pobierz szczegóły zadania produkcyjnego, aby uzyskać koszt
+            const { getTaskById, updateTask } = await import('../../services/productionService');
+            const taskDetails = await getTaskById(taskToUse.id);
+            
+            console.log(`Pobrano szczegóły zadania produkcyjnego ${taskToUse.moNumber}:`, taskDetails);
+            
+            // Zawsze aktualizuj orderItemId w zadaniu produkcyjnym, aby upewnić się, że jest poprawnie przypisane
+            // Nawet jeśli pole taskDetails.orderItemId już istnieje, ale jest różne od item.id
+            const currentOrderItemId = taskDetails.orderItemId;
+            
+            // Jeśli zadanie ma inny orderItemId niż bieżący element zamówienia, aktualizuj go
+            if (currentOrderItemId !== item.id) {
+              console.log(`Aktualizacja zadania ${taskToUse.id} - przypisywanie orderItemId: ${item.id} (było: ${currentOrderItemId || 'brak'})`);
+              await updateTask(taskToUse.id, {
+                orderItemId: item.id,
+                orderId: orderId,
+                orderNumber: refreshedOrderData.orderNumber || null
+              }, currentUser.uid);
+              
+              // Zaktualizuj orderItemId w zadaniu produkcyjnym w zamówieniu
+              const { updateProductionTaskInOrder } = await import('../../services/orderService');
+              await updateProductionTaskInOrder(orderId, taskToUse.id, {
+                orderItemId: item.id
+              }, currentUser.uid);
+            }
             
             // Aktualizuj informacje o zadaniu produkcyjnym w elemencie zamówienia
             updatedItems[i] = {
               ...item,
-              productionTaskId: matchingTask.id,
-              productionTaskNumber: matchingTask.moNumber || taskDetails.moNumber,
-              productionStatus: matchingTask.status || taskDetails.status,
+              productionTaskId: taskToUse.id,
+              productionTaskNumber: taskToUse.moNumber || taskDetails.moNumber,
+              productionStatus: taskToUse.status || taskDetails.status,
               // Pobierz koszt z newTotalCost, jeśli istnieje, w przeciwnym razie użyj totalMaterialCost lub 0
-              productionCost: taskDetails.newTotalCost || matchingTask.totalMaterialCost || taskDetails.totalMaterialCost || 0
+              productionCost: taskDetails.newTotalCost || taskToUse.totalMaterialCost || taskDetails.totalMaterialCost || 0
             };
             
-            console.log(`Przypisano zadanie produkcyjne ${matchingTask.moNumber} do elementu zamówienia ${item.name} z kosztem ${updatedItems[i].productionCost}`);
+            console.log(`Przypisano zadanie produkcyjne ${taskToUse.moNumber} do elementu zamówienia ${item.name} z kosztem ${updatedItems[i].productionCost}`);
+          } else {
+            console.log(`Nie znaleziono dopasowanego zadania dla elementu ${item.name}`);
           }
         }
         
@@ -1650,17 +1720,70 @@ const OrderForm = ({ orderId }) => {
     }
 
     try {
-      const { getTaskById } = await import('../../services/productionService');
-      const { removeProductionTaskFromOrder } = await import('../../services/orderService');
+      const { getTaskById, updateTask } = await import('../../services/productionService');
+      const { removeProductionTaskFromOrder, updateProductionTaskInOrder } = await import('../../services/orderService');
       
       const verifiedTasks = [];
       const tasksToRemove = [];
+      
+      console.log("Weryfikacja zadań produkcyjnych dla zamówienia:", orderToVerify.id);
       
       // Sprawdź każde zadanie produkcyjne
       for (const task of orderToVerify.productionTasks) {
         try {
           // Próba pobrania zadania z bazy
-          await getTaskById(task.id);
+          const taskDetails = await getTaskById(task.id);
+          
+          // Sprawdź, czy task ma orderItemId ustawiony
+          if (task.orderItemId && (!taskDetails.orderItemId || taskDetails.orderItemId !== task.orderItemId)) {
+            console.log(`Aktualizacja orderItemId w zadaniu ${task.id} na ${task.orderItemId}`);
+            await updateTask(task.id, {
+              orderItemId: task.orderItemId,
+              orderId: orderToVerify.id,
+              orderNumber: orderToVerify.orderNumber || null
+            }, currentUser?.uid || 'system');
+          }
+          
+          // Sprawdź, czy w zamówieniu jest element pasujący do tego zadania
+          if (task.orderItemId && orderToVerify.items) {
+            const matchingItem = orderToVerify.items.find(item => item.id === task.orderItemId);
+            
+            if (!matchingItem) {
+              console.log(`Nie znaleziono pozycji zamówienia ${task.orderItemId} dla zadania ${task.id}`);
+              
+              // Jeśli nie ma pasującego elementu zamówienia, spróbuj znaleźć według nazwy i ilości
+              const alternativeItem = orderToVerify.items.find(item => 
+                item.name === task.productName && 
+                parseFloat(item.quantity) === parseFloat(task.quantity) &&
+                !orderToVerify.productionTasks.some(t => 
+                  t.id !== task.id && // nie to samo zadanie
+                  t.orderItemId === item.id // już przypisane do innego zadania
+                )
+              );
+              
+              if (alternativeItem) {
+                console.log(`Znaleziono alternatywną pozycję zamówienia ${alternativeItem.id} dla zadania ${task.id}`);
+                
+                // Aktualizuj orderItemId w zadaniu
+                await updateTask(task.id, {
+                  orderItemId: alternativeItem.id,
+                  orderId: orderToVerify.id,
+                  orderNumber: orderToVerify.orderNumber || null
+                }, currentUser?.uid || 'system');
+                
+                // Aktualizuj task lokalnie
+                task.orderItemId = alternativeItem.id;
+                
+                // Aktualizuj orderItemId w tabeli productionTasks
+                if (orderToVerify.id) {
+                  await updateProductionTaskInOrder(orderToVerify.id, task.id, {
+                    orderItemId: alternativeItem.id
+                  }, currentUser?.uid || 'system');
+                }
+              }
+            }
+          }
+          
           verifiedTasks.push(task);
         } catch (error) {
           console.error(`Błąd podczas weryfikacji zadania ${task.id}:`, error);

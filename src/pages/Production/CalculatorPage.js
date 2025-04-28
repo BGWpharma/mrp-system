@@ -21,7 +21,12 @@ import {
   TableRow,
   Divider,
   Tooltip,
-  IconButton
+  IconButton,
+  FormLabel,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
+  FormHelperText
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -29,10 +34,12 @@ import {
   Download as DownloadIcon,
   Calculate as CalculateIcon,
   Info as InfoIcon,
-  RestartAlt as ResetIcon
+  RestartAlt as ResetIcon,
+  Assignment as AssignmentIcon,
+  FileDownload as FileDownloadIcon
 } from '@mui/icons-material';
 import { useNotification } from '../../hooks/useNotification';
-import { getAllRecipes } from '../../services/recipeService';
+import { getAllRecipes, getRecipeById } from '../../services/recipeService';
 
 const CalculatorPage = () => {
   const { showSuccess, showError, showInfo } = useNotification();
@@ -40,35 +47,92 @@ const CalculatorPage = () => {
   // Główne stany kalkulatora
   const [mixerVolume, setMixerVolume] = useState(100);
   const [targetAmount, setTargetAmount] = useState(1000);
-  const [selectedRecipeId, setSelectedRecipeId] = useState('');
   const [usePieces, setUsePieces] = useState(false);
+  const [selectedRecipeId, setSelectedRecipeId] = useState('');
   
   // Stany pomocnicze
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [calculationResult, setCalculationResult] = useState(null);
   const [mixings, setMixings] = useState([]);
+  const [selectedRecipe, setSelectedRecipe] = useState(null);
+  const [productionTasks, setProductionTasks] = useState([]);
+  const [selectedTaskId, setSelectedTaskId] = useState('');
+  
+  // Funkcja do pobierania receptur
+  const fetchRecipes = async () => {
+    try {
+      setLoading(true);
+      const recipesData = await getAllRecipes();
+      setRecipes(recipesData);
+    } catch (error) {
+      console.error('Błąd podczas pobierania receptur:', error);
+      showError('Nie udało się pobrać receptur');
+    } finally {
+      setLoading(false);
+    }
+  };
   
   // Pobranie wszystkich receptur przy ładowaniu komponentu
   useEffect(() => {
-    const fetchRecipes = async () => {
-      try {
-        setLoading(true);
-        const recipesData = await getAllRecipes();
-        setRecipes(recipesData);
-      } catch (error) {
-        console.error('Błąd podczas pobierania receptur:', error);
-        showError('Nie udało się pobrać receptur');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
     fetchRecipes();
   }, [showError]);
   
+  // Funkcja do pobrania zadań produkcyjnych
+  const fetchProductionTasks = async () => {
+    try {
+      setLoading(true);
+      // Importujemy funkcję do pobierania zadań produkcyjnych z poprawnego modułu
+      const { getProductionTasks } = await import('../../services/aiDataService');
+      
+      // Pobieramy tylko zadania produkcyjne o statusie "Zaplanowane" lub "W trakcie"
+      const tasks = await getProductionTasks({
+        filters: [
+          { field: 'status', operator: 'in', value: ['Zaplanowane', 'W trakcie'] }
+        ],
+        orderBy: { field: 'createdAt', direction: 'desc' },
+        limit: 100
+      });
+      
+      setProductionTasks(tasks);
+    } catch (error) {
+      console.error('Błąd podczas pobierania zadań produkcyjnych:', error);
+      showError('Nie udało się pobrać zadań produkcyjnych');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Rozszerzamy useEffect o pobieranie zadań produkcyjnych
+  useEffect(() => {
+    fetchRecipes();
+    fetchProductionTasks(); // Dodano pobieranie zadań produkcyjnych
+  }, []);
+  
   // Sprawdzenie czy wybrana receptura i jej dane są dostępne
-  const selectedRecipe = recipes.find(recipe => recipe.id === selectedRecipeId);
+  useEffect(() => {
+    if (selectedRecipeId) {
+      setLoading(true);
+      getRecipeById(selectedRecipeId)
+        .then(recipeData => {
+          if (recipeData && recipeData.ingredients && recipeData.ingredients.length > 0) {
+            // A już mamy zmienną selectedRecipe w stanie, więc używamy jej
+            setSelectedRecipe(recipeData);
+          } else {
+            setSelectedRecipe(null);
+            showError('Wybrana receptura nie zawiera składników');
+          }
+          setLoading(false);
+        })
+        .catch(error => {
+          console.error('Błąd podczas pobierania receptury:', error);
+          showError('Nie udało się pobrać szczegółów receptury');
+          setLoading(false);
+        });
+    } else {
+      setSelectedRecipe(null);
+    }
+  }, [selectedRecipeId, showError]);
   
   // Funkcja do obliczania planu mieszań
   const calculateMixings = () => {
@@ -483,10 +547,68 @@ ${';'.repeat(4)}\n`;
     setMixerVolume(100);
     setTargetAmount(1000);
     setSelectedRecipeId('');
+    setSelectedTaskId('');
     setCalculationResult(null);
     setMixings([]);
     setUsePieces(false);
     showInfo('Kalkulator został zresetowany');
+  };
+
+  // Funkcja do generowania planu mieszań na podstawie MO
+  const generatePlanFromMO = async () => {
+    if (!selectedTaskId) {
+      showError('Wybierz zadanie produkcyjne (MO) przed wygenerowaniem planu');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      // Importujemy funkcję do pobierania szczegółów zadania
+      const { getTaskById } = await import('../../services/productionService');
+      
+      // Pobieramy szczegóły wybranego zadania
+      const task = await getTaskById(selectedTaskId);
+      
+      if (!task) {
+        showError('Nie udało się pobrać szczegółów zadania produkcyjnego');
+        return;
+      }
+      
+      // Sprawdzamy czy zadanie ma przypisaną recepturę
+      if (!task.recipeId) {
+        showError('Wybrane zadanie produkcyjne nie ma przypisanej receptury');
+        return;
+      }
+      
+      // Pobieramy recepturę
+      const recipeDoc = await getRecipeById(task.recipeId);
+      
+      if (!recipeDoc) {
+        showError('Nie udało się pobrać receptury dla zadania produkcyjnego');
+        return;
+      }
+      
+      // Ustawiamy wybraną recepturę
+      setSelectedRecipe(recipeDoc);
+      setSelectedRecipeId(recipeDoc.id);
+      
+      // Ustawiamy ilość docelową na podstawie ilości z zadania produkcyjnego
+      setTargetAmount(task.quantity);
+      
+      // Ustawiamy tryb kalkulacji na podstawie jednostki z zadania
+      const isPiecesUnit = task.unit === 'szt.' || task.unit === 'pcs' || task.unit === 'ea';
+      setUsePieces(isPiecesUnit);
+      
+      // Wywołujemy funkcję do obliczenia planu mieszań
+      calculateMixings();
+      
+      showSuccess(`Plan mieszań wygenerowany na podstawie zadania produkcyjnego ${task.moNumber}`);
+    } catch (error) {
+      console.error('Błąd podczas generowania planu mieszań z MO:', error);
+      showError('Wystąpił błąd podczas generowania planu mieszań z MO');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -530,13 +652,13 @@ ${';'.repeat(4)}\n`;
             <TextField
               fullWidth
               type="number"
-              label={usePieces ? "Docelowa ilość produktu (sztuki)" : "Docelowa ilość produktu końcowego"}
+              label="Docelowa ilość produktu"
               value={targetAmount}
               onChange={(e) => setTargetAmount(Number(e.target.value))}
               InputProps={{
                 endAdornment: (
                   <Typography variant="caption" color="text.secondary">
-                    {usePieces ? "szt." : "kg"}
+                    {usePieces ? 'szt.' : 'kg'}
                   </Typography>
                 )
               }}
@@ -544,31 +666,43 @@ ${';'.repeat(4)}\n`;
             />
           </Grid>
           
-          {/* Przełącznik trybu kg/sztuki */}
+          {/* Wybór trybu kalkulacji */}
           <Grid item xs={12} md={4}>
-            <FormControl fullWidth>
-              <InputLabel>Tryb kalkulacji</InputLabel>
-              <Select
-                value={usePieces}
-                onChange={(e) => setUsePieces(e.target.value)}
-                label="Tryb kalkulacji"
+            <FormControl fullWidth component="fieldset">
+              <FormLabel component="legend">Tryb kalkulacji</FormLabel>
+              <RadioGroup
+                row
+                value={usePieces ? 'pieces' : 'weight'}
+                onChange={(e) => setUsePieces(e.target.value === 'pieces')}
               >
-                <MenuItem value={false}>Kilogramy (wg wagi)</MenuItem>
-                <MenuItem value={true}>Sztuki produktu</MenuItem>
-              </Select>
+                <FormControlLabel
+                  value="weight"
+                  control={<Radio />}
+                  label="Waga (kg)"
+                />
+                <FormControlLabel
+                  value="pieces"
+                  control={<Radio />}
+                  label="Sztuki"
+                />
+              </RadioGroup>
             </FormControl>
           </Grid>
           
           {/* Wybór receptury */}
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={6}>
             <FormControl fullWidth>
-              <InputLabel>Wybierz produkt (recepturę)</InputLabel>
+              <InputLabel id="recipe-select-label">Wybierz recepturę</InputLabel>
               <Select
+                labelId="recipe-select-label"
                 value={selectedRecipeId}
                 onChange={(e) => setSelectedRecipeId(e.target.value)}
-                label="Wybierz produkt (recepturę)"
+                label="Wybierz recepturę"
                 disabled={loading}
               >
+                <MenuItem value="">
+                  <em>-- Wybierz recepturę --</em>
+                </MenuItem>
                 {recipes.map((recipe) => (
                   <MenuItem key={recipe.id} value={recipe.id}>
                     {recipe.name}
@@ -578,24 +712,73 @@ ${';'.repeat(4)}\n`;
             </FormControl>
           </Grid>
           
+          {/* Wybór zadania produkcyjnego (MO) */}
+          <Grid item xs={12} md={6}>
+            <FormControl fullWidth>
+              <InputLabel id="mo-select-label">Wybierz zadanie produkcyjne (MO)</InputLabel>
+              <Select
+                labelId="mo-select-label"
+                value={selectedTaskId}
+                onChange={(e) => setSelectedTaskId(e.target.value)}
+                label="Wybierz zadanie produkcyjne (MO)"
+                disabled={loading}
+              >
+                <MenuItem value="">
+                  <em>-- Wybierz zadanie produkcyjne --</em>
+                </MenuItem>
+                {productionTasks.map((task) => (
+                  <MenuItem key={task.id} value={task.id}>
+                    {task.moNumber} - {task.productName} ({task.quantity} {task.unit})
+                  </MenuItem>
+                ))}
+              </Select>
+              <FormHelperText>
+                Wybierz zadanie produkcyjne, aby automatycznie wygenerować plan mieszań
+              </FormHelperText>
+            </FormControl>
+          </Grid>
+          
           {/* Przyciski akcji */}
           <Grid item xs={12}>
-            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+            <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={calculateMixings}
+                disabled={loading || !selectedRecipeId || mixerVolume <= 0 || targetAmount <= 0}
+                startIcon={<CalculateIcon />}
+              >
+                Oblicz plan mieszań
+              </Button>
+              
+              <Button
+                variant="contained"
+                color="secondary"
+                onClick={generatePlanFromMO}
+                disabled={loading || !selectedTaskId}
+                startIcon={<AssignmentIcon />}
+              >
+                Generuj z MO
+              </Button>
+              
+              {mixings.length > 0 && (
+                <Button
+                  variant="outlined"
+                  color="success"
+                  onClick={generateCSV}
+                  startIcon={<FileDownloadIcon />}
+                >
+                  Eksportuj CSV
+                </Button>
+              )}
+              
               <Button
                 variant="outlined"
-                color="secondary"
+                color="error"
                 onClick={resetCalculator}
                 startIcon={<ResetIcon />}
               >
                 Resetuj
-              </Button>
-              <Button
-                variant="contained"
-                onClick={calculateMixings}
-                startIcon={<CalculateIcon />}
-                disabled={!selectedRecipeId || mixerVolume <= 0 || targetAmount <= 0}
-              >
-                Oblicz plan mieszań
               </Button>
             </Box>
           </Grid>

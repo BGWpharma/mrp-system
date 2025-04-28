@@ -158,27 +158,38 @@ import {
         // Pobierz wszystkie partie dla wybranych przedmiotów
         const itemIds = paginatedItems.map(item => item.id);
         
-        // Pobierz partie tylko dla wybranych produktów
+        // Pobierz partie tylko dla wybranych produktów, dzieląc zapytania na mniejsze części
+        // ze względu na ograniczenie Firebase (max 30 elementów w operatorze 'in')
         const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
-        let batchesQuery;
+        let allBatches = [];
         
         if (itemIds.length > 0) {
-          batchesQuery = query(batchesRef, where('itemId', 'in', itemIds));
+          // Podziel itemIds na porcje po maksymalnie 30 elementów
+          const chunkSize = 30;
+          for (let i = 0; i < itemIds.length; i += chunkSize) {
+            const chunk = itemIds.slice(i, i + chunkSize);
+            const batchesQuery = query(batchesRef, where('itemId', 'in', chunk));
+            const batchesChunkSnapshot = await getDocs(batchesQuery);
+            const batchesChunk = batchesChunkSnapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }));
+            allBatches = [...allBatches, ...batchesChunk];
+          }
         } else {
-          batchesQuery = query(batchesRef); // Pusta lista - pobierz wszystkie (nie powinno być takiej sytuacji)
+          const batchesQuery = query(batchesRef); // Pusta lista - pobierz wszystkie (nie powinno być takiej sytuacji)
+          const batchesSnapshot = await getDocs(batchesQuery);
+          allBatches = batchesSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
         }
         
-        const batchesSnapshot = await getDocs(batchesQuery);
-        const batches = batchesSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        
-        console.log('Pobrane partie dla stronicowanych pozycji:', batches);
+        console.log('Pobrane partie dla stronicowanych pozycji:', allBatches);
 
         // Oblicz aktualne ilości i ceny dla każdego przedmiotu
         const itemsWithQuantities = await Promise.all(paginatedItems.map(async item => {
-          const itemBatches = batches.filter(batch => batch.itemId === item.id);
+          const itemBatches = allBatches.filter(batch => batch.itemId === item.id);
           
           // Filtruj partie według warehouseId, jeśli został podany
           const filteredBatches = warehouseId 
@@ -233,7 +244,7 @@ import {
         let finalItems = itemsWithQuantities;
         if (warehouseId) {
           finalItems = itemsWithQuantities.filter(item => {
-            const itemBatches = batches.filter(batch => 
+            const itemBatches = allBatches.filter(batch => 
               batch.itemId === item.id && batch.warehouseId === warehouseId
             );
             return itemBatches.length > 0;
@@ -276,16 +287,20 @@ import {
         
         // Przygotuj mapę rezerwacji dla każdego przedmiotu
         const transactionsRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
-        const transactionsQuery = query(transactionsRef, where('type', '==', 'booking'));
-        const transactionsSnapshot = await getDocs(transactionsQuery);
-        const bookings = transactionsSnapshot.docs.map(doc => ({
+        // Zbierz wszystkie rezerwacje w porcjach po 30
+        let allBookings = [];
+        
+        // Pobierz wszystkie transakcje typu 'booking'
+        const baseQuery = query(transactionsRef, where('type', '==', 'booking'));
+        const baseSnapshot = await getDocs(baseQuery);
+        allBookings = baseSnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
         
         // Grupuj rezerwacje według przedmiotu
         const bookingsByItem = {};
-        bookings.forEach(booking => {
+        allBookings.forEach(booking => {
           const itemId = booking.itemId;
           if (!bookingsByItem[itemId]) {
             bookingsByItem[itemId] = 0;

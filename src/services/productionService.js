@@ -181,8 +181,16 @@ import {
   // Tworzenie nowego zadania produkcyjnego
   export const createTask = async (taskData, userId, autoReserveMaterials = true) => {
     try {
+      console.log(`[DEBUG-MO] Rozpoczęto tworzenie zadania produkcyjnego:`, JSON.stringify({
+        productName: taskData.productName,
+        orderItemId: taskData.orderItemId,
+        orderId: taskData.orderId,
+        orderNumber: taskData.orderNumber,
+      }, null, 2));
+      
       // Wygeneruj numer MO
       const moNumber = await generateMONumber();
+      console.log(`[DEBUG-MO] Wygenerowano numer MO: ${moNumber}`);
       
       // Przygotuj dane zadania z metadanymi
       const taskWithMeta = {
@@ -209,6 +217,12 @@ import {
         }]
       };
       
+      console.log(`[DEBUG-MO] Dane powiązane z zamówieniem w taskWithMeta:`, JSON.stringify({
+        orderItemId: taskWithMeta.orderItemId,
+        orderId: taskWithMeta.orderId,
+        orderNumber: taskWithMeta.orderNumber
+      }, null, 2));
+      
       // Jeśli nie podano daty zakończenia, ustaw ją na 1 godzinę po dacie rozpoczęcia
       if (!taskWithMeta.endDate && taskWithMeta.scheduledDate) {
         const scheduledDate = taskWithMeta.scheduledDate instanceof Date 
@@ -232,8 +246,33 @@ import {
       }
       
       // Zapisz zadanie w bazie danych
-      console.log(`Tworzenie zadania z numerem MO: ${moNumber}`);
+      console.log(`[DEBUG-MO] Tworzenie zadania z numerem MO: ${moNumber}`, 
+        taskWithMeta.orderId ? `powiązanego z zamówieniem: ${taskWithMeta.orderNumber || taskWithMeta.orderId}` : 'bez powiązania z zamówieniem');
       const docRef = await addDoc(collection(db, PRODUCTION_TASKS_COLLECTION), taskWithMeta);
+      console.log(`[DEBUG-MO] Utworzono zadanie z ID: ${docRef.id}`);
+      
+      // Jeśli zadanie jest powiązane z zamówieniem, dodaj je do listy zadań w zamówieniu
+      if (taskWithMeta.orderId) {
+        try {
+          console.log(`[DEBUG-MO] Próba dodania zadania ${docRef.id} do zamówienia ${taskWithMeta.orderId} z orderItemId: ${taskWithMeta.orderItemId}`);
+          const { addProductionTaskToOrder } = await import('./orderService');
+          await addProductionTaskToOrder(taskWithMeta.orderId, {
+            id: docRef.id,
+            moNumber,
+            name: taskWithMeta.name,
+            status: taskWithMeta.status,
+            productName: taskWithMeta.productName,
+            quantity: taskWithMeta.quantity,
+            unit: taskWithMeta.unit
+          }, taskWithMeta.orderItemId);
+          console.log(`[DEBUG-MO] Pomyślnie dodano zadanie ${docRef.id} do zamówienia ${taskWithMeta.orderId}`);
+        } catch (error) {
+          console.error(`[ERROR-MO] Błąd podczas dodawania zadania do zamówienia:`, error);
+          // Nie przerywamy głównej operacji, jeśli dodawanie do zamówienia się nie powiedzie
+        }
+      } else {
+        console.log(`[DEBUG-MO] Zadanie ${docRef.id} nie jest powiązane z zamówieniem - brak orderId`);
+      }
       
       // Teraz, gdy zadanie zostało utworzone, zarezerwuj materiały
       const missingMaterials = [];

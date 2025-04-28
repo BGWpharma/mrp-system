@@ -716,18 +716,34 @@ export const DEFAULT_ORDER = {
 // Dodaj nową funkcję do aktualizacji listy zadań produkcyjnych
 export const addProductionTaskToOrder = async (orderId, taskData, orderItemId = null) => {
   try {
+    console.log(`[DEBUG] Rozpoczęto addProductionTaskToOrder - orderId: ${orderId}, taskId: ${taskData.id}, orderItemId: ${orderItemId}`);
+    console.log(`[DEBUG] Pełne dane taskData:`, JSON.stringify(taskData, null, 2));
+    
     const orderRef = doc(db, ORDERS_COLLECTION, orderId);
     const orderDoc = await getDoc(orderRef);
     
     if (!orderDoc.exists()) {
+      console.error(`[ERROR] Zamówienie o ID ${orderId} nie istnieje!`);
       throw new Error('Zamówienie nie istnieje');
     }
     
     const order = orderDoc.data();
+    console.log(`[DEBUG] Pobrano zamówienie: ${order.orderNumber || orderId}`);
     const productionTasks = order.productionTasks || [];
+    console.log(`[DEBUG] Aktualna lista zadań w zamówieniu:`, JSON.stringify(productionTasks, null, 2));
     
-    // Dodaj nowe zadanie do listy
-    productionTasks.push({
+    // Sprawdź, czy zadanie z tym ID już istnieje w tablicy
+    const existingTaskIndex = productionTasks.findIndex(task => task.id === taskData.id);
+    console.log(`[DEBUG] Czy zadanie już istnieje w zamówieniu: ${existingTaskIndex !== -1}`);
+    
+    // Zachowaj istniejący orderItemId, jeśli nie podano nowego
+    if (!orderItemId && existingTaskIndex !== -1 && productionTasks[existingTaskIndex].orderItemId) {
+      orderItemId = productionTasks[existingTaskIndex].orderItemId;
+      console.log(`[DEBUG] Używam istniejącego orderItemId z zamówienia: ${orderItemId}`);
+    }
+    
+    // Przygotuj nowe zadanie z orderItemId
+    const newTaskData = {
       id: taskData.id,
       moNumber: taskData.moNumber,
       name: taskData.name,
@@ -737,17 +753,68 @@ export const addProductionTaskToOrder = async (orderId, taskData, orderItemId = 
       quantity: taskData.quantity,
       unit: taskData.unit,
       orderItemId: orderItemId // Dodaj identyfikator pozycji zamówienia
-    });
+    };
+    console.log(`[DEBUG] Przygotowane dane zadania do dodania:`, JSON.stringify(newTaskData, null, 2));
+    
+    // Jeśli zadanie już istnieje, zaktualizuj dane, w przeciwnym razie dodaj nowe
+    if (existingTaskIndex !== -1) {
+      productionTasks[existingTaskIndex] = newTaskData;
+      console.log(`[DEBUG] Zaktualizowano zadanie ${taskData.id} w zamówieniu ${orderId} z orderItemId: ${newTaskData.orderItemId}`);
+    } else {
+      // Dodaj nowe zadanie do listy
+      productionTasks.push(newTaskData);
+      console.log(`[DEBUG] Dodano zadanie ${taskData.id} do zamówienia ${orderId} z orderItemId: ${orderItemId}`);
+    }
+    
+    // Zawsze aktualizuj zadanie produkcyjne w bazie danych, niezależnie od tego czy orderItemId było podane
+    const taskRef = doc(db, 'productionTasks', taskData.id);
+    
+    try {
+      // Pobierz aktualne dane zadania, aby zachować pozostałe pola
+      const taskDocSnap = await getDoc(taskRef);
+      if (taskDocSnap.exists()) {
+        const currentTaskData = taskDocSnap.data();
+        console.log(`[DEBUG] Pobrano aktualne dane zadania z bazy:`, JSON.stringify({
+          id: taskData.id,
+          moNumber: currentTaskData.moNumber,
+          orderItemId: currentTaskData.orderItemId,
+          orderId: currentTaskData.orderId,
+          orderNumber: currentTaskData.orderNumber
+        }, null, 2));
+        
+        // Nie nadpisuj orderItemId, jeśli już istnieje w zadaniu produkcyjnym, chyba że podano nowy
+        const finalOrderItemId = orderItemId || currentTaskData.orderItemId || null;
+        
+        const updateFields = {
+          orderItemId: finalOrderItemId,
+          orderId: orderId, // Upewniamy się, że orderId również jest ustawione
+          orderNumber: order.orderNumber, // Dodaj również numer zamówienia
+          updatedAt: serverTimestamp()
+        };
+        console.log(`[DEBUG] Aktualizacja zadania w bazie, pola:`, JSON.stringify(updateFields, null, 2));
+        
+        await updateDoc(taskRef, updateFields);
+        
+        console.log(`[DEBUG] Zaktualizowano zadanie produkcyjne ${taskData.id} z orderItemId: ${finalOrderItemId}`);
+      } else {
+        console.warn(`[WARN] Nie znaleziono zadania produkcyjnego ${taskData.id} w bazie danych`);
+      }
+    } catch (error) {
+      console.error(`[ERROR] Błąd podczas aktualizacji zadania ${taskData.id}:`, error);
+      // Kontynuuj mimo błędu - ważniejsze jest zaktualizowanie zamówienia
+    }
     
     // Zaktualizuj zamówienie
+    console.log(`[DEBUG] Zapisuję listę zadań w zamówieniu. Liczba zadań: ${productionTasks.length}`);
     await updateDoc(orderRef, {
       productionTasks,
       updatedAt: serverTimestamp()
     });
+    console.log(`[DEBUG] Zakończono pomyślnie addProductionTaskToOrder dla zadania ${taskData.id} w zamówieniu ${orderId}`);
     
     return true;
   } catch (error) {
-    console.error('Błąd podczas dodawania zadania produkcyjnego do zamówienia:', error);
+    console.error(`[ERROR] Krytyczny błąd w addProductionTaskToOrder:`, error);
     throw error;
   }
 };
@@ -853,6 +920,30 @@ export const updateProductionTaskInOrder = async (orderId, taskId, updateData, u
       updatedAt: serverTimestamp(),
       updatedBy: userId
     });
+    
+    // Zaktualizuj również zadanie produkcyjne w bazie danych z orderItemId
+    try {
+      const taskRef = doc(db, 'productionTasks', taskId);
+      const taskDoc = await getDoc(taskRef);
+      
+      if (taskDoc.exists()) {
+        // Aktualizuj tylko podstawowe pola związane z zamówieniem
+        await updateDoc(taskRef, {
+          orderItemId: updateData.orderItemId || productionTasks[taskIndex].orderItemId || null,
+          orderId: orderId,
+          orderNumber: orderData.orderNumber || null,
+          updatedAt: serverTimestamp(),
+          updatedBy: userId
+        });
+        
+        console.log(`Zaktualizowano powiązanie z zamówieniem w zadaniu produkcyjnym ${taskId}`);
+      } else {
+        console.warn(`Nie znaleziono zadania produkcyjnego ${taskId} w bazie danych`);
+      }
+    } catch (error) {
+      console.error(`Błąd podczas aktualizacji zadania ${taskId}:`, error);
+      // Kontynuuj mimo błędu - ważniejsze jest zaktualizowanie zamówienia
+    }
     
     return {
       success: true,

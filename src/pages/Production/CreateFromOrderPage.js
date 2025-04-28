@@ -261,8 +261,18 @@ const CreateFromOrderPage = () => {
   
   const fetchOrderDetails = async (orderId) => {
     try {
+      console.log(`[DEBUG-ORDER] Pobieranie szczegółów zamówienia: ${orderId}`);
       setOrderLoading(true);
       const orderData = await getOrderById(orderId);
+      
+      console.log(`[DEBUG-ORDER] Pobrano zamówienie: ${orderData.orderNumber}, ilość zadań: ${orderData.productionTasks?.length || 0}`);
+      if (orderData.productionTasks && orderData.productionTasks.length > 0) {
+        console.log(`[DEBUG-ORDER] Lista zadań w zamówieniu:`, orderData.productionTasks.map(task => ({
+          id: task.id, 
+          moNumber: task.moNumber,
+          orderItemId: task.orderItemId
+        })));
+      }
       
       // Upewnij się, że wartość totalValue jest prawidłową liczbą
       if (orderData.totalValue) {
@@ -270,8 +280,10 @@ const CreateFromOrderPage = () => {
       }
       
       // Weryfikacja i czyszczenie nieistniejących zadań produkcyjnych
+      console.log(`[DEBUG-ORDER] Weryfikacja zadań produkcyjnych w zamówieniu...`);
       const verifiedOrderData = await verifyProductionTasks(orderData);
       
+      console.log(`[DEBUG-ORDER] Po weryfikacji, ilość zadań: ${verifiedOrderData.productionTasks?.length || 0}`);
       setSelectedOrder(verifiedOrderData);
       
       // Aktualizuj listę zamówień, aby odzwierciedlić aktualne dane
@@ -283,10 +295,12 @@ const CreateFromOrderPage = () => {
       
       // Sprawdź, czy zamówienie ma już utworzone zadania produkcyjne
       if (verifiedOrderData.productionTasks && verifiedOrderData.productionTasks.length > 0) {
+        console.log(`[DEBUG-ORDER] Zamówienie ma już ${verifiedOrderData.productionTasks.length} zadań produkcyjnych`);
         showInfo(`Uwaga: Dla tego zamówienia utworzono już ${verifiedOrderData.productionTasks.length} zadań produkcyjnych. Tworzenie dodatkowych może prowadzić do duplikacji.`);
         // Zapisz istniejące zadania do wyświetlenia w UI
         setExistingTasks(verifiedOrderData.productionTasks);
       } else {
+        console.log(`[DEBUG-ORDER] Zamówienie nie ma jeszcze zadań produkcyjnych`);
         // Wyczyść listę istniejących zadań, jeśli wybrano nowe zamówienie bez zadań
         setExistingTasks([]);
       }
@@ -303,6 +317,7 @@ const CreateFromOrderPage = () => {
       
       // Inicjalizacja zaznaczonych elementów
       if (verifiedOrderData.items && verifiedOrderData.items.length > 0) {
+        console.log(`[DEBUG-ORDER] Zamówienie ma ${verifiedOrderData.items.length} pozycji`);
         // Tworzenie nowego stanu dla zaznaczonych elementów
         const initialSelectedItems = verifiedOrderData.items.map((item, index) => ({
           ...item,
@@ -314,25 +329,27 @@ const CreateFromOrderPage = () => {
         setSelectedItems(initialSelectedItems);
         
         // Sprawdź receptury dla wszystkich elementów i zainicjalizuj stanowiska produkcyjne
-        console.log("Sprawdzanie receptur dla elementów zamówienia po inicjalizacji");
+        console.log("[DEBUG-ORDER] Sprawdzanie receptur dla elementów zamówienia po inicjalizacji");
         const initialWorkstations = {};
         
         for (const item of verifiedOrderData.items) {
           const recipe = findRecipeForProduct(item.name);
           if (recipe && recipe.defaultWorkstationId) {
-            console.log(`Inicjalizacja stanowiska dla ${item.name}: ${recipe.defaultWorkstationId}`);
+            console.log(`[DEBUG-ORDER] Inicjalizacja stanowiska dla ${item.name}: ${recipe.defaultWorkstationId}`);
             initialWorkstations[item.id] = recipe.defaultWorkstationId;
           }
         }
         
         if (Object.keys(initialWorkstations).length > 0) {
-          console.log("Ustawiam początkowe stanowiska produkcyjne:", initialWorkstations);
+          console.log("[DEBUG-ORDER] Ustawiam początkowe stanowiska produkcyjne:", initialWorkstations);
           setSelectedWorkstations(initialWorkstations);
         }
       } else {
+        console.log(`[DEBUG-ORDER] Zamówienie nie ma żadnych pozycji`);
         setSelectedItems([]);
       }
     } catch (error) {
+      console.error(`[ERROR-ORDER] Błąd podczas pobierania szczegółów zamówienia:`, error);
       showError('Błąd podczas pobierania szczegółów zamówienia: ' + error.message);
     } finally {
       setOrderLoading(false);
@@ -385,23 +402,42 @@ const CreateFromOrderPage = () => {
   
   const handleSelectAllItems = (event) => {
     const checked = event.target.checked;
+    
     if (Array.isArray(selectedItems)) {
-    setSelectedItems(prev => 
-      prev.map(item => ({ ...item, selected: checked }))
-    );
+      setSelectedItems(prev => 
+        prev.map(item => ({ ...item, selected: checked }))
+      );
     } else {
       // Dla przypadku gdy selectedItems jest obiektem
       const updatedItems = {};
-      Object.keys(selectedItems).forEach(key => {
-        updatedItems[key] = checked;
-      });
+      
+      // Iteruj po elementach zamówienia i utwórz obiekt z aktualizacjami
+      if (selectedOrder && selectedOrder.items) {
+        selectedOrder.items.forEach(item => {
+          if (item.id) {
+            updatedItems[item.id] = checked;
+          }
+        });
+      } else {
+        // Jeśli brak zamówienia, aktualizuj tylko istniejące klucze
+        Object.keys(selectedItems).forEach(key => {
+          updatedItems[key] = checked;
+        });
+      }
+      
       setSelectedItems(updatedItems);
     }
   };
   
   const handleCreateTask = async () => {
     // Sprawdź czy wybrano co najmniej jeden element
-    const hasSelectedItems = selectedItems.some(item => item.selected);
+    let hasSelectedItems = false;
+    
+    if (Array.isArray(selectedItems)) {
+      hasSelectedItems = selectedItems.some(item => item.selected);
+    } else {
+      hasSelectedItems = Object.values(selectedItems).some(Boolean);
+    }
     
     if (!hasSelectedItems) {
       showError('Wybierz co najmniej jeden produkt z zamówienia');
@@ -412,69 +448,82 @@ const CreateFromOrderPage = () => {
       setCreatingTasks(true);
       
       // Przygotuj dane zadania produkcyjnego
-      const selectedProductItems = selectedItems.filter(item => item.selected);
+      const selectedProductItems = Array.isArray(selectedItems) 
+        ? selectedItems.filter(item => item.selected) 
+        : selectedOrder.items.filter(item => selectedItems[item.id]);
+      
+      console.log(`[DEBUG-CREATE] Tworzenie zadań produkcyjnych z zamówienia: ${selectedOrder.orderNumber || selectedOrder.id}`);
+      console.log(`[DEBUG-CREATE] Liczba wybranych pozycji: ${selectedProductItems.length}`);
       
       // Dla każdego wybranego produktu z zamówienia, tworzymy zadanie produkcyjne
       for (const item of selectedProductItems) {
-        // Znormalizuj jednostkę do jednej z trzech dozwolonych
-        const normalizedUnit = normalizeUnit(item.unit);
+        console.log(`[DEBUG-CREATE] Przetwarzanie pozycji: "${item.name}" (ID: ${item.id})`);
         
-        // Znajdź recepturę dla produktu
-        const recipe = findRecipeForProduct(item.name);
+        // Sprawdź czy dla tego produktu wybrano recepturę
+        const recipeId = item.recipeId;
+        let recipeData = null;
+        
+        // Jeśli produkt ma przypisaną recepturę, pobierz jej szczegóły
+        if (recipeId) {
+          console.log(`[DEBUG-CREATE] Receptura przypisana do pozycji: ${recipeId}`);
+          try {
+            const { getRecipeById } = await import('../../services/recipeService');
+            recipeData = await getRecipeById(recipeId);
+            console.log(`[DEBUG-CREATE] Pobrano dane receptury: ${recipeData.name}`);
+          } catch (error) {
+            console.error(`[ERROR-CREATE] Błąd pobierania receptury ${recipeId}:`, error);
+            showError(`Błąd podczas pobierania danych receptury: ${error.message}`);
+            continue;
+          }
+        } else {
+          // Spróbuj znaleźć recepturę na podstawie nazwy produktu
+          const recipe = findRecipeForProduct(item.name);
+          if (recipe) {
+            recipeData = recipe;
+            console.log(`[DEBUG-CREATE] Znaleziono recepturę po nazwie: ${recipe.name} (ID: ${recipe.id})`);
+          } else {
+            console.log(`[DEBUG-CREATE] Nie znaleziono receptury dla pozycji: ${item.name}`);
+          }
+        }
         
         // Utwórz listę materiałów na podstawie receptury
-        const materials = recipe 
-          ? createMaterialsFromRecipe(recipe, item.quantity)
-          : [];
+        const materials = recipeData ? createMaterialsFromRecipe(recipeData, item.quantity) : [];
+        console.log(`[DEBUG-CREATE] Utworzono listę ${materials.length} materiałów dla zadania`);
         
-        // Normalizuj jednostki materiałów
-        if (materials.length > 0) {
-          materials.forEach(material => {
-            material.unit = normalizedUnit;
-          });
-        }
+        // Normalizuj jednostkę - upewnij się, że używamy prawidłowego formatu
+        const normalizedUnit = normalizeUnit(item.unit || 'szt.');
         
-        // Jeśli znaleziono recepturę, dodaj odniesienie do niej i oblicz koszty
-        const recipeData = recipe 
-          ? { recipeId: recipe.id, recipeName: recipe.name }
-          : {};
-        
-        // Oblicz planowany czas produkcji na podstawie danych z receptury
+        // Pobierz czas produkcji z receptury (jeśli dostępny)
         let productionTimePerUnit = 0;
+        if (recipeData && recipeData.productionTimePerUnit) {
+          productionTimePerUnit = parseFloat(recipeData.productionTimePerUnit);
+        }
+        
+        // Oblicz szacowany czas trwania zadania
+        const itemQuantity = parseFloat(item.quantity) || 0;
         let estimatedDuration = 0;
-        
-        if (recipe && recipe.productionTimePerUnit) {
-          productionTimePerUnit = parseFloat(recipe.productionTimePerUnit);
-          // Całkowity czas produkcji w minutach
-          const totalProductionTimeMinutes = productionTimePerUnit * item.quantity;
-          // Konwersja na godziny
-          estimatedDuration = totalProductionTimeMinutes / 60;
+        if (productionTimePerUnit > 0 && itemQuantity > 0) {
+          estimatedDuration = productionTimePerUnit * itemQuantity;
         }
         
-        // Określ cenę jednostkową
-        const itemPrice = item.price || 0;
-        
-        // Uzyskaj datę początku produkcji z wyboru użytkownika lub wartości domyślnej
-        const productDate = productDates[item.id] 
-          ? new Date(productDates[item.id]) 
-          : selectedOrder.orderDate 
-            ? new Date(selectedOrder.orderDate) 
-            : new Date();
-            
-        // Domyślnie ustaw godzinę 8:00 rano, jeśli nie została określona przez użytkownika
-        if (!productDates[item.id]) {
-          productDate.setHours(8, 0, 0, 0);
+        // Ustal daty rozpoczęcia i zakończenia zadania
+        let startDate = new Date();
+        if (item.productionDate) {
+          startDate = new Date(item.productionDate);
         }
         
-        // Formatuj datę rozpoczęcia z aktualną godziną
-        const formattedStartDate = productDate.toISOString();
+        // Użyj aktualnej godziny dla daty startu
+        const currentTime = new Date();
+        startDate.setHours(currentTime.getHours(), currentTime.getMinutes(), 0, 0);
         
-        // Oblicz datę zakończenia na podstawie czasu produkcji
-        let endDate = new Date(productDate);
+        // Formatuj datę rozpoczęcia z godziną
+        const formattedStartDate = startDate.toISOString();
         
+        // Oblicz datę zakończenia na podstawie szacowanego czasu trwania
+        let endDate = new Date(startDate);
         if (estimatedDuration > 0) {
-          // Dodaj odpowiednią liczbę godzin do daty rozpoczęcia
-          endDate.setHours(endDate.getHours() + Math.ceil(estimatedDuration));
+          // Jeśli mamy szacowany czas trwania, dodaj go do daty rozpoczęcia
+          endDate.setMinutes(endDate.getMinutes() + estimatedDuration);
         } else {
           // Jeśli nie ma czasu produkcji, domyślnie zadanie trwa 1 dzień
           endDate.setDate(endDate.getDate() + 1);
@@ -484,7 +533,8 @@ const CreateFromOrderPage = () => {
         const formattedEndDate = endDate.toISOString();
         
         // Sprawdź, czy dla tego produktu wybrano stanowisko produkcyjne
-        const workstationId = selectedWorkstations[item.id] || (recipe && recipe.defaultWorkstationId ? recipe.defaultWorkstationId : null);
+        const workstationId = selectedWorkstations[item.id] || (recipeData && recipeData.defaultWorkstationId ? recipeData.defaultWorkstationId : null);
+        console.log(`[DEBUG-CREATE] Stanowisko produkcyjne: ${workstationId || 'nie wybrano'}`);
         
         // Przy tworzeniu obiektów zadań, dodajemy pola lotNumber i expiryDate:
         const taskData = {
@@ -521,31 +571,49 @@ const CreateFromOrderPage = () => {
           expiryDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)) // Domyślna data ważności - 1 rok
         };
         
+        console.log(`[DEBUG-CREATE] Dane zadania do utworzenia:`, JSON.stringify({
+          name: taskData.name,
+          productName: taskData.productName,
+          orderId: taskData.orderId,
+          orderNumber: taskData.orderNumber,
+          orderItemId: taskData.orderItemId,
+        }, null, 2));
+        
         // Utwórz zadanie produkcyjne
         // Uwaga: funkcja createTask automatycznie rezerwuje materiały dla zadania
+        console.log(`[DEBUG-CREATE] Wywołuję createTask dla pozycji ${item.name}`);
         const newTask = await createTask(taskData, currentUser.uid, taskForm.autoReserveMaterials);
         
         if (newTask) {
+          console.log(`[DEBUG-CREATE] Zadanie utworzone: ${newTask.id}, MO: ${newTask.moNumber}`);
+          console.log(`[DEBUG-CREATE] Dodaję zadanie ${newTask.id} do zamówienia ${selectedOrder.id} z orderItemId: ${item.id}`);
+          
           // Dodaj zadanie do zamówienia, przekazując ID pozycji zamówienia
           await addProductionTaskToOrder(selectedOrder.id, newTask, item.id);
           
           // Dodaj zadanie do listy utworzonych zadań
           setTasksCreated(prev => [...prev, newTask]);
+        } else {
+          console.error(`[ERROR-CREATE] Nie udało się utworzyć zadania dla pozycji ${item.name}`);
         }
       }
       
       // Pokaż sukces, jeśli utworzono przynajmniej jedno zadanie
       if (tasksCreated.length > 0) {
+        console.log(`[DEBUG-CREATE] Utworzono łącznie ${tasksCreated.length} zadań produkcyjnych`);
         showSuccess(`Utworzono ${tasksCreated.length} zadań produkcyjnych`);
         
         // Dodaj nowo utworzone zadania do listy istniejących zadań
         setExistingTasks(prev => [...prev, ...tasksCreated]);
         
         // Odśwież szczegóły zamówienia, aby pokazać nowo utworzone zadania
+        console.log(`[DEBUG-CREATE] Odświeżam szczegóły zamówienia ${selectedOrder.id}`);
         fetchOrderDetails(selectedOrder.id);
+      } else {
+        console.warn(`[WARN-CREATE] Nie utworzono żadnych zadań produkcyjnych`);
       }
     } catch (error) {
-      console.error('Błąd podczas tworzenia zadań produkcyjnych:', error);
+      console.error('[ERROR-CREATE] Błąd podczas tworzenia zadań produkcyjnych:', error);
       showError('Błąd podczas tworzenia zadań produkcyjnych: ' + error.message);
     } finally {
       setCreatingTasks(false);
@@ -658,19 +726,36 @@ const CreateFromOrderPage = () => {
     try {
       setCreatingTasks(true);
       
-      // Sprawdź, czy cokolwiek jest zaznaczone
-      if (selectedItems.length === 0) {
-        showWarning('Nie wybrano żadnych produktów do wyprodukowania.');
-        setCreatingTasks(false);
-      return;
-    }
-    
+      // Pobieranie zaznaczonych elementów w zależności od struktury selectedItems
+      let selectedProductItemIds = [];
+      
+      if (Array.isArray(selectedItems)) {
+        // Jeśli selectedItems jest tablicą obiektów z właściwością selected
+        const selectedProductItems = selectedItems.filter(item => item.selected);
+        if (selectedProductItems.length === 0) {
+          showWarning('Nie wybrano żadnych produktów do wyprodukowania.');
+          setCreatingTasks(false);
+          return;
+        }
+        selectedProductItemIds = selectedProductItems.map(item => item.id || item.itemId);
+      } else {
+        // Jeśli selectedItems jest obiektem, gdzie klucze to ID elementów, a wartości to flagi selected
+        selectedProductItemIds = Object.keys(selectedItems).filter(itemId => selectedItems[itemId]);
+        if (selectedProductItemIds.length === 0) {
+          showWarning('Nie wybrano żadnych produktów do wyprodukowania.');
+          setCreatingTasks(false);
+          return;
+        }
+      }
+      
+      console.log("Wybrane produkty do produkcji:", selectedProductItemIds);
+      
       // Tworzenie tablicy na utworzone zadania i listę błędów
       const createdTasks = [];
       const errors = [];
       
       // Przetwarzanie każdego zaznaczonego przedmiotu
-      for (const itemId of selectedItems) {
+      for (const itemId of selectedProductItemIds) {
         try {
           // Znajdź przedmiot w zamówieniu
           const orderItem = selectedOrder.items.find(item => item.id === itemId);
@@ -692,8 +777,8 @@ const CreateFromOrderPage = () => {
             } else {
               errors.push(`Brak receptury dla produktu ${orderItem.name}. Zadanie nie zostało utworzone.`);
               continue;
-      }
-    } else {
+            }
+          } else {
             // Pobierz dane receptury, jeśli mamy jej ID
             try {
               recipeData = await getRecipeById(recipeId);
@@ -706,10 +791,10 @@ const CreateFromOrderPage = () => {
           if (recipeId && !recipeData) {
             try {
               recipeData = await getRecipeById(recipeId);
-          } catch (recipeError) {
+            } catch (recipeError) {
               errors.push(`Błąd pobierania receptury dla produktu ${orderItem.name}: ${recipeError.message}`);
-            continue;
-          }
+              continue;
+            }
           }
           
           // Określenie jednostki produktu
@@ -725,7 +810,7 @@ const CreateFromOrderPage = () => {
           const materials = recipeData ? createMaterialsFromRecipe(recipeData, orderItem.quantity) : [];
           
           // Sprawdź czy mamy czas produkcji z receptury
-        let productionTimePerUnit = 0;
+          let productionTimePerUnit = 0;
           if (recipeData && recipeData.productionTimePerUnit) {
             productionTimePerUnit = parseFloat(recipeData.productionTimePerUnit);
           }
@@ -745,7 +830,7 @@ const CreateFromOrderPage = () => {
           }
           
           // Dane zadania produkcyjnego
-        const taskData = {
+          const taskData = {
             name: taskName,
             description: `Zadanie produkcyjne utworzone automatycznie na podstawie zamówienia ${selectedOrder.orderNumber || selectedOrder.id} dla klienta ${selectedOrder.customer?.name || 'Nieznany'}.`,
             recipeId: recipeId,
@@ -756,10 +841,10 @@ const CreateFromOrderPage = () => {
             endDate: new Date(new Date(orderItemDate).getTime() + (estimatedDuration * 60 * 1000)), // Dodaj szacowany czas trwania
             estimatedDuration: estimatedDuration,
             productionTimePerUnit: productionTimePerUnit,
-          priority: taskForm.priority || 'Normalny',
+            priority: taskForm.priority || 'Normalny',
             status: taskForm.status || 'Zaplanowane',
             notes: `Powiązane zamówienie klienta: ${selectedOrder.orderNumber || selectedOrder.id}`,
-          materials: materials,
+            materials: materials,
             // Pola specyficzne dla zadania z zamówienia
             orderItemId: itemId,
             orderId: selectedOrder.id,
@@ -771,15 +856,15 @@ const CreateFromOrderPage = () => {
             packaging: orderItem.packaging || '',
             workstationId: workstationId, // Przypisujemy stanowisko produkcyjne
             // Dodajemy pole dla informacji o rezerwacji materiałów
-          reservationMethod: taskForm.reservationMethod || 'fifo',
+            reservationMethod: taskForm.reservationMethod || 'fifo',
             autoReserveMaterials: taskForm.autoReserveMaterials || false
-        };
-        
-        // Utwórz zadanie produkcyjne
-        const newTask = await createTask(taskData, currentUser.uid, taskForm.autoReserveMaterials);
-        
-        if (newTask) {
-          // Dodaj zadanie do listy utworzonych zadań
+          };
+          
+          // Utwórz zadanie produkcyjne
+          const newTask = await createTask(taskData, currentUser.uid, taskForm.autoReserveMaterials);
+          
+          if (newTask) {
+            // Dodaj zadanie do listy utworzonych zadań
             createdTasks.push(newTask);
           }
         } catch (error) {
@@ -824,10 +909,18 @@ const CreateFromOrderPage = () => {
   // Funkcja sprawdzająca czy zadania produkcyjne istnieją i usuwająca nieistniejące referencje
   const verifyProductionTasks = async (orderData) => {
     if (!orderData || !orderData.productionTasks || orderData.productionTasks.length === 0) {
+      console.log(`[DEBUG-VERIFY] Zamówienie ${orderData?.id || 'nieznane'} nie ma zadań produkcyjnych`);
       return orderData;
     }
 
     try {
+      console.log(`[DEBUG-VERIFY] Weryfikacja ${orderData.productionTasks.length} zadań produkcyjnych w zamówieniu ${orderData.id}`);
+      console.log(`[DEBUG-VERIFY] Lista zadań do weryfikacji:`, orderData.productionTasks.map(task => ({
+        id: task.id,
+        moNumber: task.moNumber,
+        orderItemId: task.orderItemId
+      })));
+      
       const { getTaskById, deleteTask } = await import('../../services/productionService');
       const { removeProductionTaskFromOrder } = await import('../../services/orderService');
       
@@ -837,28 +930,50 @@ const CreateFromOrderPage = () => {
       // Sprawdź każde zadanie produkcyjne
       for (const task of orderData.productionTasks) {
         try {
+          console.log(`[DEBUG-VERIFY] Weryfikacja zadania ${task.id} (${task.moNumber || 'brak MO'})`);
           // Próba pobrania zadania z bazy
-          const taskExists = await getTaskById(task.id);
-          if (taskExists) {
+          const taskDetails = await getTaskById(task.id);
+          
+          if (taskDetails) {
+            console.log(`[DEBUG-VERIFY] Zadanie ${task.id} istnieje w bazie, orderItemId w bazie: ${taskDetails.orderItemId || 'brak'}, orderItemId w zamówieniu: ${task.orderItemId || 'brak'}`);
+            
+            // Sprawdź, czy orderItemId w zadaniu i zamówieniu są spójne
+            if (task.orderItemId && (!taskDetails.orderItemId || taskDetails.orderItemId !== task.orderItemId)) {
+              console.log(`[DEBUG-VERIFY] Niespójność orderItemId dla zadania ${task.id}. Aktualizuję zadanie w bazie.`);
+              
+              // Aktualizuj zadanie w bazie danych
+              const { updateTask } = await import('../../services/productionService');
+              await updateTask(task.id, {
+                orderItemId: task.orderItemId,
+                orderId: orderData.id,
+                orderNumber: orderData.orderNumber
+              }, 'system');
+              
+              console.log(`[DEBUG-VERIFY] Zaktualizowano zadanie ${task.id} w bazie z orderItemId: ${task.orderItemId}`);
+            }
+            
             verifiedTasks.push(task);
           } else {
-            console.log(`Zadanie produkcyjne ${task.id} (${task.moNumber}) już nie istnieje.`);
+            console.log(`[DEBUG-VERIFY] Zadanie produkcyjne ${task.id} (${task.moNumber || 'brak MO'}) nie istnieje w bazie.`);
             tasksToRemove.push(task);
           }
         } catch (error) {
-          console.error(`Błąd podczas weryfikacji zadania ${task.id}:`, error);
+          console.error(`[ERROR-VERIFY] Błąd podczas weryfikacji zadania ${task.id}:`, error);
           tasksToRemove.push(task);
         }
       }
       
       // Jeśli znaleziono nieistniejące zadania, usuń ich referencje z zamówienia
       if (tasksToRemove.length > 0) {
+        console.log(`[DEBUG-VERIFY] Znaleziono ${tasksToRemove.length} nieistniejących zadań do usunięcia z zamówienia`);
+        
         for (const task of tasksToRemove) {
           try {
+            console.log(`[DEBUG-VERIFY] Usuwanie referencji do zadania ${task.id} z zamówienia ${orderData.id}`);
             await removeProductionTaskFromOrder(orderData.id, task.id);
-            console.log(`Usunięto nieistniejące zadanie ${task.id} (${task.moNumber}) z zamówienia ${orderData.id}`);
+            console.log(`[DEBUG-VERIFY] Usunięto nieistniejące zadanie ${task.id} (${task.moNumber || 'brak MO'}) z zamówienia ${orderData.id}`);
           } catch (error) {
-            console.error(`Błąd podczas usuwania referencji do zadania ${task.id}:`, error);
+            console.error(`[ERROR-VERIFY] Błąd podczas usuwania referencji do zadania ${task.id}:`, error);
           }
         }
         
@@ -868,13 +983,15 @@ const CreateFromOrderPage = () => {
           productionTasks: verifiedTasks
         };
         
+        console.log(`[DEBUG-VERIFY] Po weryfikacji, zaktualizowane zamówienie ma ${verifiedTasks.length} zadań produkcyjnych`);
         showInfo(`Usunięto ${tasksToRemove.length} nieistniejących zadań produkcyjnych z zamówienia.`);
         return updatedOrder;
       }
       
+      console.log(`[DEBUG-VERIFY] Weryfikacja zadań zakończona, wszystkie ${verifiedTasks.length} zadań istnieje w bazie`);
       return orderData;
     } catch (error) {
-      console.error('Błąd podczas weryfikacji zadań produkcyjnych:', error);
+      console.error('[ERROR-VERIFY] Błąd podczas weryfikacji zadań produkcyjnych:', error);
       return orderData;
     }
   };
