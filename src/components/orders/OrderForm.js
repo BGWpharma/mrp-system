@@ -326,12 +326,12 @@ const OrderForm = ({ orderId }) => {
         await updateOrder(orderId, orderToSave, currentUser.uid);
         savedOrderId = orderId;
         showSuccess('Zamówienie zostało zaktualizowane');
+        navigate(`/orders/${savedOrderId}`);
       } else {
         savedOrderId = await createOrder(orderToSave, currentUser.uid);
         showSuccess('Zamówienie zostało utworzone');
+        navigate('/orders'); // Zmiana przekierowania na listę zamówień
       }
-      
-      navigate(`/orders/${savedOrderId}`);
     } catch (error) {
       console.error('Błąd podczas zapisywania zamówienia:', error);
       showError(`Wystąpił błąd: ${error.message}`);

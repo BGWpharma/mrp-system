@@ -175,6 +175,7 @@ function App() {
                 <Route path="/production/reports" element={<PrivateLayout><ReportsPage /></PrivateLayout>} />
                 <Route path="/production/create-from-order" element={<PrivateLayout><CreateFromOrderPage /></PrivateLayout>} />
                 <Route path="/production/workstations" element={<PrivateLayout><WorkstationsPage /></PrivateLayout>} />
+                <Route path="/production/workstations/new" element={<PrivateLayout><WorkstationsPage /></PrivateLayout>} />
                 
                 {/* Inventory Routes */}
                 <Route path="/inventory" element={<PrivateLayout><InventoryPage /></PrivateLayout>} />
