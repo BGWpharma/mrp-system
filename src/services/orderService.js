@@ -590,15 +590,6 @@ const validateOrderData = (orderData) => {
     if (item.price < 0) {
       throw new Error(`Pozycja #${index + 1} musi mieć poprawną cenę`);
     }
-    
-    // Jeśli produkt ma minimalną ilość zamówienia i jest produktem (nie recepturą),
-    // sprawdź czy ilość spełnia wymóg minimalny - tylko jeśli jednostki są takie same
-    if (item.id && item.itemType === 'product' && !item.isRecipe) {
-      const minOrderQuantity = item.minOrderQuantity || 0;
-      if (minOrderQuantity > 0 && item.quantity < minOrderQuantity && item.unit === item.originalUnit) {
-        throw new Error(`Pozycja #${index + 1} (${item.name}) wymaga minimalnej ilości zamówienia: ${minOrderQuantity} ${item.unit}`);
-      }
-    }
   });
   
   if (!orderData.orderDate) {

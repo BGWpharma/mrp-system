@@ -394,11 +394,12 @@ const OrderForm = ({ orderId }) => {
         errors[`item_${index}_price`] = 'Cena nie może być ujemna';
       }
       
-      // Sprawdź minimalne ilości zamówienia dla produktów (nie receptur)
+      // Sprawdź minimalne ilości zamówienia dla produktów, ale tylko pokazuj informację
       if (item.id && item.itemType === 'product' && !item.isRecipe) {
         const minOrderQuantity = item.minOrderQuantity || 0;
         if (minOrderQuantity > 0 && parseFloat(item.quantity) < minOrderQuantity && item.unit === item.originalUnit) {
-          errors[`item_${index}_quantity`] = `Minimalna ilość zamówienia to ${minOrderQuantity} ${item.unit}`;
+          // Nie ustawiamy błędu, tylko pokazujemy informację
+          showInfo(`Produkt ${item.name}: Sugerowana minimalna ilość zamówienia to ${minOrderQuantity} ${item.unit}`);
         }
       }
     });

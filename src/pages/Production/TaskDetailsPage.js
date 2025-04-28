@@ -49,7 +49,8 @@ import {
   Container,
   Accordion,
   AccordionSummary,
-  AccordionDetails
+  AccordionDetails,
+  AlertTitle
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -741,7 +742,7 @@ const TaskDetailsPage = () => {
   };
   
   // Zmodyfikowana funkcja do rezerwacji materiałów z obsługą ręcznego wyboru partii
-  const handleReserveMaterials = async () => {
+  const handleReserveMaterials = async (singleMaterialId = null) => {
     try {
       setReservingMaterials(true);
       
@@ -754,7 +755,7 @@ const TaskDetailsPage = () => {
       
       console.log("Rozpoczynam proces rezerwacji materiałów dla zadania:", id);
       console.log("Metoda rezerwacji:", reservationMethod);
-      console.log("Task data:", task);
+      console.log(singleMaterialId ? `Rezerwacja pojedynczego materiału ID: ${singleMaterialId}` : "Rezerwacja wszystkich materiałów");
       
       // Sprawdź, czy istnieją nowe materiały, które nie są jeszcze zarezerwowane
       const existingReservedMaterials = new Set();
@@ -766,131 +767,198 @@ const TaskDetailsPage = () => {
         });
       }
       
-      // Sprawdź, czy są nowe materiały do zarezerwowania
-      const newMaterialsToReserve = task.materials.filter(material => {
-        const materialId = material.inventoryItemId || material.id;
-        return materialId && !existingReservedMaterials.has(materialId);
-      });
-      
-      // Jeśli zadanie ma już zarezerwowane materiały i nie ma nowych materiałów do zarezerwowania
-      if (task.materialsReserved && task.materialBatches && newMaterialsToReserve.length === 0) {
-        console.log("Materiały są już zarezerwowane dla tego zadania. Pomijam ponowną rezerwację.");
-        showInfo("Materiały są już zarezerwowane dla tego zadania.");
-        setReservingMaterials(false);
-        setReserveDialogOpen(false);
-        return;
-      }
-      
-      // Jeśli są już zarezerwowane materiały, ale są też nowe do zarezerwowania
-      if (task.materialsReserved && task.materialBatches && newMaterialsToReserve.length > 0) {
-        console.log(`Wykryto ${newMaterialsToReserve.length} nowe materiały do zarezerwowania.`);
-        showInfo(`Rezerwuję ${newMaterialsToReserve.length} nowe materiały dodane do zadania.`);
-      }
-      
-      // Jeśli wybrano ręczny wybór partii
-      if (reservationMethod === 'manual') {
-        if (!validateManualBatchSelection()) {
+      // Jeśli wybrano rezerwację pojedynczego materiału
+      if (singleMaterialId) {
+        // Sprawdź czy materiał jest już zarezerwowany
+        if (existingReservedMaterials.has(singleMaterialId)) {
+          console.log(`Materiał o ID ${singleMaterialId} jest już zarezerwowany. Pomijam ponowną rezerwację.`);
+          showInfo("Ten materiał jest już zarezerwowany.");
+          setReservingMaterials(false);
+          return;
+        }
+        
+        // Pobierz dane materiału
+        const material = task.materials.find(m => (m.inventoryItemId || m.id) === singleMaterialId);
+        if (!material) {
+          console.error(`Nie znaleziono materiału o ID: ${singleMaterialId}`);
+          showError("Nie znaleziono materiału.");
+          setReservingMaterials(false);
+          return;
+        }
+        
+        // Walidacja dla pojedynczego materiału
+        if (!validateManualBatchSelectionForMaterial(singleMaterialId)) {
           setReservingMaterials(false);
           return;
         }
         
         const errors = [];
-        const reservedItems = [];
         const userId = currentUser?.uid || 'system';
+        const materialBatches = selectedBatches[singleMaterialId] || [];
         
         try {
-          // Teraz rezerwuj partie tylko dla nowych materiałów lub wszystkich jeśli nie było wcześniejszej rezerwacji
-          for (const material of task.materials) {
-            const materialId = material.inventoryItemId || material.id;
-            if (!materialId) continue;
-            
-            // Pomijamy materiały, które są już zarezerwowane (chyba że nie ma nowych materiałów)
-            if (existingReservedMaterials.has(materialId) && newMaterialsToReserve.length > 0) {
-              console.log(`Materiał ${material.name} jest już zarezerwowany, pomijam.`);
-              continue;
-            }
-            
-            const materialBatches = selectedBatches[materialId] || [];
-            
+          // Rezerwuj partie dla wybranego materiału
+          for (const batchSelection of materialBatches) {
             try {
-              // Rezerwuj materiał
-              for (const batchSelection of materialBatches) {
-                try {
-                  await bookInventoryForTask(
-                    materialId,
-                    batchSelection.quantity,
-                    id,
-                    userId,
-                    'manual',
-                    batchSelection.batchId  // Przekazujemy ID konkretnej partii
-                  );
-                } catch (error) {
-                  console.error(`Błąd podczas rezerwacji partii ${batchSelection.batchNumber} materiału ${material.name}:`, error);
-                  errors.push(`Nie można zarezerwować partii ${batchSelection.batchNumber} materiału ${material.name}: ${error.message}`);
-                }
-              }
-              
-              reservedItems.push({
-                itemId: materialId,
-                name: material.name,
-                quantity: material.quantity,
-                unit: material.unit
-              });
+              await bookInventoryForTask(
+                singleMaterialId,
+                batchSelection.quantity,
+                id,
+                userId,
+                'manual',
+                batchSelection.batchId
+              );
             } catch (error) {
-              console.error(`Błąd podczas rezerwacji materiału ${material.name}:`, error);
-              errors.push(`Nie można zarezerwować materiału ${material.name}: ${error.message}`);
+              console.error(`Błąd podczas rezerwacji partii ${batchSelection.batchNumber} materiału ${material.name}:`, error);
+              errors.push(`Nie można zarezerwować partii ${batchSelection.batchNumber} materiału ${material.name}: ${error.message}`);
             }
           }
+          
+          // Zwróć informację o wyniku operacji
+          if (errors.length === 0) {
+            showSuccess(`Zarezerwowano materiał ${material.name}`);
+            
+            // Odśwież dane zadania
+            const updatedTask = await getTaskById(id);
+            setTask(updatedTask);
+          } else {
+            showError(`Błędy: ${errors.join(', ')}`);
+          }
         } catch (error) {
-          console.error('Błąd podczas przetwarzania rezerwacji ręcznych:', error);
-          showError('Wystąpił błąd podczas przetwarzania rezerwacji: ' + error.message);
+          console.error(`Błąd podczas rezerwacji materiału ${material.name}:`, error);
+          showError(`Nie można zarezerwować materiału ${material.name}: ${error.message}`);
+        }
+      } else {
+        // Rezerwacja wszystkich materiałów
+        // Sprawdź, czy są nowe materiały do zarezerwowania
+        const newMaterialsToReserve = task.materials.filter(material => {
+          const materialId = material.inventoryItemId || material.id;
+          return materialId && !existingReservedMaterials.has(materialId);
+        });
+        
+        // Jeśli zadanie ma już zarezerwowane materiały i nie ma nowych materiałów do zarezerwowania
+        if (task.materialsReserved && task.materialBatches && newMaterialsToReserve.length === 0) {
+          console.log("Materiały są już zarezerwowane dla tego zadania. Pomijam ponowną rezerwację.");
+          showInfo("Materiały są już zarezerwowane dla tego zadania.");
           setReservingMaterials(false);
+          setReserveDialogOpen(false);
           return;
         }
         
-        // Zwróć informację o wyniku operacji
-        if (errors.length === 0) {
-          showSuccess(`Zarezerwowano wszystkie ${reservedItems.length} materiały dla zadania`);
-        } else {
-          // Jeśli mamy częściowy sukces (część materiałów zarezerwowana, część nie)
-          if (reservedItems.length > 0) {
-            showInfo(`Zarezerwowano częściowo: ${reservedItems.length} z ${task.materials.length} materiałów`);
-          }
-          
-          if (errors.length > 0) {
-            showError(`Błędy: ${errors.join(', ')}`);
-          }
+        // Jeśli są już zarezerwowane materiały, ale są też nowe do zarezerwowania
+        if (task.materialsReserved && task.materialBatches && newMaterialsToReserve.length > 0) {
+          console.log(`Wykryto ${newMaterialsToReserve.length} nowe materiały do zarezerwowania.`);
+          showInfo(`Rezerwuję ${newMaterialsToReserve.length} nowe materiały dodane do zadania.`);
         }
-      } else {
-        // Standardowa rezerwacja automatyczna (FIFO lub według daty ważności)
-        console.log("Wykonuję automatyczną rezerwację materiałów metodą:", reservationMethod);
-        const userId = currentUser?.uid || 'system';
-        const result = await reserveMaterialsForTask(id, userId, reservationMethod);
-        console.log("Wynik automatycznej rezerwacji materiałów:", result);
         
-        if (result.success) {
-          showSuccess(result.message);
-        } else {
-          // Jeśli mamy częściowy sukces (część materiałów zarezerwowana, część nie)
-          if (result.reservedItems && result.reservedItems.length > 0) {
-            showInfo(`Zarezerwowano częściowo: ${result.reservedItems.length} z ${task.materials.length} materiałów`);
+        // Jeśli wybrano ręczny wybór partii
+        if (reservationMethod === 'manual') {
+          if (!validateManualBatchSelection()) {
+            setReservingMaterials(false);
+            return;
           }
           
-          if (result.errors && result.errors.length > 0) {
-            showError(`Błędy: ${result.errors.join(', ')}`);
+          const errors = [];
+          const reservedItems = [];
+          const userId = currentUser?.uid || 'system';
+          
+          try {
+            // Teraz rezerwuj partie tylko dla nowych materiałów lub wszystkich jeśli nie było wcześniejszej rezerwacji
+            for (const material of task.materials) {
+              const materialId = material.inventoryItemId || material.id;
+              if (!materialId) continue;
+              
+              // Pomijamy materiały, które są już zarezerwowane (chyba że nie ma nowych materiałów)
+              if (existingReservedMaterials.has(materialId) && newMaterialsToReserve.length > 0) {
+                console.log(`Materiał ${material.name} jest już zarezerwowany, pomijam.`);
+                continue;
+              }
+              
+              const materialBatches = selectedBatches[materialId] || [];
+              
+              try {
+                // Rezerwuj materiał
+                for (const batchSelection of materialBatches) {
+                  try {
+                    await bookInventoryForTask(
+                      materialId,
+                      batchSelection.quantity,
+                      id,
+                      userId,
+                      'manual',
+                      batchSelection.batchId  // Przekazujemy ID konkretnej partii
+                    );
+                  } catch (error) {
+                    console.error(`Błąd podczas rezerwacji partii ${batchSelection.batchNumber} materiału ${material.name}:`, error);
+                    errors.push(`Nie można zarezerwować partii ${batchSelection.batchNumber} materiału ${material.name}: ${error.message}`);
+                  }
+                }
+                
+                reservedItems.push({
+                  itemId: materialId,
+                  name: material.name,
+                  quantity: material.quantity,
+                  unit: material.unit
+                });
+              } catch (error) {
+                console.error(`Błąd podczas rezerwacji materiału ${material.name}:`, error);
+                errors.push(`Nie można zarezerwować materiału ${material.name}: ${error.message}`);
+              }
+            }
+          } catch (error) {
+            console.error('Błąd podczas przetwarzania rezerwacji ręcznych:', error);
+            showError('Wystąpił błąd podczas przetwarzania rezerwacji: ' + error.message);
+            setReservingMaterials(false);
+            return;
+          }
+          
+          // Zwróć informację o wyniku operacji
+          if (errors.length === 0) {
+            showSuccess(`Zarezerwowano wszystkie ${reservedItems.length} materiały dla zadania`);
+          } else {
+            // Jeśli mamy częściowy sukces (część materiałów zarezerwowana, część nie)
+            if (reservedItems.length > 0) {
+              showInfo(`Zarezerwowano częściowo: ${reservedItems.length} z ${task.materials.length} materiałów`);
+            }
+            
+            if (errors.length > 0) {
+              showError(`Błędy: ${errors.join(', ')}`);
+            }
+          }
+        } else {
+          // Standardowa rezerwacja automatyczna (FIFO lub według daty ważności)
+          console.log("Wykonuję automatyczną rezerwację materiałów metodą:", reservationMethod);
+          const userId = currentUser?.uid || 'system';
+          const result = await reserveMaterialsForTask(id, userId, reservationMethod);
+          console.log("Wynik automatycznej rezerwacji materiałów:", result);
+          
+          if (result.success) {
+            showSuccess(result.message);
+          } else {
+            // Jeśli mamy częściowy sukces (część materiałów zarezerwowana, część nie)
+            if (result.reservedItems && result.reservedItems.length > 0) {
+              showInfo(`Zarezerwowano częściowo: ${result.reservedItems.length} z ${task.materials.length} materiałów`);
+            }
+            
+            if (result.errors && result.errors.length > 0) {
+              showError(`Błędy: ${result.errors.join(', ')}`);
+            }
           }
         }
+        
+        // Aktualizuj stan rezerwacji materiałów w zadaniu tylko gdy rezerwujemy wszystkie materiały
+        console.log("Aktualizacja statusu zadania - materiały zarezerwowane");
+        const taskRef = doc(db, 'productionTasks', id);
+        await updateDoc(taskRef, {
+          materialsReserved: true,
+          reservationComplete: true,
+          updatedAt: serverTimestamp(),
+          updatedBy: currentUser?.uid || 'system'
+        });
+        
+        // Zamknij dialog przy rezerwacji wszystkich materiałów
+        setReserveDialogOpen(false);
       }
-      
-      // Aktualizuj stan rezerwacji materiałów w zadaniu
-      console.log("Aktualizacja statusu zadania - materiały zarezerwowane");
-      const taskRef = doc(db, 'productionTasks', id);
-      await updateDoc(taskRef, {
-        materialsReserved: true,
-        reservationComplete: true,
-        updatedAt: serverTimestamp(),
-        updatedBy: currentUser?.uid || 'system'
-      });
       
       // Odśwież dane zadania
       console.log("Pobieranie zaktualizowanych danych zadania po rezerwacji");
@@ -898,7 +966,6 @@ const TaskDetailsPage = () => {
       console.log("Zaktualizowane dane zadania:", updatedTask);
       setTask(updatedTask);
       
-      setReserveDialogOpen(false);
     } catch (error) {
       console.error('Błąd podczas rezerwacji materiałów:', error);
       showError('Nie udało się zarezerwować materiałów: ' + error.message);
@@ -914,14 +981,14 @@ const TaskDetailsPage = () => {
     }
     
     if (materialBatchesLoading) {
-    return (
+      return (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
           <CircularProgress />
         </Box>
-    );
-  }
+      );
+    }
 
-  return (
+    return (
       <Box sx={{ mt: 2 }}>
         <Typography variant="subtitle1" gutterBottom>
           Wybierz partie dla każdego materiału:
@@ -935,6 +1002,9 @@ const TaskDetailsPage = () => {
           const selectedMaterialBatches = selectedBatches[materialId] || [];
           const totalSelectedQuantity = selectedMaterialBatches.reduce((sum, batch) => sum + batch.quantity, 0);
           const isComplete = totalSelectedQuantity >= material.quantity;
+          
+          // Sprawdź, czy materiał jest już zarezerwowany
+          const isAlreadyReserved = task.materialBatches && task.materialBatches[materialId] && task.materialBatches[materialId].length > 0;
           
           // Sortuj partie: najpierw zarezerwowane dla zadania, potem wg daty ważności
           materialBatches = [...materialBatches].sort((a, b) => {
@@ -968,13 +1038,21 @@ const TaskDetailsPage = () => {
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
                   <Typography>{material.name}</Typography>
-                  <Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
                     <Chip
                       label={`${totalSelectedQuantity.toFixed(3)} / ${parseFloat(material.quantity).toFixed(3)} ${material.unit}`}
                       color={isComplete ? "success" : "warning"}
                       size="small"
                       sx={{ mr: 1 }}
                     />
+                    {isAlreadyReserved && (
+                      <Chip
+                        label="Zarezerwowany"
+                        color="primary"
+                        size="small"
+                        sx={{ mr: 1 }}
+                      />
+                    )}
                   </Box>
                 </Box>
               </AccordionSummary>
@@ -984,88 +1062,101 @@ const TaskDetailsPage = () => {
                     Brak dostępnych partii dla tego materiału
                   </Typography>
                 ) : (
-                  <TableContainer>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Nr partii</TableCell>
-                          <TableCell>Data ważności</TableCell>
-                          <TableCell>Dostępna ilość</TableCell>
-                          <TableCell>Cena jedn.</TableCell>
-                          <TableCell>Do rezerwacji</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {materialBatches.map((batch) => {
-                          const selectedBatch = selectedMaterialBatches.find(b => b.batchId === batch.id);
-                          const selectedQuantity = selectedBatch ? selectedBatch.quantity : 0;
-                          // Sprawdź czy partia jest już zarezerwowana dla tego zadania
-                          const isReservedForTask = task.materialBatches && 
-                                                   task.materialBatches[materialId] && 
-                                                   task.materialBatches[materialId].some(b => b.batchId === batch.id);
-                          
-                          // Wyświetl informacje o faktycznej dostępności
-                          const effectiveQuantity = batch.effectiveQuantity || 0;
-                          const reservedByOthers = batch.reservedByOthers || 0;
-                          
-                          return (
-                            <TableRow key={batch.id}>
-                              <TableCell>
-                                {batch.batchNumber || batch.lotNumber || 'Bez numeru'}
-                                {isReservedForTask && (
-                                  <Chip 
-                                    label="Zarezerwowana" 
-                                    color="primary" 
-                                    size="small" 
-                                    sx={{ ml: 1 }} 
-                                    variant="outlined" 
-                                  />
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                {batch.expiryDate ? formatDate(batch.expiryDate) : 'Brak'}
-                              </TableCell>
-                              <TableCell>
-                                {parseFloat(batch.quantity).toFixed(3)} {material.unit}
-                                {reservedByOthers > 0 && (
-                                  <Typography variant="caption" color="error" display="block">
-                                    Zarezerwowane: {parseFloat(reservedByOthers).toFixed(3)} {material.unit}
+                  <>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Nr partii</TableCell>
+                            <TableCell>Data ważności</TableCell>
+                            <TableCell>Dostępna ilość</TableCell>
+                            <TableCell>Cena jedn.</TableCell>
+                            <TableCell>Do rezerwacji</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {materialBatches.map((batch) => {
+                            const selectedBatch = selectedMaterialBatches.find(b => b.batchId === batch.id);
+                            const selectedQuantity = selectedBatch ? selectedBatch.quantity : 0;
+                            // Sprawdź czy partia jest już zarezerwowana dla tego zadania
+                            const isReservedForTask = task.materialBatches && 
+                                                     task.materialBatches[materialId] && 
+                                                     task.materialBatches[materialId].some(b => b.batchId === batch.id);
+                            
+                            // Wyświetl informacje o faktycznej dostępności
+                            const effectiveQuantity = batch.effectiveQuantity || 0;
+                            const reservedByOthers = batch.reservedByOthers || 0;
+                            
+                            return (
+                              <TableRow key={batch.id}>
+                                <TableCell>
+                                  {batch.batchNumber || batch.lotNumber || 'Bez numeru'}
+                                  {isReservedForTask && (
+                                    <Chip 
+                                      label="Zarezerwowana" 
+                                      color="primary" 
+                                      size="small" 
+                                      sx={{ ml: 1 }} 
+                                      variant="outlined" 
+                                    />
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {batch.expiryDate ? formatDate(batch.expiryDate) : 'Brak'}
+                                </TableCell>
+                                <TableCell>
+                                  {parseFloat(batch.quantity).toFixed(3)} {material.unit}
+                                  {reservedByOthers > 0 && (
+                                    <Typography variant="caption" color="error" display="block">
+                                      Zarezerwowane: {parseFloat(reservedByOthers).toFixed(3)} {material.unit}
+                                    </Typography>
+                                  )}
+                                  <Typography variant="caption" color={effectiveQuantity > 0 ? "success" : "error"} display="block">
+                                    Dostępne: {parseFloat(effectiveQuantity).toFixed(3)} {material.unit}
                                   </Typography>
-                                )}
-                                <Typography variant="caption" color={effectiveQuantity > 0 ? "success" : "error"} display="block">
-                                  Dostępne: {parseFloat(effectiveQuantity).toFixed(3)} {material.unit}
-                                </Typography>
-                              </TableCell>
-                              <TableCell>
-                                {batch.unitPrice ? `${parseFloat(batch.unitPrice).toFixed(2)} €` : '—'}
-                              </TableCell>
-                              <TableCell>
-                                <TextField
-                                  type="number"
-                                  value={selectedQuantity}
-                                  onChange={(e) => {
-                                    const value = parseFloat(e.target.value);
-                                    const quantity = isNaN(value) ? 0 : Math.min(value, effectiveQuantity);
-                                    handleBatchSelection(materialId, batch.id, quantity);
-                                  }}
-                                  inputProps={{ 
-                                    min: 0, 
-                                    max: effectiveQuantity, // Maksymalna wartość to efektywnie dostępna ilość
-                                    step: 'any'
-                                  }}
-                                  size="small"
-                                  sx={{ width: '100px' }}
-                                  error={effectiveQuantity <= 0}
-                                  helperText={effectiveQuantity <= 0 ? "Brak dostępnej ilości" : ""}
-                                  disabled={effectiveQuantity <= 0}
-                                />
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                                </TableCell>
+                                <TableCell>
+                                  {batch.unitPrice ? `${parseFloat(batch.unitPrice).toFixed(2)} €` : '—'}
+                                </TableCell>
+                                <TableCell>
+                                  <TextField
+                                    type="number"
+                                    value={selectedQuantity}
+                                    onChange={(e) => {
+                                      const value = parseFloat(e.target.value);
+                                      const quantity = isNaN(value) ? 0 : Math.min(value, effectiveQuantity);
+                                      handleBatchSelection(materialId, batch.id, quantity);
+                                    }}
+                                    inputProps={{ 
+                                      min: 0, 
+                                      max: effectiveQuantity, // Maksymalna wartość to efektywnie dostępna ilość
+                                      step: 'any'
+                                    }}
+                                    size="small"
+                                    sx={{ width: '100px' }}
+                                    error={effectiveQuantity <= 0}
+                                    helperText={effectiveQuantity <= 0 ? "Brak dostępnej ilości" : ""}
+                                    disabled={effectiveQuantity <= 0}
+                                  />
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                    <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                      <Button 
+                        variant="contained" 
+                        color="primary"
+                        size="small"
+                        disabled={!isComplete || reservingMaterials || isAlreadyReserved}
+                        onClick={() => handleReserveMaterials(materialId)}
+                      >
+                        {isAlreadyReserved ? 'Zarezerwowany' : 'Rezerwuj ten materiał'}
+                      </Button>
+                    </Box>
+                  </>
                 )}
               </AccordionDetails>
             </Accordion>
@@ -1348,14 +1439,28 @@ const TaskDetailsPage = () => {
   const fetchAvailablePackaging = async () => {
     try {
       setLoadingPackaging(true);
-      const allItems = await getAllInventoryItems();
-      // Filtrujemy tylko opakowania
-      const packagingItems = allItems.filter(item => item.category === 'Opakowania');
+      
+      // Pobierz wszystkie pozycje magazynowe z odpowiednią strukturą danych zawierającą stany magazynowe
+      const result = await getAllInventoryItems();
+      
+      // Upewniamy się, że mamy dostęp do właściwych danych
+      const allItems = Array.isArray(result) ? result : result.items || [];
+      
+      // Filtrujemy tylko opakowania (zarówno zbiorcze jak i jednostkowe)
+      const packagingItems = allItems.filter(item => 
+        item.category === 'Opakowania zbiorcze' || 
+        item.category === 'Opakowania jednostkowe' || 
+        item.category === 'Opakowania'
+      );
+      
+      console.log('Pobrane opakowania:', packagingItems);
       
       setPackagingItems(packagingItems.map(item => ({
         ...item,
         selected: false,
         quantity: 0,
+        // Używamy aktualnej ilości dostępnej w magazynie, a nie pierwotnej wartości
+        availableQuantity: item.currentQuantity || item.quantity || 0,
         unitPrice: item.unitPrice || item.price || 0
       })));
     } catch (error) {
@@ -1374,9 +1479,20 @@ const TaskDetailsPage = () => {
   
   // Obsługa zmiany ilości wybranego opakowania
   const handlePackagingQuantityChange = (id, value) => {
-    setPackagingItems(prev => prev.map(item => 
-      item.id === id ? { ...item, quantity: parseFloat(value) || 0, selected: parseFloat(value) > 0 } : item
-    ));
+    setPackagingItems(prev => prev.map(item => {
+      if (item.id === id) {
+        // Ograniczamy wartość do dostępnej ilości
+        const parsedValue = parseFloat(value) || 0;
+        const limitedValue = Math.min(parsedValue, item.availableQuantity);
+        
+        return { 
+          ...item, 
+          quantity: limitedValue, 
+          selected: limitedValue > 0 
+        };
+      }
+      return item;
+    }));
   };
   
   // Obsługa wyboru/odznaczenia opakowania
@@ -1411,7 +1527,7 @@ const TaskDetailsPage = () => {
         unit: item.unit,
         inventoryItemId: item.id,
         isPackaging: true,
-        category: 'Opakowania',
+        category: item.category || 'Opakowania zbiorcze', // Zachowaj oryginalną kategorię lub ustaw domyślną
         unitPrice: item.unitPrice || 0
       }));
       
@@ -2041,6 +2157,24 @@ const TaskDetailsPage = () => {
     }
   };
 
+  // Funkcja do sprawdzania, czy materiał ma wystarczającą ilość zarezerwowanych partii
+  const validateManualBatchSelectionForMaterial = (materialId) => {
+    if (!task || !task.materials) return false;
+    
+    const material = task.materials.find(m => (m.inventoryItemId || m.id) === materialId);
+    if (!material) return false;
+    
+    const materialBatches = selectedBatches[materialId] || [];
+    const totalSelectedQuantity = materialBatches.reduce((sum, batch) => sum + batch.quantity, 0);
+    
+    if (totalSelectedQuantity < material.quantity) {
+      showError(`Niewystarczająca ilość partii wybrana dla materiału ${material.name}. Wybrano: ${totalSelectedQuantity}, wymagane: ${material.quantity}`);
+      return false;
+    }
+    
+    return true;
+  };
+
   // Renderuj stronę
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -2251,9 +2385,9 @@ const TaskDetailsPage = () => {
                     return (
                       <TableRow key={material.id}>
                         <TableCell>{material.name}</TableCell>
-                            <TableCell>{material.quantity}</TableCell>
-                            <TableCell>{material.unit}</TableCell>
-                            <TableCell>
+                        <TableCell>{material.quantity}</TableCell>
+                        <TableCell>{material.unit}</TableCell>
+                        <TableCell>
                               {editMode ? (
                                 <TextField
                                   type="number"
@@ -2568,6 +2702,13 @@ const TaskDetailsPage = () => {
             </RadioGroup>
           </FormControl>
           
+          {reservationMethod === 'manual' && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <AlertTitle>Wskazówka</AlertTitle>
+              Możesz zarezerwować pojedynczy surowiec klikając przycisk "Rezerwuj ten materiał" przy wybranym surowcu lub zarezerwować wszystkie surowce klikając przycisk "Rezerwuj wszystkie materiały" na dole.
+            </Alert>
+          )}
+          
           {reservationMethod === 'manual' && renderManualBatchSelection()}
           
           {reservationMethod !== 'manual' && (
@@ -2582,11 +2723,11 @@ const TaskDetailsPage = () => {
             Anuluj
           </Button>
           <Button 
-            onClick={handleReserveMaterials} 
+            onClick={() => handleReserveMaterials()} 
             variant="contained"
             disabled={reservingMaterials}
           >
-            {reservingMaterials ? <CircularProgress size={24} /> : 'Rezerwuj materiały'}
+            {reservingMaterials ? <CircularProgress size={24} /> : 'Rezerwuj wszystkie materiały'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -2626,7 +2767,7 @@ const TaskDetailsPage = () => {
         <DialogTitle>Dodaj opakowania do zadania produkcyjnego</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
-            Wybierz opakowania, które chcesz dodać do tego zadania produkcyjnego (np. palety, folia, kartony).
+            Wybierz opakowania, które chcesz dodać do tego zadania produkcyjnego (opakowania zbiorcze, jednostkowe, palety, folie, kartony itp.).
           </DialogContentText>
           
           {loadingPackaging ? (
@@ -2664,7 +2805,7 @@ const TaskDetailsPage = () => {
                           />
                         </TableCell>
                         <TableCell>{item.name}</TableCell>
-                        <TableCell>{item.currentQuantity || 0}</TableCell>
+                        <TableCell>{item.availableQuantity} {item.unit}</TableCell>
                         <TableCell>{item.unit}</TableCell>
                         <TableCell>{item.unitPrice ? item.unitPrice.toFixed(2) : '0.00'} €</TableCell>
                         <TableCell>
@@ -2673,9 +2814,15 @@ const TaskDetailsPage = () => {
                             value={item.quantity}
                             onChange={(e) => handlePackagingQuantityChange(item.id, e.target.value)}
                             disabled={!item.selected}
-                            inputProps={{ min: 0, step: 'any' }}
+                            inputProps={{ 
+                              min: 0, 
+                              max: item.availableQuantity, 
+                              step: 'any' 
+                            }}
                             size="small"
                             sx={{ width: '100px' }}
+                            error={parseFloat(item.quantity) > item.availableQuantity}
+                            helperText={parseFloat(item.quantity) > item.availableQuantity ? "Przekroczono dostępną ilość" : ""}
                           />
                         </TableCell>
                         <TableCell>{(item.quantity * (item.unitPrice || 0)).toFixed(2)} €</TableCell>

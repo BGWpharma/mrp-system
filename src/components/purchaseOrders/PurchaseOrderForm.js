@@ -552,7 +552,7 @@ const PurchaseOrderForm = ({ orderId }) => {
       return false;
     }
     
-    // Sprawdź minimalne ilości zamówienia
+    // Sprawdź minimalne ilości zamówienia - ale tylko wyświetl informację, nie blokuj zapisu
     const itemWithWrongMinQuantity = poData.items.find(item => {
       const inventoryItem = inventoryItems.find(i => i.id === item.inventoryItemId);
       if (!inventoryItem) return false;
@@ -564,8 +564,8 @@ const PurchaseOrderForm = ({ orderId }) => {
     });
     
     if (itemWithWrongMinQuantity) {
-      showError('Niektóre pozycje nie spełniają minimalnych ilości zamówienia. Użyj przycisku "Uzupełnij minimalne ilości".');
-      return false;
+      // Zamiast blokować zapis, tylko pokazujemy informację
+      showInfo('Niektóre pozycje nie spełniają minimalnych ilości zamówienia. Możesz użyć przycisku "Uzupełnij minimalne ilości" lub kontynuować z obecnymi ilościami.');
     }
     
     return true;
@@ -1572,7 +1572,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                 disabled={loading || loadingSupplierSuggestions || poData.items.length === 0}
                 sx={{ mr: 1 }}
             >
-                Uzupełnij minimalne ilości Work in Progress
+                Uzupełnij minimalne ilości
             </Button>
             
             {Object.keys(supplierSuggestions).length > 0 && (
