@@ -54,7 +54,8 @@ import {
   SmartToy as AIAssistantIcon,
   Calculate as CalculateIcon,
   People as PeopleIcon,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  Factory as FactoryIcon
 } from '@mui/icons-material';
 import { getExpiringBatches, getExpiredBatches } from '../../services/inventoryService';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -133,6 +134,8 @@ const Sidebar = ({ onToggle }) => {
       setOpenSubmenu('Stany');
     } else if (location.pathname === '/' || location.pathname.startsWith('/analytics')) {
       setOpenSubmenu('Dashboard');
+    } else if (location.pathname.startsWith('/hall-data')) {
+      setOpenSubmenu('Dane Hali');
     }
   }, [location.pathname]);
   
@@ -201,6 +204,14 @@ const Sidebar = ({ onToggle }) => {
         { text: 'Główny', icon: <DashboardIcon />, path: '/' },
         { text: 'Analityka', icon: <AnalyticsIcon />, path: '/analytics' },
       ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
+    },
+    { text: 'Dane Hali',
+      icon: <FactoryIcon />,
+      path: '/hall-data',
+      hasSubmenu: true,
+      children: [
+        { text: 'Warunki', icon: <FactoryIcon />, path: '/hall-data/conditions' },
+      ]
     },
     { text: 'Sprzedaż',
       icon: <CustomersIcon />,

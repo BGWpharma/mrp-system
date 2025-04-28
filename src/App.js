@@ -122,6 +122,9 @@ import PriceListDetailsPage from './pages/Sales/PriceLists/PriceListDetailsPage'
 import UsersManagementPage from './pages/Admin/UsersManagementPage';
 import SystemManagementPage from './pages/Admin/SystemManagementPage';
 
+// Hall Data
+import HallDataConditionsPage from './pages/HallData/Conditions';
+
 function App() {
   return (
     <Router>
@@ -243,6 +246,9 @@ function App() {
                 
                 {/* AI Assistant Routes */}
                 <Route path="/ai-assistant" element={<PrivateLayout><AIAssistantPage /></PrivateLayout>} />
+                
+                {/* Hall Data Routes */}
+                <Route path="/hall-data/conditions" element={<PrivateLayout><HallDataConditionsPage /></PrivateLayout>} />
                 
                 {/* CRM Routes */}
                 <Route path="/crm" element={<PrivateLayout><CRMDashboardPage /></PrivateLayout>} />

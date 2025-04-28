@@ -55,6 +55,7 @@ import {
   MoreVert as MoreVertIcon,
   DeleteForever as DeleteForeverIcon,
   ViewColumn as ViewColumnIcon,
+  ArrowDropUp as ArrowDropUpIcon,
 } from '@mui/icons-material';
 import { getAllInventoryItems, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, getItemBatches, updateReservation, updateReservationTasks, cleanupDeletedTaskReservations, deleteReservation, getInventoryItemById, recalculateAllInventoryQuantities, cleanupMicroReservations } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
@@ -158,6 +159,67 @@ const InventoryList = () => {
   // Dodaj useRef dla timerów debouncing
   const searchTermTimerRef = useRef(null);
   const searchCategoryTimerRef = useRef(null);
+
+  // Dodaj nowe zmienne stanu do sortowania tabeli głównej
+  const [tableSort, setTableSort] = useState({
+    field: 'name',
+    order: 'asc'
+  });
+
+  // Dodaj nową funkcję do sortowania głównej tabeli stanów
+  const handleTableSort = (field) => {
+    const newOrder = tableSort.field === field && tableSort.order === 'asc' ? 'desc' : 'asc';
+    setTableSort({
+      field,
+      order: newOrder
+    });
+    
+    // Sortuj filteredItems według wybranego pola
+    const sortedItems = [...filteredItems].sort((a, b) => {
+      let valueA, valueB;
+      
+      // Obsługa różnych typów pól
+      if (field === 'name' || field === 'category') {
+        valueA = (a[field] || '').toLowerCase();
+        valueB = (b[field] || '').toLowerCase();
+        return newOrder === 'asc' 
+          ? valueA.localeCompare(valueB) 
+          : valueB.localeCompare(valueA);
+      } else if (field === 'totalQuantity') {
+        valueA = Number(a.quantity || 0);
+        valueB = Number(b.quantity || 0);
+      } else if (field === 'reservedQuantity') {
+        valueA = Number(a.bookedQuantity || 0);
+        valueB = Number(b.bookedQuantity || 0);
+      } else if (field === 'availableQuantity') {
+        valueA = Number(a.quantity || 0) - Number(a.bookedQuantity || 0);
+        valueB = Number(b.quantity || 0) - Number(b.bookedQuantity || 0);
+      } else if (field === 'status') {
+        // Sortuj według statusu (jeśli jest)
+        valueA = a.status || '';
+        valueB = b.status || '';
+        return newOrder === 'asc' 
+          ? valueA.localeCompare(valueB) 
+          : valueB.localeCompare(valueA);
+      } else if (field === 'location') {
+        // Sortuj według lokalizacji (jeśli jest)
+        valueA = a.warehouseName || '';
+        valueB = b.warehouseName || '';
+        return newOrder === 'asc' 
+          ? valueA.localeCompare(valueB) 
+          : valueB.localeCompare(valueA);
+      } else {
+        // Domyślnie
+        valueA = a[field] || 0;
+        valueB = b[field] || 0;
+      }
+      
+      // Sortowanie liczbowe
+      return newOrder === 'asc' ? valueA - valueB : valueB - valueA;
+    });
+    
+    setFilteredItems(sortedItems);
+  };
 
   // Dodaj nowy useEffect do pobrania lokalizacji
   useEffect(() => {
@@ -1074,13 +1136,111 @@ const InventoryList = () => {
                 <Table>
                   <TableHead>
                     <TableRow>
-                      {visibleColumns.name && <TableCell>SKU</TableCell>}
-                      {visibleColumns.category && <TableCell>Kategoria</TableCell>}
-                      {visibleColumns.totalQuantity && <TableCell>Ilość całkowita</TableCell>}
-                      {visibleColumns.reservedQuantity && <TableCell>Ilość zarezerwowana</TableCell>}
-                      {visibleColumns.availableQuantity && <TableCell>Ilość dostępna</TableCell>}
-                      {visibleColumns.status && <TableCell>Status</TableCell>}
-                      {visibleColumns.location && <TableCell>Lokalizacja</TableCell>}
+                      {visibleColumns.name && (
+                        <TableCell onClick={() => handleTableSort('name')} style={{ cursor: 'pointer' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            SKU
+                            {tableSort.field === 'name' && (
+                              <ArrowDropUpIcon 
+                                sx={{ 
+                                  transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
+                                  transition: 'transform 0.2s'
+                                }} 
+                              />
+                            )}
+                          </Box>
+                        </TableCell>
+                      )}
+                      {visibleColumns.category && (
+                        <TableCell onClick={() => handleTableSort('category')} style={{ cursor: 'pointer' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            Kategoria
+                            {tableSort.field === 'category' && (
+                              <ArrowDropUpIcon 
+                                sx={{ 
+                                  transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
+                                  transition: 'transform 0.2s'
+                                }} 
+                              />
+                            )}
+                          </Box>
+                        </TableCell>
+                      )}
+                      {visibleColumns.totalQuantity && (
+                        <TableCell onClick={() => handleTableSort('totalQuantity')} style={{ cursor: 'pointer' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            Ilość całkowita
+                            {tableSort.field === 'totalQuantity' && (
+                              <ArrowDropUpIcon 
+                                sx={{ 
+                                  transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
+                                  transition: 'transform 0.2s'
+                                }} 
+                              />
+                            )}
+                          </Box>
+                        </TableCell>
+                      )}
+                      {visibleColumns.reservedQuantity && (
+                        <TableCell onClick={() => handleTableSort('reservedQuantity')} style={{ cursor: 'pointer' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            Ilość zarezerwowana
+                            {tableSort.field === 'reservedQuantity' && (
+                              <ArrowDropUpIcon 
+                                sx={{ 
+                                  transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
+                                  transition: 'transform 0.2s'
+                                }} 
+                              />
+                            )}
+                          </Box>
+                        </TableCell>
+                      )}
+                      {visibleColumns.availableQuantity && (
+                        <TableCell onClick={() => handleTableSort('availableQuantity')} style={{ cursor: 'pointer' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            Ilość dostępna
+                            {tableSort.field === 'availableQuantity' && (
+                              <ArrowDropUpIcon 
+                                sx={{ 
+                                  transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
+                                  transition: 'transform 0.2s'
+                                }} 
+                              />
+                            )}
+                          </Box>
+                        </TableCell>
+                      )}
+                      {visibleColumns.status && (
+                        <TableCell onClick={() => handleTableSort('status')} style={{ cursor: 'pointer' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            Status
+                            {tableSort.field === 'status' && (
+                              <ArrowDropUpIcon 
+                                sx={{ 
+                                  transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
+                                  transition: 'transform 0.2s'
+                                }} 
+                              />
+                            )}
+                          </Box>
+                        </TableCell>
+                      )}
+                      {visibleColumns.location && (
+                        <TableCell onClick={() => handleTableSort('location')} style={{ cursor: 'pointer' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            Lokalizacja
+                            {tableSort.field === 'location' && (
+                              <ArrowDropUpIcon 
+                                sx={{ 
+                                  transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
+                                  transition: 'transform 0.2s'
+                                }} 
+                              />
+                            )}
+                          </Box>
+                        </TableCell>
+                      )}
                       {visibleColumns.actions && <TableCell align="right">Akcje</TableCell>}
                     </TableRow>
                   </TableHead>
