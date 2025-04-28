@@ -1,6 +1,6 @@
 // src/services/firebase/config.js
 import { initializeApp } from 'firebase/app';
-import { getFirestore, enableIndexedDbPersistence } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, CACHE_SIZE_UNLIMITED } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 import { getDatabase } from 'firebase/database';
@@ -19,24 +19,43 @@ const firebaseConfig = {
 
 // Inicjalizacja Firebase
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+
+// Inicjalizacja Firestore z włączoną obsługą cache
+const db = initializeFirestore(app, {
+  cacheSizeBytes: CACHE_SIZE_UNLIMITED,
+});
+
 const auth = getAuth(app);
 const storage = getStorage(app);
 const rtdb = getDatabase(app);
 
-// Włącz obsługę trybu offline
-enableIndexedDbPersistence(db)
-  .then(() => {
-    console.log('Włączono obsługę trybu offline dla Firestore');
-  })
-  .catch((err) => {
-    if (err.code === 'failed-precondition') {
-      console.warn('Nie można włączyć trybu offline, ponieważ aplikacja jest otwarta w wielu kartach');
-    } else if (err.code === 'unimplemented') {
-      console.warn('Twoja przeglądarka nie obsługuje wszystkich funkcji wymaganych do obsługi trybu offline');
-    } else {
-      console.error('Błąd podczas włączania trybu offline:', err);
+// Funkcja do wymazywania danych IndexedDB (przydatna przy problemach z wersjami)
+const clearFirestoreCache = async () => {
+  try {
+    const databases = await window.indexedDB.databases();
+    const firestoreDbs = databases.filter(db => 
+      db.name.includes('firestore') || 
+      db.name.includes(firebaseConfig.projectId)
+    );
+    
+    for (const dbInfo of firestoreDbs) {
+      await new Promise((resolve, reject) => {
+        const request = window.indexedDB.deleteDatabase(dbInfo.name);
+        request.onsuccess = () => {
+          console.log(`Pomyślnie wyczyszczono bazę ${dbInfo.name}`);
+          resolve();
+        };
+        request.onerror = () => {
+          console.error(`Błąd podczas czyszczenia bazy ${dbInfo.name}`);
+          reject();
+        };
+      });
     }
-  });
+    console.log('Pamięć podręczna Firestore została wyczyszczona. Odśwież stronę, aby zastosować zmiany.');
+  } catch (error) {
+    console.error('Błąd podczas czyszczenia pamięci podręcznej Firestore:', error);
+  }
+};
 
-export { db, auth, storage, rtdb };
+// Eksportujemy funkcję clearFirestoreCache dla przypadku, gdyby była potrzebna
+export { db, auth, storage, rtdb, clearFirestoreCache };

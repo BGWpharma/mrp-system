@@ -22,7 +22,8 @@ import {
   MenuItem,
   TextField,
   CircularProgress,
-  Chip
+  Chip,
+  FormHelperText
 } from '@mui/material';
 import { 
   ArrowBack as ArrowBackIcon,
@@ -80,6 +81,21 @@ const CreateFromOrderPage = () => {
     autoReserveMaterials: false // Domyślnie wyłączone automatyczne rezerwowanie surowców
   });
   
+  // Funkcja pomocnicza do debugowania receptur - umieść ją gdzieś na początku komponentu
+  const debugRecipes = () => {
+    console.log("==== DEBUGOWANIE RECEPTUR ====");
+    console.log(`Liczba wszystkich receptur: ${recipes.length}`);
+    
+    recipes.forEach((recipe, index) => {
+      console.log(`Receptura ${index + 1}: ${recipe.name}`);
+      console.log(`  ID: ${recipe.id}`);
+      console.log(`  Domyślne stanowisko: ${recipe.defaultWorkstationId || 'BRAK'}`);
+      console.log(`  Pełny obiekt receptury:`, JSON.stringify(recipe));
+    });
+    
+    console.log("==== KONIEC DEBUGOWANIA RECEPTUR ====");
+  };
+  
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
@@ -89,6 +105,9 @@ const CreateFromOrderPage = () => {
         
         // Pobierz wszystkie receptury
         await fetchRecipes();
+        
+        // Debuguj receptury po ich pobraniu
+        debugRecipes();
         
         // Pobierz wszystkie stanowiska produkcyjne
         await fetchWorkstations();
@@ -115,18 +134,56 @@ const CreateFromOrderPage = () => {
   
   // Funkcja do znajdowania receptury dla produktu
   const findRecipeForProduct = (productName) => {
-    if (!recipes || recipes.length === 0) return null;
+    if (!recipes || recipes.length === 0) {
+      console.log(`Brak receptur do przeszukania dla produktu ${productName}`);
+      return null;
+    }
     
-    // Znajdź recepturę, która w nazwie zawiera nazwę produktu
-    const matchingRecipe = recipes.find(recipe => {
+    if (!productName) {
+      console.log(`Nazwa produktu jest pusta`);
+      return null;
+    }
+    
+    console.log(`Szukam receptury dla produktu: "${productName}" wśród ${recipes.length} receptur`);
+    
+    // 1. Najpierw spróbuj znaleźć dokładne dopasowanie
+    const exactMatch = recipes.find(recipe => 
+      recipe.name.toLowerCase() === productName.toLowerCase()
+    );
+    
+    if (exactMatch) {
+      console.log(`Znaleziono dokładne dopasowanie receptury dla produktu ${productName}:`, exactMatch.name);
+      console.log(`Receptura ma domyślne stanowisko: ${exactMatch.defaultWorkstationId || 'BRAK'}`);
+      return exactMatch;
+    }
+    
+    // 2. Jeśli nie znaleziono dokładnego dopasowania, szukaj częściowych dopasowań
+    const matchingRecipes = recipes.filter(recipe => {
       const recipeName = recipe.name.toLowerCase();
       const product = productName.toLowerCase();
-      return recipeName.includes(product) || product.includes(recipeName);
+      
+      // Sprawdź różne warianty porównania
+      const recipeContainsProduct = recipeName.includes(product);
+      const productContainsRecipe = product.includes(recipeName);
+      const similar = recipeName.replace(/[^a-zA-Z0-9]/g, '') === product.replace(/[^a-zA-Z0-9]/g, '');
+      
+      // Sprawdź wyniki poszczególnych porównań dla debugowania
+      if (recipeContainsProduct || productContainsRecipe || similar) {
+        console.log(`Częściowe dopasowanie: "${recipeName}" i "${product}" (${recipeContainsProduct ? 'receptura zawiera produkt' : ''}${productContainsRecipe ? 'produkt zawiera recepturę' : ''}${similar ? 'podobne' : ''})`);
+      }
+      
+      return recipeContainsProduct || productContainsRecipe || similar;
     });
     
-    if (matchingRecipe) {
-      console.log(`Znaleziono recepturę dla produktu ${productName}:`, matchingRecipe.name);
-      return matchingRecipe;
+    if (matchingRecipes.length > 0) {
+      // Jeśli znaleziono wiele dopasowań, wybierz najkrótszą nazwę (zwykle najbardziej dokładne dopasowanie)
+      const bestMatch = matchingRecipes.reduce((prev, current) => 
+        prev.name.length < current.name.length ? prev : current
+      );
+      
+      console.log(`Znaleziono najlepsze częściowe dopasowanie dla produktu ${productName}:`, bestMatch.name);
+      console.log(`Receptura ma domyślne stanowisko: ${bestMatch.defaultWorkstationId || 'BRAK'}`);
+      return bestMatch;
     }
     
     console.log(`Nie znaleziono receptury dla produktu ${productName}`);
@@ -255,6 +312,23 @@ const CreateFromOrderPage = () => {
         }));
         
         setSelectedItems(initialSelectedItems);
+        
+        // Sprawdź receptury dla wszystkich elementów i zainicjalizuj stanowiska produkcyjne
+        console.log("Sprawdzanie receptur dla elementów zamówienia po inicjalizacji");
+        const initialWorkstations = {};
+        
+        for (const item of verifiedOrderData.items) {
+          const recipe = findRecipeForProduct(item.name);
+          if (recipe && recipe.defaultWorkstationId) {
+            console.log(`Inicjalizacja stanowiska dla ${item.name}: ${recipe.defaultWorkstationId}`);
+            initialWorkstations[item.id] = recipe.defaultWorkstationId;
+          }
+        }
+        
+        if (Object.keys(initialWorkstations).length > 0) {
+          console.log("Ustawiam początkowe stanowiska produkcyjne:", initialWorkstations);
+          setSelectedWorkstations(initialWorkstations);
+        }
       } else {
         setSelectedItems([]);
       }
@@ -410,7 +484,7 @@ const CreateFromOrderPage = () => {
         const formattedEndDate = endDate.toISOString();
         
         // Sprawdź, czy dla tego produktu wybrano stanowisko produkcyjne
-        const workstationId = selectedWorkstations[item.id] || null;
+        const workstationId = selectedWorkstations[item.id] || (recipe && recipe.defaultWorkstationId ? recipe.defaultWorkstationId : null);
         
         // Przy tworzeniu obiektów zadań, dodajemy pola lotNumber i expiryDate:
         const taskData = {
@@ -493,32 +567,63 @@ const CreateFromOrderPage = () => {
   // Inicjalizacja zadań produkcyjnych z wybranego zamówienia
   const initializeTasksFromOrder = () => {
     if (!selectedOrder || !selectedOrder.items || selectedOrder.items.length === 0) {
+      console.log("Nie można zainicjalizować zadań - brak zamówienia lub pozycji");
       return;
     }
+    
+    console.log("Inicjalizacja zadań produkcyjnych i stanowisk z zamówienia:", selectedOrder.id);
+    console.log("Dostępne receptury:", recipes.length);
     
     // Resetuj wcześniej wybrane elementy
     setSelectedItems({});
     
     // Tworzymy nowy obiekt z zaznaczonymi elementami
     const initialSelectedItems = {};
+    // Tworzymy nowy obiekt z domyślnymi stanowiskami produkcyjnymi
+    const initialWorkstations = {};
     
     // Dla każdego produktu w zamówieniu, który jest recepturą lub dla którego można znaleźć recepturę
     selectedOrder.items.forEach(item => {
+      console.log(`Przetwarzanie pozycji zamówienia: ${item.name} (ID: ${item.id})`);
+      
+      // Znajdź recepturę dla produktu
+      const recipe = findRecipeForProduct(item.name);
+      
       // Jeśli element jest oznaczony jako receptura, zawsze go dodaj
       if (item.isRecipe) {
+        console.log(`Pozycja ${item.name} jest oznaczona jako receptura`);
         initialSelectedItems[item.id] = true;
-        return;
+      } else if (recipe) {
+        // Znaleziono recepturę dla produktu, więc zaznacz go
+        console.log(`Dla pozycji ${item.name} znaleziono recepturę: ${recipe.name}`);
+        initialSelectedItems[item.id] = true;
+      } else {
+        console.log(`Dla pozycji ${item.name} nie znaleziono receptury`);
       }
       
-      // W przeciwnym razie spróbuj znaleźć recepturę dla produktu
-      const recipe = findRecipeForProduct(item.name);
+      // Jeśli znaleziono recepturę i ma ona domyślne stanowisko produkcyjne, przypisz je do produktu
       if (recipe) {
-        // Znaleziono recepturę dla produktu, więc zaznacz go
-        initialSelectedItems[item.id] = true;
+        console.log(`Sprawdzanie stanowiska dla receptury ${recipe.name}`);
+        if (recipe.defaultWorkstationId) {
+          // Automatycznie przypisz domyślne stanowisko produkcyjne z receptury
+          initialWorkstations[item.id] = recipe.defaultWorkstationId;
+          console.log(`Przypisano domyślne stanowisko produkcyjne do ${item.name}: ${recipe.defaultWorkstationId}`);
+          
+          // Dodatkowe sprawdzenie czy stanowisko istnieje w bazie stanowisk
+          const workstationExists = workstations.some(w => w.id === recipe.defaultWorkstationId);
+          console.log(`Czy stanowisko ${recipe.defaultWorkstationId} istnieje w bazie stanowisk: ${workstationExists}`);
+        } else {
+          console.log(`Receptura ${recipe.name} nie ma ustawionego domyślnego stanowiska produkcyjnego`);
+        }
       }
     });
     
+    console.log("Wybrane pozycje:", initialSelectedItems);
+    console.log("Przypisane stanowiska:", initialWorkstations);
+    
     setSelectedItems(initialSelectedItems);
+    // Ustawienie domyślnych stanowisk produkcyjnych
+    setSelectedWorkstations(initialWorkstations);
   };
 
   // Obsługa wyboru zamówienia
@@ -527,19 +632,24 @@ const CreateFromOrderPage = () => {
       console.log('Wybrano zamówienie:', order);
       setSelectedOrder(order);
       
-      // Inicjalizuj zadania produkcyjne na podstawie wybranego zamówienia
-      initializeTasksFromOrder();
-      
-      // Pobierz receptury dla danego klienta, jeśli zamówienie ma przypisanego klienta
-      if (order.customer && order.customer.id) {
-        fetchRecipesForCustomer(order.customer.id);
-      } else {
-        // Jeśli nie ma klienta, pobierz wszystkie receptury
-        fetchRecipes();
+      try {
+        // Najpierw pobierz receptury, aby zapewnić dostępność informacji o domyślnych stanowiskach
+        if (order.customer && order.customer.id) {
+          await fetchRecipesForCustomer(order.customer.id);
+        } else {
+          await fetchRecipes();
+        }
+        
+        // Następnie inicjalizuj zadania produkcyjne i stanowiska produkcyjne
+        initializeTasksFromOrder();
+      } catch (error) {
+        console.error('Błąd podczas pobierania receptur:', error);
+        showError('Błąd podczas pobierania receptur: ' + error.message);
       }
     } else {
       setSelectedOrder(null);
       setSelectedItems({});
+      setSelectedWorkstations({});
     }
   };
 
@@ -810,6 +920,19 @@ const CreateFromOrderPage = () => {
 
   // Obsługa wyboru stanowiska produkcyjnego dla zadania
   const handleWorkstationChange = (itemId, workstationId) => {
+    // Jeśli stanowisko jest ustawione na puste, spróbuj ustawić domyślne z receptury
+    if (workstationId === '') {
+      // Znajdź recepturę dla produktu
+      const item = selectedOrder?.items?.find(i => i.id === itemId);
+      if (item) {
+        const recipe = findRecipeForProduct(item.name);
+        // Jeśli receptura ma domyślne stanowisko, ustaw je
+        if (recipe && recipe.defaultWorkstationId) {
+          workstationId = recipe.defaultWorkstationId;
+        }
+      }
+    }
+    
     setSelectedWorkstations(prev => ({
       ...prev,
       [itemId]: workstationId
@@ -994,6 +1117,27 @@ const CreateFromOrderPage = () => {
                           </MenuItem>
                         ))}
                       </Select>
+                      {recipe && recipe.defaultWorkstationId && !selectedWorkstations[item.id] && (
+                        <Button 
+                          size="small" 
+                          color="primary" 
+                          onClick={() => {
+                            console.log(`Awaryjne przypisanie stanowiska dla ${item.name}: ${recipe.defaultWorkstationId}`);
+                            setSelectedWorkstations(prev => ({
+                              ...prev,
+                              [item.id]: recipe.defaultWorkstationId
+                            }));
+                          }}
+                          sx={{ mt: 1, mb: 0.5 }}
+                        >
+                          Przypisz stanowisko z receptury
+                        </Button>
+                      )}
+                      {selectedWorkstations[item.id] && (
+                        <FormHelperText>
+                          Stanowisko przypisane z receptury
+                        </FormHelperText>
+                      )}
                     </FormControl>
                   </TableCell>
                 </TableRow>
