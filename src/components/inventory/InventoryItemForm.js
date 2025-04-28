@@ -18,7 +18,11 @@ import {
 } from '@mui/material';
 import {
   Save as SaveIcon,
-  ArrowBack as ArrowBackIcon
+  ArrowBack as ArrowBackIcon,
+  Inventory as InventoryIcon,
+  LocalShipping as ShippingIcon,
+  WarehouseOutlined as WarehouseIcon,
+  Category as CategoryIcon
 } from '@mui/icons-material';
 import { 
   createInventoryItem, 
@@ -105,26 +109,49 @@ const InventoryItemForm = ({ itemId }) => {
 
   return (
     <Box component="form" onSubmit={handleSubmit} noValidate>
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      {/* Nagłówek z przyciskami */}
+      <Paper 
+        elevation={2} 
+        sx={{ 
+          p: 2, 
+          mb: 3, 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          background: theme => theme.palette.mode === 'dark' 
+            ? 'linear-gradient(to right, rgba(40,50,80,1), rgba(30,40,70,1))' 
+            : 'linear-gradient(to right, #f5f7fa, #e4eaf0)'
+        }}
+      >
         <Button 
+          variant="outlined"
           startIcon={<ArrowBackIcon />} 
           onClick={() => navigate('/inventory')}
+          sx={{ 
+            borderRadius: '8px', 
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+          }}
         >
           Powrót
         </Button>
-        <Typography variant="h6">
+        <Typography variant="h5" sx={{ fontWeight: 'medium' }}>
           {itemId ? 'Edytuj pozycję magazynową' : 'Dodaj nową pozycję magazynową'}
         </Typography>
         <Button 
           type="submit"
-          variant="contained" 
+          variant="contained"
           color="primary"
           disabled={saving}
           startIcon={<SaveIcon />}
+          sx={{ 
+            borderRadius: '8px', 
+            boxShadow: '0 4px 6px rgba(0,0,0,0.15)',
+            px: 3
+          }}
         >
           {saving ? 'Zapisywanie...' : 'Zapisz'}
         </Button>
-      </Box>
+      </Paper>
 
       {!itemId && (
         <Alert severity="info" sx={{ mb: 3 }}>
@@ -133,133 +160,220 @@ const InventoryItemForm = ({ itemId }) => {
         </Alert>
       )}
 
-      <Paper sx={{ p: 3 }}>
-        <Grid container spacing={3}>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              required
-              fullWidth
-              label="SKU"
-              name="name"
-              value={itemData.name}
-              onChange={handleChange}
-            />
-          </Grid>
-          
-          <Grid item xs={12} sm={6}>
-            <FormControl fullWidth>
-              <InputLabel>Kategoria</InputLabel>
-              <Select
-                name="category"
-                value={itemData.category || ''}
+      <Paper 
+        elevation={3} 
+        sx={{ 
+          p: 0, 
+          mb: 3, 
+          borderRadius: '12px', 
+          overflow: 'hidden',
+          transition: 'all 0.3s ease'
+        }}
+      >
+        <Box 
+          sx={{ 
+            p: 2, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            bgcolor: theme => theme.palette.mode === 'dark' 
+              ? 'rgba(25, 35, 55, 0.5)' 
+              : 'rgba(245, 247, 250, 0.8)'
+          }}
+        >
+          <InventoryIcon color="primary" />
+          <Typography variant="h6" fontWeight="500">Dane podstawowe</Typography>
+        </Box>
+        
+        <Box sx={{ p: 3 }}>
+          <Grid container spacing={3}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                required
+                fullWidth
+                label="SKU"
+                name="name"
+                value={itemData.name}
                 onChange={handleChange}
-                label="Kategoria"
+                sx={{ 
+                  '& .MuiOutlinedInput-root': { 
+                    borderRadius: '8px' 
+                  } 
+                }}
+                InputProps={{
+                  startAdornment: (
+                    <Box sx={{ color: 'text.secondary', mr: 1, display: 'flex', alignItems: 'center' }}>
+                      <InventoryIcon fontSize="small" />
+                    </Box>
+                  ),
+                }}
+              />
+            </Grid>
+            
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
+                <InputLabel>Kategoria</InputLabel>
+                <Select
+                  name="category"
+                  value={itemData.category || ''}
+                  onChange={handleChange}
+                  label="Kategoria"
+                  startAdornment={<Box sx={{ color: 'text.secondary', mr: 1, display: 'flex', alignItems: 'center' }}><CategoryIcon fontSize="small" /></Box>}
+                >
+                  <MenuItem value="">Brak kategorii</MenuItem>
+                  <MenuItem value="Surowce">Surowce</MenuItem>
+                  <MenuItem value="Opakowania zbiorcze">Opakowania zbiorcze</MenuItem>
+                  <MenuItem value="Opakowania jednostkowe">Opakowania jednostkowe</MenuItem>
+                  <MenuItem value="Gotowe produkty">Gotowe produkty</MenuItem>
+                  <MenuItem value="Inne">Inne</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                label="Opis"
+                name="description"
+                value={itemData.description || ''}
+                onChange={handleChange}
+                fullWidth
+                multiline
+                rows={2}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                required
+                label="Jednostka miary"
+                name="unit"
+                value={itemData.unit || 'szt.'}
+                onChange={handleChange}
+                select
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
               >
-                <MenuItem value="">Brak kategorii</MenuItem>
-                <MenuItem value="Surowce">Surowce</MenuItem>
-                <MenuItem value="Opakowania zbiorcze">Opakowania zbiorcze</MenuItem>
-                <MenuItem value="Opakowania jednostkowe">Opakowania jednostkowe</MenuItem>
-                <MenuItem value="Gotowe produkty">Gotowe produkty</MenuItem>
-                <MenuItem value="Inne">Inne</MenuItem>
-              </Select>
-            </FormControl>
+                <MenuItem value="szt.">szt.</MenuItem>
+                <MenuItem value="kg">kg</MenuItem>
+                <MenuItem value="caps">caps</MenuItem>
+              </TextField>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Lokalizacja"
+                name="location"
+                value={itemData.location || ''}
+                onChange={handleChange}
+                helperText="Np. regał A, półka 2"
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                InputProps={{
+                  startAdornment: (
+                    <Box sx={{ color: 'text.secondary', mr: 1, display: 'flex', alignItems: 'center' }}>
+                      <WarehouseIcon fontSize="small" />
+                    </Box>
+                  ),
+                }}
+              />
+            </Grid>
           </Grid>
-          <Grid item xs={12}>
-            <TextField
-              label="Opis"
-              name="description"
-              value={itemData.description || ''}
-              onChange={handleChange}
-              fullWidth
-              multiline
-              rows={2}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              required
-              label="Jednostka miary"
-              name="unit"
-              value={itemData.unit || 'szt.'}
-              onChange={handleChange}
-              select
-            >
-              <MenuItem value="szt.">szt.</MenuItem>
-              <MenuItem value="kg">kg</MenuItem>
-              <MenuItem value="caps">caps</MenuItem>
-            </TextField>
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label="Lokalizacja"
-              name="location"
-              value={itemData.location || ''}
-              onChange={handleChange}
-              helperText="Np. regał A, półka 2"
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label="Minimalny stan"
-              name="minStock"
-              type="number"
-              value={itemData.minStock || ''}
-              onChange={handleChange}
-              inputProps={{ min: 0, step: 0.01 }}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label="Maksymalny stan"
-              name="maxStock"
-              type="number"
-              value={itemData.maxStock || ''}
-              onChange={handleChange}
-              inputProps={{ min: 0, step: 0.01 }}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label="Minimalna ilość zakupu"
-              name="minOrderQuantity"
-              type="number"
-              value={itemData.minOrderQuantity || ''}
-              onChange={handleChange}
-              inputProps={{ min: 0, step: 0.01 }}
-              helperText="Minimalna ilość, jaką można zamówić od dostawcy"
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label="Ilość kartonów na paletę"
-              name="boxesPerPallet"
-              type="number"
-              value={itemData.boxesPerPallet || ''}
-              onChange={handleChange}
-              inputProps={{ min: 0, step: 1 }}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label="Ilość produktu per karton"
-              name="itemsPerBox"
-              type="number"
-              value={itemData.itemsPerBox || ''}
-              onChange={handleChange}
-              inputProps={{ min: 0, step: 1 }}
-              helperText="Ilość jednostek produktu w jednym kartonie"
-            />
-          </Grid>
-        </Grid>
+        </Box>
       </Paper>
 
+      <Paper 
+        elevation={3} 
+        sx={{ 
+          p: 0, 
+          mb: 3, 
+          borderRadius: '12px', 
+          overflow: 'hidden'
+        }}
+      >
+        <Box 
+          sx={{ 
+            p: 2, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            bgcolor: theme => theme.palette.mode === 'dark' 
+              ? 'rgba(25, 35, 55, 0.5)' 
+              : 'rgba(245, 247, 250, 0.8)'
+          }}
+        >
+          <ShippingIcon color="primary" />
+          <Typography variant="h6" fontWeight="500">Parametry magazynowe</Typography>
+        </Box>
+        
+        <Box sx={{ p: 3 }}>
+          <Grid container spacing={3}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Minimalny stan"
+                name="minStock"
+                type="number"
+                value={itemData.minStock || ''}
+                onChange={handleChange}
+                inputProps={{ min: 0, step: 0.01 }}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Maksymalny stan"
+                name="maxStock"
+                type="number"
+                value={itemData.maxStock || ''}
+                onChange={handleChange}
+                inputProps={{ min: 0, step: 0.01 }}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Minimalna ilość zakupu"
+                name="minOrderQuantity"
+                type="number"
+                value={itemData.minOrderQuantity || ''}
+                onChange={handleChange}
+                inputProps={{ min: 0, step: 0.01 }}
+                helperText="Minimalna ilość, jaką można zamówić od dostawcy"
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Ilość kartonów na paletę"
+                name="boxesPerPallet"
+                type="number"
+                value={itemData.boxesPerPallet || ''}
+                onChange={handleChange}
+                inputProps={{ min: 0, step: 1 }}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Ilość produktu per karton"
+                name="itemsPerBox"
+                type="number"
+                value={itemData.itemsPerBox || ''}
+                onChange={handleChange}
+                inputProps={{ min: 0, step: 0.01 }}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+              />
+            </Grid>
+          </Grid>
+        </Box>
+      </Paper>
+      
       {/* Sekcja z cenami dostawców - wyświetlana tylko przy edycji istniejącej pozycji */}
       {itemId && (
         <Paper sx={{ p: 3, mt: 3 }}>

@@ -29,7 +29,10 @@ import {
   ArrowBack as ArrowBackIcon,
   ArrowUpward as ReceiveIcon,
   ArrowDownward as IssueIcon,
-  ExpandMore as ExpandMoreIcon
+  ExpandMore as ExpandMoreIcon,
+  AccessTime as AccessTimeIcon,
+  Calculate as CalculateIcon,
+  Inventory as InventoryIcon
 } from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -294,14 +297,31 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
 
   return (
     <Box component="form" onSubmit={handleSubmit} noValidate>
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Paper 
+        elevation={2} 
+        sx={{ 
+          p: 2, 
+          mb: 3, 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          background: theme => theme.palette.mode === 'dark' 
+            ? 'linear-gradient(to right, rgba(40,50,80,1), rgba(30,40,70,1))' 
+            : 'linear-gradient(to right, #f5f7fa, #e4eaf0)'
+        }}
+      >
         <Button 
+          variant="outlined"
           startIcon={<ArrowBackIcon />} 
           onClick={() => navigate('/inventory')}
+          sx={{ 
+            borderRadius: '8px', 
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+          }}
         >
           Powrót
         </Button>
-        <Typography variant="h5">
+        <Typography variant="h5" sx={{ fontWeight: 'medium' }}>
           {isReceive ? 'Przyjęcie towaru' : 'Wydanie towaru'}
         </Typography>
         <Button 
@@ -310,172 +330,249 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
           type="submit"
           startIcon={isReceive ? <ReceiveIcon /> : <IssueIcon />}
           disabled={processing}
+          sx={{ 
+            borderRadius: '8px', 
+            boxShadow: '0 4px 6px rgba(0,0,0,0.15)',
+            px: 3
+          }}
         >
           {processing ? 'Przetwarzanie...' : (isReceive ? 'Przyjmij' : 'Wydaj')}
         </Button>
-      </Box>
+      </Paper>
 
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>Informacje o pozycji</Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={12} sm={6}>
-            <Typography variant="body1">
-              <strong>Nazwa:</strong> {item.name}
-            </Typography>
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <Typography variant="body1">
-              <strong>Kategoria:</strong> {item.category || 'Brak kategorii'}
-            </Typography>
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <Typography variant="body1">
-              <strong>Aktualny stan:</strong> {item.quantity} {item.unit}
-            </Typography>
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <Typography variant="body1">
-              <strong>Lokalizacja:</strong> {item.location || 'Nie określono'}
-            </Typography>
-          </Grid>
-          {item.description && (
-            <Grid item xs={12}>
+      <Paper 
+        elevation={3} 
+        sx={{ 
+          p: 0, 
+          mb: 3, 
+          borderRadius: '12px', 
+          overflow: 'hidden'
+        }}
+      >
+        <Box 
+          sx={{ 
+            p: 2, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            bgcolor: theme => theme.palette.mode === 'dark' 
+              ? 'rgba(25, 35, 55, 0.5)' 
+              : 'rgba(245, 247, 250, 0.8)'
+          }}
+        >
+          <InventoryIcon color="primary" />
+          <Typography variant="h6" fontWeight="500">Informacje o pozycji</Typography>
+        </Box>
+        
+        <Box sx={{ p: 3 }}>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6}>
               <Typography variant="body1">
-                <strong>Opis:</strong> {item.description}
+                <strong>Nazwa:</strong> {item.name}
               </Typography>
             </Grid>
-          )}
-        </Grid>
+            <Grid item xs={12} sm={6}>
+              <Typography variant="body1">
+                <strong>Kategoria:</strong> {item.category || 'Brak kategorii'}
+              </Typography>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Typography variant="body1">
+                <strong>Aktualny stan:</strong> {item.quantity} {item.unit}
+              </Typography>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Typography variant="body1">
+                <strong>Lokalizacja:</strong> {item.location || 'Nie określono'}
+              </Typography>
+            </Grid>
+            {item.description && (
+              <Grid item xs={12}>
+                <Typography variant="body1">
+                  <strong>Opis:</strong> {item.description}
+                </Typography>
+              </Grid>
+            )}
+          </Grid>
+        </Box>
       </Paper>
 
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>Szczegóły transakcji</Typography>
-        <Grid container spacing={3}>
-          <Grid item xs={12} sm={6}>
-            <FormControl fullWidth required>
-              <InputLabel id="warehouse-label">Magazyn</InputLabel>
-              <Select
-                labelId="warehouse-label"
-                name="warehouseId"
-                value={transactionData.warehouseId}
-                onChange={handleChange}
-                label="Magazyn"
-                error={!transactionData.warehouseId}
-              >
-                <MenuItem value="">
-                  <em>Wybierz magazyn</em>
-                </MenuItem>
-                {warehouses.map((warehouse) => (
-                  <MenuItem key={warehouse.id} value={warehouse.id}>
-                    {warehouse.name}
+      <Paper 
+        elevation={3} 
+        sx={{ 
+          p: 0, 
+          mb: 3, 
+          borderRadius: '12px', 
+          overflow: 'hidden'
+        }}
+      >
+        <Box 
+          sx={{ 
+            p: 2, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            bgcolor: theme => theme.palette.mode === 'dark' 
+              ? 'rgba(25, 35, 55, 0.5)' 
+              : 'rgba(245, 247, 250, 0.8)'
+          }}
+        >
+          <CalculateIcon color="primary" />
+          <Typography variant="h6" fontWeight="500">Szczegóły transakcji</Typography>
+        </Box>
+        
+        <Box sx={{ p: 3 }}>
+          <Grid container spacing={3}>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth required sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
+                <InputLabel id="warehouse-label">Magazyn</InputLabel>
+                <Select
+                  labelId="warehouse-label"
+                  name="warehouseId"
+                  value={transactionData.warehouseId}
+                  onChange={handleChange}
+                  label="Magazyn"
+                  error={!transactionData.warehouseId}
+                >
+                  <MenuItem value="">
+                    <em>Wybierz magazyn</em>
                   </MenuItem>
-                ))}
-              </Select>
-              {!transactionData.warehouseId && (
-                <FormHelperText error>Wybór magazynu jest wymagany</FormHelperText>
-              )}
-            </FormControl>
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              required
-              label="Ilość"
-              name="quantity"
-              type="number"
-              value={transactionData.quantity}
-              onChange={handleChange}
-              fullWidth
-              inputProps={{ 
-                min: 0.01, 
-                step: "0.01" 
-              }}
-              error={isReceive ? false : (parseFloat(transactionData.quantity || 0) > item.quantity)}
-              helperText={
-                isReceive ? undefined : 
-                (parseFloat(transactionData.quantity || 0) > item.quantity ? 
-                  'Ilość do wydania przekracza dostępny stan magazynowy' : undefined)
-              }
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <FormControl component="fieldset">
-              <Typography variant="subtitle2" gutterBottom>Powód</Typography>
-              <RadioGroup
-                name="reason"
-                value={transactionData.reason}
-                onChange={handleChange}
-                row
-              >
-                {isReceive ? (
-                  <>
-                    <FormControlLabel value="purchase" control={<Radio />} label="Zakup" />
-                    <FormControlLabel value="return" control={<Radio />} label="Zwrot" />
-                    <FormControlLabel value="production" control={<Radio />} label="Z produkcji" />
-                    <FormControlLabel value="other" control={<Radio />} label="Inny" />
-                  </>
-                ) : (
-                  <>
-                    <FormControlLabel value="production" control={<Radio />} label="Do produkcji" />
-                    <FormControlLabel value="sale" control={<Radio />} label="Sprzedaż" />
-                    <FormControlLabel value="defect" control={<Radio />} label="Wada/Zniszczenie" />
-                    <FormControlLabel value="other" control={<Radio />} label="Inny" />
-                  </>
+                  {warehouses.map((warehouse) => (
+                    <MenuItem key={warehouse.id} value={warehouse.id}>
+                      {warehouse.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {!transactionData.warehouseId && (
+                  <FormHelperText error>Wybór magazynu jest wymagany</FormHelperText>
                 )}
-              </RadioGroup>
-            </FormControl>
-          </Grid>
-          <Grid item xs={12}>
-            <TextField
-              label="Numer referencyjny"
-              name="reference"
-              value={transactionData.reference || ''}
-              onChange={handleChange}
-              fullWidth
-              placeholder={isReceive ? "Nr faktury, zamówienia, itp." : "Nr zlecenia produkcyjnego, itp."}
-            />
-          </Grid>
-          <Grid item xs={12}>
-            <TextField
-              label="Notatki"
-              name="notes"
-              value={transactionData.notes || ''}
-              onChange={handleChange}
-              fullWidth
-              multiline
-              rows={3}
-              placeholder="Dodatkowe informacje dotyczące transakcji..."
-            />
-          </Grid>
-          {isReceive && (
+              </FormControl>
+            </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
-                fullWidth
-                label="Cena jednostkowa (EUR)"
-                name="unitPrice"
-                type="number"
-                value={transactionData.unitPrice}
-                onChange={handleChange}
-                inputProps={{ min: 0, step: 0.01 }}
-                helperText="Cena za jednostkę, używana w kalkulacji kosztów receptur i produkcji. Ważne dla dokładnych obliczeń!"
                 required
+                label="Ilość"
+                name="quantity"
+                type="number"
+                value={transactionData.quantity}
+                onChange={handleChange}
+                fullWidth
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                inputProps={{ 
+                  min: 0.01, 
+                  step: "0.01" 
+                }}
+                error={isReceive ? false : (parseFloat(transactionData.quantity || 0) > item.quantity)}
+                helperText={
+                  isReceive ? undefined : 
+                  (parseFloat(transactionData.quantity || 0) > item.quantity ? 
+                    'Ilość do wydania przekracza dostępny stan magazynowy' : undefined)
+                }
               />
             </Grid>
-          )}
-        </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl component="fieldset">
+                <Typography variant="subtitle2" gutterBottom>Powód</Typography>
+                <RadioGroup
+                  name="reason"
+                  value={transactionData.reason}
+                  onChange={handleChange}
+                  row
+                >
+                  {isReceive ? (
+                    <>
+                      <FormControlLabel value="purchase" control={<Radio />} label="Zakup" />
+                      <FormControlLabel value="return" control={<Radio />} label="Zwrot" />
+                      <FormControlLabel value="production" control={<Radio />} label="Z produkcji" />
+                      <FormControlLabel value="other" control={<Radio />} label="Inny" />
+                    </>
+                  ) : (
+                    <>
+                      <FormControlLabel value="production" control={<Radio />} label="Do produkcji" />
+                      <FormControlLabel value="sale" control={<Radio />} label="Sprzedaż" />
+                      <FormControlLabel value="defect" control={<Radio />} label="Wada/Zniszczenie" />
+                      <FormControlLabel value="other" control={<Radio />} label="Inny" />
+                    </>
+                  )}
+                </RadioGroup>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                label="Numer referencyjny"
+                name="reference"
+                value={transactionData.reference || ''}
+                onChange={handleChange}
+                fullWidth
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                placeholder={isReceive ? "Nr faktury, zamówienia, itp." : "Nr zlecenia produkcyjnego, itp."}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                label="Notatki"
+                name="notes"
+                value={transactionData.notes || ''}
+                onChange={handleChange}
+                fullWidth
+                multiline
+                rows={3}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                placeholder="Dodatkowe informacje dotyczące transakcji..."
+              />
+            </Grid>
+            {isReceive && (
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Cena jednostkowa (EUR)"
+                  name="unitPrice"
+                  type="number"
+                  value={transactionData.unitPrice}
+                  onChange={handleChange}
+                  inputProps={{ min: 0, step: 0.01 }}
+                  helperText="Cena za jednostkę, używana w kalkulacji kosztów receptur i produkcji. Ważne dla dokładnych obliczeń!"
+                  required
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                />
+              </Grid>
+            )}
+          </Grid>
+        </Box>
       </Paper>
 
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Box sx={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center', 
-          mb: 2,
-          borderBottom: '1px solid rgba(0, 0, 0, 0.12)',
-          pb: 1
-        }}>
-          <Typography variant="h6">
-            {isReceive ? 'Informacje o partii' : 'Wybór partii'}
-          </Typography>
+      <Paper 
+        elevation={3} 
+        sx={{ 
+          p: 0, 
+          mb: 3, 
+          borderRadius: '12px', 
+          overflow: 'hidden'
+        }}
+      >
+        <Box 
+          sx={{ 
+            p: 2, 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            bgcolor: theme => theme.palette.mode === 'dark' 
+              ? 'rgba(25, 35, 55, 0.5)' 
+              : 'rgba(245, 247, 250, 0.8)'
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AccessTimeIcon color="primary" />
+            <Typography variant="h6" fontWeight="500">
+              {isReceive ? 'Informacje o partii' : 'Wybór partii'}
+            </Typography>
+          </Box>
           <FormControlLabel 
             control={
               <Switch 
@@ -494,125 +591,149 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
           />
         </Box>
 
-        {batchData.useBatch && (
-          <Grid container spacing={3}>
-            {isReceive ? (
-              // Formularz dla przyjęcia
-              <>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    label="Numer partii/LOT"
-                    name="batchNumber"
-                    value={batchData.batchNumber}
-                    onChange={handleBatchChange}
-                    fullWidth
-                    placeholder="Numer partii od dostawcy lub zostaw puste dla auto-generacji"
-                    helperText="Jeśli pole pozostanie puste, system automatycznie wygeneruje numer LOT"
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth>
-                    <InputLabel shrink id="expiry-date-label">Data ważności</InputLabel>
-                    <Box sx={{ 
-                      mt: 2,
-                      display: 'flex', 
-                      flexDirection: 'column'
-                    }}>
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={batchData.noExpiryDate}
-                            onChange={(e) => {
-                              const { checked } = e.target;
-                              setBatchData(prev => ({ 
-                                ...prev, 
-                                noExpiryDate: checked,
-                                expiryDate: checked ? null : prev.expiryDate 
-                              }));
-                            }}
-                            name="noExpiryDate"
-                            color="primary"
-                          />
-                        }
-                        label={
-                          <Typography 
-                            variant="body2" 
-                            sx={{ 
-                              fontWeight: batchData.noExpiryDate ? 'bold' : 'normal',
-                              color: batchData.noExpiryDate ? 'text.primary' : 'text.secondary'  
-                            }}
-                          >
-                            Brak terminu ważności
-                          </Typography>
-                        }
-                        sx={{ 
-                          mb: 1, 
-                          p: 1, 
-                          border: batchData.noExpiryDate ? '1px solid rgba(0, 0, 0, 0.23)' : 'none',
-                          borderRadius: 1,
-                          bgcolor: batchData.noExpiryDate ? 'rgba(0, 0, 0, 0.04)' : 'transparent'
-                        }}
-                      />
-                      {!batchData.noExpiryDate && (
-                        <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
-                          <DatePicker
-                            label="Wybierz datę"
-                            value={batchData.expiryDate}
-                            onChange={handleDateChange}
-                            renderInput={(params) => 
-                              <TextField 
-                                {...params} 
-                                fullWidth
-                                variant="outlined"
-                                required
-                                error={!batchData.expiryDate && !batchData.noExpiryDate}
-                                helperText={!batchData.expiryDate && !batchData.noExpiryDate ? "Data ważności jest wymagana" : ""}
-                              />
-                            }
-                            disablePast
-                          />
-                        </LocalizationProvider>
+        <Box sx={{ p: 3 }}>
+          {batchData.useBatch && (
+            <Grid container spacing={3}>
+              {isReceive ? (
+                // Formularz dla przyjęcia
+                <>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      label="Numer partii/LOT"
+                      name="batchNumber"
+                      value={batchData.batchNumber}
+                      onChange={handleBatchChange}
+                      fullWidth
+                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                      placeholder="Numer partii od dostawcy lub zostaw puste dla auto-generacji"
+                      helperText="Jeśli pole pozostanie puste, system automatycznie wygeneruje numer LOT"
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
+                      <InputLabel shrink id="expiry-date-label">Data ważności</InputLabel>
+                      <Box sx={{ 
+                        mt: 2,
+                        display: 'flex', 
+                        flexDirection: 'column'
+                      }}>
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={batchData.noExpiryDate}
+                              onChange={(e) => {
+                                const { checked } = e.target;
+                                setBatchData(prev => ({ 
+                                  ...prev, 
+                                  noExpiryDate: checked,
+                                  expiryDate: checked ? null : prev.expiryDate 
+                                }));
+                              }}
+                              name="noExpiryDate"
+                              color="primary"
+                            />
+                          }
+                          label={
+                            <Typography 
+                              variant="body2" 
+                              sx={{ 
+                                fontWeight: batchData.noExpiryDate ? 'bold' : 'normal',
+                                color: batchData.noExpiryDate ? 'text.primary' : 'text.secondary'  
+                              }}
+                            >
+                              Brak terminu ważności
+                            </Typography>
+                          }
+                          sx={{ 
+                            mb: 1, 
+                            p: 1, 
+                            border: batchData.noExpiryDate ? '1px solid rgba(0, 0, 0, 0.23)' : 'none',
+                            borderRadius: 1,
+                            bgcolor: batchData.noExpiryDate ? 'rgba(0, 0, 0, 0.04)' : 'transparent'
+                          }}
+                        />
+                        {!batchData.noExpiryDate && (
+                          <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                            <DatePicker
+                              label="Wybierz datę"
+                              value={batchData.expiryDate}
+                              onChange={handleDateChange}
+                              renderInput={(params) => 
+                                <TextField 
+                                  {...params} 
+                                  fullWidth
+                                  variant="outlined"
+                                  required
+                                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                                  error={!batchData.expiryDate && !batchData.noExpiryDate}
+                                  helperText={!batchData.expiryDate && !batchData.noExpiryDate ? "Data ważności jest wymagana" : ""}
+                                />
+                              }
+                              disablePast
+                            />
+                          </LocalizationProvider>
+                        )}
+                      </Box>
+                      {batchData.noExpiryDate && (
+                        <FormHelperText>
+                          Produkt nie będzie śledzony pod kątem terminu przydatności. 
+                          Zalecane tylko dla przedmiotów bez określonego terminu ważności.
+                        </FormHelperText>
                       )}
-                    </Box>
-                    {batchData.noExpiryDate && (
-                      <FormHelperText>
-                        Produkt nie będzie śledzony pod kątem terminu przydatności. 
-                        Zalecane tylko dla przedmiotów bez określonego terminu ważności.
-                      </FormHelperText>
-                    )}
-                  </FormControl>
-                </Grid>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField
+                      label="Dodatkowe informacje o partii"
+                      name="batchNotes"
+                      value={batchData.batchNotes}
+                      onChange={handleBatchChange}
+                      fullWidth
+                      multiline
+                      rows={2}
+                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                      placeholder="Dodatkowe informacje o partii, certyfikaty, itp."
+                    />
+                  </Grid>
+                </>
+              ) : (
+                // Formularz dla wydania
                 <Grid item xs={12}>
-                  <TextField
-                    label="Dodatkowe informacje o partii"
-                    name="batchNotes"
-                    value={batchData.batchNotes}
-                    onChange={handleBatchChange}
-                    fullWidth
-                    multiline
-                    rows={2}
-                    placeholder="Dodatkowe informacje o partii, certyfikaty, itp."
-                  />
-                </Grid>
-              </>
-            ) : (
-              // Formularz dla wydania
-              <Grid item xs={12}>
-                <FormControl fullWidth required error={batchData.useBatch && !batchData.batchId}>
-                  <InputLabel>Wybierz partię</InputLabel>
-                  <Select
-                    name="batchId"
-                    value={batchData.batchId}
-                    onChange={handleBatchChange}
-                    label="Wybierz partię"
-                  >
-                    {batches.length === 0 ? (
-                      <MenuItem value="" disabled>Brak dostępnych partii</MenuItem>
-                    ) : (
-                      batches.map(batch => {
-                        // Sprawdź czy partia ma datę ważności
-                        if (!batch.expiryDate) {
-                          // Dla partii bez daty ważności
+                  <FormControl fullWidth required error={batchData.useBatch && !batchData.batchId} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
+                    <InputLabel>Wybierz partię</InputLabel>
+                    <Select
+                      name="batchId"
+                      value={batchData.batchId}
+                      onChange={handleBatchChange}
+                      label="Wybierz partię"
+                    >
+                      {batches.length === 0 ? (
+                        <MenuItem value="" disabled>Brak dostępnych partii</MenuItem>
+                      ) : (
+                        batches.map(batch => {
+                          // Sprawdź czy partia ma datę ważności
+                          if (!batch.expiryDate) {
+                            // Dla partii bez daty ważności
+                            return (
+                              <MenuItem 
+                                key={batch.id} 
+                                value={batch.id}
+                                disabled={batch.quantity < parseFloat(transactionData.quantity || 0)}
+                              >
+                                {batch.batchNumber ? `${batch.batchNumber} - ` : ''}
+                                Ilość: {batch.quantity} {item.unit} | 
+                                Bez daty ważności
+                              </MenuItem>
+                            );
+                          }
+                          
+                          const expiryDate = batch.expiryDate instanceof Timestamp 
+                            ? batch.expiryDate.toDate() 
+                            : new Date(batch.expiryDate);
+                          
+                          const isExpired = expiryDate < new Date();
+                          const expiryDateFormatted = expiryDate.toLocaleDateString('pl-PL');
+                          
                           return (
                             <MenuItem 
                               key={batch.id} 
@@ -621,59 +742,44 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
                             >
                               {batch.batchNumber ? `${batch.batchNumber} - ` : ''}
                               Ilość: {batch.quantity} {item.unit} | 
-                              Bez daty ważności
+                              Ważne do: {expiryDateFormatted}
+                              {isExpired ? ' (PRZETERMINOWANE)' : ''}
                             </MenuItem>
                           );
-                        }
-                        
-                        const expiryDate = batch.expiryDate instanceof Timestamp 
-                          ? batch.expiryDate.toDate() 
-                          : new Date(batch.expiryDate);
-                        
-                        const isExpired = expiryDate < new Date();
-                        const expiryDateFormatted = expiryDate.toLocaleDateString('pl-PL');
-                        
-                        return (
-                          <MenuItem 
-                            key={batch.id} 
-                            value={batch.id}
-                            disabled={batch.quantity < parseFloat(transactionData.quantity || 0)}
-                          >
-                            {batch.batchNumber ? `${batch.batchNumber} - ` : ''}
-                            Ilość: {batch.quantity} {item.unit} | 
-                            Ważne do: {expiryDateFormatted}
-                            {isExpired ? ' (PRZETERMINOWANE)' : ''}
-                          </MenuItem>
-                        );
-                      })
+                        })
+                      )}
+                    </Select>
+                    {batchData.useBatch && !batchData.batchId && (
+                      <FormHelperText>Wybierz partię do wydania</FormHelperText>
                     )}
-                  </Select>
-                  {batchData.useBatch && !batchData.batchId && (
-                    <FormHelperText>Wybierz partię do wydania</FormHelperText>
+                  </FormControl>
+                  {batches.length > 0 && !batchData.batchId && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                      Partie są sortowane według daty ważności (FEFO - First Expired, First Out)
+                    </Typography>
                   )}
-                </FormControl>
-                {batches.length > 0 && !batchData.batchId && (
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                    Partie są sortowane według daty ważności (FEFO - First Expired, First Out)
-                  </Typography>
-                )}
-              </Grid>
-            )}
-          </Grid>
-        )}
-        
-        {!batchData.useBatch && !isReceive && (
-          <Typography variant="body2" color="text.secondary">
-            Towar zostanie wydany automatycznie według zasady FEFO (First Expired, First Out) - 
-            najpierw wydawane są partie z najkrótszym terminem ważności.
-          </Typography>
-        )}
+                </Grid>
+              )}
+            </Grid>
+          )}
+          
+          {!batchData.useBatch && !isReceive && (
+            <Typography variant="body2" color="text.secondary">
+              Towar zostanie wydany automatycznie według zasady FEFO (First Expired, First Out) - 
+              najpierw wydawane są partie z najkrótszym terminem ważności.
+            </Typography>
+          )}
+        </Box>
       </Paper>
 
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
         <Button 
-          sx={{ mr: 2 }}
+          variant="outlined"
           onClick={() => navigate('/inventory')}
+          sx={{ 
+            mr: 2,
+            borderRadius: '8px'
+          }}
         >
           Anuluj
         </Button>
@@ -683,6 +789,11 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
           type="submit"
           startIcon={isReceive ? <ReceiveIcon /> : <IssueIcon />}
           disabled={processing}
+          sx={{ 
+            borderRadius: '8px', 
+            boxShadow: '0 4px 6px rgba(0,0,0,0.15)',
+            px: 3
+          }}
         >
           {processing ? 'Przetwarzanie...' : (isReceive ? 'Przyjmij' : 'Wydaj')}
         </Button>

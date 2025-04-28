@@ -42,7 +42,8 @@ import {
   Inventory as InventoryIcon,
   Edit as EditIcon,
   Build as BuildIcon,
-  ProductionQuantityLimits as ProductIcon
+  ProductionQuantityLimits as ProductIcon,
+  AccessTime as AccessTimeIcon
 } from '@mui/icons-material';
 import { createRecipe, updateRecipe, getRecipeById, fixRecipeYield } from '../../services/recipeService';
 import { getAllInventoryItems, getIngredientPrices, createInventoryItem, getAllWarehouses } from '../../services/inventoryService';
@@ -541,337 +542,492 @@ const RecipeForm = ({ recipeId }) => {
 
   return (
     <Box component="form" onSubmit={handleSubmit} noValidate>
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      {/* Nagłówek z przyciskami */}
+      <Paper 
+        elevation={2} 
+        sx={{ 
+          p: 2, 
+          mb: 3, 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          background: theme => theme.palette.mode === 'dark' 
+            ? 'linear-gradient(to right, rgba(40,50,80,1), rgba(30,40,70,1))' 
+            : 'linear-gradient(to right, #f5f7fa, #e4eaf0)'
+        }}
+      >
         <Button 
+          variant="outlined"
           startIcon={<ArrowBackIcon />} 
           onClick={() => navigate('/recipes')}
+          sx={{ 
+            borderRadius: '8px', 
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+          }}
         >
           Powrót
         </Button>
-        <Typography variant="h5">
+        <Typography variant="h5" sx={{ fontWeight: 'medium' }}>
           {recipeId ? 'Edytuj recepturę' : 'Dodaj nową recepturę'}
         </Typography>
-        <Box>
+        <Box sx={{ display: 'flex', gap: 1 }}>
           <Button 
             variant="contained" 
             color="primary" 
             type="submit"
             startIcon={<SaveIcon />}
             disabled={saving}
+            sx={{ 
+              borderRadius: '8px', 
+              boxShadow: '0 4px 6px rgba(0,0,0,0.15)',
+              px: 3
+            }}
           >
             {saving ? 'Zapisywanie...' : 'Zapisz'}
           </Button>
           {recipeId && renderCreateProductButton()}
         </Box>
-      </Box>
-
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>Dane podstawowe</Typography>
-        <Grid container spacing={3}>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              required
-              name="name"
-              label="SKU receptury"
-              value={recipeData.name}
-              onChange={handleChange}
-              error={!recipeData.name}
-              helperText={!recipeData.name ? 'SKU jest wymagany' : ''}
-            />
-          </Grid>
-          
-          <Grid item xs={12} sm={6}>
-            <FormControl fullWidth>
-              <InputLabel id="customer-select-label">Klient (opcjonalnie)</InputLabel>
-              <Select
-                labelId="customer-select-label"
-                name="customerId"
-                value={recipeData.customerId}
-                onChange={handleChange}
-                label="Klient (opcjonalnie)"
-                displayEmpty
-              >
-                <MenuItem value="">
-                  <em>Brak - receptura ogólna</em>
-                </MenuItem>
-                {customers.map((customer) => (
-                  <MenuItem key={customer.id} value={customer.id}>
-                    {customer.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-          
-          <Grid item xs={12}>
-            <TextField
-              label="Opis"
-              name="description"
-              value={recipeData.description || ''}
-              onChange={handleChange}
-              fullWidth
-              multiline
-              rows={2}
-            />
-          </Grid>
-          
-          <Grid item xs={12} sm={6}>
-            <TextField
-              label="Koszt procesowy na sztukę (EUR)"
-              name="processingCostPerUnit"
-              type="number"
-              InputProps={{ inputProps: { min: 0, step: 0.01 } }}
-              value={recipeData.processingCostPerUnit || 0}
-              onChange={handleChange}
-              fullWidth
-              helperText="Koszt procesowy lub robocizny na jedną sztukę produktu"
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              label="Czas produkcji na sztukę (min)"
-              name="productionTimePerUnit"
-              type="number"
-              InputProps={{ inputProps: { min: 0, step: 0.1 } }}
-              value={recipeData.productionTimePerUnit || 0}
-              onChange={handleChange}
-              fullWidth
-              helperText="Czas potrzebny na wyprodukowanie jednej sztuki produktu"
-            />
-          </Grid>
-          
-          <Grid item xs={12}>
-            <FormControl fullWidth>
-              <InputLabel>Domyślne stanowisko produkcyjne</InputLabel>
-              <Select
-                name="defaultWorkstationId"
-                value={recipeData.defaultWorkstationId || ''}
-                onChange={handleChange}
-                label="Domyślne stanowisko produkcyjne"
-              >
-                <MenuItem value="">
-                  <em>Brak</em>
-                </MenuItem>
-                {workstations.map((workstation) => (
-                  <MenuItem key={workstation.id} value={workstation.id}>
-                    {workstation.name}
-                  </MenuItem>
-                ))}
-              </Select>
-              <FormHelperText>Stanowisko będzie automatycznie przypisywane podczas generowania MO z CO</FormHelperText>
-            </FormControl>
-          </Grid>
-          
-          {/* Ukrywamy pola wydajności, dodajemy ukryte pole input */}
-          <input 
-            type="hidden" 
-            name="yield.quantity" 
-            value="1" 
-          />
-          <input 
-            type="hidden" 
-            name="yield.unit" 
-            value="szt." 
-          />
-          
-          <Grid item xs={12}>
-            <FormControl fullWidth>
-              <InputLabel>Status</InputLabel>
-              <Select
-                name="status"
-                value={recipeData.status || 'Robocza'}
-                onChange={handleChange}
-                label="Status"
-              >
-                <MenuItem value="Robocza">Robocza</MenuItem>
-                <MenuItem value="W przeglądzie">W przeglądzie</MenuItem>
-                <MenuItem value="Zatwierdzona">Zatwierdzona</MenuItem>
-                <MenuItem value="Wycofana">Wycofana</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-        </Grid>
       </Paper>
 
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="subtitle1" gutterBottom>
-          Składniki
-          <Button 
-            size="small"
-            onClick={addIngredient}
-            sx={{ ml: 2 }}
-          >
-            Dodaj składnik
-          </Button>
-          <Button 
-            size="small"
-            color="secondary"
-            onClick={handleAddInventoryItem}
-            sx={{ ml: 1 }}
-          >
-            Ze stanów
-          </Button>
-          <Button 
-            size="small"
-            color="primary"
-            onClick={() => linkAllIngredientsWithInventory(false)}
-            sx={{ ml: 1 }}
-          >
-            Powiąż ze stanami
-          </Button>
-          <Button 
-            size="small"
-            color="warning"
-            onClick={() => linkAllIngredientsWithInventory(true)}
-            sx={{ ml: 1 }}
-          >
-            Resetuj powiązania
-          </Button>
-        </Typography>
-        
-        <Box sx={{ mb: 2 }}>
-          <Autocomplete
-            options={inventoryItems}
-            getOptionLabel={(option) => option.name || ''}
-            loading={loadingInventory}
-            onChange={(event, newValue) => handleAddInventoryItem(newValue)}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Dodaj składnik ze stanów"
-                variant="outlined"
-                fullWidth
-                helperText="Tylko składniki ze stanów mają przypisane ceny do kalkulacji kosztów. Składniki dodane ręcznie nie będą uwzględnione w kalkulacji."
-                InputProps={{
-                  ...params.InputProps,
-                  endAdornment: (
-                    <>
-                      {loadingInventory ? <CircularProgress color="inherit" size={20} /> : null}
-                      {params.InputProps.endAdornment}
-                    </>
-                  ),
-                  startAdornment: <InventoryIcon color="action" sx={{ mr: 1 }} />
-                }}
-              />
-            )}
-            renderOption={(props, option) => {
-              const { key, ...otherProps } = props;
-              return (
-                <li key={key} {...otherProps}>
-                  <Box>
-                    <Typography variant="body1">{option.name}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {option.unitPrice ? `Cena: ${option.unitPrice.toFixed(2)} EUR/${option.unit}` : 'Brak ceny jednostkowej'}
-                    </Typography>
-                  </Box>
-                </li>
-              );
-            }}
-          />
+      {/* Sekcja danych podstawowych */}
+      <Paper 
+        elevation={3} 
+        sx={{ 
+          p: 0, 
+          mb: 3, 
+          borderRadius: '12px', 
+          overflow: 'hidden',
+          transition: 'all 0.3s ease'
+        }}
+      >
+        <Box 
+          sx={{ 
+            p: 2, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            bgcolor: theme => theme.palette.mode === 'dark' 
+              ? 'rgba(25, 35, 55, 0.5)' 
+              : 'rgba(245, 247, 250, 0.8)'
+          }}
+        >
+          <ProductIcon color="primary" />
+          <Typography variant="h6" fontWeight="500">Dane podstawowe</Typography>
         </Box>
         
-        <Divider sx={{ my: 2 }} />
-        
-        {recipeData.ingredients.length > 0 ? (
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>SKU składnika</TableCell>
-                  <TableCell>Ilość</TableCell>
-                  <TableCell>Jednostka</TableCell>
-                  <TableCell>Uwagi</TableCell>
-                  <TableCell>Źródło</TableCell>
-                  <TableCell>Akcje</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {recipeData.ingredients.map((ingredient, index) => (
-                  <TableRow key={index}>
-                    <TableCell>
-                      <TextField
-                        fullWidth
-                        variant="standard"
-                        value={ingredient.name}
-                        onChange={(e) => handleIngredientChange(index, 'name', e.target.value)}
-                        disabled={!!ingredient.id}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <TextField
-                        fullWidth
-                        variant="standard"
-                        type="number"
-                        value={ingredient.quantity}
-                        onChange={(e) => handleIngredientChange(index, 'quantity', e.target.value)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <TextField
-                        fullWidth
-                        variant="standard"
-                        value={ingredient.unit}
-                        onChange={(e) => handleIngredientChange(index, 'unit', e.target.value)}
-                        disabled={!!ingredient.id}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <TextField
-                        fullWidth
-                        variant="standard"
-                        value={ingredient.notes || ''}
-                        onChange={(e) => handleIngredientChange(index, 'notes', e.target.value)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {ingredient.id ? (
-                        <Chip 
-                          size="small" 
-                          color="primary" 
-                          label="Stany" 
-                          icon={<InventoryIcon />} 
-                          title="Składnik ze stanów - ma przypisaną cenę do kalkulacji kosztów" 
-                        />
-                      ) : (
-                        <Chip 
-                          size="small" 
-                          color="default" 
-                          label="Ręczny" 
-                          icon={<EditIcon />} 
-                          title="Składnik dodany ręcznie - brak ceny do kalkulacji kosztów" 
-                        />
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <IconButton 
-                        color="error" 
-                        onClick={() => removeIngredient(index)}
-                        size="small"
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        ) : (
-          <Typography variant="body2" color="text.secondary" sx={{ my: 2 }}>
-            Brak składników. Dodaj składniki ze stanów lub ręcznie.
-          </Typography>
-        )}
+        <Box sx={{ p: 3 }}>
+          <Grid container spacing={3}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                required
+                name="name"
+                label="SKU receptury"
+                value={recipeData.name}
+                onChange={handleChange}
+                error={!recipeData.name}
+                helperText={!recipeData.name ? 'SKU jest wymagany' : ''}
+                sx={{ 
+                  '& .MuiOutlinedInput-root': { 
+                    borderRadius: '8px' 
+                  } 
+                }}
+                InputProps={{
+                  startAdornment: (
+                    <Box sx={{ color: 'text.secondary', mr: 1, display: 'flex', alignItems: 'center' }}>
+                      <ProductIcon fontSize="small" />
+                    </Box>
+                  ),
+                }}
+              />
+            </Grid>
+            
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
+                <InputLabel id="customer-select-label">Klient (opcjonalnie)</InputLabel>
+                <Select
+                  labelId="customer-select-label"
+                  name="customerId"
+                  value={recipeData.customerId}
+                  onChange={handleChange}
+                  label="Klient (opcjonalnie)"
+                  displayEmpty
+                >
+                  <MenuItem value="">
+                    <em>Brak - receptura ogólna</em>
+                  </MenuItem>
+                  {customers.map((customer) => (
+                    <MenuItem key={customer.id} value={customer.id}>
+                      {customer.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            
+            <Grid item xs={12}>
+              <TextField
+                label="Opis"
+                name="description"
+                value={recipeData.description || ''}
+                onChange={handleChange}
+                fullWidth
+                multiline
+                rows={2}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+              />
+            </Grid>
+            
+            <Grid item xs={12} sm={6} md={4}>
+              <TextField
+                label="Koszt procesowy na sztukę (EUR)"
+                name="processingCostPerUnit"
+                type="number"
+                InputProps={{ 
+                  inputProps: { min: 0, step: 0.01 },
+                  startAdornment: (
+                    <Box sx={{ color: 'text.secondary', mr: 1, display: 'flex', alignItems: 'center' }}>
+                      <CalculateIcon fontSize="small" />
+                    </Box>
+                  ),
+                }}
+                value={recipeData.processingCostPerUnit || 0}
+                onChange={handleChange}
+                fullWidth
+                helperText="Koszt procesowy lub robocizny na jedną sztukę produktu"
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={4}>
+              <TextField
+                label="Czas produkcji na sztukę (min)"
+                name="productionTimePerUnit"
+                type="number"
+                InputProps={{ 
+                  inputProps: { min: 0, step: 0.1 },
+                  startAdornment: (
+                    <Box sx={{ color: 'text.secondary', mr: 1, display: 'flex', alignItems: 'center' }}>
+                      <AccessTimeIcon fontSize="small" />
+                    </Box>
+                  ),
+                }}
+                value={recipeData.productionTimePerUnit || 0}
+                onChange={handleChange}
+                fullWidth
+                helperText="Czas potrzebny na wyprodukowanie jednej sztuki produktu"
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+              />
+            </Grid>
+            
+            <Grid item xs={12} md={4}>
+              <FormControl fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  name="status"
+                  value={recipeData.status || 'Robocza'}
+                  onChange={handleChange}
+                  label="Status"
+                  startAdornment={<Box sx={{ color: 'text.secondary', mr: 1, display: 'flex', alignItems: 'center' }}></Box>}
+                >
+                  <MenuItem value="Robocza">Robocza</MenuItem>
+                  <MenuItem value="W przeglądzie">W przeglądzie</MenuItem>
+                  <MenuItem value="Zatwierdzona">Zatwierdzona</MenuItem>
+                  <MenuItem value="Wycofana">Wycofana</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            
+            <Grid item xs={12}>
+              <FormControl fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
+                <InputLabel>Domyślne stanowisko produkcyjne</InputLabel>
+                <Select
+                  name="defaultWorkstationId"
+                  value={recipeData.defaultWorkstationId || ''}
+                  onChange={handleChange}
+                  label="Domyślne stanowisko produkcyjne"
+                  startAdornment={<Box sx={{ color: 'text.secondary', mr: 1, display: 'flex', alignItems: 'center' }}><BuildIcon fontSize="small" /></Box>}
+                >
+                  <MenuItem value="">
+                    <em>Brak</em>
+                  </MenuItem>
+                  {workstations.map((workstation) => (
+                    <MenuItem key={workstation.id} value={workstation.id}>
+                      {workstation.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+                <FormHelperText>Stanowisko będzie automatycznie przypisywane podczas generowania MO z CO</FormHelperText>
+              </FormControl>
+            </Grid>
+            
+            {/* Ukrywamy pola wydajności, dodajemy ukryte pole input */}
+            <input 
+              type="hidden" 
+              name="yield.quantity" 
+              value="1" 
+            />
+            <input 
+              type="hidden" 
+              name="yield.unit" 
+              value="szt." 
+            />
+          </Grid>
+        </Box>
       </Paper>
 
+      {/* Sekcja składników */}
+      <Paper 
+        elevation={3} 
+        sx={{ 
+          p: 0, 
+          mb: 3, 
+          borderRadius: '12px', 
+          overflow: 'hidden' 
+        }}
+      >
+        <Box 
+          sx={{ 
+            p: 2, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            bgcolor: theme => theme.palette.mode === 'dark' 
+              ? 'rgba(25, 35, 55, 0.5)' 
+              : 'rgba(245, 247, 250, 0.8)',
+            justifyContent: 'space-between'
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <InventoryIcon color="primary" sx={{ mr: 1 }} />
+            <Typography variant="h6" fontWeight="500">Składniki</Typography>
+          </Box>
+          
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button 
+              variant="outlined"
+              size="small"
+              onClick={addIngredient}
+              startIcon={<AddIcon />}
+              sx={{ borderRadius: '20px' }}
+            >
+              Dodaj składnik
+            </Button>
+            <Button 
+              variant="outlined"
+              size="small"
+              color="secondary"
+              onClick={handleAddInventoryItem}
+              startIcon={<InventoryIcon />}
+              sx={{ borderRadius: '20px' }}
+            >
+              Ze stanów
+            </Button>
+            <Button 
+              variant="outlined"
+              size="small"
+              color="primary"
+              onClick={() => linkAllIngredientsWithInventory(false)}
+              sx={{ borderRadius: '20px' }}
+            >
+              Powiąż
+            </Button>
+            <Button 
+              variant="outlined"
+              size="small"
+              color="warning"
+              onClick={() => linkAllIngredientsWithInventory(true)}
+              sx={{ borderRadius: '20px' }}
+            >
+              Resetuj
+            </Button>
+          </Box>
+        </Box>
+        
+        <Box sx={{ p: 3 }}>
+          <Box sx={{ mb: 3 }}>
+            <Autocomplete
+              options={inventoryItems}
+              getOptionLabel={(option) => option.name || ''}
+              loading={loadingInventory}
+              onChange={(event, newValue) => handleAddInventoryItem(newValue)}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Dodaj składnik ze stanów"
+                  variant="outlined"
+                  fullWidth
+                  helperText="Tylko składniki ze stanów mają przypisane ceny do kalkulacji kosztów. Składniki dodane ręcznie nie będą uwzględnione w kalkulacji."
+                  InputProps={{
+                    ...params.InputProps,
+                    sx: { borderRadius: '8px' },
+                    endAdornment: (
+                      <>
+                        {loadingInventory ? <CircularProgress color="inherit" size={20} /> : null}
+                        {params.InputProps.endAdornment}
+                      </>
+                    ),
+                    startAdornment: <InventoryIcon color="action" sx={{ mr: 1 }} />
+                  }}
+                />
+              )}
+              renderOption={(props, option) => {
+                const { key, ...otherProps } = props;
+                return (
+                  <li key={key} {...otherProps}>
+                    <Box>
+                      <Typography variant="body1">{option.name}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {option.unitPrice ? `Cena: ${option.unitPrice.toFixed(2)} EUR/${option.unit}` : 'Brak ceny jednostkowej'}
+                      </Typography>
+                    </Box>
+                  </li>
+                );
+              }}
+            />
+          </Box>
+          
+          {recipeData.ingredients.length > 0 ? (
+            <TableContainer sx={{ borderRadius: '8px', border: '1px solid', borderColor: 'divider' }}>
+              <Table>
+                <TableHead sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.6)' : 'rgba(240, 245, 250, 0.8)' }}>
+                  <TableRow>
+                    <TableCell width="30%"><Typography variant="subtitle2">SKU składnika</Typography></TableCell>
+                    <TableCell width="15%"><Typography variant="subtitle2">Ilość</Typography></TableCell>
+                    <TableCell width="15%"><Typography variant="subtitle2">Jednostka</Typography></TableCell>
+                    <TableCell width="20%"><Typography variant="subtitle2">Uwagi</Typography></TableCell>
+                    <TableCell width="10%"><Typography variant="subtitle2">Źródło</Typography></TableCell>
+                    <TableCell width="10%"><Typography variant="subtitle2">Akcje</Typography></TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {recipeData.ingredients.map((ingredient, index) => (
+                    <TableRow key={index} hover sx={{ '&:nth-of-type(even)': { bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.2)' : 'rgba(245, 247, 250, 0.5)' } }}>
+                      <TableCell>
+                        <TextField
+                          fullWidth
+                          variant="standard"
+                          value={ingredient.name}
+                          onChange={(e) => handleIngredientChange(index, 'name', e.target.value)}
+                          disabled={!!ingredient.id}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          fullWidth
+                          variant="standard"
+                          type="number"
+                          value={ingredient.quantity}
+                          onChange={(e) => handleIngredientChange(index, 'quantity', e.target.value)}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          fullWidth
+                          variant="standard"
+                          value={ingredient.unit}
+                          onChange={(e) => handleIngredientChange(index, 'unit', e.target.value)}
+                          disabled={!!ingredient.id}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          fullWidth
+                          variant="standard"
+                          value={ingredient.notes || ''}
+                          onChange={(e) => handleIngredientChange(index, 'notes', e.target.value)}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {ingredient.id ? (
+                          <Chip 
+                            size="small" 
+                            color="primary" 
+                            label="Stany" 
+                            icon={<InventoryIcon />} 
+                            title="Składnik ze stanów - ma przypisaną cenę do kalkulacji kosztów" 
+                            sx={{ borderRadius: '16px' }}
+                          />
+                        ) : (
+                          <Chip 
+                            size="small" 
+                            color="default" 
+                            label="Ręczny" 
+                            icon={<EditIcon />} 
+                            title="Składnik dodany ręcznie - brak ceny do kalkulacji kosztów" 
+                            sx={{ borderRadius: '16px' }}
+                          />
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <IconButton 
+                          color="error" 
+                          onClick={() => removeIngredient(index)}
+                          size="small"
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          ) : (
+            <Paper 
+              sx={{ 
+                p: 3, 
+                textAlign: 'center', 
+                bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(25, 35, 55, 0.5)' : 'rgba(245, 247, 250, 0.8)',
+                borderRadius: '8px',
+                border: '1px dashed',
+                borderColor: 'divider'
+              }}
+            >
+              <InventoryIcon sx={{ fontSize: 40, color: 'text.secondary', mb: 1 }} />
+              <Typography variant="body1" color="text.secondary" gutterBottom>
+                Brak składników. 
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Dodaj składniki ze stanów lub ręcznie używając przycisków powyżej.
+              </Typography>
+            </Paper>
+          )}
+        </Box>
+      </Paper>
+
+      {/* Dialog dodawania produktu do stanów */}
       <Dialog 
         open={createProductDialogOpen} 
         onClose={() => setCreateProductDialogOpen(false)}
         maxWidth="md"
         fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: '12px',
+            overflow: 'hidden'
+          }
+        }}
       >
-        <DialogTitle>Dodaj produkt do stanów</DialogTitle>
-        <DialogContent>
+        <Box sx={{ 
+          p: 2, 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 1,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          bgcolor: theme => theme.palette.mode === 'dark' 
+            ? 'rgba(25, 35, 55, 0.5)' 
+            : 'rgba(245, 247, 250, 0.8)'
+        }}>
+          <ProductIcon color="primary" />
+          <DialogTitle sx={{ p: 0 }}>Dodaj produkt do stanów</DialogTitle>
+        </Box>
+        
+        <DialogContent sx={{ mt: 2 }}>
           <DialogContentText sx={{ mb: 2 }}>
             Uzupełnij poniższe dane, aby dodać produkt z receptury do stanów. 
             Koszt produkcji zostanie obliczony na podstawie kosztów składników.
@@ -888,11 +1044,19 @@ const RecipeForm = ({ recipeId }) => {
                 required
                 error={!productData.name}
                 helperText={!productData.name ? 'SKU jest wymagany' : ''}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                InputProps={{
+                  startAdornment: (
+                    <Box sx={{ color: 'text.secondary', mr: 1, display: 'flex', alignItems: 'center' }}>
+                      <ProductIcon fontSize="small" />
+                    </Box>
+                  )
+                }}
               />
             </Grid>
             
             <Grid item xs={12} md={6}>
-              <FormControl fullWidth required>
+              <FormControl fullWidth required sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
                 <InputLabel id="warehouse-select-label">Lokalizacja</InputLabel>
                 <Select
                   labelId="warehouse-select-label"
@@ -902,6 +1066,7 @@ const RecipeForm = ({ recipeId }) => {
                   onChange={handleProductDataChange}
                   label="Lokalizacja"
                   error={!productData.warehouseId}
+                  startAdornment={<Box sx={{ color: 'text.secondary', mr: 1, display: 'flex', alignItems: 'center' }}></Box>}
                 >
                   {warehouses.map((warehouse) => (
                     <MenuItem key={warehouse.id} value={warehouse.id}>
@@ -921,6 +1086,7 @@ const RecipeForm = ({ recipeId }) => {
                 fullWidth
                 multiline
                 rows={2}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
               />
             </Grid>
             
@@ -933,12 +1099,16 @@ const RecipeForm = ({ recipeId }) => {
                 fullWidth
                 InputProps={{
                   readOnly: true,
+                  startAdornment: (
+                    <Box sx={{ color: 'text.secondary', mr: 1, display: 'flex', alignItems: 'center' }}></Box>
+                  )
                 }}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
               />
             </Grid>
             
             <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
+              <FormControl fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
                 <InputLabel id="unit-select-label">Jednostka</InputLabel>
                 <Select
                   labelId="unit-select-label"
@@ -947,6 +1117,7 @@ const RecipeForm = ({ recipeId }) => {
                   value={productData.unit}
                   onChange={handleProductDataChange}
                   label="Jednostka"
+                  startAdornment={<Box sx={{ color: 'text.secondary', mr: 1, display: 'flex', alignItems: 'center' }}></Box>}
                 >
                   <MenuItem value="szt.">szt.</MenuItem>
                   <MenuItem value="kg">kg</MenuItem>
@@ -964,6 +1135,7 @@ const RecipeForm = ({ recipeId }) => {
                 onChange={handleProductDataChange}
                 fullWidth
                 inputProps={{ min: 0, step: 0.01 }}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
               />
             </Grid>
             
@@ -976,6 +1148,7 @@ const RecipeForm = ({ recipeId }) => {
                 onChange={handleProductDataChange}
                 fullWidth
                 inputProps={{ min: 0, step: 0.01 }}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
               />
             </Grid>
             
@@ -988,18 +1161,30 @@ const RecipeForm = ({ recipeId }) => {
                 onChange={handleProductDataChange}
                 fullWidth
                 inputProps={{ min: 0, step: 0.01 }}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
               />
             </Grid>
           </Grid>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCreateProductDialogOpen(false)}>Anuluj</Button>
+        <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+          <Button 
+            onClick={() => setCreateProductDialogOpen(false)}
+            variant="outlined"
+            sx={{ borderRadius: '8px' }}
+          >
+            Anuluj
+          </Button>
           <Button 
             onClick={handleCreateProduct} 
             variant="contained" 
             color="primary"
             disabled={creatingProduct || !productData.name || !productData.warehouseId}
             startIcon={creatingProduct ? <CircularProgress size={20} /> : <ProductIcon />}
+            sx={{ 
+              borderRadius: '8px', 
+              boxShadow: '0 4px 6px rgba(0,0,0,0.15)',
+              px: 3
+            }}
           >
             {creatingProduct ? 'Zapisywanie...' : 'Dodaj do stanów'}
           </Button>
