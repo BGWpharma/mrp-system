@@ -138,7 +138,7 @@ const Sidebar = ({ onToggle }) => {
     } else if (location.pathname === '/' || location.pathname.startsWith('/analytics')) {
       setOpenSubmenu('Dashboard');
     } else if (location.pathname.startsWith('/hall-data')) {
-      setOpenSubmenu('Dane Hali');
+      setOpenSubmenu('Parametry hali');
     }
   }, [location.pathname]);
   
@@ -208,7 +208,7 @@ const Sidebar = ({ onToggle }) => {
         { text: 'Analityka', icon: <AnalyticsIcon />, path: '/analytics' },
       ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
     },
-    { text: 'Dane Hali',
+    { text: 'Parametry hali',
       icon: <FactoryIcon />,
       path: '/hall-data',
       hasSubmenu: true,

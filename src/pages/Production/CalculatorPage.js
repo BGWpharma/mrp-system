@@ -804,8 +804,13 @@ ${';'.repeat(4)}\n`;
           
           <Grid container spacing={2} sx={{ mb: 3 }}>
             <Grid item xs={6} md={3}>
-              <Paper sx={{ p: 2, textAlign: 'center', backgroundColor: '#f5f5f5' }}>
-                <Typography variant="body2" color="text.secondary">
+              <Paper sx={{ 
+                p: 2, 
+                textAlign: 'center', 
+                backgroundColor: theme => theme.palette.mode === 'dark' ? '#1e2a45' : '#f5f5f5',
+                color: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.87)' : 'rgba(0, 0, 0, 0.87)'
+              }}>
+                <Typography variant="body2" color={theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'text.secondary'}>
                   Produkt
                 </Typography>
                 <Typography variant="h6">
@@ -814,8 +819,13 @@ ${';'.repeat(4)}\n`;
               </Paper>
             </Grid>
             <Grid item xs={6} md={3}>
-              <Paper sx={{ p: 2, textAlign: 'center', backgroundColor: '#f5f5f5' }}>
-                <Typography variant="body2" color="text.secondary">
+              <Paper sx={{ 
+                p: 2, 
+                textAlign: 'center', 
+                backgroundColor: theme => theme.palette.mode === 'dark' ? '#1e2a45' : '#f5f5f5',
+                color: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.87)' : 'rgba(0, 0, 0, 0.87)'
+              }}>
+                <Typography variant="body2" color={theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'text.secondary'}>
                   Docelowa ilość
                 </Typography>
                 <Typography variant="h6">
@@ -824,8 +834,13 @@ ${';'.repeat(4)}\n`;
               </Paper>
             </Grid>
             <Grid item xs={6} md={3}>
-              <Paper sx={{ p: 2, textAlign: 'center', backgroundColor: '#f5f5f5' }}>
-                <Typography variant="body2" color="text.secondary">
+              <Paper sx={{ 
+                p: 2, 
+                textAlign: 'center', 
+                backgroundColor: theme => theme.palette.mode === 'dark' ? '#1e2a45' : '#f5f5f5',
+                color: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.87)' : 'rgba(0, 0, 0, 0.87)'
+              }}>
+                <Typography variant="body2" color={theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'text.secondary'}>
                   Objętość mieszalnika
                 </Typography>
                 <Typography variant="h6">
@@ -834,8 +849,13 @@ ${';'.repeat(4)}\n`;
               </Paper>
             </Grid>
             <Grid item xs={6} md={3}>
-              <Paper sx={{ p: 2, textAlign: 'center', backgroundColor: '#f5f5f5' }}>
-                <Typography variant="body2" color="text.secondary">
+              <Paper sx={{ 
+                p: 2, 
+                textAlign: 'center', 
+                backgroundColor: theme => theme.palette.mode === 'dark' ? '#1e2a45' : '#f5f5f5',
+                color: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.87)' : 'rgba(0, 0, 0, 0.87)'
+              }}>
+                <Typography variant="body2" color={theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'text.secondary'}>
                   Liczba mieszań
                 </Typography>
                 <Typography variant="h6">
@@ -849,10 +869,20 @@ ${';'.repeat(4)}\n`;
             Szczegółowy plan mieszań:
           </Typography>
           
-          <TableContainer component={Paper} sx={{ maxHeight: 440, mb: 2 }}>
+          <TableContainer component={Paper} sx={{ 
+            maxHeight: 440, 
+            mb: 2,
+            backgroundColor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 42, 69, 0.9)' : 'inherit'
+          }}>
             <Table stickyHeader size="small">
               <TableHead>
-                <TableRow>
+                <TableRow sx={{ 
+                  "& th": { 
+                    backgroundColor: theme => theme.palette.mode === 'dark' ? '#1e2a45' : '#f5f5f5', 
+                    fontWeight: "bold",
+                    color: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.87)' : 'rgba(0, 0, 0, 0.87)'
+                  }
+                }}>
                   <TableCell>Nr mieszania</TableCell>
                   <TableCell>Objętość</TableCell>
                   {usePieces && <TableCell>Liczba sztuk</TableCell>}
@@ -861,7 +891,12 @@ ${';'.repeat(4)}\n`;
                   <TableCell>Jednostka</TableCell>
                 </TableRow>
               </TableHead>
-              <TableBody>
+              <TableBody sx={{
+                "& tr": {
+                  backgroundColor: theme => theme.palette.mode === 'dark' ? 'transparent' : 'inherit',
+                  color: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.87)' : 'inherit'
+                }
+              }}>
                 {mixings.map((mixing) => (
                   mixing.ingredients.map((ingredient, ingredientIndex) => (
                     <TableRow key={`ingredient-${ingredientIndex}`}>
@@ -873,7 +908,9 @@ ${';'.repeat(4)}\n`;
                           <TableCell rowSpan={mixing.ingredients.length}>
                             {mixing.volumeToMix.toFixed(4)} kg
                             {/* Dodajemy informację o rzeczywistej wadze składników */}
-                            <Typography variant="caption" display="block" color="text.secondary">
+                            <Typography variant="caption" display="block" color={theme => 
+                              theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'text.secondary'
+                            }>
                               (suma składników: {mixing.totalIngredientsWeight.toFixed(4)} kg)
                             </Typography>
                           </TableCell>

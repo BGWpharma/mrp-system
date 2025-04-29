@@ -54,7 +54,8 @@ import {
   Refresh as RefreshIcon,
   PlaylistAdd as PlaylistAddIcon,
   Link as LinkIcon,
-  OpenInNew as OpenInNewIcon
+  OpenInNew as OpenInNewIcon,
+  BuildCircle as ServiceIcon
 } from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -117,6 +118,7 @@ const OrderForm = ({ orderId }) => {
   const [orderData, setOrderData] = useState({...DEFAULT_ORDER});
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
+  const [services, setServices] = useState([]); // Dodajemy listę usług
   const [recipes, setRecipes] = useState([]);
   const [validationErrors, setValidationErrors] = useState({});
   const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false);
@@ -293,12 +295,18 @@ const OrderForm = ({ orderId }) => {
           setOrderData(verifiedOrder);
         }
         
+        // Pobierz klientów
         const fetchedCustomers = await getAllCustomers();
         setCustomers(fetchedCustomers);
-        
-        const fetchedProducts = await getAllInventoryItems();
-        setProducts(fetchedProducts);
-        
+          
+        // Pobierz wszystkie produkty i odfiltruj usługi (kategoria "Inne")
+        const productsData = await getAllInventoryItems();
+        const servicesData = productsData.filter(item => item.category === 'Inne');
+        const otherProductsData = productsData.filter(item => item.category !== 'Inne');
+        setProducts(otherProductsData);
+        setServices(servicesData);
+          
+        // Pobierz wszystkie receptury
         const fetchedRecipes = await getAllRecipes();
         setRecipes(fetchedRecipes);
         
@@ -566,18 +574,18 @@ const OrderForm = ({ orderId }) => {
           const priceListItem = await getPriceForCustomerProduct(orderData.customer.id, product.id, isRecipe);
           
           if (priceListItem) {
-            console.log(`Znaleziono cenę w liście cenowej: ${priceListItem} dla ${name} (${isRecipe ? 'receptura' : 'produkt'})`);
+            console.log(`Znaleziono cenę w liście cenowej: ${priceListItem} dla ${name} (${isRecipe ? 'receptura' : 'produkt/usługa'})`);
             price = priceListItem;
             fromPriceList = true;
           } else {
-            console.log(`Nie znaleziono ceny w liście cenowej dla ${name} (${isRecipe ? 'receptura' : 'produkt'})`);
+            console.log(`Nie znaleziono ceny w liście cenowej dla ${name} (${isRecipe ? 'receptura' : 'produkt/usługa'})`);
           }
         } catch (error) {
           console.error('Błąd podczas pobierania ceny z listy cenowej:', error);
         }
       }
       
-      // Jeśli to produkt, pobierz jego szczegóły
+      // Jeśli to produkt lub usługa, pobierz jego szczegóły
       if (!isRecipe) {
         try {
           const productDetails = await getProductById(product.id);
@@ -594,7 +602,7 @@ const OrderForm = ({ orderId }) => {
             }
           }
         } catch (error) {
-          console.error('Błąd podczas pobierania szczegółów produktu:', error);
+          console.error('Błąd podczas pobierania szczegółów produktu/usługi:', error);
         }
       } else {
         // Jeśli to receptura, oblicz koszt produkcji tylko jeśli nie mamy ceny z listy cenowej
@@ -674,7 +682,7 @@ const OrderForm = ({ orderId }) => {
       setValidationErrors(updatedErrors);
       
     } catch (error) {
-      console.error('Błąd podczas wyboru produktu:', error);
+      console.error('Błąd podczas wyboru produktu/usługi:', error);
       showError(`Wystąpił błąd: ${error.message}`);
     }
   };
@@ -2106,9 +2114,44 @@ const OrderForm = ({ orderId }) => {
                         <ToggleButton value="recipe" size="small">
                           Receptura
                         </ToggleButton>
+                        <ToggleButton value="service" size="small">
+                          Usługa
+                        </ToggleButton>
                       </ToggleButtonGroup>
                       
-                      {(item.itemType || (item.isRecipe ? 'recipe' : 'product')) === 'product' ? (
+                      {(item.itemType === 'service') ? (
+                        <Autocomplete
+                          options={services}
+                          getOptionLabel={(option) => option.name || ''}
+                          value={services.find(s => s.id === item.id) || null}
+                          onChange={(_, newValue) => handleProductSelect(index, newValue, 'service')}
+                          renderInput={(params) => (
+                            <TextField 
+                              {...params} 
+                              label="Usługa"
+                              size="small"
+                              error={!!validationErrors[`item_${index}_name`]}
+                              helperText={validationErrors[`item_${index}_name`]}
+                            />
+                          )}
+                        />
+                      ) : (item.itemType === 'recipe' || item.isRecipe) ? (
+                        <Autocomplete
+                          options={recipes}
+                          getOptionLabel={(option) => option.name || ''}
+                          value={recipes.find(r => r.id === item.id) || null}
+                          onChange={(_, newValue) => handleProductSelect(index, newValue, 'recipe')}
+                          renderInput={(params) => (
+                            <TextField 
+                              {...params} 
+                              label="Receptura"
+                              size="small"
+                              error={!!validationErrors[`item_${index}_name`]}
+                              helperText={validationErrors[`item_${index}_name`]}
+                            />
+                          )}
+                        />
+                      ) : (
                         <TextField
                           label="Nazwa produktu"
                           value={item.name}
@@ -2119,22 +2162,6 @@ const OrderForm = ({ orderId }) => {
                           size="small"
                           variant="outlined"
                         />
-                      ) : (
-                      <Autocomplete
-                          options={recipes}
-                          getOptionLabel={(option) => option.name || ''}
-                          value={recipes.find(r => r.id === item.id) || null}
-                          onChange={(_, newValue) => handleProductSelect(index, newValue, 'recipe')}
-                        renderInput={(params) => (
-                          <TextField 
-                            {...params} 
-                              label="Receptura"
-                              size="small"
-                            error={!!validationErrors[`item_${index}_name`]}
-                            helperText={validationErrors[`item_${index}_name`]}
-                          />
-                        )}
-                      />
                       )}
                     </TableCell>
                     <TableCell>
