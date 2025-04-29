@@ -35,7 +35,8 @@ import {
   Apps as AppsIcon,
   Translate as TranslateIcon,
   People as PeopleIcon,
-  AdminPanelSettings as AdminIcon
+  AdminPanelSettings as AdminIcon,
+  BugReport as BugReportIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -615,6 +616,11 @@ const Navbar = () => {
                 <MenuItem component={Link} to="/admin/system" onClick={handleClose}>
                   <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
                   Narzędzia systemowe
+                </MenuItem>
+                
+                <MenuItem component={Link} to="/admin/bug-reports" onClick={handleClose}>
+                  <ListItemIcon><BugReportIcon fontSize="small" /></ListItemIcon>
+                  Zgłoszenia błędów
                 </MenuItem>
                 <Divider />
               </>

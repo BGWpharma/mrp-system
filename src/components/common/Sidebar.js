@@ -55,11 +55,13 @@ import {
   Calculate as CalculateIcon,
   People as PeopleIcon,
   Settings as SettingsIcon,
-  Factory as FactoryIcon
+  Factory as FactoryIcon,
+  BugReport as BugReportIcon
 } from '@mui/icons-material';
 import { getExpiringBatches, getExpiredBatches } from '../../services/inventoryService';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import BugReportDialog from './BugReportDialog';
 
 // Styled components
 const StyledListItemButton = styled(ListItemButton)(({ theme, isheader, isactive }) => ({
@@ -116,6 +118,7 @@ const Sidebar = ({ onToggle }) => {
   const [expiringItemsCount, setExpiringItemsCount] = useState(0);
   const { currentUser } = useAuth();
   const isAdmin = currentUser?.role === 'administrator';
+  const [bugReportDialogOpen, setBugReportDialogOpen] = useState(false);
   
   // Wywołujemy callback onToggle przy zmianie stanu sidebara
   useEffect(() => {
@@ -421,6 +424,49 @@ const Sidebar = ({ onToggle }) => {
           )
         ))}
       </List>
+      
+      <Box sx={{ 
+        position: 'absolute', 
+        bottom: 0, 
+        left: 0, 
+        right: 0, 
+        p: 1.5, 
+        borderTop: '1px solid', 
+        borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.08)',
+        backgroundColor: mode === 'dark' ? '#182136' : '#ffffff',
+      }}>
+        <StyledListItem 
+          button 
+          onClick={() => setBugReportDialogOpen(true)}
+          sx={{
+            color: 'error.main',
+            '&:hover': {
+              backgroundColor: alpha('#f44336', 0.08),
+            },
+          }}
+        >
+          <Tooltip title="Zgłoś błąd" placement="right" arrow>
+            <ListItemIcon sx={{ minWidth: 36, color: 'error.main' }}>
+              <BugReportIcon />
+            </ListItemIcon>
+          </Tooltip>
+          {isDrawerOpen && (
+            <ListItemText 
+              primary="Zgłoś błąd" 
+              primaryTypographyProps={{ 
+                fontSize: '0.875rem',
+                fontWeight: 'medium',
+                color: 'error.main'
+              }} 
+            />
+          )}
+        </StyledListItem>
+      </Box>
+      
+      <BugReportDialog 
+        open={bugReportDialogOpen} 
+        onClose={() => setBugReportDialogOpen(false)} 
+      />
     </Drawer>
   );
 };

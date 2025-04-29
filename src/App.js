@@ -1,11 +1,14 @@
 // src/App.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { useTheme } from './contexts/ThemeContext';
 import { ColumnPreferencesProvider } from './contexts/ColumnPreferencesContext';
 import Notifications from './components/common/Notifications';
+
+// Inicjujemy przechwytywanie logów konsoli
+import './services/logsCaptureService';
 
 // Pages
 import Login from './pages/Auth/Login';
@@ -121,6 +124,7 @@ import PriceListDetailsPage from './pages/Sales/PriceLists/PriceListDetailsPage'
 // Admin Pages
 import UsersManagementPage from './pages/Admin/UsersManagementPage';
 import SystemManagementPage from './pages/Admin/SystemManagementPage';
+import BugReportsPage from './pages/Admin/BugReportsPage';
 
 // Hall Data
 import HallDataConditionsPage from './pages/HallData/Conditions';
@@ -152,6 +156,14 @@ function App() {
                   <AdminRoute>
                     <PrivateLayout>
                       <SystemManagementPage />
+                    </PrivateLayout>
+                  </AdminRoute>
+                } />
+                
+                <Route path="/admin/bug-reports" element={
+                  <AdminRoute>
+                    <PrivateLayout>
+                      <BugReportsPage />
                     </PrivateLayout>
                   </AdminRoute>
                 } />
