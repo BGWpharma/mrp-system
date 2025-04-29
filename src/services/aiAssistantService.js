@@ -680,6 +680,106 @@ const formatMessagesForOpenAI = (messages, businessData = null) => {
         }
       }
     }
+    
+    // Dodaj dane o analizie tendencji i predykcjach, jeśli są dostępne
+    if (businessData.analysis && businessData.analysis.trendsAndPredictions && 
+        !businessData.analysis.trendsAndPredictions.isEmpty) {
+      
+      const trendData = businessData.analysis.trendsAndPredictions;
+      
+      businessDataContext += `\n### Analiza tendencji i predykcje:\n`;
+      
+      // Tendencje w stanach magazynowych
+      if (trendData.inventory && trendData.inventory.predictions.itemsRequiringReplenishment) {
+        const replenishmentItems = trendData.inventory.predictions.itemsRequiringReplenishment;
+        
+        if (replenishmentItems.length > 0) {
+          businessDataContext += `\nProdukty wymagające uzupełnienia w ciągu 14 dni:\n`;
+          replenishmentItems.slice(0, 5).forEach((item, idx) => {
+            businessDataContext += `${idx + 1}. ${item.name} - za ${item.daysToStockout} dni wyczerpie się zapas (obecnie: ${item.currentQuantity})\n`;
+          });
+          
+          if (replenishmentItems.length > 5) {
+            businessDataContext += `... oraz ${replenishmentItems.length - 5} więcej\n`;
+          }
+        }
+      }
+      
+      // Tendencje w zamówieniach klientów
+      if (trendData.orders && trendData.orders.predictions) {
+        const orderPredictions = trendData.orders.predictions;
+        
+        if (orderPredictions.nextMonthOrderCount && orderPredictions.orderGrowthRate) {
+          businessDataContext += `\nPredykcje zamówień klientów:\n`;
+          businessDataContext += `- Przewidywana liczba zamówień w przyszłym miesiącu: ${orderPredictions.nextMonthOrderCount}\n`;
+          businessDataContext += `- Przewidywana wartość zamówień w przyszłym miesiącu: ${orderPredictions.nextMonthOrderValue?.toFixed(2) || 'Brak danych'} PLN\n`;
+          businessDataContext += `- Trend wzrostu/spadku zamówień: ${orderPredictions.orderGrowthRate > 0 ? '+' : ''}${orderPredictions.orderGrowthRate.toFixed(2)}%\n`;
+        }
+      }
+      
+      // Tendencje w produkcji
+      if (trendData.production && trendData.production.trends) {
+        const productionTrends = trendData.production.trends;
+        
+        if (productionTrends.avgProductionDurationHours) {
+          businessDataContext += `\nTendencje w produkcji:\n`;
+          businessDataContext += `- Średni czas trwania zadania produkcyjnego: ${productionTrends.avgProductionDurationHours.toFixed(1)} godzin\n`;
+          
+          if (productionTrends.productionEfficiencyChange) {
+            const changeText = productionTrends.productionEfficiencyChange > 0 
+              ? `poprawa o ${productionTrends.productionEfficiencyChange.toFixed(1)}%` 
+              : `pogorszenie o ${Math.abs(productionTrends.productionEfficiencyChange).toFixed(1)}%`;
+            
+            businessDataContext += `- Zmiana efektywności produkcji: ${changeText}\n`;
+          }
+        }
+        
+        if (trendData.production.predictions && trendData.production.predictions.nextMonthTaskCount) {
+          businessDataContext += `- Przewidywana liczba zadań produkcyjnych w przyszłym miesiącu: ${trendData.production.predictions.nextMonthTaskCount}\n`;
+          
+          if (trendData.production.predictions.isEfficiencyImproving !== undefined) {
+            businessDataContext += `- Efektywność produkcji: ${trendData.production.predictions.isEfficiencyImproving ? 'poprawia się' : 'pogarsza się'}\n`;
+          }
+        }
+      }
+    }
+    
+    // Dodaj informacje o powiązaniach materiałów i ich przepływie, jeśli są dostępne
+    if (businessData.analysis && businessData.analysis.materialTraceability && 
+        !businessData.analysis.materialTraceability.isEmpty) {
+      
+      const traceData = businessData.analysis.materialTraceability;
+      
+      businessDataContext += `\n### Analiza przepływu materiałów (traceability):\n`;
+      
+      if (traceData.poToLotCount) {
+        businessDataContext += `- Liczba powiązań między zamówieniami zakupu i partiami materiałów: ${traceData.poToLotCount}\n`;
+      }
+      
+      if (traceData.lotToMoCount) {
+        businessDataContext += `- Liczba powiązań między partiami materiałów i zadaniami produkcyjnymi: ${traceData.lotToMoCount}\n`;
+      }
+      
+      // Dodaj przykładowe przepływy materiałów (od PO przez LOT do MO)
+      if (traceData.recentMaterialFlows && traceData.recentMaterialFlows.length > 0) {
+        businessDataContext += `\nPrzykładowe ścieżki przepływu materiałów (do 3 najnowszych):\n`;
+        
+        traceData.recentMaterialFlows.slice(0, 3).forEach((flow, idx) => {
+          businessDataContext += `${idx + 1}. ${flow.po.supplier} (PO: ${flow.po.number}) → `;
+          businessDataContext += `${flow.lot.itemName} (LOT: ${flow.lot.id.substring(0, 8)}...) → `;
+          businessDataContext += `${flow.mo.product} (MO: ${flow.mo.number})\n`;
+        });
+      }
+      
+      // Dodaj TOP materiały używane w produkcji
+      if (traceData.topMaterialsInProduction && traceData.topMaterialsInProduction.length > 0) {
+        businessDataContext += `\nNajczęściej używane materiały w produkcji:\n`;
+        
+        traceData.topMaterialsInProduction.slice(0, 5).forEach((material, idx) => {
+          businessDataContext += `${idx + 1}. ${material.itemName} - używany w ${material.usageCount} zadaniach produkcyjnych\n`;
+        });
+      }
+    }
   }
   
   // Instrukcja systemowa jako pierwszy element

@@ -633,9 +633,9 @@ const calculateStockValue = (inventory) => {
 };
 
 /**
- * Analizuje receptury i przygotowuje statystyki
+ * Analizuje receptury
  * @param {Array} recipes - Lista receptur
- * @returns {Object} - Statystyki dotyczące receptur
+ * @returns {Object} - Analizy i statystyki receptur
  */
 export const analyzeRecipes = (recipes) => {
   if (!recipes || recipes.length === 0) {
@@ -644,22 +644,153 @@ export const analyzeRecipes = (recipes) => {
     };
   }
   
-  // Receptury z komponentami
-  const recipesWithComponents = recipes.filter(r => 
-    (r.components && r.components.length > 0) || 
-    (r.ingredients && r.ingredients.length > 0)
-  ).length;
+  // Licznik receptur z komponentami
+  const recipesWithComponents = recipes.filter(recipe => 
+    recipe.components && recipe.components.length > 0
+  );
   
-  // Oblicz średnią liczbę komponentów na recepturę
-  let totalComponents = 0;
+  // Licznik receptur ze składnikami
+  const recipesWithIngredients = recipes.filter(recipe => 
+    recipe.ingredients && recipe.ingredients.length > 0
+  );
+  
+  // Licznik receptur z przypisanym produktem
+  const recipesWithProduct = recipes.filter(recipe => 
+    recipe.productId || recipe.product || recipe.productName
+  );
+
+  // Wyodrębnienie wszystkich składników i komponentów ze wszystkich receptur
+  const allComponents = [];
+  const allIngredients = [];
+  
+  // Mapowanie składników do receptur (które receptury używają danego składnika)
+  const ingredientToRecipesMap = {};
+  // Mapowanie komponentów do receptur
+  const componentToRecipesMap = {};
+  // Mapowanie produktów do receptur
+  const productToRecipeMap = {};
+  // Koszty produkcji receptur
+  const recipeCosts = {};
+  
+  // Zbieranie wszystkich składników i komponentów
   recipes.forEach(recipe => {
-    const componentsCount = (recipe.components?.length || 0) + (recipe.ingredients?.length || 0);
-    totalComponents += componentsCount;
+    // ID produktu końcowego
+    const productId = recipe.productId || (recipe.product ? recipe.product.id : null);
+    if (productId) {
+      productToRecipeMap[productId] = recipe.id;
+    }
+    
+    // Koszty produkcji
+    recipeCosts[recipe.id] = {
+      id: recipe.id,
+      name: recipe.name,
+      processingCostPerUnit: recipe.processingCostPerUnit || 0,
+      materialCost: 0, // Będzie obliczone poniżej
+      laborCost: recipe.laborCost || 0,
+      totalUnitCost: 0 // Będzie obliczone poniżej
+    };
+    
+    // Analiza składników
+    if (recipe.ingredients && recipe.ingredients.length > 0) {
+      recipe.ingredients.forEach(ingredient => {
+        // Dodaj unikalne składniki do listy wszystkich składników
+        if (ingredient.id && !allIngredients.some(i => i.id === ingredient.id)) {
+          allIngredients.push({
+            id: ingredient.id,
+            name: ingredient.name,
+            unit: ingredient.unit || 'szt.'
+          });
+        }
+        
+        // Dodaj składnik do mapy składnik -> receptury
+        if (ingredient.id) {
+          if (!ingredientToRecipesMap[ingredient.id]) {
+            ingredientToRecipesMap[ingredient.id] = [];
+          }
+          
+          // Unikaj duplikatów
+          if (!ingredientToRecipesMap[ingredient.id].includes(recipe.id)) {
+            ingredientToRecipesMap[ingredient.id].push(recipe.id);
+          }
+        }
+        
+        // Dodaj koszt materiału do kosztów receptury
+        const ingredientCost = parseFloat(ingredient.price || 0) * parseFloat(ingredient.quantity || 0);
+        recipeCosts[recipe.id].materialCost += ingredientCost;
+      });
+    }
+    
+    // Analiza komponentów (podobne podejście jak dla składników)
+    if (recipe.components && recipe.components.length > 0) {
+      recipe.components.forEach(component => {
+        // Dodaj unikalne komponenty do listy wszystkich komponentów
+        if (component.id && !allComponents.some(c => c.id === component.id)) {
+          allComponents.push({
+            id: component.id,
+            name: component.name,
+            unit: component.unit || 'szt.'
+          });
+        }
+        
+        // Dodaj komponent do mapy komponent -> receptury
+        if (component.id) {
+          if (!componentToRecipesMap[component.id]) {
+            componentToRecipesMap[component.id] = [];
+          }
+          
+          // Unikaj duplikatów
+          if (!componentToRecipesMap[component.id].includes(recipe.id)) {
+            componentToRecipesMap[component.id].push(recipe.id);
+          }
+        }
+        
+        // Dodaj koszt komponentu do kosztów receptury
+        const componentCost = parseFloat(component.price || 0) * parseFloat(component.quantity || 0);
+        recipeCosts[recipe.id].materialCost += componentCost;
+      });
+    }
+    
+    // Oblicz całkowity koszt jednostkowy
+    recipeCosts[recipe.id].totalUnitCost = (
+      recipeCosts[recipe.id].materialCost + 
+      recipeCosts[recipe.id].laborCost + 
+      recipeCosts[recipe.id].processingCostPerUnit
+    );
   });
   
-  const avgComponentsPerRecipe = recipesWithComponents > 0 
-    ? totalComponents / recipesWithComponents 
-    : 0;
+  // Znajdź najczęściej używane składniki
+  const topIngredients = Object.entries(ingredientToRecipesMap)
+    .map(([ingredientId, recipeIds]) => {
+      const ingredient = allIngredients.find(i => i.id === ingredientId);
+      return {
+        id: ingredientId,
+        name: ingredient ? ingredient.name : 'Nieznany składnik',
+        unit: ingredient ? ingredient.unit : 'szt.',
+        usageCount: recipeIds.length,
+        recipes: recipeIds.map(recipeId => {
+          const recipe = recipes.find(r => r.id === recipeId);
+          return {
+            id: recipeId,
+            name: recipe ? recipe.name : 'Nieznana receptura'
+          };
+        })
+      };
+    })
+    .sort((a, b) => b.usageCount - a.usageCount);
+  
+  // Znajdź najdroższe receptury
+  const topExpensiveRecipes = Object.values(recipeCosts)
+    .filter(cost => cost.totalUnitCost > 0)
+    .sort((a, b) => b.totalUnitCost - a.totalUnitCost)
+    .slice(0, 10)
+    .map(cost => ({
+      id: cost.id,
+      name: cost.name,
+      totalUnitCost: cost.totalUnitCost,
+      materialCost: cost.materialCost,
+      laborCost: cost.laborCost,
+      processingCost: cost.processingCostPerUnit
+    }));
   
   // Pełna lista wszystkich receptur z ich szczegółami
   const fullRecipeDetails = recipes.map(recipe => {
@@ -699,78 +830,644 @@ export const analyzeRecipes = (recipes) => {
       ingredients: ingredients,
       version: recipe.version || 1,
       notes: recipe.notes || '',
-      status: recipe.status || 'Aktywna'
+      status: recipe.status || 'Aktywna',
+      // Dodanie informacji o kosztach
+      costs: recipeCosts[recipe.id] || {
+        materialCost: 0,
+        laborCost: 0,
+        processingCostPerUnit: 0,
+        totalUnitCost: 0
+      }
     };
   });
   
-  // Przygotowanie danych o komponentach
-  const allComponents = recipes.flatMap(recipe => {
-    const components = recipe.components?.map(comp => ({
-      recipeId: recipe.id,
-      recipeName: recipe.name,
-      componentId: comp.id,
-      componentName: comp.name || comp.materialName,
-      quantity: comp.quantity || 1,
-      unit: comp.unit || 'szt.',
-      materialId: comp.materialId || comp.id,
-      notes: comp.notes || ''
-    })) || [];
-    
-    const ingredients = recipe.ingredients?.map(ing => ({
-      recipeId: recipe.id,
-      recipeName: recipe.name,
-      ingredientId: ing.id,
-      ingredientName: ing.name,
-      quantity: ing.quantity || 1,
-      unit: ing.unit || 'szt.',
-      materialId: ing.materialId || ing.id,
-      notes: ing.notes || ''
-    })) || [];
-    
-    return [...components, ...ingredients];
-  });
+  // Znajdź receptury połączone (jedna receptura używa produktu z innej receptury)
+  const connectedRecipes = [];
   
-  // Analiza popularności komponentów (które są używane w wielu recepturach)
-  const componentUsage = {};
-  allComponents.forEach(comp => {
-    const componentId = comp.componentId || comp.ingredientId;
-    const componentName = comp.componentName || comp.ingredientName;
-    
-    if (!componentUsage[componentId]) {
-      componentUsage[componentId] = {
-        id: componentId,
-        name: componentName,
-        usageCount: 0,
-        recipes: []
-      };
+  recipes.forEach(recipe => {
+    // Sprawdź czy składniki są produktami innych receptur
+    if (recipe.ingredients) {
+      recipe.ingredients.forEach(ingredient => {
+        const ingredientId = ingredient.id || ingredient.materialId;
+        if (ingredientId && productToRecipeMap[ingredientId]) {
+          const sourceRecipeId = productToRecipeMap[ingredientId];
+          const sourceRecipe = recipes.find(r => r.id === sourceRecipeId);
+          
+          if (sourceRecipe) {
+            connectedRecipes.push({
+              sourceRecipe: {
+                id: sourceRecipe.id,
+                name: sourceRecipe.name
+              },
+              targetRecipe: {
+                id: recipe.id,
+                name: recipe.name
+              },
+              ingredientName: ingredient.name,
+              quantity: ingredient.quantity,
+              unit: ingredient.unit
+            });
+          }
+        }
+      });
     }
     
-    // Sprawdź czy dana receptura nie została już wcześniej dodana
-    if (!componentUsage[componentId].recipes.some(r => r.recipeId === comp.recipeId)) {
-      componentUsage[componentId].usageCount++;
-      componentUsage[componentId].recipes.push({
-        recipeId: comp.recipeId,
-        recipeName: comp.recipeName
+    // Sprawdź czy komponenty są produktami innych receptur
+    if (recipe.components) {
+      recipe.components.forEach(component => {
+        const componentId = component.id || component.materialId;
+        if (componentId && productToRecipeMap[componentId]) {
+          const sourceRecipeId = productToRecipeMap[componentId];
+          const sourceRecipe = recipes.find(r => r.id === sourceRecipeId);
+          
+          if (sourceRecipe) {
+            connectedRecipes.push({
+              sourceRecipe: {
+                id: sourceRecipe.id,
+                name: sourceRecipe.name
+              },
+              targetRecipe: {
+                id: recipe.id,
+                name: recipe.name
+              },
+              componentName: component.name,
+              quantity: component.quantity,
+              unit: component.unit
+            });
+          }
+        }
       });
     }
   });
   
-  // Przygotuj listę TOP komponentów według użycia w recepturach
-  const topComponents = Object.values(componentUsage)
-    .sort((a, b) => b.usageCount - a.usageCount)
-    .slice(0, 10);
+  // Znajdź średnie, minimalne i maksymalne koszty produkcji
+  const allCosts = Object.values(recipeCosts).filter(cost => cost.totalUnitCost > 0);
+  
+  const avgTotalUnitCost = allCosts.length > 0
+    ? allCosts.reduce((sum, cost) => sum + cost.totalUnitCost, 0) / allCosts.length
+    : 0;
+    
+  const minTotalUnitCost = allCosts.length > 0
+    ? Math.min(...allCosts.map(cost => cost.totalUnitCost))
+    : 0;
+    
+  const maxTotalUnitCost = allCosts.length > 0
+    ? Math.max(...allCosts.map(cost => cost.totalUnitCost))
+    : 0;
   
   return {
     totalRecipes: recipes.length,
-    recipesWithComponents,
-    avgComponentsPerRecipe,
-    // Dodajemy pełne dane wszystkich receptur
-    fullRecipeDetails,
-    allComponents,
-    topComponents,
-    // Liczba unikalnych komponentów używanych we wszystkich recepturach
-    uniqueComponentsCount: Object.keys(componentUsage).length
+    recipesWithComponents: recipesWithComponents.length,
+    recipesWithIngredients: recipesWithIngredients.length,
+    recipesWithProduct: recipesWithProduct.length,
+    avgComponentsPerRecipe: recipesWithComponents.length > 0 
+      ? recipesWithComponents.reduce((sum, recipe) => sum + (recipe.components.length || 0), 0) / recipesWithComponents.length 
+      : 0,
+    avgIngredientsPerRecipe: recipesWithIngredients.length > 0 
+      ? recipesWithIngredients.reduce((sum, recipe) => sum + (recipe.ingredients.length || 0), 0) / recipesWithIngredients.length 
+      : 0,
+    uniqueComponentsCount: allComponents.length,
+    uniqueIngredientsCount: allIngredients.length,
+    topComponents: topIngredients.slice(0, 10),
+    topExpensiveRecipes: topExpensiveRecipes,
+    fullRecipeDetails: fullRecipeDetails,
+    connectedRecipes: connectedRecipes,
+    costAnalysis: {
+      avgTotalUnitCost,
+      minTotalUnitCost,
+      maxTotalUnitCost,
+      recipesWithCostData: allCosts.length
+    },
+    ingredientUsageMap: ingredientToRecipesMap,
+    productToRecipeMap: productToRecipeMap
   };
+};
+
+/**
+ * Analizuje materiały magazynowe w podziale na kategorie
+ * @param {Array} inventory - Lista produktów magazynowych
+ * @returns {Object} - Analizy i statystyki materiałów w podziale na kategorie
+ */
+export const analyzeInventoryByCategory = (inventory) => {
+  if (!inventory || inventory.length === 0) {
+    return {
+      isEmpty: true
+    };
+  }
+  
+  // Przygotuj kategorie produktów
+  const categories = {};
+  
+  // Analizuj produkty według kategorii
+  inventory.forEach(item => {
+    const category = item.category || 'Nieskategoryzowane';
+    
+    if (!categories[category]) {
+      categories[category] = {
+        count: 0,
+        totalQuantity: 0,
+        totalValue: 0,
+        items: [],
+        lowStock: 0,
+        overStock: 0,
+        zeroStock: 0
+      };
+    }
+    
+    // Zwiększ liczniki dla kategorii
+    categories[category].count += 1;
+    categories[category].totalQuantity += parseFloat(item.quantity || 0);
+    categories[category].totalValue += parseFloat(item.quantity || 0) * parseFloat(item.price || 0);
+    
+    // Sprawdź stany magazynowe dla kategorii
+    if (item.quantity <= 0) {
+      categories[category].zeroStock += 1;
+    } else if (item.minQuantity > 0 && item.quantity <= item.minQuantity) {
+      categories[category].lowStock += 1;
+    } else if (item.maxQuantity > 0 && item.quantity > item.maxQuantity) {
+      categories[category].overStock += 1;
+    }
+    
+    // Dodaj szczegółowe informacje o produkcie do kategorii
+    categories[category].items.push({
+      id: item.id,
+      name: item.name,
+      quantity: parseFloat(item.quantity || 0),
+      unit: item.unit || 'szt.',
+      price: parseFloat(item.price || 0),
+      minQuantity: parseFloat(item.minQuantity || 0),
+      maxQuantity: parseFloat(item.maxQuantity || 0),
+      supplier: item.supplierId || item.supplier || null,
+      location: item.location || item.warehouseId || 'Magazyn główny'
+    });
+  });
+  
+  // Przygotuj wyniki analizy
+  const categoryStats = Object.keys(categories).map(category => ({
+    name: category,
+    count: categories[category].count,
+    totalQuantity: categories[category].totalQuantity,
+    totalValue: categories[category].totalValue,
+    lowStockCount: categories[category].lowStock,
+    overStockCount: categories[category].overStock,
+    zeroStockCount: categories[category].zeroStock,
+    lowStockPercentage: categories[category].count > 0 
+      ? (categories[category].lowStock / categories[category].count) * 100 
+      : 0,
+    items: categories[category].items.sort((a, b) => b.quantity - a.quantity).slice(0, 5) // Top 5 produktów wg ilości
+  }));
+  
+  return {
+    categories: categoryStats,
+    topCategories: categoryStats
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5),
+    categoriesWithLowStock: categoryStats
+      .filter(cat => cat.lowStockCount > 0)
+      .sort((a, b) => b.lowStockCount - a.lowStockCount)
+  };
+};
+
+/**
+ * Analizuje powiązania między partiami materiałów, zamówieniami zakupu i zadaniami produkcyjnymi
+ * @param {Object} data - Dane z systemu MRP
+ * @returns {Object} - Analizy i statystyki przepływu materiałów
+ */
+export const analyzeMaterialTraceability = (data) => {
+  if (!data || !data.materialBatches || data.materialBatches.length === 0) {
+    return {
+      isEmpty: true
+    };
+  }
+  
+  const { materialBatches, batchReservations, purchaseOrders, productionTasks } = data;
+  
+  // Przygotuj mapowanie PO -> LOT (jedna PO może mieć wiele LOTów)
+  const poToLotMap = {};
+  // Przygotuj mapowanie LOT -> MO (jeden LOT może być używany w wielu MO)
+  const lotToMoMap = {};
+  // Przygotuj mapowanie MO -> LOTs (jedno MO może używać wielu LOTów)
+  const moToLotsMap = {};
+  
+  // Utwórz mapowanie zamówień zakupu do partii materiałów
+  materialBatches.forEach(batch => {
+    if (batch.purchaseOrderDetails && batch.purchaseOrderDetails.id) {
+      const poId = batch.purchaseOrderDetails.id;
+      
+      if (!poToLotMap[poId]) {
+        poToLotMap[poId] = [];
+      }
+      
+      poToLotMap[poId].push({
+        lotId: batch.id,
+        itemId: batch.itemId,
+        itemName: batch.itemName,
+        quantity: batch.quantity,
+        receivedDate: batch.createdAt || batch.receivedDate
+      });
+    }
+  });
+  
+  // Utwórz mapowanie partii materiałów do zadań produkcyjnych
+  if (batchReservations && batchReservations.length > 0) {
+    batchReservations.forEach(reservation => {
+      if (reservation.batchId && reservation.productionTaskId) {
+        const lotId = reservation.batchId;
+        const moId = reservation.productionTaskId;
+        
+        // LOT -> MO
+        if (!lotToMoMap[lotId]) {
+          lotToMoMap[lotId] = [];
+        }
+        
+        lotToMoMap[lotId].push({
+          moId,
+          quantity: reservation.quantity,
+          reservationDate: reservation.createdAt
+        });
+        
+        // MO -> LOTs
+        if (!moToLotsMap[moId]) {
+          moToLotsMap[moId] = [];
+        }
+        
+        // Znajdź dane partii
+        const batch = materialBatches.find(b => b.id === lotId);
+        
+        moToLotsMap[moId].push({
+          lotId,
+          itemId: batch ? batch.itemId : null,
+          itemName: batch ? batch.itemName : 'Nieznany materiał',
+          quantity: reservation.quantity,
+          supplierInfo: batch && batch.purchaseOrderDetails ? {
+            supplierId: batch.purchaseOrderDetails.supplier?.id,
+            supplierName: batch.purchaseOrderDetails.supplier?.name
+          } : null,
+          poId: batch && batch.purchaseOrderDetails ? batch.purchaseOrderDetails.id : null,
+          poNumber: batch && batch.purchaseOrderDetails ? batch.purchaseOrderDetails.number : null
+        });
+      }
+    });
+  }
+  
+  // Znajdź pełne ścieżki przepływu materiałów (PO -> LOT -> MO)
+  const materialFlowPaths = [];
+  
+  // Dla każdego zamówienia zakupu
+  Object.keys(poToLotMap).forEach(poId => {
+    const po = purchaseOrders?.find(p => p.id === poId);
+    
+    // Dla każdej partii materiału z tego zamówienia
+    poToLotMap[poId].forEach(lotInfo => {
+      const lotId = lotInfo.lotId;
+      
+      // Znajdź wszystkie MO, które używają tej partii
+      const moList = lotToMoMap[lotId] || [];
+      
+      moList.forEach(moInfo => {
+        const mo = productionTasks?.find(t => t.id === moInfo.moId);
+        
+        materialFlowPaths.push({
+          // Dane zamówienia zakupu
+          po: {
+            id: poId,
+            number: po?.number || 'Nieznane PO',
+            supplier: po?.supplier?.name || 'Nieznany dostawca',
+            orderDate: po?.orderDate,
+            status: po?.status || 'Nieznany status'
+          },
+          // Dane partii materiału
+          lot: {
+            id: lotId,
+            itemId: lotInfo.itemId,
+            itemName: lotInfo.itemName,
+            quantity: lotInfo.quantity,
+            receivedDate: lotInfo.receivedDate
+          },
+          // Dane zadania produkcyjnego
+          mo: {
+            id: moInfo.moId,
+            number: mo?.number || 'Nieznane MO',
+            product: mo?.productName || 'Nieznany produkt',
+            quantity: mo?.quantity,
+            status: mo?.status || 'Nieznany status',
+            startDate: mo?.startDate || mo?.plannedStartDate,
+            usedQuantity: moInfo.quantity
+          }
+        });
+      });
+    });
+  });
+  
+  return {
+    // Liczba powiązań między zamówieniami zakupu i partiami materiałów
+    poToLotCount: Object.keys(poToLotMap).length,
+    // Liczba powiązań między partiami materiałów i zadaniami produkcyjnymi
+    lotToMoCount: Object.keys(lotToMoMap).length,
+    // Pełne ścieżki przepływu materiałów
+    materialFlowPaths,
+    // Najnowsze ścieżki przepływu materiałów (do 10)
+    recentMaterialFlows: materialFlowPaths
+      .sort((a, b) => {
+        const aDate = a.mo.startDate ? new Date(a.mo.startDate) : new Date(0);
+        const bDate = b.mo.startDate ? new Date(b.mo.startDate) : new Date(0);
+        return bDate - aDate;
+      })
+      .slice(0, 10),
+    // TOP 10 materiałów używanych w produkcji
+    topMaterialsInProduction: Object.entries(lotToMoMap)
+      .map(([lotId, moList]) => {
+        const batch = materialBatches.find(b => b.id === lotId);
+        return {
+          lotId,
+          itemId: batch?.itemId,
+          itemName: batch?.itemName || 'Nieznany materiał',
+          usageCount: moList.length,
+          totalQuantityUsed: moList.reduce((sum, mo) => sum + (parseFloat(mo.quantity) || 0), 0)
+        };
+      })
+    .sort((a, b) => b.usageCount - a.usageCount)
+      .slice(0, 10)
+  };
+};
+
+/**
+ * Analizuje tendencje i tworzy podstawowe predykcje na podstawie danych historycznych
+ * @param {Object} data - Dane z systemu MRP
+ * @returns {Object} - Analizy tendencji i podstawowe predykcje
+ */
+export const analyzeTrendsAndPredictions = (data) => {
+  if (!data) {
+  return {
+      isEmpty: true
+    };
+  }
+  
+  const { inventory, orders, productionTasks, purchaseOrders } = data;
+  const results = {
+    inventory: { trends: {}, predictions: {} },
+    orders: { trends: {}, predictions: {} },
+    production: { trends: {}, predictions: {} },
+    purchaseOrders: { trends: {}, predictions: {} }
+  };
+  
+  // Analiza tendencji w stanach magazynowych
+  if (inventory && inventory.length > 0) {
+    // Znajdujemy produkty, których stan zmniejsza się lub zwiększa systematycznie
+    // Na podstawie historii transakcji (jeśli dostępna)
+    const inventoryWithLowStockTrend = inventory.filter(item => 
+      item.minQuantity > 0 && 
+      item.quantity <= item.minQuantity * 1.5 &&
+      (item.transactions && item.transactions.length >= 3)
+    );
+    
+    // Obliczamy średnią zmianę stanu magazynowego
+    const inventoryChangeTrend = inventoryWithLowStockTrend.map(item => {
+      // Sortuj transakcje od najnowszych do najstarszych
+      const sortedTransactions = [...(item.transactions || [])]
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .slice(0, 10); // Ogranicz do 10 ostatnich transakcji
+      
+      // Oblicz zmiany stanu
+      let totalChange = 0;
+      let previousQuantity = null;
+      
+      sortedTransactions.forEach(transaction => {
+        if (previousQuantity !== null) {
+          totalChange += transaction.quantity - previousQuantity;
+        }
+        previousQuantity = transaction.quantity;
+      });
+      
+      const avgChange = sortedTransactions.length > 1 
+        ? totalChange / (sortedTransactions.length - 1) 
+        : 0;
+      
+      return {
+        id: item.id,
+        name: item.name,
+        currentQuantity: item.quantity,
+        minQuantity: item.minQuantity,
+        avgChange,
+        daysToStockout: avgChange < 0 
+          ? Math.round(item.quantity / Math.abs(avgChange)) 
+          : null,
+        transactionsCount: sortedTransactions.length
+      };
+    }).filter(item => item.avgChange !== 0);
+    
+    results.inventory.trends.itemsWithChangeTrend = inventoryChangeTrend;
+    
+    // Przewidywanie produktów, które będą wymagały uzupełnienia w ciągu 14 dni
+    results.inventory.predictions.itemsRequiringReplenishment = inventoryChangeTrend
+      .filter(item => item.avgChange < 0 && item.daysToStockout !== null && item.daysToStockout <= 14)
+      .sort((a, b) => a.daysToStockout - b.daysToStockout);
+  }
+  
+  // Analiza tendencji w zamówieniach klientów
+  if (orders && orders.length > 0) {
+    // Sortuj zamówienia według daty
+    const sortedOrders = [...orders]
+      .filter(order => order.orderDate || order.createdAt)
+      .sort((a, b) => {
+        const dateA = new Date(a.orderDate || a.createdAt);
+        const dateB = new Date(b.orderDate || b.createdAt);
+        return dateA - dateB;
+      });
+    
+    // Grupuj zamówienia po miesiącach
+    const ordersByMonth = {};
+    
+    sortedOrders.forEach(order => {
+      const orderDate = new Date(order.orderDate || order.createdAt);
+      const monthKey = `${orderDate.getFullYear()}-${orderDate.getMonth() + 1}`;
+      
+      if (!ordersByMonth[monthKey]) {
+        ordersByMonth[monthKey] = {
+          count: 0,
+          value: 0,
+          orders: []
+        };
+      }
+      
+      ordersByMonth[monthKey].count += 1;
+      ordersByMonth[monthKey].value += parseFloat(order.totalValue || 0);
+      ordersByMonth[monthKey].orders.push(order.id);
+    });
+    
+    // Przekształć na tablicę do analizy tendencji
+    const monthlyOrderData = Object.keys(ordersByMonth)
+      .sort()
+      .map(monthKey => ({
+        month: monthKey,
+        count: ordersByMonth[monthKey].count,
+        value: ordersByMonth[monthKey].value
+      }));
+    
+    results.orders.trends.monthlyOrderData = monthlyOrderData;
+    
+    // Oblicz tendencję wzrostu/spadku
+    if (monthlyOrderData.length >= 3) {
+      const last3Months = monthlyOrderData.slice(-3);
+      
+      // Oblicz średnią zmianę liczby zamówień
+      let orderCountChange = 0;
+      let orderValueChange = 0;
+      
+      for (let i = 1; i < last3Months.length; i++) {
+        orderCountChange += last3Months[i].count - last3Months[i-1].count;
+        orderValueChange += last3Months[i].value - last3Months[i-1].value;
+      }
+      
+      const avgOrderCountChange = orderCountChange / (last3Months.length - 1);
+      const avgOrderValueChange = orderValueChange / (last3Months.length - 1);
+      
+      // Przewidywana liczba zamówień w następnym miesiącu
+      const lastMonthCount = last3Months[last3Months.length - 1].count;
+      const lastMonthValue = last3Months[last3Months.length - 1].value;
+      
+      results.orders.predictions.nextMonthOrderCount = Math.round(lastMonthCount + avgOrderCountChange);
+      results.orders.predictions.nextMonthOrderValue = lastMonthValue + avgOrderValueChange;
+      results.orders.predictions.orderGrowthRate = last3Months.length > 0 && last3Months[0].count > 0
+        ? ((last3Months[last3Months.length - 1].count - last3Months[0].count) / last3Months[0].count) * 100
+        : 0;
+    }
+  }
+  
+  // Analiza tendencji w zadaniach produkcyjnych
+  if (productionTasks && productionTasks.length > 0) {
+    // Sortuj zadania produkcyjne według daty
+    const sortedTasks = [...productionTasks]
+      .filter(task => task.createdAt || task.startDate || task.plannedStartDate)
+      .sort((a, b) => {
+        const dateA = new Date(a.createdAt || a.startDate || a.plannedStartDate);
+        const dateB = new Date(b.createdAt || b.startDate || b.plannedStartDate);
+        return dateA - dateB;
+      });
+    
+    // Grupuj zadania produkcyjne po miesiącach
+    const tasksByMonth = {};
+    
+    sortedTasks.forEach(task => {
+      const taskDate = new Date(task.createdAt || task.startDate || task.plannedStartDate);
+      const monthKey = `${taskDate.getFullYear()}-${taskDate.getMonth() + 1}`;
+      
+      if (!tasksByMonth[monthKey]) {
+        tasksByMonth[monthKey] = {
+          count: 0,
+          tasks: []
+        };
+      }
+      
+      tasksByMonth[monthKey].count += 1;
+      tasksByMonth[monthKey].tasks.push(task.id);
+    });
+    
+    // Przekształć na tablicę do analizy tendencji
+    const monthlyTaskData = Object.keys(tasksByMonth)
+      .sort()
+      .map(monthKey => ({
+        month: monthKey,
+        count: tasksByMonth[monthKey].count
+      }));
+    
+    results.production.trends.monthlyTaskData = monthlyTaskData;
+    
+    // Oblicz tendencję wzrostu/spadku
+    if (monthlyTaskData.length >= 3) {
+      const last3Months = monthlyTaskData.slice(-3);
+      
+      // Oblicz średnią zmianę liczby zadań
+      let taskCountChange = 0;
+      
+      for (let i = 1; i < last3Months.length; i++) {
+        taskCountChange += last3Months[i].count - last3Months[i-1].count;
+      }
+      
+      const avgTaskCountChange = taskCountChange / (last3Months.length - 1);
+      
+      // Przewidywana liczba zadań produkcyjnych w następnym miesiącu
+      const lastMonthCount = last3Months[last3Months.length - 1].count;
+      
+      results.production.predictions.nextMonthTaskCount = Math.round(lastMonthCount + avgTaskCountChange);
+      results.production.predictions.taskGrowthRate = last3Months.length > 0 && last3Months[0].count > 0
+        ? ((last3Months[last3Months.length - 1].count - last3Months[0].count) / last3Months[0].count) * 100
+        : 0;
+    }
+  }
+  
+  // Analiza efektywności produkcji
+  if (productionTasks && productionTasks.length > 0) {
+    const tasksWithDuration = productionTasks.filter(task => 
+      task.startDate && task.endDate && task.status === 'completed'
+    );
+    
+    if (tasksWithDuration.length > 0) {
+      // Oblicz średni czas trwania zadań produkcyjnych (w godzinach)
+      const totalDuration = tasksWithDuration.reduce((sum, task) => {
+        const startDate = new Date(task.startDate);
+        const endDate = new Date(task.endDate);
+        const durationHours = (endDate - startDate) / (1000 * 60 * 60); // Oblicz różnicę w godzinach
+        return sum + durationHours;
+      }, 0);
+      
+      const avgDurationHours = totalDuration / tasksWithDuration.length;
+      
+      results.production.trends.avgProductionDurationHours = avgDurationHours;
+      results.production.trends.completedTasksCount = tasksWithDuration.length;
+      
+      // Oblicz efektywność produkcji w czasie
+      // Grupuj zadania produkcyjne po miesiącach
+      const efficiencyByMonth = {};
+      
+      tasksWithDuration.forEach(task => {
+        const taskDate = new Date(task.endDate);
+        const monthKey = `${taskDate.getFullYear()}-${taskDate.getMonth() + 1}`;
+        
+        if (!efficiencyByMonth[monthKey]) {
+          efficiencyByMonth[monthKey] = {
+            count: 0,
+            totalDurationHours: 0
+          };
+        }
+        
+        const startDate = new Date(task.startDate);
+        const endDate = new Date(task.endDate);
+        const durationHours = (endDate - startDate) / (1000 * 60 * 60); // Oblicz różnicę w godzinach
+        
+        efficiencyByMonth[monthKey].count += 1;
+        efficiencyByMonth[monthKey].totalDurationHours += durationHours;
+      });
+      
+      // Przekształć na tablicę i oblicz średnią długość zadania produkcyjnego w każdym miesiącu
+      const monthlyEfficiencyData = Object.keys(efficiencyByMonth)
+        .sort()
+        .map(monthKey => ({
+          month: monthKey,
+          count: efficiencyByMonth[monthKey].count,
+          avgDurationHours: efficiencyByMonth[monthKey].totalDurationHours / efficiencyByMonth[monthKey].count
+        }));
+      
+      results.production.trends.monthlyEfficiencyData = monthlyEfficiencyData;
+      
+      // Sprawdź, czy efektywność produkcji poprawia się
+      if (monthlyEfficiencyData.length >= 3) {
+        const last3Months = monthlyEfficiencyData.slice(-3);
+        
+        // Oblicz zmianę w czasie trwania zadań
+        const firstMonthDuration = last3Months[0].avgDurationHours;
+        const lastMonthDuration = last3Months[last3Months.length - 1].avgDurationHours;
+        
+        const durationChangePercentage = ((lastMonthDuration - firstMonthDuration) / firstMonthDuration) * 100;
+        
+        // Ujemny wynik oznacza, że zadania trwają krócej (poprawa efektywności)
+        results.production.trends.productionEfficiencyChange = -durationChangePercentage;
+        results.production.predictions.isEfficiencyImproving = durationChangePercentage < 0;
+      }
+    }
+  }
+  
+  return results;
 };
 
 /**
@@ -794,6 +1491,8 @@ export const enrichBusinessDataWithAnalysis = (businessData) => {
     if (businessData.data.inventory && businessData.data.inventory.length > 0) {
       console.log(`Analizuję stan magazynowy (${businessData.data.inventory.length} pozycji)`);
       enrichedData.analysis.inventory = analyzeInventory(businessData.data.inventory);
+      // Dodaj analizę kategorii produktów
+      enrichedData.analysis.inventoryByCategory = analyzeInventoryByCategory(businessData.data.inventory);
     }
     
     // Analiza zamówień klientów
@@ -814,53 +1513,28 @@ export const enrichBusinessDataWithAnalysis = (businessData) => {
       enrichedData.analysis.suppliers = analyzeSuppliers(businessData.data.suppliers);
     }
     
-    // Analiza zamówień od dostawców
-    if (businessData.data.purchaseOrders && businessData.data.purchaseOrders.length > 0) {
-      console.log(`Analizuję zamówienia zakupowe (${businessData.data.purchaseOrders.length} zamówień)`);
-      enrichedData.analysis.purchaseOrders = analyzePurchaseOrders(businessData.data.purchaseOrders);
-    }
-    
     // Analiza receptur
     if (businessData.data.recipes && businessData.data.recipes.length > 0) {
       console.log(`Analizuję receptury (${businessData.data.recipes.length} receptur)`);
       enrichedData.analysis.recipes = analyzeRecipes(businessData.data.recipes);
     }
     
-    // Logowanie dla receptur z komponentami i składnikami
-    if (businessData.data.recipes) {
-      const recipesWithComponents = businessData.data.recipes.filter(recipe => 
-        recipe.components && recipe.components.length > 0);
-      console.log(`Liczba receptur z komponentami: ${recipesWithComponents.length}`);
-      
-      const recipesWithIngredients = businessData.data.recipes.filter(recipe => 
-        recipe.ingredients && recipe.ingredients.length > 0);
-      console.log(`Liczba receptur ze składnikami: ${recipesWithIngredients.length}`);
+    // Analiza zamówień zakupu
+    if (businessData.data.purchaseOrders && businessData.data.purchaseOrders.length > 0) {
+      console.log(`Analizuję zamówienia zakupu (${businessData.data.purchaseOrders.length} zamówień)`);
+      enrichedData.analysis.purchaseOrders = analyzePurchaseOrders(businessData.data.purchaseOrders);
     }
     
-    // Analiza partii materiałów
+    // Analiza powiązań materiałów (traceability)
     if (businessData.data.materialBatches && businessData.data.materialBatches.length > 0) {
-      console.log(`Analizuję partie materiałów (${businessData.data.materialBatches.length} partii)`);
-      
-      // Podstawowa analiza partii materiałów
-      enrichedData.analysis.materialBatches = {
-        totalBatches: businessData.data.materialBatches.length,
-        batchesWithPO: businessData.data.materialBatches.filter(batch => batch.purchaseOrderDetails).length,
-        batchesWithReservations: businessData.data.materialBatches.filter(batch => 
-          batch.reservations && Object.keys(batch.reservations).length > 0).length,
-        availableBatches: businessData.data.materialBatches.filter(batch => 
-          batch.remainingQuantity > 0).length,
-        totalQuantity: businessData.data.materialBatches.reduce((sum, batch) => 
-          sum + (batch.quantity || 0), 0),
-        totalRemainingQuantity: businessData.data.materialBatches.reduce((sum, batch) => 
-          sum + (batch.remainingQuantity || 0), 0)
-      };
+      console.log(`Analizuję powiązania materiałów (${businessData.data.materialBatches.length} partii)`);
+      enrichedData.analysis.materialTraceability = analyzeMaterialTraceability(businessData.data);
     }
+    
+    // Analiza tendencji i predykcji
+    console.log('Analizuję tendencje i tworzę predykcje...');
+    enrichedData.analysis.trendsAndPredictions = analyzeTrendsAndPredictions(businessData.data);
   }
-  
-  console.log('Zakończono dodawanie analiz do danych biznesowych');
-  
-  // Aktualizuj informacje o kompletności danych, dodając informacje o dostępnych analizach
-  enrichedData.hasAnalysis = Object.keys(enrichedData.analysis).length > 0;
   
   return enrichedData;
 };
