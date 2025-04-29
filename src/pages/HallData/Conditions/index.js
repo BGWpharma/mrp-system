@@ -76,7 +76,6 @@ const HallDataConditionsPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [permissionError, setPermissionError] = useState(false);
-  const [indexError, setIndexError] = useState(false);
   const [sensors, setSensors] = useState([]);
   const [selectedSensor, setSelectedSensor] = useState('');
   const [currentData, setCurrentData] = useState({
@@ -107,9 +106,10 @@ const HallDataConditionsPage = () => {
     onValue(sensorsRef, (snapshot) => {
       if (snapshot.exists()) {
         const sensorsData = snapshot.val();
-        const sensorsList = Object.keys(sensorsData).map(key => ({
+        // Zmodyfikowana metoda konwersji danych z nowej struktury
+        const sensorsList = Object.entries(sensorsData).map(([key, data]) => ({
           id: key,
-          name: key
+          name: data.device_id || key // Używamy device_id jeśli dostępne, w przeciwnym razie key
         }));
         
         setSensors(sensorsList);
@@ -144,7 +144,7 @@ const HallDataConditionsPage = () => {
       if (snapshot.exists()) {
         const sensorData = snapshot.val();
         
-        // Pobierz ostatni odczyt
+        // Pobierz ostatni odczyt - teraz dane są bezpośrednio w obiekcie
         const lastReading = {
           temperature: sensorData.temperature || 0,
           humidity: sensorData.humidity || 0,
@@ -193,25 +193,24 @@ const HallDataConditionsPage = () => {
     const startTimestamp = startDate.toISOString();
     const endTimestamp = endDate.toISOString();
     
-    // Pobierz historię odczytów z wybranego przedziału czasu
-    const historyRef = query(
-      ref(rtdb, 'history/' + selectedSensor),
-      orderByChild('timestamp'),
-      startAt(startTimestamp),
-      endAt(endTimestamp),
-      limitToLast(500) // Limit dla wydajności
-    );
+    // Nowa struktura danych - historia znajduje się bezpośrednio w węźle "history"
+    // z kluczami jako identyfikatory dokumentów i wartościami jako dane odczytów
+    const historyRef = ref(rtdb, 'history/' + selectedSensor);
     
+    // Najpierw pobieramy wszystkie dane i filtrujemy po stronie klienta
     get(historyRef)
       .then((snapshot) => {
         if (snapshot.exists()) {
           const historyData = [];
           snapshot.forEach((childSnapshot) => {
             const reading = childSnapshot.val();
+            
             // Konwertuj timestamp do formatu daty
             try {
               const date = new Date(reading.timestamp);
-              if (isValid(date)) {
+              
+              // Sprawdź czy data mieści się w wybranym zakresie
+              if (isValid(date) && date >= startDate && date <= endDate) {
                 historyData.push({
                   time: format(date, 'HH:mm'),
                   fullTime: format(date, 'dd.MM.yyyy HH:mm'),
@@ -229,22 +228,27 @@ const HallDataConditionsPage = () => {
           // Sortuj dane wg czasu
           historyData.sort((a, b) => a.timestamp - b.timestamp);
           
+          // Ogranicz ilość danych do wyświetlenia dla wydajności
+          const limitedData = historyData.length > 500 
+            ? historyData.slice(historyData.length - 500) 
+            : historyData;
+          
           // Ustaw minimalną i maksymalną wartość dla osi Y
-          if (historyData.length > 0) {
+          if (limitedData.length > 0) {
             // Temperatura
-            const temperatures = historyData.map(item => Number(item.temperature));
+            const temperatures = limitedData.map(item => Number(item.temperature));
             const minTemp = Math.floor(Math.min(...temperatures) - 1);
             const maxTemp = Math.ceil(Math.max(...temperatures) + 1);
             setTempMinMax({ min: minTemp, max: maxTemp });
             
             // Wilgotność
-            const humidities = historyData.map(item => Number(item.humidity));
+            const humidities = limitedData.map(item => Number(item.humidity));
             const minHumidity = Math.floor(Math.min(...humidities) - 5);
             const maxHumidity = Math.ceil(Math.max(...humidities) + 5);
             setHumidityMinMax({ min: minHumidity, max: maxHumidity });
           }
           
-          setHistoryData(historyData);
+          setHistoryData(limitedData);
         } else {
           setHistoryData([]);
         }
@@ -254,10 +258,9 @@ const HallDataConditionsPage = () => {
         console.error("Błąd podczas pobierania historii:", error);
         if (error.message && error.message.includes('permission_denied')) {
           setPermissionError(true);
-        } else if (error.message && error.message.includes('Index not defined')) {
-          setIndexError(true);
+        } else {
+          setError("Nie udało się pobrać danych historycznych: " + error.message);
         }
-        setError("Nie udało się pobrać danych historycznych");
         setLoading(false);
       });
   }, [selectedSensor, startDate, endDate, refreshTrigger]);
@@ -352,51 +355,6 @@ const HallDataConditionsPage = () => {
     );
   }
 
-  if (indexError) {
-    return (
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Typography variant="h4" gutterBottom>Warunki</Typography>
-        <Paper elevation={3} sx={{ p: 3 }}>
-          <Alert severity="error" sx={{ mb: 3 }}>
-            <Typography variant="h6">Brak zdefiniowanego indeksu w bazie danych Firebase</Typography>
-            <Typography paragraph>
-              Wykryto błąd: "Index not defined, add ".indexOn": "timestamp", for path "/history/Hala_produkcyjna_1", to the rules"
-            </Typography>
-            <Typography variant="body2" paragraph>
-              Aby rozwiązać ten problem, należy dodać indeks dla pola "timestamp" w regułach bazy danych:
-            </Typography>
-            <Box sx={{ bgcolor: 'background.paper', p: 2, borderRadius: 1, mb: 2 }}>
-              <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
-{`{
-  "rules": {
-    ".read": true,
-    ".write": false,
-    "history": {
-      "$sensor_id": {
-        ".indexOn": ["timestamp"]
-      }
-    }
-  }
-}`}
-              </pre>
-            </Box>
-            <Typography variant="body2">
-              Wykonaj następujące kroki:
-            </Typography>
-            <ol>
-              <li>Zaloguj się do konsoli Firebase: <Link href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer">https://console.firebase.google.com/</Link></li>
-              <li>Wybierz projekt</li>
-              <li>Przejdź do sekcji "Realtime Database"</li>
-              <li>Kliknij zakładkę "Reguły"</li>
-              <li>Zaktualizuj reguły zgodnie z powyższym przykładem (gdzie $sensor_id to parametr reprezentujący dowolny identyfikator czujnika)</li>
-              <li>Kliknij "Publikuj"</li>
-            </ol>
-          </Alert>
-        </Paper>
-      </Container>
-    );
-  }
-
   if (error) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4 }}>
@@ -434,28 +392,28 @@ const HallDataConditionsPage = () => {
           <Typography variant="body2">
             Przykładowa struktura danych:
           </Typography>
-          <Box sx={{ bgcolor: 'background.paper', p: 2, borderRadius: 1, mt: 1 }}>
+          <Box sx={{ bgcolor: 'background.paper', p: 2, borderRadius: 1, my: 1, overflowX: 'auto' }}>
             <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
 {`{
   "sensors": {
     "Hala_produkcyjna_1": {
       "device_id": "Hala_produkcyjna_1",
-      "humidity": 32.6,
-      "temperature": 22.4,
-      "timestamp": "2025-04-28T11:20:04"
+      "humidity": 45.6,
+      "temperature": 21.6,
+      "timestamp": "2025-04-29T16:09:49"
     }
   },
   "history": {
     "Hala_produkcyjna_1": {
-      "-NzVx7Ty4Cxm23v45sW": {
-        "humidity": 32.6,
-        "temperature": 22.4,
-        "timestamp": "2025-04-28T11:20:04"
+      "-OP0sEJN91iVTBUM7a": {
+        "humidity": 45.6,
+        "temperature": 21.6,
+        "timestamp": "2025-04-29T16:09:49"
       },
-      "-NzVw7Ty4Cxm23v45sW": {
-        "humidity": 32.1,
-        "temperature": 22.2,
-        "timestamp": "2025-04-28T11:15:04"
+      "-OP0sMReTWuTDk4vj-8x": {
+        "humidity": 45.3,
+        "temperature": 21.5,
+        "timestamp": "2025-04-29T16:04:49"
       }
     }
   }
@@ -760,9 +718,12 @@ const HallDataConditionsPage = () => {
             </Typography>
             {selectedSensor && (
               <Typography variant="body2" color="text.secondary">
-                Oczekiwana ścieżka w Firebase: <code>history/{selectedSensor}/[dane]</code>
+                Sprawdź strukturę danych w Firebase: <code>history/{selectedSensor}</code>
               </Typography>
             )}
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              Przykładowe klucze w historii: <code>-OP0sEJN91iVTBUM7a</code>
+            </Typography>
           </Box>
         ) : (
           <>
