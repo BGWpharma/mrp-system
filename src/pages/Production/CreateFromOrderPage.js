@@ -401,32 +401,32 @@ const CreateFromOrderPage = () => {
   };
   
   const handleSelectAllItems = (event) => {
-    const checked = event.target.checked;
+    if (!selectedOrder || !selectedOrder.items) return;
     
-    if (Array.isArray(selectedItems)) {
-      setSelectedItems(prev => 
-        prev.map(item => ({ ...item, selected: checked }))
-      );
-    } else {
-      // Dla przypadku gdy selectedItems jest obiektem
-      const updatedItems = {};
+    const { checked } = event.target;
+    
+    // Filtruj produkty, aby zaznaczać tylko te, które mają przypisaną recepturę
+    const productsWithRecipes = selectedOrder.items.filter(item => {
+      const recipe = findRecipeForProduct(item.name);
+      return !!recipe; // Zwróci true tylko dla produktów z recepturą
+    });
+    
+    const newSelectedItems = { ...selectedItems };
+    
+    // Zaznacz/odznacz wszystkie produkty z recepturami
+    productsWithRecipes.forEach(item => {
+      // Sprawdź, czy element ma już utworzone zadanie
+      const hasTask = existingTasks.some(task => 
+        task.productName === item.name && 
+        task.quantity === item.quantity);
       
-      // Iteruj po elementach zamówienia i utwórz obiekt z aktualizacjami
-      if (selectedOrder && selectedOrder.items) {
-        selectedOrder.items.forEach(item => {
-          if (item.id) {
-            updatedItems[item.id] = checked;
-          }
-        });
-      } else {
-        // Jeśli brak zamówienia, aktualizuj tylko istniejące klucze
-        Object.keys(selectedItems).forEach(key => {
-          updatedItems[key] = checked;
-        });
+      // Aktualizuj wybór tylko dla elementów, które nie mają jeszcze zadań
+      if (!hasTask) {
+        newSelectedItems[item.id] = checked;
       }
-      
-      setSelectedItems(updatedItems);
-    }
+    });
+    
+    setSelectedItems(newSelectedItems);
   };
   
   const handleCreateTask = async () => {
@@ -632,66 +632,55 @@ const CreateFromOrderPage = () => {
     ? selectedItems.some(item => item.selected)
     : Object.keys(selectedItems).length > 0 && Object.values(selectedItems).some(Boolean);
 
-  // Inicjalizacja zadań produkcyjnych z wybranego zamówienia
+  // Inicjalizacja zadań produkcyjnych na podstawie wybranego zamówienia
   const initializeTasksFromOrder = () => {
-    if (!selectedOrder || !selectedOrder.items || selectedOrder.items.length === 0) {
-      console.log("Nie można zainicjalizować zadań - brak zamówienia lub pozycji");
-      return;
-    }
+    if (!selectedOrder || !selectedOrder.items) return;
     
-    console.log("Inicjalizacja zadań produkcyjnych i stanowisk z zamówienia:", selectedOrder.id);
-    console.log("Dostępne receptury:", recipes.length);
+    console.log('Inicjalizacja zadań produkcyjnych z zamówienia:', selectedOrder.id);
     
-    // Resetuj wcześniej wybrane elementy
-    setSelectedItems({});
-    
-    // Tworzymy nowy obiekt z zaznaczonymi elementami
-    const initialSelectedItems = {};
-    // Tworzymy nowy obiekt z domyślnymi stanowiskami produkcyjnymi
-    const initialWorkstations = {};
-    
-    // Dla każdego produktu w zamówieniu, który jest recepturą lub dla którego można znaleźć recepturę
-    selectedOrder.items.forEach(item => {
-      console.log(`Przetwarzanie pozycji zamówienia: ${item.name} (ID: ${item.id})`);
-      
-      // Znajdź recepturę dla produktu
+    // Filtruj produkty, aby inicjalizować tylko te, które mają przypisaną recepturę
+    const productsWithRecipes = selectedOrder.items.filter(item => {
       const recipe = findRecipeForProduct(item.name);
-      
-      // Jeśli element jest oznaczony jako receptura, zawsze go dodaj
-      if (item.isRecipe) {
-        console.log(`Pozycja ${item.name} jest oznaczona jako receptura`);
-        initialSelectedItems[item.id] = true;
-      } else if (recipe) {
-        // Znaleziono recepturę dla produktu, więc zaznacz go
-        console.log(`Dla pozycji ${item.name} znaleziono recepturę: ${recipe.name}`);
-        initialSelectedItems[item.id] = true;
-      } else {
-        console.log(`Dla pozycji ${item.name} nie znaleziono receptury`);
-      }
-      
-      // Jeśli znaleziono recepturę i ma ona domyślne stanowisko produkcyjne, przypisz je do produktu
-      if (recipe) {
-        console.log(`Sprawdzanie stanowiska dla receptury ${recipe.name}`);
-        if (recipe.defaultWorkstationId) {
-          // Automatycznie przypisz domyślne stanowisko produkcyjne z receptury
-          initialWorkstations[item.id] = recipe.defaultWorkstationId;
-          console.log(`Przypisano domyślne stanowisko produkcyjne do ${item.name}: ${recipe.defaultWorkstationId}`);
-          
-          // Dodatkowe sprawdzenie czy stanowisko istnieje w bazie stanowisk
-          const workstationExists = workstations.some(w => w.id === recipe.defaultWorkstationId);
-          console.log(`Czy stanowisko ${recipe.defaultWorkstationId} istnieje w bazie stanowisk: ${workstationExists}`);
-        } else {
-          console.log(`Receptura ${recipe.name} nie ma ustawionego domyślnego stanowiska produkcyjnego`);
-        }
-      }
+      return !!recipe; // Zwróci true tylko dla produktów z recepturą
     });
     
-    console.log("Wybrane pozycje:", initialSelectedItems);
-    console.log("Przypisane stanowiska:", initialWorkstations);
+    // Inicjalizuj wybrane elementy dla wszystkich produktów z recepturami
+    const initialSelectedItems = {};
     
+    // Tworzenie nowego stanu produktów wybranych do produkcji
+    productsWithRecipes.forEach(item => {
+      initialSelectedItems[item.id] = false; // Domyślnie odznaczone
+      
+      // Przypisz domyślne stanowisko produkcyjne na podstawie receptury
+      const recipe = findRecipeForProduct(item.name);
+      if (recipe && recipe.defaultWorkstationId) {
+        console.log(`Przypisuję stanowisko produkcyjne ${recipe.defaultWorkstationId} dla produktu ${item.name}`);
+        setSelectedWorkstations(prev => ({
+          ...prev,
+          [item.id]: recipe.defaultWorkstationId
+        }));
+      }
+      
+      // Ustaw domyślną datę produkcji dla produktu
+      setProductDates(prev => ({
+        ...prev,
+        [item.id]: selectedOrder.expectedDeliveryDate ? 
+          new Date(selectedOrder.expectedDeliveryDate) : 
+          new Date()
+      }));
+    });
+    
+    // Ustaw stan dla wybranych produktów
     setSelectedItems(initialSelectedItems);
-    // Ustawienie domyślnych stanowisk produkcyjnych
-    setSelectedWorkstations(initialWorkstations);
+    
+    // Sprawdź, czy są już istniejące zadania produkcyjne dla tego zamówienia
+    if (selectedOrder.productionTasks && selectedOrder.productionTasks.length > 0) {
+      console.log(`Znaleziono ${selectedOrder.productionTasks.length} istniejących zadań produkcyjnych.`);
+      setExistingTasks(selectedOrder.productionTasks);
+    } else {
+      console.log('Brak istniejących zadań produkcyjnych.');
+      setExistingTasks([]);
+    }
   };
 
   // Obsługa wyboru zamówienia
@@ -776,25 +765,27 @@ const CreateFromOrderPage = () => {
               recipeData = matchingRecipe;
             } else {
               errors.push(`Brak receptury dla produktu ${orderItem.name}. Zadanie nie zostało utworzone.`);
-              continue;
+              continue; // Przejdź do następnego produktu, jeśli brak receptury
             }
           } else {
             // Pobierz dane receptury, jeśli mamy jej ID
             try {
               recipeData = await getRecipeById(recipeId);
+              if (!recipeData) {
+                errors.push(`Nie znaleziono receptury o ID ${recipeId} dla produktu ${orderItem.name}. Zadanie nie zostało utworzone.`);
+                continue; // Przejdź do następnego produktu, jeśli brak receptury
+              }
             } catch (recipeError) {
               console.error(`Błąd pobierania receptury ${recipeId}:`, recipeError);
+              errors.push(`Błąd pobierania receptury dla produktu ${orderItem.name}: ${recipeError.message}. Zadanie nie zostało utworzone.`);
+              continue; // Przejdź do następnego produktu w przypadku błędu
             }
           }
           
-          // Jeśli znaleźliśmy recepturę, ale nie mamy jej danych, pobierz je
-          if (recipeId && !recipeData) {
-            try {
-              recipeData = await getRecipeById(recipeId);
-            } catch (recipeError) {
-              errors.push(`Błąd pobierania receptury dla produktu ${orderItem.name}: ${recipeError.message}`);
-              continue;
-            }
+          // Upewnij się, że mamy dane receptury przed kontynuacją
+          if (!recipeData) {
+            errors.push(`Brak danych receptury dla produktu ${orderItem.name}. Zadanie nie zostało utworzone.`);
+            continue;
           }
           
           // Określenie jednostki produktu
@@ -996,23 +987,36 @@ const CreateFromOrderPage = () => {
     }
   };
 
-  // Funkcja sprawdzająca czy wszystkie produkty są zaznaczone
+  // Sprawdza, czy wszystkie elementy są zaznaczone
   const isAllSelected = () => {
-    if (!selectedOrder || !selectedOrder.items || selectedOrder.items.length === 0) {
-      return false;
-    }
+    if (!selectedOrder || !selectedOrder.items || selectedOrder.items.length === 0) return false;
     
-    return selectedOrder.items.every(item => isItemSelected(item.id));
+    // Filtruj produkty, aby sprawdzać tylko te, które mają przypisaną recepturę
+    const productsWithRecipes = selectedOrder.items.filter(item => {
+      const recipe = findRecipeForProduct(item.name);
+      return !!recipe; // Zwróci true tylko dla produktów z recepturą
+    });
+    
+    if (productsWithRecipes.length === 0) return false;
+    
+    // Sprawdź, czy wszystkie produkty z recepturami są zaznaczone
+    return productsWithRecipes.every(item => selectedItems[item.id]);
   };
-  
-  // Funkcja sprawdzająca czy tylko część produktów jest zaznaczona
+
+  // Sprawdza, czy część elementów jest zaznaczona
   const isPartiallySelected = () => {
-    if (!selectedOrder || !selectedOrder.items || selectedOrder.items.length === 0) {
-      return false;
-    }
+    if (!selectedOrder || !selectedOrder.items || selectedOrder.items.length === 0) return false;
     
-    const selectedCount = selectedOrder.items.filter(item => isItemSelected(item.id)).length;
-    return selectedCount > 0 && selectedCount < selectedOrder.items.length;
+    // Filtruj produkty, aby sprawdzać tylko te, które mają przypisaną recepturę
+    const productsWithRecipes = selectedOrder.items.filter(item => {
+      const recipe = findRecipeForProduct(item.name);
+      return !!recipe; // Zwróci true tylko dla produktów z recepturą
+    });
+    
+    if (productsWithRecipes.length === 0) return false;
+    
+    const selectedCount = productsWithRecipes.filter(item => selectedItems[item.id]).length;
+    return selectedCount > 0 && selectedCount < productsWithRecipes.length;
   };
   
   // Funkcja sprawdzająca czy konkretny produkt jest zaznaczony
@@ -1023,7 +1027,7 @@ const CreateFromOrderPage = () => {
       return Boolean(selectedItems[itemId]);
     }
   };
-
+  
   // Pobierz stanowiska produkcyjne
   const fetchWorkstations = async () => {
     try {
@@ -1076,6 +1080,20 @@ const CreateFromOrderPage = () => {
       }));
     };
 
+    // Filtruj produkty, aby wyświetlać tylko te, które mają przypisaną recepturę
+    const productsWithRecipes = selectedOrder.items.filter(item => {
+      const recipe = findRecipeForProduct(item.name);
+      return !!recipe; // Zwróci true tylko dla produktów z recepturą
+    });
+
+    if (productsWithRecipes.length === 0) {
+      return (
+        <Typography variant="body1" sx={{ my: 2 }}>
+          Zamówienie nie zawiera produktów z przypisanymi recepturami.
+        </Typography>
+      );
+    }
+
     return (
       <TableContainer component={Paper} sx={{ mt: 2 }}>
         <Table size="small">
@@ -1100,7 +1118,7 @@ const CreateFromOrderPage = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {selectedOrder.items.map((item) => {
+            {productsWithRecipes.map((item) => {
               // Znajdź recepturę dla produktu
               const recipe = findRecipeForProduct(item.name);
               // Oblicz planowany czas produkcji dla 1 szt.

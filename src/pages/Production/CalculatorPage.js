@@ -109,6 +109,13 @@ const CalculatorPage = () => {
     fetchProductionTasks(); // Dodano pobieranie zadań produkcyjnych
   }, []);
   
+  // Automatyczne generowanie planu po wybraniu zadania produkcyjnego (MO)
+  useEffect(() => {
+    if (selectedTaskId) {
+      generatePlanFromMO();
+    }
+  }, [selectedTaskId]);
+  
   // Sprawdzenie czy wybrana receptura i jej dane są dostępne
   useEffect(() => {
     if (selectedRecipeId) {
@@ -749,16 +756,6 @@ ${';'.repeat(4)}\n`;
                 startIcon={<CalculateIcon />}
               >
                 Oblicz plan mieszań
-              </Button>
-              
-              <Button
-                variant="contained"
-                color="secondary"
-                onClick={generatePlanFromMO}
-                disabled={loading || !selectedTaskId}
-                startIcon={<AssignmentIcon />}
-              >
-                Generuj z MO
               </Button>
               
               {mixings.length > 0 && (
