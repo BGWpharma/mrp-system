@@ -401,7 +401,7 @@ const RecipeDetailsPage = () => {
             </Grid>
             <Grid item xs={12} md={6}>
               <Typography variant="subtitle2" color="text.secondary">
-                Czas/sztuka: {recipe.productionTimePerUnit ? `${recipe.productionTimePerUnit} min` : 'Nie określono'}
+                Czas/sztuka: {recipe.productionTimePerUnit ? `${parseFloat(recipe.productionTimePerUnit).toFixed(2)} min` : 'Nie określono'}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>

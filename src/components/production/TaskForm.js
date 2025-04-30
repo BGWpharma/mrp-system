@@ -743,7 +743,7 @@ const TaskForm = ({ taskId }) => {
                     onChange={handleProductionTimePerUnitChange}
                     type="number"
                     variant="outlined"
-                    InputProps={{ inputProps: { min: 0, step: 0.1 } }}
+                    InputProps={{ inputProps: { min: 0, step: 0.01 } }}
                     helperText="Czas produkcji dla 1 sztuki w minutach"
                   />
                 </Grid>

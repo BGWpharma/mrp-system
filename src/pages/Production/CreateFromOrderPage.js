@@ -1199,7 +1199,7 @@ const CreateFromOrderPage = () => {
                   </TableCell>
                   <TableCell>
                     {totalProductionTime > 0 ? (
-                      `${(productionTimePerUnit * item.quantity).toFixed(1)} min.`
+                      `${(productionTimePerUnit * item.quantity).toFixed(2)} min.`
                     ) : (
                       recipe ? (
                         <Typography variant="body2" color="error">

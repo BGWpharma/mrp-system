@@ -706,7 +706,7 @@ const RecipeForm = ({ recipeId }) => {
                 name="productionTimePerUnit"
                 type="number"
                 InputProps={{ 
-                  inputProps: { min: 0, step: 0.1 },
+                  inputProps: { min: 0, step: 0.01 },
                   startAdornment: (
                     <Box sx={{ color: 'text.secondary', mr: 1, display: 'flex', alignItems: 'center' }}>
                       <AccessTimeIcon fontSize="small" />

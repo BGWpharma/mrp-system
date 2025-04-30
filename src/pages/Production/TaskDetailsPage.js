@@ -1784,8 +1784,8 @@ const TaskDetailsPage = () => {
           <table>
             <tr><th>Planowany start:</th><td>${formatDateForPrint(task.scheduledDate)}</td></tr>
             <tr><th>Planowane zakończenie:</th><td>${formatDateForPrint(task.endDate)}</td></tr>
-            <tr><th>Szacowany czas produkcji:</th><td>${task.estimatedDuration ? task.estimatedDuration.toFixed(1) + ' godz.' : 'Nie określono'}</td></tr>
-            <tr><th>Czas na jednostkę:</th><td>${task.productionTimePerUnit ? task.productionTimePerUnit + ' min./szt.' : 'Nie określono'}</td></tr>
+            <tr><th>Szacowany czas produkcji:</th><td>${task.estimatedDuration ? task.estimatedDuration.toFixed(2) + ' godz.' : 'Nie określono'}</td></tr>
+            <tr><th>Czas na jednostkę:</th><td>${task.productionTimePerUnit ? parseFloat(task.productionTimePerUnit).toFixed(2) + ' min./szt.' : 'Nie określono'}</td></tr>
           </table>
         </div>
 
@@ -2655,83 +2655,162 @@ const TaskDetailsPage = () => {
               </Paper>
             </Grid>
           
-            {/* Pozostałe sekcje... */}
-          </Grid>
-            </>
-      )}
-
-      {/* Dialogi (potwierdzenie, produkcja, itp.) */}
-      {/* ... */}
-
-      {/* Dialog rezerwacji materiałów */}
-      <Dialog
-        open={reserveDialogOpen}
-        onClose={() => setReserveDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>Rezerwacja surowców</DialogTitle>
-        <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
-            Wybierz metodę rezerwacji surowców dla tego zadania produkcyjnego.
-          </DialogContentText>
-          
-          <FormControl component="fieldset" sx={{ mb: 2, mt: 2 }}>
-            <FormLabel component="legend">Metoda rezerwacji składników</FormLabel>
-            <RadioGroup
-              row
-              name="reservationMethod"
-              value={reservationMethod}
-              onChange={handleReservationMethodChange}
-            >
-              <FormControlLabel 
-                value="fifo" 
-                control={<Radio />} 
-                label="FIFO (First In, First Out)" 
-              />
-              <FormControlLabel 
-                value="expiry" 
-                control={<Radio />} 
-                label="Według daty ważności (najkrótszej)" 
-              />
-              <FormControlLabel 
-                value="manual" 
-                control={<Radio />} 
-                label="Ręczny wybór partii" 
-              />
-            </RadioGroup>
-          </FormControl>
-          
-          {reservationMethod === 'manual' && (
-            <Alert severity="info" sx={{ mb: 2 }}>
-              <AlertTitle>Wskazówka</AlertTitle>
-              Możesz zarezerwować pojedynczy surowiec klikając przycisk "Rezerwuj ten materiał" przy wybranym surowcu lub zarezerwować wszystkie surowce klikając przycisk "Rezerwuj wszystkie materiały" na dole.
-            </Alert>
-          )}
-          
-          {reservationMethod === 'manual' && renderManualBatchSelection()}
-          
-          {reservationMethod !== 'manual' && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-              Rezerwacja blokuje materiały w magazynie na potrzeby tego zadania produkcyjnego, 
-              zapewniając ich dostępność w momencie rozpoczęcia produkcji.
+            {/* Sekcja planu mieszań (checklista) */}
+            {task?.mixingPlanChecklist && task.mixingPlanChecklist.length > 0 && (
+              <Grid item xs={12}>
+                <Paper sx={{ p: 2, mb: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                    <Typography variant="h6">
+                      Plan mieszań
                 </Typography>
-              )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setReserveDialogOpen(false)}>
-            Anuluj
-          </Button>
-          <Button 
-            onClick={() => handleReserveMaterials()} 
-            variant="contained"
-            disabled={reservingMaterials}
-          >
-            {reservingMaterials ? <CircularProgress size={24} /> : 'Rezerwuj wszystkie materiały'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
+                  </Box>
+                  
+                  {/* Tabela mieszań */}
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell width="25%">Mieszanie</TableCell>
+                          <TableCell width="35%">Składniki</TableCell>
+                          <TableCell width="40%" align="center">Status</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {/* Grupujemy elementy checklisty według mieszań */}
+                        {task.mixingPlanChecklist
+                          .filter(item => item.type === 'header')
+                          .map(headerItem => {
+                            // Pobierz wszystkie elementy składników dla danego mieszania
+                            const ingredients = task.mixingPlanChecklist
+                              .filter(item => item.parentId === headerItem.id && item.type === 'ingredient');
+                            
+                            // Pobierz checkboxy kontrolne dla danego mieszania
+                            const checkItems = task.mixingPlanChecklist
+                              .filter(item => item.parentId === headerItem.id && item.type === 'check');
+                            
+                            return (
+                              <TableRow key={headerItem.id} sx={{ 
+                                '& td': { 
+                                  borderBottom: '1px solid rgba(224, 224, 224, 1)',
+                                  verticalAlign: 'top',
+                                  pt: 2, pb: 2
+                                }
+                              }}>
+                                {/* Informacje o mieszaniu */}
+                                <TableCell>
+                                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                                    {headerItem.text}
+                                  </Typography>
+                                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                                    {headerItem.details}
+                                  </Typography>
+                                </TableCell>
+                                
+                                {/* Lista składników */}
+                                <TableCell>
+                                  <Table size="small" sx={{ 
+                                    '& td': { 
+                                      border: 'none',
+                                      pt: 0.5,
+                                      pb: 0.5 
+                                    } 
+                                  }}>
+                                    <TableBody>
+                                      {ingredients.map((ingredient) => (
+                                        <TableRow key={ingredient.id}>
+                                          <TableCell sx={{ pl: 0 }}>
+                                            <Typography variant="body2">
+                                              {ingredient.text}
+                                            </Typography>
+                                            <Typography variant="caption" color="text.secondary">
+                                              {ingredient.details}
+                                            </Typography>
+                                          </TableCell>
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                </TableCell>
+                                
+                                {/* Checkboxy statusu mieszania */}
+                                <TableCell align="center">
+                                  <Grid container spacing={1} alignItems="center">
+                                    {checkItems.map((item) => (
+                                      <Grid item xs={12} key={item.id} sx={{ borderBottom: '1px solid rgba(224, 224, 224, 0.3)', pb: 1 }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                          <FormControlLabel
+                                            control={
+                                              <Checkbox
+                                                checked={item.completed || false}
+                                                onChange={async (e) => {
+                                                  try {
+                                                    // Pobierz referencję do dokumentu zadania
+                                                    const taskRef = doc(db, 'productionTasks', task.id);
+                                                    
+                                                    // Zaktualizuj stan checkboxa w bazie danych
+                                                    const updatedChecklist = task.mixingPlanChecklist.map(checkItem => {
+                                                      if (checkItem.id === item.id) {
+                                                        return {
+                                                          ...checkItem,
+                                                          completed: e.target.checked,
+                                                          completedAt: e.target.checked ? new Date().toISOString() : null,
+                                                          completedBy: e.target.checked ? currentUser.uid : null
+                                                        };
+                                                      }
+                                                      return checkItem;
+                                                    });
+                                                    
+                                                    // Zapisz zaktualizowaną checklistę
+                                                    await updateDoc(taskRef, {
+                                                      mixingPlanChecklist: updatedChecklist,
+                                                      updatedAt: serverTimestamp(),
+                                                      updatedBy: currentUser.uid
+                                                    });
+                                                    
+                                                    // Zaktualizuj stan lokalny
+                                                    setTask(prevTask => ({
+                                                      ...prevTask,
+                                                      mixingPlanChecklist: updatedChecklist
+                                                    }));
+                                                    
+                                                    showSuccess('Zaktualizowano stan zadania');
+                                                  } catch (error) {
+                                                    console.error('Błąd podczas aktualizacji stanu checklisty:', error);
+                                                    showError('Nie udało się zaktualizować stanu zadania');
+                                                  }
+                                                }}
+                                              />
+                                            }
+                                            label={item.text}
+                                            sx={{ width: '100%' }}
+                                          />
+                                          {item.completed && (
+                                            <Chip 
+                                              size="small" 
+                                              label={item.completedAt ? new Date(item.completedAt).toLocaleDateString('pl-PL') : '-'} 
+                                              color="success" 
+                                              variant="outlined"
+                                              sx={{ ml: 1 }}
+                                            />
+                                          )}
+                                        </Box>
+                                      </Grid>
+                                    ))}
+                                  </Grid>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Paper>
+              </Grid>
+            )}
+          </Grid>
+        </>
+      )}
+      
       {/* Dialog usuwania zadania */}
       <Dialog
         open={deleteDialog}
@@ -2740,7 +2819,7 @@ const TaskDetailsPage = () => {
         <DialogTitle>Potwierdź usunięcie</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Czy na pewno chcesz usunąć to zadanie produkcyjne? Ta operacja jest nieodwracalna.
+            Czy na pewno chcesz usunąć to zadanie produkcyjne (MO: {task?.moNumber})? Ta operacja jest nieodwracalna.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
@@ -2756,272 +2835,7 @@ const TaskDetailsPage = () => {
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* Dialog dodawania opakowań */}
-      <Dialog
-        open={packagingDialogOpen}
-        onClose={() => setPackagingDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>Dodaj opakowania do zadania produkcyjnego</DialogTitle>
-        <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
-            Wybierz opakowania, które chcesz dodać do tego zadania produkcyjnego (opakowania zbiorcze, jednostkowe, palety, folie, kartony itp.).
-          </DialogContentText>
-          
-          {loadingPackaging ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
-              <CircularProgress />
-            </Box>
-          ) : (
-            <TableContainer component={Paper} sx={{ mt: 2 }}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell padding="checkbox">Wybierz</TableCell>
-                    <TableCell>Nazwa</TableCell>
-                    <TableCell>Dostępna ilość</TableCell>
-                    <TableCell>Jednostka</TableCell>
-                    <TableCell>Cena jedn.</TableCell>
-                    <TableCell>Ilość do dodania</TableCell>
-                    <TableCell>Koszt</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {packagingItems.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} align="center">
-                        Brak dostępnych opakowań
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    packagingItems.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell padding="checkbox">
-                          <Checkbox
-                            checked={item.selected}
-                            onChange={(e) => handlePackagingSelection(item.id, e.target.checked)}
-                          />
-                        </TableCell>
-                        <TableCell>{item.name}</TableCell>
-                        <TableCell>{item.availableQuantity} {item.unit}</TableCell>
-                        <TableCell>{item.unit}</TableCell>
-                        <TableCell>{item.unitPrice ? item.unitPrice.toFixed(2) : '0.00'} €</TableCell>
-                        <TableCell>
-                          <TextField
-                            type="number"
-                            value={item.quantity}
-                            onChange={(e) => handlePackagingQuantityChange(item.id, e.target.value)}
-                            disabled={!item.selected}
-                            inputProps={{ 
-                              min: 0, 
-                              max: item.availableQuantity, 
-                              step: 'any' 
-                            }}
-                            size="small"
-                            sx={{ width: '100px' }}
-                            error={parseFloat(item.quantity) > item.availableQuantity}
-                            helperText={parseFloat(item.quantity) > item.availableQuantity ? "Przekroczono dostępną ilość" : ""}
-                          />
-                        </TableCell>
-                        <TableCell>{(item.quantity * (item.unitPrice || 0)).toFixed(2)} €</TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPackagingDialogOpen(false)}>
-            Anuluj
-          </Button>
-          <Button 
-            onClick={handleAddPackagingToTask} 
-            variant="contained"
-            disabled={loadingPackaging || packagingItems.filter(item => item.selected && item.quantity > 0).length === 0}
-          >
-            {loadingPackaging ? <CircularProgress size={24} /> : 'Dodaj opakowania'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Dialog zatrzymania produkcji */}
-      <Dialog
-        open={stopProductionDialogOpen}
-        onClose={() => setStopProductionDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Zatrzymaj produkcję</DialogTitle>
-        <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
-            Wprowadź informacje o zakończonej sesji produkcyjnej
-          </DialogContentText>
-          
-          {productionData.error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {productionData.error}
-            </Alert>
-          )}
-
-          <TextField
-            label="Wyprodukowana ilość"
-            type="number"
-            value={productionData.completedQuantity}
-            onChange={(e) => setProductionData({ ...productionData, completedQuantity: e.target.value })}
-            fullWidth
-            margin="dense"
-            InputProps={{
-              endAdornment: <Typography variant="body2">{task?.unit || 'szt.'}</Typography>
-            }}
-          />
-          
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, my: 2 }}>
-            <Typography variant="subtitle2" gutterBottom>
-              Przedział czasowy produkcji:
-            </Typography>
-            
-            <TextField
-              label="Czas rozpoczęcia"
-              type="datetime-local"
-              value={productionData.startTime instanceof Date 
-                ? productionData.startTime.toISOString().slice(0, 16) 
-                : ''}
-              onChange={(e) => {
-                const newDate = e.target.value ? new Date(e.target.value) : new Date();
-                setProductionData({ ...productionData, startTime: newDate });
-              }}
-              fullWidth
-              margin="dense"
-              variant="outlined"
-              InputLabelProps={{
-                shrink: true,
-              }}
-            />
-            
-            <TextField
-              label="Czas zakończenia"
-              type="datetime-local"
-              value={productionData.endTime instanceof Date 
-                ? productionData.endTime.toISOString().slice(0, 16) 
-                : ''}
-              onChange={(e) => {
-                const newDate = e.target.value ? new Date(e.target.value) : new Date();
-                setProductionData({ ...productionData, endTime: newDate });
-              }}
-              fullWidth
-              margin="dense"
-              variant="outlined"
-              InputLabelProps={{
-                shrink: true,
-              }}
-            />
-            
-            {productionData.startTime && productionData.endTime && (
-              <Typography variant="body2" color="textSecondary">
-                Czas trwania: {Math.round((productionData.endTime.getTime() - productionData.startTime.getTime()) / (1000 * 60))} minut
-              </Typography>
-            )}
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setStopProductionDialogOpen(false)}>
-            Anuluj
-          </Button>
-          <Button onClick={handleStopProduction} variant="contained">
-            Zatwierdź
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Dialog dodawania nowej sesji produkcyjnej */}
-      <Dialog
-        open={addHistoryDialogOpen}
-        onClose={() => setAddHistoryDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Dodaj nową sesję produkcyjną</DialogTitle>
-        <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
-            Wprowadź informacje o nowej sesji produkcyjnej.
-          </DialogContentText>
-          
-          <TextField
-            label="Ilość wyprodukowana"
-            type="number"
-            value={editedHistoryItem.quantity}
-            onChange={(e) => setEditedHistoryItem(prev => ({ ...prev, quantity: e.target.value }))}
-            fullWidth
-            margin="dense"
-            InputProps={{
-              endAdornment: <Typography variant="body2">{task?.unit || 'szt.'}</Typography>
-            }}
-          />
-          
-          <TextField
-            label="Czas rozpoczęcia"
-            type="datetime-local"
-            value={editedHistoryItem.startTime.toISOString().slice(0, 16)}
-            onChange={(e) => setEditedHistoryItem(prev => ({ ...prev, startTime: new Date(e.target.value) }))}
-            fullWidth
-            margin="dense"
-            InputLabelProps={{
-              shrink: true,
-            }}
-          />
-          
-          <TextField
-            label="Czas zakończenia"
-            type="datetime-local"
-            value={editedHistoryItem.endTime.toISOString().slice(0, 16)}
-            onChange={(e) => setEditedHistoryItem(prev => ({ ...prev, endTime: new Date(e.target.value) }))}
-            fullWidth
-            margin="dense"
-            InputLabelProps={{
-              shrink: true,
-            }}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAddHistoryDialogOpen(false)}>
-            Anuluj
-          </Button>
-          <Button onClick={handleAddHistoryItem} variant="contained">
-            Dodaj sesję
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Dialog usuwania sesji produkcyjnej */}
-      <Dialog
-        open={deleteHistoryDialogOpen}
-        onClose={() => setDeleteHistoryDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Potwierdź usunięcie sesji produkcyjnej</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Czy na pewno chcesz usunąć tę sesję produkcyjną? Ta operacja jest nieodwracalna.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteHistoryDialogOpen(false)}>
-            Anuluj
-          </Button>
-          <Button 
-            onClick={handleConfirmDeleteHistoryItem} 
-            variant="contained" 
-            color="error"
-          >
-            Usuń sesję
-          </Button>
-        </DialogActions>
-      </Dialog>
+      
     </Container>
   );
 };

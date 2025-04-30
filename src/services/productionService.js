@@ -2454,7 +2454,7 @@ import {
           }
         }
       }
-
+      
       // Pobierz szczegóły partii i elementów inwentarza dla wszystkich materiałów
       if (materialIds.length > 0) {
         const { collection, query, where, getDocs, doc, getDoc } = await import('firebase/firestore');
@@ -2585,6 +2585,111 @@ import {
       return result;
     } catch (error) {
       console.error('Błąd podczas generowania raportu materiałów i LOT-ów:', error);
+      throw error;
+    }
+  };
+
+  // Zapisuje plan mieszań jako checklistę w zadaniu produkcyjnym
+  export const saveProductionMixingPlan = async (taskId, mixingPlan, userId) => {
+    try {
+      if (!taskId) {
+        throw new Error('Nie podano ID zadania produkcyjnego');
+      }
+      
+      // Pobierz referencję do dokumentu zadania
+      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+      const taskDoc = await getDoc(taskRef);
+      
+      if (!taskDoc.exists()) {
+        throw new Error('Nie znaleziono zadania produkcyjnego');
+      }
+      
+      // Przygotuj elementy checklisty na podstawie planu mieszań
+      const checklistItems = [];
+      
+      mixingPlan.forEach(mixing => {
+        // Dodaj nagłówek mieszania
+        const headerItem = {
+          id: `mixing-${mixing.mixingNumber}`,
+          type: 'header',
+          text: `Mieszanie nr ${mixing.mixingNumber}`,
+          details: `Objętość: ${mixing.volumeToMix.toFixed(4)} kg${mixing.piecesCount ? `, Liczba sztuk: ${mixing.piecesCount}` : ''}`,
+          completed: false,
+          createdAt: new Date().toISOString(),
+          createdBy: userId
+        };
+        
+        checklistItems.push(headerItem);
+        
+        // Dodaj składniki jako elementy checklisty pod nagłówkiem
+        mixing.ingredients.forEach((ingredient, index) => {
+          // Pomijamy opakowania (dodatkowe zabezpieczenie)
+          if (ingredient.name && !ingredient.name.includes('PACK')) {
+            const ingredientItem = {
+              id: `mixing-${mixing.mixingNumber}-ingredient-${index}`,
+              type: 'ingredient',
+              text: ingredient.name,
+              details: `Ilość: ${ingredient.quantity.toFixed(4)} ${ingredient.unit}`,
+              parentId: headerItem.id,
+              completed: false,
+              createdAt: new Date().toISOString(),
+              createdBy: userId
+            };
+            
+            checklistItems.push(ingredientItem);
+          }
+        });
+        
+        // Dodaj elementy sprawdzające dla każdego mieszania
+        const checkItems = [
+          {
+            id: `mixing-${mixing.mixingNumber}-check-ingredients`,
+            type: 'check',
+            text: 'Sprawdzenie składników',
+            parentId: headerItem.id,
+            completed: false,
+            createdAt: new Date().toISOString(),
+            createdBy: userId
+          },
+          {
+            id: `mixing-${mixing.mixingNumber}-add-to-mixer`,
+            type: 'check',
+            text: 'Dodane do mieszalnika',
+            parentId: headerItem.id,
+            completed: false,
+            createdAt: new Date().toISOString(),
+            createdBy: userId
+          },
+          {
+            id: `mixing-${mixing.mixingNumber}-mixing-complete`,
+            type: 'check',
+            text: 'Mieszanie zakończone',
+            parentId: headerItem.id,
+            completed: false,
+            createdAt: new Date().toISOString(),
+            createdBy: userId
+          }
+        ];
+        
+        checklistItems.push(...checkItems);
+      });
+      
+      // Przygotuj dane do aktualizacji
+      const updateData = {
+        mixingPlanChecklist: checklistItems,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      };
+      
+      // Zapisz checklistę w zadaniu
+      await updateDoc(taskRef, updateData);
+      
+      return {
+        success: true,
+        message: 'Plan mieszań został zapisany w zadaniu produkcyjnym'
+      };
+    } catch (error) {
+      console.error('Błąd podczas zapisywania planu mieszań:', error);
       throw error;
     }
   };

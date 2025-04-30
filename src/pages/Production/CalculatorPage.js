@@ -36,13 +36,16 @@ import {
   Info as InfoIcon,
   RestartAlt as ResetIcon,
   Assignment as AssignmentIcon,
-  FileDownload as FileDownloadIcon
+  FileDownload as FileDownloadIcon,
+  SaveAlt as SaveAltIcon
 } from '@mui/icons-material';
 import { useNotification } from '../../hooks/useNotification';
 import { getAllRecipes, getRecipeById } from '../../services/recipeService';
+import { useAuth } from '../../hooks/useAuth';
 
 const CalculatorPage = () => {
   const { showSuccess, showError, showInfo } = useNotification();
+  const { currentUser } = useAuth();
   
   // Główne stany kalkulatora
   const [mixerVolume, setMixerVolume] = useState(100);
@@ -618,6 +621,43 @@ ${';'.repeat(4)}\n`;
     }
   };
 
+  // Funkcja do zapisywania planu mieszań jako checklisty w zadaniu produkcyjnym (MO)
+  const saveMixingPlanToTask = async () => {
+    if (!selectedTaskId) {
+      showError('Wybierz zadanie produkcyjne (MO) przed zapisaniem planu mieszań');
+      return;
+    }
+    
+    if (!mixings || mixings.length === 0) {
+      showError('Brak planu mieszań do zapisania');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      // Importujemy funkcję do zapisywania planu mieszań
+      const { saveProductionMixingPlan } = await import('../../services/productionService');
+      
+      // Zapisujemy plan mieszań w zadaniu
+      const result = await saveProductionMixingPlan(
+        selectedTaskId,
+        mixings,
+        currentUser?.uid
+      );
+      
+      if (result.success) {
+        showSuccess('Plan mieszań został zapisany jako checklista w zadaniu produkcyjnym');
+      } else {
+        showError('Nie udało się zapisać planu mieszań w zadaniu produkcyjnym');
+      }
+    } catch (error) {
+      console.error('Błąd podczas zapisywania planu mieszań w zadaniu:', error);
+      showError('Wystąpił błąd podczas zapisywania planu mieszań: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Paper sx={{ p: 3, mb: 4, borderRadius: 2 }}>
@@ -766,6 +806,18 @@ ${';'.repeat(4)}\n`;
                   startIcon={<FileDownloadIcon />}
                 >
                   Eksportuj CSV
+                </Button>
+              )}
+              
+              {mixings.length > 0 && selectedTaskId && (
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  onClick={saveMixingPlanToTask}
+                  startIcon={<SaveAltIcon />}
+                  disabled={loading}
+                >
+                  Zapisz plan w MO
                 </Button>
               )}
               
