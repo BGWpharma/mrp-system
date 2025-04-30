@@ -50,6 +50,7 @@ import NotificationsMenu from './NotificationsMenu';
 import { getAllInventoryItems } from '../../services/inventoryService';
 import { getDocs, collection } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
+import BugReportDialog from './BugReportDialog';
 
 // Styled components
 const SearchIconWrapper = styled('div')(({ theme }) => ({
@@ -95,6 +96,7 @@ const Navbar = () => {
   const [searchResults, setSearchResults] = useState([]);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [bugReportDialogOpen, setBugReportDialogOpen] = useState(false);
   const navigate = useNavigate();
   const searchTimeout = useRef(null);
   const searchResultsRef = useRef(null);
@@ -369,271 +371,278 @@ const Navbar = () => {
   };
 
   return (
-    <AppBar 
-      position="static" 
-      elevation={0}
-      sx={{ 
-        backgroundColor: mode === 'dark' ? '#182136' : '#ffffff',
-        borderBottom: '1px solid',
-        borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
-        color: mode === 'dark' ? '#ffffff' : 'rgba(0, 0, 0, 0.87)'
-      }}
-    >
-      <Toolbar sx={{ justifyContent: 'space-between' }}>
-        {/* Logo */}
-        <Box sx={{ display: 'flex', alignItems: 'center', ml: 4 }}>
-          <Link 
-            to="/" 
-            style={{ 
-              textDecoration: 'none', 
-              display: 'flex',
-              alignItems: 'center'
-            }}
-          >
-            <Box
-              component="img"
-              src={mode === 'dark' ? '/BGWPharma_Logo_DarkTheme.png' : '/BGWPharma_Logo_LightTheme.png'}
-              alt="BGW Pharma Logo"
-              sx={{ 
-                height: '32px',
-                maxWidth: '160px',
-                padding: '3px 0',
-                objectFit: 'contain',
-                ml: 2
+    <>
+      <AppBar 
+        position="static" 
+        elevation={0}
+        sx={{ 
+          backgroundColor: mode === 'dark' ? '#182136' : '#ffffff',
+          borderBottom: '1px solid',
+          borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
+          color: mode === 'dark' ? '#ffffff' : 'rgba(0, 0, 0, 0.87)'
+        }}
+      >
+        <Toolbar sx={{ justifyContent: 'space-between' }}>
+          {/* Logo */}
+          <Box sx={{ display: 'flex', alignItems: 'center', ml: 4 }}>
+            <Link 
+              to="/" 
+              style={{ 
+                textDecoration: 'none', 
+                display: 'flex',
+                alignItems: 'center'
               }}
-            />
-          </Link>
-        </Box>
-        
-        {/* Search bar */}
-        <Box sx={{ position: 'relative', flexGrow: 1, maxWidth: 500, mx: 2 }} ref={searchResultsRef}>
-          <SearchIconWrapper>
-            <SearchIcon />
-          </SearchIconWrapper>
-          <StyledInputBase
-            placeholder="Szukaj PO, CO, MO, LOT..."
-            inputProps={{ 'aria-label': 'search' }}
-            value={searchQuery}
-            onChange={handleSearchChange}
-            onFocus={handleSearchFocus}
-            sx={{
-              width: '100%',
-              '& .MuiInputBase-input': {
-                paddingRight: isSearching ? '30px' : '8px',
-              }
-            }}
-          />
-          {isSearching && (
-            <CircularProgress 
-              size={20} 
-              sx={{ 
-                position: 'absolute', 
-                right: 16, 
-                top: '50%', 
-                transform: 'translateY(-50%)',
-                color: theme => theme.palette.text.secondary
-              }} 
-            />
-          )}
+            >
+              <Box
+                component="img"
+                src={mode === 'dark' ? '/BGWPharma_Logo_DarkTheme.png' : '/BGWPharma_Logo_LightTheme.png'}
+                alt="BGW Pharma Logo"
+                sx={{ 
+                  height: '32px',
+                  maxWidth: '160px',
+                  padding: '3px 0',
+                  objectFit: 'contain',
+                  ml: 2
+                }}
+              />
+            </Link>
+          </Box>
           
-          {/* Wyniki wyszukiwania */}
-          {isSearchFocused && searchResults.length > 0 && (
-            <Paper
+          {/* Search bar */}
+          <Box sx={{ position: 'relative', flexGrow: 1, maxWidth: 500, mx: 2 }} ref={searchResultsRef}>
+            <SearchIconWrapper>
+              <SearchIcon />
+            </SearchIconWrapper>
+            <StyledInputBase
+              placeholder="Szukaj PO, CO, MO, LOT..."
+              inputProps={{ 'aria-label': 'search' }}
+              value={searchQuery}
+              onChange={handleSearchChange}
+              onFocus={handleSearchFocus}
               sx={{
-                position: 'absolute',
-                top: '100%',
-                left: 0,
-                right: 0,
-                zIndex: 1000,
-                mt: 1,
-                maxHeight: '80vh',
-                overflow: 'auto',
-                boxShadow: 3,
-                bgcolor: mode === 'dark' ? '#1a2235' : '#ffffff',
+                width: '100%',
+                '& .MuiInputBase-input': {
+                  paddingRight: isSearching ? '30px' : '8px',
+                }
               }}
-            >
-              <List>
-                {searchResults.map((result) => (
-                  <ListItem 
-                    key={`${result.type}-${result.id}`} 
-                    button
-                    onClick={() => handleResultClick(result)}
-                    sx={{
-                      borderLeft: '4px solid',
-                      borderColor: () => {
-                        if (result.type === 'purchaseOrder') return '#3f51b5';
-                        if (result.type === 'customerOrder') return '#4caf50';
-                        if (result.type === 'productionTask') return '#ff9800';
-                        if (result.type === 'inventoryBatch') return '#e91e63';
-                        return 'transparent';
-                      }
-                    }}
-                  >
-                    <ListItemText 
-                      primary={
-                        <>
-                          {result.title}
-                          {result.lotInfo && <Chip size="small" label={result.lotInfo} sx={{ ml: 1, height: 20, fontSize: '0.7rem' }} />}
-                        </>
-                      }
-                      secondary={
-                        <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          {result.type === 'inventoryBatch' ? (
-                            <>
-                              <Chip 
-                                label={`Ilość: ${result.quantity} ${result.unit}`} 
-                                size="small" 
-                                sx={{ height: 20, fontSize: '0.7rem' }}
-                              />
-                              {result.expiryDate && 
-                                `Ważne do: ${new Date(result.expiryDate).toLocaleDateString('pl-PL')}`
-                              }
-                            </>
-                          ) : (
-                            <>
-                              <Chip 
-                                label={result.status} 
-                                size="small" 
-                                sx={{ height: 20, fontSize: '0.7rem' }}
-                              />
-                              {result.date && new Date(result.date).toLocaleDateString()}
-                            </>
-                          )}
-                        </Typography>
-                      }
-                    />
-                  </ListItem>
-                ))}
-              </List>
-            </Paper>
-          )}
-        </Box>
-        
-        {/* Right side items */}
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <Tooltip title={mode === 'dark' ? 'Przełącz na jasny motyw' : 'Przełącz na ciemny motyw'}>
-            <IconButton 
-              color="inherit" 
-              sx={{ ml: 1 }}
-              onClick={toggleTheme}
-              aria-label={mode === 'dark' ? 'Przełącz na jasny motyw' : 'Przełącz na ciemny motyw'}
-            >
-              {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
-            </IconButton>
-          </Tooltip>
-          
-          <Tooltip title="Przetłumacz na angielski">
-            <IconButton 
-              color="inherit" 
-              sx={{ ml: 1 }}
-              onClick={handleTranslate}
-              aria-label="Przetłumacz na angielski"
-            >
-              <TranslateIcon />
-            </IconButton>
-          </Tooltip>
-          
-          <NotificationsMenu />
-          
-          <Box sx={{ position: 'relative', ml: 2 }}>
-            <IconButton 
-              onClick={handleMenu} 
-              color="inherit" 
-              sx={{ 
-                border: '2px solid',
-                borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
-                padding: '4px'
-              }}
-            >
-              <Avatar 
-                src={currentUser?.photoURL || ''} 
-                alt={currentUser?.displayName || 'User'}
-                sx={{ width: 32, height: 32 }}
-              >
-                {!currentUser?.photoURL && <Person />}
-              </Avatar>
-            </IconButton>
+            />
+            {isSearching && (
+              <CircularProgress 
+                size={20} 
+                sx={{ 
+                  position: 'absolute', 
+                  right: 16, 
+                  top: '50%', 
+                  transform: 'translateY(-50%)',
+                  color: theme => theme.palette.text.secondary
+                }} 
+              />
+            )}
             
-            {isAdmin && (
-              <Tooltip title="Administrator">
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    bottom: -4,
-                    right: -4,
-                    backgroundColor: mode === 'dark' ? '#304FFE' : '#1565C0',
-                    borderRadius: '50%',
-                    width: 16,
-                    height: 16,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    border: '1px solid',
-                    borderColor: mode === 'dark' ? '#1A1A2E' : '#fff',
-                  }}
-                >
-                  <AdminIcon fontSize="inherit" sx={{ fontSize: 10, color: '#fff' }} />
-                </Box>
-              </Tooltip>
+            {/* Wyniki wyszukiwania */}
+            {isSearchFocused && searchResults.length > 0 && (
+              <Paper
+                sx={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  zIndex: 1000,
+                  mt: 1,
+                  maxHeight: '80vh',
+                  overflow: 'auto',
+                  boxShadow: 3,
+                  bgcolor: mode === 'dark' ? '#1a2235' : '#ffffff',
+                }}
+              >
+                <List>
+                  {searchResults.map((result) => (
+                    <ListItem 
+                      key={`${result.type}-${result.id}`} 
+                      button
+                      onClick={() => handleResultClick(result)}
+                      sx={{
+                        borderLeft: '4px solid',
+                        borderColor: () => {
+                          if (result.type === 'purchaseOrder') return '#3f51b5';
+                          if (result.type === 'customerOrder') return '#4caf50';
+                          if (result.type === 'productionTask') return '#ff9800';
+                          if (result.type === 'inventoryBatch') return '#e91e63';
+                          return 'transparent';
+                        }
+                      }}
+                    >
+                      <ListItemText 
+                        primary={
+                          <>
+                            {result.title}
+                            {result.lotInfo && <Chip size="small" label={result.lotInfo} sx={{ ml: 1, height: 20, fontSize: '0.7rem' }} />}
+                          </>
+                        }
+                        secondary={
+                          <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            {result.type === 'inventoryBatch' ? (
+                              <>
+                                <Chip 
+                                  label={`Ilość: ${result.quantity} ${result.unit}`} 
+                                  size="small" 
+                                  sx={{ height: 20, fontSize: '0.7rem' }}
+                                />
+                                {result.expiryDate && 
+                                  `Ważne do: ${new Date(result.expiryDate).toLocaleDateString('pl-PL')}`
+                                }
+                              </>
+                            ) : (
+                              <>
+                                <Chip 
+                                  label={result.status} 
+                                  size="small" 
+                                  sx={{ height: 20, fontSize: '0.7rem' }}
+                                />
+                                {result.date && new Date(result.date).toLocaleDateString()}
+                              </>
+                            )}
+                          </Typography>
+                        }
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
             )}
           </Box>
           
-          <Menu
-            anchorEl={anchorEl}
-            open={Boolean(anchorEl)}
-            onClose={handleClose}
-            transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-            anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-            PaperProps={{
-              elevation: 3,
-              sx: {
-                mt: 1.5,
-                backgroundColor: mode === 'dark' ? '#182136' : '#ffffff',
-                backgroundImage: 'none',
-                border: '1px solid',
-                borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
-                minWidth: 200
-              }
-            }}
-          >
-            <MenuItem component={Link} to="/profile" onClick={handleClose}>
-              <ListItemIcon><Person fontSize="small" /></ListItemIcon>
-              {isAdmin ? 'Profil administratora' : 'Profil'}
-            </MenuItem>
+          {/* Right side items */}
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Tooltip title={mode === 'dark' ? 'Przełącz na jasny motyw' : 'Przełącz na ciemny motyw'}>
+              <IconButton 
+                color="inherit" 
+                sx={{ ml: 1 }}
+                onClick={toggleTheme}
+                aria-label={mode === 'dark' ? 'Przełącz na jasny motyw' : 'Przełącz na ciemny motyw'}
+              >
+                {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
+              </IconButton>
+            </Tooltip>
             
-            {isAdmin && (
-              <>
-                <Divider />
-                <Typography variant="caption" color="text.secondary" sx={{ px: 2, py: 1, display: 'block' }}>
-                  Administracja
-                </Typography>
-                
-                <MenuItem component={Link} to="/admin/users" onClick={handleClose}>
-                  <ListItemIcon><PeopleIcon fontSize="small" /></ListItemIcon>
-                  Użytkownicy
-                </MenuItem>
-                
-                <MenuItem component={Link} to="/admin/system" onClick={handleClose}>
-                  <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
-                  Narzędzia systemowe
-                </MenuItem>
-                
-                <MenuItem component={Link} to="/admin/bug-reports" onClick={handleClose}>
-                  <ListItemIcon><BugReportIcon fontSize="small" /></ListItemIcon>
-                  Zgłoszenia błędów
-                </MenuItem>
-                <Divider />
-              </>
-            )}
+            <Tooltip title="Przetłumacz na angielski">
+              <IconButton 
+                color="inherit" 
+                sx={{ ml: 1 }}
+                onClick={handleTranslate}
+                aria-label="Przetłumacz na angielski"
+              >
+                <TranslateIcon />
+              </IconButton>
+            </Tooltip>
             
-            <MenuItem onClick={handleLogout}>
-              <ListItemIcon><ExitToApp fontSize="small" /></ListItemIcon>
-              Wyloguj
-            </MenuItem>
-          </Menu>
-        </Box>
-      </Toolbar>
-    </AppBar>
+            <NotificationsMenu />
+            
+            <Box sx={{ position: 'relative', ml: 2 }}>
+              <IconButton 
+                onClick={handleMenu} 
+                color="inherit" 
+                sx={{ 
+                  border: '2px solid',
+                  borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+                  padding: '4px'
+                }}
+              >
+                <Avatar 
+                  src={currentUser?.photoURL || ''} 
+                  alt={currentUser?.displayName || 'User'}
+                  sx={{ width: 32, height: 32 }}
+                >
+                  {!currentUser?.photoURL && <Person />}
+                </Avatar>
+              </IconButton>
+              
+              {isAdmin && (
+                <Tooltip title="Administrator">
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      bottom: -4,
+                      right: -4,
+                      backgroundColor: mode === 'dark' ? '#304FFE' : '#1565C0',
+                      borderRadius: '50%',
+                      width: 16,
+                      height: 16,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: '1px solid',
+                      borderColor: mode === 'dark' ? '#1A1A2E' : '#fff',
+                    }}
+                  >
+                    <AdminIcon fontSize="inherit" sx={{ fontSize: 10, color: '#fff' }} />
+                  </Box>
+                </Tooltip>
+              )}
+            </Box>
+            
+            <Menu
+              anchorEl={anchorEl}
+              open={Boolean(anchorEl)}
+              onClose={handleClose}
+              transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+              anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+              PaperProps={{
+                elevation: 3,
+                sx: {
+                  mt: 1.5,
+                  backgroundColor: mode === 'dark' ? '#182136' : '#ffffff',
+                  backgroundImage: 'none',
+                  border: '1px solid',
+                  borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
+                  minWidth: 200
+                }
+              }}
+            >
+              <MenuItem component={Link} to="/profile" onClick={handleClose}>
+                <ListItemIcon><Person fontSize="small" /></ListItemIcon>
+                {isAdmin ? 'Profil administratora' : 'Profil'}
+              </MenuItem>
+              
+              {isAdmin && (
+                <>
+                  <Divider />
+                  <Typography variant="caption" color="text.secondary" sx={{ px: 2, py: 1, display: 'block' }}>
+                    Administracja
+                  </Typography>
+                  
+                  <MenuItem component={Link} to="/admin/users" onClick={handleClose}>
+                    <ListItemIcon><PeopleIcon fontSize="small" /></ListItemIcon>
+                    Użytkownicy
+                  </MenuItem>
+                  
+                  <MenuItem component={Link} to="/admin/system" onClick={handleClose}>
+                    <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
+                    Narzędzia systemowe
+                  </MenuItem>
+                  
+                  <MenuItem component={Link} to="/admin/bug-reports" onClick={handleClose}>
+                    <ListItemIcon><BugReportIcon fontSize="small" /></ListItemIcon>
+                    Zgłoszenia błędów
+                  </MenuItem>
+                  <Divider />
+                </>
+              )}
+              
+              <MenuItem onClick={handleLogout}>
+                <ListItemIcon><ExitToApp fontSize="small" /></ListItemIcon>
+                Wyloguj
+              </MenuItem>
+            </Menu>
+          </Box>
+        </Toolbar>
+      </AppBar>
+      
+      <BugReportDialog 
+        open={bugReportDialogOpen} 
+        onClose={() => setBugReportDialogOpen(false)} 
+      />
+    </>
   );
 };
 
