@@ -27,36 +27,66 @@
     -->
   <title>BGW-MRP</title>
   <script>
-    function addTimestamp() {
-      const timestamp = new Date().getTime();
-      const scripts = document.getElementsByTagName('script');
-      const links = document.getElementsByTagName('link');
+    const newVersion = '1.0.7';
+
+    // Funkcja do dodawania parametru wersji do zasobów
+    function addVersionToResources() {
+      const scripts = document.querySelectorAll('script[src]');
+      const links = document.querySelectorAll('link[href]');
       
-      for (let i = 0; i < scripts.length; i++) {
-        if (scripts[i].src) {
-          scripts[i].src = scripts[i].src + '?v=' + timestamp;
+      scripts.forEach(script => {
+        if (script.src && !script.src.includes('?v=')) {
+          script.src = script.src + '?v=' + newVersion;
         }
-      }
+      });
       
-      for (let i = 0; i < links.length; i++) {
-        if (links[i].href) {
-          links[i].href = links[i].href + '?v=' + timestamp;
+      links.forEach(link => {
+        if (link.href && !link.href.includes('?v=')) {
+          link.href = link.href + '?v=' + newVersion;
+        }
+      });
+    }
+    
+    // Funkcja sprawdzająca wersję aplikacji
+    function checkAppVersion() {
+      const currentVersion = localStorage.getItem('appVersion');
+      
+      if (currentVersion !== newVersion) {
+        localStorage.setItem('appVersion', newVersion);
+        
+        if (currentVersion) {
+          // Jeśli to nie jest pierwsze uruchomienie, wymuszamy pełne odświeżenie
+          caches.keys().then(cacheNames => {
+            return Promise.all(
+              cacheNames.map(cacheName => {
+                return caches.delete(cacheName);
+              })
+            );
+          }).then(() => {
+            window.location.reload(true);
+          });
         }
       }
     }
     
+    // Uruchamiamy sprawdzanie wersji natychmiast
+    checkAppVersion();
+    
+    // Po załadowaniu strony dodajemy wersję do zasobów
     window.onload = function() {
-      addTimestamp();
-      const currentVersion = localStorage.getItem('appVersion');
-      const newVersion = '1.0.6';
-      
-      if (currentVersion !== newVersion) {
-        localStorage.setItem('appVersion', newVersion);
-        if (currentVersion) {
-          window.location.reload(true);
-        }
-      }
+      addVersionToResources();
     };
+    
+    // Rejestrujemy zdarzenie do obsługi Service Workera (jeśli jest używany)
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for (let registration of registrations) {
+            registration.update();
+          }
+        });
+      });
+    }
   </script>
 </head>
 

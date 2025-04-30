@@ -1,0 +1,31 @@
+{
+  "rules": {
+    ".read": "auth != null",
+    ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+    
+    "users": {
+      "$user_id": {
+        ".read": "auth != null && auth.uid === $user_id",
+        ".write": "auth != null && (auth.uid === $user_id || root.child('users').child(auth.uid).child('role').val() === 'admin')"
+      }
+    },
+    
+    "sensors": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+      "$sensor_id": {
+        "data": {
+          ".write": "auth != null && root.child('sensors').child($sensor_id).child('authorizedUsers').child(auth.uid).exists()"
+        }
+      }
+    },
+    
+    "history": {
+      ".read": "auth != null",
+      "$sensor_id": {
+        ".indexOn": ["timestamp"],
+        ".write": "auth != null && (root.child('sensors').child($sensor_id).child('authorizedUsers').child(auth.uid).exists() || root.child('users').child(auth.uid).child('role').val() === 'admin')"
+      }
+    }
+  }
+} 
