@@ -34,7 +34,8 @@ import {
   ProductionQuantityLimits as ProductIcon,
   Person as PersonIcon,
   FilterList as FilterIcon,
-  Info as InfoIcon
+  Info as InfoIcon,
+  ArrowDropUp as ArrowDropUpIcon
 } from '@mui/icons-material';
 import { getAllRecipes, deleteRecipe, getRecipesByCustomer } from '../../services/recipeService';
 import { getAllCustomers } from '../../services/customerService';
@@ -67,6 +68,12 @@ const RecipeList = () => {
   
   // Dodajemy stan dla powiadomienia o indeksie Firestore
   const [showIndexAlert, setShowIndexAlert] = useState(false);
+
+  // Dodajemy stan dla sortowania
+  const [tableSort, setTableSort] = useState({
+    field: 'name',
+    order: 'asc'
+  });
 
   // Pobierz wszystkie receptury przy montowaniu komponentu
   useEffect(() => {
@@ -142,6 +149,105 @@ const RecipeList = () => {
     }
   };
 
+  const handleTableSort = (field) => {
+    const newOrder = tableSort.field === field && tableSort.order === 'asc' ? 'desc' : 'asc';
+    setTableSort({
+      field,
+      order: newOrder
+    });
+    
+    // Sortuj receptury według wybranego pola
+    sortRecipes(field, newOrder);
+  };
+
+  const sortRecipes = (field, order) => {
+    let sortedRecipes = [...filteredRecipes];
+    
+    sortedRecipes.sort((a, b) => {
+      let valueA, valueB;
+      
+      // Obsługa różnych typów pól
+      if (field === 'name') {
+        valueA = (a.name || '').toLowerCase();
+        valueB = (b.name || '').toLowerCase();
+        return order === 'asc' 
+          ? valueA.localeCompare(valueB) 
+          : valueB.localeCompare(valueA);
+      } else if (field === 'description') {
+        valueA = (a.description || '').toLowerCase();
+        valueB = (b.description || '').toLowerCase();
+        return order === 'asc' 
+          ? valueA.localeCompare(valueB) 
+          : valueB.localeCompare(valueA);
+      } else if (field === 'customer') {
+        // Znajdź nazwy klientów
+        const customerA = customers.find(c => c.id === a.customerId);
+        const customerB = customers.find(c => c.id === b.customerId);
+        valueA = (customerA?.name || '').toLowerCase();
+        valueB = (customerB?.name || '').toLowerCase();
+        return order === 'asc' 
+          ? valueA.localeCompare(valueB) 
+          : valueB.localeCompare(valueA);
+      } else if (field === 'updatedAt') {
+        valueA = a.updatedAt ? new Date(a.updatedAt.toDate()).getTime() : 0;
+        valueB = b.updatedAt ? new Date(b.updatedAt.toDate()).getTime() : 0;
+      } else {
+        // Domyślnie
+        valueA = a[field] || '';
+        valueB = b[field] || '';
+      }
+      
+      // Sortowanie liczbowe lub domyślne
+      if (typeof valueA === 'number' && typeof valueB === 'number') {
+        return order === 'asc' ? valueA - valueB : valueB - valueA;
+      }
+      
+      return 0;
+    });
+    
+    setFilteredRecipes(sortedRecipes);
+    
+    // Zaktualizuj również posortowane receptury w grupach
+    if (tabValue === 1) {
+      const updatedGroups = { ...groupedRecipes };
+      
+      Object.keys(updatedGroups).forEach(groupId => {
+        if (updatedGroups[groupId].recipes.length > 0) {
+          let sortedGroupRecipes = [...updatedGroups[groupId].recipes];
+          
+          sortedGroupRecipes.sort((a, b) => {
+            let valueA, valueB;
+            
+            if (field === 'name') {
+              valueA = (a.name || '').toLowerCase();
+              valueB = (b.name || '').toLowerCase();
+              return order === 'asc' 
+                ? valueA.localeCompare(valueB) 
+                : valueB.localeCompare(valueA);
+            } else if (field === 'description') {
+              valueA = (a.description || '').toLowerCase();
+              valueB = (b.description || '').toLowerCase();
+              return order === 'asc' 
+                ? valueA.localeCompare(valueB) 
+                : valueB.localeCompare(valueA);
+            } else if (field === 'updatedAt') {
+              valueA = a.updatedAt ? new Date(a.updatedAt.toDate()).getTime() : 0;
+              valueB = b.updatedAt ? new Date(b.updatedAt.toDate()).getTime() : 0;
+              return order === 'asc' ? valueA - valueB : valueB - valueA;
+            }
+            
+            return 0;
+          });
+          
+          updatedGroups[groupId].recipes = sortedGroupRecipes;
+        }
+      });
+      
+      setGroupedRecipes(updatedGroups);
+    }
+  };
+
+  // Modyfikujemy funkcję filterRecipes, aby zachować sortowanie
   const filterRecipes = () => {
     let filtered = [...recipes];
     
@@ -154,6 +260,9 @@ const RecipeList = () => {
     }
     
     setFilteredRecipes(filtered);
+    
+    // Zastosuj aktywne sortowanie
+    sortRecipes(tableSort.field, tableSort.order);
   };
   
   const groupRecipesByCustomer = () => {
@@ -219,10 +328,58 @@ const RecipeList = () => {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>SKU</TableCell>
-                <TableCell>Opis</TableCell>
-                <TableCell>Klient</TableCell>
-                <TableCell>Ostatnia aktualizacja</TableCell>
+                <TableCell onClick={() => handleTableSort('name')} style={{ cursor: 'pointer' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    SKU
+                    {tableSort.field === 'name' && (
+                      <ArrowDropUpIcon 
+                        sx={{ 
+                          transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
+                          transition: 'transform 0.2s'
+                        }} 
+                      />
+                    )}
+                  </Box>
+                </TableCell>
+                <TableCell onClick={() => handleTableSort('description')} style={{ cursor: 'pointer' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    Opis
+                    {tableSort.field === 'description' && (
+                      <ArrowDropUpIcon 
+                        sx={{ 
+                          transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
+                          transition: 'transform 0.2s'
+                        }} 
+                      />
+                    )}
+                  </Box>
+                </TableCell>
+                <TableCell onClick={() => handleTableSort('customer')} style={{ cursor: 'pointer' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    Klient
+                    {tableSort.field === 'customer' && (
+                      <ArrowDropUpIcon 
+                        sx={{ 
+                          transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
+                          transition: 'transform 0.2s'
+                        }} 
+                      />
+                    )}
+                  </Box>
+                </TableCell>
+                <TableCell onClick={() => handleTableSort('updatedAt')} style={{ cursor: 'pointer' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    Ostatnia aktualizacja
+                    {tableSort.field === 'updatedAt' && (
+                      <ArrowDropUpIcon 
+                        sx={{ 
+                          transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
+                          transition: 'transform 0.2s'
+                        }} 
+                      />
+                    )}
+                  </Box>
+                </TableCell>
                 <TableCell align="right">Akcje</TableCell>
               </TableRow>
             </TableHead>

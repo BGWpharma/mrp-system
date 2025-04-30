@@ -68,6 +68,7 @@ import EditReservationDialog from './EditReservationDialog';
 import { doc, getDoc, updateDoc, serverTimestamp, collection, getDocs, addDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
+import { INVENTORY_CATEGORIES } from '../../utils/constants';
 
 // Definicje stałych (takie same jak w inventoryService.js)
 const INVENTORY_TRANSACTIONS_COLLECTION = 'inventoryTransactions';
@@ -1097,17 +1098,21 @@ const InventoryList = () => {
                 startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
               }}
             />
-            <TextField
-              label="Szukaj kategorii"
-              variant="outlined"
-              value={searchCategory}
-              onChange={handleSearchCategoryChange}
-              size="small"
-              sx={{ flexGrow: 1, minWidth: '200px' }}
-              InputProps={{
-                startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
-              }}
-            />
+            <FormControl sx={{ flexGrow: 1, minWidth: '200px' }}>
+              <InputLabel id="category-select-label">Szukaj kategorii</InputLabel>
+              <Select
+                labelId="category-select-label"
+                value={searchCategory}
+                label="Szukaj kategorii"
+                onChange={handleSearchCategoryChange}
+                size="small"
+              >
+                <MenuItem value="">Wszystkie kategorie</MenuItem>
+                {Object.values(INVENTORY_CATEGORIES).map((category) => (
+                  <MenuItem key={category} value={category}>{category}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
             <Button 
               variant="contained" 
               onClick={handleSearch}
