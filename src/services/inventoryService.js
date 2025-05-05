@@ -1062,31 +1062,33 @@ import {
       // Uzupełnij informacje o zadaniach produkcyjnych dla transakcji rezerwacji
       for (const transaction of transactions) {
         if ((transaction.type === 'booking' || transaction.type === 'booking_cancel') && transaction.referenceId) {
-          // Sprawdź, czy już mamy dane zadania w transakcji
-          if (!transaction.taskNumber && !transaction.taskName) {
-            try {
-              const taskRef = doc(db, 'productionTasks', transaction.referenceId);
-              const taskDoc = await getDoc(taskRef);
+          try {
+            // Zawsze sprawdzaj aktualny stan zadania produkcyjnego
+            const taskRef = doc(db, 'productionTasks', transaction.referenceId);
+            const taskDoc = await getDoc(taskRef);
+            
+            if (taskDoc.exists()) {
+              const taskData = taskDoc.data();
+              // Aktualizuj dane w transakcji
+              transaction.taskName = taskData.name || '';
+              transaction.taskNumber = taskData.number || '';
+              // Dodawaj informacje o numerze MO
+              transaction.moNumber = taskData.moNumber || '';
+              transaction.clientName = taskData.clientName || '';
+              transaction.clientId = taskData.clientId || '';
               
-              if (taskDoc.exists()) {
-                const taskData = taskDoc.data();
-                transaction.taskName = taskData.name || '';
-                transaction.taskNumber = taskData.number || '';
-                transaction.clientName = taskData.clientName || '';
-                transaction.clientId = taskData.clientId || '';
-                
-                // Zaktualizuj transakcję, aby zapisać te dane na przyszłość
-                await updateDoc(doc(transactionsRef, transaction.id), {
-                  taskName: transaction.taskName,
-                  taskNumber: transaction.taskNumber,
-                  clientName: transaction.clientName,
-                  clientId: transaction.clientId
-                });
-              }
-            } catch (error) {
-              console.error('Błąd podczas pobierania danych zadania:', error);
-              // Kontynuuj, nawet jeśli nie udało się pobrać danych zadania
+              // Zaktualizuj transakcję w bazie danych
+              await updateDoc(doc(transactionsRef, transaction.id), {
+                taskName: transaction.taskName,
+                taskNumber: transaction.taskNumber,
+                moNumber: transaction.moNumber,
+                clientName: transaction.clientName,
+                clientId: transaction.clientId
+              });
             }
+          } catch (error) {
+            console.error('Błąd podczas pobierania danych zadania:', error);
+            // Kontynuuj, nawet jeśli nie udało się pobrać danych zadania
           }
           
           // Sprawdź, czy mamy informacje o partii dla rezerwacji
@@ -3777,6 +3779,7 @@ import {
             taskId: taskId,
             taskName: transaction.taskName || '',
             taskNumber: transaction.taskNumber || '',
+            moNumber: transaction.moNumber || '', // Dodanie numeru MO
             clientName: transaction.clientName || '',
             clientId: transaction.clientId || '',
             totalQuantity: 0,

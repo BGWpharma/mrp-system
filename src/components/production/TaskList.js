@@ -731,9 +731,9 @@ const TaskList = () => {
                       {visibleColumns.cost && (
                         <TableCell>
                           {task.unitMaterialCost !== undefined ? 
-                            `${parseFloat(task.unitMaterialCost).toFixed(2)} €` : 
+                            `${parseFloat(task.unitMaterialCost)} €` : 
                             (task.totalMaterialCost !== undefined && task.quantity ? 
-                              `${(parseFloat(task.totalMaterialCost) / parseFloat(task.quantity)).toFixed(2)} €` : '-')}
+                              `${parseFloat(task.totalMaterialCost) / parseFloat(task.quantity)} €` : '-')}
                         </TableCell>
                       )}
                       {visibleColumns.totalCost && (

@@ -85,11 +85,12 @@ const InventoryItemForm = ({ itemId }) => {
       if (itemId) {
         await updateInventoryItem(itemId, itemData, currentUser.uid);
         showSuccess('Pozycja została zaktualizowana');
+        navigate(`/inventory/${itemId}`);
       } else {
-        await createInventoryItem(itemData, currentUser.uid);
+        const newItem = await createInventoryItem(itemData, currentUser.uid);
         showSuccess('Pozycja została utworzona');
+        navigate('/inventory');
       }
-      navigate('/inventory');
     } catch (error) {
       showError('Błąd podczas zapisywania pozycji: ' + error.message);
       console.error('Error saving inventory item:', error);
@@ -126,7 +127,7 @@ const InventoryItemForm = ({ itemId }) => {
         <Button 
           variant="outlined"
           startIcon={<ArrowBackIcon />} 
-          onClick={() => navigate('/inventory')}
+          onClick={() => itemId ? navigate(`/inventory/${itemId}`) : navigate('/inventory')}
           sx={{ 
             borderRadius: '8px', 
             boxShadow: '0 2px 4px rgba(0,0,0,0.1)'

@@ -26,7 +26,8 @@ import {
   FormControl,
   InputLabel,
   IconButton,
-  CircularProgress
+  CircularProgress,
+  Tooltip
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -41,9 +42,10 @@ import {
   Refresh as RefreshIcon,
   SortByAlpha as SortIcon,
   FilterList as FilterIcon,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  Cached as CachedIcon
 } from '@mui/icons-material';
-import { getInventoryItemById, getItemTransactions, getItemBatches, getSupplierPrices, deleteReservation, cleanupDeletedTaskReservations, getReservationsGroupedByTask, cleanupItemReservations, getAllWarehouses } from '../../services/inventoryService';
+import { getInventoryItemById, getItemTransactions, getItemBatches, getSupplierPrices, deleteReservation, cleanupDeletedTaskReservations, getReservationsGroupedByTask, cleanupItemReservations, getAllWarehouses, recalculateItemQuantity } from '../../services/inventoryService';
 import { getAllSuppliers } from '../../services/supplierService';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
@@ -90,6 +92,7 @@ const ItemDetailsPage = () => {
   const [sortField, setSortField] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState('desc');
   const [updatingReservations, setUpdatingReservations] = useState(false);
+  const [refreshingQuantity, setRefreshingQuantity] = useState(false);
 
   useEffect(() => {
     const fetchItemData = async () => {
@@ -397,6 +400,25 @@ const ItemDetailsPage = () => {
     }
   };
 
+  // Funkcja do odświeżania ilości towaru
+  const handleRefreshQuantity = async () => {
+    try {
+      setRefreshingQuantity(true);
+      const newQuantity = await recalculateItemQuantity(id);
+      
+      // Pobierz zaktualizowane dane pozycji
+      const updatedItem = await getInventoryItemById(id);
+      setItem(updatedItem);
+      
+      showSuccess(`Odświeżono ilość towaru. Aktualny stan: ${newQuantity} ${updatedItem.unit}`);
+    } catch (error) {
+      console.error('Błąd podczas odświeżania ilości:', error);
+      showError('Wystąpił błąd podczas odświeżania ilości: ' + error.message);
+    } finally {
+      setRefreshingQuantity(false);
+    }
+  };
+
   if (loading) {
     return <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>Ładowanie danych...</Container>;
   }
@@ -432,6 +454,17 @@ const ItemDetailsPage = () => {
           Szczegóły pozycji magazynowej
         </Typography>
         <Box>
+          <Tooltip title="Odśwież ilość towaru">
+            <Button 
+              variant="outlined" 
+              onClick={handleRefreshQuantity}
+              startIcon={refreshingQuantity ? <CircularProgress size={20} /> : <CachedIcon />}
+              sx={{ mr: 1 }}
+              disabled={refreshingQuantity}
+            >
+              Odśwież ilość
+            </Button>
+          </Tooltip>
           <Button 
             variant="outlined" 
             component={Link} 
@@ -454,18 +487,8 @@ const ItemDetailsPage = () => {
             variant="outlined"
             onClick={handleOpenLabelDialog}
             startIcon={<QrCodeIcon />}
-            sx={{ mr: 1 }}
           >
             Drukuj etykietę
-          </Button>
-          <Button 
-            variant="contained" 
-            color="primary"
-            component={Link} 
-            to={`/inventory/${id}/receive`}
-            startIcon={<AddIcon />}
-          >
-            Przyjmij dostawę
           </Button>
         </Box>
       </Box>
@@ -726,34 +749,6 @@ const ItemDetailsPage = () => {
             <Grid item xs={12} md={6}>
               <Paper elevation={1} sx={{ p: 2, mb: 3, borderRadius: 2 }}>
                 <Typography variant="h6" gutterBottom sx={{ borderBottom: '1px solid', borderColor: theme => theme.palette.mode === 'dark' ? 'divider' : '#e0e0e0', pb: 1, fontWeight: 'bold' }}>
-                  Dane logistyczne
-                </Typography>
-                <TableContainer>
-                  <Table sx={{ '& td, & th': { borderBottom: '1px solid', borderColor: theme => theme.palette.mode === 'dark' ? 'divider' : '#f5f5f5', py: 1.5 } }}>
-                    <TableBody>
-                      <TableRow>
-                        <TableCell component="th" sx={{ width: '40%', fontWeight: 'medium' }}>Minimalny stan</TableCell>
-                        <TableCell>{item.minStock ? `${item.minStock} ${item.unit}` : 'Nie określono'}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>Maksymalny stan</TableCell>
-                        <TableCell>{item.maxStock ? `${item.maxStock} ${item.unit}` : 'Nie określono'}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>Ilość kartonów na paletę</TableCell>
-                        <TableCell>{item.boxesPerPallet ? `${item.boxesPerPallet} szt.` : 'Nie określono'}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>Ilość produktu per karton</TableCell>
-                        <TableCell>{item.itemsPerBox ? `${item.itemsPerBox} ${item.unit}` : 'Nie określono'}</TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Paper>
-
-              <Paper elevation={1} sx={{ p: 2, mb: 3, borderRadius: 2 }}>
-                <Typography variant="h6" gutterBottom sx={{ borderBottom: '1px solid', borderColor: theme => theme.palette.mode === 'dark' ? 'divider' : '#e0e0e0', pb: 1, fontWeight: 'bold' }}>
                   Dane finansowe
                 </Typography>
                 <TableContainer>
@@ -989,16 +984,6 @@ const ItemDetailsPage = () => {
               </Button>
               <Button 
                 startIcon={updatingReservations ? <CircularProgress size={20} /> : <DeleteIcon />} 
-                onClick={handleCleanupAllItemReservations}
-                variant="outlined"
-                color="error"
-                disabled={updatingReservations}
-                sx={{ mr: 2 }}
-              >
-                {updatingReservations ? 'Czyszczenie...' : 'Usuń wszystkie rezerwacje'}
-              </Button>
-              <Button 
-                startIcon={updatingReservations ? <CircularProgress size={20} /> : <DeleteIcon />} 
                 onClick={handleCleanupDeletedTaskReservations}
                 variant="outlined"
                 color="warning"
@@ -1054,8 +1039,14 @@ const ItemDetailsPage = () => {
                         </IconButton>
                       </Box>
                     </TableCell>
-                    <TableCell>Nr MO</TableCell>
-                    <TableCell>Klient</TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        Nr MO
+                        <IconButton size="small" onClick={() => handleSort('moNumber')}>
+                          <SortIcon />
+                        </IconButton>
+                      </Box>
+                    </TableCell>
                     <TableCell>Partia</TableCell>
                     <TableCell>Status</TableCell>
                     <TableCell align="right">Akcje</TableCell>
@@ -1081,10 +1072,7 @@ const ItemDetailsPage = () => {
                           {reservation.taskName || '—'}
                         </TableCell>
                         <TableCell>
-                          {reservation.taskNumber || '—'}
-                        </TableCell>
-                        <TableCell>
-                          {reservation.clientName || '—'}
+                          {reservation.moNumber || '—'}
                         </TableCell>
                         <TableCell>
                           {reservation.batches?.map((batch, batchIndex) => (

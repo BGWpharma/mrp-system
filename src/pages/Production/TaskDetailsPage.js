@@ -2108,10 +2108,10 @@ const TaskDetailsPage = () => {
               )}
             </Typography>
             <Typography variant="body1">
-              <strong>Koszt materiałów na jednostkę:</strong> {unitMaterialCost.toFixed(2)} €/{task.unit}
+              <strong>Koszt materiałów na jednostkę:</strong> {unitMaterialCost} €/{task.unit}
               {task.unitMaterialCost !== undefined && costChanged && (
                 <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                  (W bazie: {task.unitMaterialCost.toFixed(2)} €/{task.unit})
+                  (W bazie: {task.unitMaterialCost} €/{task.unit})
                 </Typography>
               )}
             </Typography>
