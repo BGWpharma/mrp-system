@@ -141,6 +141,7 @@ const TaskDetailsPage = () => {
   const [expandedMaterial, setExpandedMaterial] = useState(null);
   const [deleteHistoryItem, setDeleteHistoryItem] = useState(null);
   const [deleteHistoryDialogOpen, setDeleteHistoryDialogOpen] = useState(false);
+  const [includeInCosts, setIncludeInCosts] = useState({});
 
   const fetchTask = async () => {
     try {
@@ -189,6 +190,16 @@ const TaskDetailsPage = () => {
         });
         
         setMaterialQuantities(quantities);
+        
+        // Inicjalizacja stanu includeInCosts - domyślnie wszystkie materiały są wliczane do kosztów
+        const costsInclude = {};
+        materialsList.forEach(material => {
+          costsInclude[material.id] = fetchedTask.materialInCosts && fetchedTask.materialInCosts[material.id] !== undefined
+            ? fetchedTask.materialInCosts[material.id]
+            : true;
+        });
+        
+        setIncludeInCosts(costsInclude);
       }
       
       // Jeśli zadanie ma historię statusów, pobierz dane użytkowników
@@ -1296,6 +1307,10 @@ const TaskDetailsPage = () => {
             .not-reserved {
               background-color: #ffebee;
             }
+            .excluded {
+              text-decoration: line-through;
+              color: #888;
+            }
           </style>
         </head>
         <body>
@@ -1331,30 +1346,39 @@ const TaskDetailsPage = () => {
                   <th>Cena jedn.</th>
                   <th>Koszt</th>
                   <th>Stan</th>
+                  <th>Wliczany do kosztów</th>
                 </tr>
               </thead>
               <tbody>
                 ${report.materials.map(material => {
-                  const materialId = material.inventoryItemId || material.id;
-                  const reservedBatches = task.materialBatches && task.materialBatches[materialId];
-                  const hasReservedBatches = reservedBatches && reservedBatches.length > 0;
-                  
-                  // Oblicz koszt materiału
-                  const quantity = material.quantity || 0;
-                  const unitPrice = material.unitPrice || 0;
-                  const cost = quantity * unitPrice;
+                  const isReserved = material.batches && material.batches.length > 0;
+                  const isIncludedInCosts = includeInCosts[material.id] !== undefined ? includeInCosts[material.id] : true;
+                  const rowClass = isReserved ? 'reserved' : 'not-reserved';
+                  const nameClass = !isIncludedInCosts ? 'excluded' : '';
                   
                   return `
-                    <tr class="${hasReservedBatches ? 'reserved' : 'not-reserved'}">
-                      <td>${material.name}</td>
-                      <td>${material.quantity}</td>
-                      <td>${material.unit}</td>
-                      <td>${hasReservedBatches ? unitPrice.toFixed(2) + ' €' : '—'}</td>
-                      <td>${hasReservedBatches ? cost.toFixed(2) + ' €' : '—'}</td>
-                      <td>${hasReservedBatches ? 'Zarezerwowano' : 'Nie zarezerwowano'}</td>
-                    </tr>
+                  <tr class="${rowClass}">
+                    <td class="${nameClass}">${material.name}</td>
+                    <td>${material.quantity}</td>
+                    <td>${material.unit || 'szt.'}</td>
+                    <td>${material.unitPrice ? `${material.unitPrice.toFixed(2)} €` : '—'}</td>
+                    <td>${material.cost ? `${material.cost.toFixed(2)} €` : '—'}</td>
+                    <td>${material.available ? 'Dostępny' : 'Brak'}</td>
+                    <td>${isIncludedInCosts ? 'Tak' : 'Nie'}</td>
+                  </tr>
                   `;
                 }).join('')}
+                
+                <tr>
+                  <th colspan="4" style="text-align: right">Całkowity koszt materiałów:</th>
+                  <th>${report.totalMaterialCost ? `${report.totalMaterialCost.toFixed(2)} €` : '—'}</th>
+                  <th colspan="2"></th>
+                </tr>
+                <tr>
+                  <th colspan="4" style="text-align: right">Koszt materiałów na jednostkę:</th>
+                  <th>${report.unitMaterialCost ? `${report.unitMaterialCost.toFixed(2)} €/${task.unit}` : '—'}</th>
+                  <th colspan="2"></th>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -1395,48 +1419,6 @@ const TaskDetailsPage = () => {
                 </tbody>
               </table>`
             }
-          </div>
-          
-          <div class="section">
-            <h3>Podsumowanie kosztów</h3>
-            <table>
-              <tr>
-                <th>Całkowity koszt materiałów:</th>
-                <td>
-                  ${report.materials.reduce((sum, material) => {
-                    const materialId = material.inventoryItemId || material.id;
-                    const reservedBatches = task.materialBatches && task.materialBatches[materialId];
-                    
-                    // Uwzględnij koszt tylko jeśli materiał ma zarezerwowane partie
-                    if (reservedBatches && reservedBatches.length > 0) {
-                      const quantity = material.quantity || 0;
-                      const unitPrice = material.unitPrice || 0;
-                      return sum + (quantity * unitPrice);
-                    }
-                    return sum;
-                  }, 0).toFixed(2)} €
-                </td>
-              </tr>
-              <tr>
-                <th>Koszt materiałów na jednostkę produktu:</th>
-                <td>
-                  ${task.quantity ? 
-                    (report.materials.reduce((sum, material) => {
-                      const materialId = material.inventoryItemId || material.id;
-                      const reservedBatches = task.materialBatches && task.materialBatches[materialId];
-                      
-                      // Uwzględnij koszt tylko jeśli materiał ma zarezerwowane partie
-                      if (reservedBatches && reservedBatches.length > 0) {
-                        const quantity = material.quantity || 0;
-                        const unitPrice = material.unitPrice || 0;
-                        return sum + (quantity * unitPrice);
-                      }
-                      return sum;
-                    }, 0) / task.quantity).toFixed(2) 
-                    : '0.00'} €/${task.unit}
-                </td>
-              </tr>
-            </table>
           </div>
           
           <div class="footer">
@@ -2025,8 +2007,8 @@ const TaskDetailsPage = () => {
         const materialId = material.inventoryItemId || material.id;
         const reservedBatches = task.materialBatches && task.materialBatches[materialId];
         
-        // Uwzględnij koszt tylko jeśli materiał ma zarezerwowane partie
-        if (reservedBatches && reservedBatches.length > 0) {
+        // Uwzględnij koszt tylko jeśli materiał ma zarezerwowane partie i jest wliczany do kosztów
+        if (reservedBatches && reservedBatches.length > 0 && includeInCosts[material.id]) {
           const quantity = materialQuantities[material.id] || material.quantity || 0;
           const unitPrice = material.unitPrice || 0;
           return sum + (quantity * unitPrice);
@@ -2078,7 +2060,7 @@ const TaskDetailsPage = () => {
       console.error('Błąd podczas aktualizacji kosztów materiałów:', error);
       showError('Nie udało się zaktualizować kosztów materiałów: ' + error.message);
     }
-  }, [id, task, materials, materialQuantities, currentUser, showSuccess, showError, showInfo]);
+  }, [id, task, materials, materialQuantities, currentUser, showSuccess, showError, showInfo, includeInCosts]);
 
   // Dodaj przycisk do ręcznej aktualizacji kosztów w podsumowaniu kosztów materiałów
   const renderMaterialCostsSummary = () => {
@@ -2088,8 +2070,8 @@ const TaskDetailsPage = () => {
       const materialId = material.inventoryItemId || material.id;
       const reservedBatches = task.materialBatches && task.materialBatches[materialId];
       
-      // Uwzględnij koszt tylko jeśli materiał ma zarezerwowane partie
-      if (reservedBatches && reservedBatches.length > 0) {
+      // Uwzględnij koszt tylko jeśli materiał ma zarezerwowane partie i jest włączony do kosztów
+      if (reservedBatches && reservedBatches.length > 0 && includeInCosts[material.id]) {
         const quantity = materialQuantities[material.id] || material.quantity || 0;
         const unitPrice = material.unitPrice || 0;
         return sum + (quantity * unitPrice);
@@ -2190,6 +2172,30 @@ const TaskDetailsPage = () => {
   const filteredPackagingItems = packagingItems.filter(item => 
     item.name.toLowerCase().includes(searchPackaging.toLowerCase())
   );
+
+  // Funkcja obsługująca zmianę stanu checkboxa dla wliczania do kosztów
+  const handleIncludeInCostsChange = async (materialId, checked) => {
+    try {
+      // Aktualizujemy stan lokalnie
+      setIncludeInCosts(prev => ({
+        ...prev,
+        [materialId]: checked
+      }));
+      
+      // Aktualizacja w bazie danych
+      if (task?.id) {
+        const taskRef = doc(db, 'productionTasks', task.id);
+        await updateDoc(taskRef, {
+          [`materialInCosts.${materialId}`]: checked
+        });
+        
+        showSuccess('Zaktualizowano ustawienia kosztów');
+      }
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji ustawień kosztów:', error);
+      showError('Nie udało się zaktualizować ustawień kosztów');
+    }
+  };
 
   // Renderuj stronę
     return (
@@ -2384,6 +2390,7 @@ const TaskDetailsPage = () => {
                         <TableCell>Cena jedn.</TableCell>
                         <TableCell>Koszt</TableCell>
                         <TableCell>Zarezerwowane partie (LOT)</TableCell>
+                        <TableCell>Wliczaj</TableCell>
                         <TableCell>Akcje</TableCell>
                   </TableRow>
                 </TableHead>
@@ -2453,6 +2460,13 @@ const TaskDetailsPage = () => {
                                   Brak zarezerwowanych partii
                                 </Typography>
                           )}
+                        </TableCell>
+                        <TableCell>
+                          <Checkbox
+                            checked={includeInCosts[material.id] || false}
+                            onChange={(e) => handleIncludeInCostsChange(material.id, e.target.checked)}
+                            color="primary"
+                          />
                         </TableCell>
                             <TableCell>
                               {editMode ? (

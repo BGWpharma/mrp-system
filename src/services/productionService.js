@@ -2551,7 +2551,15 @@ import {
             unit: material.unit || inventoryDetails.unit || 'szt.',
             category: material.category || inventoryDetails.category || '',
             // Użyj średniej ważonej ceny jeśli jest dostępna, w przeciwnym razie użyj ceny z materiału lub inwentarza
-            unitPrice: averageUnitPrice || material.unitPrice || inventoryDetails.unitPrice || 0
+            unitPrice: averageUnitPrice || material.unitPrice || inventoryDetails.unitPrice || 0,
+            // Dodaj informację o partiach
+            batches: materialBatches,
+            // Dodaj informację, czy materiał jest dostępny
+            available: materialBatches.length > 0,
+            // Dodaj informację, czy materiał ma być wliczany do kosztów
+            includeInCosts: task.materialInCosts && task.materialInCosts[material.id] !== undefined 
+                           ? task.materialInCosts[material.id] 
+                           : true
           });
         }
       }
@@ -2581,6 +2589,25 @@ import {
           }
         }
       }
+      
+      // Oblicz łączny koszt materiałów uwzględniając tylko te, które mają być wliczane do kosztów
+      let totalMaterialCost = 0;
+      for (const material of result.materials) {
+        if (material.includeInCosts && material.batches && material.batches.length > 0) {
+          const cost = material.quantity * material.unitPrice;
+          material.cost = cost;
+          totalMaterialCost += cost;
+        } else {
+          material.cost = 0;
+        }
+      }
+      
+      // Koszt materiałów na jednostkę produktu
+      const unitMaterialCost = task.quantity > 0 ? totalMaterialCost / task.quantity : 0;
+      
+      // Dodaj podsumowanie kosztów
+      result.totalMaterialCost = totalMaterialCost;
+      result.unitMaterialCost = unitMaterialCost;
       
       return result;
     } catch (error) {
