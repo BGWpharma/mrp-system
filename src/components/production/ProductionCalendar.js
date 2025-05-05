@@ -316,6 +316,8 @@ const ProductionCalendar = () => {
         return '#2ecc71'; // zielony
       case 'Anulowane':
         return '#e74c3c'; // czerwony
+      case 'Wstrzymane':
+        return '#757575'; // szary
       default:
         return '#95a5a6'; // szary
     }
@@ -401,7 +403,13 @@ const ProductionCalendar = () => {
         extendedProps: {
           task: task,
           moNumber: task.moNumber, // Dodajemy numer MO do extendedProps
-          orderId: task.orderId    // Dodajemy ID zamówienia do extendedProps
+          orderId: task.orderId,   // Dodajemy ID zamówienia do extendedProps
+          productName: task.productName,
+          quantity: task.quantity,
+          unit: task.unit,
+          status: task.status,
+          workstationId: task.workstationId,
+          estimatedDuration: task.estimatedDuration
         },
         resourceId: resourceId,
         editable: canEditTask(task) && editable,
@@ -1417,6 +1425,7 @@ const ProductionCalendar = () => {
             <Chip size="small" label="W trakcie" sx={{ backgroundColor: '#f39c12', color: '#fff' }} />
             <Chip size="small" label="Zakończone" sx={{ backgroundColor: '#2ecc71', color: '#fff' }} />
             <Chip size="small" label="Anulowane" sx={{ backgroundColor: '#e74c3c', color: '#fff' }} />
+            <Chip size="small" label="Wstrzymane" sx={{ backgroundColor: '#757575', color: '#fff' }} />
           </>
         )}
       </Box>

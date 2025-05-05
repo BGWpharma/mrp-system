@@ -88,10 +88,10 @@ const CalculatorPage = () => {
       // Importujemy funkcję do pobierania zadań produkcyjnych z poprawnego modułu
       const { getProductionTasks } = await import('../../services/aiDataService');
       
-      // Pobieramy tylko zadania produkcyjne o statusie "Zaplanowane" lub "W trakcie"
+      // Pobieramy zadania produkcyjne o statusie "Zaplanowane", "W trakcie" oraz "Wstrzymane"
       const tasks = await getProductionTasks({
         filters: [
-          { field: 'status', operator: 'in', value: ['Zaplanowane', 'W trakcie'] }
+          { field: 'status', operator: 'in', value: ['Zaplanowane', 'W trakcie', 'Wstrzymane'] }
         ],
         orderBy: { field: 'createdAt', direction: 'desc' },
         limit: 100

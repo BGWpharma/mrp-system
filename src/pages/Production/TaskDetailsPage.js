@@ -50,7 +50,8 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  AlertTitle
+  AlertTitle,
+  InputAdornment
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -72,7 +73,8 @@ import {
   Check as CheckIcon,
   Inventory2 as PackagingIcon,
   BookmarkAdd as BookmarkAddIcon,
-  ExpandMore as ExpandMoreIcon
+  ExpandMore as ExpandMoreIcon,
+  Search as SearchIcon
 } from '@mui/icons-material';
 import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession, addProductionSession, deleteProductionSession } from '../../services/productionService';
 import { getItemBatches, bookInventoryForTask, cancelBooking, getBatchReservations, getAllInventoryItems, getInventoryItemById, getInventoryBatch } from '../../services/inventoryService';
@@ -122,6 +124,7 @@ const TaskDetailsPage = () => {
   const [loadingPackaging, setLoadingPackaging] = useState(false);
   const [selectedPackaging, setSelectedPackaging] = useState({});
   const [packagingQuantities, setPackagingQuantities] = useState({});
+  const [searchPackaging, setSearchPackaging] = useState('');
   const [userNames, setUserNames] = useState({});
   const [productionHistory, setProductionHistory] = useState([]);
   const [editingHistoryItem, setEditingHistoryItem] = useState(null);
@@ -721,9 +724,9 @@ const TaskDetailsPage = () => {
     });
   };
   
-  // Funkcja do sprawdzania, czy wszystkie materiały mają wystarczającą ilość zarezerwowanych partii
+  // Zmodyfikowana funkcja validateManualBatchSelection, która nie wywołuje showError w trakcie renderowania
   const validateManualBatchSelection = () => {
-    if (!task || !task.materials) return false;
+    if (!task || !task.materials) return { valid: false, error: "Brak materiałów do walidacji" };
     
     for (const material of task.materials) {
       const materialId = material.inventoryItemId || material.id;
@@ -733,14 +736,36 @@ const TaskDetailsPage = () => {
       const totalSelectedQuantity = materialBatches.reduce((sum, batch) => sum + batch.quantity, 0);
       
       if (totalSelectedQuantity < material.quantity) {
-        showError(`Niewystarczająca ilość partii wybrana dla materiału ${material.name}. Wybrano: ${totalSelectedQuantity}, wymagane: ${material.quantity}`);
-        return false;
+        return { 
+          valid: false, 
+          error: `Niewystarczająca ilość partii wybrana dla materiału ${material.name}. Wybrano: ${totalSelectedQuantity}, wymagane: ${material.quantity}`
+        };
       }
     }
     
-    return true;
+    return { valid: true };
   };
   
+  // Podobnie zmodyfikujemy funkcję validateManualBatchSelectionForMaterial
+  const validateManualBatchSelectionForMaterial = (materialId) => {
+    if (!task || !task.materials) return { valid: false, error: "Brak materiałów do walidacji" };
+    
+    const material = task.materials.find(m => (m.inventoryItemId || m.id) === materialId);
+    if (!material) return { valid: false, error: "Nie znaleziono materiału" };
+    
+    const materialBatches = selectedBatches[materialId] || [];
+    const totalSelectedQuantity = materialBatches.reduce((sum, batch) => sum + batch.quantity, 0);
+    
+    if (totalSelectedQuantity < material.quantity) {
+      return {
+        valid: false,
+        error: `Niewystarczająca ilość partii wybrana dla materiału ${material.name}. Wybrano: ${totalSelectedQuantity}, wymagane: ${material.quantity}`
+      };
+    }
+    
+    return { valid: true };
+  };
+
   // Zmodyfikowana funkcja do rezerwacji materiałów z obsługą ręcznego wyboru partii
   const handleReserveMaterials = async (singleMaterialId = null) => {
     try {
@@ -787,7 +812,9 @@ const TaskDetailsPage = () => {
         }
         
         // Walidacja dla pojedynczego materiału
-        if (!validateManualBatchSelectionForMaterial(singleMaterialId)) {
+        const validationResult = validateManualBatchSelectionForMaterial(singleMaterialId);
+        if (!validationResult.valid) {
+          showError(validationResult.error);
           setReservingMaterials(false);
           return;
         }
@@ -853,7 +880,9 @@ const TaskDetailsPage = () => {
         
         // Jeśli wybrano ręczny wybór partii
         if (reservationMethod === 'manual') {
-          if (!validateManualBatchSelection()) {
+          const validationResult = validateManualBatchSelection();
+          if (!validationResult.valid) {
+            showError(validationResult.error);
             setReservingMaterials(false);
             return;
           }
@@ -2157,23 +2186,10 @@ const TaskDetailsPage = () => {
     }
   };
 
-  // Funkcja do sprawdzania, czy materiał ma wystarczającą ilość zarezerwowanych partii
-  const validateManualBatchSelectionForMaterial = (materialId) => {
-    if (!task || !task.materials) return false;
-    
-    const material = task.materials.find(m => (m.inventoryItemId || m.id) === materialId);
-    if (!material) return false;
-    
-    const materialBatches = selectedBatches[materialId] || [];
-    const totalSelectedQuantity = materialBatches.reduce((sum, batch) => sum + batch.quantity, 0);
-    
-    if (totalSelectedQuantity < material.quantity) {
-      showError(`Niewystarczająca ilość partii wybrana dla materiału ${material.name}. Wybrano: ${totalSelectedQuantity}, wymagane: ${material.quantity}`);
-      return false;
-    }
-    
-    return true;
-  };
+  // Funkcja do filtrowania opakowań na podstawie wyszukiwania
+  const filteredPackagingItems = packagingItems.filter(item => 
+    item.name.toLowerCase().includes(searchPackaging.toLowerCase())
+  );
 
   // Renderuj stronę
     return (
@@ -2832,6 +2848,164 @@ const TaskDetailsPage = () => {
             color="error"
           >
             Usuń zadanie
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Dialog wyboru opakowań */}
+      <Dialog
+        open={packagingDialogOpen}
+        onClose={() => setPackagingDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Dodaj opakowania do zadania</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Wybierz opakowania, które chcesz dodać do zadania produkcyjnego.
+          </DialogContentText>
+          
+          {/* Pasek wyszukiwania opakowań */}
+          <TextField
+            fullWidth
+            margin="normal"
+            label="Wyszukaj opakowanie"
+            variant="outlined"
+            value={searchPackaging}
+            onChange={(e) => setSearchPackaging(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ mb: 2 }}
+          />
+          
+          {loadingPackaging ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell padding="checkbox">Wybierz</TableCell>
+                    <TableCell>Nazwa</TableCell>
+                    <TableCell>Kategoria</TableCell>
+                    <TableCell>Dostępna ilość</TableCell>
+                    <TableCell>Ilość do dodania</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {filteredPackagingItems.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} align="center">
+                        {packagingItems.length === 0 
+                          ? "Brak dostępnych opakowań"
+                          : "Brak wyników dla podanego wyszukiwania"}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredPackagingItems.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell padding="checkbox">
+                          <Checkbox
+                            checked={item.selected}
+                            onChange={(e) => handlePackagingSelection(item.id, e.target.checked)}
+                          />
+                        </TableCell>
+                        <TableCell>{item.name}</TableCell>
+                        <TableCell>{item.category}</TableCell>
+                        <TableCell>{item.availableQuantity} {item.unit}</TableCell>
+                        <TableCell>
+                          <TextField
+                            type="number"
+                            value={item.quantity || ''}
+                            onChange={(e) => handlePackagingQuantityChange(item.id, e.target.value)}
+                            disabled={!item.selected}
+                            inputProps={{ min: 0, max: item.availableQuantity, step: 'any' }}
+                            size="small"
+                            sx={{ width: '100px' }}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPackagingDialogOpen(false)}>
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleAddPackagingToTask} 
+            variant="contained" 
+            color="primary"
+            disabled={loadingPackaging || packagingItems.filter(item => item.selected && item.quantity > 0).length === 0}
+          >
+            {loadingPackaging ? <CircularProgress size={24} /> : 'Dodaj wybrane opakowania'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Dialog rezerwacji surowców */}
+      <Dialog
+        open={reserveDialogOpen}
+        onClose={() => setReserveDialogOpen(false)}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>Rezerwacja surowców</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Wybierz partie materiałów, które chcesz zarezerwować dla tego zadania produkcyjnego.
+          </DialogContentText>
+          
+          <FormControl component="fieldset" sx={{ mb: 2 }}>
+            <FormLabel component="legend">Metoda rezerwacji</FormLabel>
+            <RadioGroup 
+              row 
+              value={reservationMethod} 
+              onChange={handleReservationMethodChange}
+            >
+              <FormControlLabel 
+                value="automatic" 
+                control={<Radio />} 
+                label="Automatyczna (FIFO)" 
+              />
+              <FormControlLabel 
+                value="manual" 
+                control={<Radio />} 
+                label="Ręczna (wybór partii)" 
+              />
+            </RadioGroup>
+          </FormControl>
+          
+          {reservationMethod === 'manual' && renderManualBatchSelection()}
+          
+          {reservationMethod === 'automatic' && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              System automatycznie zarezerwuje najstarsze dostępne partie materiałów (FIFO).
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReserveDialogOpen(false)}>
+            Anuluj
+          </Button>
+          <Button 
+            onClick={() => handleReserveMaterials()} 
+            variant="contained" 
+            color="primary"
+            disabled={loading || reservingMaterials || (reservationMethod === 'manual' && !validateManualBatchSelection().valid)}
+          >
+            {reservingMaterials ? <CircularProgress size={24} /> : 'Rezerwuj materiały'}
           </Button>
         </DialogActions>
       </Dialog>

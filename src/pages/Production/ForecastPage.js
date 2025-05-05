@@ -134,12 +134,17 @@ const ForecastPage = () => {
         // Wyświetl informacje o datach dla każdego zadania
         console.log(`Zadanie ${task.id}: ${task.name}, data: ${taskDate}, status: ${task.status}`);
         
+        // Pobierz tylko datę (dzień) z pełnej daty (bez czasu/godziny)
+        const taskDateOnly = new Date(taskDate.getFullYear(), taskDate.getMonth(), taskDate.getDate());
+        const startDateOnly = new Date(startDateTime.getFullYear(), startDateTime.getMonth(), startDateTime.getDate());
+        const endDateOnly = new Date(endDateTime.getFullYear(), endDateTime.getMonth(), endDateTime.getDate());
+        
         // Rozszerz filtrowanie, aby uwzględniało zadania "Zaplanowane", "W trakcie" oraz "Wstrzymane"
-        const isInDateRange = taskDate >= startDateTime && taskDate <= endDateTime;
+        const isInDateRange = taskDateOnly >= startDateOnly && taskDateOnly <= endDateOnly;
         const isValidStatus = task.status === 'Zaplanowane' || task.status === 'W trakcie' || task.status === 'Wstrzymane';
         
         // Dodaj dodatkowy log do debugowania
-        console.log(`Zadanie ${task.id} - isInDateRange: ${isInDateRange}, isValidStatus: ${isValidStatus}, taskDate: ${taskDate}, startDateTime: ${startDateTime}, endDateTime: ${endDateTime}`);
+        console.log(`Zadanie ${task.id} - isInDateRange: ${isInDateRange}, isValidStatus: ${isValidStatus}, taskDateOnly: ${taskDateOnly}, startDateOnly: ${startDateOnly}, endDateOnly: ${endDateOnly}`);
         
         // Zadania "Wstrzymane" uwzględniamy zawsze, niezależnie od daty
         if (task.status === 'Wstrzymane') {
@@ -750,8 +755,13 @@ const ForecastPage = () => {
                     } else {
                       taskDate = task.scheduledDate;
                     }
+
+                    // Zmodyfikowane porównanie dat - porównujemy tylko daty bez czasu (godzin)
+                    const taskDateOnly = new Date(taskDate.getFullYear(), taskDate.getMonth(), taskDate.getDate());
+                    const startDateOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+                    const endDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
                     
-                    return taskDate >= startDate && taskDate <= endDate;
+                    return taskDateOnly >= startDateOnly && taskDateOnly <= endDateOnly;
                   })
                   .map((task) => (
                     <TableRow 
