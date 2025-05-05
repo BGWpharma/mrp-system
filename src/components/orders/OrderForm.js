@@ -570,7 +570,7 @@ const OrderForm = ({ orderId }) => {
       // Jeżeli mamy klienta, spróbuj pobrać cenę z listy cenowej
       if (orderData.customer?.id) {
         try {
-          // Pobierz cenę z listy cenowej klienta, wskazując czy to receptura czy produkt
+          // Pobierz cenę z listy cenowej klienta, wskazując czy to receptura czy produkt/usługa
           const priceListItem = await getPriceForCustomerProduct(orderData.customer.id, product.id, isRecipe);
           
           if (priceListItem) {
@@ -1865,6 +1865,169 @@ const OrderForm = ({ orderId }) => {
     }).format(amount);
   };
 
+  // Funkcja do odświeżania ceny jednostkowej pozycji
+  const refreshItemPrice = async (index) => {
+    try {
+      const item = orderData.items[index];
+      
+      if (!item.id) {
+        showError('Ta pozycja nie ma identyfikatora produktu. Najpierw wybierz produkt.');
+        return;
+      }
+      
+      // Aktualizujemy status odświeżania dla tej pozycji
+      const updatedItems = [...orderData.items];
+      updatedItems[index] = {
+        ...updatedItems[index],
+        isRefreshing: true
+      };
+      
+      setOrderData(prev => ({
+        ...prev,
+        items: updatedItems
+      }));
+      
+      let price = 0;
+      let fromPriceList = false;
+      let basePrice = 0;
+      
+      // Sprawdź, czy to receptura czy produkt/usługa
+      if (item.itemType === 'recipe' || item.isRecipe) {
+        // Jeżeli mamy klienta, spróbuj pobrać cenę z listy cenowej
+        if (orderData.customer?.id) {
+          try {
+            // Pobierz cenę z listy cenowej klienta dla receptury
+            const priceListItem = await getPriceForCustomerProduct(orderData.customer.id, item.id, true);
+            
+            if (priceListItem) {
+              console.log(`Znaleziono cenę w liście cenowej: ${priceListItem} dla ${item.name} (receptura)`);
+              price = priceListItem;
+              fromPriceList = true;
+            } else {
+              console.log(`Nie znaleziono ceny w liście cenowej dla ${item.name} (receptura)`);
+              // Jeśli nie znaleziono ceny w liście cenowej, sprawdź koszt produkcji
+              try {
+                // Spróbuj najpierw pobrać recepturę bezpośrednio
+                let recipe = await getRecipeById(item.id);
+                
+                if (!recipe) {
+                  // Jeśli nie ma receptury o tym ID, spróbuj pobrać recepturę powiązaną z produktem
+                  recipe = await getRecipeByProductId(item.id);
+                }
+                
+                if (recipe) {
+                  // Jeśli receptura ma koszt/sztuka (processingCostPerUnit), użyj go bezpośrednio
+                  if (recipe.processingCostPerUnit !== undefined && recipe.processingCostPerUnit !== null) {
+                    basePrice = recipe.processingCostPerUnit;
+                    console.log(`Użyto kosztu/sztuka z receptury: ${basePrice}`);
+                    
+                    // Dla receptury spoza listy cenowej użyj bezpośrednio kosztu/sztuka bez marży
+                    price = parseFloat(basePrice.toFixed(2));
+                  } else {
+                    // W przeciwnym razie oblicz koszt produkcji
+                    const cost = await calculateProductionCost(recipe);
+                    basePrice = cost.totalCost;
+                    console.log(`Obliczono koszt produkcji receptury: ${basePrice}`);
+                    
+                    // Zastosuj marżę do kosztu produkcji (lub użyj już istniejącej marży dla pozycji)
+                    const marginToUse = item.margin || DEFAULT_MARGIN;
+                    const calculatedPrice = basePrice * (1 + marginToUse / 100);
+                    price = parseFloat(calculatedPrice.toFixed(2));
+                  }
+                }
+              } catch (error) {
+                console.error('Błąd podczas obliczania kosztu produkcji:', error);
+                showError('Nie udało się obliczyć kosztu produkcji: ' + error.message);
+              }
+            }
+          } catch (error) {
+            console.error('Błąd podczas pobierania ceny z listy cenowej:', error);
+            showError('Błąd podczas pobierania ceny z listy cenowej: ' + error.message);
+          }
+        }
+      } else {
+        // Produkt lub usługa
+        // Jeżeli mamy klienta, spróbuj pobrać cenę z listy cenowej
+        if (orderData.customer?.id) {
+          try {
+            // Pobierz cenę z listy cenowej klienta
+            const priceListItem = await getPriceForCustomerProduct(orderData.customer.id, item.id, false);
+            
+            if (priceListItem) {
+              console.log(`Znaleziono cenę w liście cenowej: ${priceListItem} dla ${item.name} (produkt/usługa)`);
+              price = priceListItem;
+              fromPriceList = true;
+            } else {
+              console.log(`Nie znaleziono ceny w liście cenowej dla ${item.name} (produkt/usługa)`);
+              // Jeśli nie znaleziono ceny w liście cenowej, użyj ceny standardowej produktu
+              try {
+                const productDetails = await getProductById(item.id);
+                if (productDetails) {
+                  basePrice = productDetails.standardPrice || 0;
+                  
+                  // Zastosuj marżę do ceny bazowej (lub użyj już istniejącej marży dla pozycji)
+                  const marginToUse = item.margin || DEFAULT_MARGIN;
+                  const calculatedPrice = basePrice * (1 + marginToUse / 100);
+                  price = parseFloat(calculatedPrice.toFixed(2));
+                }
+              } catch (error) {
+                console.error('Błąd podczas pobierania szczegółów produktu/usługi:', error);
+                showError('Błąd podczas pobierania szczegółów produktu: ' + error.message);
+              }
+            }
+          } catch (error) {
+            console.error('Błąd podczas pobierania ceny z listy cenowej:', error);
+            showError('Błąd podczas pobierania ceny z listy cenowej: ' + error.message);
+          }
+        }
+      }
+      
+      // Aktualizuj cenę w pozycji zamówienia
+      updatedItems[index] = {
+        ...updatedItems[index],
+        price,
+        basePrice,
+        fromPriceList,
+        isRefreshing: false
+      };
+      
+      const updatedOrderData = {
+        ...orderData,
+        items: updatedItems
+      };
+      
+      setOrderData(updatedOrderData);
+      
+      // Jeśli zamówienie już istnieje, zapisz zmiany w bazie danych
+      if (orderId) {
+        try {
+          await updateOrder(orderId, updatedOrderData, currentUser.uid);
+          console.log(`Zaktualizowano cenę jednostkową pozycji ${index} w zamówieniu ${orderId}`);
+        } catch (error) {
+          console.error('Błąd podczas zapisywania zamówienia po aktualizacji ceny:', error);
+          showError('Zmiany zostały wprowadzone lokalnie, ale nie zostały zapisane w bazie danych. Błąd: ' + error.message);
+        }
+      }
+      
+      showSuccess('Cena jednostkowa została zaktualizowana');
+    } catch (error) {
+      console.error('Błąd podczas odświeżania ceny jednostkowej:', error);
+      showError('Wystąpił błąd podczas odświeżania ceny: ' + error.message);
+      
+      // Zresetuj status odświeżania dla tej pozycji
+      const updatedItems = [...orderData.items];
+      updatedItems[index] = {
+        ...updatedItems[index],
+        isRefreshing: false
+      };
+      
+      setOrderData(prev => ({
+        ...prev,
+        items: updatedItems
+      }));
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
@@ -2193,6 +2356,24 @@ const OrderForm = ({ orderId }) => {
                         onChange={(e) => handleItemChange(index, 'price', e.target.value)}
                         InputProps={{
                           startAdornment: <InputAdornment position="start">EUR</InputAdornment>,
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <Tooltip title="Odśwież cenę jednostkową">
+                                <IconButton
+                                  edge="end"
+                                  size="small"
+                                  onClick={() => refreshItemPrice(index)}
+                                  disabled={item.isRefreshing}
+                                >
+                                  {item.isRefreshing ? (
+                                    <CircularProgress size={18} />
+                                  ) : (
+                                    <RefreshIcon fontSize="small" />
+                                  )}
+                                </IconButton>
+                              </Tooltip>
+                            </InputAdornment>
+                          ),
                         }}
                         inputProps={{ min: 0, step: 0.01 }}
                         fullWidth
