@@ -570,7 +570,7 @@ const OrderForm = ({ orderId }) => {
       // Jeżeli mamy klienta, spróbuj pobrać cenę z listy cenowej
       if (orderData.customer?.id) {
         try {
-          // Pobierz cenę z listy cenowej klienta, wskazując czy to receptura czy produkt/usługa
+          // Pobierz cenę z listy cenowej klienta, wskazując czy to receptura czy produkt
           const priceListItem = await getPriceForCustomerProduct(orderData.customer.id, product.id, isRecipe);
           
           if (priceListItem) {
@@ -1869,162 +1869,115 @@ const OrderForm = ({ orderId }) => {
   const refreshItemPrice = async (index) => {
     try {
       const item = orderData.items[index];
-      
-      if (!item.id) {
-        showError('Ta pozycja nie ma identyfikatora produktu. Najpierw wybierz produkt.');
+      if (!item || !item.id) {
+        showError("Nie można odświeżyć ceny - brak identyfikatora produktu");
         return;
       }
       
-      // Aktualizujemy status odświeżania dla tej pozycji
-      const updatedItems = [...orderData.items];
-      updatedItems[index] = {
-        ...updatedItems[index],
-        isRefreshing: true
-      };
-      
-      setOrderData(prev => ({
-        ...prev,
-        items: updatedItems
-      }));
-      
       let price = 0;
       let fromPriceList = false;
-      let basePrice = 0;
       
-      // Sprawdź, czy to receptura czy produkt/usługa
-      if (item.itemType === 'recipe' || item.isRecipe) {
-        // Jeżeli mamy klienta, spróbuj pobrać cenę z listy cenowej
-        if (orderData.customer?.id) {
-          try {
-            // Pobierz cenę z listy cenowej klienta dla receptury
-            const priceListItem = await getPriceForCustomerProduct(orderData.customer.id, item.id, true);
-            
-            if (priceListItem) {
-              console.log(`Znaleziono cenę w liście cenowej: ${priceListItem} dla ${item.name} (receptura)`);
-              price = priceListItem;
-              fromPriceList = true;
-            } else {
-              console.log(`Nie znaleziono ceny w liście cenowej dla ${item.name} (receptura)`);
-              // Jeśli nie znaleziono ceny w liście cenowej, sprawdź koszt produkcji
-              try {
-                // Spróbuj najpierw pobrać recepturę bezpośrednio
-                let recipe = await getRecipeById(item.id);
-                
-                if (!recipe) {
-                  // Jeśli nie ma receptury o tym ID, spróbuj pobrać recepturę powiązaną z produktem
-                  recipe = await getRecipeByProductId(item.id);
-                }
-                
-                if (recipe) {
-                  // Jeśli receptura ma koszt/sztuka (processingCostPerUnit), użyj go bezpośrednio
-                  if (recipe.processingCostPerUnit !== undefined && recipe.processingCostPerUnit !== null) {
-                    basePrice = recipe.processingCostPerUnit;
-                    console.log(`Użyto kosztu/sztuka z receptury: ${basePrice}`);
-                    
-                    // Dla receptury spoza listy cenowej użyj bezpośrednio kosztu/sztuka bez marży
-                    price = parseFloat(basePrice.toFixed(2));
-                  } else {
-                    // W przeciwnym razie oblicz koszt produkcji
-                    const cost = await calculateProductionCost(recipe);
-                    basePrice = cost.totalCost;
-                    console.log(`Obliczono koszt produkcji receptury: ${basePrice}`);
-                    
-                    // Zastosuj marżę do kosztu produkcji (lub użyj już istniejącej marży dla pozycji)
-                    const marginToUse = item.margin || DEFAULT_MARGIN;
-                    const calculatedPrice = basePrice * (1 + marginToUse / 100);
-                    price = parseFloat(calculatedPrice.toFixed(2));
-                  }
-                }
-              } catch (error) {
-                console.error('Błąd podczas obliczania kosztu produkcji:', error);
-                showError('Nie udało się obliczyć kosztu produkcji: ' + error.message);
-              }
-            }
-          } catch (error) {
-            console.error('Błąd podczas pobierania ceny z listy cenowej:', error);
-            showError('Błąd podczas pobierania ceny z listy cenowej: ' + error.message);
+      // Sprawdź najpierw cenę z listy cenowej klienta, jeśli klient istnieje
+      if (orderData.customer?.id) {
+        try {
+          const priceListItem = await getPriceForCustomerProduct(orderData.customer.id, item.id, item.isRecipe);
+          
+          if (priceListItem) {
+            console.log(`Znaleziono cenę w liście cenowej: ${priceListItem} dla ${item.name}`);
+            price = priceListItem;
+            fromPriceList = true;
           }
+        } catch (error) {
+          console.error('Błąd podczas pobierania ceny z listy cenowej:', error);
         }
-      } else {
-        // Produkt lub usługa
-        // Jeżeli mamy klienta, spróbuj pobrać cenę z listy cenowej
-        if (orderData.customer?.id) {
+      }
+      
+      // Jeśli nie znaleziono ceny w liście cenowej
+      if (!fromPriceList) {
+        // Dla produktu/usługi
+        if (!item.isRecipe && item.itemType !== 'recipe') {
           try {
-            // Pobierz cenę z listy cenowej klienta
-            const priceListItem = await getPriceForCustomerProduct(orderData.customer.id, item.id, false);
+            const productDetails = await getProductById(item.id);
+            if (productDetails) {
+              const basePrice = productDetails.standardPrice || 0;
+              const margin = item.margin || DEFAULT_MARGIN;
+              
+              // Zastosuj marżę do ceny bazowej
+              const calculatedPrice = basePrice * (1 + margin / 100);
+              price = parseFloat(calculatedPrice.toFixed(2));
+            }
+          } catch (error) {
+            console.error('Błąd podczas pobierania szczegółów produktu/usługi:', error);
+          }
+        } else {
+          // Dla receptury
+          try {
+            // Spróbuj pobrać recepturę
+            let recipe = await getRecipeById(item.recipeId || item.id);
             
-            if (priceListItem) {
-              console.log(`Znaleziono cenę w liście cenowej: ${priceListItem} dla ${item.name} (produkt/usługa)`);
-              price = priceListItem;
-              fromPriceList = true;
-            } else {
-              console.log(`Nie znaleziono ceny w liście cenowej dla ${item.name} (produkt/usługa)`);
-              // Jeśli nie znaleziono ceny w liście cenowej, użyj ceny standardowej produktu
+            if (!recipe) {
+              // Jeśli nie ma receptury o tym ID, spróbuj pobrać recepturę powiązaną z produktem
+              recipe = await getRecipeByProductId(item.id);
+            }
+            
+            if (recipe) {
+              // Jeśli receptura ma koszt/sztuka, użyj go bezpośrednio
+              if (recipe.processingCostPerUnit !== undefined && recipe.processingCostPerUnit !== null) {
+                price = parseFloat(recipe.processingCostPerUnit.toFixed(2));
+              } else {
+                // W przeciwnym razie oblicz koszt produkcji
+                const cost = await calculateProductionCost(recipe);
+                const basePrice = cost.totalCost;
+                const margin = item.margin || 0;
+                
+                // Zastosuj marżę do kosztu produkcji
+                const calculatedPrice = basePrice * (1 + margin / 100);
+                price = parseFloat(calculatedPrice.toFixed(2));
+              }
+              
+              // Odśwież również informacje o ostatnim użyciu receptury
               try {
-                const productDetails = await getProductById(item.id);
-                if (productDetails) {
-                  basePrice = productDetails.standardPrice || 0;
+                const lastUsageInfo = await getLastRecipeUsageInfo(recipe.id);
+                if (lastUsageInfo) {
+                  // Aktualizuj informacje o ostatnim użyciu
+                  const updatedItems = [...orderData.items];
+                  updatedItems[index] = {
+                    ...updatedItems[index],
+                    lastUsageInfo
+                  };
                   
-                  // Zastosuj marżę do ceny bazowej (lub użyj już istniejącej marży dla pozycji)
-                  const marginToUse = item.margin || DEFAULT_MARGIN;
-                  const calculatedPrice = basePrice * (1 + marginToUse / 100);
-                  price = parseFloat(calculatedPrice.toFixed(2));
+                  setOrderData(prev => ({
+                    ...prev,
+                    items: updatedItems,
+                  }));
                 }
               } catch (error) {
-                console.error('Błąd podczas pobierania szczegółów produktu/usługi:', error);
-                showError('Błąd podczas pobierania szczegółów produktu: ' + error.message);
+                console.error('Błąd podczas pobierania informacji o ostatnim użyciu receptury:', error);
               }
             }
           } catch (error) {
-            console.error('Błąd podczas pobierania ceny z listy cenowej:', error);
-            showError('Błąd podczas pobierania ceny z listy cenowej: ' + error.message);
+            console.error('Błąd podczas obliczania kosztu produkcji:', error);
           }
         }
       }
       
-      // Aktualizuj cenę w pozycji zamówienia
+      // Aktualizuj cenę pozycji
+      const updatedItems = [...orderData.items];
       updatedItems[index] = {
         ...updatedItems[index],
         price,
-        basePrice,
-        fromPriceList,
-        isRefreshing: false
-      };
-      
-      const updatedOrderData = {
-        ...orderData,
-        items: updatedItems
-      };
-      
-      setOrderData(updatedOrderData);
-      
-      // Jeśli zamówienie już istnieje, zapisz zmiany w bazie danych
-      if (orderId) {
-        try {
-          await updateOrder(orderId, updatedOrderData, currentUser.uid);
-          console.log(`Zaktualizowano cenę jednostkową pozycji ${index} w zamówieniu ${orderId}`);
-        } catch (error) {
-          console.error('Błąd podczas zapisywania zamówienia po aktualizacji ceny:', error);
-          showError('Zmiany zostały wprowadzone lokalnie, ale nie zostały zapisane w bazie danych. Błąd: ' + error.message);
-        }
-      }
-      
-      showSuccess('Cena jednostkowa została zaktualizowana');
-    } catch (error) {
-      console.error('Błąd podczas odświeżania ceny jednostkowej:', error);
-      showError('Wystąpił błąd podczas odświeżania ceny: ' + error.message);
-      
-      // Zresetuj status odświeżania dla tej pozycji
-      const updatedItems = [...orderData.items];
-      updatedItems[index] = {
-        ...updatedItems[index],
-        isRefreshing: false
+        fromPriceList
       };
       
       setOrderData(prev => ({
         ...prev,
-        items: updatedItems
+        items: updatedItems,
       }));
+      
+      showSuccess('Cena jednostkowa została zaktualizowana');
+    } catch (error) {
+      console.error('Błąd podczas odświeżania ceny:', error);
+      showError(`Wystąpił błąd: ${error.message}`);
     }
   };
 
@@ -2240,8 +2193,10 @@ const OrderForm = ({ orderId }) => {
                     </Tooltip>
                   </TableCell>
                   <TableCell width="10%">Koszt produkcji</TableCell>
+                  <TableCell width="10%">Profit</TableCell>
                   <TableCell width="10%">Ostatni koszt</TableCell>
                   <TableCell width="10%">Suma wartości pozycji</TableCell>
+                  <TableCell width="10%">Koszt całk./szt.</TableCell>
                   <TableCell width="5%"></TableCell>
                 </TableRow>
               </TableHead>
@@ -2360,16 +2315,12 @@ const OrderForm = ({ orderId }) => {
                             <InputAdornment position="end">
                               <Tooltip title="Odśwież cenę jednostkową">
                                 <IconButton
+                                  aria-label="odśwież cenę"
+                                  onClick={() => refreshItemPrice(index)}
                                   edge="end"
                                   size="small"
-                                  onClick={() => refreshItemPrice(index)}
-                                  disabled={item.isRefreshing}
                                 >
-                                  {item.isRefreshing ? (
-                                    <CircularProgress size={18} />
-                                  ) : (
-                                    <RefreshIcon fontSize="small" />
-                                  )}
+                                  <RefreshIcon fontSize="small" />
                                 </IconButton>
                               </Tooltip>
                             </InputAdornment>
@@ -2427,6 +2378,18 @@ const OrderForm = ({ orderId }) => {
                         <Typography variant="body2" color="text.secondary">-</Typography>
                       )}
                     </TableCell>
+                    <TableCell align="right">
+                      {item.fromPriceList && item.productionCost !== undefined ? (
+                        <Box sx={{ 
+                          fontWeight: 'medium', 
+                          color: (item.quantity * item.price - item.productionCost) > 0 ? 'success.main' : 'error.main' 
+                        }}>
+                          {formatCurrency(item.quantity * item.price - item.productionCost)}
+                        </Box>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">-</Typography>
+                      )}
+                    </TableCell>
                     <TableCell>
                       {item.lastUsageInfo ? (
                         <Tooltip title={`Data: ${formatDateToDisplay(item.lastUsageInfo.date)}, Ostatni koszt: ${formatCurrency(item.lastUsageInfo.cost)}`}>
@@ -2446,6 +2409,33 @@ const OrderForm = ({ orderId }) => {
                     <TableCell>
                       <Box sx={{ fontWeight: 'bold', color: 'success.main' }}>
                         {formatCurrency(calculateItemTotalValue(item))}
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ fontWeight: 'medium' }}>
+                        {(() => {
+                          // Oblicz proporcję wartości tej pozycji do całkowitej wartości produktów
+                          const itemTotalValue = calculateItemTotalValue(item);
+                          const allItemsValue = calculateTotalItemsValue();
+                          const proportion = allItemsValue > 0 ? itemTotalValue / allItemsValue : 0;
+                          
+                          // Oblicz proporcjonalny udział w kosztach dodatkowych
+                          const shippingCost = parseFloat(orderData.shippingCost) || 0;
+                          const additionalCosts = calculateAdditionalCosts();
+                          const discounts = calculateDiscounts();
+                          
+                          // Całkowity udział pozycji w kosztach dodatkowych
+                          const additionalShare = proportion * (shippingCost + additionalCosts - discounts);
+                          
+                          // Całkowity koszt pozycji z kosztami dodatkowymi
+                          const totalWithAdditional = itemTotalValue + additionalShare;
+                          
+                          // Koszt pojedynczej sztuki
+                          const quantity = parseFloat(item.quantity) || 1;
+                          const unitCost = totalWithAdditional / quantity;
+                          
+                          return formatCurrency(unitCost);
+                        })()}
                       </Box>
                     </TableCell>
                     <TableCell>

@@ -946,7 +946,9 @@ const OrderDetails = () => {
                     </IconButton>
                   </Tooltip>
                 </TableCell>
+                <TableCell sx={{ color: 'inherit' }} align="right">Profit</TableCell>
                 <TableCell sx={{ color: 'inherit' }} align="right">Suma wartości pozycji</TableCell>
+                <TableCell sx={{ color: 'inherit' }} align="right">Koszt całk./szt.</TableCell>
                 <TableCell sx={{ color: 'inherit' }}>Akcje</TableCell>
               </TableRow>
             </TableHead>
@@ -989,7 +991,54 @@ const OrderDetails = () => {
                     )}
                   </TableCell>
                   <TableCell align="right">
+                    {item.fromPriceList && item.productionCost !== undefined ? (
+                      <Typography sx={{ 
+                        fontWeight: 'medium', 
+                        color: (item.quantity * item.price - item.productionCost) > 0 ? 'success.main' : 'error.main' 
+                      }}>
+                        {formatCurrency(item.quantity * item.price - item.productionCost)}
+                      </Typography>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">-</Typography>
+                    )}
+                  </TableCell>
+                  <TableCell align="right">
                     {formatCurrency(calculateItemTotalValue(item))}
+                  </TableCell>
+                  <TableCell align="right">
+                    {(() => {
+                      // Oblicz proporcję wartości tej pozycji do całkowitej wartości produktów
+                      const itemTotalValue = calculateItemTotalValue(item);
+                      const allItemsValue = order.items?.reduce((sum, i) => sum + calculateItemTotalValue(i), 0) || 0;
+                      const proportion = allItemsValue > 0 ? itemTotalValue / allItemsValue : 0;
+                      
+                      // Oblicz proporcjonalny udział w kosztach dodatkowych
+                      const shippingCost = parseFloat(order.shippingCost) || 0;
+                      
+                      // Suma dodatkowych kosztów (dodatnich)
+                      const additionalCosts = order.additionalCostsItems ? 
+                        order.additionalCostsItems
+                          .filter(cost => parseFloat(cost.value) > 0)
+                          .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0) : 0;
+                      
+                      // Suma rabatów (ujemnych kosztów)
+                      const discounts = order.additionalCostsItems ? 
+                        Math.abs(order.additionalCostsItems
+                          .filter(cost => parseFloat(cost.value) < 0)
+                          .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)) : 0;
+                      
+                      // Całkowity udział pozycji w kosztach dodatkowych
+                      const additionalShare = proportion * (shippingCost + additionalCosts - discounts);
+                      
+                      // Całkowity koszt pozycji z kosztami dodatkowymi
+                      const totalWithAdditional = itemTotalValue + additionalShare;
+                      
+                      // Koszt pojedynczej sztuki
+                      const quantity = parseFloat(item.quantity) || 1;
+                      const unitCost = totalWithAdditional / quantity;
+                      
+                      return formatCurrency(unitCost);
+                    })()}
                   </TableCell>
                   <TableCell>
                     <Tooltip title="Drukuj etykietę">
@@ -1016,7 +1065,7 @@ const OrderDetails = () => {
                 <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                   {formatCurrency(order.items?.reduce((sum, item) => sum + calculateItemTotalValue(item), 0) || 0)}
                 </TableCell>
-                <TableCell />
+                <TableCell colSpan={2} />
               </TableRow>
               <TableRow>
                 <TableCell colSpan={2} />
@@ -1026,6 +1075,7 @@ const OrderDetails = () => {
                 <TableCell align="right">
                   {formatCurrency(order.shippingCost || 0)}
                 </TableCell>
+                <TableCell colSpan={5} />
               </TableRow>
               
               {/* Dodatkowe koszty (tylko jeśli istnieją) */}
@@ -1045,6 +1095,7 @@ const OrderDetails = () => {
                             <TableCell align="right">
                               {formatCurrency(parseFloat(cost.value) || 0)}
                             </TableCell>
+                            <TableCell colSpan={5} />
                           </TableRow>
                         ))
                       }
@@ -1059,6 +1110,7 @@ const OrderDetails = () => {
                             .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
                           )}
                         </TableCell>
+                        <TableCell colSpan={5} />
                       </TableRow>
                     </>
                   )}
@@ -1077,6 +1129,7 @@ const OrderDetails = () => {
                             <TableCell align="right" sx={{ color: 'secondary.main' }}>
                               {formatCurrency(Math.abs(parseFloat(cost.value)) || 0)}
                             </TableCell>
+                            <TableCell colSpan={5} />
                           </TableRow>
                         ))
                       }
@@ -1091,6 +1144,7 @@ const OrderDetails = () => {
                             .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
                           ))}
                         </TableCell>
+                        <TableCell colSpan={5} />
                       </TableRow>
                     </>
                   )}
@@ -1126,6 +1180,7 @@ const OrderDetails = () => {
                     return formatCurrency(total);
                   })()}
                 </TableCell>
+                <TableCell colSpan={5} />
               </TableRow>
             </TableBody>
           </Table>
