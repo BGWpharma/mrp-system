@@ -255,7 +255,10 @@ export const createOrder = async (orderData, userId) => {
     
     // Wygeneruj numer CO z afiksem klienta, jeśli istnieje
     const customerAffix = orderData.customer && orderData.customer.orderAffix ? orderData.customer.orderAffix : '';
-    const orderNumber = await generateCONumber(customerAffix);
+    // Pobierz ID klienta, jeśli istnieje
+    const customerId = orderData.customer && orderData.customer.id ? orderData.customer.id : null;
+    // Przekaż ID klienta do funkcji generującej numer CO
+    const orderNumber = await generateCONumber(customerAffix, customerId);
     
     // Używamy wartości totalValue przekazanej w danych - ona już zawiera wszystkie składniki 
     // (produkty, koszty dostawy, dodatkowe koszty i rabaty)

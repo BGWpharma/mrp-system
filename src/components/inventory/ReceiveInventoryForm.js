@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Grid, Typography, TextField, Box, Button } from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { Grid, Typography, TextField, Box, Button, FormControlLabel, Checkbox } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers';
 
 const ReceiveInventoryForm = () => {
@@ -11,13 +11,19 @@ const ReceiveInventoryForm = () => {
     batchNumber: '',
     lotNumber: '',
     expiryDate: null,
-    batchNotes: ''
+    batchNotes: '',
   });
+
+  // Generuj numer LOT automatycznie przy inicjalizacji komponentu
+  useEffect(() => {
+    generateLOT();
+  }, []);
 
   const generateLOT = async () => {
     try {
       const { generateLOTNumber } = await import('../../utils/numberGenerators');
       const lotNumber = await generateLOTNumber();
+      console.log('Wygenerowano nowy numer LOT:', lotNumber);
       setTransactionData(prev => ({
         ...prev,
         lotNumber,
@@ -56,24 +62,15 @@ const ReceiveInventoryForm = () => {
             />
           </Grid>
           <Grid item xs={12} sm={6}>
-            <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
-              <TextField
-                fullWidth
-                label="Numer LOT"
-                name="lotNumber"
-                value={transactionData.lotNumber}
-                onChange={handleTransactionChange}
-                margin="normal"
-                helperText="Wewnętrzny numer partii (LOT)"
-              />
-              <Button 
-                variant="outlined" 
-                onClick={generateLOT}
-                sx={{ mt: 2, ml: 1, height: 56 }}
-              >
-                Generuj
-              </Button>
-            </Box>
+            <TextField
+              fullWidth
+              label="Numer LOT"
+              name="lotNumber"
+              value={transactionData.lotNumber}
+              onChange={handleTransactionChange}
+              margin="normal"
+              helperText="Wpisz własny numer LOT lub pozostaw wygenerowany automatycznie"
+            />
           </Grid>
           <Grid item xs={12} sm={6}>
             <DatePicker

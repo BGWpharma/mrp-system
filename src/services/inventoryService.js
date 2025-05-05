@@ -666,11 +666,17 @@ import {
       
       const transactionRef = await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transaction);
       
-      // Generuj numer partii, jeśli nie został podany
-      let generatedLotNumber = transactionData.lotNumber || transactionData.batchNumber;
+      // Generuj lub użyj istniejącego numeru partii
+      let lotNumber;
       
-      if (!generatedLotNumber) {
-        generatedLotNumber = await generateLOTNumber();
+      // Jeśli użytkownik podał numer LOT, użyj go
+      if (transactionData.lotNumber && transactionData.lotNumber.trim() !== '') {
+        lotNumber = transactionData.lotNumber.trim();
+        console.log('Używam numeru LOT wprowadzonego przez użytkownika:', lotNumber);
+      } else {
+        // W przeciwnym razie generujemy nowy unikalny numer LOT
+        lotNumber = await generateLOTNumber();
+        console.log('Wygenerowano nowy numer LOT:', lotNumber);
       }
       
       // Przygotuj dane partii
@@ -680,8 +686,8 @@ import {
         transactionId: transactionRef.id,
         quantity: Number(quantity),
         initialQuantity: Number(quantity),
-        batchNumber: generatedLotNumber,
-        lotNumber: generatedLotNumber,
+        batchNumber: transactionData.batchNumber || lotNumber,
+        lotNumber: lotNumber,
         warehouseId: transactionData.warehouseId, // Zawsze dodajemy warehouseId
         receivedDate: serverTimestamp(),
         notes: transactionData.batchNotes || transactionData.notes || '',

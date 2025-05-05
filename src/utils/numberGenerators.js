@@ -6,9 +6,10 @@ const COUNTERS_COLLECTION = 'counters';
 /**
  * Pobiera i inkrementuje licznik dla danego typu dokumentu
  * @param {string} counterType - Typ licznika (MO, PO, CO, LOT)
+ * @param {string} customerId - ID klienta (opcjonalne, tylko dla licznika CO)
  * @returns {Promise<number>} - Nowy numer
  */
-const getNextNumber = async (counterType) => {
+const getNextNumber = async (counterType, customerId = null) => {
   try {
     // Sprawdź, czy istnieje kolekcja liczników
     const countersRef = collection(db, COUNTERS_COLLECTION);
@@ -21,9 +22,9 @@ const getNextNumber = async (counterType) => {
     const querySnapshot = await getDocs(q);
     
     let counter;
-    let currentYear = new Date().getFullYear();
+    let currentNumber;
     
-    // Jeśli nie ma liczników lub licznik jest z poprzedniego roku, utwórz nowy
+    // Jeśli nie ma liczników, utwórz nowy
     if (querySnapshot.empty) {
       // Utwórz nowy dokument liczników
       counter = {
@@ -31,9 +32,18 @@ const getNextNumber = async (counterType) => {
         PO: 1,
         CO: 1,
         LOT: 1,
-        year: currentYear,
-        lastUpdated: new Date()
+        lastUpdated: new Date(),
+        customerCounters: {} // Pole do przechowywania liczników klientów
       };
+      
+      // Jeśli to licznik CO dla konkretnego klienta, dodaj go do customerCounters
+      if (counterType === 'CO' && customerId) {
+        counter.customerCounters[customerId] = 1;
+        currentNumber = 1;
+      } else {
+        // Dla pozostałych typów dokumentów, zwracamy początkową wartość
+        currentNumber = counter[counterType];
+      }
       
       await addDoc(countersRef, counter);
     } else {
@@ -41,20 +51,33 @@ const getNextNumber = async (counterType) => {
       const counterDoc = querySnapshot.docs[0];
       counter = counterDoc.data();
       
-      // Jeśli licznik jest z poprzedniego roku, zresetuj liczniki
-      if (counter.year !== currentYear) {
-        counter = {
-          MO: 1,
-          PO: 1,
-          CO: 1,
-          LOT: 1,
-          year: currentYear,
-          lastUpdated: new Date()
-        };
+      // Upewnij się, że istnieje obiekt customerCounters
+      if (!counter.customerCounters) {
+        counter.customerCounters = {};
+      }
+      
+      // Jeśli to licznik CO dla konkretnego klienta
+      if (counterType === 'CO' && customerId) {
+        // Sprawdź czy istnieje licznik dla danego klienta
+        if (counter.customerCounters[customerId] === undefined) {
+          counter.customerCounters[customerId] = 1;
+          currentNumber = 1;
+        } else {
+          // Zapisz bieżącą wartość przed inkrementacją
+          currentNumber = counter.customerCounters[customerId];
+          counter.customerCounters[customerId]++;
+        }
         
-        await addDoc(countersRef, counter);
+        // Aktualizuj dokument
+        await addDoc(countersRef, {
+          ...counter,
+          lastUpdated: new Date()
+        });
       } else {
-        // Inkrementuj odpowiedni licznik
+        // Zapisz bieżącą wartość przed inkrementacją
+        currentNumber = counter[counterType];
+        
+        // Inkrementuj odpowiedni licznik globalny
         counter[counterType]++;
         
         // Aktualizuj dokument
@@ -65,7 +88,8 @@ const getNextNumber = async (counterType) => {
       }
     }
     
-    return counter[counterType];
+    // Zwracamy bieżącą wartość licznika
+    return currentNumber;
   } catch (error) {
     console.error(`Błąd podczas generowania numeru ${counterType}:`, error);
     // W przypadku błędu, wygeneruj losowy numer jako fallback
@@ -75,33 +99,34 @@ const getNextNumber = async (counterType) => {
 
 /**
  * Generuje numer zlecenia produkcyjnego (MO)
- * Format: MO-ROK-NUMER (np. MO-2023-0001)
+ * Format: MO00001 (np. MO00001)
  */
 export const generateMONumber = async () => {
   const nextNumber = await getNextNumber('MO');
-  const year = new Date().getFullYear();
-  return `MO-${year}-${nextNumber.toString().padStart(4, '0')}`;
+  return `MO${nextNumber.toString().padStart(5, '0')}`;
 };
 
 /**
  * Generuje numer zamówienia zakupu (PO)
- * Format: PO-ROK-NUMER (np. PO-2023-0001)
+ * Format: PO00001 (np. PO00001)
  */
 export const generatePONumber = async () => {
   const nextNumber = await getNextNumber('PO');
-  const year = new Date().getFullYear();
-  return `PO-${year}-${nextNumber.toString().padStart(4, '0')}`;
+  return `PO${nextNumber.toString().padStart(5, '0')}`;
 };
 
 /**
  * Generuje numer zamówienia klienta (CO)
- * Format: CO-ROK-NUMER (np. CO-2023-0001) lub CO-ROK-NUMERAFIKS (np. CO-2023-0001GW)
+ * Format: CO00001 (np. CO00001) lub CO00001AFIKS (np. CO00001GW)
  * @param {string} customerAffix - Opcjonalny afiks do dodania do numeru zamówienia
+ * @param {string} customerId - ID klienta, do którego należy zamówienie
  */
-export const generateCONumber = async (customerAffix = '') => {
-  const nextNumber = await getNextNumber('CO');
-  const year = new Date().getFullYear();
-  const baseNumber = `CO-${year}-${nextNumber.toString().padStart(4, '0')}`;
+export const generateCONumber = async (customerAffix = '', customerId = null) => {
+  // Jeśli podano ID klienta, użyj licznika dla tego klienta
+  const nextNumber = await getNextNumber('CO', customerId);
+  
+  // Nowy format bez roku: CO00001
+  const baseNumber = `CO${nextNumber.toString().padStart(5, '0')}`;
   
   // Dodaj afiks tylko jeśli został podany
   if (customerAffix && typeof customerAffix === 'string' && customerAffix.trim() !== '') {
@@ -113,10 +138,9 @@ export const generateCONumber = async (customerAffix = '') => {
 
 /**
  * Generuje numer partii (LOT)
- * Format: LOT-ROK-NUMER (np. LOT-2023-0001)
+ * Format: LOT00001 (np. LOT00001)
  */
 export const generateLOTNumber = async () => {
   const nextNumber = await getNextNumber('LOT');
-  const year = new Date().getFullYear();
-  return `LOT-${year}-${nextNumber.toString().padStart(4, '0')}`;
+  return `LOT${nextNumber.toString().padStart(5, '0')}`;
 }; 

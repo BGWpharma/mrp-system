@@ -735,7 +735,7 @@ const TaskDetailsPage = () => {
     });
   };
   
-  // Zmodyfikowana funkcja validateManualBatchSelection, która nie wywołuje showError w trakcie renderowania
+  // Walidacja ręcznego wyboru partii
   const validateManualBatchSelection = () => {
     if (!task || !task.materials) return { valid: false, error: "Brak materiałów do walidacji" };
     
@@ -743,13 +743,18 @@ const TaskDetailsPage = () => {
       const materialId = material.inventoryItemId || material.id;
       if (!materialId) continue;
       
+      // Użyj rzeczywistej ilości z materialQuantities jeśli jest dostępna
+      const requiredQuantity = materialQuantities[materialId] !== undefined 
+        ? materialQuantities[materialId] 
+        : material.quantity;
+      
       const materialBatches = selectedBatches[materialId] || [];
       const totalSelectedQuantity = materialBatches.reduce((sum, batch) => sum + batch.quantity, 0);
       
-      if (totalSelectedQuantity < material.quantity) {
+      if (totalSelectedQuantity < requiredQuantity) {
         return { 
           valid: false, 
-          error: `Niewystarczająca ilość partii wybrana dla materiału ${material.name}. Wybrano: ${totalSelectedQuantity}, wymagane: ${material.quantity}`
+          error: `Niewystarczająca ilość partii wybrana dla materiału ${material.name}. Wybrano: ${totalSelectedQuantity}, wymagane: ${requiredQuantity}`
         };
       }
     }
@@ -764,13 +769,18 @@ const TaskDetailsPage = () => {
     const material = task.materials.find(m => (m.inventoryItemId || m.id) === materialId);
     if (!material) return { valid: false, error: "Nie znaleziono materiału" };
     
+    // Użyj rzeczywistej ilości z materialQuantities jeśli jest dostępna
+    const requiredQuantity = materialQuantities[materialId] !== undefined 
+      ? materialQuantities[materialId] 
+      : material.quantity;
+    
     const materialBatches = selectedBatches[materialId] || [];
     const totalSelectedQuantity = materialBatches.reduce((sum, batch) => sum + batch.quantity, 0);
     
-    if (totalSelectedQuantity < material.quantity) {
+    if (totalSelectedQuantity < requiredQuantity) {
       return {
         valid: false,
-        error: `Niewystarczająca ilość partii wybrana dla materiału ${material.name}. Wybrano: ${totalSelectedQuantity}, wymagane: ${material.quantity}`
+        error: `Niewystarczająca ilość partii wybrana dla materiału ${material.name}. Wybrano: ${totalSelectedQuantity}, wymagane: ${requiredQuantity}`
       };
     }
     
@@ -782,221 +792,85 @@ const TaskDetailsPage = () => {
     try {
       setReservingMaterials(true);
       
-      if (!task || !task.materials || task.materials.length === 0) {
-        showError('Zadanie nie ma przypisanych materiałów do rezerwacji');
-        setReservingMaterials(false);
-        setReserveDialogOpen(false);
-        return;
-      }
-      
-      console.log("Rozpoczynam proces rezerwacji materiałów dla zadania:", id);
-      console.log("Metoda rezerwacji:", reservationMethod);
-      console.log(singleMaterialId ? `Rezerwacja pojedynczego materiału ID: ${singleMaterialId}` : "Rezerwacja wszystkich materiałów");
-      
-      // Sprawdź, czy istnieją nowe materiały, które nie są jeszcze zarezerwowane
-      const existingReservedMaterials = new Set();
-      
-      // Zbierz ID wszystkich już zarezerwowanych materiałów
-      if (task.materialBatches) {
-        Object.keys(task.materialBatches).forEach(materialId => {
-          existingReservedMaterials.add(materialId);
-        });
-      }
-      
-      // Jeśli wybrano rezerwację pojedynczego materiału
-      if (singleMaterialId) {
-        // Sprawdź czy materiał jest już zarezerwowany
-        if (existingReservedMaterials.has(singleMaterialId)) {
-          console.log(`Materiał o ID ${singleMaterialId} jest już zarezerwowany. Pomijam ponowną rezerwację.`);
-          showInfo("Ten materiał jest już zarezerwowany.");
-          setReservingMaterials(false);
-          return;
-        }
-        
-        // Pobierz dane materiału
-        const material = task.materials.find(m => (m.inventoryItemId || m.id) === singleMaterialId);
-        if (!material) {
-          console.error(`Nie znaleziono materiału o ID: ${singleMaterialId}`);
-          showError("Nie znaleziono materiału.");
-          setReservingMaterials(false);
-          return;
-        }
-        
-        // Walidacja dla pojedynczego materiału
-        const validationResult = validateManualBatchSelectionForMaterial(singleMaterialId);
+      // Dla ręcznej rezerwacji
+      if (reservationMethod === 'manual') {
+        // Walidacja tylko dla pojedynczego materiału lub dla wszystkich materiałów
+        const validationResult = singleMaterialId 
+          ? validateManualBatchSelectionForMaterial(singleMaterialId)
+          : validateManualBatchSelection();
+          
         if (!validationResult.valid) {
           showError(validationResult.error);
-          setReservingMaterials(false);
           return;
         }
+      
+        // Wybierz materiały do rezerwacji - jeden określony lub wszystkie
+        const materialsToReserve = singleMaterialId
+          ? task.materials.filter(m => (m.inventoryItemId || m.id) === singleMaterialId)
+          : task.materials;
         
-        const errors = [];
-        const userId = currentUser?.uid || 'system';
-        const materialBatches = selectedBatches[singleMaterialId] || [];
-        
-        try {
-          // Rezerwuj partie dla wybranego materiału
-          for (const batchSelection of materialBatches) {
-            try {
-              await bookInventoryForTask(
-                singleMaterialId,
-                batchSelection.quantity,
-                id,
-                userId,
-                'manual',
-                batchSelection.batchId
-              );
-            } catch (error) {
-              console.error(`Błąd podczas rezerwacji partii ${batchSelection.batchNumber} materiału ${material.name}:`, error);
-              errors.push(`Nie można zarezerwować partii ${batchSelection.batchNumber} materiału ${material.name}: ${error.message}`);
-            }
-          }
-          
-          // Zwróć informację o wyniku operacji
-          if (errors.length === 0) {
-            showSuccess(`Zarezerwowano materiał ${material.name}`);
-            
-            // Odśwież dane zadania
-            const updatedTask = await getTaskById(id);
-            setTask(updatedTask);
-          } else {
-            showError(`Błędy: ${errors.join(', ')}`);
-          }
-        } catch (error) {
-          console.error(`Błąd podczas rezerwacji materiału ${material.name}:`, error);
-          showError(`Nie można zarezerwować materiału ${material.name}: ${error.message}`);
-        }
-      } else {
-        // Rezerwacja wszystkich materiałów
-        // Sprawdź, czy są nowe materiały do zarezerwowania
-        const newMaterialsToReserve = task.materials.filter(material => {
+        // Dla każdego materiału
+        for (const material of materialsToReserve) {
           const materialId = material.inventoryItemId || material.id;
-          return materialId && !existingReservedMaterials.has(materialId);
-        });
-        
-        // Jeśli zadanie ma już zarezerwowane materiały i nie ma nowych materiałów do zarezerwowania
-        if (task.materialsReserved && task.materialBatches && newMaterialsToReserve.length === 0) {
-          console.log("Materiały są już zarezerwowane dla tego zadania. Pomijam ponowną rezerwację.");
-          showInfo("Materiały są już zarezerwowane dla tego zadania.");
-          setReservingMaterials(false);
-          setReserveDialogOpen(false);
-          return;
-        }
-        
-        // Jeśli są już zarezerwowane materiały, ale są też nowe do zarezerwowania
-        if (task.materialsReserved && task.materialBatches && newMaterialsToReserve.length > 0) {
-          console.log(`Wykryto ${newMaterialsToReserve.length} nowe materiały do zarezerwowania.`);
-          showInfo(`Rezerwuję ${newMaterialsToReserve.length} nowe materiały dodane do zadania.`);
-        }
-        
-        // Jeśli wybrano ręczny wybór partii
-        if (reservationMethod === 'manual') {
-          const validationResult = validateManualBatchSelection();
-          if (!validationResult.valid) {
-            showError(validationResult.error);
-            setReservingMaterials(false);
-            return;
-          }
+          if (!materialId) continue;
           
-          const errors = [];
-          const reservedItems = [];
-          const userId = currentUser?.uid || 'system';
-          
-          try {
-            // Teraz rezerwuj partie tylko dla nowych materiałów lub wszystkich jeśli nie było wcześniejszej rezerwacji
-            for (const material of task.materials) {
-              const materialId = material.inventoryItemId || material.id;
-              if (!materialId) continue;
-              
-              // Pomijamy materiały, które są już zarezerwowane (chyba że nie ma nowych materiałów)
-              if (existingReservedMaterials.has(materialId) && newMaterialsToReserve.length > 0) {
-                console.log(`Materiał ${material.name} jest już zarezerwowany, pomijam.`);
-                continue;
-              }
-              
-              const materialBatches = selectedBatches[materialId] || [];
-              
-              try {
-                // Rezerwuj materiał
-                for (const batchSelection of materialBatches) {
-                  try {
-                    await bookInventoryForTask(
-                      materialId,
-                      batchSelection.quantity,
-                      id,
-                      userId,
-                      'manual',
-                      batchSelection.batchId  // Przekazujemy ID konkretnej partii
-                    );
-                  } catch (error) {
-                    console.error(`Błąd podczas rezerwacji partii ${batchSelection.batchNumber} materiału ${material.name}:`, error);
-                    errors.push(`Nie można zarezerwować partii ${batchSelection.batchNumber} materiału ${material.name}: ${error.message}`);
-                  }
-                }
-                
-                reservedItems.push({
-                  itemId: materialId,
-                  name: material.name,
-                  quantity: material.quantity,
-                  unit: material.unit
-                });
-              } catch (error) {
-                console.error(`Błąd podczas rezerwacji materiału ${material.name}:`, error);
-                errors.push(`Nie można zarezerwować materiału ${material.name}: ${error.message}`);
-              }
-            }
-          } catch (error) {
-            console.error('Błąd podczas przetwarzania rezerwacji ręcznych:', error);
-            showError('Wystąpił błąd podczas przetwarzania rezerwacji: ' + error.message);
-            setReservingMaterials(false);
-            return;
-          }
-          
-          // Zwróć informację o wyniku operacji
-          if (errors.length === 0) {
-            showSuccess(`Zarezerwowano wszystkie ${reservedItems.length} materiały dla zadania`);
-          } else {
-            // Jeśli mamy częściowy sukces (część materiałów zarezerwowana, część nie)
-            if (reservedItems.length > 0) {
-              showInfo(`Zarezerwowano częściowo: ${reservedItems.length} z ${task.materials.length} materiałów`);
-            }
+          // Użyj rzeczywistej ilości z materialQuantities jeśli jest dostępna
+          const requiredQuantity = materialQuantities[materialId] !== undefined 
+            ? materialQuantities[materialId] 
+            : material.quantity;
             
-            if (errors.length > 0) {
-              showError(`Błędy: ${errors.join(', ')}`);
-            }
-          }
-        } else {
-          // Standardowa rezerwacja automatyczna (FIFO lub według daty ważności)
-          console.log("Wykonuję automatyczną rezerwację materiałów metodą:", reservationMethod);
-          const userId = currentUser?.uid || 'system';
-          const result = await reserveMaterialsForTask(id, userId, reservationMethod);
-          console.log("Wynik automatycznej rezerwacji materiałów:", result);
+          // Pobierz wybrane partie
+          const selectedMaterialBatches = selectedBatches[materialId] || [];
           
-          if (result.success) {
-            showSuccess(result.message);
-          } else {
-            // Jeśli mamy częściowy sukces (część materiałów zarezerwowana, część nie)
-            if (result.reservedItems && result.reservedItems.length > 0) {
-              showInfo(`Zarezerwowano częściowo: ${result.reservedItems.length} z ${task.materials.length} materiałów`);
-            }
+          // Dla każdej wybranej partii wykonaj rezerwację
+          for (const batch of selectedMaterialBatches) {
+            if (batch.quantity <= 0) continue;
             
-            if (result.errors && result.errors.length > 0) {
-              showError(`Błędy: ${result.errors.join(', ')}`);
-            }
+            // Utwórz rezerwację dla konkretnej partii
+            await bookInventoryForTask(
+              materialId,
+              batch.quantity,
+              id, // ID zadania
+              currentUser.uid,
+              'manual', // Metoda ręczna
+              batch.batchId // ID konkretnej partii
+            );
           }
         }
         
-        // Aktualizuj stan rezerwacji materiałów w zadaniu tylko gdy rezerwujemy wszystkie materiały
-        console.log("Aktualizacja statusu zadania - materiały zarezerwowane");
-        const taskRef = doc(db, 'productionTasks', id);
-        await updateDoc(taskRef, {
-          materialsReserved: true,
-          reservationComplete: true,
-          updatedAt: serverTimestamp(),
-          updatedBy: currentUser?.uid || 'system'
-        });
+        showSuccess(`Materiały zostały zarezerwowane dla zadania ${task.moNumber || task.id}`);
+      }
+      // Dla automatycznej rezerwacji
+      else {
+        const materialsToReserve = singleMaterialId
+          ? task.materials.filter(m => (m.inventoryItemId || m.id) === singleMaterialId)
+          : task.materials;
+          
+        // Dla każdego materiału
+        for (const material of materialsToReserve) {
+          const materialId = material.inventoryItemId || material.id;
+          if (!materialId) continue;
+              
+          // Użyj rzeczywistej ilości z materialQuantities jeśli jest dostępna
+          const requiredQuantity = materialQuantities[materialId] !== undefined 
+            ? materialQuantities[materialId] 
+            : material.quantity;
+          
+          // Utwórz rezerwację automatyczną
+          await bookInventoryForTask(
+            materialId,
+            requiredQuantity,
+            id, // ID zadania
+            currentUser.uid,
+            'fifo' // Metoda FIFO
+          );
+        }
         
-        // Zamknij dialog przy rezerwacji wszystkich materiałów
+        showSuccess(`Materiały zostały automatycznie zarezerwowane dla zadania ${task.moNumber || task.id}`);
+      }
+        
+      // Zamknij dialog tylko jeśli rezerwujemy wszystkie materiały
+      if (!singleMaterialId) {
         setReserveDialogOpen(false);
       }
       
@@ -1038,10 +912,16 @@ const TaskDetailsPage = () => {
           const materialId = material.inventoryItemId || material.id;
           if (!materialId) return null;
           
+          // Użyj rzeczywistej ilości z materialQuantities jeśli jest dostępna
+          // W przeciwnym razie użyj oryginalnej ilości z material.quantity
+          const requiredQuantity = materialQuantities[materialId] !== undefined 
+            ? materialQuantities[materialId] 
+            : material.quantity;
+          
           let materialBatches = batches[materialId] || [];
           const selectedMaterialBatches = selectedBatches[materialId] || [];
           const totalSelectedQuantity = selectedMaterialBatches.reduce((sum, batch) => sum + batch.quantity, 0);
-          const isComplete = totalSelectedQuantity >= material.quantity;
+          const isComplete = totalSelectedQuantity >= requiredQuantity;
           
           // Sprawdź, czy materiał jest już zarezerwowany
           const isAlreadyReserved = task.materialBatches && task.materialBatches[materialId] && task.materialBatches[materialId].length > 0;
@@ -1080,7 +960,7 @@ const TaskDetailsPage = () => {
                   <Typography>{material.name}</Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
                     <Chip
-                      label={`${totalSelectedQuantity.toFixed(3)} / ${parseFloat(material.quantity).toFixed(3)} ${material.unit}`}
+                      label={`${totalSelectedQuantity.toFixed(3)} / ${parseFloat(requiredQuantity).toFixed(3)} ${material.unit}`}
                       color={isComplete ? "success" : "warning"}
                       size="small"
                       sx={{ mr: 1 }}
