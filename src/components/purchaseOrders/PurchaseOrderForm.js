@@ -1428,15 +1428,15 @@ const PurchaseOrderForm = ({ orderId }) => {
         console.error('Błąd podczas przetwarzania daty faktury:', error);
         showError('Nieprawidłowy format daty faktury');
       }
-    }
-    
-    // Specjalna obsługa dla zmiany waluty
-    if (field === 'currency') {
-      const newCurrency = value;
+        }
+        
+        // Specjalna obsługa dla zmiany waluty
+        if (field === 'currency') {
+          const newCurrency = value;
       const oldCurrency = currentCost.currency || poData.currency;
-      
-      // Jeśli zmieniono walutę, przelicz wartość
-      if (newCurrency !== oldCurrency) {
+          
+          // Jeśli zmieniono walutę, przelicz wartość
+          if (newCurrency !== oldCurrency) {
         try {
           console.log(`Zmiana waluty kosztu z ${oldCurrency} na ${newCurrency}`);
           const originalValue = parseFloat(currentCost.originalValue) || parseFloat(currentCost.value) || 0;
@@ -2592,9 +2592,9 @@ const PurchaseOrderForm = ({ orderId }) => {
                   Wartość netto razem: <strong>{parseFloat(poData.totalValue || 0).toFixed(2)} {poData.currency}</strong>
                 </Typography>
                 
-                <Typography variant="subtitle1" gutterBottom>
+                    <Typography variant="subtitle1" gutterBottom>
                   Suma podatku VAT: <strong>{parseFloat(poData.totalVat || 0).toFixed(2)} {poData.currency}</strong>
-                </Typography>
+                    </Typography>
                 
                 <Typography variant="h6" color="primary" gutterBottom>
                   Wartość brutto: <strong>{parseFloat(poData.totalGross || 0).toFixed(2)} {poData.currency}</strong>
