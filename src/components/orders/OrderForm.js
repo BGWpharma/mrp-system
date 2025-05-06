@@ -438,6 +438,51 @@ const OrderForm = ({ orderId }) => {
         ...prev, 
         [name]: value 
       }));
+    } else if (name === 'invoiceDate' && value) {
+      console.log(`Zmiana daty faktury na: ${value}`);
+      
+      // Zapisz datę faktury
+      setOrderData(prev => ({ 
+        ...prev, 
+        [name]: value 
+      }));
+      
+      // Jeśli mamy walutę inną niż EUR dla kosztów dostawy, pobierz kurs z dnia poprzedzającego datę faktury
+      const currency = orderData.shippingCurrency;
+      if (currency && currency !== 'EUR') {
+        try {
+          // Pobierz datę poprzedniego dnia dla daty faktury
+          const invoiceDate = new Date(value);
+          const rateFetchDate = new Date(invoiceDate);
+          rateFetchDate.setDate(rateFetchDate.getDate() - 1);
+          
+          console.log(`Próbuję pobrać kurs dla ${currency}/EUR z dnia ${rateFetchDate.toISOString().split('T')[0]}`);
+          
+          // Pobierz kurs z API
+          getExchangeRate(currency, 'EUR', rateFetchDate)
+            .then(rate => {
+              console.log(`Pobrany kurs: ${rate}`);
+              
+              if (rate > 0) {
+                // Przelicz wartość dostawy
+                const originalValue = orderData.shippingCostOriginal || orderData.shippingCost || 0;
+                const convertedValue = originalValue * rate;
+                
+                // Aktualizuj stan
+                setOrderData(prev => ({
+                  ...prev,
+                  shippingCost: convertedValue,
+                  exchangeRate: rate
+                }));
+              }
+            })
+            .catch(error => {
+              console.error('Błąd podczas pobierania kursu:', error);
+            });
+        } catch (error) {
+          console.error('Błąd podczas przetwarzania daty faktury:', error);
+        }
+      }
     } else {
       setOrderData(prev => ({ ...prev, [name]: value }));
     }
@@ -786,31 +831,40 @@ const OrderForm = ({ orderId }) => {
         .map(async currency => {
           try {
             const rate = await getExchangeRate(currency, baseCurrency, yesterday);
-            rates[currency] = rate;
+            if (rate > 0) {
+              rates[currency] = rate;
+            } else {
+              console.error(`Otrzymano nieprawidłowy kurs dla ${currency}/${baseCurrency}: ${rate}`);
+              // Nie ustawiamy domyślnego kursu
+            }
           } catch (err) {
             console.error(`Błąd podczas pobierania kursu ${currency}/${baseCurrency}:`, err);
-            // Użyj wartości domyślnych z konfiguracji
-            rates[currency] = getDefaultRate(currency, baseCurrency);
+            // Nie ustawiamy domyślnego kursu
           }
         });
       
       await Promise.all(fetchPromises);
+      
+      // Sprawdź, czy mamy kursy dla wszystkich walut, jeśli nie, pokaż komunikat
+      const missingCurrencies = currencies
+        .filter(currency => currency !== baseCurrency && !rates[currency]);
+      
+      if (missingCurrencies.length > 0) {
+        console.warn(`Brak kursów dla walut: ${missingCurrencies.join(', ')}`);
+        showInfo('Nie udało się pobrać kursów dla niektórych walut. Przeliczanie między walutami będzie możliwe po wprowadzeniu daty faktury.');
+      }
       
       console.log('Pobrano kursy walut:', rates);
       setExchangeRates(rates);
       
     } catch (error) {
       console.error('Błąd podczas pobierania kursów walut:', error);
-      showError('Nie udało się pobrać kursów walut. Używam domyślnych wartości.');
+      showError('Nie udało się pobrać kursów walut. Przeliczanie między walutami będzie możliwe po wprowadzeniu daty faktury.');
       
-      // Ustaw domyślne kursy w razie błędu
-      setExchangeRates({
-        EUR: orderData.currency === 'EUR' ? 1 : 4.3,
-        PLN: orderData.currency === 'PLN' ? 1 : 0.23,
-        USD: orderData.currency === 'USD' ? 1 : 0.92,
-        GBP: orderData.currency === 'GBP' ? 1 : 1.17,
-        CHF: orderData.currency === 'CHF' ? 1 : 1.04
-      });
+      // W przypadku błędu ustawiamy tylko kurs dla waluty bazowej
+      const rates = {};
+      rates[orderData.currency || 'EUR'] = 1;
+      setExchangeRates(rates);
     } finally {
       setLoadingRates(false);
     }
@@ -818,22 +872,7 @@ const OrderForm = ({ orderId }) => {
   
   // Pomocnicza funkcja do pobierania domyślnego kursu
   const getDefaultRate = (fromCurrency, toCurrency) => {
-    const defaultRates = {
-      'EUR': { 'PLN': 4.3, 'USD': 1.08, 'GBP': 0.85, 'CHF': 0.96 },
-      'PLN': { 'EUR': 0.23, 'USD': 0.25, 'GBP': 0.2, 'CHF': 0.22 },
-      'USD': { 'EUR': 0.92, 'PLN': 3.97, 'GBP': 0.79, 'CHF': 0.88 },
-      'GBP': { 'EUR': 1.17, 'PLN': 5.06, 'USD': 1.27, 'CHF': 1.13 },
-      'CHF': { 'EUR': 1.04, 'PLN': 4.49, 'USD': 1.13, 'GBP': 0.89 }
-    };
-    
-    if (defaultRates[fromCurrency] && defaultRates[fromCurrency][toCurrency]) {
-      return defaultRates[fromCurrency][toCurrency];
-    }
-    
-    if (defaultRates[toCurrency] && defaultRates[toCurrency][fromCurrency]) {
-      return 1 / defaultRates[toCurrency][fromCurrency];
-    }
-    
+    // Zawsze zwracamy 1, ponieważ kursy pobieramy dynamicznie z API
     return 1;
   };
   
@@ -850,7 +889,8 @@ const OrderForm = ({ orderId }) => {
     const rate = exchangeRates[fromCurrency] / exchangeRates[toCurrency];
     if (!rate) {
       console.error(`Brak kursu dla pary walut ${fromCurrency}/${toCurrency}`);
-      return amount;
+      showInfo('Aby przeliczać waluty, podaj datę faktury.');
+      return amount; // Zwracamy oryginalną wartość bez przeliczania, jeśli nie mamy kursu
     }
     
     // Wartość przeliczona bez zaokrąglania
@@ -866,7 +906,9 @@ const OrderForm = ({ orderId }) => {
       vatRate: 23, // Domyślna stawka VAT
       currency: 'EUR', // Domyślna waluta EUR
       originalValue: 0, // Wartość w oryginalnej walucie
-      exchangeRate: 1 // Domyślny kurs wymiany
+      exchangeRate: 1, // Domyślny kurs wymiany
+      invoiceNumber: '', // Numer faktury
+      invoiceDate: '' // Data faktury
     };
     
     setOrderData(prev => ({
@@ -884,6 +926,87 @@ const OrderForm = ({ orderId }) => {
           value = 23; // Domyślna wartość VAT
         }
         
+        // Specjalna obsługa dla zmiany daty faktury
+        if (field === 'invoiceDate' && value) {
+          try {
+            console.log(`Zmiana daty faktury na: ${value}`);
+            
+            // Formatowanie daty do obsługi przez input type="date"
+            const formattedDate = value;
+            console.log(`Sformatowana data faktury: ${formattedDate}`);
+            
+            // Jeśli waluta pozycji jest inna niż waluta zamówienia
+            if (item.currency && item.currency !== 'EUR') {
+              try {
+                // Pobierz datę poprzedniego dnia dla daty faktury
+                const invoiceDate = new Date(formattedDate);
+                const rateFetchDate = new Date(invoiceDate);
+                rateFetchDate.setDate(rateFetchDate.getDate() - 1);
+                
+                console.log(`Próbuję pobrać kurs dla ${item.currency}/EUR z dnia ${rateFetchDate.toISOString().split('T')[0]}`);
+                
+                // Używamy getExchangeRate z serwisu kursów walut
+                import('../../services/exchangeRateService').then(async ({ getExchangeRate }) => {
+                  try {
+                    const rate = await getExchangeRate(item.currency, 'EUR', rateFetchDate);
+                    console.log(`Pobrany kurs: ${rate}`);
+                    
+                    if (rate > 0) {
+                      // Aktualizuj pozycję z nowym kursem i przeliczoną wartością
+                      const originalValue = parseFloat(item.originalValue) || parseFloat(item.value) || 0;
+                      const convertedValue = originalValue * rate;
+                      
+                      const updatedItem = {
+                        ...item,
+                        invoiceDate: formattedDate,
+                        exchangeRate: rate,
+                        value: convertedValue.toFixed(2)
+                      };
+                      
+                      // Aktualizuj stan
+                      setOrderData(prev => ({
+                        ...prev,
+                        additionalCostsItems: prev.additionalCostsItems.map(cost => 
+                          cost.id === id ? updatedItem : cost
+                        )
+                      }));
+                    } else {
+                      // W przypadku błędu, po prostu aktualizuj datę faktury
+                      setOrderData(prev => ({
+                        ...prev,
+                        additionalCostsItems: prev.additionalCostsItems.map(cost => 
+                          cost.id === id ? { ...cost, invoiceDate: formattedDate } : cost
+                        )
+                      }));
+                    }
+                  } catch (error) {
+                    console.error(`Błąd podczas pobierania kursu:`, error);
+                    // W przypadku błędu nie zmieniamy kursu, tylko aktualizujemy datę
+                    setOrderData(prev => ({
+                      ...prev,
+                      additionalCostsItems: prev.additionalCostsItems.map(cost => 
+                        cost.id === id ? { ...cost, invoiceDate: formattedDate } : cost
+                      )
+                    }));
+                  }
+                });
+                
+                // Zwracamy tymczasową wartość z zaktualizowaną datą faktury
+                return { ...item, invoiceDate: formattedDate };
+              } catch (error) {
+                console.error('Błąd podczas przetwarzania daty faktury:', error);
+                return { ...item, invoiceDate: formattedDate };
+              }
+            } else {
+              // Jeśli waluta jest taka sama, po prostu zaktualizuj datę
+              return { ...item, invoiceDate: formattedDate };
+            }
+          } catch (error) {
+            console.error('Błąd podczas przetwarzania daty faktury:', error);
+            return item;
+          }
+        }
+        
         // Specjalna obsługa dla zmiany waluty
         if (field === 'currency') {
           const newCurrency = value;
@@ -892,17 +1015,85 @@ const OrderForm = ({ orderId }) => {
           // Jeśli zmieniono walutę, przelicz wartość
           if (newCurrency !== oldCurrency) {
             const originalValue = parseFloat(item.originalValue) || parseFloat(item.value) || 0;
-            // Zapisz oryginalną wartość w nowej walucie
-            const newOriginalValue = originalValue;
-            // Przelicz wartość na EUR (waluta bazowa zamówienia)
-            const convertedValue = convertCurrency(originalValue, newCurrency, 'EUR');
             
+            // Jeśli mamy datę faktury, spróbuj pobrać kurs z API
+            if (item.invoiceDate) {
+              try {
+                const invoiceDate = new Date(item.invoiceDate);
+                const rateFetchDate = new Date(invoiceDate);
+                rateFetchDate.setDate(rateFetchDate.getDate() - 1);
+                
+                console.log(`Pobieranie kursu dla zmiany waluty z datą faktury ${item.invoiceDate}, data kursu: ${rateFetchDate.toISOString().split('T')[0]}`);
+                
+                // Używamy dynamicznego importu, aby uniknąć błędów cyklicznych importów
+                import('../../services/exchangeRateService').then(async ({ getExchangeRate }) => {
+                  try {
+                    const rate = await getExchangeRate(newCurrency, 'EUR', rateFetchDate);
+                    console.log(`Pobrany kurs dla ${newCurrency}/EUR z dnia ${rateFetchDate.toISOString().split('T')[0]}: ${rate}`);
+                    
+                    if (rate > 0) {
+                      // Przelicz wartość
+                      const convertedValue = originalValue * rate;
+                      
+                      // Aktualizuj pozycję z nowym kursem i przeliczoną wartością
+                      const updatedItem = {
+                        ...item,
+                        currency: newCurrency,
+                        originalValue: originalValue,
+                        exchangeRate: rate,
+                        value: convertedValue.toFixed(2)
+                      };
+                      
+                      // Aktualizuj stan
+                      setOrderData(prev => ({
+                        ...prev,
+                        additionalCostsItems: prev.additionalCostsItems.map(cost => 
+                          cost.id === id ? updatedItem : cost
+                        )
+                      }));
+                    } else {
+                      // W przypadku błędu, zaktualizuj tylko walutę
+                      setOrderData(prev => ({
+                        ...prev,
+                        additionalCostsItems: prev.additionalCostsItems.map(cost => 
+                          cost.id === id ? { ...cost, currency: newCurrency, originalValue: originalValue } : cost
+                        )
+                      }));
+                    }
+                  } catch (error) {
+                    console.error(`Błąd podczas pobierania kursu:`, error);
+                    // W przypadku błędu, zaktualizuj tylko walutę
+                    setOrderData(prev => ({
+                      ...prev,
+                      additionalCostsItems: prev.additionalCostsItems.map(cost => 
+                        cost.id === id ? { ...cost, currency: newCurrency, originalValue: originalValue } : cost
+                      )
+                    }));
+                  }
+                });
+                
+                // Zwracamy tymczasową wartość z zaktualizowaną walutą
+                return { ...item, currency: newCurrency, originalValue: originalValue };
+              } catch (error) {
+                console.error('Błąd podczas zmiany waluty:', error);
+              }
+            } else {
+              // Jeśli nie mamy daty faktury, nie przeliczamy walut - tylko informujemy użytkownika
+              showInfo('Aby przeliczać waluty, podaj datę faktury.');
+              return { 
+                ...item, 
+                currency: newCurrency,
+                originalValue: originalValue,
+                // Nie zmieniamy wartości value, będzie ona przeliczona po podaniu daty faktury
+              };
+            }
+            
+            // Ten kod zostanie wykonany tylko jeśli nie mamy daty faktury i wystąpił błąd w powyższym bloku try-catch
             return { 
               ...item, 
               currency: newCurrency,
-              originalValue: newOriginalValue,
-              value: convertedValue,
-              exchangeRate: exchangeRates[newCurrency] || 1
+              originalValue: originalValue,
+              // Nie zmieniamy wartości, dopóki użytkownik nie poda daty faktury
             };
           }
         }
@@ -915,14 +1106,26 @@ const OrderForm = ({ orderId }) => {
           if (item.currency && item.currency !== 'EUR') {
             // Zapisz oryginalną wartość
             const originalValue = newValue;
-            // Przelicz wartość na EUR
-            const convertedValue = convertCurrency(originalValue, item.currency, 'EUR');
             
-            return { 
-              ...item, 
-              originalValue: originalValue,
-              value: convertedValue
-            };
+            // Jeśli mamy datę faktury i kurs wymiany, użyj ich
+            if (item.invoiceDate && item.exchangeRate && parseFloat(item.exchangeRate) > 0) {
+              const rate = parseFloat(item.exchangeRate);
+              const convertedValue = originalValue * rate;
+              
+              return { 
+                ...item, 
+                originalValue: originalValue,
+                value: convertedValue.toFixed(2)
+              };
+            } else {
+              // Jeśli nie mamy daty faktury lub kursu, nie przeliczamy - zapisujemy oryginalną wartość
+              // i czekamy na datę faktury
+              return { 
+                ...item, 
+                originalValue: originalValue,
+                value: originalValue // Tymczasowo przechowujemy tę samą wartość - zostanie przeliczona po podaniu daty faktury
+              };
+            }
           } else {
             // Jeśli waluta to EUR, obie wartości są takie same
             return { 
@@ -2614,31 +2817,54 @@ const OrderForm = ({ orderId }) => {
                         return;
                       }
                       
-                      // Przelicz wartość na nową walutę
-                      if (newCurrency === 'EUR') {
-                        // Jeśli zmieniamy na EUR, używamy bezpośrednio przeliczonej wartości
-                        setOrderData(prev => ({
-                          ...prev,
-                          shippingCurrency: 'EUR',
-                          shippingCost: convertCurrency(originalValue, oldCurrency, 'EUR'),
-                          shippingCostOriginal: convertCurrency(originalValue, oldCurrency, 'EUR')
-                        }));
-                      } else if (oldCurrency === 'EUR') {
-                        // Jeśli zmieniamy z EUR na inną walutę
-                        setOrderData(prev => ({
-                          ...prev,
-                          shippingCurrency: newCurrency,
-                          shippingCost: convertCurrency(originalValue, 'EUR', newCurrency),
-                          shippingCostOriginal: originalValue
-                        }));
+                      // Przelicz wartość na nową walutę tylko jeśli mamy datę faktury i kurs
+                      if (orderData.invoiceDate) {
+                        if (newCurrency === 'EUR') {
+                          // Jeśli zmieniamy na EUR, używamy bezpośrednio przeliczonej wartości
+                          if (orderData.exchangeRate) {
+                            setOrderData(prev => ({
+                              ...prev,
+                              shippingCurrency: 'EUR',
+                              shippingCost: originalValue * orderData.exchangeRate,
+                              shippingCostOriginal: originalValue * orderData.exchangeRate
+                            }));
+                          } else {
+                            // Jeśli nie mamy kursu, zachowujemy wartość bez przeliczania
+                            setOrderData(prev => ({
+                              ...prev,
+                              shippingCurrency: 'EUR',
+                              shippingCost: originalValue,
+                              shippingCostOriginal: originalValue
+                            }));
+                          }
+                        } else if (oldCurrency === 'EUR') {
+                          // Jeśli zmieniamy z EUR na inną walutę
+                          // Nie przeliczamy, tylko zapamiętujemy wartość EUR jako oryginalną
+                          setOrderData(prev => ({
+                            ...prev,
+                            shippingCurrency: newCurrency,
+                            shippingCost: originalValue, // Tymczasowo bez przeliczania - kurs zostanie pobrany po podaniu daty faktury
+                            shippingCostOriginal: originalValue
+                          }));
+                        } else {
+                          // Jeśli zmieniamy z jednej waluty obcej na inną
+                          // Tymczasowo nie przeliczamy, czekamy na datę faktury
+                          setOrderData(prev => ({
+                            ...prev,
+                            shippingCurrency: newCurrency,
+                            shippingCost: originalValue, // Tymczasowo bez przeliczania
+                            shippingCostOriginal: originalValue
+                          }));
+                        }
                       } else {
-                        // Jeśli zmieniamy z jednej waluty obcej na inną
-                        const valueInEUR = convertCurrency(originalValue, oldCurrency, 'EUR');
+                        // Jeśli nie mamy daty faktury, nie przeliczamy - pokazujemy komunikat
+                        showInfo('Aby przeliczać waluty, podaj datę faktury.');
                         setOrderData(prev => ({
                           ...prev,
                           shippingCurrency: newCurrency,
-                          shippingCost: valueInEUR,
-                          shippingCostOriginal: convertCurrency(valueInEUR, 'EUR', newCurrency)
+                          shippingCostOriginal: originalValue,
+                          // Zachowaj oryginalną wartość jako koszt dostawy do momentu podania daty faktury
+                          shippingCost: originalValue
                         }));
                       }
                     }}
@@ -2650,11 +2876,38 @@ const OrderForm = ({ orderId }) => {
                   </Select>
                 </FormControl>
               </Box>
-              {orderData.shippingCurrency && orderData.shippingCurrency !== 'EUR' && orderData.shippingCost > 0 && (
+              {orderData.shippingCurrency && orderData.shippingCurrency !== 'EUR' && orderData.shippingCost > 0 && orderData.exchangeRate && (
                 <Typography variant="caption" sx={{ display: 'block', mt: 1, fontStyle: 'italic' }}>
-                  {formatCurrency(parseFloat(orderData.shippingCostOriginal) || 0)} {orderData.shippingCurrency} = {formatCurrency(parseFloat(orderData.shippingCost) || 0)} EUR
+                  {formatCurrency(parseFloat(orderData.shippingCostOriginal) || 0)} {orderData.shippingCurrency} = {formatCurrency(parseFloat(orderData.shippingCost) || 0)} EUR (kurs: {orderData.exchangeRate})
                 </Typography>
               )}
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                name="invoiceNumber"
+                label="Nr faktury"
+                value={orderData.invoiceNumber || ''}
+                onChange={handleChange}
+                fullWidth
+                placeholder="Wprowadź numer faktury"
+                variant="outlined"
+                InputProps={{
+                  startAdornment: <InputAdornment position="start">📄</InputAdornment>,
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                type="date"
+                label="Data faktury"
+                name="invoiceDate"
+                value={orderData.invoiceDate || ''}
+                onChange={handleChange}
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+                variant="outlined"
+                helperText="Data wystawienia faktury"
+              />
             </Grid>
           </Grid>
           
@@ -2712,6 +2965,9 @@ const OrderForm = ({ orderId }) => {
                     <TableCell align="right">Kwota</TableCell>
                     <TableCell align="right">Waluta</TableCell>
                     <TableCell align="right">VAT</TableCell>
+                    <TableCell>Nr faktury</TableCell>
+                    <TableCell>Data faktury</TableCell>
+                    <TableCell>Kurs</TableCell>
                     <TableCell width="50px"></TableCell>
                   </TableRow>
                 </TableHead>
@@ -2765,6 +3021,38 @@ const OrderForm = ({ orderId }) => {
                         </FormControl>
                       </TableCell>
                       <TableCell>
+                        <TextField
+                          value={cost.invoiceNumber || ''}
+                          onChange={(e) => handleAdditionalCostChange(cost.id, 'invoiceNumber', e.target.value)}
+                          variant="standard"
+                          fullWidth
+                          placeholder="Nr faktury"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          type="date"
+                          value={cost.invoiceDate || ''}
+                          onChange={(e) => handleAdditionalCostChange(cost.id, 'invoiceDate', e.target.value)}
+                          variant="standard"
+                          inputProps={{ 
+                            max: formatDateForInput ? formatDateForInput(new Date()) : new Date().toISOString().split('T')[0]
+                          }}
+                          sx={{ width: 150 }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          type="number"
+                          value={cost.exchangeRate || 1}
+                          onChange={(e) => handleAdditionalCostChange(cost.id, 'exchangeRate', e.target.value)}
+                          variant="standard"
+                          inputProps={{ step: '0.000001', min: '0' }}
+                          sx={{ maxWidth: 100 }}
+                          disabled={cost.currency === 'EUR'}
+                        />
+                      </TableCell>
+                      <TableCell>
                         <IconButton size="small" color="error" onClick={() => handleRemoveAdditionalCost(cost.id)}>
                           <DeleteIcon />
                         </IconButton>
@@ -2789,14 +3077,15 @@ const OrderForm = ({ orderId }) => {
                   </TableRow>
                   
                   {/* Informacja o kursach walut jeśli używane są różne waluty */}
-                  {orderData.additionalCostsItems.some(cost => cost.currency && cost.currency !== 'EUR') && (
+                  {orderData.additionalCostsItems.some(cost => cost.currency && cost.currency !== 'EUR' && cost.exchangeRate > 0) && (
                     <TableRow>
                       <TableCell colSpan={5} sx={{ py: 1 }}>
                         <Typography variant="caption" sx={{ fontStyle: 'italic' }}>
-                          Wartości w walutach obcych zostały przeliczone według wczorajszego kursu: 
-                          {Object.entries(exchangeRates)
-                            .filter(([currency]) => currency !== 'EUR')
-                            .map(([currency, rate]) => ` ${currency}/EUR: ${rate.toFixed(6)}`)
+                          Wartości w walutach obcych zostały przeliczone według kursów z dnia poprzedzającego datę faktury: 
+                          {orderData.additionalCostsItems
+                            .filter(cost => cost.currency !== 'EUR' && cost.exchangeRate > 0)
+                            .map(cost => ` ${cost.currency}/EUR: ${parseFloat(cost.exchangeRate).toFixed(6)}`)
+                            .filter((value, index, self) => self.indexOf(value) === index) // Usunięcie duplikatów
                             .join(', ')}
                         </Typography>
                       </TableCell>
