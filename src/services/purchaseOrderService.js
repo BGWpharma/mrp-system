@@ -172,6 +172,12 @@ export const getPurchaseOrderById = async (id) => {
 // Funkcja do generowania numerów zamówień
 export const generateOrderNumber = async (prefix) => {
   try {
+    // Użyj funkcji generatePONumber z numberGenerators.js, która tworzy numery w formacie PO00001
+    const { generatePONumber } = await import('../utils/numberGenerators');
+    return await generatePONumber();
+    
+    // Poniższy kod jest zakomentowany, ponieważ używamy teraz starego formatu bez roku
+    /*
     const now = new Date();
     const year = now.getFullYear();
     
@@ -187,6 +193,7 @@ export const generateOrderNumber = async (prefix) => {
     const orderNumber = `${prefix}-${year}-${(ordersCount + 1).toString().padStart(4, '0')}`;
     
     return orderNumber;
+    */
   } catch (error) {
     console.error('Błąd podczas generowania numeru zamówienia:', error);
     throw error;

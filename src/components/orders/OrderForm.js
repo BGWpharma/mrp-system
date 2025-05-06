@@ -76,7 +76,7 @@ import { getAllCustomers, createCustomer } from '../../services/customerService'
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatCurrency } from '../../utils/formatUtils';
-import { formatDateForInput } from '../../utils/dateUtils';
+import { formatDateForInput, formatDate, safeParseDate, ensureDateInputFormat } from '../../utils/dateUtils';
 import { getAllRecipes, getRecipeById } from '../../services/recipeService';
 import { storage } from '../../services/firebase/config';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
@@ -156,19 +156,24 @@ const OrderForm = ({ orderId }) => {
         if (orderId) {
           const fetchedOrder = await getOrderById(orderId);
           
-          const orderDate = fetchedOrder.orderDate?.toDate ? fetchedOrder.orderDate.toDate() : new Date(fetchedOrder.orderDate);
+          console.log("Ładowanie danych zamówienia o ID:", orderId);
           
-          // Sprawdź najpierw expectedDeliveryDate, potem deadline jako fallback
-          const expectedDeliveryDate = fetchedOrder.expectedDeliveryDate?.toDate ? 
-            fetchedOrder.expectedDeliveryDate.toDate() : 
-            fetchedOrder.expectedDeliveryDate ? new Date(fetchedOrder.expectedDeliveryDate) : 
-            fetchedOrder.deadline?.toDate ? fetchedOrder.deadline.toDate() :
-            fetchedOrder.deadline ? new Date(fetchedOrder.deadline) : null;
-            
-          const deliveryDate = fetchedOrder.deliveryDate?.toDate ? 
-            fetchedOrder.deliveryDate.toDate() : 
-            fetchedOrder.deliveryDate ? new Date(fetchedOrder.deliveryDate) : null;
-            
+          // Pobierz i sparsuj daty w zamówieniu
+          const orderDate = safeParseDate(fetchedOrder.orderDate);
+          const deadline = safeParseDate(fetchedOrder.deadline) || safeParseDate(fetchedOrder.expectedDeliveryDate);
+          const deliveryDate = safeParseDate(fetchedOrder.deliveryDate);
+          
+          console.log("Daty w pobranym zamówieniu:");
+          console.log("- orderDate:", fetchedOrder.orderDate, typeof fetchedOrder.orderDate);
+          console.log("- deadline:", fetchedOrder.deadline, typeof fetchedOrder.deadline);
+          console.log("- expectedDeliveryDate:", fetchedOrder.expectedDeliveryDate, typeof fetchedOrder.expectedDeliveryDate);
+          console.log("- deliveryDate:", fetchedOrder.deliveryDate, typeof fetchedOrder.deliveryDate);
+
+          console.log("Przeformatowane daty przed zapisaniem do state:");
+          console.log("- orderDate format:", formatDateForInput(orderDate));
+          console.log("- deadline format:", formatDateForInput(deadline));
+          console.log("- deliveryDate format:", deliveryDate ? formatDateForInput(deliveryDate) : "");
+          
           if (!fetchedOrder.items || fetchedOrder.items.length === 0) {
             fetchedOrder.items = [{ ...DEFAULT_ORDER.items[0] }];
           }
@@ -279,9 +284,9 @@ const OrderForm = ({ orderId }) => {
           
           setOrderData({
             ...fetchedOrder,
-            orderDate: formatDateForInput(orderDate),
-            deadline: expectedDeliveryDate ? formatDateForInput(expectedDeliveryDate) : '',
-            deliveryDate: deliveryDate ? formatDateForInput(deliveryDate) : '',
+            orderDate: ensureDateInputFormat(orderDate),
+            deadline: ensureDateInputFormat(deadline),
+            deliveryDate: ensureDateInputFormat(deliveryDate),
             linkedPurchaseOrders: validLinkedPOs,
             // Inicjalizacja pustą tablicą, jeśli w zamówieniu nie ma dodatkowych kosztów
             additionalCostsItems: fetchedOrder.additionalCostsItems || []
@@ -353,7 +358,9 @@ const OrderForm = ({ orderId }) => {
         totalValue: calculateTotal(), // Używamy funkcji która uwzględnia wszystkie składniki: produkty, dostawę, dodatkowe koszty i rabaty
         // Upewniamy się, że daty są poprawne
         orderDate: verifiedOrderData.orderDate ? new Date(verifiedOrderData.orderDate) : new Date(),
-        expectedDeliveryDate: verifiedOrderData.expectedDeliveryDate ? new Date(verifiedOrderData.expectedDeliveryDate) : null,
+        // Zapisujemy deadline jako expectedDeliveryDate w bazie danych
+        expectedDeliveryDate: verifiedOrderData.deadline ? new Date(verifiedOrderData.deadline) : null,
+        deadline: verifiedOrderData.deadline ? new Date(verifiedOrderData.deadline) : null,
         deliveryDate: verifiedOrderData.deliveryDate ? new Date(verifiedOrderData.deliveryDate) : null
       };
 
@@ -424,9 +431,12 @@ const OrderForm = ({ orderId }) => {
     const { name, value } = e.target;
     
     if (['orderDate', 'deadline', 'deliveryDate'].includes(name)) {
+      console.log(`Zmiana daty ${name}:`, value);
+      
+      // Dla pól daty, zawsze używamy wartości jako string
       setOrderData(prev => ({ 
         ...prev, 
-        [name]: formatDateForInput(value) 
+        [name]: value 
       }));
     } else {
       setOrderData(prev => ({ ...prev, [name]: value }));
@@ -757,21 +767,37 @@ const OrderForm = ({ orderId }) => {
       yesterday.setDate(yesterday.getDate() - 1);
       
       const currencies = ['EUR', 'PLN', 'USD', 'GBP', 'CHF'];
-      const baseCurrency = 'EUR'; // EUR jako domyślna waluta bazowa dla CO
+      const baseCurrency = orderData.currency; // Waluta bazowa zamówienia
       
-      const rates = {};
-      for (const currency of currencies) {
-        if (currency !== baseCurrency) {
-          const rate = await getExchangeRate(currency, baseCurrency, yesterday);
-          rates[currency] = rate;
-        }
+      // Sprawdź, czy baseCurrency jest jedną z obsługiwanych walut
+      if (!currencies.includes(baseCurrency)) {
+        console.warn(`Nieobsługiwana waluta bazowa: ${baseCurrency}. Używam domyślnej waluty EUR.`);
+        setOrderData(prev => ({ ...prev, currency: 'EUR' }));
+        return; // Funkcja zostanie ponownie wywołana przez useEffect po zmianie currency
       }
       
+      const rates = {};
       // Dodaj kurs 1 dla waluty bazowej
       rates[baseCurrency] = 1;
       
-      setExchangeRates(rates);
+      // Pobierz kursy dla pozostałych walut
+      const fetchPromises = currencies
+        .filter(currency => currency !== baseCurrency)
+        .map(async currency => {
+          try {
+            const rate = await getExchangeRate(currency, baseCurrency, yesterday);
+            rates[currency] = rate;
+          } catch (err) {
+            console.error(`Błąd podczas pobierania kursu ${currency}/${baseCurrency}:`, err);
+            // Użyj wartości domyślnych z konfiguracji
+            rates[currency] = getDefaultRate(currency, baseCurrency);
+          }
+        });
+      
+      await Promise.all(fetchPromises);
+      
       console.log('Pobrano kursy walut:', rates);
+      setExchangeRates(rates);
       
     } catch (error) {
       console.error('Błąd podczas pobierania kursów walut:', error);
@@ -779,15 +805,36 @@ const OrderForm = ({ orderId }) => {
       
       // Ustaw domyślne kursy w razie błędu
       setExchangeRates({
-        EUR: 1,
-        PLN: 4.3,
-        USD: 1.08,
-        GBP: 0.85,
-        CHF: 0.96
+        EUR: orderData.currency === 'EUR' ? 1 : 4.3,
+        PLN: orderData.currency === 'PLN' ? 1 : 0.23,
+        USD: orderData.currency === 'USD' ? 1 : 0.92,
+        GBP: orderData.currency === 'GBP' ? 1 : 1.17,
+        CHF: orderData.currency === 'CHF' ? 1 : 1.04
       });
     } finally {
       setLoadingRates(false);
     }
+  };
+  
+  // Pomocnicza funkcja do pobierania domyślnego kursu
+  const getDefaultRate = (fromCurrency, toCurrency) => {
+    const defaultRates = {
+      'EUR': { 'PLN': 4.3, 'USD': 1.08, 'GBP': 0.85, 'CHF': 0.96 },
+      'PLN': { 'EUR': 0.23, 'USD': 0.25, 'GBP': 0.2, 'CHF': 0.22 },
+      'USD': { 'EUR': 0.92, 'PLN': 3.97, 'GBP': 0.79, 'CHF': 0.88 },
+      'GBP': { 'EUR': 1.17, 'PLN': 5.06, 'USD': 1.27, 'CHF': 1.13 },
+      'CHF': { 'EUR': 1.04, 'PLN': 4.49, 'USD': 1.13, 'GBP': 0.89 }
+    };
+    
+    if (defaultRates[fromCurrency] && defaultRates[fromCurrency][toCurrency]) {
+      return defaultRates[fromCurrency][toCurrency];
+    }
+    
+    if (defaultRates[toCurrency] && defaultRates[toCurrency][fromCurrency]) {
+      return 1 / defaultRates[toCurrency][fromCurrency];
+    }
+    
+    return 1;
   };
   
   // Pobierz kursy walut przy starcie
@@ -2082,7 +2129,7 @@ const OrderForm = ({ orderId }) => {
                 type="date"
                 label="Data zamówienia"
                 name="orderDate"
-                value={orderData.orderDate || ''}
+                value={ensureDateInputFormat(orderData.orderDate)}
                 onChange={handleChange}
                 fullWidth
                 required
@@ -2139,7 +2186,7 @@ const OrderForm = ({ orderId }) => {
                 type="date"
                 label="Oczekiwana data dostawy"
                 name="deadline"
-                value={orderData.deadline || ''}
+                value={ensureDateInputFormat(orderData.deadline)}
                 onChange={handleChange}
                 fullWidth
                 InputLabelProps={{ shrink: true }}

@@ -14,7 +14,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { ArrowBack as ArrowBackIcon, Save as SaveIcon } from '@mui/icons-material';
-import { getInventoryItemById, getItemBatches, updateBatch } from '../../services/inventoryService';
+import { getInventoryItemById, getItemBatches, updateBatch, getInventoryBatch } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -33,7 +33,8 @@ const BatchEditForm = () => {
     expiryDate: null,
     notes: '',
     unitPrice: '',
-    quantity: ''
+    quantity: '',
+    itemId: ''
   });
 
   useEffect(() => {
@@ -41,31 +42,71 @@ const BatchEditForm = () => {
       try {
         setLoading(true);
         
-        // Pobierz dane pozycji magazynowej
-        const itemData = await getInventoryItemById(id);
-        setItem(itemData);
+        // Określ ID partii - może być w parametrze batchId lub id (jeśli wchodzimy bezpośrednio ze ścieżki /inventory/batch/:batchId)
+        const actualBatchId = batchId || id;
         
-        // Pobierz partie dla tej pozycji
-        const batches = await getItemBatches(id);
-        
-        // Znajdź konkretną partię
-        const batch = batches.find(b => b.id === batchId);
-        
-        if (!batch) {
-          showError('Nie znaleziono partii o podanym ID');
-          navigate(`/inventory/${id}/batches`);
+        if (!actualBatchId) {
+          showError('Brak ID partii');
+          navigate('/inventory');
           return;
         }
         
-        // Ustaw dane partii w formularzu
-        setBatchData({
-          batchNumber: batch.batchNumber || '',
-          lotNumber: batch.lotNumber || '',
-          expiryDate: batch.expiryDate ? new Date(batch.expiryDate) : null,
-          notes: batch.notes || '',
-          unitPrice: batch.unitPrice || '',
-          quantity: batch.quantity || 0
-        });
+        // Jeśli mamy zarówno id produktu jak i batchId, używamy zwykłej ścieżki
+        if (id && batchId) {
+          // Pobierz dane pozycji magazynowej
+          const itemData = await getInventoryItemById(id);
+          setItem(itemData);
+          
+          // Pobierz partie dla tej pozycji
+          const batches = await getItemBatches(id);
+          
+          // Znajdź konkretną partię
+          const batch = batches.find(b => b.id === batchId);
+          
+          if (!batch) {
+            showError('Nie znaleziono partii o podanym ID');
+            navigate(`/inventory/${id}/batches`);
+            return;
+          }
+          
+          // Ustaw dane partii w formularzu
+          setBatchData({
+            batchNumber: batch.batchNumber || '',
+            lotNumber: batch.lotNumber || '',
+            expiryDate: batch.expiryDate ? new Date(batch.expiryDate) : null,
+            notes: batch.notes || '',
+            unitPrice: batch.unitPrice || '',
+            quantity: batch.quantity || 0,
+            itemId: batch.itemId || id
+          });
+        } else {
+          // Jeśli mamy tylko ID partii (ze ścieżki /inventory/batch/:batchId)
+          // Pobierz dane partii bezpośrednio
+          const batch = await getInventoryBatch(actualBatchId);
+          
+          if (!batch) {
+            showError('Nie znaleziono partii o podanym ID');
+            navigate('/inventory');
+            return;
+          }
+          
+          // Ustaw dane partii w formularzu
+          setBatchData({
+            batchNumber: batch.batchNumber || '',
+            lotNumber: batch.lotNumber || '',
+            expiryDate: batch.expiryDate ? new Date(batch.expiryDate) : null,
+            notes: batch.notes || '',
+            unitPrice: batch.unitPrice || '',
+            quantity: batch.quantity || 0,
+            itemId: batch.itemId
+          });
+          
+          // Jeśli mamy itemId w partii, pobierz dane produktu
+          if (batch.itemId) {
+            const itemData = await getInventoryItemById(batch.itemId);
+            setItem(itemData);
+          }
+        }
       } catch (error) {
         showError('Błąd podczas pobierania danych: ' + error.message);
         console.error('Error fetching data:', error);
@@ -115,16 +156,39 @@ const BatchEditForm = () => {
         quantity: batchData.quantity ? parseFloat(batchData.quantity) : 0
       };
       
+      // Określ ID partii - może być w parametrze batchId lub id
+      const actualBatchId = batchId || id;
+      
       // Aktualizuj partię
-      await updateBatch(batchId, updateData, currentUser.uid);
+      await updateBatch(actualBatchId, updateData, currentUser.uid);
       
       showSuccess('Partia została zaktualizowana');
-      navigate(`/inventory/${id}/batches`);
+      
+      // Nawiguj z powrotem - albo do listy partii produktu, albo do inwentarza głównego
+      if (id && batchId) {
+        navigate(`/inventory/${id}/batches`);
+      } else if (batchData.itemId) {
+        navigate(`/inventory/${batchData.itemId}/batches`);
+      } else {
+        navigate('/inventory');
+      }
     } catch (error) {
       showError('Błąd podczas aktualizacji partii: ' + error.message);
       console.error('Error updating batch:', error);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleBack = () => {
+    // Wróć do odpowiedniej strony w zależności od tego, z której ścieżki przyszliśmy
+    if (id && batchId) {
+      navigate(`/inventory/${id}/batches`);
+    } else if (batchData.itemId) {
+      // Przekieruj do listy partii produktu zamiast do edycji
+      navigate(`/inventory/${batchData.itemId}/batches`);
+    } else {
+      navigate('/inventory');
     }
   };
 
@@ -142,12 +206,12 @@ const BatchEditForm = () => {
         <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Button 
             startIcon={<ArrowBackIcon />} 
-            onClick={() => navigate(`/inventory/${id}/batches`)}
+            onClick={handleBack}
           >
             Powrót
           </Button>
           <Typography variant="h5">
-            Edycja partii: {item?.name}
+            Edycja partii: {item?.name || 'Partia nr ' + (batchData.lotNumber || batchData.batchNumber)}
           </Typography>
           <Button 
             variant="contained" 
@@ -241,6 +305,49 @@ const BatchEditForm = () => {
             </Grid>
           </Grid>
         </Paper>
+        
+        {item && (
+          <Paper sx={{ p: 3, mb: 3 }}>
+            <Typography variant="h6" gutterBottom>Informacje o produkcie</Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Nazwa produktu"
+                  value={item.name || ''}
+                  margin="normal"
+                  InputProps={{
+                    readOnly: true,
+                  }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Kategoria"
+                  value={item.category || ''}
+                  margin="normal"
+                  InputProps={{
+                    readOnly: true,
+                  }}
+                />
+              </Grid>
+              {item.sku && (
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="SKU"
+                    value={item.sku || ''}
+                    margin="normal"
+                    InputProps={{
+                      readOnly: true,
+                    }}
+                  />
+                </Grid>
+              )}
+            </Grid>
+          </Paper>
+        )}
       </Box>
     </LocalizationProvider>
   );

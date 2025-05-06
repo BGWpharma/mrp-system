@@ -4,7 +4,8 @@ import {
   Container, Typography, Paper, Button, Box, Chip, Grid, Divider, 
   Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  FormControl, InputLabel, Select, MenuItem, TextField, CircularProgress, IconButton
+  FormControl, InputLabel, Select, MenuItem, TextField, CircularProgress, IconButton,
+  List, ListItem, ListItemText, ListItemIcon, Collapse
 } from '@mui/material';
 import { 
   Edit as EditIcon, 
@@ -19,7 +20,10 @@ import {
   Email as EmailIcon,
   Phone as PhoneIcon,
   MoreVert as MoreVertIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
+  Label as LabelIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -32,6 +36,7 @@ import {
   PURCHASE_ORDER_STATUSES,
   translateStatus
 } from '../../services/purchaseOrderService';
+import { getBatchesByPurchaseOrderId } from '../../services/inventoryService';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../hooks/useNotification';
 import { useReactToPrint } from 'react-to-print';
@@ -55,6 +60,9 @@ const PurchaseOrderDetails = ({ orderId }) => {
   const [invoiceLink, setInvoiceLink] = useState('');
   const [userNames, setUserNames] = useState({});
   const [menuAnchorRef, setMenuAnchorRef] = useState(null);
+  const [relatedBatches, setRelatedBatches] = useState([]);
+  const [loadingBatches, setLoadingBatches] = useState(false);
+  const [expandedItems, setExpandedItems] = useState({});
   
   const printRef = useRef(null);
   
@@ -91,6 +99,9 @@ const PurchaseOrderDetails = ({ orderId }) => {
           const names = await getUsersDisplayNames(uniqueUserIds);
           setUserNames(names);
         }
+        
+        // Pobierz powiązane LOTy
+        await fetchRelatedBatches(orderId);
       } catch (error) {
         showError('Błąd podczas pobierania danych zamówienia: ' + error.message);
       } finally {
@@ -114,6 +125,53 @@ const PurchaseOrderDetails = ({ orderId }) => {
       }, 500);
     }
   }, [orderId, showError]);
+  
+  // Dodajemy nową funkcję do pobierania powiązanych partii (LOT)
+  const fetchRelatedBatches = async (poId) => {
+    try {
+      setLoadingBatches(true);
+      const batches = await getBatchesByPurchaseOrderId(poId);
+      setRelatedBatches(batches);
+      setLoadingBatches(false);
+    } catch (error) {
+      console.error('Błąd podczas pobierania powiązanych partii:', error);
+      setLoadingBatches(false);
+    }
+  };
+  
+  // Funkcja do grupowania LOTów według pozycji zamówienia
+  const getBatchesByItemId = (itemId) => {
+    if (!relatedBatches || relatedBatches.length === 0) return [];
+    
+    return relatedBatches.filter(batch => {
+      // Sprawdź różne możliwe powiązania między LOTem a pozycją zamówienia
+      return (
+        (batch.purchaseOrderDetails && batch.purchaseOrderDetails.itemPoId === itemId) ||
+        (batch.sourceDetails && batch.sourceDetails.itemPoId === itemId) ||
+        (itemId === undefined) // Jeśli itemId nie jest podane, zwróć wszystkie
+      );
+    });
+  };
+  
+  // Funkcja do nawigacji do szczegółów partii (LOTu)
+  const handleBatchClick = (batchId, itemId) => {
+    if (!batchId) return;
+    if (itemId) {
+      // Jeśli znamy ID produktu, przekieruj do listy partii produktu
+      navigate(`/inventory/${itemId}/batches`);
+    } else {
+      // Jeśli nie znamy ID produktu, pobierz partię i przekieruj na podstawie jej itemId
+      navigate(`/inventory/batch/${batchId}`);
+    }
+  };
+  
+  // Funkcja do przełączania rozwinięcia/zwinięcia listy LOTów dla danej pozycji
+  const toggleItemExpansion = (itemId) => {
+    setExpandedItems(prev => ({
+      ...prev,
+      [itemId]: !prev[itemId]
+    }));
+  };
   
   // Funkcja zwracająca nazwę użytkownika zamiast ID
   const getUserName = (userId) => {
@@ -811,33 +869,115 @@ const PurchaseOrderDetails = ({ orderId }) => {
                       }
                       
                       return (
-                        <TableRow 
-                          key={index}
-                          sx={{ backgroundColor: rowColor }}
-                        >
-                          <TableCell>{item.name}</TableCell>
-                          <TableCell align="right">{item.quantity}</TableCell>
-                          <TableCell>{item.unit}</TableCell>
-                          <TableCell align="right">{formatCurrency(item.unitPrice, purchaseOrder.currency)}</TableCell>
-                          <TableCell align="right">{formatCurrency(item.totalPrice, purchaseOrder.currency)}</TableCell>
-                          <TableCell align="right">
-                            {received} {received > 0 && `(${fulfilledPercentage.toFixed(0)}%)`}
-                          </TableCell>
-                          {/* Ukrywamy przycisk akcji przy drukowaniu */}
-                          <TableCell align="right" sx={{ '@media print': { display: 'none' } }}>
-                            {canReceiveItems && item.inventoryItemId && 
-                             (parseFloat(item.received || 0) < parseFloat(item.quantity || 0)) && (
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                startIcon={<InventoryIcon />}
-                                onClick={() => handleReceiveClick(item)}
-                              >
-                                Przyjmij
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
+                        <React.Fragment key={index}>
+                          <TableRow 
+                            sx={{ backgroundColor: rowColor }}
+                          >
+                            <TableCell>
+                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                {item.name}
+                                {/* Dodaj przycisk rozwijania, jeśli istnieją LOTy dla tego produktu */}
+                                {getBatchesByItemId(item.id).length > 0 && (
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => toggleItemExpansion(item.id)}
+                                    sx={{ ml: 1 }}
+                                  >
+                                    {expandedItems[item.id] ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                                  </IconButton>
+                                )}
+                              </Box>
+                            </TableCell>
+                            <TableCell align="right">{item.quantity}</TableCell>
+                            <TableCell>{item.unit}</TableCell>
+                            <TableCell align="right">{formatCurrency(item.unitPrice, purchaseOrder.currency)}</TableCell>
+                            <TableCell align="right">{formatCurrency(item.totalPrice, purchaseOrder.currency)}</TableCell>
+                            <TableCell align="right">
+                              {received} {received > 0 && `(${fulfilledPercentage.toFixed(0)}%)`}
+                            </TableCell>
+                            {/* Ukrywamy przycisk akcji przy drukowaniu */}
+                            <TableCell align="right" sx={{ '@media print': { display: 'none' } }}>
+                              {canReceiveItems && item.inventoryItemId && 
+                               (parseFloat(item.received || 0) < parseFloat(item.quantity || 0)) && (
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  startIcon={<InventoryIcon />}
+                                  onClick={() => handleReceiveClick(item)}
+                                >
+                                  Przyjmij
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                          
+                          {/* LOTy powiązane z tą pozycją zamówienia */}
+                          {expandedItems[item.id] && (
+                            <TableRow>
+                              <TableCell colSpan={7} sx={{ py: 0, backgroundColor: 'rgba(0, 0, 0, 0.02)' }}>
+                                <Collapse in={expandedItems[item.id]} timeout="auto" unmountOnExit>
+                                  <Box sx={{ m: 2 }}>
+                                    <Typography variant="subtitle2" gutterBottom component="div">
+                                      Partie (LOT) przypisane do tej pozycji
+                                    </Typography>
+                                    {getBatchesByItemId(item.id).length > 0 ? (
+                                      <List dense>
+                                        {getBatchesByItemId(item.id).map((batch) => (
+                                          <ListItem 
+                                            key={batch.id} 
+                                            sx={{ 
+                                              bgcolor: 'background.paper', 
+                                              mb: 0.5, 
+                                              borderRadius: 1,
+                                              cursor: 'pointer',
+                                              '&:hover': { bgcolor: 'action.hover' }
+                                            }}
+                                            onClick={() => handleBatchClick(batch.id, item.id)}
+                                          >
+                                            <ListItemIcon>
+                                              <LabelIcon color="info" />
+                                            </ListItemIcon>
+                                            <ListItemText
+                                              primary={`LOT: ${batch.lotNumber || batch.batchNumber || "Brak numeru"}`}
+                                              secondary={
+                                                <React.Fragment>
+                                                  <Typography component="span" variant="body2" color="text.primary">
+                                                    Ilość: {batch.quantity} {item.unit}
+                                                  </Typography>
+                                                  {batch.receivedDate && (
+                                                    <Typography component="span" variant="body2" display="block" color="text.secondary">
+                                                      Przyjęto: {new Date(batch.receivedDate.seconds * 1000).toLocaleDateString('pl-PL')}
+                                                    </Typography>
+                                                  )}
+                                                  {batch.warehouseId && (
+                                                    <Typography component="span" variant="body2" display="block" color="text.secondary">
+                                                      Magazyn: {batch.warehouseName || batch.warehouseId}
+                                                    </Typography>
+                                                  )}
+                                                </React.Fragment>
+                                              }
+                                            />
+                                            <Chip 
+                                              size="small" 
+                                              label="Przejdź do szczegółów" 
+                                              color="primary" 
+                                              variant="outlined" 
+                                              sx={{ ml: 1 }}
+                                            />
+                                          </ListItem>
+                                        ))}
+                                      </List>
+                                    ) : (
+                                      <Typography variant="body2" color="text.secondary">
+                                        Brak przypisanych partii dla tej pozycji
+                                      </Typography>
+                                    )}
+                                  </Box>
+                                </Collapse>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </React.Fragment>
                       );
                     })}
                   </TableBody>
@@ -925,6 +1065,75 @@ const PurchaseOrderDetails = ({ orderId }) => {
               </Grid>
             </Paper>
           </Box>
+          
+          {/* Nowa sekcja wyświetlająca wszystkie LOTy powiązane z zamówieniem */}
+          {relatedBatches.length > 0 && (
+            <Paper sx={{ p: 3, mb: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                Wszystkie partie (LOT) powiązane z zamówieniem
+              </Typography>
+              
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Numer LOT</TableCell>
+                      <TableCell>Produkt</TableCell>
+                      <TableCell align="right">Ilość</TableCell>
+                      <TableCell>Magazyn</TableCell>
+                      <TableCell>Data przyjęcia</TableCell>
+                      <TableCell>Wartość</TableCell>
+                      <TableCell>Akcje</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {relatedBatches.map((batch) => (
+                      <TableRow 
+                        key={batch.id} 
+                        hover 
+                        sx={{ 
+                          cursor: 'pointer',
+                          '&:hover': { bgcolor: 'action.hover' }
+                        }}
+                      >
+                        <TableCell sx={{ fontWeight: 'medium' }}>
+                          {batch.lotNumber || batch.batchNumber || "Brak numeru"}
+                        </TableCell>
+                        <TableCell>
+                          {batch.itemName || "Nieznany produkt"}
+                        </TableCell>
+                        <TableCell align="right">
+                          {batch.quantity || 0} {batch.unit || 'szt.'}
+                        </TableCell>
+                        <TableCell>
+                          {batch.warehouseName || batch.warehouseId || "Główny magazyn"}
+                        </TableCell>
+                        <TableCell>
+                          {batch.receivedDate ? 
+                            (typeof batch.receivedDate === 'object' && batch.receivedDate.seconds ? 
+                              new Date(batch.receivedDate.seconds * 1000).toLocaleDateString('pl-PL') : 
+                              new Date(batch.receivedDate).toLocaleDateString('pl-PL')) : 
+                            "Nieznana data"}
+                        </TableCell>
+                        <TableCell>
+                          {formatCurrency(batch.unitPrice * batch.quantity, purchaseOrder.currency)}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => handleBatchClick(batch.id, batch.itemId)}
+                          >
+                            Szczegóły
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+          )}
           
           <Paper sx={{ mb: 3, p: 3, borderRadius: 2 }}>
             <Typography variant="h6" gutterBottom>

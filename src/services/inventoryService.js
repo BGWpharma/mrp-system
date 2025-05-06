@@ -754,6 +754,7 @@ import {
               } : null,
               orderDate: poData.orderDate || null,
               deliveryDate: poData.expectedDeliveryDate || poData.deliveryDate || null,
+              // Zapisz ID pozycji zamówienia - to ważne dla powiązania LOT z konkretną pozycją w PO
               itemPoId: transactionData.itemPOId || null,
               invoiceNumber: poData.invoiceNumber || null,
               invoiceLink: poData.invoiceLink || null
@@ -765,7 +766,9 @@ import {
               orderId: poId || null,
               orderNumber: poData.number || transactionData.orderNumber || null,
               supplierId: poData.supplier?.id || null,
-              supplierName: poData.supplier?.name || null
+              supplierName: poData.supplier?.name || null,
+              // Zapisz ID pozycji zamówienia również w starszym formacie
+              itemPoId: transactionData.itemPOId || null
             };
             
             // Aktualizuj cenę jednostkową na podstawie dodatkowych kosztów z PO
@@ -4014,6 +4017,58 @@ import {
       };
     } catch (error) {
       console.error(`Błąd podczas pobierania partii o ID ${batchId}:`, error);
+      throw error;
+    }
+  };
+
+  /**
+   * Pobiera wszystkie partie (LOTy) powiązane z danym zamówieniem zakupowym (PO)
+   * @param {string} purchaseOrderId - ID zamówienia zakupowego
+   * @returns {Promise<Array>} - Lista partii materiałów powiązanych z zamówieniem
+   */
+  export const getBatchesByPurchaseOrderId = async (purchaseOrderId) => {
+    try {
+      if (!purchaseOrderId) {
+        throw new Error('ID zamówienia zakupowego jest wymagane');
+      }
+      
+      // Przygotuj kwerendę - szukaj partii, które mają powiązanie z danym PO
+      const q1 = query(
+        collection(db, INVENTORY_BATCHES_COLLECTION),
+        where('purchaseOrderDetails.id', '==', purchaseOrderId)
+      );
+      
+      // Wykonaj zapytanie
+      const querySnapshot1 = await getDocs(q1);
+      let batches = querySnapshot1.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // Sprawdź również w starszym formacie danych (dla kompatybilności)
+      if (batches.length === 0) {
+        const q2 = query(
+          collection(db, INVENTORY_BATCHES_COLLECTION),
+          where('sourceDetails.orderId', '==', purchaseOrderId)
+        );
+        
+        const querySnapshot2 = await getDocs(q2);
+        batches = querySnapshot2.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+      }
+      
+      // Posortuj partie według daty przyjęcia (od najnowszej)
+      batches.sort((a, b) => {
+        const dateA = a.receivedDate ? (a.receivedDate.toDate ? a.receivedDate.toDate() : new Date(a.receivedDate)) : new Date(0);
+        const dateB = b.receivedDate ? (b.receivedDate.toDate ? b.receivedDate.toDate() : new Date(b.receivedDate)) : new Date(0);
+        return dateB - dateA;
+      });
+      
+      return batches;
+    } catch (error) {
+      console.error(`Błąd podczas pobierania partii dla zamówienia ${purchaseOrderId}:`, error);
       throw error;
     }
   };

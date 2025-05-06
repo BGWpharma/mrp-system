@@ -298,7 +298,7 @@ const Dashboard = () => {
                             <EuroIcon color="primary" />
                           </ListItemIcon>
                           <ListItemText
-                            primary={String(po.number || `PO-${po.id ? po.id.substring(0, 6) : ''}`)}
+                            primary={String(po.number || `PO${po.id ? po.id.substring(0, 6).padStart(5, '0') : '00000'}`)}
                             secondary={`${formatCurrency(po.totalGross || po.totalValue || 0)} - ${formatTimestamp(po.date, false)}`}
                           />
                           <Chip
