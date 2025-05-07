@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Container, 
   Typography, 
@@ -12,7 +12,8 @@ import {
   MenuItem,
   Grid,
   Alert,
-  Divider
+  Divider,
+  CircularProgress
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -20,6 +21,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { pl } from 'date-fns/locale';
 import { formatDateForInput } from '../../utils/dateUtils';
 import { Send as SendIcon } from '@mui/icons-material';
+import { getMONumbersForSelect } from '../../services/moService';
 
 const CompletedMOForm = () => {
   const [formData, setFormData] = useState({
@@ -36,6 +38,25 @@ const CompletedMOForm = () => {
 
   const [validationErrors, setValidationErrors] = useState({});
   const [submitted, setSubmitted] = useState(false);
+  const [moOptions, setMoOptions] = useState([]);
+  const [loadingMO, setLoadingMO] = useState(false);
+
+  // Pobierz numery MO przy pierwszym renderowaniu komponentu
+  useEffect(() => {
+    const fetchMONumbers = async () => {
+      try {
+        setLoadingMO(true);
+        const options = await getMONumbersForSelect();
+        setMoOptions(options);
+      } catch (error) {
+        console.error('Błąd podczas pobierania numerów MO:', error);
+      } finally {
+        setLoadingMO(false);
+      }
+    };
+
+    fetchMONumbers();
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -189,17 +210,36 @@ const CompletedMOForm = () => {
             </Grid>
             
             <Grid item xs={12}>
-              <TextField
-                required
-                fullWidth
-                label="Numer MO"
-                name="moNumber"
-                value={formData.moNumber}
-                onChange={handleChange}
-                placeholder="Proszę podać tylko wartość liczbową! Zgodnie z wydrukiem z programu MRP"
+              <FormControl 
+                fullWidth 
+                required 
                 error={!!validationErrors.moNumber}
-                helperText={validationErrors.moNumber}
-              />
+              >
+                <InputLabel>Numer MO</InputLabel>
+                <Select
+                  name="moNumber"
+                  value={formData.moNumber}
+                  onChange={handleChange}
+                  label="Numer MO"
+                  disabled={loadingMO}
+                  startAdornment={
+                    loadingMO ? 
+                    <CircularProgress size={20} sx={{ mr: 1 }} /> : 
+                    null
+                  }
+                >
+                  {moOptions.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {validationErrors.moNumber && (
+                  <Typography variant="caption" color="error">
+                    {validationErrors.moNumber}
+                  </Typography>
+                )}
+              </FormControl>
             </Grid>
             
             <Grid item xs={12}>

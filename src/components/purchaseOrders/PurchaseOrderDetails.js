@@ -557,6 +557,9 @@ const PurchaseOrderDetails = ({ orderId }) => {
                   <th>Jednostka</th>
                   <th>Cena jedn.</th>
                   <th>Wartość</th>
+                  <th>Kwota oryg.</th>
+                  <th>Plan. data dost.</th>
+                  <th>Rzecz. data dost.</th>
                   <th>VAT</th>
                 </tr>
               </thead>
@@ -566,11 +569,18 @@ const PurchaseOrderDetails = ({ orderId }) => {
                     <td>${item.name}</td>
                     <td>${item.quantity}</td>
                     <td>${item.unit}</td>
-                    <td>${formatCurrency(item.unitPrice, purchaseOrder.currency)}</td>
+                    <td>${formatCurrency(item.unitPrice, purchaseOrder.currency, 6)}</td>
                     <td>${formatCurrency(item.totalPrice, purchaseOrder.currency)}</td>
+                    <td>${item.currency && item.currency !== purchaseOrder.currency && item.originalUnitPrice 
+                          ? formatCurrency(item.originalUnitPrice * item.quantity, item.currency) 
+                          : item.currency === 'EUR' && purchaseOrder.currency === 'EUR'
+                            ? formatCurrency(item.totalPrice, item.currency)
+                            : "-"}</td>
+                    <td>${item.plannedDeliveryDate ? new Date(item.plannedDeliveryDate).toLocaleDateString('pl-PL') : '-'}</td>
+                    <td>${item.actualDeliveryDate ? new Date(item.actualDeliveryDate).toLocaleDateString('pl-PL') : '-'}</td>
                     <td>${item.vatRate}%</td>
                   </tr>
-                `).join('') || '<tr><td colspan="6">Brak pozycji</td></tr>'}
+                `).join('') || '<tr><td colspan="8">Brak pozycji</td></tr>'}
               </tbody>
             </table>
             
@@ -882,6 +892,9 @@ const PurchaseOrderDetails = ({ orderId }) => {
                       <TableCell>Jednostka</TableCell>
                       <TableCell align="right">Cena jedn.</TableCell>
                       <TableCell align="right">Wartość netto</TableCell>
+                      <TableCell align="right">Kwota oryg.</TableCell>
+                      <TableCell align="right">Plan. data dost.</TableCell>
+                      <TableCell align="right">Rzecz. data dost.</TableCell>
                       <TableCell align="right">Odebrano</TableCell>
                       {/* Ukrywamy kolumnę akcji przy drukowaniu */}
                       <TableCell sx={{ '@media print': { display: 'none' } }}></TableCell>
@@ -924,8 +937,17 @@ const PurchaseOrderDetails = ({ orderId }) => {
                             </TableCell>
                             <TableCell align="right">{item.quantity}</TableCell>
                             <TableCell>{item.unit}</TableCell>
-                            <TableCell align="right">{formatCurrency(item.unitPrice, purchaseOrder.currency)}</TableCell>
+                            <TableCell align="right">{formatCurrency(item.unitPrice, purchaseOrder.currency, 6)}</TableCell>
                             <TableCell align="right">{formatCurrency(item.totalPrice, purchaseOrder.currency)}</TableCell>
+                            <TableCell align="right">
+                              {item.currency && item.currency !== purchaseOrder.currency && item.originalUnitPrice 
+                                    ? formatCurrency(item.originalUnitPrice * item.quantity, item.currency) 
+                                    : item.currency === 'EUR' && purchaseOrder.currency === 'EUR'
+                                      ? formatCurrency(item.totalPrice, item.currency)
+                                      : "-"}
+                            </TableCell>
+                            <TableCell align="right">{item.plannedDeliveryDate ? formatDate(item.plannedDeliveryDate) : '-'}</TableCell>
+                            <TableCell align="right">{item.actualDeliveryDate ? formatDate(item.actualDeliveryDate) : '-'}</TableCell>
                             <TableCell align="right">
                               {received} {received > 0 && `(${fulfilledPercentage.toFixed(0)}%)`}
                             </TableCell>
@@ -1197,7 +1219,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                         <TableRow key={cost.id || index}>
                           <TableCell>{cost.description || `Dodatkowy koszt ${index+1}`}</TableCell>
                           <TableCell align="right">{formatCurrency(costValue, purchaseOrder.currency)}</TableCell>
-                          <TableCell align="right">{vatRate}%</TableCell>
+                          <TableCell align="right">{vatRate > 0 ? `${vatRate}%` : ''}</TableCell>
                           <TableCell align="right">{formatCurrency(vatValue, purchaseOrder.currency)}</TableCell>
                           <TableCell align="right">{formatCurrency(grossValue, purchaseOrder.currency)}</TableCell>
                         </TableRow>
@@ -1205,7 +1227,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                     })}
                   </TableBody>
                 </Table>
-                
+
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
                   <Button
                     variant="contained"
@@ -1221,7 +1243,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                 </Typography>
               </>
             ) : (
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2">
                 Brak dodatkowych kosztów
               </Typography>
             )}
@@ -1230,7 +1252,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
       ) : (
         <Typography>Nie znaleziono zamówienia</Typography>
       )}
-      
+
       {/* Dialog usuwania */}
       <Dialog
         open={deleteDialogOpen}
@@ -1416,4 +1438,4 @@ const PurchaseOrderDetails = ({ orderId }) => {
   );
 };
 
-export default PurchaseOrderDetails; 
+export default PurchaseOrderDetails;

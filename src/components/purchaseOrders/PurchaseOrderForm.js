@@ -433,7 +433,9 @@ const PurchaseOrderForm = ({ orderId }) => {
         originalUnitPrice: 0, // Wartość w oryginalnej walucie
         exchangeRate: 1, // Kurs wymiany
         invoiceNumber: '', // Numer faktury
-        invoiceDate: '' // Data faktury
+        invoiceDate: '', // Data faktury
+        plannedDeliveryDate: '', // Planowana data dostawy
+        actualDeliveryDate: '' // Rzeczywista data dostawy
       }]
     }));
   };
@@ -468,8 +470,10 @@ const PurchaseOrderForm = ({ orderId }) => {
           invoiceDate: value
         };
         
-        // Pobierz kurs tylko jeśli waluta pozycji jest inna niż waluta zamówienia
-        if (currentItem.currency && currentItem.currency !== poData.currency) {
+        // Pobierz kurs tylko jeśli waluta pozycji jest inna niż waluta zamówienia i nie jest to EUR
+        if (currentItem.currency && 
+            currentItem.currency !== poData.currency && 
+            !(currentItem.currency === 'EUR' && poData.currency === 'EUR')) {
           let rate = 0;
           try {
             rate = await getExchangeRate(currentItem.currency, poData.currency, rateFetchDate);
@@ -482,7 +486,7 @@ const PurchaseOrderForm = ({ orderId }) => {
             updatedItems[index] = {
               ...updatedItems[index],
               exchangeRate: rate,
-              unitPrice: convertedPrice.toFixed(2),
+              unitPrice: convertedPrice.toFixed(6),
               totalPrice: (convertedPrice * currentItem.quantity).toFixed(2)
             };
             
@@ -525,6 +529,19 @@ const PurchaseOrderForm = ({ orderId }) => {
             originalUnitPrice: originalPrice
           };
           
+          // Jeśli nowa waluta to EUR i waluta zamówienia to również EUR, nie przewalutowuj
+          if (newCurrency === 'EUR' && poData.currency === 'EUR') {
+            updatedItems[index] = {
+              ...updatedItems[index],
+              exchangeRate: 1,
+              unitPrice: originalPrice.toFixed(6),
+              totalPrice: (originalPrice * currentItem.quantity).toFixed(2)
+            };
+            
+            setPoData(prev => ({ ...prev, items: updatedItems }));
+            return;
+          }
+          
           // Jeśli mamy datę faktury, użyj daty poprzedzającej do pobrania kursu
           if (currentItem.invoiceDate) {
             const invoiceDate = new Date(currentItem.invoiceDate);
@@ -545,7 +562,7 @@ const PurchaseOrderForm = ({ orderId }) => {
               updatedItems[index] = {
                 ...updatedItems[index],
                 exchangeRate: rate,
-                unitPrice: convertedPrice.toFixed(2),
+                unitPrice: convertedPrice.toFixed(6),
                 totalPrice: (convertedPrice * currentItem.quantity).toFixed(2)
               };
               
@@ -597,7 +614,7 @@ const PurchaseOrderForm = ({ orderId }) => {
               return { 
                 ...item, 
                 exchangeRate: newRate,
-                unitPrice: convertedPrice.toFixed(2),
+                unitPrice: convertedPrice.toFixed(6),
                 totalPrice: (convertedPrice * item.quantity).toFixed(2)
               };
             }
@@ -638,7 +655,7 @@ const PurchaseOrderForm = ({ orderId }) => {
           updatedItems[index] = {
             ...updatedItems[index],
             originalUnitPrice: newUnitPrice,
-            unitPrice: convertedPrice.toFixed(2),
+            unitPrice: convertedPrice.toFixed(6),
             totalPrice: (convertedPrice * currentItem.quantity).toFixed(2)
           };
           
@@ -711,7 +728,9 @@ const PurchaseOrderForm = ({ orderId }) => {
               originalUnitPrice: supplierPrice.price || 0,
               exchangeRate: updatedItems[index].currency === poData.currency ? 1 : (updatedItems[index].exchangeRate || 0),
               invoiceNumber: updatedItems[index].invoiceNumber || '',
-              invoiceDate: updatedItems[index].invoiceDate || ''
+              invoiceDate: updatedItems[index].invoiceDate || '',
+              plannedDeliveryDate: updatedItems[index].plannedDeliveryDate || '',
+              actualDeliveryDate: updatedItems[index].actualDeliveryDate || ''
             };
             
             console.log(`[DEBUG] Aktualizacja pozycji z ceną dostawcy:`, updatedItems[index]);
@@ -747,7 +766,9 @@ const PurchaseOrderForm = ({ orderId }) => {
       originalUnitPrice: updatedItems[index].unitPrice || 0,
       exchangeRate: updatedItems[index].currency === poData.currency ? 1 : (updatedItems[index].exchangeRate || 0),
       invoiceNumber: updatedItems[index].invoiceNumber || '',
-      invoiceDate: updatedItems[index].invoiceDate || ''
+      invoiceDate: updatedItems[index].invoiceDate || '',
+      plannedDeliveryDate: updatedItems[index].plannedDeliveryDate || '',
+      actualDeliveryDate: updatedItems[index].actualDeliveryDate || ''
     };
     
     console.log(`[DEBUG] Aktualizacja pozycji bez ceny dostawcy:`, updatedItems[index]);
@@ -758,6 +779,29 @@ const PurchaseOrderForm = ({ orderId }) => {
   const savePurchaseOrder = async (orderData, orderId, userId) => {
     try {
       let result;
+      
+      // Upewnij się, że wszystkie wartości unitPrice i value mają odpowiednią precyzję
+      if (orderData.items && orderData.items.length > 0) {
+        orderData.items = orderData.items.map(item => {
+          const unitPrice = parseFloat(item.unitPrice) || 0;
+          return {
+            ...item,
+            unitPrice: unitPrice.toFixed(6), // Zapewniamy 6 miejsc po przecinku
+            totalPrice: (unitPrice * (parseFloat(item.quantity) || 0)).toFixed(2)
+          };
+        });
+      }
+
+      // Upewnij się, że wszystkie wartości kosztów dodatkowych mają odpowiednią precyzję
+      if (orderData.additionalCostsItems && orderData.additionalCostsItems.length > 0) {
+        orderData.additionalCostsItems = orderData.additionalCostsItems.map(cost => {
+          const value = parseFloat(cost.value) || 0;
+          return {
+            ...cost,
+            value: value.toFixed(6) // Zapewniamy 6 miejsc po przecinku
+          };
+        });
+      }
       
       // Obliczanie wartości przy użyciu funkcji calculateTotals
       const totals = calculateTotals(orderData.items, orderData.additionalCostsItems);
@@ -1333,7 +1377,7 @@ const PurchaseOrderForm = ({ orderId }) => {
           return {
             ...cost,
             exchangeRate: rate,
-            value: convertedValue.toFixed(2)
+            value: convertedValue.toFixed(6)
           };
         }
         return cost;
@@ -1359,7 +1403,7 @@ const PurchaseOrderForm = ({ orderId }) => {
           return {
             ...item,
             exchangeRate: rate,
-            unitPrice: convertedPrice.toFixed(2),
+            unitPrice: convertedPrice.toFixed(6),
             totalPrice: (convertedPrice * item.quantity).toFixed(2)
           };
         }
@@ -1419,7 +1463,8 @@ const PurchaseOrderForm = ({ orderId }) => {
                 updatedCosts[costIndex] = {
                   ...updatedCosts[costIndex],
                   exchangeRate: rate,
-                  value: convertedValue.toFixed(2)
+                  originalValue: originalValue,
+                  value: convertedValue.toFixed(6)
                 };
               }
             } catch (error) {
@@ -1481,7 +1526,8 @@ const PurchaseOrderForm = ({ orderId }) => {
                 updatedCosts[costIndex] = {
                   ...updatedCosts[costIndex],
                   exchangeRate: rate,
-                  value: convertedValue.toFixed(2)
+                  originalValue: originalValue,
+                  value: convertedValue.toFixed(6)
                 };
                 
                 // Aktualizacja kursów dla wszystkich pozycji z tą samą walutą i datą faktury
@@ -1531,10 +1577,10 @@ const PurchaseOrderForm = ({ orderId }) => {
           
           const updatedCosts = poData.additionalCostsItems.map(item => {
             if (item.id === id) {
-            return { 
-              ...item, 
+              return { 
+                ...item, 
                 exchangeRate: newRate,
-                value: convertedValue.toFixed(2)
+                value: convertedValue.toFixed(6)
               };
             }
             return item;
@@ -1577,7 +1623,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                 updatedCosts[costIndex] = {
                   ...updatedCosts[costIndex],
                   originalValue: newValue,
-                  value: convertedValue.toFixed(2)
+                  value: convertedValue.toFixed(6)
             };
           } else {
                 // Jeśli nie ma kursu, spróbuj go pobrać
@@ -1597,7 +1643,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                     ...updatedCosts[costIndex],
                     exchangeRate: rate,
                     originalValue: newValue,
-                    value: convertedValue.toFixed(2)
+                    value: convertedValue.toFixed(6)
                   };
                   
                   // Aktualizacja kursów dla wszystkich pozycji z tą samą walutą i datą faktury
@@ -1638,7 +1684,7 @@ const PurchaseOrderForm = ({ orderId }) => {
             return { 
               ...item, 
               originalValue: newValue,
-            value: newValue.toFixed(2)
+            value: newValue.toFixed(6)
             };
         }
         
@@ -1698,7 +1744,7 @@ const PurchaseOrderForm = ({ orderId }) => {
           return {
             ...cost,
             exchangeRate: rate,
-            value: convertedValue.toFixed(2)
+            value: convertedValue.toFixed(6)
           };
         }
         return cost;
@@ -1738,7 +1784,7 @@ const PurchaseOrderForm = ({ orderId }) => {
           return {
             ...item,
             exchangeRate: rate,
-            unitPrice: convertedPrice.toFixed(2),
+            unitPrice: convertedPrice.toFixed(6),
             totalPrice: (convertedPrice * item.quantity).toFixed(2)
           };
         }
@@ -1941,6 +1987,103 @@ const PurchaseOrderForm = ({ orderId }) => {
       invoiceLinks: updatedInvoiceLinks,
       invoiceLink: updatedInvoiceLink
     }));
+  };
+  
+  // Funkcja do ponownego przeliczenia wszystkich wartości walutowych
+  const recalculateAllCurrencyValues = async () => {
+    try {
+      // Kopia aktualnych danych
+      let updatedItems = [...poData.items];
+      let updated = false;
+      
+      // Dla każdej pozycji w innej walucie niż waluta zamówienia
+      for (let i = 0; i < updatedItems.length; i++) {
+        const item = updatedItems[i];
+        
+        if (item.currency && item.currency !== poData.currency && item.invoiceDate) {
+          const originalPrice = parseFloat(item.originalUnitPrice) || 0;
+          
+          // Pobierz datę poprzedniego dnia dla daty faktury
+          const invoiceDate = new Date(item.invoiceDate);
+          const rateFetchDate = new Date(invoiceDate);
+          rateFetchDate.setDate(rateFetchDate.getDate() - 1);
+          
+          try {
+            const rate = await getExchangeRate(item.currency, poData.currency, rateFetchDate);
+            console.log(`Przeliczam kurs dla ${item.currency}/${poData.currency} z dnia ${rateFetchDate.toISOString().split('T')[0]}: ${rate}`);
+            
+            // Przelicz wartość z pełną precyzją
+            const convertedPrice = originalPrice * rate;
+            
+            // Aktualizuj pozycję z nowym kursem i przeliczoną wartością
+            updatedItems[i] = {
+              ...updatedItems[i],
+              exchangeRate: rate,
+              unitPrice: convertedPrice.toFixed(6),
+              totalPrice: (convertedPrice * item.quantity).toFixed(2)
+            };
+            
+            updated = true;
+          } catch (error) {
+            console.error(`Błąd podczas przeliczania kursu dla pozycji ${i}:`, error);
+            showError(`Nie udało się przeliczyć kursu dla pozycji ${item.name}`);
+          }
+        }
+      }
+      
+      // Aktualizuj również dodatkowe koszty
+      let updatedCosts = [...poData.additionalCostsItems];
+      
+      for (let i = 0; i < updatedCosts.length; i++) {
+        const cost = updatedCosts[i];
+        
+        if (cost.currency && cost.currency !== poData.currency && cost.invoiceDate) {
+          const originalValue = parseFloat(cost.originalValue) || 0;
+          
+          // Pobierz datę poprzedniego dnia dla daty faktury
+          const invoiceDate = new Date(cost.invoiceDate);
+          const rateFetchDate = new Date(invoiceDate);
+          rateFetchDate.setDate(rateFetchDate.getDate() - 1);
+          
+          try {
+            const rate = await getExchangeRate(cost.currency, poData.currency, rateFetchDate);
+            console.log(`Przeliczam kurs dla kosztu ${cost.currency}/${poData.currency} z dnia ${rateFetchDate.toISOString().split('T')[0]}: ${rate}`);
+            
+            // Przelicz wartość z pełną precyzją
+            const convertedValue = originalValue * rate;
+            
+            // Aktualizuj koszt z nowym kursem i przeliczoną wartością
+            updatedCosts[i] = {
+              ...updatedCosts[i],
+              exchangeRate: rate,
+              originalValue: originalValue,
+              value: convertedValue.toFixed(6)
+            };
+            
+            updated = true;
+          } catch (error) {
+            console.error(`Błąd podczas przeliczania kursu dla kosztu ${i}:`, error);
+            showError(`Nie udało się przeliczyć kursu dla kosztu ${cost.description || 'dodatkowego'}`);
+          }
+        }
+      }
+      
+      if (updated) {
+        // Aktualizuj stan
+        setPoData(prev => ({
+          ...prev,
+          items: updatedItems,
+          additionalCostsItems: updatedCosts
+        }));
+        
+        showSuccess('Przeliczono wszystkie wartości walutowe z większą precyzją');
+      } else {
+        showInfo('Nie znaleziono pozycji do przeliczenia');
+      }
+    } catch (error) {
+      console.error('Błąd podczas przeliczania wszystkich wartości:', error);
+      showError('Wystąpił błąd podczas przeliczania wartości');
+    }
   };
   
   if (loading) {
@@ -2207,6 +2350,8 @@ const PurchaseOrderForm = ({ orderId }) => {
                         <TableCell align="right">Kwota</TableCell>
                         <TableCell align="right">Waluta</TableCell>
                         <TableCell align="right">VAT</TableCell>
+                        <TableCell align="right">Kwota oryg.</TableCell>
+                        <TableCell align="right">Kwota po przew.</TableCell>
                         <TableCell>Nr faktury</TableCell>
                         <TableCell>Data faktury</TableCell>
                         <TableCell>Kurs</TableCell>
@@ -2265,6 +2410,32 @@ const PurchaseOrderForm = ({ orderId }) => {
                                 <MenuItem value="NP">NP</MenuItem>
                               </Select>
                             </FormControl>
+                          </TableCell>
+                          <TableCell align="right">
+                            {cost.currency !== poData.currency ? (
+                              <Tooltip title={`Oryginalnie w ${cost.currency}`}>
+                                <Typography variant="body2">
+                                  {formatCurrency(cost.originalValue || 0, cost.currency)}
+                                </Typography>
+                              </Tooltip>
+                            ) : (
+                              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                -
+                              </Typography>
+                            )}
+                          </TableCell>
+                          <TableCell align="right">
+                            {cost.currency !== poData.currency ? (
+                              <Tooltip title={`Po przewalutowaniu na ${poData.currency}`}>
+                                <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                                  {formatCurrency(cost.value || 0, poData.currency)}
+                                </Typography>
+                              </Tooltip>
+                            ) : (
+                              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                -
+                              </Typography>
+                            )}
                           </TableCell>
                           <TableCell>
                             <TextField
@@ -2325,6 +2496,8 @@ const PurchaseOrderForm = ({ orderId }) => {
                         <TableCell />
                         <TableCell />
                         <TableCell />
+                        <TableCell />
+                        <TableCell />
                       </TableRow>
                       {/* Dodane wiersze z kwotami VAT dla poszczególnych stawek */}
                       {Array.from(new Set(poData.additionalCostsItems.map(cost => cost.vatRate)))
@@ -2343,6 +2516,8 @@ const PurchaseOrderForm = ({ orderId }) => {
                               <TableCell align="right" sx={{ fontStyle: 'italic' }}>
                                 {vatValue.toFixed(6)} {poData.currency}
                               </TableCell>
+                              <TableCell />
+                              <TableCell />
                               <TableCell />
                               <TableCell />
                               <TableCell />
@@ -2376,11 +2551,13 @@ const PurchaseOrderForm = ({ orderId }) => {
                         <TableCell />
                         <TableCell />
                         <TableCell />
+                        <TableCell />
+                        <TableCell />
                       </TableRow>
                       {/* Informacja o kursach walut */}
                       {poData.additionalCostsItems.some(cost => cost.currency !== poData.currency) && (
                         <TableRow>
-                          <TableCell colSpan={8} sx={{ py: 1 }}>
+                          <TableCell colSpan={10} sx={{ py: 1 }}>
                             <Typography variant="caption" sx={{ fontStyle: 'italic' }} className="exchange-rate-info">
                               Wartości w walutach obcych zostały przeliczone według kursów z dnia poprzedzającego datę faktury.
                             </Typography>
@@ -2413,10 +2590,13 @@ const PurchaseOrderForm = ({ orderId }) => {
                   <TableCell>Jedn.</TableCell>
                   <TableCell>Cena jedn.</TableCell>
                   <TableCell>Waluta</TableCell>
-                  <TableCell>Wartość</TableCell>
                   <TableCell>VAT</TableCell>
+                  <TableCell>Kwota oryg.</TableCell>
+                  <TableCell>Kwota po przew.</TableCell>
                   <TableCell>Nr faktury</TableCell>
                   <TableCell>Data faktury</TableCell>
+                  <TableCell>Plan. data dost.</TableCell>
+                  <TableCell>Rzecz. data dost.</TableCell>
                   <TableCell>Kurs</TableCell>
                   {Object.keys(supplierSuggestions).length > 0 && (
                     <TableCell>Sugestia</TableCell>
@@ -2494,7 +2674,6 @@ const PurchaseOrderForm = ({ orderId }) => {
                         </Select>
                       </FormControl>
                     </TableCell>
-                    <TableCell>{formatCurrency(item.totalPrice || 0)}</TableCell>
                     <TableCell>
                       <FormControl size="small" sx={{ width: 100 }}>
                         <Select
@@ -2510,6 +2689,44 @@ const PurchaseOrderForm = ({ orderId }) => {
                           <MenuItem value="NP">NP</MenuItem>
                         </Select>
                       </FormControl>
+                    </TableCell>
+                    <TableCell>
+                      {item.currency !== poData.currency ? (
+                        <Tooltip title={`Oryginalnie w ${item.currency}`}>
+                          <Typography variant="body2">
+                            {formatCurrency((item.originalUnitPrice || 0) * item.quantity, item.currency)}
+                          </Typography>
+                        </Tooltip>
+                      ) : (
+                        item.currency === 'EUR' && poData.currency === 'EUR' ? (
+                          <Typography variant="body2">
+                            {formatCurrency(item.totalPrice || 0, item.currency)}
+                          </Typography>
+                        ) : (
+                          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                            -
+                          </Typography>
+                        )
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {item.currency !== poData.currency ? (
+                        <Tooltip title={`Po przewalutowaniu na ${poData.currency}`}>
+                          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                            {formatCurrency(item.totalPrice || 0, poData.currency)}
+                          </Typography>
+                        </Tooltip>
+                      ) : (
+                        item.currency === 'EUR' && poData.currency === 'EUR' ? (
+                          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                            -
+                          </Typography>
+                        ) : (
+                          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                            {formatCurrency(item.totalPrice || 0, poData.currency)}
+                          </Typography>
+                        )
+                      )}
                     </TableCell>
                     <TableCell>
                       <TextField
@@ -2529,6 +2746,28 @@ const PurchaseOrderForm = ({ orderId }) => {
                         onChange={(e) => handleItemChange(index, 'invoiceDate', e.target.value)}
                         InputLabelProps={{ shrink: true }}
                         sx={{ width: 150 }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <TextField
+                        type="date"
+                        size="small"
+                        value={item.plannedDeliveryDate || ''}
+                        onChange={(e) => handleItemChange(index, 'plannedDeliveryDate', e.target.value)}
+                        InputLabelProps={{ shrink: true }}
+                        sx={{ width: 150 }}
+                        placeholder="Planowana dostawa"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <TextField
+                        type="date"
+                        size="small"
+                        value={item.actualDeliveryDate || ''}
+                        onChange={(e) => handleItemChange(index, 'actualDeliveryDate', e.target.value)}
+                        InputLabelProps={{ shrink: true }}
+                        sx={{ width: 150 }}
+                        placeholder="Rzeczywista dostawa"
                       />
                     </TableCell>
                     <TableCell>
@@ -2613,6 +2852,16 @@ const PurchaseOrderForm = ({ orderId }) => {
                 sx={{ mr: 1 }}
             >
                 Uzupełnij minimalne ilości
+            </Button>
+
+            <Button
+              variant="outlined"
+                color="secondary"
+                onClick={recalculateAllCurrencyValues}
+                disabled={loading}
+                sx={{ mr: 1 }}
+            >
+                Przelicz kursy
             </Button>
             
             {Object.keys(supplierSuggestions).length > 0 && (

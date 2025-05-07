@@ -3,7 +3,9 @@ import { Container, Typography, Box, Paper, Alert, Button, Link, Grid, Card, Car
 import { 
   Launch as LaunchIcon,
   Assignment as AssignmentIcon,
-  Add as AddIcon
+  Add as AddIcon,
+  FactCheck as FactCheckIcon,
+  SwapVert as SwapVertIcon
 } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
 
@@ -39,6 +41,58 @@ const FormsPage = () => {
                 startIcon={<AddIcon />} 
                 component={RouterLink} 
                 to="/production/forms/completed-mo"
+                color="primary" 
+                variant="contained"
+                fullWidth
+              >
+                Wypełnij formularz
+              </Button>
+            </CardActions>
+          </Card>
+        </Grid>
+        
+        <Grid item xs={12} sm={6} md={4}>
+          <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ flexGrow: 1 }}>
+              <Typography variant="h6" gutterBottom component="div" sx={{ display: 'flex', alignItems: 'center' }}>
+                <FactCheckIcon sx={{ mr: 1 }} />
+                Raport - Kontrola Produkcji
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Formularz do raportowania kontroli jakości produkcji. Zawiera szczegółowe informacje o przebiegu procesu produkcyjnego i warunkach atmosferycznych.
+              </Typography>
+            </CardContent>
+            <CardActions>
+              <Button 
+                startIcon={<AddIcon />} 
+                component={RouterLink} 
+                to="/production/forms/production-control"
+                color="primary" 
+                variant="contained"
+                fullWidth
+              >
+                Wypełnij formularz
+              </Button>
+            </CardActions>
+          </Card>
+        </Grid>
+        
+        <Grid item xs={12} sm={6} md={4}>
+          <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ flexGrow: 1 }}>
+              <Typography variant="h6" gutterBottom component="div" sx={{ display: 'flex', alignItems: 'center' }}>
+                <SwapVertIcon sx={{ mr: 1 }} />
+                Raport - Zmiana Produkcji
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Formularz do raportowania pracy na zmianie produkcyjnej. Zawiera informacje o pracownikach, wykonanych produktach i innych czynnościach.
+              </Typography>
+            </CardContent>
+            <CardActions>
+              <Button 
+                startIcon={<AddIcon />} 
+                component={RouterLink} 
+                to="/production/forms/production-shift"
                 color="primary" 
                 variant="contained"
                 fullWidth
