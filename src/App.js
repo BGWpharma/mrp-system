@@ -34,6 +34,7 @@ import CreateFromOrderPage from './pages/Production/CreateFromOrderPage';
 import WorkstationsPage from './pages/Production/WorkstationsPage';
 import CalculatorPage from './pages/Production/CalculatorPage';
 import FormsPage from './pages/Production/FormsPage';
+import CompletedMOFormPage from './pages/Production/CompletedMOFormPage';
 
 // Inventory
 import InventoryPage from './pages/Inventory/InventoryPage';
@@ -180,6 +181,7 @@ function App() {
                 <Route path="/production/calendar" element={<PrivateLayout><ProductionCalendarPage /></PrivateLayout>} />
                 <Route path="/production/calculator" element={<PrivateLayout><CalculatorPage /></PrivateLayout>} />
                 <Route path="/production/forms" element={<PrivateLayout><FormsPage /></PrivateLayout>} />
+                <Route path="/production/forms/completed-mo" element={<PrivateLayout><CompletedMOFormPage /></PrivateLayout>} />
                 <Route path="/production/tasks/:id" element={<PrivateLayout><TaskDetailsPage /></PrivateLayout>} />
                 <Route path="/production/tasks/:id/edit" element={<PrivateLayout><EditTaskPage /></PrivateLayout>} />
                 <Route path="/production/consumption/:taskId" element={<PrivateLayout><ConsumptionPage /></PrivateLayout>} />

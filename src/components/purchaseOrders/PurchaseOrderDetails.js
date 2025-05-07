@@ -23,7 +23,8 @@ import {
   Refresh as RefreshIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
-  Label as LabelIcon
+  Label as LabelIcon,
+  Add as AddIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -63,6 +64,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
   const [relatedBatches, setRelatedBatches] = useState([]);
   const [loadingBatches, setLoadingBatches] = useState(false);
   const [expandedItems, setExpandedItems] = useState({});
+  const [tempInvoiceLinks, setTempInvoiceLinks] = useState([]);
   
   const printRef = useRef(null);
   
@@ -303,6 +305,17 @@ const PurchaseOrderDetails = ({ orderId }) => {
   const handleInvoiceLinkDialogOpen = () => {
     setInvoiceLink(purchaseOrder.invoiceLink || '');
     setInvoiceLinkDialogOpen(true);
+    
+    // Inicjalizuj tablicę invoiceLinks jeśli nie istnieje, ale jest stare pole invoiceLink
+    if ((!purchaseOrder.invoiceLinks || purchaseOrder.invoiceLinks.length === 0) && purchaseOrder.invoiceLink) {
+      setTempInvoiceLinks([{
+        id: `invoice-${Date.now()}`,
+        description: 'Faktura główna',
+        url: purchaseOrder.invoiceLink
+      }]);
+    } else {
+      setTempInvoiceLinks(purchaseOrder.invoiceLinks || []);
+    }
   };
 
   const handleInvoiceLinkSave = async () => {
@@ -310,7 +323,8 @@ const PurchaseOrderDetails = ({ orderId }) => {
       // Przygotuj dane do aktualizacji
       const updatedData = {
         ...purchaseOrder,
-        invoiceLink: invoiceLink
+        invoiceLink: tempInvoiceLinks.length > 0 ? tempInvoiceLinks[0].url : '',
+        invoiceLinks: tempInvoiceLinks
       };
       
       // Zaktualizuj zamówienie w bazie danych
@@ -319,14 +333,15 @@ const PurchaseOrderDetails = ({ orderId }) => {
       // Zaktualizuj lokalny stan
       setPurchaseOrder({
         ...purchaseOrder,
-        invoiceLink: invoiceLink
+        invoiceLink: tempInvoiceLinks.length > 0 ? tempInvoiceLinks[0].url : '',
+        invoiceLinks: tempInvoiceLinks
       });
       
       setInvoiceLinkDialogOpen(false);
-      showSuccess('Link do faktury został zaktualizowany');
+      showSuccess('Linki do faktur zostały zaktualizowane');
     } catch (error) {
-      console.error('Błąd podczas zapisywania linku do faktury:', error);
-      showError('Nie udało się zapisać linku do faktury');
+      console.error('Błąd podczas zapisywania linków do faktur:', error);
+      showError('Nie udało się zapisać linków do faktur');
     }
   };
   
@@ -746,13 +761,32 @@ const PurchaseOrderDetails = ({ orderId }) => {
                     </Typography>
                   )}
                   
-                  {purchaseOrder.invoiceLink && (
+                  {/* Stary pojedynczy link do faktury (dla kompatybilności) */}
+                  {purchaseOrder.invoiceLink && (!purchaseOrder.invoiceLinks || purchaseOrder.invoiceLinks.length === 0) && (
                     <Typography variant="body1" gutterBottom>
                       <strong>Faktura:</strong>{' '}
-                      <Link href={purchaseOrder.invoiceLink} target="_blank" rel="noopener noreferrer">
+                      <a href={purchaseOrder.invoiceLink} target="_blank" rel="noopener noreferrer">
                         Zobacz fakturę
-                      </Link>
+                      </a>
                     </Typography>
+                  )}
+                  
+                  {/* Wiele linków do faktur */}
+                  {purchaseOrder.invoiceLinks && purchaseOrder.invoiceLinks.length > 0 && (
+                    <>
+                      <Typography variant="body1" gutterBottom>
+                        <strong>Faktury:</strong>
+                      </Typography>
+                      <Box component="ul" sx={{ pl: 4, mt: 0 }}>
+                        {purchaseOrder.invoiceLinks.map((invoice, index) => (
+                          <Typography component="li" variant="body2" gutterBottom key={invoice.id || index}>
+                            <a href={invoice.url} target="_blank" rel="noopener noreferrer">
+                              {invoice.description || `Faktura ${index + 1}`}
+                            </a>
+                          </Typography>
+                        ))}
+                      </Box>
+                    </>
                   )}
                 </Grid>
                 
@@ -1271,23 +1305,107 @@ const PurchaseOrderDetails = ({ orderId }) => {
       <Dialog
         open={invoiceLinkDialogOpen}
         onClose={() => setInvoiceLinkDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
       >
         <DialogTitle>
-          {purchaseOrder.invoiceLink ? 'Zmień link do faktury' : 'Dodaj link do faktury'}
+          Linki do faktur
         </DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
-            Wprowadź link do faktury dla tego zamówienia. Może to być link do dokumentu w chmurze lub systemu księgowego.
+            Zarządzaj linkami do faktur dla tego zamówienia. Możesz dodać wiele faktur, np. główną fakturę i dodatkowe faktury za transport, ubezpieczenie itp.
           </DialogContentText>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Link do faktury"
-            type="url"
-            fullWidth
-            value={invoiceLink}
-            onChange={(e) => setInvoiceLink(e.target.value)}
-          />
+          
+          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
+            <Button 
+              startIcon={<AddIcon />} 
+              onClick={() => setTempInvoiceLinks([
+                ...tempInvoiceLinks, 
+                { id: `invoice-${Date.now()}`, description: '', url: '' }
+              ])}
+              variant="outlined"
+              size="small"
+            >
+              Dodaj fakturę
+            </Button>
+          </Box>
+          
+          {tempInvoiceLinks.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ my: 2 }}>
+              Brak faktur. Kliknij "Dodaj fakturę", aby dodać link do faktury.
+            </Typography>
+          ) : (
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Opis</TableCell>
+                    <TableCell>Link do faktury</TableCell>
+                    <TableCell width="100px"></TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {tempInvoiceLinks.map((invoice, index) => (
+                    <TableRow key={invoice.id || index}>
+                      <TableCell>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          value={invoice.description}
+                          onChange={(e) => {
+                            const updated = [...tempInvoiceLinks];
+                            updated[index].description = e.target.value;
+                            setTempInvoiceLinks(updated);
+                          }}
+                          placeholder="Opis faktury, np. Faktura główna, Faktura transportowa itp."
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          value={invoice.url}
+                          onChange={(e) => {
+                            const updated = [...tempInvoiceLinks];
+                            updated[index].url = e.target.value;
+                            setTempInvoiceLinks(updated);
+                            
+                            // Aktualizujemy też stare pole dla kompatybilności
+                            if (index === 0) {
+                              setInvoiceLink(e.target.value);
+                            }
+                          }}
+                          placeholder="https://drive.google.com/file/d/..."
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            const updated = tempInvoiceLinks.filter((_, i) => i !== index);
+                            setTempInvoiceLinks(updated);
+                            
+                            // Aktualizujemy też stare pole dla kompatybilności
+                            if (index === 0 && updated.length > 0) {
+                              setInvoiceLink(updated[0].url);
+                            } else if (updated.length === 0) {
+                              setInvoiceLink('');
+                            }
+                          }}
+                          color="error"
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+          
+          {/* Ukryte stare pole dla kompatybilności */}
+          <input type="hidden" value={invoiceLink} />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setInvoiceLinkDialogOpen(false)}>Anuluj</Button>

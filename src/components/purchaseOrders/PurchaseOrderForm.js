@@ -101,6 +101,7 @@ const PurchaseOrderForm = ({ orderId }) => {
     notes: '',
     status: PURCHASE_ORDER_STATUSES.DRAFT,
     invoiceLink: '',
+    invoiceLinks: [], // Nowe pole dla wielu linków do faktur
   });
   
   useEffect(() => {
@@ -368,10 +369,17 @@ const PurchaseOrderForm = ({ orderId }) => {
     }));
   }, [poData.items, poData.additionalCostsItems]);
   
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    // Standardowa obsługa pól
-    setPoData(prev => ({ ...prev, [name]: value }));
+  const handleChange = (e, value) => {
+    // Obsługa przypadku gdy funkcja jest wywoływana z nazwą i wartością
+    if (typeof e === 'string' && value !== undefined) {
+      const name = e;
+      setPoData(prev => ({ ...prev, [name]: value }));
+      return;
+    }
+    
+    // Standardowa obsługa gdy przekazywany jest event
+    const { name, value: eventValue } = e.target;
+    setPoData(prev => ({ ...prev, [name]: eventValue }));
   };
   
   const handleDateChange = (name, date) => {
@@ -1872,6 +1880,69 @@ const PurchaseOrderForm = ({ orderId }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId]);
   
+  // Funkcja dodająca nowy link do faktury
+  const handleAddInvoiceLink = () => {
+    const newInvoiceLink = {
+      id: `invoice-${Date.now()}`,
+      description: '',
+      url: ''
+    };
+    
+    setPoData(prev => ({
+      ...prev,
+      invoiceLinks: [...(prev.invoiceLinks || []), newInvoiceLink],
+      // Aktualizacja starego pola invoiceLink dla kompatybilności
+      // Jeśli jest to pierwsza faktura, ustawiamy też stare pole
+      invoiceLink: prev.invoiceLinks?.length === 0 ? newInvoiceLink.url : prev.invoiceLink
+    }));
+  };
+  
+  // Funkcja obsługująca zmianę danych linku do faktury
+  const handleInvoiceLinkChange = (id, field, value) => {
+    const updatedInvoiceLinks = (poData.invoiceLinks || []).map(link => {
+      if (link.id === id) {
+        const updatedLink = { ...link, [field]: value };
+        
+        // Jeśli aktualizujemy URL pierwszej faktury, zaktualizuj też stare pole invoiceLink dla kompatybilności
+        if (field === 'url' && poData.invoiceLinks.indexOf(link) === 0) {
+          setPoData(prev => ({
+            ...prev,
+            invoiceLink: value
+          }));
+        }
+        
+        return updatedLink;
+      }
+      return link;
+    });
+    
+    setPoData(prev => ({
+      ...prev,
+      invoiceLinks: updatedInvoiceLinks
+    }));
+  };
+  
+  // Funkcja usuwająca link do faktury
+  const handleRemoveInvoiceLink = (id) => {
+    const updatedInvoiceLinks = (poData.invoiceLinks || []).filter(link => link.id !== id);
+    
+    // Aktualizacja starego pola invoiceLink
+    let updatedInvoiceLink = poData.invoiceLink;
+    if (updatedInvoiceLinks.length > 0 && poData.invoiceLinks.findIndex(link => link.id === id) === 0) {
+      // Jeśli usunięto pierwszy link, zaktualizuj stare pole do nowego pierwszego linku
+      updatedInvoiceLink = updatedInvoiceLinks[0].url;
+    } else if (updatedInvoiceLinks.length === 0) {
+      // Jeśli usunięto wszystkie linki, wyczyść stare pole
+      updatedInvoiceLink = '';
+    }
+    
+    setPoData(prev => ({
+      ...prev,
+      invoiceLinks: updatedInvoiceLinks,
+      invoiceLink: updatedInvoiceLink
+    }));
+  };
+  
   if (loading) {
     return (
       <Container>
@@ -1930,7 +2001,7 @@ const PurchaseOrderForm = ({ orderId }) => {
             </Grid>
             
             {/* Waluta */}
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={3} style={{display: 'none'}}>
               <FormControl fullWidth>
                 <InputLabel>Waluta</InputLabel>
                 <Select
@@ -2029,15 +2100,76 @@ const PurchaseOrderForm = ({ orderId }) => {
               />
             </Grid>
             
-            {/* Link do faktury */}
+            {/* Faktury - wielu linków */}
             <Grid item xs={12}>
-              <TextField
-                label="Link do faktury (Google Drive)"
-                fullWidth
+              <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="subtitle1">Faktury</Typography>
+                <Button
+                  startIcon={<AddIcon />}
+                  onClick={handleAddInvoiceLink}
+                  variant="outlined"
+                  size="small"
+                >
+                  Dodaj fakturę
+                </Button>
+              </Box>
+              
+              {!poData.invoiceLinks || poData.invoiceLinks.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" sx={{ my: 2 }}>
+                  Brak faktur. Kliknij "Dodaj fakturę", aby dodać link do faktury.
+                </Typography>
+              ) : (
+                <TableContainer component={Paper} sx={{ mb: 2 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Opis</TableCell>
+                        <TableCell>Link do faktury</TableCell>
+                        <TableCell width="100px"></TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {poData.invoiceLinks.map((invoice, index) => (
+                        <TableRow key={invoice.id}>
+                          <TableCell>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              value={invoice.description}
+                              onChange={(e) => handleInvoiceLinkChange(invoice.id, 'description', e.target.value)}
+                              placeholder="Opis faktury, np. Faktura główna, Faktura transportowa itp."
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              value={invoice.url}
+                              onChange={(e) => handleInvoiceLinkChange(invoice.id, 'url', e.target.value)}
+                              placeholder="https://drive.google.com/file/d/..."
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <IconButton
+                              size="small"
+                              onClick={() => handleRemoveInvoiceLink(invoice.id)}
+                              color="error"
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+              
+              {/* Zachowujemy stare pole dla kompatybilności, ale ukrywamy je */}
+              <input
+                type="hidden"
+                name="invoiceLink"
                 value={poData.invoiceLink || ''}
-                onChange={(e) => handleChange('invoiceLink', e.target.value)}
-                placeholder="https://drive.google.com/file/d/..."
-                helperText="Wprowadź link do faktury z Google Drive"
               />
             </Grid>
             
