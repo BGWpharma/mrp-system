@@ -4,10 +4,10 @@ import {
   Container, Typography, Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Button, TextField, Box, Chip, IconButton, Dialog,
   DialogActions, DialogContent, DialogContentText, DialogTitle, MenuItem, Select, FormControl, InputLabel, 
-  Tooltip, Menu, Checkbox, ListItemText
+  Tooltip, Menu, Checkbox, ListItemText, TableSortLabel, Pagination, TableFooter
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, Description as DescriptionIcon, ViewColumn as ViewColumnIcon } from '@mui/icons-material';
-import { getAllPurchaseOrders, deletePurchaseOrder, updatePurchaseOrderStatus } from '../../services/purchaseOrderService';
+import { getAllPurchaseOrders, deletePurchaseOrder, updatePurchaseOrderStatus, getPurchaseOrdersWithPagination } from '../../services/purchaseOrderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { STATUS_TRANSLATIONS, PURCHASE_ORDER_STATUSES } from '../../config';
@@ -30,6 +30,16 @@ const PurchaseOrderList = () => {
   const [newStatus, setNewStatus] = useState('');
   const [columnMenuAnchor, setColumnMenuAnchor] = useState(null);
   
+  // Dodajemy stany do obsługi sortowania
+  const [orderBy, setOrderBy] = useState('number'); // Domyślnie sortowanie po numerze
+  const [order, setOrder] = useState('asc'); // Domyślnie rosnąco
+  
+  // Dodajemy stany do obsługi paginacji
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  
   // Używamy kontekstu preferencji kolumn
   const { getColumnPreferencesForView, updateColumnPreferences } = useColumnPreferences();
   // Pobieramy preferencje dla widoku 'purchaseOrders'
@@ -37,18 +47,35 @@ const PurchaseOrderList = () => {
   
   useEffect(() => {
     fetchPurchaseOrders();
-  }, []);
+  }, [page, limit, orderBy, order]); // Dodajemy zależności dla paginacji i sortowania
   
   useEffect(() => {
+    // Przy zmianie filtrów resetujemy stronę do pierwszej
+    if (searchTerm !== '' || statusFilter !== 'all') {
+      setPage(1);
+    }
+    
     filterPurchaseOrders();
   }, [searchTerm, statusFilter, purchaseOrders]);
   
   const fetchPurchaseOrders = async () => {
     try {
       setLoading(true);
-      const data = await getAllPurchaseOrders();
-      setPurchaseOrders(data);
-      setFilteredPOs(data);
+      
+      // Używamy funkcji z paginacją zamiast getAllPurchaseOrders
+      const response = await getPurchaseOrdersWithPagination(
+        page, 
+        limit, 
+        orderBy, 
+        order
+      );
+      
+      // Ustawiamy dane i informacje o paginacji
+      setPurchaseOrders(response.data);
+      setFilteredPOs(response.data);
+      setTotalItems(response.pagination.totalItems);
+      setTotalPages(response.pagination.totalPages);
+      
       setLoading(false);
     } catch (error) {
       console.error('Błąd podczas pobierania zamówień zakupu:', error);
@@ -74,7 +101,96 @@ const PurchaseOrderList = () => {
       );
     }
     
+    // Sortowanie wyników
+    filtered = sortData(filtered);
+    
     setFilteredPOs(filtered);
+  };
+  
+  // Funkcja sortująca dane
+  const sortData = (dataToSort) => {
+    return dataToSort.sort((a, b) => {
+      let valueA, valueB;
+      
+      // Określamy, jakie wartości porównać w zależności od wybranej kolumny
+      switch (orderBy) {
+        case 'number':
+          valueA = a.number || '';
+          valueB = b.number || '';
+          break;
+        case 'supplier':
+          valueA = a.supplier?.name || '';
+          valueB = b.supplier?.name || '';
+          break;
+        case 'orderDate':
+          valueA = a.orderDate ? new Date(a.orderDate).getTime() : 0;
+          valueB = b.orderDate ? new Date(b.orderDate).getTime() : 0;
+          break;
+        case 'expectedDeliveryDate':
+          valueA = a.expectedDeliveryDate ? new Date(a.expectedDeliveryDate).getTime() : 0;
+          valueB = b.expectedDeliveryDate ? new Date(b.expectedDeliveryDate).getTime() : 0;
+          break;
+        case 'value':
+          // Kalkulujemy wartość brutto dla porównania
+          const getTotal = (po) => {
+            if (po.totalGross !== undefined && po.totalGross !== null) {
+              return parseFloat(po.totalGross);
+            }
+            
+            const productsValue = parseFloat(po.calculatedProductsValue || po.totalValue || 0);
+            let additionalCostsValue = 0;
+            
+            if (po.calculatedAdditionalCosts !== undefined) {
+              additionalCostsValue = parseFloat(po.calculatedAdditionalCosts);
+            } else if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
+              additionalCostsValue = po.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
+            } else if (po.additionalCosts) {
+              additionalCostsValue = parseFloat(po.additionalCosts) || 0;
+            }
+            
+            const vatValue = (productsValue * (parseFloat(po.vatRate) || 0)) / 100;
+            return productsValue + vatValue + additionalCostsValue;
+          };
+          
+          valueA = getTotal(a);
+          valueB = getTotal(b);
+          break;
+        case 'status':
+          valueA = a.status || '';
+          valueB = b.status || '';
+          break;
+        default:
+          valueA = a[orderBy] || '';
+          valueB = b[orderBy] || '';
+      }
+      
+      // Porównanie wartości
+      const compareResult = typeof valueA === 'string' 
+        ? valueA.localeCompare(valueB)
+        : valueA - valueB;
+        
+      // Zwróć wynik sortowania w zależności od wybranego kierunku (rosnąco/malejąco)
+      return order === 'asc' ? compareResult : -compareResult;
+    });
+  };
+  
+  // Funkcja obsługująca kliknięcie w nagłówek kolumny
+  const handleRequestSort = (property) => {
+    const isAsc = orderBy === property && order === 'asc';
+    setOrder(isAsc ? 'desc' : 'asc');
+    setOrderBy(property);
+    // Nie wywołujemy filterPurchaseOrders, ponieważ zmiana order i orderBy spowoduje wywołanie fetchPurchaseOrders 
+  };
+  
+  // Funkcja obsługująca zmianę strony
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
+  
+  // Funkcja obsługująca zmianę liczby elementów na stronę
+  const handleChangeRowsPerPage = (event) => {
+    setLimit(parseInt(event.target.value, 10));
+    setPage(1); // Resetujemy do pierwszej strony
   };
   
   const handleSearchChange = (e) => {
@@ -93,7 +209,8 @@ const PurchaseOrderList = () => {
   const handleDeleteConfirm = async () => {
     try {
       await deletePurchaseOrder(poToDelete.id);
-      setPurchaseOrders(purchaseOrders.filter(po => po.id !== poToDelete.id));
+      // Po usunięciu odświeżamy listę
+      fetchPurchaseOrders();
       showSuccess('Zamówienie zakupu zostało usunięte');
       setDeleteDialogOpen(false);
       setPoToDelete(null);
@@ -113,15 +230,9 @@ const PurchaseOrderList = () => {
     try {
       await updatePurchaseOrderStatus(poToUpdateStatus.id, newStatus, currentUser.uid);
       
-      // Aktualizacja stanu lokalnego
-      const updatedPOs = purchaseOrders.map(po => {
-        if (po.id === poToUpdateStatus.id) {
-          return { ...po, status: newStatus };
-        }
-        return po;
-      });
+      // Po aktualizacji odświeżamy listę
+      fetchPurchaseOrders();
       
-      setPurchaseOrders(updatedPOs);
       showSuccess('Status zamówienia zakupu został zaktualizowany');
       setStatusDialogOpen(false);
       setPoToUpdateStatus(null);
@@ -175,6 +286,25 @@ const PurchaseOrderList = () => {
   const toggleColumnVisibility = (columnName) => {
     // Zamiast lokalnego setVisibleColumns, używamy funkcji updateColumnPreferences z kontekstu
     updateColumnPreferences('purchaseOrders', columnName, !visibleColumns[columnName]);
+  };
+  
+  // Komponent dla nagłówka kolumny z sortowaniem
+  const SortableTableCell = ({ id, label, disableSorting = false }) => {
+    return (
+      <TableCell>
+        {disableSorting ? (
+          label
+        ) : (
+          <TableSortLabel
+            active={orderBy === id}
+            direction={orderBy === id ? order : 'asc'}
+            onClick={() => handleRequestSort(id)}
+          >
+            {label}
+          </TableSortLabel>
+        )}
+      </TableCell>
+    );
   };
   
   if (loading) {
@@ -239,108 +369,145 @@ const PurchaseOrderList = () => {
           <Typography variant="body1">Brak zamówień zakupu spełniających kryteria wyszukiwania</Typography>
         </Paper>
       ) : (
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                {visibleColumns.number && <TableCell>Numer</TableCell>}
-                {visibleColumns.supplier && <TableCell>Dostawca</TableCell>}
-                {visibleColumns.orderDate && <TableCell>Data zamówienia</TableCell>}
-                {visibleColumns.expectedDeliveryDate && <TableCell>Planowana dostawa</TableCell>}
-                {visibleColumns.value && <TableCell>Wartość</TableCell>}
-                {visibleColumns.status && <TableCell>Status</TableCell>}
-                {visibleColumns.actions && <TableCell>Akcje</TableCell>}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredPOs.map((po) => (
-                <TableRow key={po.id}>
-                  {visibleColumns.number && (
-                    <TableCell>
-                      {po.number}
-                      {po.invoiceLink && (
-                        <Tooltip title="Faktura załączona">
-                          <DescriptionIcon 
-                            fontSize="small" 
-                            color="primary" 
-                            sx={{ ml: 1, verticalAlign: 'middle' }} 
-                          />
-                        </Tooltip>
-                      )}
-                    </TableCell>
-                  )}
-                  {visibleColumns.supplier && <TableCell>{po.supplier?.name}</TableCell>}
-                  {visibleColumns.orderDate && <TableCell>{po.orderDate ? new Date(po.orderDate).toLocaleDateString('pl-PL') : '-'}</TableCell>}
-                  {visibleColumns.expectedDeliveryDate && <TableCell>{po.expectedDeliveryDate ? new Date(po.expectedDeliveryDate).toLocaleDateString('pl-PL') : '-'}</TableCell>}
-                  {visibleColumns.value && (
-                    <TableCell>
-                      {(() => {
-                        // Najpierw sprawdź, czy zamówienie ma już obliczoną wartość brutto
-                        if (po.totalGross !== undefined && po.totalGross !== null) {
-                          return `${parseFloat(po.totalGross).toFixed(2)} ${po.currency || 'PLN'}`;
-                        }
-                        
-                        // Jeśli nie, używaj wartości produktów + dodatkowe koszty
-                        const productsValue = po.calculatedProductsValue || po.totalValue || 0;
-                        let additionalCostsValue = 0;
-                        
-                        if (po.calculatedAdditionalCosts !== undefined) {
-                          additionalCostsValue = parseFloat(po.calculatedAdditionalCosts);
-                        } else if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
-                          additionalCostsValue = po.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
-                        } else if (po.additionalCosts) {
-                          additionalCostsValue = parseFloat(po.additionalCosts) || 0;
-                        }
-                        
-                        const vatValue = (parseFloat(productsValue) * (parseFloat(po.vatRate) || 0)) / 100;
-                        const totalGross = parseFloat(productsValue) + vatValue + additionalCostsValue;
-                        
-                        return `${totalGross.toFixed(2)} ${po.currency || 'PLN'}`;
-                      })()}
-                    </TableCell>
-                  )}
-                  {visibleColumns.status && (
-                    <TableCell onClick={() => handleStatusClick(po)} style={{ cursor: 'pointer' }}>
-                      {getStatusChip(po.status)}
-                    </TableCell>
-                  )}
-                  {visibleColumns.actions && (
-                    <TableCell>
-                      <Tooltip title="Zobacz szczegóły">
-                        <IconButton
-                          component={Link}
-                          to={`/purchase-orders/${po.id}`}
-                          color="primary"
-                        >
-                          <ViewIcon />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Edytuj">
-                        <IconButton
-                          component={Link}
-                          to={`/purchase-orders/${po.id}/edit`}
-                          color="secondary"
-                          disabled={po.status !== PURCHASE_ORDER_STATUSES.DRAFT}
-                        >
-                          <EditIcon />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Usuń">
-                        <IconButton
-                          color="error"
-                          onClick={() => handleDeleteClick(po)}
-                          disabled={po.status !== PURCHASE_ORDER_STATUSES.DRAFT}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
-                  )}
+        <Paper>
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  {visibleColumns.number && <SortableTableCell id="number" label="Numer" />}
+                  {visibleColumns.supplier && <SortableTableCell id="supplier" label="Dostawca" />}
+                  {visibleColumns.orderDate && <SortableTableCell id="orderDate" label="Data zamówienia" />}
+                  {visibleColumns.expectedDeliveryDate && <SortableTableCell id="expectedDeliveryDate" label="Planowana dostawa" />}
+                  {visibleColumns.value && <SortableTableCell id="value" label="Wartość" />}
+                  {visibleColumns.status && <SortableTableCell id="status" label="Status" />}
+                  {visibleColumns.actions && <SortableTableCell id="actions" label="Akcje" disableSorting={true} />}
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              </TableHead>
+              <TableBody>
+                {filteredPOs.map((po) => (
+                  <TableRow key={po.id}>
+                    {visibleColumns.number && (
+                      <TableCell>
+                        {po.number}
+                        {po.invoiceLink && (
+                          <Tooltip title="Faktura załączona">
+                            <DescriptionIcon 
+                              fontSize="small" 
+                              color="primary" 
+                              sx={{ ml: 1, verticalAlign: 'middle' }} 
+                            />
+                          </Tooltip>
+                        )}
+                      </TableCell>
+                    )}
+                    {visibleColumns.supplier && <TableCell>{po.supplier?.name}</TableCell>}
+                    {visibleColumns.orderDate && <TableCell>{po.orderDate ? new Date(po.orderDate).toLocaleDateString('pl-PL') : '-'}</TableCell>}
+                    {visibleColumns.expectedDeliveryDate && <TableCell>{po.expectedDeliveryDate ? new Date(po.expectedDeliveryDate).toLocaleDateString('pl-PL') : '-'}</TableCell>}
+                    {visibleColumns.value && (
+                      <TableCell>
+                        {(() => {
+                          // Najpierw sprawdź, czy zamówienie ma już obliczoną wartość brutto
+                          if (po.totalGross !== undefined && po.totalGross !== null) {
+                            return `${parseFloat(po.totalGross).toFixed(2)} ${po.currency || 'PLN'}`;
+                          }
+                          
+                          // Jeśli nie, używaj wartości produktów + dodatkowe koszty
+                          const productsValue = po.calculatedProductsValue || po.totalValue || 0;
+                          let additionalCostsValue = 0;
+                          
+                          if (po.calculatedAdditionalCosts !== undefined) {
+                            additionalCostsValue = parseFloat(po.calculatedAdditionalCosts);
+                          } else if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
+                            additionalCostsValue = po.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
+                          } else if (po.additionalCosts) {
+                            additionalCostsValue = parseFloat(po.additionalCosts) || 0;
+                          }
+                          
+                          const vatValue = (parseFloat(productsValue) * (parseFloat(po.vatRate) || 0)) / 100;
+                          const totalGross = parseFloat(productsValue) + vatValue + additionalCostsValue;
+                          
+                          return `${totalGross.toFixed(2)} ${po.currency || 'PLN'}`;
+                        })()}
+                      </TableCell>
+                    )}
+                    {visibleColumns.status && (
+                      <TableCell onClick={() => handleStatusClick(po)} style={{ cursor: 'pointer' }}>
+                        {getStatusChip(po.status)}
+                      </TableCell>
+                    )}
+                    {visibleColumns.actions && (
+                      <TableCell>
+                        <Tooltip title="Zobacz szczegóły">
+                          <IconButton
+                            component={Link}
+                            to={`/purchase-orders/${po.id}`}
+                            color="primary"
+                          >
+                            <ViewIcon />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Edytuj">
+                          <IconButton
+                            component={Link}
+                            to={`/purchase-orders/${po.id}/edit`}
+                            color="secondary"
+                            disabled={po.status !== PURCHASE_ORDER_STATUSES.DRAFT}
+                          >
+                            <EditIcon />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Usuń">
+                          <IconButton
+                            color="error"
+                            onClick={() => handleDeleteClick(po)}
+                            disabled={po.status !== PURCHASE_ORDER_STATUSES.DRAFT}
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+              <TableFooter>
+                <TableRow>
+                  <TableCell colSpan={7}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Typography variant="body2">
+                          Wierszy na stronę:
+                        </Typography>
+                        <Select
+                          value={limit}
+                          onChange={handleChangeRowsPerPage}
+                          size="small"
+                        >
+                          {[5, 10, 25, 50].map(pageSize => (
+                            <MenuItem key={pageSize} value={pageSize}>
+                              {pageSize}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </Box>
+                      <Pagination 
+                        count={totalPages}
+                        page={page}
+                        onChange={handleChangePage}
+                        color="primary"
+                        showFirstButton
+                        showLastButton
+                      />
+                      <Typography variant="body2">
+                        Wyświetlanie {(page - 1) * limit + 1}-{Math.min(page * limit, totalItems)} z {totalItems}
+                      </Typography>
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              </TableFooter>
+            </Table>
+          </TableContainer>
+        </Paper>
       )}
       
       {/* Menu konfiguracji kolumn */}

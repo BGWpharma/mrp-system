@@ -119,6 +119,118 @@ export const getAllPurchaseOrders = async () => {
   }
 };
 
+/**
+ * Pobiera zamówienia zakupowe z paginacją
+ * @param {number} page - Numer strony (numeracja od 1)
+ * @param {number} limit - Liczba elementów na stronę
+ * @param {string} sortField - Pole, po którym sortujemy
+ * @param {string} sortOrder - Kierunek sortowania (asc/desc)
+ * @returns {Object} - Obiekt zawierający dane i metadane paginacji
+ */
+export const getPurchaseOrdersWithPagination = async (page = 1, limit = 10, sortField = 'createdAt', sortOrder = 'desc') => {
+  try {
+    // Pobierz całkowitą liczbę dokumentów (to jest wymagane dla paginacji)
+    const countSnapshot = await getDocs(
+      query(collection(db, PURCHASE_ORDERS_COLLECTION))
+    );
+    const totalCount = countSnapshot.size;
+    
+    // Ustaw realne wartości dla page i limit
+    const pageNum = Math.max(1, page);
+    const itemsPerPage = Math.max(1, limit);
+    
+    // Oblicz offset i liczenie stron
+    const totalPages = Math.ceil(totalCount / itemsPerPage);
+    
+    // Jeśli żądana strona jest większa niż liczba stron, ustaw na ostatnią stronę
+    const safePageNum = Math.min(pageNum, Math.max(1, totalPages));
+    
+    // Przygotuj zapytanie z sortowaniem
+    let q = query(
+      collection(db, PURCHASE_ORDERS_COLLECTION),
+      orderBy(sortField, sortOrder)
+    );
+    
+    // Pobierz wszystkie dokumenty dla sortowania
+    // W Firebase nie ma bezpośredniego mechanizmu OFFSET i LIMIT jak w SQL
+    // Musimy pobrać dokumenty i ręcznie zaimplementować paginację
+    const querySnapshot = await getDocs(q);
+    const allDocs = querySnapshot.docs;
+    
+    // Ręczna paginacja
+    const startIndex = (safePageNum - 1) * itemsPerPage;
+    const endIndex = Math.min(startIndex + itemsPerPage, allDocs.length);
+    const paginatedDocs = allDocs.slice(startIndex, endIndex);
+    
+    // Przygotuj dane zamówień
+    const purchaseOrders = [];
+    
+    for (const docRef of paginatedDocs) {
+      const poData = docRef.data();
+      
+      // Pobierz dane dostawcy, jeśli zamówienie ma referencję do dostawcy
+      let supplierData = null;
+      if (poData.supplierId) {
+        const supplierDoc = await getDoc(doc(db, SUPPLIERS_COLLECTION, poData.supplierId));
+        if (supplierDoc.exists()) {
+          supplierData = { id: supplierDoc.id, ...supplierDoc.data() };
+        }
+      }
+      
+      // Upewnij się, że zamówienie ma poprawną wartość brutto (totalGross)
+      let totalGross = poData.totalGross;
+      
+      // Jeśli nie ma wartości brutto lub jest nieprawidłowa, oblicz ją
+      if (totalGross === undefined || totalGross === null) {
+        // Oblicz wartość produktów
+        const productsValue = typeof poData.items === 'object' && Array.isArray(poData.items)
+          ? poData.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0)
+          : (parseFloat(poData.totalValue) || 0);
+        
+        // Oblicz VAT (tylko od wartości produktów)
+        const vatRate = parseFloat(poData.vatRate) || 0;
+        const vatValue = (productsValue * vatRate) / 100;
+        
+        // Oblicz dodatkowe koszty
+        const additionalCosts = poData.additionalCostsItems && Array.isArray(poData.additionalCostsItems) 
+          ? poData.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
+          : (parseFloat(poData.additionalCosts) || 0);
+        
+        // Wartość brutto to suma: wartość netto produktów + VAT + dodatkowe koszty
+        totalGross = productsValue + vatValue + additionalCosts;
+      } else {
+        totalGross = parseFloat(totalGross) || 0;
+      }
+      
+      purchaseOrders.push({
+        id: docRef.id,
+        ...poData,
+        supplier: supplierData,
+        totalGross: totalGross,
+        // Bezpieczna konwersja dat zamiast bezpośredniego wywołania toDate()
+        orderDate: safeConvertDate(poData.orderDate),
+        expectedDeliveryDate: safeConvertDate(poData.expectedDeliveryDate),
+        createdAt: safeConvertDate(poData.createdAt),
+        updatedAt: safeConvertDate(poData.updatedAt)
+      });
+    }
+    
+    // Zwróć dane wraz z informacjami o paginacji
+    return {
+      data: purchaseOrders,
+      pagination: {
+        page: safePageNum,
+        limit: itemsPerPage,
+        totalItems: totalCount,
+        totalPages: totalPages
+      }
+    };
+  } catch (error) {
+    console.error('Błąd podczas pobierania zamówień zakupowych z paginacją:', error);
+    throw error;
+  }
+};
+
 export const getPurchaseOrderById = async (id) => {
   try {
     const purchaseOrderDoc = await getDoc(doc(db, PURCHASE_ORDERS_COLLECTION, id));

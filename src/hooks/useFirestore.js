@@ -1,5 +1,5 @@
 // src/hooks/useFirestore.js
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   collection, 
   doc, 
@@ -29,6 +29,8 @@ export const useFirestore = (collectionName) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { currentUser } = useAuth();
+  const unsubscribeRef = useRef(null);
+  const [isSubscribed, setIsSubscribed] = useState(false);
   
   // Pobierz wszystkie dokumenty
   const getAll = async (options = {}) => {
@@ -162,48 +164,105 @@ export const useFirestore = (collectionName) => {
     }
   };
   
-  // Nasłuchiwanie zmian w kolekcji (opcjonalne)
+  // Odsubskrybuj bieżącą subskrypcję, jeśli istnieje
+  const unsubscribe = () => {
+    if (unsubscribeRef.current) {
+      console.log(`Odsubskrybuję od zmian w kolekcji ${collectionName}`);
+      unsubscribeRef.current();
+      unsubscribeRef.current = null;
+      setIsSubscribed(false);
+    }
+  };
+  
+  // Nasłuchiwanie zmian w kolekcji z zaawansowanymi opcjami
   const subscribe = (callback, options = {}) => {
+    // Wyczyść istniejącą subskrypcję
+    unsubscribe();
+    
+    console.log(`Rozpoczynam nasłuchiwanie zmian w kolekcji ${collectionName} z opcjami:`, options);
+    
+    // Ustaw ograniczenia zapytania
     const collectionRef = collection(db, collectionName);
+    let queryConstraints = [];
     
-    // Buduj zapytanie na podstawie opcji
-    let q = collectionRef;
-    
+    // Dodaj filtry
     if (options.where) {
-      q = query(q, where(options.where.field, options.where.operator, options.where.value));
+      if (Array.isArray(options.where)) {
+        options.where.forEach(filter => {
+          queryConstraints.push(where(filter.field, filter.operator, filter.value));
+        });
+      } else {
+        queryConstraints.push(where(options.where.field, options.where.operator, options.where.value));
+      }
     }
     
+    // Dodaj sortowanie
     if (options.orderBy) {
-      q = query(q, orderBy(options.orderBy.field, options.orderBy.direction || 'asc'));
+      if (Array.isArray(options.orderBy)) {
+        options.orderBy.forEach(sort => {
+          queryConstraints.push(orderBy(sort.field, sort.direction || 'asc'));
+        });
+      } else {
+        queryConstraints.push(orderBy(options.orderBy.field, options.orderBy.direction || 'asc'));
+      }
     }
     
+    // Dodaj limit
     if (options.limit) {
-      q = query(q, limit(options.limit));
+      queryConstraints.push(limit(options.limit));
     }
     
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const docsData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      
-      setDocuments(docsData);
-      if (callback) callback(docsData);
-    }, (err) => {
-      console.error(`Error subscribing to ${collectionName}:`, err);
-      setError(err.message);
-    });
+    // Utwórz zapytanie
+    const q = query(collectionRef, ...queryConstraints);
     
+    // Ustaw częstotliwość aktualizacji
+    const snapshotOptions = {};
+    if (options.snapshotListenOptions) {
+      Object.assign(snapshotOptions, options.snapshotListenOptions);
+    }
+    
+    // Rozpocznij nasłuchiwanie
+    unsubscribeRef.current = onSnapshot(
+      q, 
+      snapshotOptions,
+      (querySnapshot) => {
+        const docsData = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        setDocuments(docsData);
+        setIsSubscribed(true);
+        if (callback) callback(docsData);
+      }, 
+      (err) => {
+        console.error(`Error subscribing to ${collectionName}:`, err);
+        setError(err.message);
+        setIsSubscribed(false);
+      }
+    );
+    
+    // Zwróć funkcję do ręcznego odsubskrybowania
     return unsubscribe;
   };
   
+  // Automatycznie odsubskrybuj przy odmontowaniu komponentu
+  useEffect(() => {
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+  
   // Załaduj domyślne dane przy montowaniu komponentu
   useEffect(() => {
-    getAll()
-      .catch(err => {
-        console.error(`Error in initial load of ${collectionName}:`, err);
-      });
-      
+    // Pobierz dane tylko jeśli nie ma aktywnej subskrypcji
+    if (!isSubscribed) {
+      getAll()
+        .catch(err => {
+          console.error(`Error in initial load of ${collectionName}:`, err);
+        });
+    }
+    
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collectionName]);
   
@@ -211,11 +270,13 @@ export const useFirestore = (collectionName) => {
     documents,
     loading,
     error,
+    isSubscribed,
     getAll,
     getOne,
     add,
     update,
     remove,
-    subscribe
+    subscribe,
+    unsubscribe
   };
 };

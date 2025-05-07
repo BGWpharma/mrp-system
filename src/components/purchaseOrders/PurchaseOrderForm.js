@@ -1297,10 +1297,10 @@ const PurchaseOrderForm = ({ orderId }) => {
         {
           id: newCostId,
           description: '',
-          value: 0,
+          value: '',
           vatRate: 23, // Domyślna stawka VAT 23%
           currency: poData.currency, // Domyślna waluta zgodna z zamówieniem
-          originalValue: 0, // Wartość w oryginalnej walucie
+          originalValue: '', // Wartość w oryginalnej walucie
           exchangeRate: 1, // Kurs wymiany
           invoiceNumber: '', // Numer faktury
           invoiceDate: '', // Data faktury
@@ -1684,7 +1684,7 @@ const PurchaseOrderForm = ({ orderId }) => {
             return { 
               ...item, 
               originalValue: newValue,
-            value: newValue.toFixed(6)
+              value: newValue
             };
         }
         
@@ -2368,6 +2368,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                               value={cost.description}
                               onChange={(e) => handleAdditionalCostChange(cost.id, 'description', e.target.value)}
                               placeholder="Np. cła, transport, ubezpieczenie"
+                              sx={{ minWidth: '250px' }}
                             />
                           </TableCell>
                           <TableCell align="right">
@@ -2376,7 +2377,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                               size="small"
                               value={cost.currency === poData.currency ? cost.value : (cost.originalValue || 0)}
                               onChange={(e) => handleAdditionalCostChange(cost.id, 'value', e.target.value)}
-                              inputProps={{ min: 0, step: 'any' }}
+                              inputProps={{ step: 'any' }}
                               sx={{ width: 120 }}
                             />
                           </TableCell>
@@ -2444,6 +2445,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                               value={cost.invoiceNumber || ''}
                               onChange={(e) => handleAdditionalCostChange(cost.id, 'invoiceNumber', e.target.value)}
                               placeholder="Nr faktury"
+                              sx={{ minWidth: '150px' }}
                             />
                           </TableCell>
                           <TableCell>
@@ -2488,7 +2490,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                           Suma:
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                          {poData.additionalCostsItems.reduce((sum, item) => sum + (parseFloat(item.value) || 0), 0).toFixed(2)} {poData.currency}
+                          {parseFloat(poData.additionalCostsItems.reduce((sum, item) => sum + (parseFloat(item.value) || 0), 0))} {poData.currency}
                         </TableCell>
                         <TableCell />
                         <TableCell />
@@ -2541,7 +2543,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                               const vatRate = typeof item.vatRate === 'number' ? item.vatRate : 0;
                               return sum + (itemValue * vatRate) / 100;
                             }, 0);
-                            return parseFloat(netTotal + vatTotal).toFixed(6);
+                            return parseFloat(netTotal + vatTotal);
                           })()} {poData.currency}
                         </TableCell>
                         <TableCell />
