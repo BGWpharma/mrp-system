@@ -806,7 +806,7 @@ const PurchaseOrderForm = ({ orderId }) => {
     }
     
     // Sprawdź poprawność danych dla każdego przedmiotu
-    const invalidItem = poData.items.find(item => !item.name || !item.quantity || !item.unitPrice);
+    const invalidItem = poData.items.find(item => !item.name || !item.quantity);
     if (invalidItem) {
       showError('Uzupełnij wszystkie dane dla każdego przedmiotu');
       return false;

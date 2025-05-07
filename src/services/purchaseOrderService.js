@@ -962,22 +962,25 @@ const updateBatchPricesWithAdditionalCosts = async (purchaseOrderId, poData, use
   try {
     console.log(`Aktualizuję ceny partii dla zamówienia ${purchaseOrderId}`);
     
-    // Oblicz łączne dodatkowe koszty
-    let additionalCostsTotal = 0;
+    // Oblicz łączne dodatkowe koszty BRUTTO (z VAT)
+    let additionalCostsGrossTotal = 0;
     
     // Z nowego formatu additionalCostsItems
     if (poData.additionalCostsItems && Array.isArray(poData.additionalCostsItems)) {
-      additionalCostsTotal = poData.additionalCostsItems.reduce((sum, cost) => {
-        return sum + (parseFloat(cost.value) || 0);
+      additionalCostsGrossTotal = poData.additionalCostsItems.reduce((sum, cost) => {
+        const net = parseFloat(cost.value) || 0;
+        const vatRate = typeof cost.vatRate === 'number' ? cost.vatRate : 0;
+        const vat = (net * vatRate) / 100;
+        return sum + net + vat;
       }, 0);
     } 
-    // Ze starego pola additionalCosts (dla kompatybilności)
+    // Ze starego pola additionalCosts (dla kompatybilności, traktujemy jako brutto)
     else if (poData.additionalCosts) {
-      additionalCostsTotal = parseFloat(poData.additionalCosts) || 0;
+      additionalCostsGrossTotal = parseFloat(poData.additionalCosts) || 0;
     }
     
     // Jeśli brak dodatkowych kosztów, nie ma potrzeby aktualizacji
-    if (additionalCostsTotal <= 0) {
+    if (additionalCostsGrossTotal <= 0) {
       console.log(`Brak dodatkowych kosztów do rozliczenia w zamówieniu ${purchaseOrderId}`);
       return;
     }
@@ -999,10 +1002,10 @@ const updateBatchPricesWithAdditionalCosts = async (purchaseOrderId, poData, use
       return;
     }
     
-    // Oblicz dodatkowy koszt na jednostkę
-    const additionalCostPerUnit = additionalCostsTotal / totalProductQuantity;
+    // Oblicz dodatkowy koszt BRUTTO na jednostkę
+    const additionalCostPerUnit = additionalCostsGrossTotal / totalProductQuantity;
     
-    console.log(`Obliczony dodatkowy koszt na jednostkę: ${additionalCostPerUnit}`);
+    console.log(`Obliczony dodatkowy koszt brutto na jednostkę: ${additionalCostPerUnit}`);
     
     // Pobierz wszystkie partie magazynowe powiązane z tym zamówieniem
     const { collection, query, where, getDocs, doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
@@ -1062,10 +1065,10 @@ const updateBatchPricesWithAdditionalCosts = async (purchaseOrderId, poData, use
         ? batchData.baseUnitPrice 
         : batchData.unitPrice || 0;
         
-      // Ustawienie nowej ceny jednostkowej
+      // Ustawienie nowej ceny jednostkowej: cena netto + koszt dodatkowy brutto na jednostkę
       const newUnitPrice = parseFloat(baseUnitPrice) + additionalCostPerUnit;
       
-      console.log(`Aktualizuję partię ${batchData.id}: basePrice=${baseUnitPrice}, additionalCost=${additionalCostPerUnit}, newPrice=${newUnitPrice}`);
+      console.log(`Aktualizuję partię ${batchData.id}: basePrice=${baseUnitPrice}, additionalCostBrutto=${additionalCostPerUnit}, newPrice=${newUnitPrice}`);
       
       // Aktualizuj dokument partii
       updatePromises.push(updateDoc(batchRef, {

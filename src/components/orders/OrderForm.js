@@ -55,7 +55,8 @@ import {
   PlaylistAdd as PlaylistAddIcon,
   Link as LinkIcon,
   OpenInNew as OpenInNewIcon,
-  BuildCircle as ServiceIcon
+  BuildCircle as ServiceIcon,
+  Receipt as ReceiptIcon
 } from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -149,6 +150,30 @@ const OrderForm = ({ orderId }) => {
   const [calculatingCosts, setCalculatingCosts] = useState(false);
   const [exchangeRates, setExchangeRates] = useState({ EUR: 1, PLN: 4.3, USD: 1.08 });
   const [loadingRates, setLoadingRates] = useState(false);
+
+  const [invoices, setInvoices] = useState([]);
+
+  const handleAddInvoice = () => {
+    setInvoices(prev => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        number: '',
+        date: '',
+        status: 'nieopłacona',
+        amount: '',
+        paidAmount: ''
+      }
+    ]);
+  };
+
+  const handleInvoiceChange = (id, field, value) => {
+    setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, [field]: value } : inv));
+  };
+
+  const handleRemoveInvoice = (id) => {
+    setInvoices(prev => prev.filter(inv => inv.id !== id));
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -2241,7 +2266,7 @@ const OrderForm = ({ orderId }) => {
 
   return (
     <>
-      <Box component="form" onSubmit={handleSubmit} noValidate>
+      <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
         <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Button 
             startIcon={<ArrowBackIcon />} 
@@ -3356,6 +3381,106 @@ const OrderForm = ({ orderId }) => {
               </Paper>
             </Grid>
           </Grid>
+        </Paper>
+
+        {/* Sekcja faktur */}
+        <Paper sx={{ p: 3, mb: 3, boxShadow: 2, borderRadius: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main', display: 'flex', alignItems: 'center' }}>
+              <ReceiptIcon sx={{ mr: 1 }} /> Faktury
+            </Typography>
+            <Button
+              startIcon={<AddIcon />}
+              variant="outlined"
+              onClick={handleAddInvoice}
+              size="small"
+              sx={{ borderRadius: 2 }}
+            >
+              Dodaj fakturę
+            </Button>
+          </Box>
+          <Divider sx={{ mb: 3 }} />
+          {invoices.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', mb: 2 }}>
+              Brak faktur. Użyj przycisku powyżej, aby dodać fakturę.
+            </Typography>
+          ) : (
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Nr faktury</TableCell>
+                    <TableCell>Data faktury</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell align="right">Kwota</TableCell>
+                    <TableCell align="right">Kwota opłacona</TableCell>
+                    <TableCell width="50px"></TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {invoices.map((inv) => (
+                    <TableRow key={inv.id}>
+                      <TableCell>
+                        <TextField
+                          value={inv.number}
+                          onChange={e => handleInvoiceChange(inv.id, 'number', e.target.value)}
+                          variant="standard"
+                          fullWidth
+                          placeholder="Nr faktury"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          type="date"
+                          value={inv.date}
+                          onChange={e => handleInvoiceChange(inv.id, 'date', e.target.value)}
+                          variant="standard"
+                          sx={{ width: 150 }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <FormControl variant="standard" sx={{ minWidth: 120 }}>
+                          <Select
+                            value={inv.status}
+                            onChange={e => handleInvoiceChange(inv.id, 'status', e.target.value)}
+                          >
+                            <MenuItem value="nieopłacona">Nieopłacona</MenuItem>
+                            <MenuItem value="częściowo opłacona">Częściowo opłacona</MenuItem>
+                            <MenuItem value="opłacona">Opłacona</MenuItem>
+                          </Select>
+                        </FormControl>
+                      </TableCell>
+                      <TableCell align="right">
+                        <TextField
+                          type="number"
+                          value={inv.amount}
+                          onChange={e => handleInvoiceChange(inv.id, 'amount', e.target.value)}
+                          variant="standard"
+                          inputProps={{ step: '0.01', min: '0' }}
+                          sx={{ maxWidth: 120 }}
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        <TextField
+                          type="number"
+                          value={inv.paidAmount}
+                          onChange={e => handleInvoiceChange(inv.id, 'paidAmount', e.target.value)}
+                          variant="standard"
+                          inputProps={{ step: '0.01', min: '0' }}
+                          sx={{ maxWidth: 120 }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <IconButton size="small" color="error" onClick={() => handleRemoveInvoice(inv.id)}>
+                          <DeleteIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
         </Paper>
       </Box>
       

@@ -273,6 +273,9 @@ const Sidebar = ({ onToggle }) => {
           backgroundColor: mode === 'dark' ? '#182136' : '#ffffff',
           borderRight: '1px solid',
           borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.08)',
+          height: '100%', 
+          display: 'flex',
+          flexDirection: 'column',
         },
       }}
     >
@@ -284,6 +287,7 @@ const Sidebar = ({ onToggle }) => {
           p: 1.5,
           borderBottom: '1px solid',
           borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.08)',
+          flexShrink: 0,
         }}
       >
         {isDrawerOpen && (
@@ -310,7 +314,25 @@ const Sidebar = ({ onToggle }) => {
         </IconButton>
       </Box>
 
-      <List sx={{ pt: 1 }}>
+      <List sx={{ 
+        pt: 1,
+        flexGrow: 1,
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        '&::-webkit-scrollbar': {
+          width: '8px',
+        },
+        '&::-webkit-scrollbar-track': {
+          backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+        },
+        '&::-webkit-scrollbar-thumb': {
+          backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
+          borderRadius: '4px',
+        },
+        '&::-webkit-scrollbar-thumb:hover': {
+          backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)',
+        }
+      }}>
         {menuItems.map((item) => (
           item.children ? (
             <React.Fragment key={item.text}>
@@ -426,14 +448,11 @@ const Sidebar = ({ onToggle }) => {
       </List>
       
       <Box sx={{ 
-        position: 'absolute', 
-        bottom: 0, 
-        left: 0, 
-        right: 0, 
-        p: 1.5, 
+        flexShrink: 0,
         borderTop: '1px solid', 
         borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.08)',
         backgroundColor: mode === 'dark' ? '#182136' : '#ffffff',
+        p: 1.5
       }}>
         <StyledListItem 
           button 
