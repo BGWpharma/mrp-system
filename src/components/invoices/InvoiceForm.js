@@ -1140,7 +1140,31 @@ const InvoiceForm = ({ invoiceId }) => {
             )}
             
             <Typography variant="h6" fontWeight="bold" color="primary">
-              Razem brutto: {(parseFloat(invoice.total) - parseFloat(invoice.settledAdvancePayments || 0)).toFixed(2)} {invoice.currency || 'zł'}
+              Razem brutto: {(
+                // Obliczenie wartości netto
+                parseFloat(invoice.items.reduce((sum, item) => {
+                  const quantity = Number(item.quantity) || 0;
+                  const price = Number(item.price) || 0;
+                  return sum + (quantity * price);
+                }, 0)) + 
+                // Dodanie VAT do wartości netto
+                parseFloat(invoice.items.reduce((sum, item) => {
+                  const quantity = Number(item.quantity) || 0;
+                  const price = Number(item.price) || 0;
+                  
+                  // Sprawdź czy stawka VAT to liczba czy string "ZW" lub "NP"
+                  let vatRate = 0;
+                  if (typeof item.vat === 'number') {
+                    vatRate = item.vat;
+                  } else if (item.vat !== "ZW" && item.vat !== "NP") {
+                    vatRate = parseFloat(item.vat) || 0;
+                  }
+                  
+                  return sum + (quantity * price * (vatRate / 100));
+                }, 0)) - 
+                // Odejmowanie zaliczek/przedpłat
+                parseFloat(invoice.settledAdvancePayments || 0)
+              ).toFixed(2)} {invoice.currency || 'zł'}
             </Typography>
           </Grid>
         </Grid>
