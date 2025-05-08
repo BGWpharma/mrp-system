@@ -1,5 +1,5 @@
 // src/components/recipes/RecipeList.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   Table, 
@@ -23,7 +23,12 @@ import {
   Tabs,
   Tab,
   Alert,
-  Snackbar
+  Snackbar,
+  Pagination,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  CircularProgress
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -35,12 +40,15 @@ import {
   Person as PersonIcon,
   FilterList as FilterIcon,
   Info as InfoIcon,
-  ArrowDropUp as ArrowDropUpIcon
+  ArrowDropUp as ArrowDropUpIcon,
+  ExpandMore as ExpandMoreIcon,
+  Cached as CachedIcon
 } from '@mui/icons-material';
-import { getAllRecipes, deleteRecipe, getRecipesByCustomer } from '../../services/recipeService';
-import { getAllCustomers } from '../../services/customerService';
+import { getAllRecipes, deleteRecipe, getRecipesByCustomer, getRecipesWithPagination } from '../../services/recipeService';
+import { useCustomersCache } from '../../hooks/useCustomersCache';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
+import searchService from '../../services/searchService';
 
 // UWAGA: Do poprawnego działania zapytań filtrowania wg. klienta wymagany jest
 // indeks złożony w Firestore dla kolekcji "recipes":
@@ -55,10 +63,9 @@ const RecipeList = () => {
   const { showSuccess, showError } = useNotification();
   const navigate = useNavigate();
   
-  // Dodajemy stan dla filtrowania wg klienta
-  const [customers, setCustomers] = useState([]);
+  // Użyj nowego hooka do buforowania danych klientów
+  const { customers, loading: loadingCustomers, error: customersError, refreshCustomers } = useCustomersCache();
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
-  const [loadingCustomers, setLoadingCustomers] = useState(false);
   
   // Dodajemy zakładki dla zmiany widoku
   const [tabValue, setTabValue] = useState(0); // 0 - wszystkie, 1 - grupowane wg klienta
@@ -75,77 +82,234 @@ const RecipeList = () => {
     order: 'asc'
   });
 
-  // Pobierz wszystkie receptury przy montowaniu komponentu
-  useEffect(() => {
-    fetchRecipes();
-    fetchCustomers();
-  }, [selectedCustomerId]);
+  // Dodajemy stany do obsługi paginacji
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
-  // Filtruj receptury przy zmianie searchTerm lub receptur
-  useEffect(() => {
-    filterRecipes();
-  }, [searchTerm, recipes, tabValue]);
+  // Dodajemy stan dla debounce wyszukiwania
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [searchTimeout, setSearchTimeout] = useState(null);
+
+  // Dodajemy stan dla rozwiniętych paneli klientów
+  const [expandedPanel, setExpandedPanel] = useState(null);
+  const [customerRecipes, setCustomerRecipes] = useState({});
+  const [loadingCustomerRecipes, setLoadingCustomerRecipes] = useState({});
   
-  // Grupuj receptury wg klienta przy zmianie receptur lub listy klientów
-  useEffect(() => {
-    groupRecipesByCustomer();
-  }, [recipes, customers]);
+  // Dodaje stan dla informacji o indeksie wyszukiwania
+  const [searchIndexStatus, setSearchIndexStatus] = useState({
+    isLoaded: false,
+    lastRefreshed: null
+  });
   
-  const fetchCustomers = async () => {
-    try {
-      setLoadingCustomers(true);
-      const customersData = await getAllCustomers();
-      setCustomers(customersData);
-    } catch (error) {
-      console.error('Błąd podczas pobierania klientów:', error);
-      showError('Nie udało się pobrać listy klientów');
-    } finally {
-      setLoadingCustomers(false);
+  // Obsługa debounce dla wyszukiwania
+  useEffect(() => {
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
     }
-  };
-
-  const fetchRecipes = async () => {
+    
+    const timeoutId = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300); // 300ms opóźnienia
+    
+    setSearchTimeout(timeoutId);
+    
+    return () => {
+      if (searchTimeout) {
+        clearTimeout(searchTimeout);
+      }
+    };
+  }, [searchTerm]);
+  
+  // Zmodyfikowana funkcja pobierająca receptury używająca indeksu wyszukiwania
+  const fetchRecipes = useCallback(async () => {
     try {
       setLoading(true);
       
-      let recipesData;
+      // Opcje wyszukiwania
+      const searchOptions = {
+        page,
+        limit,
+        sortField: tableSort.field,
+        sortOrder: tableSort.order,
+        customerId: selectedCustomerId || null
+      };
       
-      console.log('Filtrowanie receptur dla klienta ID:', selectedCustomerId);
-      
-      if (selectedCustomerId) {
-        try {
-          // Pobierz receptury dla wybranego klienta
-          console.log('Pobieranie receptur dla klienta:', selectedCustomerId);
-          recipesData = await getRecipesByCustomer(selectedCustomerId);
-          console.log('Znaleziono receptur dla klienta:', recipesData.length);
-        } catch (error) {
-          console.error('Błąd filtrowania po kliencie:', error);
+      // Użyj nowego searchService zamiast bezpośredniego zapytania do Firestore
+      const result = await searchService.searchRecipes(debouncedSearchTerm, searchOptions);
           
-          // Sprawdź, czy to błąd braku indeksu
-          if (error.message && error.message.includes('index')) {
-            setShowIndexAlert(true);
-            // Alternatywny sposób filtrowania - pobierz wszystkie i filtruj po stronie klienta
-            console.log('Alternatywne filtrowanie po stronie klienta');
-            recipesData = await getAllRecipes();
-            recipesData = recipesData.filter(recipe => recipe.customerId === selectedCustomerId);
-          } else {
-            throw error; // Przekaż dalej inne błędy
-          }
-        }
-      } else {
-        // Pobierz wszystkie receptury
-        console.log('Pobieranie wszystkich receptur');
-        recipesData = await getAllRecipes();
-        console.log('Znaleziono wszystkich receptur:', recipesData.length);
-      }
+      // Ustawienie stanów po wyszukiwaniu
+      setRecipes(result.data);
+      setFilteredRecipes(result.data);
+      setTotalItems(result.pagination.totalItems);
+      setTotalPages(result.pagination.totalPages);
       
-      setRecipes(recipesData);
-      setFilteredRecipes(recipesData);
+      // Aktualizacja informacji o indeksie
+      setSearchIndexStatus({
+        isLoaded: true,
+        lastRefreshed: new Date()
+      });
+      
+      console.log('Pobrano receptur z indeksu wyszukiwania:', result.data.length);
+      console.log('Łącznie receptur w indeksie:', result.pagination.totalItems);
+      
       setLoading(false);
     } catch (error) {
-      console.error('Błąd podczas pobierania receptur:', error);
+      console.error('Błąd podczas wyszukiwania receptur:', error);
+      
+      // Jeśli wystąpił błąd z indeksem, spróbuj użyć standardowego podejścia
+      try {
+        console.warn('Próba użycia standardowego API po błędzie indeksu wyszukiwania');
+        
+        const fallbackResult = await getRecipesWithPagination(
+          page, 
+          limit, 
+          tableSort.field, 
+          tableSort.order,
+          selectedCustomerId,
+          debouncedSearchTerm
+        );
+        
+        setRecipes(fallbackResult.data);
+        setFilteredRecipes(fallbackResult.data);
+        setTotalItems(fallbackResult.pagination.totalItems);
+        setTotalPages(fallbackResult.pagination.totalPages);
+      } catch (fallbackError) {
+        console.error('Błąd podczas awaryjnego pobierania receptur:', fallbackError);
       showError('Nie udało się pobrać receptur');
+      }
+      
       setLoading(false);
+    }
+  }, [page, limit, tableSort, selectedCustomerId, debouncedSearchTerm, showError]);
+      
+  // Odświeżamy indeks wyszukiwania - funkcja do ręcznego wywołania przez użytkownika
+  const refreshSearchIndex = async () => {
+    try {
+      setLoading(true);
+      await searchService.refreshIndex('recipes');
+      
+      // Po odświeżeniu indeksu, pobierz dane ponownie
+      await fetchRecipes();
+      
+      showSuccess('Indeks wyszukiwania został zaktualizowany');
+    
+      // Aktualizacja informacji o indeksie
+      setSearchIndexStatus({
+        isLoaded: true,
+        lastRefreshed: new Date()
+      });
+    } catch (error) {
+      console.error('Błąd podczas odświeżania indeksu wyszukiwania:', error);
+      showError('Nie udało się odświeżyć indeksu wyszukiwania');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Efekt uruchamiający pobieranie przy zmianie parametrów
+  useEffect(() => {
+    fetchRecipes();
+  }, [fetchRecipes]);
+  
+  // Ustawiamy klientów do wyświetlenia w zakładce "grupowane wg klienta"
+  useEffect(() => {
+    if (tabValue === 1 && customers.length > 0) {
+      prepareCustomerGroups();
+    }
+  }, [tabValue, customers]);
+    
+  // Funkcja przygotowująca grupy klientów do wyświetlenia
+  const prepareCustomerGroups = () => {
+    const grouped = {};
+    
+    // Domyślna grupa dla receptur bez klienta
+    grouped['noCustomer'] = {
+      id: 'noCustomer',
+      name: 'Receptury ogólne',
+      recipes: []
+    };
+    
+    // Utwórz grupy dla każdego klienta
+    customers.forEach(customer => {
+      grouped[customer.id] = {
+        id: customer.id,
+        name: customer.name,
+        customer: customer,
+        recipes: []
+      };
+    });
+    
+    setGroupedRecipes(grouped);
+  };
+
+  // Funkcja pobierająca receptury dla konkretnego klienta - używa indeksu wyszukiwania
+  const fetchRecipesForCustomer = async (customerId) => {
+    try {
+      // Oznacz, że pobieramy receptury dla tego klienta
+      setLoadingCustomerRecipes(prev => ({ ...prev, [customerId]: true }));
+      
+      let customerRecipesData;
+      
+      // Użyj searchService zamiast bezpośrednich zapytań do Firestore
+      const searchOptions = {
+        sortField: 'name',
+        sortOrder: 'asc',
+        // Filtruj receptury bez klienta lub dla konkretnego klienta
+        customerId: customerId === 'noCustomer' ? null : customerId,
+        // Pobierz wszystkie wyniki (duża wartość limitu)
+        page: 1,
+        limit: 1000
+      };
+      
+      // Wykonaj wyszukiwanie z opcjami
+      const result = await searchService.searchRecipes(debouncedSearchTerm, searchOptions);
+      customerRecipesData = result.data;
+      
+      // Zapisz receptury dla danego klienta
+      setCustomerRecipes(prev => ({
+        ...prev,
+        [customerId]: customerRecipesData
+      }));
+      
+    } catch (error) {
+      console.error(`Błąd podczas pobierania receptur dla klienta ${customerId}:`, error);
+      
+      // W przypadku błędu, spróbuj tradycyjnego podejścia
+      try {
+        let fallbackData;
+        
+        if (customerId === 'noCustomer') {
+          // Dla receptur ogólnych (bez klienta) użyj filtrowania po stronie klienta
+          const allRecipes = await getAllRecipes();
+          fallbackData = allRecipes.filter(recipe => !recipe.customerId);
+      } else {
+          // Dla konkretnego klienta pobierz receptury bezpośrednio
+          fallbackData = await getRecipesByCustomer(customerId);
+        }
+        
+        // Zastosuj filtrowanie według searchTerm, jeśli istnieje
+        if (debouncedSearchTerm && debouncedSearchTerm.trim() !== '') {
+          const searchTermLower = debouncedSearchTerm.toLowerCase().trim();
+          fallbackData = fallbackData.filter(recipe => 
+            (recipe.name && recipe.name.toLowerCase().includes(searchTermLower)) ||
+            (recipe.description && recipe.description.toLowerCase().includes(searchTermLower))
+          );
+        }
+        
+        // Zapisz receptury dla danego klienta
+        setCustomerRecipes(prev => ({
+          ...prev,
+          [customerId]: fallbackData
+        }));
+      } catch (fallbackError) {
+        console.error(`Błąd podczas awaryjnego pobierania receptur dla klienta ${customerId}:`, fallbackError);
+        showError(`Nie udało się pobrać receptur dla wybranego klienta`);
+      }
+    } finally {
+      // Oznacz, że zakończyliśmy pobieranie dla tego klienta
+      setLoadingCustomerRecipes(prev => ({ ...prev, [customerId]: false }));
     }
   };
 
@@ -155,147 +319,29 @@ const RecipeList = () => {
       field,
       order: newOrder
     });
-    
-    // Sortuj receptury według wybranego pola
-    sortRecipes(field, newOrder);
+    setPage(1); // Reset do pierwszej strony po zmianie sortowania
   };
 
-  const sortRecipes = (field, order) => {
-    let sortedRecipes = [...filteredRecipes];
-    
-    sortedRecipes.sort((a, b) => {
-      let valueA, valueB;
-      
-      // Obsługa różnych typów pól
-      if (field === 'name') {
-        valueA = (a.name || '').toLowerCase();
-        valueB = (b.name || '').toLowerCase();
-        return order === 'asc' 
-          ? valueA.localeCompare(valueB) 
-          : valueB.localeCompare(valueA);
-      } else if (field === 'description') {
-        valueA = (a.description || '').toLowerCase();
-        valueB = (b.description || '').toLowerCase();
-        return order === 'asc' 
-          ? valueA.localeCompare(valueB) 
-          : valueB.localeCompare(valueA);
-      } else if (field === 'customer') {
-        // Znajdź nazwy klientów
-        const customerA = customers.find(c => c.id === a.customerId);
-        const customerB = customers.find(c => c.id === b.customerId);
-        valueA = (customerA?.name || '').toLowerCase();
-        valueB = (customerB?.name || '').toLowerCase();
-        return order === 'asc' 
-          ? valueA.localeCompare(valueB) 
-          : valueB.localeCompare(valueA);
-      } else if (field === 'updatedAt') {
-        valueA = a.updatedAt ? new Date(a.updatedAt.toDate()).getTime() : 0;
-        valueB = b.updatedAt ? new Date(b.updatedAt.toDate()).getTime() : 0;
-      } else {
-        // Domyślnie
-        valueA = a[field] || '';
-        valueB = b[field] || '';
-      }
-      
-      // Sortowanie liczbowe lub domyślne
-      if (typeof valueA === 'number' && typeof valueB === 'number') {
-        return order === 'asc' ? valueA - valueB : valueB - valueA;
-      }
-      
-      return 0;
-    });
-    
-    setFilteredRecipes(sortedRecipes);
-    
-    // Zaktualizuj również posortowane receptury w grupach
-    if (tabValue === 1) {
-      const updatedGroups = { ...groupedRecipes };
-      
-      Object.keys(updatedGroups).forEach(groupId => {
-        if (updatedGroups[groupId].recipes.length > 0) {
-          let sortedGroupRecipes = [...updatedGroups[groupId].recipes];
-          
-          sortedGroupRecipes.sort((a, b) => {
-            let valueA, valueB;
-            
-            if (field === 'name') {
-              valueA = (a.name || '').toLowerCase();
-              valueB = (b.name || '').toLowerCase();
-              return order === 'asc' 
-                ? valueA.localeCompare(valueB) 
-                : valueB.localeCompare(valueA);
-            } else if (field === 'description') {
-              valueA = (a.description || '').toLowerCase();
-              valueB = (b.description || '').toLowerCase();
-              return order === 'asc' 
-                ? valueA.localeCompare(valueB) 
-                : valueB.localeCompare(valueA);
-            } else if (field === 'updatedAt') {
-              valueA = a.updatedAt ? new Date(a.updatedAt.toDate()).getTime() : 0;
-              valueB = b.updatedAt ? new Date(b.updatedAt.toDate()).getTime() : 0;
-              return order === 'asc' ? valueA - valueB : valueB - valueA;
-            }
-            
-            return 0;
-          });
-          
-          updatedGroups[groupId].recipes = sortedGroupRecipes;
-        }
-      });
-      
-      setGroupedRecipes(updatedGroups);
-    }
-  };
-
-  // Modyfikujemy funkcję filterRecipes, aby zachować sortowanie
-  const filterRecipes = () => {
-    let filtered = [...recipes];
-    
-    // Filtruj wg wyszukiwanego terminu
-    if (searchTerm.trim() !== '') {
-      filtered = filtered.filter(recipe => 
-        recipe.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        recipe.description?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-    
-    setFilteredRecipes(filtered);
-    
-    // Zastosuj aktywne sortowanie
-    sortRecipes(tableSort.field, tableSort.order);
+  // Obsługa zmiany strony paginacji
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
   };
   
-  const groupRecipesByCustomer = () => {
-    const grouped = {};
+  // Obsługa zmiany liczby elementów na stronę
+  const handleChangeRowsPerPage = (event) => {
+    setLimit(parseInt(event.target.value, 10));
+    setPage(1); // Wracamy na pierwszą stronę po zmianie rozmiaru
+  };
+  
+  // Obsługa kliknięcia panelu klienta
+  const handlePanelChange = (customerId) => (event, isExpanded) => {
+    const newExpandedPanel = isExpanded ? customerId : null;
+    setExpandedPanel(newExpandedPanel);
     
-    // Domyślna grupa dla receptur bez klienta
-    grouped['noCustomer'] = {
-      name: 'Receptury ogólne',
-      recipes: []
-    };
-    
-    // Utwórz grupy dla każdego klienta
-    customers.forEach(customer => {
-      grouped[customer.id] = {
-        name: customer.name,
-        customer: customer,
-        recipes: []
-      };
-    });
-    
-    // Przypisz receptury do odpowiednich grup
-    recipes.forEach(recipe => {
-      if (!recipe.customerId) {
-        grouped['noCustomer'].recipes.push(recipe);
-      } else if (grouped[recipe.customerId]) {
-        grouped[recipe.customerId].recipes.push(recipe);
-      } else {
-        // Jeśli klient został usunięty, dodaj recepturę do grupy "bez klienta"
-        grouped['noCustomer'].recipes.push(recipe);
-      }
-    });
-    
-    setGroupedRecipes(grouped);
+    // Jeśli panel jest rozwijany i nie mamy jeszcze receptur dla tego klienta, pobierz je
+    if (isExpanded && (!customerRecipes[customerId] || customerRecipes[customerId].length === 0)) {
+      fetchRecipesForCustomer(customerId);
+    }
   };
 
   const handleDeleteRecipe = async (recipeId) => {
@@ -303,7 +349,20 @@ const RecipeList = () => {
       try {
         await deleteRecipe(recipeId);
         showSuccess('Receptura została usunięta');
-        fetchRecipes(); // Odśwież listę po usunięciu
+        
+        // Odśwież właściwą listę po usunięciu
+        if (tabValue === 0) {
+          // Odśwież również indeks wyszukiwania po usunięciu receptury
+          await searchService.refreshIndex('recipes');
+          fetchRecipes();
+        } else {
+          // W widoku grupowanym - odśwież tylko dane dla aktualnie rozwiniętego klienta
+          if (expandedPanel) {
+            // Odśwież indeks przed pobraniem nowych danych
+            await searchService.refreshIndex('recipes');
+            fetchRecipesForCustomer(expandedPanel);
+          }
+        }
       } catch (error) {
         console.error('Błąd podczas usuwania receptury:', error);
         showError('Nie udało się usunąć receptury: ' + error.message);
@@ -315,7 +374,7 @@ const RecipeList = () => {
     const newCustomerId = event.target.value;
     console.log('Zmieniono filtr klienta na:', newCustomerId);
     setSelectedCustomerId(newCustomerId);
-    // fetchRecipes zostanie wywołane przez useEffect, gdy selectedCustomerId się zmieni
+    setPage(1); // Reset do pierwszej strony po zmianie filtra
   };
   
   const handleTabChange = (event, newValue) => {
@@ -472,36 +531,75 @@ const RecipeList = () => {
         </TableContainer>
   );
   
-  // Renderowanie widoku zgrupowanego wg klientów
-  const renderGroupedRecipes = () => (
-    <Box>
-      {Object.keys(groupedRecipes).map(groupId => {
-        const group = groupedRecipes[groupId];
-        
-        // Nie pokazuj pustych grup
-        if (group.recipes.length === 0) return null;
+  // Renderowanie widoku zgrupowanego wg klientów jako zwijane panele
+  const renderGroupedRecipes = () => {
+    // Sprawdź, czy mamy klientów do wyświetlenia
+    if (Object.keys(groupedRecipes).length === 0) {
+      return (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+          <CircularProgress />
+        </Box>
+      );
+    }
         
         return (
-          <Box key={groupId} sx={{ mb: 4 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              {groupId === 'noCustomer' ? (
-                <Typography variant="h6">{group.name}</Typography>
+      <Box>
+        {/* Panele dla każdego klienta */}
+        {Object.values(groupedRecipes).map((group) => (
+          <Accordion 
+            key={group.id} 
+            expanded={expandedPanel === group.id} 
+            onChange={handlePanelChange(group.id)}
+            sx={{ mb: 2 }}
+          >
+            <AccordionSummary
+              expandIcon={<ExpandMoreIcon />}
+              sx={{ bgcolor: 'action.hover' }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                {group.id === 'noCustomer' ? (
+                  <Typography variant="subtitle1">Receptury ogólne</Typography>
               ) : (
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <>
                   <PersonIcon sx={{ mr: 1, color: 'primary.main' }} />
-                  <Typography variant="h6">{group.name}</Typography>
+                    <Typography variant="subtitle1">{group.name}</Typography>
+                  </>
+                )}
+                
+                {/* Dodajemy licznik receptur, jeśli został już załadowany */}
+                {customerRecipes[group.id] && (
+                  <Chip 
+                    label={`${customerRecipes[group.id].length} receptur`}
+                    size="small"
+                    sx={{ ml: 2 }}
+                  />
+                )}
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              {loadingCustomerRecipes[group.id] ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                  <CircularProgress />
                 </Box>
+              ) : customerRecipes[group.id] ? (
+                customerRecipes[group.id].length > 0 ? (
+                  renderRecipesTable(customerRecipes[group.id])
+                ) : (
+                  <Typography variant="body2" color="text.secondary" align="center">
+                    Brak receptur dla tego klienta
+                  </Typography>
+                )
+              ) : (
+                <Typography variant="body2" color="text.secondary" align="center">
+                  Kliknij, aby załadować receptury
+                </Typography>
               )}
-              <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
-                ({group.recipes.length} {group.recipes.length === 1 ? 'receptura' : 'receptury'})
-              </Typography>
-            </Box>
-            {renderRecipesTable(group.recipes)}
+            </AccordionDetails>
+          </Accordion>
+        ))}
           </Box>
         );
-      })}
-    </Box>
-  );
+  };
 
   return (
     <Box sx={{ maxWidth: '1200px', mx: 'auto', py: 3 }}>
@@ -528,6 +626,19 @@ const RecipeList = () => {
       
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5">Receptury</Typography>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          {/* Przycisk do odświeżania indeksu wyszukiwania */}
+          <Tooltip title="Odśwież indeks wyszukiwania">
+            <Button
+              variant="outlined"
+              startIcon={<CachedIcon />}
+              onClick={refreshSearchIndex}
+              disabled={loading}
+            >
+              Odśwież indeks
+            </Button>
+          </Tooltip>
+          
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -536,6 +647,7 @@ const RecipeList = () => {
         >
           Dodaj recepturę
         </Button>
+        </Box>
       </Box>
       
       <Box sx={{ mb: 3, display: 'flex', flexWrap: 'wrap', gap: 2 }}>
@@ -571,6 +683,17 @@ const RecipeList = () => {
         </FormControl>
       </Box>
       
+      {/* Informacja o indeksie wyszukiwania */}
+      {searchIndexStatus.isLoaded && (
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="body2" color="text.secondary">
+            Indeks wyszukiwania aktywny
+            {searchIndexStatus.lastRefreshed && 
+              ` (ostatnie odświeżenie: ${formatDate(searchIndexStatus.lastRefreshed)})`}
+          </Typography>
+        </Box>
+      )}
+      
       <Box sx={{ mb: 3 }}>
         <Tabs value={tabValue} onChange={handleTabChange} textColor="primary" indicatorColor="primary">
           <Tab label="Lista receptur" />
@@ -578,11 +701,46 @@ const RecipeList = () => {
         </Tabs>
       </Box>
       
-      {loading ? (
-        <Typography>Ładowanie receptur...</Typography>
+      {loading && tabValue === 0 ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+          <CircularProgress />
+        </Box>
       ) : (
         tabValue === 0 ? (
-          renderRecipesTable(filteredRecipes)
+          <>
+            {renderRecipesTable(filteredRecipes)}
+            
+            {/* Dodajemy kontrolki paginacji */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Typography variant="body2">
+                  Wierszy na stronę:
+                </Typography>
+                <Select
+                  value={limit}
+                  onChange={handleChangeRowsPerPage}
+                  size="small"
+                >
+                  {[5, 10, 25, 50].map(pageSize => (
+                    <MenuItem key={pageSize} value={pageSize}>
+                      {pageSize}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </Box>
+              <Pagination 
+                count={totalPages}
+                page={page}
+                onChange={handleChangePage}
+                color="primary"
+                showFirstButton
+                showLastButton
+              />
+              <Typography variant="body2">
+                Wyświetlanie {filteredRecipes.length > 0 ? (page - 1) * limit + 1 : 0}-{Math.min(page * limit, totalItems)} z {totalItems}
+              </Typography>
+            </Box>
+          </>
         ) : (
           renderGroupedRecipes()
         )

@@ -125,57 +125,110 @@ export const getAllPurchaseOrders = async () => {
  * @param {number} limit - Liczba elementów na stronę
  * @param {string} sortField - Pole, po którym sortujemy
  * @param {string} sortOrder - Kierunek sortowania (asc/desc)
+ * @param {Object} filters - Opcjonalne filtry (status, searchTerm)
  * @returns {Object} - Obiekt zawierający dane i metadane paginacji
  */
-export const getPurchaseOrdersWithPagination = async (page = 1, limit = 10, sortField = 'createdAt', sortOrder = 'desc') => {
+export const getPurchaseOrdersWithPagination = async (page = 1, limit = 10, sortField = 'createdAt', sortOrder = 'desc', filters = {}) => {
   try {
-    // Pobierz całkowitą liczbę dokumentów (to jest wymagane dla paginacji)
-    const countSnapshot = await getDocs(
-      query(collection(db, PURCHASE_ORDERS_COLLECTION))
-    );
-    const totalCount = countSnapshot.size;
-    
     // Ustaw realne wartości dla page i limit
     const pageNum = Math.max(1, page);
     const itemsPerPage = Math.max(1, limit);
     
-    // Oblicz offset i liczenie stron
-    const totalPages = Math.ceil(totalCount / itemsPerPage);
+    // Kolekcjonujemy wszystkie ID dostawców, aby potem pobrać ich dane za jednym razem
+    const supplierIds = new Set();
     
-    // Jeśli żądana strona jest większa niż liczba stron, ustaw na ostatnią stronę
-    const safePageNum = Math.min(pageNum, Math.max(1, totalPages));
-    
+    // Najpierw pobieramy wszystkie dane do filtrowania po stronie serwera
     // Przygotuj zapytanie z sortowaniem
     let q = query(
       collection(db, PURCHASE_ORDERS_COLLECTION),
       orderBy(sortField, sortOrder)
     );
     
-    // Pobierz wszystkie dokumenty dla sortowania
-    // W Firebase nie ma bezpośredniego mechanizmu OFFSET i LIMIT jak w SQL
-    // Musimy pobrać dokumenty i ręcznie zaimplementować paginację
+    // Pobierz wszystkie dokumenty dla sortowania i paginacji
     const querySnapshot = await getDocs(q);
-    const allDocs = querySnapshot.docs;
+    let allDocs = querySnapshot.docs;
+    
+    // Filtrowanie po stronie serwera
+    if (filters) {
+      // Filtrowanie po statusie
+      if (filters.status && filters.status !== 'all') {
+        allDocs = allDocs.filter(doc => {
+          const data = doc.data();
+          return data.status === filters.status;
+        });
+      }
+      
+      // Filtrowanie po tekście wyszukiwania
+      if (filters.searchTerm && filters.searchTerm.trim() !== '') {
+        const searchTerm = filters.searchTerm.toLowerCase().trim();
+        allDocs = allDocs.filter(doc => {
+          const data = doc.data();
+          // Szukaj w numerze zamówienia
+          if (data.number && data.number.toLowerCase().includes(searchTerm)) {
+            return true;
+          }
+          
+          // Szukaj w ID dostawcy - później będziemy szukać w nazwie dostawcy
+          if (data.supplierId) {
+            supplierIds.add(data.supplierId);
+          }
+          
+          return false;
+        });
+      }
+    }
+    
+    // Pobierz wszystkich dostawców, których ID zostały zebrane podczas filtrowania i paginacji
+    const totalCount = allDocs.length;
+    
+    // Oblicz liczbę stron
+    const totalPages = Math.ceil(totalCount / itemsPerPage);
+    
+    // Jeśli żądana strona jest większa niż liczba stron, ustaw na ostatnią stronę
+    const safePageNum = Math.min(pageNum, Math.max(1, totalPages));
     
     // Ręczna paginacja
     const startIndex = (safePageNum - 1) * itemsPerPage;
     const endIndex = Math.min(startIndex + itemsPerPage, allDocs.length);
     const paginatedDocs = allDocs.slice(startIndex, endIndex);
     
-    // Przygotuj dane zamówień
-    const purchaseOrders = [];
+    // Zbierz wszystkie ID dostawców z paginowanych dokumentów
+    paginatedDocs.forEach(doc => {
+      const data = doc.data();
+      if (data.supplierId) {
+        supplierIds.add(data.supplierId);
+      }
+    });
     
-    for (const docRef of paginatedDocs) {
+    // Pobierz wszystkich dostawców z listy ID jednym zapytaniem zbiorczym
+    const suppliersMap = {}; // Mapa ID -> dane dostawcy
+    
+    if (supplierIds.size > 0) {
+      // Konwertuj Set na Array
+      const supplierIdsArray = Array.from(supplierIds);
+      
+      // Firebase ma limit 10 elementów w klauzuli 'in', więc musimy podzielić na mniejsze grupy
+      const batchSize = 10;
+      for (let i = 0; i < supplierIdsArray.length; i += batchSize) {
+        const batch = supplierIdsArray.slice(i, i + batchSize);
+        const suppliersQuery = query(
+          collection(db, SUPPLIERS_COLLECTION),
+          where('__name__', 'in', batch)
+        );
+        
+        const suppliersSnapshot = await getDocs(suppliersQuery);
+        suppliersSnapshot.forEach(doc => {
+          suppliersMap[doc.id] = { id: doc.id, ...doc.data() };
+        });
+      }
+    }
+    
+    // Przygotuj dane zamówień
+    let purchaseOrders = paginatedDocs.map(docRef => {
       const poData = docRef.data();
       
-      // Pobierz dane dostawcy, jeśli zamówienie ma referencję do dostawcy
-      let supplierData = null;
-      if (poData.supplierId) {
-        const supplierDoc = await getDoc(doc(db, SUPPLIERS_COLLECTION, poData.supplierId));
-        if (supplierDoc.exists()) {
-          supplierData = { id: supplierDoc.id, ...supplierDoc.data() };
-        }
-      }
+      // Pobierz dane dostawcy z wcześniej utworzonej mapy
+      const supplierData = poData.supplierId ? suppliersMap[poData.supplierId] || null : null;
       
       // Upewnij się, że zamówienie ma poprawną wartość brutto (totalGross)
       let totalGross = poData.totalGross;
@@ -202,7 +255,7 @@ export const getPurchaseOrdersWithPagination = async (page = 1, limit = 10, sort
         totalGross = parseFloat(totalGross) || 0;
       }
       
-      purchaseOrders.push({
+      return {
         id: docRef.id,
         ...poData,
         supplier: supplierData,
@@ -212,7 +265,17 @@ export const getPurchaseOrdersWithPagination = async (page = 1, limit = 10, sort
         expectedDeliveryDate: safeConvertDate(poData.expectedDeliveryDate),
         createdAt: safeConvertDate(poData.createdAt),
         updatedAt: safeConvertDate(poData.updatedAt)
-      });
+      };
+    });
+    
+    // Dodatkowe filtrowanie po nazwie dostawcy, jeśli jest szukany term
+    if (filters.searchTerm && filters.searchTerm.trim() !== '') {
+      const searchTerm = filters.searchTerm.toLowerCase().trim();
+      // Filtruj zamówienia, gdzie nazwa dostawcy pasuje do wyszukiwanego terminu
+      purchaseOrders = purchaseOrders.filter(po => 
+        po.supplier && po.supplier.name && 
+        po.supplier.name.toLowerCase().includes(searchTerm)
+      );
     }
     
     // Zwróć dane wraz z informacjami o paginacji

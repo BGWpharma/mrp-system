@@ -142,49 +142,51 @@ const Dashboard = () => {
     }
   }, []);
 
-  // Odświeżanie wszystkich sekcji danych naraz
-  const refreshAllData = useCallback(() => {
-    setLoading(true);
-    
-    // Rozdzielamy zapytania, aby zmniejszyć obciążenie równoczesne
-    fetchRecipes();
-    fetchAnalytics();
-    
-    // Małe opóźnienie dla lepszej wydajności
-    setTimeout(() => {
-      fetchOrderStats();
+  // Odświeżanie wszystkich sekcji danych naraz za pomocą Promise.all
+  const refreshAllData = useCallback(async () => {
+    try {
+      setLoading(true);
       
-      setTimeout(() => {
-        fetchTasks();
-        setLoading(false);
-      }, 300);
-    }, 500);
-  }, [fetchRecipes, fetchAnalytics, fetchOrderStats, fetchTasks]);
+      // Uruchamiamy wszystkie zapytania równolegle
+      await Promise.all([
+        fetchRecipes(),
+        fetchOrderStats(),
+        fetchAnalytics(),
+        fetchTasks()
+      ]);
+      
+      console.log('Wszystkie dane zostały pobrane równolegle');
+    } catch (error) {
+      console.error('Błąd podczas odświeżania danych dashboardu:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchRecipes, fetchOrderStats, fetchAnalytics, fetchTasks]);
 
-  // Pierwsze ładowanie danych - stopniowe
+  // Pierwsze ładowanie danych - równolegle za pomocą Promise.all
   useEffect(() => {
-    setLoading(true);
-    
-    // Rozdzielamy zapytania, aby zmniejszyć obciążenie równoczesne
     const loadData = async () => {
-      // Najpierw krytyczne dane dashboardu
-      await fetchRecipes();
-      await fetchAnalytics();
-      
-      // Po 500ms ładujemy zamówienia
-      setTimeout(async () => {
-        await fetchOrderStats();
+      try {
+        setLoading(true);
         
-        // Na końcu ładujemy zadania produkcyjne
-        setTimeout(async () => {
-          await fetchTasks();
-          setLoading(false);
-        }, 300);
-      }, 500);
+        // Uruchamiamy wszystkie zapytania równolegle
+        await Promise.all([
+          fetchRecipes(),
+          fetchOrderStats(),
+          fetchAnalytics(),
+          fetchTasks()
+        ]);
+        
+        console.log('Wszystkie dane zostały załadowane równolegle');
+      } catch (error) {
+        console.error('Błąd podczas ładowania danych dashboardu:', error);
+      } finally {
+        setLoading(false);
+      }
     };
     
     loadData();
-  }, [fetchRecipes, fetchAnalytics, fetchOrderStats, fetchTasks]);
+  }, [fetchRecipes, fetchOrderStats, fetchAnalytics, fetchTasks]);
 
   // Mapowanie statusów zamówień na kolory
   const getStatusColor = useMemo(() => (status) => {

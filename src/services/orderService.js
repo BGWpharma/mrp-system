@@ -18,10 +18,12 @@ import { generateCONumber, generatePONumber } from '../utils/numberGenerators';
 import { formatDateForInput } from '../utils/dateUtils';
 
 const ORDERS_COLLECTION = 'orders';
+const CUSTOMERS_COLLECTION = 'customers';
 
 /**
  * Pobiera wszystkie zamówienia
  * Możliwość filtrowania po statusie
+ * Zbiorczo pobiera dane klientów
  */
 export const getAllOrders = async (filters = null) => {
   try {
@@ -70,15 +72,52 @@ export const getAllOrders = async (filters = null) => {
     
     const querySnapshot = await getDocs(ordersQuery);
     
-    const orders = [];
-    querySnapshot.forEach((doc) => {
-      orders.push({
-        id: doc.id,
-        ...doc.data()
-      });
+    const orders = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    // Zbierz wszystkie ID klientów
+    const customerIds = new Set();
+    orders.forEach(order => {
+      if (order.customerId && !order.customer) {
+        customerIds.add(order.customerId);
+      }
     });
     
-    return orders;
+    // Pobierz klientów jednym zapytaniem, z uwzględnieniem limitu 10 elementów per zapytanie
+    const customersMap = {};
+    if (customerIds.size > 0) {
+      const customerIdsArray = Array.from(customerIds);
+      
+      // Pobierz klientów w grupach po 10 (limit Firestore dla operatora 'in')
+      const batchSize = 10;
+      for (let i = 0; i < customerIdsArray.length; i += batchSize) {
+        const batch = customerIdsArray.slice(i, i + batchSize);
+        const customersQuery = query(
+          collection(db, CUSTOMERS_COLLECTION),
+          where('__name__', 'in', batch)
+        );
+        
+        const customersSnapshot = await getDocs(customersQuery);
+        customersSnapshot.forEach(doc => {
+          customersMap[doc.id] = { id: doc.id, ...doc.data() };
+        });
+      }
+    }
+    
+    // Przypisz dane klientów do zamówień
+    const ordersWithCustomers = orders.map(order => {
+      if (order.customerId && !order.customer && customersMap[order.customerId]) {
+        return {
+          ...order,
+          customer: customersMap[order.customerId]
+        };
+      }
+      return order;
+    });
+    
+    return ordersWithCustomers;
   } catch (error) {
     console.error('Błąd podczas pobierania zamówień:', error);
     throw error;
@@ -1063,5 +1102,157 @@ export const getLastRecipeUsageInfo = async (recipeId) => {
   } catch (error) {
     console.error('Błąd podczas pobierania informacji o ostatnim użyciu receptury:', error);
     return null;
+  }
+};
+
+/**
+ * Pobiera zamówienia klienta z paginacją
+ * @param {number} page - Numer strony (numeracja od 1)
+ * @param {number} limit - Liczba elementów na stronę
+ * @param {string} sortField - Pole, po którym sortujemy
+ * @param {string} sortOrder - Kierunek sortowania (asc/desc)
+ * @param {Object} filters - Filtry: status, customerId, fromDate, toDate, searchTerm
+ * @returns {Object} - Obiekt zawierający dane i metadane paginacji
+ */
+export const getOrdersWithPagination = async (page = 1, limit = 10, sortField = 'orderDate', sortOrder = 'desc', filters = {}) => {
+  try {
+    // Ustaw realne wartości dla page i limit
+    const pageNum = Math.max(1, page);
+    const itemsPerPage = Math.max(1, limit);
+    
+    // Warunki filtrowania
+    const conditions = [];
+    
+    // Filtruj po statusie
+    if (filters.status && filters.status !== 'all') {
+      conditions.push(where('status', '==', filters.status));
+    }
+    
+    // Filtruj po kliencie
+    if (filters.customerId) {
+      conditions.push(where('customer.id', '==', filters.customerId));
+    }
+    
+    // Filtruj po dacie od
+    if (filters.fromDate) {
+      const fromTimestamp = Timestamp.fromDate(new Date(filters.fromDate));
+      conditions.push(where('orderDate', '>=', fromTimestamp));
+    }
+    
+    // Filtruj po dacie do
+    if (filters.toDate) {
+      const toTimestamp = Timestamp.fromDate(new Date(filters.toDate));
+      conditions.push(where('orderDate', '<=', toTimestamp));
+    }
+    
+    // Utwórz zapytanie bazowe
+    let ordersQuery;
+    
+    // Gdy mamy warunki filtrowania
+    if (conditions.length > 0) {
+      // UWAGA: sortField musi być takie samo jak pole użyte w where() dla poprawnego działania zapytania Firestore
+      // W przypadku filtrowania po orderDate, musimy sortować również po orderDate
+      if (conditions.some(cond => cond._field?.fieldPath === 'orderDate')) {
+        ordersQuery = query(
+          collection(db, ORDERS_COLLECTION),
+          ...conditions,
+          orderBy('orderDate', sortOrder.toLowerCase())
+        );
+      } else {
+        // W pozostałych przypadkach sortuj po wybranym polu
+        ordersQuery = query(
+          collection(db, ORDERS_COLLECTION),
+          ...conditions,
+          orderBy(sortField, sortOrder.toLowerCase())
+        );
+      }
+    } else {
+      // Gdy nie ma filtrów, sortuj według wybranego pola
+      ordersQuery = query(
+        collection(db, ORDERS_COLLECTION),
+        orderBy(sortField, sortOrder.toLowerCase())
+      );
+    }
+    
+    // Pobierz wszystkie dokumenty spełniające kryteria, aby potem możliwa była lokalna paginacja
+    // To podejście jest odpowiednie dla małych/średnich zbiorów danych
+    // Dla dużych zbiorów lepiej użyć startAfter/limit w Firebase
+    const querySnapshot = await getDocs(ordersQuery);
+    
+    let orders = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    // Zbierz wszystkie ID klientów
+    const customerIds = new Set();
+    orders.forEach(order => {
+      if (order.customerId && !order.customer) {
+        customerIds.add(order.customerId);
+      }
+    });
+    
+    // Pobierz klientów jednym zapytaniem, z uwzględnieniem limitu 10 elementów per zapytanie
+    const customersMap = {};
+    if (customerIds.size > 0) {
+      const customerIdsArray = Array.from(customerIds);
+      
+      // Pobierz klientów w grupach po 10 (limit Firestore dla operatora 'in')
+      const batchSize = 10;
+      for (let i = 0; i < customerIdsArray.length; i += batchSize) {
+        const batch = customerIdsArray.slice(i, i + batchSize);
+        const customersQuery = query(
+          collection(db, CUSTOMERS_COLLECTION),
+          where('__name__', 'in', batch)
+        );
+        
+        const customersSnapshot = await getDocs(customersQuery);
+        customersSnapshot.forEach(doc => {
+          customersMap[doc.id] = { id: doc.id, ...doc.data() };
+        });
+      }
+    }
+    
+    // Przypisz dane klientów do zamówień
+    orders = orders.map(order => {
+      if (order.customerId && !order.customer && customersMap[order.customerId]) {
+        return {
+          ...order,
+          customer: customersMap[order.customerId]
+        };
+      }
+      return order;
+    });
+    
+    // Filtrowanie po searchTerm - wykonujemy lokalnie, ponieważ Firestore nie obsługuje wyszukiwania tekstowego
+    if (filters.searchTerm) {
+      const searchLower = filters.searchTerm.toLowerCase();
+      orders = orders.filter(order => 
+        (order.orderNumber && order.orderNumber.toLowerCase().includes(searchLower)) ||
+        (order.customer?.name && order.customer.name.toLowerCase().includes(searchLower)) ||
+        (order.items && order.items.some(item => item.name && item.name.toLowerCase().includes(searchLower)))
+      );
+    }
+    
+    // Oblicz całkowitą liczbę elementów po filtrowaniu
+    const totalItems = orders.length;
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    
+    // Przeprowadź paginację
+    const startIndex = (pageNum - 1) * itemsPerPage;
+    const paginatedData = orders.slice(startIndex, startIndex + itemsPerPage);
+    
+    return {
+      data: paginatedData,
+      pagination: {
+        page: pageNum,
+        limit: itemsPerPage,
+        totalItems,
+        totalPages
+      }
+    };
+  } catch (error) {
+    console.error('Błąd podczas pobierania zamówień z paginacją:', error);
+    throw error;
   }
 }; 

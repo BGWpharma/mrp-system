@@ -29,6 +29,130 @@ import {
     }));
   };
   
+  /**
+   * Pobiera receptury z paginacją
+   * @param {number} page - Numer strony (numeracja od 1)
+   * @param {number} limit - Liczba elementów na stronę
+   * @param {string} sortField - Pole, po którym sortujemy (domyślnie 'updatedAt')
+   * @param {string} sortOrder - Kierunek sortowania (asc/desc) (domyślnie 'desc')
+   * @param {string} customerId - Opcjonalne filtrowanie wg ID klienta
+   * @param {string} searchTerm - Opcjonalne filtrowanie wg tekstu wyszukiwania
+   * @returns {Object} - Obiekt zawierający dane i informacje o paginacji
+   */
+  export const getRecipesWithPagination = async (page = 1, limit = 10, sortField = 'updatedAt', sortOrder = 'desc', customerId = null, searchTerm = null) => {
+    try {
+      // Pobierz całkowitą liczbę receptur (przed filtrowaniem przez customerId)
+      let countQuery;
+      if (customerId) {
+        countQuery = query(
+          collection(db, RECIPES_COLLECTION),
+          where('customerId', '==', customerId)
+        );
+      } else {
+        countQuery = collection(db, RECIPES_COLLECTION);
+      }
+      
+      const countSnapshot = await getDocs(countQuery);
+      const totalCount = countSnapshot.size;
+      
+      // Ustaw realne wartości dla page i limit
+      const pageNum = Math.max(1, page);
+      const itemsPerPage = Math.max(1, limit);
+      
+      // Oblicz liczbę stron
+      const totalPages = Math.ceil(totalCount / itemsPerPage);
+      
+      // Jeśli żądana strona jest większa niż liczba stron, ustaw na ostatnią stronę
+      const safePageNum = Math.min(pageNum, Math.max(1, totalPages));
+      
+      // Przygotuj zapytanie
+      let q;
+      if (customerId) {
+        q = query(
+          collection(db, RECIPES_COLLECTION),
+          where('customerId', '==', customerId),
+          orderBy(sortField, sortOrder)
+        );
+      } else {
+        q = query(
+          collection(db, RECIPES_COLLECTION),
+          orderBy(sortField, sortOrder)
+        );
+      }
+      
+      // Pobierz wszystkie dokumenty dla sortowania
+      // W Firebase nie ma bezpośredniego mechanizmu OFFSET i LIMIT jak w SQL
+      // Musimy pobrać dokumenty i ręcznie zaimplementować paginację
+      const querySnapshot = await getDocs(q);
+      const allDocs = querySnapshot.docs;
+      
+      // Filtruj wyniki na serwerze jeśli podano searchTerm
+      let filteredDocs = allDocs;
+      if (searchTerm && searchTerm.trim() !== '') {
+        const searchTermLower = searchTerm.toLowerCase().trim();
+        filteredDocs = allDocs.filter(doc => {
+          const data = doc.data();
+          return (
+            (data.name && data.name.toLowerCase().includes(searchTermLower)) ||
+            (data.description && data.description.toLowerCase().includes(searchTermLower))
+          );
+        });
+        
+        // Aktualizujemy liczby po filtrowaniu
+        const filteredTotalCount = filteredDocs.length;
+        const filteredTotalPages = Math.ceil(filteredTotalCount / itemsPerPage);
+        const filteredSafePageNum = Math.min(pageNum, Math.max(1, filteredTotalPages));
+        
+        // Ręczna paginacja po filtrowaniu
+        const startIndex = (filteredSafePageNum - 1) * itemsPerPage;
+        const endIndex = Math.min(startIndex + itemsPerPage, filteredDocs.length);
+        const paginatedDocs = filteredDocs.slice(startIndex, endIndex);
+        
+        // Mapujemy dokumenty na obiekty
+        const recipes = paginatedDocs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        // Zwróć dane wraz z informacjami o paginacji
+        return {
+          data: recipes,
+          pagination: {
+            page: filteredSafePageNum,
+            limit: itemsPerPage,
+            totalItems: filteredTotalCount,
+            totalPages: filteredTotalPages
+          }
+        };
+      }
+      
+      // Standardowa paginacja bez wyszukiwania
+      const startIndex = (safePageNum - 1) * itemsPerPage;
+      const endIndex = Math.min(startIndex + itemsPerPage, allDocs.length);
+      const paginatedDocs = allDocs.slice(startIndex, endIndex);
+      
+      // Mapujemy dokumenty na obiekty
+      const recipes = paginatedDocs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // Zwróć dane wraz z informacjami o paginacji
+      return {
+        data: recipes,
+        pagination: {
+          page: safePageNum,
+          limit: itemsPerPage,
+          totalItems: totalCount,
+          totalPages: totalPages
+        }
+      };
+    } catch (error) {
+      console.error('Błąd podczas pobierania receptur z paginacją:', error);
+      throw error;
+    }
+  };
+  
   // Pobieranie receptur dla konkretnego klienta
   export const getRecipesByCustomer = async (customerId) => {
     console.log('getRecipesByCustomer - customerId:', customerId);
@@ -214,26 +338,27 @@ import {
   // Usuwanie receptury
   export const deleteRecipe = async (recipeId) => {
     try {
-      // Pobierz wszystkie wersje przepisu
+      // Usuń główny dokument
+      await deleteDoc(doc(db, RECIPES_COLLECTION, recipeId));
+      
+      // Usuń wszystkie wersje receptury
       const versionsRef = collection(db, RECIPE_VERSIONS_COLLECTION);
       const q = query(versionsRef, where('recipeId', '==', recipeId));
       const versionsSnapshot = await getDocs(q);
       
-      // Usuń wszystkie wersje
-      const versionDeletions = versionsSnapshot.docs.map(doc => 
-        deleteDoc(doc.ref)
-      );
+      const batch = [];
+      versionsSnapshot.forEach(doc => {
+        batch.push(deleteDoc(doc.ref));
+      });
       
-      // Poczekaj na usunięcie wszystkich wersji
-      await Promise.all(versionDeletions);
+      // Wykonaj usuwanie wszysktich wersji równolegle
+      if (batch.length > 0) {
+        await Promise.all(batch);
+      }
       
-      // Na końcu usuń sam przepis
-      const recipeRef = doc(db, RECIPES_COLLECTION, recipeId);
-      await deleteDoc(recipeRef);
-      
-      return { success: true };
+      return true;
     } catch (error) {
-      console.error('Błąd podczas usuwania przepisu:', error);
+      console.error('Error deleting recipe:', error);
       throw error;
     }
   };

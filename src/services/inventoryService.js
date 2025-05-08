@@ -155,20 +155,32 @@ import {
         // Wytnij tylko interesujący nas fragment
         const paginatedItems = allItems.slice(startAt, startAt + pageSize);
         
-        // Pobierz wszystkie partie dla wybranych przedmiotów
+        // Pobierz wszystkie partie tylko dla wybranych przedmiotów
         const itemIds = paginatedItems.map(item => item.id);
         
         // Pobierz partie tylko dla wybranych produktów, dzieląc zapytania na mniejsze części
-        // ze względu na ograniczenie Firebase (max 30 elementów w operatorze 'in')
+        // ze względu na ograniczenie Firebase (max 10 elementów w operatorze 'in')
         const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
         let allBatches = [];
         
         if (itemIds.length > 0) {
-          // Podziel itemIds na porcje po maksymalnie 30 elementów
-          const chunkSize = 30;
+          // Podziel itemIds na porcje po maksymalnie 10 elementów (limit Firebase dla operatora 'in')
+          const chunkSize = 10;
           for (let i = 0; i < itemIds.length; i += chunkSize) {
             const chunk = itemIds.slice(i, i + chunkSize);
-            const batchesQuery = query(batchesRef, where('itemId', 'in', chunk));
+            
+            let batchesQuery;
+            if (warehouseId) {
+              // Filtruj również według magazynu
+              batchesQuery = query(
+                batchesRef, 
+                where('itemId', 'in', chunk),
+                where('warehouseId', '==', warehouseId)
+              );
+            } else {
+              batchesQuery = query(batchesRef, where('itemId', 'in', chunk));
+            }
+            
             const batchesChunkSnapshot = await getDocs(batchesQuery);
             const batchesChunk = batchesChunkSnapshot.docs.map(doc => ({
               id: doc.id,
@@ -185,182 +197,49 @@ import {
           }));
         }
         
-        console.log('Pobrane partie dla stronicowanych pozycji:', allBatches);
-
-        // Oblicz aktualne ilości i ceny dla każdego przedmiotu
-        const itemsWithQuantities = await Promise.all(paginatedItems.map(async item => {
+        console.log('Pobrane partie dla stronicowanych pozycji:', allBatches.length);
+        
+        // Przypisz partie do odpowiednich pozycji magazynowych
+        // i oblicz ilości dostępne i zarezerwowane
+        for (const item of paginatedItems) {
+          // Znajdź wszystkie partie dla danej pozycji
           const itemBatches = allBatches.filter(batch => batch.itemId === item.id);
           
-          // Filtruj partie według warehouseId, jeśli został podany
-          const filteredBatches = warehouseId 
-            ? itemBatches.filter(batch => batch.warehouseId === warehouseId)
-            : itemBatches;
-            
-          // Oblicz ilość na podstawie przefiltrowanych partii
-          const currentQuantity = filteredBatches.reduce((sum, batch) => sum + (parseFloat(batch.quantity) || 0), 0);
+          // Oblicz łączną ilość dostępną i zarezerwowaną
+          let totalQuantity = 0;
+          let bookedQuantity = 0;
           
-          // Znajdź najnowszą cenę z partii
-          const validBatches = itemBatches.filter(batch => parseFloat(batch.quantity) > 0);
-          let latestPrice = item.unitPrice || item.price || 0;
-          
-          if (validBatches.length > 0) {
-            const latestBatch = validBatches.reduce((latest, current) => {
-              const currentDate = current.date ? new Date(current.date.toDate()) : new Date(0);
-              const latestDate = latest.date ? new Date(latest.date.toDate()) : new Date(0);
-              return currentDate > latestDate ? current : latest;
-            });
-            latestPrice = latestBatch.unitPrice || latestBatch.price || latestPrice;
-          }
-          
-          // Pobierz ceny dostawców dla tego elementu i sprawdź minQuantity
-          let minOrderQuantity = item.minOrderQuantity;
-          try {
-            if (!minOrderQuantity) {
-              const prices = await getSupplierPrices(item.id);
-              if (prices && prices.length > 0) {
-                const defaultPrice = prices.find(p => p.isDefault) || prices[0];
-                if (defaultPrice && defaultPrice.minQuantity) {
-                  console.log(`[DEBUG] Używam minQuantity ${defaultPrice.minQuantity} jako minOrderQuantity dla ${item.name}`);
-                  minOrderQuantity = defaultPrice.minQuantity;
-                }
-              }
-            }
-          } catch (error) {
-            console.error(`Błąd podczas pobierania cen dostawców dla ${item.id}:`, error);
-          }
-
-          return {
-            ...item,
-            currentQuantity,
-            quantity: currentQuantity, // Dodajemy quantity jako alias dla currentQuantity
-            unitPrice: latestPrice,
-            minOrderQuantity: minOrderQuantity
-          };
-        }));
-
-        console.log('Pozycje po obliczeniu ilości:', itemsWithQuantities);
-
-        // Jeśli podano warehouseId, filtruj tylko przedmioty z danego magazynu
-        let finalItems = itemsWithQuantities;
-        if (warehouseId) {
-          finalItems = itemsWithQuantities.filter(item => {
-            const itemBatches = allBatches.filter(batch => 
-              batch.itemId === item.id && batch.warehouseId === warehouseId
-            );
-            return itemBatches.length > 0;
+          itemBatches.forEach(batch => {
+            totalQuantity += parseFloat(batch.quantity || 0);
+            bookedQuantity += parseFloat(batch.bookedQuantity || 0);
           });
+          
+          // Przypisz obliczone wartości do pozycji
+          item.quantity = totalQuantity;
+          item.bookedQuantity = bookedQuantity;
+          item.batches = itemBatches;
+          
+          // Dodaj nazwę magazynu (jeśli istnieje)
+          if (warehouseId && itemBatches.length > 0) {
+            item.warehouseId = warehouseId;
+            // Nazwę magazynu można dodać później w komponencie
+          }
         }
         
-        // Zwróć zarówno pozycje jak i metadane paginacji
+        // Zwróć obiekt z paginowanymi danymi i informacjami o paginacji
         return {
-          items: finalItems,
+          items: paginatedItems,
           totalCount: totalCount,
           page: page,
-          pageSize: pageSize
+          pageSize: pageSize,
+          totalPages: Math.ceil(totalCount / pageSize)
         };
-        
-      } else {
-        // Bez paginacji - stara logika, pobierz wszystkie
-        const querySnapshot = await getDocs(q);
-        let items = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        
-        // Filtruj po terminie wyszukiwania (stara logika, zachowana dla kompatybilności)
-        if (searchTerm && searchTerm.trim() !== '') {
-          const searchTermLower = searchTerm.toLowerCase().trim();
-          items = items.filter(item => 
-            (item.name && item.name.toLowerCase().includes(searchTermLower)) ||
-            (item.description && item.description.toLowerCase().includes(searchTermLower)) ||
-            (item.category && item.category.toLowerCase().includes(searchTermLower))
-          );
-        }
-        
-        // Oblicz aktualne ilości dla każdego przedmiotu
-        const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
-        const batchesSnapshot = await getDocs(batchesRef);
-        const batches = batchesSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        
-        // Przygotuj mapę rezerwacji dla każdego przedmiotu
-        const transactionsRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
-        // Zbierz wszystkie rezerwacje w porcjach po 30
-        let allBookings = [];
-        
-        // Pobierz wszystkie transakcje typu 'booking'
-        const baseQuery = query(transactionsRef, where('type', '==', 'booking'));
-        const baseSnapshot = await getDocs(baseQuery);
-        allBookings = baseSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        
-        // Grupuj rezerwacje według przedmiotu
-        const bookingsByItem = {};
-        allBookings.forEach(booking => {
-          const itemId = booking.itemId;
-          if (!bookingsByItem[itemId]) {
-            bookingsByItem[itemId] = 0;
-          }
-          bookingsByItem[itemId] += parseFloat(booking.quantity) || 0;
-        });
-        
-        // Oblicz aktualne ilości i dodaj informacje o rezerwacjach
-        const itemsWithQuantities = await Promise.all(items.map(async item => {
-          // Partie dla tego przedmiotu
-          let itemBatches = batches.filter(batch => batch.itemId === item.id);
-          
-          // Filtruj partie według warehouseId, jeśli został podany
-          if (warehouseId) {
-            itemBatches = itemBatches.filter(batch => batch.warehouseId === warehouseId);
-          }
-          
-          // Suma ilości dla każdej partii
-          const quantity = itemBatches.reduce((sum, batch) => sum + (parseFloat(batch.quantity) || 0), 0);
-          
-          // Ilość zarezerwowana
-          const bookedQuantity = bookingsByItem[item.id] || 0;
-          
-          // Znajdź najnowszą cenę z partii
-          const validBatches = batches.filter(
-            batch => batch.itemId === item.id && parseFloat(batch.quantity) > 0
-          );
-          let latestPrice = item.unitPrice || item.price || 0;
-          
-          if (validBatches.length > 0) {
-            const latestBatch = validBatches.reduce((latest, current) => {
-              const currentDate = current.date ? new Date(current.date.toDate()) : new Date(0);
-              const latestDate = latest.date ? new Date(latest.date.toDate()) : new Date(0);
-              return currentDate > latestDate ? current : latest;
-            });
-            latestPrice = latestBatch.unitPrice || latestBatch.price || latestPrice;
-          }
-          
-          // Dodaj dodatkowe informacje dla każdego przedmiotu
-          const warningLevels = {};
-          if (item.minStockLevel !== undefined && quantity <= item.minStockLevel) {
-            warningLevels.belowMinimum = true;
-          }
-          if (item.optimalStockLevel !== undefined && quantity >= item.optimalStockLevel) {
-            warningLevels.aboveOptimal = true;
-          }
-          
-          return {
-            ...item,
-            quantity,
-            bookedQuantity,
-            unitPrice: latestPrice,
-            warningLevels,
-          };
-        }));
-
-        return itemsWithQuantities;
       }
+      
+      // Jeśli nie ma paginacji, zwróć wszystkie elementy
+      return allItems;
     } catch (error) {
-      console.error('Błąd podczas pobierania pozycji magazynowych:', error);
+      console.error('Error fetching inventory items:', error);
       throw error;
     }
   };

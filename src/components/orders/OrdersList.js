@@ -50,14 +50,16 @@ import {
   Cancel as CancelIcon,
   Refresh as RefreshIcon,
   People as CustomersIcon,
-  ShoppingCart as ShoppingCartIcon
+  ShoppingCart as ShoppingCartIcon,
+  ArrowDropDown as ArrowDropDownIcon
 } from '@mui/icons-material';
 import { 
   getAllOrders, 
   deleteOrder, 
   updateOrderStatus, 
   getOrderById,
-  ORDER_STATUSES 
+  ORDER_STATUSES,
+  getOrdersWithPagination
 } from '../../services/orderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -68,9 +70,22 @@ import { getRecipeById } from '../../services/recipeService';
 const OrdersList = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(0);
+  
+  // Modyfikacja stanów dla paginacji serwerowej
+  const [page, setPage] = useState(1); // Zmiana z 0 na 1 (index od 1)
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  
+  // Stan dla debounce wyszukiwania
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [searchTimeout, setSearchTimeout] = useState(null);
+  
+  // Stan dla sortowania
+  const [orderBy, setOrderBy] = useState('orderDate');
+  const [orderDirection, setOrderDirection] = useState('desc');
+  
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
     status: 'all',
@@ -94,155 +109,57 @@ const OrdersList = () => {
     fetchCustomers();
   }, []);
 
+  // Obsługa debounce dla wyszukiwania
+  useEffect(() => {
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
+    
+    const timeoutId = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500); // 500ms opóźnienia
+    
+    setSearchTimeout(timeoutId);
+    
+    return () => {
+      if (searchTimeout) {
+        clearTimeout(searchTimeout);
+      }
+    };
+  }, [searchTerm]);
+  
+  useEffect(() => {
+    fetchOrders();
+  }, [page, rowsPerPage, orderBy, orderDirection, debouncedSearchTerm]);
+
   const fetchOrders = async () => {
     try {
       setLoading(true);
       
-      const data = await getAllOrders();
-      console.log("Pobrano zamówienia:", data);
+      // Przygotowanie filtrów dla funkcji z paginacją
+      const paginationFilters = {
+        ...filters,
+        searchTerm: debouncedSearchTerm
+      };
       
-      if (!data || !Array.isArray(data) || data.length === 0) {
-        setOrders([]);
-        setLoading(false);
-        return;
-      }
-
-      // Zaktualizuj wartości dla każdego zamówienia
-      const updatedOrders = await Promise.all(data.map(async (order) => {
-        // Jeśli zamówienie ma powiązane PO, pobierz pełne dane zamówienia i wszystkich PO
-        if (order.linkedPurchaseOrders && order.linkedPurchaseOrders.length > 0) {
-          console.log(`Zamówienie ${order.id} ma powiązane PO, pobieranie pełnych danych...`);
-          
-          // Pobierz pełne dane zamówienia
-          const fullOrderData = await getOrderById(order.id);
-          console.log(`Pobrano pełne dane zamówienia ${order.id}`, fullOrderData);
-          
-          // Oblicz wartość PO
-        let poTotal = 0;
-        
-          if (fullOrderData.linkedPurchaseOrders && Array.isArray(fullOrderData.linkedPurchaseOrders)) {
-            // Dla każdego powiązanego PO, oblicz jego wartość brutto
-            poTotal = fullOrderData.linkedPurchaseOrders.reduce((sum, po) => {
-              console.log("Przetwarzanie PO:", po);
-              
-              // Jeśli zamówienie zakupu ma już obliczoną wartość brutto, używamy jej
-            if (po.totalGross !== undefined && po.totalGross !== null) {
-                const grossValue = typeof po.totalGross === 'number' ? po.totalGross : parseFloat(po.totalGross) || 0;
-                console.log(`Używam istniejącej wartości totalGross dla ${po.number}: ${grossValue}`);
-                return sum + grossValue;
-              }
-              
-              console.log(`Brak wartości totalGross dla PO ${po.number}, obliczam ręcznie`);
-              
-              // Wartość produktów
-              const productsValue = typeof po.value === 'number' ? po.value : parseFloat(po.value) || 0;
-              
-              // Stawka VAT i wartość podatku VAT
-              const vatRate = typeof po.vatRate === 'number' ? po.vatRate : parseFloat(po.vatRate) || 0;
-            const vatValue = (productsValue * vatRate) / 100;
-            
-              // Dodatkowe koszty
-            let additionalCosts = 0;
-            if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
-              additionalCosts = po.additionalCostsItems.reduce((costsSum, cost) => {
-                  const costValue = typeof cost.value === 'number' ? cost.value : parseFloat(cost.value) || 0;
-                  return costsSum + costValue;
-              }, 0);
-            } else {
-                additionalCosts = typeof po.additionalCosts === 'number' ? po.additionalCosts : parseFloat(po.additionalCosts) || 0;
-            }
-            
-              // Obliczanie wartości brutto zamówienia zakupu
-            const grossValue = productsValue + vatValue + additionalCosts;
-              console.log(`Obliczona wartość PO ${po.number}: ${grossValue}`);
-            
-            return sum + grossValue;
-          }, 0);
-        }
-        
-          // Obliczamy wartość produktów, sprawdzając czy nie ma aktualizacji cen na podstawie kosztu procesowego
-          const subtotal = await Promise.all((fullOrderData.items || []).map(async (item) => {
-            const quantity = parseFloat(item.quantity) || 0;
-            let price = parseFloat(item.price) || 0;
-            
-            // Sprawdź, czy produkt jest recepturą bez ceny z listy cenowej
-            if ((item.isRecipe || item.itemType === 'recipe') && item.id && !item.fromPriceList && price === 0) {
-              try {
-                // Pobierz recepturę, aby sprawdzić koszt procesowy
-                const recipe = await getRecipeById(item.id);
-                if (recipe && recipe.processingCostPerUnit) {
-                  // Użyj kosztu procesowego jako ceny
-                  price = recipe.processingCostPerUnit;
-                  console.log(`Użyto kosztu procesowego ${price} EUR dla produktu ${item.name} w zamówieniu ${order.id}`);
-                }
-              } catch (error) {
-                console.error(`Błąd podczas pobierania receptury dla ${item.name}:`, error);
-              }
-            }
-            
-            return quantity * price;
-          })).then(values => values.reduce((sum, value) => sum + value, 0));
-          
-          // Dodanie kosztów dostawy
-          const shippingCost = parseFloat(fullOrderData.shippingCost) || 0;
-        
-        // Łączna wartość zamówienia - bez PO
-        const totalValue = subtotal + shippingCost;
-          
-          console.log(`Zaktualizowane wartości zamówienia ${order.id}: produkty=${subtotal}, dostawa=${shippingCost}, PO=${poTotal}, razem=${totalValue}`);
-        
-        return {
-            ...fullOrderData,
-          totalValue: parseFloat(fullOrderData.totalValue) || totalValue,
-          productsValue: subtotal,
-          purchaseOrdersValue: poTotal,
-          shippingCost: shippingCost
-        };
-        } else {
-          // Jeśli zamówienie nie ma powiązanych PO, oblicz tylko wartość produktów
-          const subtotal = await Promise.all((order.items || []).map(async (item) => {
-            const quantity = parseFloat(item.quantity) || 0;
-            let price = parseFloat(item.price) || 0;
-            
-            // Sprawdź, czy produkt jest recepturą bez ceny z listy cenowej
-            if ((item.isRecipe || item.itemType === 'recipe') && item.id && !item.fromPriceList && price === 0) {
-              try {
-                // Pobierz recepturę, aby sprawdzić koszt procesowy
-                const recipe = await getRecipeById(item.id);
-                if (recipe && recipe.processingCostPerUnit) {
-                  // Użyj kosztu procesowego jako ceny
-                  price = recipe.processingCostPerUnit;
-                  console.log(`Użyto kosztu procesowego ${price} EUR dla produktu ${item.name} w zamówieniu ${order.id}`);
-                }
-              } catch (error) {
-                console.error(`Błąd podczas pobierania receptury dla ${item.name}:`, error);
-              }
-            }
-            
-            return quantity * price;
-          })).then(values => values.reduce((sum, value) => sum + value, 0));
-          
-          // Dodanie kosztów dostawy
-          const shippingCost = parseFloat(order.shippingCost) || 0;
-          
-          // Łączna wartość zamówienia - bez PO
-          const totalValue = subtotal + shippingCost;
-          
-          console.log(`Zaktualizowane wartości zamówienia ${order.id}: produkty=${subtotal}, dostawa=${shippingCost}, PO=0, razem=${totalValue}`);
-          
-          return {
-            ...order,
-            totalValue: parseFloat(order.totalValue) || totalValue,
-            productsValue: subtotal,
-            purchaseOrdersValue: 0,
-            shippingCost: shippingCost
-          };
-        }
-      }));
+      // Wywołanie funkcji paginacji serwerowej
+      const result = await getOrdersWithPagination(
+        page,
+        rowsPerPage,
+        orderBy,
+        orderDirection,
+        paginationFilters
+      );
       
-      setOrders(updatedOrders);
+      // Aktualizacja danych i metadanych paginacji
+      setOrders(result.data);
+      setTotalItems(result.pagination.totalItems);
+      setTotalPages(result.pagination.totalPages);
+      
+      console.log("Pobrano zamówienia z paginacją:", result);
     } catch (error) {
       console.error('Błąd podczas pobierania zamówień:', error);
+      showError('Nie udało się pobrać listy zamówień');
     } finally {
       setLoading(false);
     }
@@ -262,22 +179,8 @@ const OrdersList = () => {
   };
 
   const applyFilters = async () => {
-    try {
-      setLoading(true);
-      // Przygotuj obiekty z filtrami - dla dat musimy odpowiednio sformatować wartości
-      const filtersToApply = {
-        ...filters,
-        // Format dat jest już odpowiedni dla filtrów, więc nie musimy go przekształcać
-      };
-      const data = await getAllOrders(filtersToApply);
-      setOrders(data);
-      setPage(0);
-    } catch (error) {
-      showError('Błąd podczas filtrowania zamówień: ' + error.message);
-      console.error('Error filtering orders:', error);
-    } finally {
-      setLoading(false);
-    }
+    setPage(1); // Reset do pierwszej strony przy zmianie filtrów
+    fetchOrders();
   };
 
   useEffect(() => {
@@ -314,6 +217,9 @@ const OrdersList = () => {
       toDate: '',
       customerId: ''
     });
+    setSearchTerm('');
+    setDebouncedSearchTerm('');
+    setPage(1);
     fetchOrders();
   };
 
@@ -331,12 +237,12 @@ const OrdersList = () => {
   };
 
   const handleChangePage = (event, newPage) => {
-    setPage(newPage);
+    setPage(newPage + 1); // Dodanie +1, ponieważ MUI TablePagination używa indeksowania od 0, a nasza funkcja od 1
   };
 
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
+    setPage(1); // Reset strony na pierwszą
   };
 
   const handleAddOrder = () => {
@@ -435,21 +341,8 @@ const OrdersList = () => {
     setExpandedOrderId(expandedOrderId === orderId ? null : orderId);
   };
 
-  // Filtrowanie wyszukiwania
-  const filteredOrders = orders.filter(order => {
-    if (!searchTerm) return true;
-    
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      (order.id && order.id.toLowerCase().includes(searchLower)) ||
-      (order.customer?.name && order.customer.name.toLowerCase().includes(searchLower)) ||
-      (order.items && order.items.some(item => item.name && item.name.toLowerCase().includes(searchLower)))
-    );
-  });
-
-  // Paginacja
-  const displayedOrders = filteredOrders
-    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  // Używamy danych bezpośrednio z serwera
+  const displayedOrders = orders;
 
   const getStatusChipColor = (status) => {
     switch (status) {
@@ -740,6 +633,14 @@ const OrdersList = () => {
     return String(supplier);
   };
 
+  // Obsługa sortowania kolumn
+  const handleSort = (column) => {
+    const isAsc = orderBy === column && orderDirection === 'asc';
+    setOrderDirection(isAsc ? 'desc' : 'asc');
+    setOrderBy(column);
+    setPage(1); // Reset do pierwszej strony
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -911,25 +812,101 @@ const OrdersList = () => {
               <Table sx={{ minWidth: 800 }}>
                 <TableHead>
                   <TableRow>
-                    <TableCell width="5%"></TableCell>
-                    <TableCell>Klient</TableCell>
-                    <TableCell>Numer zamówienia</TableCell>
-                    <TableCell>Data zamówienia</TableCell>
-                    <TableCell>Oczekiwana data dostawy</TableCell>
-                    <TableCell>Wartość</TableCell>
+                    <TableCell>Szczegóły</TableCell>
+                    <TableCell 
+                      onClick={() => handleSort('orderNumber')}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        Numer 
+                        {orderBy === 'orderNumber' && (
+                          <ArrowDropDownIcon 
+                            sx={{ 
+                              transform: orderDirection === 'asc' ? 'rotate(180deg)' : 'none',
+                              transition: 'transform 0.2s'
+                            }} 
+                          />
+                        )}
+                      </Box>
+                    </TableCell>
+                    <TableCell 
+                      onClick={() => handleSort('orderDate')}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        Data
+                        {orderBy === 'orderDate' && (
+                          <ArrowDropDownIcon 
+                            sx={{ 
+                              transform: orderDirection === 'asc' ? 'rotate(180deg)' : 'none',
+                              transition: 'transform 0.2s'
+                            }} 
+                          />
+                        )}
+                      </Box>
+                    </TableCell>
+                    <TableCell 
+                      onClick={() => handleSort('customer.name')}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        Klient
+                        {orderBy === 'customer.name' && (
+                          <ArrowDropDownIcon 
+                            sx={{ 
+                              transform: orderDirection === 'asc' ? 'rotate(180deg)' : 'none',
+                              transition: 'transform 0.2s'
+                            }} 
+                          />
+                        )}
+                      </Box>
+                    </TableCell>
                     <TableCell>Status</TableCell>
+                    <TableCell 
+                      onClick={() => handleSort('totalValue')}
+                      style={{ cursor: 'pointer' }}
+                      align="right"
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                        Wartość
+                        {orderBy === 'totalValue' && (
+                          <ArrowDropDownIcon 
+                            sx={{ 
+                              transform: orderDirection === 'asc' ? 'rotate(180deg)' : 'none',
+                              transition: 'transform 0.2s'
+                            }} 
+                          />
+                        )}
+                      </Box>
+                    </TableCell>
+                    <TableCell 
+                      onClick={() => handleSort('expectedDeliveryDate')}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        Termin dostawy
+                        {orderBy === 'expectedDeliveryDate' && (
+                          <ArrowDropDownIcon 
+                            sx={{ 
+                              transform: orderDirection === 'asc' ? 'rotate(180deg)' : 'none',
+                              transition: 'transform 0.2s'
+                            }} 
+                          />
+                        )}
+                      </Box>
+                    </TableCell>
                     <TableCell align="right">Akcje</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {filteredOrders.length === 0 ? (
+                  {displayedOrders.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} align="center">
                         Brak zamówień
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredOrders.map((order) => (
+                    displayedOrders.map((order) => (
                       <React.Fragment key={order.id}>
                         <TableRow hover>
                           <TableCell>
@@ -1274,14 +1251,15 @@ const OrdersList = () => {
               </Table>
             </TableContainer>
 
+            {/* Komponent paginacji */}
             <TablePagination
-              component="div"
-              count={filteredOrders.length}
-              page={page}
-              onPageChange={handleChangePage}
-              rowsPerPage={rowsPerPage}
-              onRowsPerPageChange={handleChangeRowsPerPage}
               rowsPerPageOptions={[5, 10, 25, 50]}
+              component="div"
+              count={totalItems}
+              rowsPerPage={rowsPerPage}
+              page={page - 1} // Odejmujemy 1, bo MUI TablePagination używa indeksowania od 0
+              onPageChange={handleChangePage}
+              onRowsPerPageChange={handleChangeRowsPerPage}
               labelRowsPerPage="Wierszy na stronie:"
               labelDisplayedRows={({ from, to, count }) => `${from}-${to} z ${count}`}
             />

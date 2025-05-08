@@ -1274,7 +1274,42 @@ import {
       
       console.log(`Pobrano ${allTasks.length} zadań`);
       
-      return allTasks;
+      // Zbierz wszystkie ID receptur używanych w zadaniach
+      const recipeIds = new Set();
+      allTasks.forEach(task => {
+        if (task.recipeId) {
+          recipeIds.add(task.recipeId);
+        }
+      });
+      
+      // Jeśli mamy receptury do pobrania, zróbmy to zbiorczo
+      let recipesMap = {};
+      if (recipeIds.size > 0) {
+        // Importuj funkcje z recipeService
+        const { getAllRecipes } = await import('./recipeService');
+        
+        // Pobierz wszystkie receptury
+        const recipes = await getAllRecipes();
+        
+        // Utwórz mapę ID -> receptura
+        recipesMap = recipes.reduce((map, recipe) => {
+          map[recipe.id] = recipe;
+          return map;
+        }, {});
+      }
+      
+      // Przypisz dane receptur do zadań
+      const tasksWithRecipes = allTasks.map(task => {
+        if (task.recipeId && recipesMap[task.recipeId]) {
+          return {
+            ...task,
+            recipe: recipesMap[task.recipeId]
+          };
+        }
+        return task;
+      });
+      
+      return tasksWithRecipes;
     } catch (error) {
       console.error('Błąd podczas pobierania zaplanowanych zadań:', error);
       throw error;
@@ -2912,6 +2947,33 @@ import {
       };
     } catch (error) {
       console.error('Błąd podczas usuwania sesji produkcyjnej:', error);
+      throw error;
+    }
+  };
+
+  // Zmodyfikowana funkcja do pobierania receptury dla zadania
+  export const fetchRecipeByTaskId = async (taskId) => {
+    try {
+      // Pobierz zadanie
+      const taskDoc = await getTaskById(taskId);
+      
+      if (!taskDoc || !taskDoc.recipeId) {
+        throw new Error('Zadanie nie istnieje lub nie ma przypisanej receptury');
+      }
+      
+      // Importuj funkcje z recipeService
+      const { getRecipeById } = await import('./recipeService');
+      
+      // Pobierz recepturę
+      const recipe = await getRecipeById(taskDoc.recipeId);
+      
+      return {
+        taskId,
+        recipeId: taskDoc.recipeId,
+        recipe
+      };
+    } catch (error) {
+      console.error('Błąd podczas pobierania receptury dla zadania:', error);
       throw error;
     }
   };

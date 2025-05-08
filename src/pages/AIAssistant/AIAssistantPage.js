@@ -535,13 +535,6 @@ const AIAssistantPage = () => {
           Asystent AI
         </Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button 
-            variant="outlined" 
-            startIcon={<HelpIcon />}
-            onClick={handleOpenInstructions}
-          >
-            Instrukcje API
-          </Button>
           {!useGlobalApiKey && (
             <Button 
               variant="outlined" 
@@ -831,16 +824,6 @@ const AIAssistantPage = () => {
           >
             Pokaż instrukcje
           </Button>
-        </Alert>
-      )}
-      
-      {/* Informacja o używaniu globalnego klucza API */}
-      {useGlobalApiKey && (
-        <Alert 
-          severity="success" 
-          sx={{ mt: 3, maxWidth: '600px', width: '100%' }}
-        >
-          System korzysta z globalnego klucza API. Nie musisz konfigurować własnego klucza.
         </Alert>
       )}
       
