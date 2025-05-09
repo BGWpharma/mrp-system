@@ -56,6 +56,7 @@ import {
   People as PeopleIcon,
   Settings as SettingsIcon,
   Factory as FactoryIcon,
+  PrecisionManufacturing as PrecisionManufacturingIcon,
   BugReport as BugReportIcon
 } from '@mui/icons-material';
 import { getExpiringBatches, getExpiredBatches } from '../../services/inventoryService';
@@ -214,6 +215,7 @@ const Sidebar = ({ onToggle }) => {
       hasSubmenu: true,
       children: [
         { text: 'Warunki', icon: <FactoryIcon />, path: '/hall-data/conditions' },
+        { text: 'Maszyny', icon: <PrecisionManufacturingIcon />, path: '/hall-data/machines' },
       ]
     },
     { text: 'Sprzedaż',

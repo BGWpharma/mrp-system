@@ -131,6 +131,7 @@ import BugReportsPage from './pages/Admin/BugReportsPage';
 
 // Hall Data
 import HallDataConditionsPage from './pages/HallData/Conditions';
+import HallDataMachinesPage from './pages/HallData/Machines';
 
 function App() {
   return (
@@ -269,6 +270,7 @@ function App() {
                 
                 {/* Hall Data Routes */}
                 <Route path="/hall-data/conditions" element={<PrivateLayout><HallDataConditionsPage /></PrivateLayout>} />
+                <Route path="/hall-data/machines" element={<PrivateLayout><HallDataMachinesPage /></PrivateLayout>} />
                 
                 {/* CRM Routes */}
                 <Route path="/crm" element={<PrivateLayout><CRMDashboardPage /></PrivateLayout>} />
