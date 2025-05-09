@@ -43,9 +43,10 @@ import {
   SortByAlpha as SortIcon,
   FilterList as FilterIcon,
   Delete as DeleteIcon,
-  Cached as CachedIcon
+  Cached as CachedIcon,
+  AccessTime as ClockIcon
 } from '@mui/icons-material';
-import { getInventoryItemById, getItemTransactions, getItemBatches, getSupplierPrices, deleteReservation, cleanupDeletedTaskReservations, getReservationsGroupedByTask, cleanupItemReservations, getAllWarehouses, recalculateItemQuantity } from '../../services/inventoryService';
+import { getInventoryItemById, getItemTransactions, getItemBatches, getSupplierPrices, deleteReservation, cleanupDeletedTaskReservations, getReservationsGroupedByTask, cleanupItemReservations, getAllWarehouses, recalculateItemQuantity, getAwaitingOrdersForInventoryItem } from '../../services/inventoryService';
 import { getAllSuppliers } from '../../services/supplierService';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
@@ -93,6 +94,8 @@ const ItemDetailsPage = () => {
   const [sortOrder, setSortOrder] = useState('desc');
   const [updatingReservations, setUpdatingReservations] = useState(false);
   const [refreshingQuantity, setRefreshingQuantity] = useState(false);
+  const [awaitingOrders, setAwaitingOrders] = useState([]);
+  const [loadingAwaitingOrders, setLoadingAwaitingOrders] = useState(false);
 
   useEffect(() => {
     const fetchItemData = async () => {
@@ -136,6 +139,9 @@ const ItemDetailsPage = () => {
         
         // Pobierz rezerwacje (transakcje typu 'booking')
         await fetchReservations(itemData);
+        
+        // Pobierz oczekiwane zamówienia
+        fetchAwaitingOrders(id);
       } catch (error) {
         showError('Błąd podczas pobierania danych pozycji: ' + error.message);
         console.error('Error fetching item details:', error);
@@ -419,6 +425,20 @@ const ItemDetailsPage = () => {
     }
   };
 
+  // Funkcja do pobierania oczekiwanych zamówień
+  const fetchAwaitingOrders = async (itemId) => {
+    try {
+      setLoadingAwaitingOrders(true);
+      const awaitingOrdersData = await getAwaitingOrdersForInventoryItem(itemId);
+      setAwaitingOrders(awaitingOrdersData);
+    } catch (error) {
+      console.error('Błąd podczas pobierania oczekiwanych zamówień:', error);
+      showError('Nie udało się pobrać oczekujących zamówień: ' + error.message);
+    } finally {
+      setLoadingAwaitingOrders(false);
+    }
+  };
+
   if (loading) {
     return <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>Ładowanie danych...</Container>;
   }
@@ -675,6 +695,7 @@ const ItemDetailsPage = () => {
             <Tab label="Partie i daty ważności" id="item-tab-1" sx={{ fontWeight: 'medium', py: 2 }} />
             <Tab label="Historia transakcji" id="item-tab-2" sx={{ fontWeight: 'medium', py: 2 }} />
             <Tab label="Rezerwacje" id="item-tab-3" sx={{ fontWeight: 'medium', py: 2 }} />
+            <Tab label="Oczekiwane" id="item-tab-4" sx={{ fontWeight: 'medium', py: 2 }} icon={<ClockIcon fontSize="small" sx={{ mr: 1 }} />} iconPosition="start" />
           </Tabs>
         </Box>
 
@@ -1099,6 +1120,142 @@ const ItemDetailsPage = () => {
                               <DeleteIcon fontSize="small" />
                             </IconButton>
                           </Box>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </TabPanel>
+
+        {/* Zawartość zakładki Oczekiwane */}
+        <TabPanel value={tabValue} index={4}>
+          <Box sx={{
+            p: 2,
+            mb: 2,
+            borderRadius: 2,
+            bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'white',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', mb: 0 }}>
+              Oczekiwane pozycje z zamówień zakupowych
+            </Typography>
+            <Button 
+              variant="outlined" 
+              startIcon={loadingAwaitingOrders ? <CircularProgress size={20} /> : <RefreshIcon />}
+              onClick={() => fetchAwaitingOrders(id)}
+              disabled={loadingAwaitingOrders}
+            >
+              Odśwież
+            </Button>
+          </Box>
+          
+          {loadingAwaitingOrders ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : awaitingOrders.length === 0 ? (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              Brak oczekujących zamówień dla tego produktu.
+            </Alert>
+          ) : (
+            <TableContainer component={Paper} sx={{ mt: 2, borderRadius: 2, overflow: 'hidden', elevation: 1 }}>
+              <Table sx={{ '& th': { fontWeight: 'bold', bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : '#f8f9fa' } }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Nr zamówienia</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Zamówione</TableCell>
+                    <TableCell>Otrzymane</TableCell>
+                    <TableCell>Cena jednostkowa</TableCell>
+                    <TableCell>Data zamówienia</TableCell>
+                    <TableCell>Oczekiwana dostawa</TableCell>
+                    <TableCell>Tymczasowe ID</TableCell>
+                    <TableCell>Akcje</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {awaitingOrders.map(order => {
+                    const statusText = (() => {
+                      switch(order.status) {
+                        case 'ordered': return 'Zamówione';
+                        case 'confirmed': return 'Potwierdzone';
+                        case 'partial': return 'Częściowo dostarczone';
+                        default: return order.status;
+                      }
+                    })();
+                    
+                    const statusColor = (() => {
+                      switch(order.status) {
+                        case 'ordered': return 'primary';
+                        case 'confirmed': return 'success';
+                        case 'partial': return 'warning';
+                        default: return 'default';
+                      }
+                    })();
+                    
+                    // Sprawdź, czy zamówienie jest opóźnione
+                    const isOverdue = order.expectedDeliveryDate && new Date(order.expectedDeliveryDate) < new Date();
+                    
+                    return (
+                      <TableRow key={order.id} hover>
+                        <TableCell>
+                          <Link to={`/purchase-orders/${order.poId}`} style={{ textDecoration: 'none', color: 'inherit', fontWeight: 'bold' }}>
+                            {order.poNumber}
+                          </Link>
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={statusText} 
+                            color={statusColor} 
+                            size="small" 
+                          />
+                        </TableCell>
+                        <TableCell align="right">
+                          {order.orderedQuantity} {order.unit}
+                        </TableCell>
+                        <TableCell align="right">
+                          {order.receivedQuantity} {order.unit}
+                        </TableCell>
+                        <TableCell align="right">
+                          {order.unitPrice ? `${Number(order.unitPrice).toFixed(2)} EUR` : '-'}
+                        </TableCell>
+                        <TableCell>
+                          {order.orderDate ? new Date(order.orderDate).toLocaleDateString('pl-PL') : '-'}
+                        </TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            {order.expectedDeliveryDate ? (
+                              <>
+                                {new Date(order.expectedDeliveryDate).toLocaleDateString('pl-PL')}
+                                {isOverdue && (
+                                  <Chip 
+                                    size="small" 
+                                    label="Opóźnione" 
+                                    color="error" 
+                                    sx={{ ml: 1 }} 
+                                  />
+                                )}
+                              </>
+                            ) : '-'}
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          {order.id ? `temp-${order.id.substring(0, 8)}` : '-'}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            component={Link}
+                            to={`/purchase-orders/${order.poId}`}
+                          >
+                            Szczegóły
+                          </Button>
                         </TableCell>
                       </TableRow>
                     );

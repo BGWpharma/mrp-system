@@ -3951,3 +3951,96 @@ import {
       throw error;
     }
   };
+
+  /**
+   * Pobiera oczekiwane zamówienia dla danego produktu magazynowego
+   * @param {string} inventoryItemId - ID produktu magazynowego
+   * @returns {Promise<Array>} - Lista oczekiwanych zamówień
+   */
+  export const getAwaitingOrdersForInventoryItem = async (inventoryItemId) => {
+    try {
+      if (!inventoryItemId) {
+        throw new Error('ID produktu jest wymagane');
+      }
+      
+      const { getPurchaseOrdersByStatus } = await import('./purchaseOrderService');
+      
+      // Pobierz zamówienia o statusach: zamówione, potwierdzone i częściowo dostarczone
+      const orderedPOs = await getPurchaseOrdersByStatus('ordered');
+      const confirmedPOs = await getPurchaseOrdersByStatus('confirmed'); 
+      const partialPOs = await getPurchaseOrdersByStatus('partial');
+      
+      // Połącz wszystkie zamówienia w jedną tablicę
+      const allActivePOs = [...orderedPOs, ...confirmedPOs, ...partialPOs];
+      
+      // Filtruj zamówienia, które zawierają szukany produkt
+      const awaitingOrders = [];
+      
+      for (const po of allActivePOs) {
+        if (po.items && Array.isArray(po.items)) {
+          // Znajdź pozycje pasujące do szukanego produktu
+          const matchingItems = po.items.filter(item => 
+            (item.id === inventoryItemId || 
+             item.itemId === inventoryItemId || 
+             item.inventoryItemId === inventoryItemId)
+          );
+          
+          if (matchingItems.length > 0) {
+            // Dla każdej pasującej pozycji
+            for (const item of matchingItems) {
+              // Oblicz ilość oczekiwaną (zamówioną minus otrzymaną)
+              const orderedQuantity = parseFloat(item.quantity) || 0;
+              const receivedQuantity = parseFloat(item.received) || 0;
+              const awaitingQuantity = Math.max(0, orderedQuantity - receivedQuantity);
+              
+              // Jeśli jest jeszcze oczekiwana ilość, dodaj do listy
+              if (awaitingQuantity > 0) {
+                // Upewnij się, że cena jednostkowa jest liczbą
+                let unitPrice = null;
+                if (item.price) {
+                  unitPrice = parseFloat(item.price);
+                } else if (item.unitPrice) {
+                  unitPrice = parseFloat(item.unitPrice);
+                }
+                
+                awaitingOrders.push({
+                  id: `${po.id}-${item.id || inventoryItemId}`, // Unikalny identyfikator dla wiersza
+                  poNumber: po.number,
+                  poId: po.id,
+                  status: po.status,
+                  expectedDeliveryDate: po.expectedDeliveryDate,
+                  supplier: po.supplier?.name || 'Nieznany dostawca',
+                  itemId: inventoryItemId,
+                  itemName: item.name,
+                  orderedQuantity: orderedQuantity,
+                  receivedQuantity: receivedQuantity,
+                  awaitingQuantity: awaitingQuantity,
+                  unitPrice: unitPrice,
+                  unit: item.unit,
+                  orderDate: po.orderDate,
+                  createdAt: po.createdAt
+                });
+              }
+            }
+          }
+        }
+      }
+      
+      // Posortuj według daty oczekiwanej dostawy (od najwcześniejszej)
+      return awaitingOrders.sort((a, b) => {
+        // Jeśli obie mają daty oczekiwanej dostawy
+        if (a.expectedDeliveryDate && b.expectedDeliveryDate) {
+          return new Date(a.expectedDeliveryDate) - new Date(b.expectedDeliveryDate);
+        }
+        // Jeśli tylko a ma datę oczekiwanej dostawy
+        if (a.expectedDeliveryDate) return -1;
+        // Jeśli tylko b ma datę oczekiwanej dostawy
+        if (b.expectedDeliveryDate) return 1;
+        // Jeśli żadne nie ma daty oczekiwanej dostawy, sortuj wg daty zamówienia
+        return new Date(b.orderDate || b.createdAt) - new Date(a.orderDate || a.createdAt);
+      });
+    } catch (error) {
+      console.error('Błąd podczas pobierania oczekujących zamówień:', error);
+      throw error;
+    }
+  };

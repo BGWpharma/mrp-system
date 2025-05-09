@@ -101,7 +101,7 @@ const TaskDetailsPage = () => {
   const [confirmationDialogOpen, setConfirmationDialogOpen] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState(false);
   const [materials, setMaterials] = useState([]);
-  const [batches, setBatches] = useState([]);
+  const [batches, setBatches] = useState({});
   const [stopProductionDialogOpen, setStopProductionDialogOpen] = useState(false);
   const [productionData, setProductionData] = useState({
     completedQuantity: '',
@@ -116,7 +116,7 @@ const TaskDetailsPage = () => {
   const [editMode, setEditMode] = useState(false);
   const [errors, setErrors] = useState({});
   const [reserveDialogOpen, setReserveDialogOpen] = useState(false);
-  const [reservationMethod, setReservationMethod] = useState('fifo');
+  const [reservationMethod, setReservationMethod] = useState('automatic');
   const [manualBatchQuantities, setManualBatchQuantities] = useState({});
   const [reservationErrors, setReservationErrors] = useState({});
   const [packagingDialogOpen, setPackagingDialogOpen] = useState(false);
@@ -142,6 +142,21 @@ const TaskDetailsPage = () => {
   const [deleteHistoryItem, setDeleteHistoryItem] = useState(null);
   const [deleteHistoryDialogOpen, setDeleteHistoryDialogOpen] = useState(false);
   const [includeInCosts, setIncludeInCosts] = useState({});
+
+  // Stan dla przechowywania oczekiwanych zamówień
+  const [awaitingOrders, setAwaitingOrders] = useState({});
+  const [awaitingOrdersLoading, setAwaitingOrdersLoading] = useState(false);
+  
+  // Stan edycji pozycji historii
+  const [editedHistoryNote, setEditedHistoryNote] = useState('');
+  const [editedHistoryQuantity, setEditedHistoryQuantity] = useState('');
+  
+  // Stan do zarządzania usuwaniem pozycji historii
+  const [historyItemToDelete, setHistoryItemToDelete] = useState(null);
+  
+  // Stan komunikatu błędu
+  const [errorMessage, setErrorMessage] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(null);
 
   const fetchTask = async () => {
     try {
@@ -231,6 +246,7 @@ const TaskDetailsPage = () => {
     }
   };
   
+  // Pobieranie danych zadania przy montowaniu komponentu
   useEffect(() => {
     fetchTask();
   }, [id, navigate, showError]);
@@ -238,6 +254,13 @@ const TaskDetailsPage = () => {
   useEffect(() => {
     fetchProductionHistory();
   }, [task?.id]);
+
+  // Dodaję efekt pobierający oczekiwane zamówienia przy każdym załadowaniu zadania
+  useEffect(() => {
+    if (task?.id && task?.materials?.length > 0) {
+      fetchAwaitingOrdersForMaterials();
+    }
+  }, [task?.id, task?.materials?.length]);
 
   const fetchStatusHistory = async (userIds) => {
     const names = await getUsersDisplayNames(userIds);
@@ -694,8 +717,12 @@ const TaskDetailsPage = () => {
     setReservationMethod(newMethod);
     
     // Jeśli wybrano ręczną metodę, pobierz partie
-    if (newMethod === 'manual' && Object.keys(batches).length === 0) {
-      fetchBatchesForMaterials();
+    if (newMethod === 'manual') {
+      if (Object.keys(batches).length === 0) {
+        fetchBatchesForMaterials();
+      }
+      // Zawsze pobieraj oczekiwane zamówienia przy wyborze ręcznej metody
+      fetchAwaitingOrdersForMaterials();
       setManualBatchSelectionActive(true);
     } else {
       setManualBatchSelectionActive(false);
@@ -890,13 +917,9 @@ const TaskDetailsPage = () => {
   
   // Renderowanie komponentu do ręcznego wyboru partii
   const renderManualBatchSelection = () => {
-    if (!task || !task.materials || task.materials.length === 0) {
-      return <Typography>Brak materiałów do zarezerwowania</Typography>;
-    }
-    
     if (materialBatchesLoading) {
       return (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
           <CircularProgress />
         </Box>
       );
@@ -983,6 +1006,7 @@ const TaskDetailsPage = () => {
                   </Typography>
                 ) : (
                   <>
+                    <Typography variant="subtitle2" gutterBottom>Partie magazynowe:</Typography>
                     <TableContainer>
                       <Table size="small">
                         <TableHead>
@@ -1065,19 +1089,107 @@ const TaskDetailsPage = () => {
                         </TableBody>
                       </Table>
                     </TableContainer>
-                    <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-                      <Button 
-                        variant="contained" 
-                        color="primary"
-                        size="small"
-                        disabled={!isComplete || reservingMaterials || isAlreadyReserved}
-                        onClick={() => handleReserveMaterials(materialId)}
-                      >
-                        {isAlreadyReserved ? 'Zarezerwowany' : 'Rezerwuj ten materiał'}
-                      </Button>
-                    </Box>
                   </>
                 )}
+                
+                {/* Sekcja z oczekiwanymi zamówieniami - wydzielona poza warunek sprawdzający partie */}
+                <Box sx={{ mt: 3 }}>
+                  <Typography variant="subtitle2" gutterBottom>Oczekiwane zamówienia:</Typography>
+                  {awaitingOrdersLoading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+                      <CircularProgress size={24} />
+                    </Box>
+                  ) : (
+                    <>
+                      {awaitingOrders[materialId] && awaitingOrders[materialId].length > 0 ? (
+                        <TableContainer>
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>Nr zamówienia</TableCell>
+                                <TableCell>Status</TableCell>
+                                <TableCell>Zamówione</TableCell>
+                                <TableCell>Otrzymane</TableCell>
+                                <TableCell>Cena jednostkowa</TableCell>
+                                <TableCell>Data zamówienia</TableCell>
+                                <TableCell>Oczekiwana dostawa</TableCell>
+                                <TableCell>Tymczasowe ID</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {awaitingOrders[materialId].map(order => {
+                                const statusText = (() => {
+                                  switch(order.status) {
+                                    case 'ordered': return 'Zamówione';
+                                    case 'confirmed': return 'Potwierdzone';
+                                    case 'partial': return 'Częściowo dostarczone';
+                                    default: return order.status;
+                                  }
+                                })();
+                                
+                                const statusColor = (() => {
+                                  switch(order.status) {
+                                    case 'ordered': return 'primary';
+                                    case 'confirmed': return 'success';
+                                    case 'partial': return 'warning';
+                                    default: return 'default';
+                                  }
+                                })();
+                                
+                                return (
+                                  <TableRow key={order.id}>
+                                    <TableCell>{order.poNumber}</TableCell>
+                                    <TableCell>
+                                      <Chip 
+                                        label={statusText} 
+                                        color={statusColor} 
+                                        size="small" 
+                                      />
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      {order.orderedQuantity} {order.unit}
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      {order.receivedQuantity} {order.unit}
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      {order.unitPrice && typeof order.unitPrice === 'number' ? `${order.unitPrice.toFixed(2)} EUR` : '-'}
+                                    </TableCell>
+                                    <TableCell>
+                                      {order.orderDate ? new Date(order.orderDate).toLocaleDateString('pl-PL') : '-'}
+                                    </TableCell>
+                                    <TableCell>
+                                      {order.expectedDeliveryDate ? new Date(order.expectedDeliveryDate).toLocaleDateString('pl-PL') : 'Nie określono'}
+                                    </TableCell>
+                                    <TableCell>
+                                      {order.tempId || 'temp-' + order.id.substring(0, 8)}
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      ) : (
+                        <Typography variant="body2" color="textSecondary">
+                          Brak oczekujących zamówień dla tego materiału
+                        </Typography>
+                      )}
+                    </>
+                  )}
+                </Box>
+                    
+                <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                  <Button 
+                    variant="contained" 
+                    color="primary"
+                    size="small"
+                    disabled={!isComplete || reservingMaterials || isAlreadyReserved}
+                    onClick={() => handleReserveMaterials(materialId)}
+                  >
+                    {isAlreadyReserved ? 'Zarezerwowany' : 'Rezerwuj ten materiał'}
+                  </Button>
+                </Box>
               </AccordionDetails>
             </Accordion>
           );
@@ -2074,6 +2186,42 @@ const TaskDetailsPage = () => {
     } catch (error) {
       console.error('Błąd podczas aktualizacji ustawień kosztów:', error);
       showError('Nie udało się zaktualizować ustawień kosztów');
+    }
+  };
+
+  // Nowa funkcja do pobierania oczekiwanych zamówień dla materiałów
+  const fetchAwaitingOrdersForMaterials = async () => {
+    try {
+      if (!task || !task.materials) return;
+      setAwaitingOrdersLoading(true);
+      
+      const ordersData = {};
+      
+      for (const material of task.materials) {
+        const materialId = material.inventoryItemId || material.id;
+        if (!materialId) continue;
+        
+        try {
+          const { getAwaitingOrdersForInventoryItem } = await import('../../services/inventoryService');
+          const materialOrders = await getAwaitingOrdersForInventoryItem(materialId);
+          
+          if (materialOrders.length > 0) {
+            ordersData[materialId] = materialOrders;
+          } else {
+            ordersData[materialId] = [];
+          }
+        } catch (error) {
+          console.error(`Błąd podczas pobierania oczekiwanych zamówień dla materiału ${materialId}:`, error);
+          ordersData[materialId] = [];
+        }
+      }
+      
+      setAwaitingOrders(ordersData);
+    } catch (error) {
+      console.error('Błąd podczas pobierania oczekiwanych zamówień dla materiałów:', error);
+      showError('Nie udało się pobrać informacji o oczekiwanych zamówieniach');
+    } finally {
+      setAwaitingOrdersLoading(false);
     }
   };
 
