@@ -31,12 +31,17 @@ import {
 import {
   Add as AddIcon,
   Delete as DeleteIcon,
-  FindReplace as SuggestIcon,
-  InfoOutlined as InfoIcon,
   FindInPage as FindInPageIcon,
+  FindReplace as SuggestIcon,
   CheckCircleOutline as CheckCircleOutlineIcon,
   Check as CheckIcon,
-  StarOutline as StarIcon
+  StarOutline as StarIcon,
+  ExpandLess as ExpandLessIcon,
+  ExpandMore as ExpandMoreIcon,
+  PlaylistAddCheck as PlaylistAddCheckIcon,
+  Search as SearchIcon,
+  Autorenew as AutorenewIcon,
+  Info as InfoIcon
 } from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -102,6 +107,7 @@ const PurchaseOrderForm = ({ orderId }) => {
     status: PURCHASE_ORDER_STATUSES.DRAFT,
     invoiceLink: '',
     invoiceLinks: [], // Nowe pole dla wielu linków do faktur
+    expandedItems: {}
   });
   
   useEffect(() => {
@@ -2583,309 +2589,281 @@ const PurchaseOrderForm = ({ orderId }) => {
             </Typography>
           </Box>
           
-          <TableContainer component={Paper}>
+          <TableContainer component={Paper} sx={{ overflowX: 'visible' }}>
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Produkt</TableCell>
-                  <TableCell>Ilość</TableCell>
-                  <TableCell>Jedn.</TableCell>
-                  <TableCell>Cena jedn.</TableCell>
-                  <TableCell>Waluta</TableCell>
-                  <TableCell>VAT</TableCell>
-                  <TableCell>Kwota oryg.</TableCell>
-                  <TableCell>Kwota po przew.</TableCell>
-                  <TableCell>Nr faktury</TableCell>
-                  <TableCell>Data faktury</TableCell>
-                  <TableCell>Plan. data dost.</TableCell>
-                  <TableCell>Rzecz. data dost.</TableCell>
-                  <TableCell>Kurs</TableCell>
-                  {Object.keys(supplierSuggestions).length > 0 && (
-                    <TableCell>Sugestia</TableCell>
-                  )}
-                  <TableCell></TableCell>
+                  {/* Podstawowe kolumny - zawsze widoczne */}
+                  <TableCell width="25%">Produkt</TableCell>
+                  <TableCell width="10%">Ilość</TableCell>
+                  <TableCell width="8%">Jedn.</TableCell>
+                  <TableCell width="12%">Cena jedn.</TableCell>
+                  <TableCell width="10%">Waluta</TableCell>
+                  <TableCell width="8%">VAT</TableCell>
+                  <TableCell width="15%">Kwota po przew.</TableCell>
+                  <TableCell width="12%"></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {poData.items.map((item, index) => (
-                  <TableRow key={index}>
-                    <TableCell>
-                      <Autocomplete
-                        options={inventoryItems}
-                        getOptionLabel={(option) => option.name}
-                        value={inventoryItems.find(i => i.id === item.inventoryItemId) || null}
-                        onChange={(event, newValue) => handleItemSelect(index, newValue)}
-                        renderInput={(params) => (
-                          <TextField
-                            {...params}
-                            label="Produkt"
-                            required
-                            size="small"
-                          />
-                        )}
-                        sx={{ width: 250 }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <TextField
-                        type="number"
-                        value={item.quantity}
-                        onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                        size="small"
-                        inputProps={{ min: 0, step: 'any' }}
-                        sx={{ width: 100 }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <TextField
-                        value={item.unit}
-                        onChange={(e) => handleItemChange(index, 'unit', e.target.value)}
-                        size="small"
-                        sx={{ width: 80 }}
-                      />
-                    </TableCell>
-                    <TableCell align="right">
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                        {supplierSuggestions[item.inventoryItemId]?.isDefault && (
-                          <Tooltip title="Domyślna cena dostawcy">
-                            <StarIcon color="primary" sx={{ mr: 1 }} />
-                          </Tooltip>
-                        )}
+                  <React.Fragment key={index}>
+                    <TableRow hover>
+                      {/* Podstawowe kolumny - zawsze widoczne */}
+                      <TableCell>
+                        <Autocomplete
+                          options={inventoryItems}
+                          getOptionLabel={(option) => option.name}
+                          value={inventoryItems.find(i => i.id === item.inventoryItemId) || null}
+                          onChange={(event, newValue) => handleItemSelect(index, newValue)}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="Produkt"
+                              required
+                              size="small"
+                            />
+                          )}
+                          sx={{ width: '100%' }}
+                        />
+                      </TableCell>
+                      <TableCell>
                         <TextField
                           type="number"
-                          value={item.currency === poData.currency ? item.unitPrice : (item.originalUnitPrice || 0)}
-                          onChange={(e) => handleItemChange(index, 'unitPrice', e.target.value)}
+                          value={item.quantity}
+                          onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
                           size="small"
                           inputProps={{ min: 0, step: 'any' }}
-                          sx={{ width: 100 }}
+                          sx={{ width: '100%' }}
                         />
-                      </Box>
-                    </TableCell>
-                    <TableCell align="right">
-                      <FormControl size="small" sx={{ width: 100 }}>
-                        <Select
-                          value={item.currency || poData.currency}
-                          onChange={(e) => handleItemChange(index, 'currency', e.target.value)}
-                          size="small"
-                        >
-                          <MenuItem value="EUR">EUR</MenuItem>
-                          <MenuItem value="PLN">PLN</MenuItem>
-                          <MenuItem value="USD">USD</MenuItem>
-                          <MenuItem value="GBP">GBP</MenuItem>
-                          <MenuItem value="CHF">CHF</MenuItem>
-                        </Select>
-                      </FormControl>
-                    </TableCell>
-                    <TableCell>
-                      <FormControl size="small" sx={{ width: 100 }}>
-                        <Select
-                          value={item.vatRate !== undefined ? item.vatRate : 23}
-                          onChange={(e) => handleItemChange(index, 'vatRate', e.target.value)}
-                          size="small"
-                        >
-                          <MenuItem value={0}>0%</MenuItem>
-                          <MenuItem value={5}>5%</MenuItem>
-                          <MenuItem value={8}>8%</MenuItem>
-                          <MenuItem value={23}>23%</MenuItem>
-                          <MenuItem value="ZW">ZW</MenuItem>
-                          <MenuItem value="NP">NP</MenuItem>
-                        </Select>
-                      </FormControl>
-                    </TableCell>
-                    <TableCell>
-                      {item.currency !== poData.currency ? (
-                        <Tooltip title={`Oryginalnie w ${item.currency}`}>
-                          <Typography variant="body2">
-                            {formatCurrency((item.originalUnitPrice || 0) * item.quantity, item.currency)}
-                          </Typography>
-                        </Tooltip>
-                      ) : (
-                        item.currency === 'EUR' && poData.currency === 'EUR' ? (
-                          <Typography variant="body2">
-                            {formatCurrency(item.totalPrice || 0, item.currency)}
-                          </Typography>
-                        ) : (
-                          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                            -
-                          </Typography>
-                        )
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {item.currency !== poData.currency ? (
-                        <Tooltip title={`Po przewalutowaniu na ${poData.currency}`}>
-                          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                            {formatCurrency(item.totalPrice || 0, poData.currency)}
-                          </Typography>
-                        </Tooltip>
-                      ) : (
-                        item.currency === 'EUR' && poData.currency === 'EUR' ? (
-                          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                            -
-                          </Typography>
-                        ) : (
-                          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                            {formatCurrency(item.totalPrice || 0, poData.currency)}
-                          </Typography>
-                        )
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <TextField
-                        fullWidth
-                        size="small"
-                        value={item.invoiceNumber || ''}
-                        onChange={(e) => handleItemChange(index, 'invoiceNumber', e.target.value)}
-                        placeholder="Nr faktury"
-                        sx={{ width: 120 }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <TextField
-                        type="date"
-                        size="small"
-                        value={item.invoiceDate || ''}
-                        onChange={(e) => handleItemChange(index, 'invoiceDate', e.target.value)}
-                        InputLabelProps={{ shrink: true }}
-                        sx={{ width: 150 }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <TextField
-                        type="date"
-                        size="small"
-                        value={item.plannedDeliveryDate || ''}
-                        onChange={(e) => handleItemChange(index, 'plannedDeliveryDate', e.target.value)}
-                        InputLabelProps={{ shrink: true }}
-                        sx={{ width: 150 }}
-                        placeholder="Planowana dostawa"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <TextField
-                        type="date"
-                        size="small"
-                        value={item.actualDeliveryDate || ''}
-                        onChange={(e) => handleItemChange(index, 'actualDeliveryDate', e.target.value)}
-                        InputLabelProps={{ shrink: true }}
-                        sx={{ width: 150 }}
-                        placeholder="Rzeczywista dostawa"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <TextField
-                        type="number"
-                        size="small"
-                        value={item.exchangeRate || 0}
-                        onChange={(e) => handleItemChange(index, 'exchangeRate', e.target.value)}
-                        placeholder="Kurs"
-                        inputProps={{ min: 0, step: 'any' }}
-                        sx={{ width: 100 }}
-                        disabled={item.currency === poData.currency}
-                      />
-                    </TableCell>
-                    {Object.keys(supplierSuggestions).length > 0 && (
-                      <TableCell>
-                        {item.inventoryItemId && supplierSuggestions[item.inventoryItemId] && (
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            <Typography variant="body2">
-                              {formatCurrency(supplierSuggestions[item.inventoryItemId].price)} 
-                            </Typography>
-                            {item.supplierName && (
-                              <Tooltip title={`Dostawca: ${item.supplierName}`}>
-                                <InfoIcon fontSize="small" sx={{ ml: 1, color: 'info.main' }} />
-                              </Tooltip>
-                            )}
-                          </Box>
-                        )}
                       </TableCell>
+                      <TableCell>
+                        <TextField
+                          value={item.unit}
+                          onChange={(e) => handleItemChange(index, 'unit', e.target.value)}
+                          size="small"
+                          sx={{ width: '100%' }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
+                          {supplierSuggestions[item.inventoryItemId]?.isDefault && (
+                            <Tooltip title="Domyślna cena dostawcy">
+                              <StarIcon color="primary" sx={{ mr: 1 }} />
+                            </Tooltip>
+                          )}
+                          <TextField
+                            type="number"
+                            value={item.currency === poData.currency ? item.unitPrice : (item.originalUnitPrice || 0)}
+                            onChange={(e) => handleItemChange(index, 'unitPrice', e.target.value)}
+                            size="small"
+                            inputProps={{ min: 0, step: 'any' }}
+                            sx={{ width: '100%' }}
+                          />
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <FormControl size="small" sx={{ width: '100%' }}>
+                          <Select
+                            value={item.currency || poData.currency}
+                            onChange={(e) => handleItemChange(index, 'currency', e.target.value)}
+                            size="small"
+                          >
+                            <MenuItem value="EUR">EUR</MenuItem>
+                            <MenuItem value="PLN">PLN</MenuItem>
+                            <MenuItem value="USD">USD</MenuItem>
+                            <MenuItem value="GBP">GBP</MenuItem>
+                            <MenuItem value="CHF">CHF</MenuItem>
+                          </Select>
+                        </FormControl>
+                      </TableCell>
+                      <TableCell>
+                        <FormControl size="small" sx={{ width: '100%' }}>
+                          <Select
+                            value={item.vatRate !== undefined ? item.vatRate : 23}
+                            onChange={(e) => handleItemChange(index, 'vatRate', e.target.value)}
+                            size="small"
+                          >
+                            <MenuItem value={0}>0%</MenuItem>
+                            <MenuItem value={5}>5%</MenuItem>
+                            <MenuItem value={8}>8%</MenuItem>
+                            <MenuItem value={23}>23%</MenuItem>
+                            <MenuItem value="ZW">ZW</MenuItem>
+                            <MenuItem value="NP">NP</MenuItem>
+                          </Select>
+                        </FormControl>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                          {formatCurrency(item.totalPrice || 0, poData.currency)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                          <Tooltip title="Rozwiń dodatkowe pola">
+                            <IconButton 
+                              size="small" 
+                              onClick={() => {
+                                const expandedItems = { ...poData.expandedItems || {} };
+                                expandedItems[index] = !expandedItems[index];
+                                setPoData(prev => ({ ...prev, expandedItems }));
+                              }}
+                            >
+                              {poData.expandedItems && poData.expandedItems[index] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                            </IconButton>
+                          </Tooltip>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleRemoveItem(index)}
+                            color="error"
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                    
+                    {/* Dodatkowy wiersz z pozostałymi polami - widoczny po rozwinięciu */}
+                    {poData.expandedItems && poData.expandedItems[index] && (
+                      <TableRow sx={{ backgroundColor: 'action.hover' }}>
+                        <TableCell colSpan={8}>
+                          <Grid container spacing={2} sx={{ py: 1 }}>
+                            <Grid item xs={12} sm={4}>
+                              <Typography variant="caption" display="block" gutterBottom>
+                                Kwota oryginalna
+                              </Typography>
+                              <Typography variant="body2">
+                                {item.currency !== poData.currency 
+                                  ? formatCurrency((item.originalUnitPrice || 0) * item.quantity, item.currency)
+                                  : '-'}
+                              </Typography>
+                            </Grid>
+                            <Grid item xs={12} sm={4}>
+                              <Typography variant="caption" display="block" gutterBottom>
+                                Nr faktury
+                              </Typography>
+                              <TextField
+                                fullWidth
+                                size="small"
+                                value={item.invoiceNumber || ''}
+                                onChange={(e) => handleItemChange(index, 'invoiceNumber', e.target.value)}
+                                placeholder="Nr faktury"
+                              />
+                            </Grid>
+                            <Grid item xs={12} sm={4}>
+                              <Typography variant="caption" display="block" gutterBottom>
+                                Data faktury
+                              </Typography>
+                              <TextField
+                                type="date"
+                                fullWidth
+                                size="small"
+                                value={item.invoiceDate || ''}
+                                onChange={(e) => handleItemChange(index, 'invoiceDate', e.target.value)}
+                                InputLabelProps={{ shrink: true }}
+                              />
+                            </Grid>
+                            <Grid item xs={12} sm={4}>
+                              <Typography variant="caption" display="block" gutterBottom>
+                                Planowana data dostawy
+                              </Typography>
+                              <TextField
+                                type="date"
+                                fullWidth
+                                size="small"
+                                value={item.plannedDeliveryDate || ''}
+                                onChange={(e) => handleItemChange(index, 'plannedDeliveryDate', e.target.value)}
+                                InputLabelProps={{ shrink: true }}
+                                placeholder="Planowana dostawa"
+                              />
+                            </Grid>
+                            <Grid item xs={12} sm={4}>
+                              <Typography variant="caption" display="block" gutterBottom>
+                                Rzeczywista data dostawy
+                              </Typography>
+                              <TextField
+                                type="date"
+                                fullWidth
+                                size="small"
+                                value={item.actualDeliveryDate || ''}
+                                onChange={(e) => handleItemChange(index, 'actualDeliveryDate', e.target.value)}
+                                InputLabelProps={{ shrink: true }}
+                                placeholder="Rzeczywista dostawa"
+                              />
+                            </Grid>
+                            <Grid item xs={12} sm={4}>
+                              <Typography variant="caption" display="block" gutterBottom>
+                                Kurs
+                              </Typography>
+                              <TextField
+                                type="number"
+                                fullWidth
+                                size="small"
+                                value={item.exchangeRate || 0}
+                                onChange={(e) => handleItemChange(index, 'exchangeRate', e.target.value)}
+                                placeholder="Kurs"
+                                inputProps={{ min: 0, step: 'any' }}
+                                disabled={item.currency === poData.currency}
+                              />
+                            </Grid>
+                            {Object.keys(supplierSuggestions).length > 0 && item.inventoryItemId && supplierSuggestions[item.inventoryItemId] && (
+                              <Grid item xs={12}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+                                  <InfoIcon fontSize="small" sx={{ mr: 1, color: 'info.main' }} />
+                                  <Typography variant="body2">
+                                    Sugerowana cena: {formatCurrency(supplierSuggestions[item.inventoryItemId].price)}
+                                    {item.supplierName && ` (Dostawca: ${item.supplierName})`}
+                                  </Typography>
+                                </Box>
+                              </Grid>
+                            )}
+                          </Grid>
+                        </TableCell>
+                      </TableRow>
                     )}
-                    <TableCell>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleRemoveItem(index)}
-                        color="error"
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
+                  </React.Fragment>
                 ))}
               </TableBody>
             </Table>
           </TableContainer>
           
-          {/* Informacja o kursach walut */}
-          {poData.items.some(item => item.currency !== poData.currency) && (
-            <Box sx={{ mt: 2, mb: 1 }}>
-              <Typography variant="caption" sx={{ fontStyle: 'italic' }} className="exchange-rate-info">
-                Wartości w walutach obcych zostały przeliczone według kursów z dnia poprzedzającego datę faktury.
-              </Typography>
-            </Box>
-          )}
-          
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2, mb: 2 }}>
-            <Box>
+          {/* Przyciski akcji */}
+          <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
             <Button
               variant="outlined"
-                startIcon={<FindInPageIcon />}
-                onClick={findBestSuppliers}
-                disabled={loading || loadingSupplierSuggestions || poData.items.length === 0}
-                sx={{ mr: 1 }}
-            >
-                Znajdź najlepsze ceny
-            </Button>
-            
-            <Button
-              variant="outlined"
-                startIcon={<CheckCircleOutlineIcon />}
-                onClick={useDefaultSupplierPrices}
-                disabled={loading || loadingSupplierSuggestions || poData.items.length === 0}
-                sx={{ mr: 1 }}
-            >
-                Użyj domyślnych cen
-            </Button>
-            
-            <Button
-              variant="outlined"
-                startIcon={<SuggestIcon />}
-                onClick={fillMinimumOrderQuantities}
-                disabled={loading || loadingSupplierSuggestions || poData.items.length === 0}
-                sx={{ mr: 1 }}
-            >
-                Uzupełnij minimalne ilości
-            </Button>
-
-            <Button
-              variant="outlined"
-                color="secondary"
-                onClick={recalculateAllCurrencyValues}
-                disabled={loading}
-                sx={{ mr: 1 }}
-            >
-                Przelicz kursy
-            </Button>
-            
-            {Object.keys(supplierSuggestions).length > 0 && (
-              <Button
-                  variant="contained"
-                  color="secondary"
-                  startIcon={<CheckIcon />}
-                onClick={applyBestSupplierPrices}
-                  disabled={loading || loadingSupplierSuggestions}
-              >
-                  Zastosuj ceny
-              </Button>
-            )}
-            </Box>
-            
-            <Button
-              variant="contained"
-              color="primary"
               startIcon={<AddIcon />}
               onClick={handleAddItem}
             >
               Dodaj pozycję
+            </Button>
+            
+            {Object.keys(supplierSuggestions).length > 0 && (
+              <Button
+                variant="outlined"
+                color="secondary"
+                startIcon={<AutorenewIcon />}
+                onClick={applyBestSupplierPrices}
+              >
+                Zastosuj najlepsze ceny
+              </Button>
+            )}
+            
+            <Button
+              variant="outlined"
+              color="info"
+              startIcon={<PlaylistAddCheckIcon />}
+              onClick={fillMinimumOrderQuantities}
+            >
+              Uzupełnij minimalne ilości
+            </Button>
+            
+            <Button
+              variant="outlined"
+              color="warning"
+              startIcon={<SearchIcon />}
+              onClick={findBestSuppliers}
+              disabled={loadingSupplierSuggestions}
+            >
+              Znajdź najlepsze ceny
             </Button>
           </Box>
           
