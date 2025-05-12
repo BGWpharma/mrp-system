@@ -454,6 +454,9 @@ const HallDataMachinesPage = () => {
               
               <Divider sx={{ my: 2 }} />
               
+              <Typography variant="subtitle1" sx={{ mb: 2 }}>
+                Surowe odczyty wagi
+              </Typography>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
@@ -466,6 +469,65 @@ const HallDataMachinesPage = () => {
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                     <Typography variant="subtitle2" color="text.secondary">NOK</Typography>
                     <Typography variant="h6">{machine.weight_stats.nok_count || 0} odczytów</Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+              
+              {/* Dodana sekcja informacji o produkcie */}
+              <Divider sx={{ my: 2 }} />
+              
+              <Typography variant="subtitle1" sx={{ mb: 2 }}>
+                Informacje o produkcie (waga)
+              </Typography>
+              <Grid container spacing={3}>
+                <Grid item xs={6} sm={4} md={2}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <Typography variant="subtitle2" color="text.secondary">Średnia waga</Typography>
+                    <Typography variant="h6">{machine.weight_stats.final_avg_weight ? machine.weight_stats.final_avg_weight.toFixed(2) : 'N/A'} g</Typography>
+                  </Box>
+                </Grid>
+                
+                <Grid item xs={6} sm={4} md={2}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <Typography variant="subtitle2" color="text.secondary">Min. waga</Typography>
+                    <Typography variant="h6">{machine.weight_stats.final_min_weight || 'N/A'} g</Typography>
+                  </Box>
+                </Grid>
+                
+                <Grid item xs={6} sm={4} md={2}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <Typography variant="subtitle2" color="text.secondary">Max. waga</Typography>
+                    <Typography variant="h6">{machine.weight_stats.final_max_weight || 'N/A'} g</Typography>
+                  </Box>
+                </Grid>
+                
+                <Grid item xs={6} sm={4} md={2}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <Typography variant="subtitle2" color="text.secondary">Mediana</Typography>
+                    <Typography variant="h6">{machine.weight_stats.final_median_weight || 'N/A'} g</Typography>
+                  </Box>
+                </Grid>
+                
+                <Grid item xs={6} sm={4} md={2}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <Typography variant="subtitle2" color="text.secondary">Odchylenie std.</Typography>
+                    <Typography variant="h6">{machine.weight_stats.final_std_dev ? machine.weight_stats.final_std_dev.toFixed(2) : 'N/A'}</Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+              
+              <Grid container spacing={2} sx={{ mt: 1 }}>
+                <Grid item xs={12} sm={6}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <Typography variant="subtitle2" color="text.secondary">OK</Typography>
+                    <Typography variant="h6">{machine.weight_stats.final_ok_count || 0} produktów</Typography>
+                  </Box>
+                </Grid>
+                
+                <Grid item xs={12} sm={6}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <Typography variant="subtitle2" color="text.secondary">NOK</Typography>
+                    <Typography variant="h6">{machine.weight_stats.final_nok_count || 0} produktów</Typography>
                   </Box>
                 </Grid>
               </Grid>
@@ -568,8 +630,8 @@ const HallDataMachinesPage = () => {
                   <TableCell>Czas</TableCell>
                   <TableCell>Czas trwania</TableCell>
                   <TableCell>Odczyty</TableCell>
-                  <TableCell>Średnia waga</TableCell>
-                  <TableCell>OK/NOK</TableCell>
+                  <TableCell>Średnia waga produktu</TableCell>
+                  <TableCell>OK/NOK produktów</TableCell>
                   <TableCell>Status</TableCell>
                 </TableRow>
               </TableHead>
@@ -580,12 +642,16 @@ const HallDataMachinesPage = () => {
                     <TableCell>{formatDuration(record.duration_minutes)}</TableCell>
                     <TableCell>{record.total_readings || 0}</TableCell>
                     <TableCell>
-                      {record.weight_stats?.avg_weight 
-                        ? `${record.weight_stats.avg_weight.toFixed(2)} g` 
-                        : 'N/A'}
+                      {record.weight_stats?.final_avg_weight 
+                        ? `${record.weight_stats.final_avg_weight.toFixed(2)} g` 
+                        : record.weight_stats?.avg_weight 
+                          ? `${record.weight_stats.avg_weight.toFixed(2)} g`
+                          : 'N/A'}
                     </TableCell>
                     <TableCell>
-                      {`${record.weight_stats?.ok_count || 0} / ${record.weight_stats?.nok_count || 0}`}
+                      {record.weight_stats?.final_ok_count !== undefined && record.weight_stats?.final_nok_count !== undefined
+                        ? `${record.weight_stats.final_ok_count || 0} / ${record.weight_stats.final_nok_count || 0}`
+                        : `${record.weight_stats?.ok_count || 0} / ${record.weight_stats?.nok_count || 0}`}
                     </TableCell>
                     <TableCell>
                       {renderStatusChip(getMachineStatus(record.errors_count))}
