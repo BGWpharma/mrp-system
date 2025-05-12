@@ -177,7 +177,7 @@ const RecipeList = () => {
         setTotalPages(fallbackResult.pagination.totalPages);
       } catch (fallbackError) {
         console.error('Błąd podczas awaryjnego pobierania receptur:', fallbackError);
-      showError('Nie udało się pobrać receptur');
+        showError('Nie udało się pobrać receptur');
       }
       
       setLoading(false);
@@ -477,7 +477,13 @@ const RecipeList = () => {
                       <Chip label="Ogólna" size="small" variant="outlined" />
                     )}
                   </TableCell>
-                  <TableCell>{recipe.updatedAt ? formatDate(recipe.updatedAt.toDate()) : '-'}</TableCell>
+                  <TableCell>
+                    {recipe.updatedAt 
+                      ? (recipe.updatedAt && typeof recipe.updatedAt === 'object' && typeof recipe.updatedAt.toDate === 'function'
+                         ? formatDate(recipe.updatedAt.toDate()) 
+                         : formatDate(recipe.updatedAt)) 
+                      : '-'}
+                  </TableCell>
                   <TableCell align="right">
                     <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
                       <Tooltip title="Podgląd">

@@ -15,7 +15,15 @@ import {
     Timestamp,
     setDoc,
     writeBatch,
-    limit
+    limit,
+    getCountFromServer,
+    startAfter,
+    endBefore,
+    limitToLast,
+    deleteField,
+    collectionGroup,
+    startAt,
+    endAt
   } from 'firebase/firestore';
   import { db } from './firebase/config';
   import { generateLOTNumber } from '../utils/numberGenerators';
@@ -110,13 +118,31 @@ import {
   // ------ ZARZĄDZANIE POZYCJAMI MAGAZYNOWYMI ------
   
   // Pobieranie wszystkich pozycji magazynowych z możliwością filtrowania po magazynie
-  export const getAllInventoryItems = async (warehouseId = null, page = null, pageSize = null, searchTerm = null, searchCategory = null) => {
+  export const getAllInventoryItems = async (warehouseId = null, page = null, pageSize = null, searchTerm = null, searchCategory = null, sortField = null, sortOrder = null) => {
     try {
-      console.log('Pobieranie pozycji magazynowych z paginacją:', { warehouseId, page, pageSize, searchTerm, searchCategory });
+      console.log('Pobieranie pozycji magazynowych z paginacją:', { warehouseId, page, pageSize, searchTerm, searchCategory, sortField, sortOrder });
       const itemsRef = collection(db, INVENTORY_COLLECTION);
       
-      // Konstruuj zapytanie bazowe
-      let q = query(itemsRef, orderBy('name', 'asc'));
+      // Mapowanie nazw pól sortowania na pola w bazie danych
+      const fieldMapping = {
+        'totalQuantity': 'quantity',
+        'name': 'name',
+        'category': 'category',
+        'availableQuantity': 'quantity',  // Domyślnie używamy quantity, ale sortujemy po availableQuantity później
+        'reservedQuantity': 'bookedQuantity'
+      };
+
+      // Konstruuj zapytanie bazowe z sortowaniem
+      let q;
+      
+      // Określ pole do sortowania - domyślnie 'name'
+      const fieldToSort = fieldMapping[sortField] || 'name';
+      
+      // Określ kierunek sortowania - domyślnie 'asc'
+      const direction = sortOrder === 'desc' ? 'desc' : 'asc';
+      
+      // Utwórz zapytanie z sortowaniem
+      q = query(itemsRef, orderBy(fieldToSort, direction));
       
       // Najpierw pobierz wszystkie dokumenty, aby potem filtrować (Firebase ma ograniczenia w złożonych zapytaniach)
       const allItemsSnapshot = await getDocs(q);
@@ -143,90 +169,141 @@ import {
         console.log(`Znaleziono ${allItems.length} pozycji z kategorii "${searchCategory}"`);
       }
       
+      // Dla pól, które wymagają specjalnego sortowania (np. availableQuantity)
+      if (sortField === 'availableQuantity') {
+        // Sortowanie po ilości dostępnej (quantity - bookedQuantity)
+        allItems.sort((a, b) => {
+          const availableA = Number(a.quantity || 0) - Number(a.bookedQuantity || 0);
+          const availableB = Number(b.quantity || 0) - Number(b.bookedQuantity || 0);
+          
+          return sortOrder === 'desc' ? availableB - availableA : availableA - availableB;
+        });
+      }
+      // Dla pozostałych pól, które nie mogą być sortowane po stronie serwera
+      else if (sortField && !['name', 'category', 'createdAt', 'updatedAt', 'quantity', 'bookedQuantity'].includes(fieldMapping[sortField])) {
+        // Sortowanie po stronie klienta dla pól obliczanych
+        allItems.sort((a, b) => {
+          let valueA, valueB;
+          
+          if (sortField === 'totalQuantity') {
+            valueA = Number(a.quantity || 0);
+            valueB = Number(b.quantity || 0);
+          } else if (sortField === 'reservedQuantity') {
+            valueA = Number(a.bookedQuantity || 0);
+            valueB = Number(b.bookedQuantity || 0);
+          } else {
+            // Domyślnie
+            valueA = a[sortField] || 0;
+            valueB = b[sortField] || 0;
+          }
+          
+          return sortOrder === 'desc' ? valueB - valueA : valueA - valueB;
+        });
+      }
+      
       // Całkowita liczba pozycji po filtrowaniu
       const totalCount = allItems.length;
       
-      // Zastosuj paginację, jeśli parametry są zdefiniowane
+      // Zastosuj paginację, jeśli podano parametry paginacji
+      let paginatedItems = allItems;
+      
       if (page !== null && pageSize !== null) {
-        // Dla page=1, pageSize=10 pomijamy 0 (startAt = 0)
-        // Dla page=2, pageSize=10 pomijamy 10 (startAt = 10)
-        const startAt = (page - 1) * pageSize;
+        const startIndex = (page - 1) * pageSize;
+        const endIndex = startIndex + pageSize;
         
-        // Wytnij tylko interesujący nas fragment
-        const paginatedItems = allItems.slice(startAt, startAt + pageSize);
-        
-        // Pobierz wszystkie partie tylko dla wybranych przedmiotów
-        const itemIds = paginatedItems.map(item => item.id);
-        
-        // Pobierz partie tylko dla wybranych produktów, dzieląc zapytania na mniejsze części
-        // ze względu na ograniczenie Firebase (max 10 elementów w operatorze 'in')
+        // Wyciągnij tylko pozycje dla bieżącej strony
+        paginatedItems = allItems.slice(startIndex, endIndex);
+        console.log(`Paginacja: strona ${page}, rozmiar ${pageSize}, wyświetlam elementy ${startIndex+1}-${Math.min(endIndex, totalCount)} z ${totalCount}`);
+      }
+      
+      // Pobierz partie magazynowe tylko dla paginowanych pozycji aby zwiększyć wydajność
+      // Jeśli warehouseId jest określony, pobierz partie tylko dla tego magazynu
+      // W przeciwnym razie pobierz wszystkie partie
+
+      // Implementacja cache dla zapytań o partie
+      const batchesCache = {};
+      
+      // Zbierz ID przedmiotów tylko raz
+      const itemIds = paginatedItems.map(item => item.id);
+      
+      // Pobierz partie tylko jeśli mamy jakieś przedmioty do przetworzenia
+      if (itemIds.length > 0) {
+        // Pobierz wszystkie partie dla wymaganych przedmiotów za jednym razem
+        // używając kilku zapytań batch (Firebase ma limit 10 elementów w warunku 'in')
+        const chunkSize = 10;
         const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
-        let allBatches = [];
         
-        if (itemIds.length > 0) {
-          // Podziel itemIds na porcje po maksymalnie 10 elementów (limit Firebase dla operatora 'in')
-          const chunkSize = 10;
-          for (let i = 0; i < itemIds.length; i += chunkSize) {
-            const chunk = itemIds.slice(i, i + chunkSize);
-            
-            let batchesQuery;
-            if (warehouseId) {
-              // Filtruj również według magazynu
-              batchesQuery = query(
-                batchesRef, 
-                where('itemId', 'in', chunk),
-                where('warehouseId', '==', warehouseId)
-              );
-            } else {
-              batchesQuery = query(batchesRef, where('itemId', 'in', chunk));
-            }
-            
-            const batchesChunkSnapshot = await getDocs(batchesQuery);
-            const batchesChunk = batchesChunkSnapshot.docs.map(doc => ({
-              id: doc.id,
-              ...doc.data()
-            }));
-            allBatches = [...allBatches, ...batchesChunk];
+        // Funkcja pomocnicza do wykonania zapytania dla jednej partii ID przedmiotów
+        const fetchBatchesForItems = async (itemIdsChunk) => {
+          let batchesQuery;
+          if (warehouseId) {
+            batchesQuery = query(
+              batchesRef, 
+              where('itemId', 'in', itemIdsChunk),
+              where('warehouseId', '==', warehouseId)
+            );
+          } else {
+            batchesQuery = query(batchesRef, where('itemId', 'in', itemIdsChunk));
           }
-        } else {
-          const batchesQuery = query(batchesRef); // Pusta lista - pobierz wszystkie (nie powinno być takiej sytuacji)
-          const batchesSnapshot = await getDocs(batchesQuery);
-          allBatches = batchesSnapshot.docs.map(doc => ({
+          
+          const snapshot = await getDocs(batchesQuery);
+          return snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
           }));
+        };
+        
+        // Podziel itemIds na mniejsze porcje i wykonaj zapytania równolegle
+        const chunks = [];
+        for (let i = 0; i < itemIds.length; i += chunkSize) {
+          chunks.push(itemIds.slice(i, i + chunkSize));
         }
         
+        // Wykonaj wszystkie zapytania równolegle
+        const batchesArrays = await Promise.all(
+          chunks.map(chunk => fetchBatchesForItems(chunk))
+        );
+        
+        // Połącz wyniki
+        const allBatches = batchesArrays.flat();
         console.log('Pobrane partie dla stronicowanych pozycji:', allBatches.length);
         
-        // Przypisz partie do odpowiednich pozycji magazynowych
-        // i oblicz ilości dostępne i zarezerwowane
-        for (const item of paginatedItems) {
-          // Znajdź wszystkie partie dla danej pozycji
-          const itemBatches = allBatches.filter(batch => batch.itemId === item.id);
-          
-          // Oblicz łączną ilość dostępną i zarezerwowaną
-          let totalQuantity = 0;
-          let bookedQuantity = 0;
-          
-          itemBatches.forEach(batch => {
-            totalQuantity += parseFloat(batch.quantity || 0);
-            bookedQuantity += parseFloat(batch.bookedQuantity || 0);
-          });
-          
-          // Przypisz obliczone wartości do pozycji
-          item.quantity = totalQuantity;
-          item.bookedQuantity = bookedQuantity;
-          item.batches = itemBatches;
-          
-          // Dodaj nazwę magazynu (jeśli istnieje)
-          if (warehouseId && itemBatches.length > 0) {
-            item.warehouseId = warehouseId;
-            // Nazwę magazynu można dodać później w komponencie
+        // Indeksuj partie według itemId dla szybszego dostępu
+        for (const batch of allBatches) {
+          const itemId = batch.itemId;
+          if (!batchesCache[itemId]) {
+            batchesCache[itemId] = [];
           }
+          batchesCache[itemId].push(batch);
         }
+      }
+      
+      // Przypisz partie do odpowiednich pozycji magazynowych
+      // i oblicz ilości dostępne
+      for (const item of paginatedItems) {
+        // Znajdź wszystkie partie dla danej pozycji z cache
+        const itemBatches = batchesCache[item.id] || [];
         
-        // Zwróć obiekt z paginowanymi danymi i informacjami o paginacji
+        // Oblicz łączną ilość dostępną
+        let totalQuantity = 0;
+        
+        itemBatches.forEach(batch => {
+          totalQuantity += parseFloat(batch.quantity || 0);
+        });
+        
+        // Przypisz obliczone wartości do pozycji
+        item.quantity = totalQuantity;
+        item.bookedQuantity = 0; // To zostanie zaktualizowane później jeśli potrzeba
+        item.batches = itemBatches;
+        
+        // Dodaj nazwę magazynu (jeśli istnieje)
+        if (warehouseId && itemBatches.length > 0) {
+          item.warehouseId = warehouseId;
+        }
+      }
+      
+      // Zwróć obiekt z paginowanymi danymi i informacjami o paginacji
+      if (page !== null && pageSize !== null) {
         return {
           items: paginatedItems,
           totalCount: totalCount,
@@ -1164,8 +1241,11 @@ import {
         updatedBy: userId
       };
       
-      // Jeśli zmieniono datę ważności, konwertuj ją na Timestamp
-      if (batchData.expiryDate && batchData.expiryDate instanceof Date) {
+      // Jeśli zmieniono datę ważności, konwertuj ją na Timestamp lub usuń pole
+      if (batchData.noExpiryDate === true || batchData.expiryDate === null) {
+        // Jeśli zaznaczono "brak terminu ważności" lub explicite ustawiono na null
+        updateData.expiryDate = deleteField();
+      } else if (batchData.expiryDate && batchData.expiryDate instanceof Date) {
         updateData.expiryDate = Timestamp.fromDate(batchData.expiryDate);
       }
       
@@ -4041,6 +4121,129 @@ import {
       });
     } catch (error) {
       console.error('Błąd podczas pobierania oczekujących zamówień:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Usuwa partię z systemu, sprawdzając wcześniej, czy nie jest używana w MO/PO
+   * @param {string} batchId - ID partii do usunięcia
+   * @param {string} userId - ID użytkownika wykonującego operację
+   * @returns {Promise<Object>} - Wynik operacji
+   */
+  export const deleteBatch = async (batchId, userId) => {
+    try {
+      if (!batchId) {
+        throw new Error('Nie podano ID partii');
+      }
+
+      // Pobierz dane partii
+      const batchRef = doc(db, INVENTORY_BATCHES_COLLECTION, batchId);
+      const batchDoc = await getDoc(batchRef);
+
+      if (!batchDoc.exists()) {
+        throw new Error('Partia nie istnieje');
+      }
+
+      const batchData = batchDoc.data();
+      const itemId = batchData.itemId;
+      const lotNumber = batchData.lotNumber || batchData.batchNumber || 'Nieznana partia';
+      const quantity = batchData.quantity || 0;
+
+      // Sprawdź, czy partia jest używana w zamówieniach produkcyjnych
+      // Szukamy zadań produkcyjnych, które mają rezerwacje na tę partię
+      const productionTasksRef = collection(db, 'productionTasks');
+      let hasReservations = false;
+      let reservationDetails = [];
+
+      // Sprawdź zadania produkcyjne, które mają zarezerwowane materiały
+      const tasksWithMaterialsQuery = query(
+        productionTasksRef,
+        where('materialsReserved', '==', true)
+      );
+      
+      const tasksSnapshot = await getDocs(tasksWithMaterialsQuery);
+      
+      for (const taskDoc of tasksSnapshot.docs) {
+        const taskData = taskDoc.data();
+        
+        // Sprawdź, czy zadanie ma materialBatches z danym itemId
+        if (taskData.materialBatches && taskData.materialBatches[itemId]) {
+          // Sprawdź czy wśród tych partii jest ta, którą chcemy usunąć
+          const batchReservation = taskData.materialBatches[itemId].find(
+            batch => batch.batchId === batchId
+          );
+          
+          if (batchReservation) {
+            hasReservations = true;
+            reservationDetails.push({
+              taskId: taskDoc.id,
+              taskName: taskData.name || 'Zadanie produkcyjne',
+              moNumber: taskData.moNumber || 'Nieznany numer MO',
+              quantityReserved: batchReservation.quantity || 0
+            });
+          }
+        }
+      }
+      
+      // Jeśli partia jest używana w zadaniach produkcyjnych, zwróć błąd
+      if (hasReservations) {
+        let message = `Partia ${lotNumber} jest używana w następujących zadaniach produkcyjnych:`;
+        reservationDetails.forEach(detail => {
+          message += `\n- ${detail.taskName} (MO: ${detail.moNumber}) - zarezerwowano: ${detail.quantityReserved}`;
+        });
+        message += '\n\nNajpierw usuń rezerwacje w tych zadaniach.';
+        
+        return {
+          success: false,
+          message,
+          reservationDetails
+        };
+      }
+
+      // Jeśli partia ma ilość > 0, zaktualizuj stan magazynowy produktu
+      if (quantity > 0 && itemId) {
+        const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
+        const itemDoc = await getDoc(itemRef);
+        
+        if (itemDoc.exists()) {
+          const itemData = itemDoc.data();
+          const currentQuantity = itemData.quantity || 0;
+          
+          // Odejmij ilość partii od całkowitej ilości produktu
+          await updateDoc(itemRef, {
+            quantity: Math.max(0, currentQuantity - quantity),
+            updatedAt: serverTimestamp(),
+            updatedBy: userId
+          });
+        }
+      }
+
+      // Dodaj transakcję informującą o usunięciu partii
+      const transactionData = {
+        type: 'DELETE_BATCH',
+        itemId: itemId,
+        itemName: batchData.itemName || 'Nieznany produkt',
+        batchId: batchId,
+        batchNumber: lotNumber,
+        quantity: quantity,
+        warehouseId: batchData.warehouseId,
+        notes: `Usunięcie partii ${lotNumber}`,
+        createdBy: userId,
+        createdAt: serverTimestamp()
+      };
+      
+      await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
+
+      // Usuń partię
+      await deleteDoc(batchRef);
+      
+      return {
+        success: true,
+        message: `Partia ${lotNumber} została usunięta`
+      };
+    } catch (error) {
+      console.error(`Błąd podczas usuwania partii o ID ${batchId}:`, error);
       throw error;
     }
   };

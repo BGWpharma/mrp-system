@@ -754,7 +754,7 @@ const ItemDetailsPage = () => {
                               {price.supplierName}
                             </TableCell>
                             <TableCell align="right" sx={{ fontWeight: 'medium' }}>
-                              {price.price.toFixed(2)} {price.currency || item.currency || 'EUR'}
+                              {price.price} {price.currency || item.currency || 'EUR'}
                             </TableCell>
                             <TableCell align="right">{price.minQuantity || 1} {item.unit}</TableCell>
                             <TableCell align="right">{price.leadTime || 7} dni</TableCell>
@@ -777,7 +777,7 @@ const ItemDetailsPage = () => {
                     <TableBody>
                       <TableRow>
                         <TableCell component="th" sx={{ width: '40%', fontWeight: 'medium' }}>Cena</TableCell>
-                        <TableCell>{item.price ? `${item.price.toFixed(2)} ${item.currency || 'EUR'}` : 'Nie określono'}</TableCell>
+                        <TableCell>{item.price ? `${item.price} ${item.currency || 'EUR'}` : 'Nie określono'}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell component="th" sx={{ fontWeight: 'medium' }}>Min. ilość</TableCell>

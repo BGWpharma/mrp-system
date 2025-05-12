@@ -40,9 +40,10 @@ import {
   Edit as EditIcon,
   SwapHoriz as SwapHorizIcon,
   QrCode as QrCodeIcon,
-  Print as PrintIcon
+  Print as PrintIcon,
+  Delete as DeleteIcon
 } from '@mui/icons-material';
-import { getInventoryItemById, getItemBatches, getAllWarehouses, transferBatch } from '../../services/inventoryService';
+import { getInventoryItemById, getItemBatches, getAllWarehouses, transferBatch, deleteBatch } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
 import { Timestamp } from 'firebase/firestore';
@@ -70,6 +71,9 @@ const BatchesPage = () => {
   const [processingTransfer, setProcessingTransfer] = useState(false);
   const [labelDialogOpen, setLabelDialogOpen] = useState(false);
   const [selectedBatchForLabel, setSelectedBatchForLabel] = useState(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedBatchForDelete, setSelectedBatchForDelete] = useState(null);
+  const [processingDelete, setProcessingDelete] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -338,6 +342,54 @@ const BatchesPage = () => {
     }, 300);
   };
 
+  const openDeleteDialog = (batch) => {
+    setSelectedBatchForDelete(batch);
+    setDeleteDialogOpen(true);
+  };
+
+  const closeDeleteDialog = () => {
+    setDeleteDialogOpen(false);
+    setSelectedBatchForDelete(null);
+  };
+
+  const handleDeleteBatch = async () => {
+    if (!selectedBatchForDelete) return;
+    
+    try {
+      setProcessingDelete(true);
+      
+      const result = await deleteBatch(selectedBatchForDelete.id, user?.uid || 'unknown');
+      
+      if (result.success) {
+        showSuccess(result.message || 'Partia została usunięta');
+        
+        // Odśwież listę partii po usunięciu
+        const batchesData = await getItemBatches(id);
+        // Dodaj informacje o lokalizacji magazynu do każdej partii
+        const enhancedBatches = batchesData.map(batch => {
+          const warehouse = warehouses.find(w => w.id === batch.warehouseId);
+          return {
+            ...batch,
+            warehouseName: warehouse?.name || 'Magazyn podstawowy',
+            warehouseAddress: warehouse?.address || '',
+          };
+        });
+        
+        setBatches(enhancedBatches);
+        setFilteredBatches(enhancedBatches);
+      } else {
+        showError(result.message || 'Nie można usunąć partii');
+      }
+      
+      closeDeleteDialog();
+    } catch (error) {
+      console.error('Error deleting batch:', error);
+      showError(error.message || 'Wystąpił błąd podczas usuwania partii');
+    } finally {
+      setProcessingDelete(false);
+    }
+  };
+
   if (loading) {
     return <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>Ładowanie danych...</Container>;
   }
@@ -517,12 +569,12 @@ const BatchesPage = () => {
                             if (!batch.unitPrice) return '-';
                             
                             // Podstawowy format ceny
-                            let priceDisplay = `${parseFloat(batch.unitPrice).toFixed(2)} EUR`;
+                            let priceDisplay = `${parseFloat(batch.unitPrice).toFixed(4)} EUR`;
                             
                             // Jeśli mamy informacje o cenie bazowej i dodatkowym koszcie
                             if (batch.baseUnitPrice !== undefined && batch.additionalCostPerUnit !== undefined) {
-                              const basePrice = parseFloat(batch.baseUnitPrice).toFixed(2);
-                              const additionalCost = parseFloat(batch.additionalCostPerUnit).toFixed(2);
+                              const basePrice = parseFloat(batch.baseUnitPrice).toFixed(4);
+                              const additionalCost = parseFloat(batch.additionalCostPerUnit).toFixed(4);
                               
                               // Wyświetl rozszerzone informacje o cenie
                               return (
@@ -657,6 +709,15 @@ const BatchesPage = () => {
                                 </IconButton>
                               </Tooltip>
                             )}
+                            <Tooltip title="Usuń partię">
+                              <IconButton 
+                                size="small" 
+                                color="error"
+                                onClick={() => openDeleteDialog(batch)}
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            </Tooltip>
                           </Box>
                         </TableCell>
                       </TableRow>
@@ -702,10 +763,10 @@ const BatchesPage = () => {
               {/* Dodaj informacje o cenie jednostkowej z rozbiciem na bazową i dodatkowe koszty */}
               {selectedBatch.unitPrice > 0 && (
                 <Typography variant="body2" gutterBottom>
-                  <strong>Cena jednostkowa:</strong> {parseFloat(selectedBatch.unitPrice).toFixed(2)} EUR
+                  <strong>Cena jednostkowa:</strong> {parseFloat(selectedBatch.unitPrice).toFixed(4)} EUR
                   {selectedBatch.baseUnitPrice !== undefined && selectedBatch.additionalCostPerUnit !== undefined && (
                     <Box component="span" sx={{ color: 'text.secondary', fontSize: '0.9em' }}>
-                      {` (baza: ${parseFloat(selectedBatch.baseUnitPrice).toFixed(2)} EUR + dodatkowy koszt: ${parseFloat(selectedBatch.additionalCostPerUnit).toFixed(2)} EUR)`}
+                      {` (baza: ${parseFloat(selectedBatch.baseUnitPrice).toFixed(4)} EUR + dodatkowy koszt: ${parseFloat(selectedBatch.additionalCostPerUnit).toFixed(4)} EUR)`}
                     </Box>
                   )}
                 </Typography>
@@ -838,6 +899,86 @@ const BatchesPage = () => {
         item={item}
         batches={selectedBatchForLabel ? [selectedBatchForLabel] : batches}
       />
+
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={closeDeleteDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          Czy na pewno chcesz usunąć tę partię?
+        </DialogTitle>
+        <DialogContent>
+          {selectedBatchForDelete && (
+            <Box sx={{ pt: 1 }}>
+              <Typography variant="body1" color="error" gutterBottom>
+                Uwaga! Ta operacja jest nieodwracalna.
+              </Typography>
+              <Typography variant="body2" gutterBottom>
+                <strong>Numer partii/LOT:</strong> {selectedBatchForDelete.batchNumber || selectedBatchForDelete.lotNumber || '-'}
+              </Typography>
+              <Typography variant="body2" gutterBottom>
+                <strong>Ilość:</strong> {selectedBatchForDelete.quantity} {item?.unit || 'szt.'}
+              </Typography>
+              <Typography variant="body2" gutterBottom>
+                <strong>Magazyn:</strong> {selectedBatchForDelete.warehouseAddress || selectedBatchForDelete.warehouseName || 'Magazyn podstawowy'}
+              </Typography>
+              
+              {/* Dodatkowe informacje jeśli partia pochodzi z PO */}
+              {selectedBatchForDelete.purchaseOrderDetails && (
+                <Box sx={{ mt: 2, p: 1, bgcolor: '#fff4e5', borderRadius: 1 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Ta partia jest powiązana z zamówieniem zakupowym:
+                  </Typography>
+                  <Typography variant="body2">
+                    PO: {selectedBatchForDelete.purchaseOrderDetails.number || '-'}
+                  </Typography>
+                  {selectedBatchForDelete.purchaseOrderDetails.supplier && (
+                    <Typography variant="body2">
+                      Dostawca: {selectedBatchForDelete.purchaseOrderDetails.supplier.name || '-'}
+                    </Typography>
+                  )}
+                </Box>
+              )}
+              
+              <Typography variant="body2" sx={{ mt: 2, fontWeight: 'medium' }}>
+                Usunięcie partii spowoduje:
+              </Typography>
+              <ul>
+                <li>
+                  <Typography variant="body2">
+                    Zmniejszenie całkowitej ilości produktu w magazynie
+                  </Typography>
+                </li>
+                <li>
+                  <Typography variant="body2">
+                    Pozostawienie historii transakcji (pojawi się nowa transakcja usunięcia)
+                  </Typography>
+                </li>
+                <li>
+                  <Typography variant="body2">
+                    Utratę powiązań z zamówieniami zakupowymi lub produkcyjnymi
+                  </Typography>
+                </li>
+              </ul>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeDeleteDialog} disabled={processingDelete}>
+            Anuluj
+          </Button>
+          <Button 
+            variant="contained" 
+            color="error" 
+            onClick={handleDeleteBatch}
+            disabled={processingDelete}
+          >
+            {processingDelete ? 'Usuwanie...' : 'Usuń partię'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

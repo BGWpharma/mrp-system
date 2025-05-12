@@ -8,7 +8,12 @@ import {
   Button,
   Grid,
   CircularProgress,
-  InputAdornment
+  InputAdornment,
+  FormControl,
+  FormControlLabel,
+  Checkbox,
+  InputLabel,
+  FormHelperText
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -31,6 +36,7 @@ const BatchEditForm = () => {
     batchNumber: '',
     lotNumber: '',
     expiryDate: null,
+    noExpiryDate: false,
     notes: '',
     unitPrice: '',
     quantity: '',
@@ -69,11 +75,15 @@ const BatchEditForm = () => {
             return;
           }
           
+          // Sprawdź, czy partia ma datę ważności
+          const hasExpiryDate = batch.expiryDate !== null && batch.expiryDate !== undefined;
+          
           // Ustaw dane partii w formularzu
           setBatchData({
             batchNumber: batch.batchNumber || '',
             lotNumber: batch.lotNumber || '',
-            expiryDate: batch.expiryDate ? new Date(batch.expiryDate) : null,
+            expiryDate: hasExpiryDate ? (batch.expiryDate.toDate ? batch.expiryDate.toDate() : new Date(batch.expiryDate)) : null,
+            noExpiryDate: !hasExpiryDate,
             notes: batch.notes || '',
             unitPrice: batch.unitPrice || '',
             quantity: batch.quantity || 0,
@@ -90,11 +100,15 @@ const BatchEditForm = () => {
             return;
           }
           
+          // Sprawdź, czy partia ma datę ważności
+          const hasExpiryDate = batch.expiryDate !== null && batch.expiryDate !== undefined;
+          
           // Ustaw dane partii w formularzu
           setBatchData({
             batchNumber: batch.batchNumber || '',
             lotNumber: batch.lotNumber || '',
-            expiryDate: batch.expiryDate ? new Date(batch.expiryDate) : null,
+            expiryDate: hasExpiryDate ? (batch.expiryDate.toDate ? batch.expiryDate.toDate() : new Date(batch.expiryDate)) : null,
+            noExpiryDate: !hasExpiryDate,
             notes: batch.notes || '',
             unitPrice: batch.unitPrice || '',
             quantity: batch.quantity || 0,
@@ -127,6 +141,15 @@ const BatchEditForm = () => {
     setBatchData(prev => ({ ...prev, expiryDate: date }));
   };
 
+  const handleNoExpiryDateChange = (e) => {
+    const { checked } = e.target;
+    setBatchData(prev => ({ 
+      ...prev, 
+      noExpiryDate: checked,
+      expiryDate: checked ? null : prev.expiryDate 
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -150,7 +173,7 @@ const BatchEditForm = () => {
       const updateData = {
         batchNumber: batchData.batchNumber,
         lotNumber: batchData.lotNumber,
-        expiryDate: batchData.expiryDate,
+        expiryDate: batchData.noExpiryDate ? null : batchData.expiryDate,
         notes: batchData.notes,
         unitPrice: batchData.unitPrice ? parseFloat(batchData.unitPrice) : 0,
         quantity: batchData.quantity ? parseFloat(batchData.quantity) : 0
@@ -249,17 +272,62 @@ const BatchEditForm = () => {
               />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <DatePicker
-                label="Data ważności"
-                value={batchData.expiryDate}
-                onChange={handleDateChange}
-                slotProps={{
-                  textField: {
-                    fullWidth: true,
-                    margin: 'normal'
-                  }
-                }}
-              />
+              <FormControl fullWidth margin="normal">
+                <InputLabel shrink id="expiry-date-label">Data ważności</InputLabel>
+                <Box sx={{ 
+                  mt: 2,
+                  display: 'flex', 
+                  flexDirection: 'column'
+                }}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={batchData.noExpiryDate}
+                        onChange={handleNoExpiryDateChange}
+                        name="noExpiryDate"
+                        color="primary"
+                      />
+                    }
+                    label={
+                      <Typography 
+                        variant="body2" 
+                        sx={{ 
+                          fontWeight: batchData.noExpiryDate ? 'bold' : 'normal',
+                          color: batchData.noExpiryDate ? 'text.primary' : 'text.secondary'  
+                        }}
+                      >
+                        Brak terminu ważności
+                      </Typography>
+                    }
+                    sx={{ 
+                      mb: 1, 
+                      p: 1, 
+                      border: batchData.noExpiryDate ? '1px solid rgba(0, 0, 0, 0.23)' : 'none',
+                      borderRadius: 1,
+                      bgcolor: batchData.noExpiryDate ? 'rgba(0, 0, 0, 0.04)' : 'transparent'
+                    }}
+                  />
+                  {!batchData.noExpiryDate && (
+                    <DatePicker
+                      label="Wybierz datę"
+                      value={batchData.expiryDate}
+                      onChange={handleDateChange}
+                      slotProps={{
+                        textField: {
+                          fullWidth: true,
+                          margin: 'normal'
+                        }
+                      }}
+                    />
+                  )}
+                </Box>
+                {batchData.noExpiryDate && (
+                  <FormHelperText>
+                    Produkt nie będzie śledzony pod kątem terminu przydatności. 
+                    Zalecane tylko dla przedmiotów bez określonego terminu ważności.
+                  </FormHelperText>
+                )}
+              </FormControl>
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
@@ -272,7 +340,7 @@ const BatchEditForm = () => {
                 margin="normal"
                 InputProps={{
                   startAdornment: <InputAdornment position="start">EUR</InputAdornment>,
-                  inputProps: { min: 0, step: 0.01 }
+                  inputProps: { min: 0, step: 0.0001 }
                 }}
               />
             </Grid>

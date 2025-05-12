@@ -280,7 +280,7 @@ const SupplierPricesList = ({ itemId, currency = DEFAULT_CURRENCY }) => {
                 <TableRow key={item.id}>
                   <TableCell>{item.supplierName || 'Nieznany dostawca'}</TableCell>
                   <TableCell align="right">
-                    {item.price.toFixed(2)} {item.currency || currency}
+                    {item.price} {item.currency || currency}
                   </TableCell>
                   <TableCell align="right">{item.minQuantity || 1}</TableCell>
                   <TableCell align="right">{item.leadTime || 7}</TableCell>
@@ -356,7 +356,7 @@ const SupplierPricesList = ({ itemId, currency = DEFAULT_CURRENCY }) => {
               onChange={handleInputChange}
               InputProps={{
                 endAdornment: <InputAdornment position="end">{currency}</InputAdornment>,
-                inputProps: { min: 0, step: 0.01 }
+                inputProps: { min: 0 }
               }}
               sx={{ mb: 2 }}
             />

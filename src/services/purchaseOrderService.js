@@ -305,21 +305,27 @@ export const getPurchaseOrderById = async (id) => {
     const poData = purchaseOrderDoc.data();
     console.log("Dane PO z bazy:", poData);
     
-    // Pobierz dane dostawcy, jeśli zamówienie ma referencję do dostawcy
+    // Pobierz dane dostawcy, tylko jeśli zamówienie ma referencję do dostawcy
+    // i nie zawiera już pełnych danych dostawcy
     let supplierData = null;
-    if (poData.supplierId) {
+    if (poData.supplier && poData.supplier.id) {
+      // Już mamy dane dostawcy w obiekcie zamówienia
+      supplierData = poData.supplier;
+    } else if (poData.supplierId) {
+      // Pobierz dane dostawcy z bazy
       const supplierDoc = await getDoc(doc(db, SUPPLIERS_COLLECTION, poData.supplierId));
       if (supplierDoc.exists()) {
         supplierData = { id: supplierDoc.id, ...supplierDoc.data() };
       }
     }
     
-    // Pastewniamy, że wszystkie pola są poprawnie przekształcone
+    // Upewnij się, że wszystkie pola są poprawnie przekształcone - użyj destrukturyzacji z wartościami domyślnymi
+    // aby uniknąć wielu operacji
     const result = {
       id: purchaseOrderDoc.id,
       ...poData,
-      number: poData.number || '',
       supplier: supplierData,
+      number: poData.number || '',
       items: poData.items || [],
       totalValue: poData.totalValue || 0,
       totalGross: poData.totalGross || 0,
@@ -329,7 +335,7 @@ export const getPurchaseOrderById = async (id) => {
       deliveryAddress: poData.deliveryAddress || '',
       notes: poData.notes || '',
       status: poData.status || 'draft',
-      // Bezpieczna konwersja dat z wykorzystaniem globalnej funkcji safeConvertDate
+      // Bezpieczna konwersja dat
       orderDate: safeConvertDate(poData.orderDate),
       expectedDeliveryDate: safeConvertDate(poData.expectedDeliveryDate),
       createdAt: safeConvertDate(poData.createdAt),

@@ -170,9 +170,62 @@ class SearchIndexService {
       filteredRecipes.sort((a, b) => {
         // Obsługa różnych typów pól
         if (sortField === 'updatedAt' || sortField === 'createdAt') {
-          // Daty - zakładamy że są timestampami Firestore lub null
-          const aValue = a[sortField] ? a[sortField].toDate ? a[sortField].toDate().getTime() : a[sortField] : 0;
-          const bValue = b[sortField] ? b[sortField].toDate ? b[sortField].toDate().getTime() : b[sortField] : 0;
+          // Daty - obsługa różnych formatów daty w bezpieczny sposób
+          let aValue = 0;
+          let bValue = 0;
+          
+          try {
+            if (a[sortField]) {
+              // Obsługa obiektu Firestore Timestamp
+              if (typeof a[sortField] === 'object' && typeof a[sortField].toDate === 'function') {
+                aValue = a[sortField].toDate().getTime();
+              }
+              // Obsługa obiektu Date 
+              else if (a[sortField] instanceof Date) {
+                aValue = a[sortField].getTime();
+              }
+              // Obsługa stringa z datą
+              else if (typeof a[sortField] === 'string') {
+                aValue = new Date(a[sortField]).getTime();
+                if (isNaN(aValue)) aValue = 0;
+              }
+              // Obsługa obiektu z sekundami i nanosekundami (format Firestore Timestamp)
+              else if (typeof a[sortField] === 'object' && 'seconds' in a[sortField]) {
+                aValue = a[sortField].seconds * 1000;
+              }
+              // Obsługa liczby (timestamp)
+              else if (typeof a[sortField] === 'number') {
+                aValue = a[sortField];
+              }
+            }
+            
+            if (b[sortField]) {
+              // Obsługa obiektu Firestore Timestamp
+              if (typeof b[sortField] === 'object' && typeof b[sortField].toDate === 'function') {
+                bValue = b[sortField].toDate().getTime();
+              }
+              // Obsługa obiektu Date
+              else if (b[sortField] instanceof Date) {
+                bValue = b[sortField].getTime();
+              }
+              // Obsługa stringa z datą
+              else if (typeof b[sortField] === 'string') {
+                bValue = new Date(b[sortField]).getTime();
+                if (isNaN(bValue)) bValue = 0;
+              }
+              // Obsługa obiektu z sekundami i nanosekundami (format Firestore Timestamp)
+              else if (typeof b[sortField] === 'object' && 'seconds' in b[sortField]) {
+                bValue = b[sortField].seconds * 1000;
+              }
+              // Obsługa liczby (timestamp)
+              else if (typeof b[sortField] === 'number') {
+                bValue = b[sortField];
+              }
+            }
+          } catch (error) {
+            console.error('Błąd podczas sortowania według daty:', error);
+          }
+          
           return sortMultiplier * (aValue - bValue);
         } else {
           // Standardowe porównanie string/number

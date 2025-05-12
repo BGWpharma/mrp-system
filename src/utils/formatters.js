@@ -10,12 +10,17 @@
 export const formatDate = (date, options = {}) => {
     if (!date) return '—';
     
-    // Obsługa timestampu Firestore
-    if (date && typeof date === 'object' && typeof date.toDate === 'function') {
-      date = date.toDate();
-    }
-    
     try {
+      // Obsługa timestampu Firestore z metodą toDate
+      if (date && typeof date === 'object' && typeof date.toDate === 'function') {
+        date = date.toDate();
+      }
+      
+      // Obsługa obiektu Firestore Timestamp z polami seconds i nanoseconds
+      if (date && typeof date === 'object' && 'seconds' in date && 'nanoseconds' in date) {
+        date = new Date(date.seconds * 1000 + date.nanoseconds / 1000000);
+      }
+      
       // Obsługa stringa
       if (typeof date === 'string') {
         // Sprawdź czy jest to format ISO
@@ -63,9 +68,10 @@ export const formatDate = (date, options = {}) => {
    * 
    * @param {number} amount - Kwota do sformatowania
    * @param {string} currency - Kod waluty (domyślnie EUR)
+   * @param {number} precision - Liczba miejsc po przecinku (domyślnie 4 dla cen jednostkowych)
    * @returns {string} Sformatowana kwota
    */
-  export const formatCurrency = (amount, currency = 'EUR') => {
+  export const formatCurrency = (amount, currency = 'EUR', precision = 4) => {
     if (amount === undefined || amount === null) return '—';
     
     // Upewnij się, że amount jest liczbą
@@ -81,7 +87,9 @@ export const formatDate = (date, options = {}) => {
     try {
       return new Intl.NumberFormat('pl-PL', {
         style: 'currency',
-        currency
+        currency,
+        minimumFractionDigits: precision,
+        maximumFractionDigits: precision
       }).format(amount);
     } catch (error) {
       console.error('Error formatting currency:', error);

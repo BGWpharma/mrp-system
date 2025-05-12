@@ -56,6 +56,8 @@ import {
   DeleteForever as DeleteForeverIcon,
   ViewColumn as ViewColumnIcon,
   ArrowDropUp as ArrowDropUpIcon,
+  PictureAsPdf as PdfIcon,
+  TableChart as CsvIcon
 } from '@mui/icons-material';
 import { getAllInventoryItems, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, getItemBatches, updateReservation, updateReservationTasks, cleanupDeletedTaskReservations, deleteReservation, getInventoryItemById, recalculateAllInventoryQuantities, cleanupMicroReservations } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
@@ -175,51 +177,12 @@ const InventoryList = () => {
       order: newOrder
     });
     
-    // Sortuj filteredItems według wybranego pola
-    const sortedItems = [...filteredItems].sort((a, b) => {
-      let valueA, valueB;
-      
-      // Obsługa różnych typów pól
-      if (field === 'name' || field === 'category') {
-        valueA = (a[field] || '').toLowerCase();
-        valueB = (b[field] || '').toLowerCase();
-        return newOrder === 'asc' 
-          ? valueA.localeCompare(valueB) 
-          : valueB.localeCompare(valueA);
-      } else if (field === 'totalQuantity') {
-        valueA = Number(a.quantity || 0);
-        valueB = Number(b.quantity || 0);
-      } else if (field === 'reservedQuantity') {
-        valueA = Number(a.bookedQuantity || 0);
-        valueB = Number(b.bookedQuantity || 0);
-      } else if (field === 'availableQuantity') {
-        valueA = Number(a.quantity || 0) - Number(a.bookedQuantity || 0);
-        valueB = Number(b.quantity || 0) - Number(b.bookedQuantity || 0);
-      } else if (field === 'status') {
-        // Sortuj według statusu (jeśli jest)
-        valueA = a.status || '';
-        valueB = b.status || '';
-        return newOrder === 'asc' 
-          ? valueA.localeCompare(valueB) 
-          : valueB.localeCompare(valueA);
-      } else if (field === 'location') {
-        // Sortuj według lokalizacji (jeśli jest)
-        valueA = a.warehouseName || '';
-        valueB = b.warehouseName || '';
-        return newOrder === 'asc' 
-          ? valueA.localeCompare(valueB) 
-          : valueB.localeCompare(valueA);
-      } else {
-        // Domyślnie
-        valueA = a[field] || 0;
-        valueB = b[field] || 0;
-      }
-      
-      // Sortowanie liczbowe
-      return newOrder === 'asc' ? valueA - valueB : valueB - valueA;
-    });
+    // Zamiast sortować lokalnie, wywołamy fetchInventoryItems z nowymi parametrami sortowania
+    // Najpierw resetujemy paginację
+    setPage(1);
     
-    setFilteredItems(sortedItems);
+    // Następnie pobieramy dane z serwera z nowym sortowaniem
+    fetchInventoryItems(field, newOrder);
   };
 
   // Dodaj nowy useEffect do pobrania lokalizacji
@@ -245,20 +208,15 @@ const InventoryList = () => {
     setSelectedWarehouse(event.target.value);
   };
 
-  // Efekt, który ponownie pobiera dane po zmianie stanów
+  // Efekt, który pobiera dane przy pierwszym renderowaniu
   useEffect(() => {
-    fetchInventoryItems();
-  }, [selectedWarehouse]);
-
-  // Pobierz wszystkie pozycje przy montowaniu komponentu
-  useEffect(() => {
-    fetchInventoryItems();
+    fetchInventoryItems(tableSort.field, tableSort.order);
     fetchExpiryData();
     
     // Dodaj nasłuchiwanie na zdarzenie aktualizacji stanów
     const handleInventoryUpdate = () => {
       console.log('Wykryto aktualizację stanów, odświeżam dane...');
-      fetchInventoryItems();
+      fetchInventoryItems(tableSort.field, tableSort.order);
     };
     
     window.addEventListener('inventory-updated', handleInventoryUpdate);
@@ -286,6 +244,11 @@ const InventoryList = () => {
     
     searchTermTimerRef.current = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
+      // Po ustawieniu nowego terminu wyszukiwania, wywołujemy fetchInventoryItems z aktualnymi parametrami sortowania
+      if (searchTerm !== debouncedSearchTerm) {
+        setPage(1); // Reset paginacji
+        fetchInventoryItems(tableSort.field, tableSort.order);
+      }
     }, 1000);
 
     return () => {
@@ -303,6 +266,11 @@ const InventoryList = () => {
     
     searchCategoryTimerRef.current = setTimeout(() => {
       setDebouncedSearchCategory(searchCategory);
+      // Po ustawieniu nowej kategorii wyszukiwania, wywołujemy fetchInventoryItems z aktualnymi parametrami sortowania
+      if (searchCategory !== debouncedSearchCategory) {
+        setPage(1); // Reset paginacji
+        fetchInventoryItems(tableSort.field, tableSort.order);
+      }
     }, 1000);
 
     return () => {
@@ -312,20 +280,34 @@ const InventoryList = () => {
     };
   }, [searchCategory]);
 
-  // Zmodyfikuj funkcję fetchInventoryItems, aby używała debounced wartości
-  const fetchInventoryItems = async () => {
+  // Efekt, który ponownie pobiera dane po zmianie wybranego magazynu
+  useEffect(() => {
+    if (selectedWarehouse !== undefined) {
+      setPage(1); // Resetuj stronę po zmianie magazynu
+      fetchInventoryItems(tableSort.field, tableSort.order);
+    }
+  }, [selectedWarehouse]);
+
+  // Zmodyfikuj funkcję fetchInventoryItems, aby przyjmowała parametry sortowania
+  const fetchInventoryItems = async (newSortField = null, newSortOrder = null) => {
     setLoading(true);
     try {
       // Najpierw wyczyść mikrorezerwacje
       await cleanupMicroReservations();
       
-      // Wywołaj getAllInventoryItems z parametrami paginacji i wyszukiwania
+      // Użyj przekazanych parametrów sortowania lub tych z stanu
+      const sortFieldToUse = newSortField || tableSort.field;
+      const sortOrderToUse = newSortOrder || tableSort.order;
+      
+      // Wywołaj getAllInventoryItems z parametrami paginacji, wyszukiwania i sortowania
       const result = await getAllInventoryItems(
         selectedWarehouse || null, 
         page, 
         pageSize, 
         debouncedSearchTerm.trim() !== '' ? debouncedSearchTerm : null,
-        debouncedSearchCategory.trim() !== '' ? debouncedSearchCategory : null
+        debouncedSearchCategory.trim() !== '' ? debouncedSearchCategory : null,
+        sortFieldToUse,
+        sortOrderToUse
       );
       
       // Jeśli wynik to obiekt z właściwościami items i totalCount, to używamy paginacji
@@ -359,9 +341,9 @@ const InventoryList = () => {
     setPage(1); // Resetuj stronę po zmianie rozmiaru strony
   };
 
-  // Efekt, który ponownie pobiera dane po zmianie strony lub rozmiaru strony
+  // Modyfikujemy efekt, który ponownie pobiera dane po zmianie strony lub rozmiaru strony
   useEffect(() => {
-    fetchInventoryItems();
+    fetchInventoryItems(tableSort.field, tableSort.order);
   }, [page, pageSize]);
 
   const fetchExpiryData = async () => {
@@ -1028,11 +1010,220 @@ const InventoryList = () => {
     setSearchCategory(e.target.value);
   };
 
-  // Modyfikuj funkcję handleSearch, aby bezpośrednio ustawiała wartości debounced
+  // Modyfikuj funkcję handleSearch, aby uwzględniała aktualne parametry sortowania
   const handleSearch = () => {
     setPage(1); // Zresetuj paginację
     setDebouncedSearchTerm(searchTerm);
     setDebouncedSearchCategory(searchCategory);
+    // Wywołaj fetchInventoryItems z aktualnymi parametrami sortowania
+    fetchInventoryItems(tableSort.field, tableSort.order);
+  };
+
+  // Funkcja do generowania raportu PDF ze stanów magazynowych
+  const generatePdfReport = async () => {
+    try {
+      setLoading(true);
+      showSuccess('Generowanie raportu PDF...');
+
+      // Pobierz wszystkie pozycje magazynowe do raportu (bez paginacji)
+      const allItems = await getAllInventoryItems(
+        selectedWarehouse || null, 
+        null, 
+        null, 
+        debouncedSearchTerm.trim() !== '' ? debouncedSearchTerm : null,
+        debouncedSearchCategory.trim() !== '' ? debouncedSearchCategory : null,
+        tableSort.field,
+        tableSort.order
+      );
+
+      // Importuj jsPDF i autoTable
+      const { jsPDF } = await import('jspdf');
+      const autoTable = (await import('jspdf-autotable')).default;
+
+      // Utwórz dokument PDF
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      // Funkcja do poprawiania polskich znaków
+      const fixPolishChars = (text) => {
+        if (!text) return '';
+        return text.toString()
+          .replace(/ą/g, 'a')
+          .replace(/ć/g, 'c')
+          .replace(/ę/g, 'e')
+          .replace(/ł/g, 'l')
+          .replace(/ń/g, 'n')
+          .replace(/ó/g, 'o')
+          .replace(/ś/g, 's')
+          .replace(/ź/g, 'z')
+          .replace(/ż/g, 'z')
+          .replace(/Ą/g, 'A')
+          .replace(/Ć/g, 'C')
+          .replace(/Ę/g, 'E')
+          .replace(/Ł/g, 'L')
+          .replace(/Ń/g, 'N')
+          .replace(/Ó/g, 'O')
+          .replace(/Ś/g, 'S')
+          .replace(/Ź/g, 'Z')
+          .replace(/Ż/g, 'Z');
+      };
+
+      // Nagłówek
+      doc.setFontSize(18);
+      doc.text('Inventory Stock Report', 14, 20);
+
+      // Data wygenerowania
+      const currentDate = new Date();
+      const formattedDate = `${currentDate.getDate()}.${currentDate.getMonth() + 1}.${currentDate.getFullYear()}`;
+      doc.setFontSize(12);
+      doc.text(`Generated: ${formattedDate}`, 14, 30);
+
+      // Filtr magazynu
+      if (selectedWarehouse) {
+        const warehouseName = warehouses.find(w => w.id === selectedWarehouse)?.name || selectedWarehouse;
+        doc.text(`Warehouse: ${fixPolishChars(warehouseName)}`, 14, 38);
+      } else {
+        doc.text('Warehouse: All', 14, 38);
+      }
+
+      // Filtr wyszukiwania
+      if (debouncedSearchTerm) {
+        doc.text(`SKU Filter: ${fixPolishChars(debouncedSearchTerm)}`, 14, 46);
+      }
+      if (debouncedSearchCategory) {
+        doc.text(`Category: ${fixPolishChars(debouncedSearchCategory)}`, 14, 54);
+      }
+
+      // Podsumowanie ilościowe
+      const itemsToShow = Array.isArray(allItems.items) ? allItems.items : allItems;
+      const totalItems = itemsToShow.length;
+      const totalQuantity = itemsToShow.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+      const totalReserved = itemsToShow.reduce((sum, item) => sum + (Number(item.bookedQuantity) || 0), 0);
+      const totalAvailable = totalQuantity - totalReserved;
+
+      doc.setFontSize(14);
+      doc.text('Summary', 14, 65);
+      doc.setFontSize(10);
+      doc.text(`Total items: ${totalItems}`, 14, 73);
+      doc.text(`Total quantity: ${totalQuantity.toFixed(2)}`, 14, 80);
+      doc.text(`Reserved quantity: ${totalReserved.toFixed(2)}`, 14, 87);
+      doc.text(`Available quantity: ${totalAvailable.toFixed(2)}`, 14, 94);
+
+      // Przygotuj dane tabeli
+      const tableData = itemsToShow.map(item => {
+        const bookedQuantity = Number(item.bookedQuantity) || 0;
+        const availableQuantity = Number(item.quantity) - bookedQuantity;
+        
+        return [
+          fixPolishChars(item.name || ''),
+          fixPolishChars(item.category || ''),
+          fixPolishChars(item.sku || ''),
+          (Number(item.quantity) || 0).toFixed(2) + ' ' + (item.unit || 'pcs.'),
+          bookedQuantity.toFixed(2) + ' ' + (item.unit || 'pcs.'),
+          availableQuantity.toFixed(2) + ' ' + (item.unit || 'pcs.'),
+          fixPolishChars(item.warehouseName || '')
+        ];
+      });
+
+      // Nagłówki tabeli
+      const tableHeaders = [
+        'Name',
+        'Category',
+        'SKU',
+        'Total Quantity',
+        'Reserved Quantity',
+        'Available Quantity',
+        'Location'
+      ];
+
+      // Generuj tabelę
+      autoTable(doc, {
+        startY: 105,
+        head: [tableHeaders],
+        body: tableData,
+        headStyles: { fillColor: [66, 139, 202], font: 'helvetica' },
+        alternateRowStyles: { fillColor: [241, 245, 249] },
+        styles: { font: 'helvetica', fontSize: 8, cellPadding: 2 },
+        margin: { top: 105 },
+        tableLineWidth: 0.1,
+        tableLineColor: [0, 0, 0]
+      });
+
+      // Stopka
+      const pageCount = doc.internal.getNumberOfPages();
+      for(let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(10);
+        doc.text(
+          `Page ${i} of ${pageCount}`,
+          doc.internal.pageSize.width / 2,
+          doc.internal.pageSize.height - 10,
+          { align: 'center' }
+        );
+      }
+
+      // Zapisz plik
+      doc.save(`Inventory_Stock_Report_${formattedDate.replace(/\./g, '_')}.pdf`);
+      showSuccess('Raport PDF został wygenerowany');
+    } catch (error) {
+      console.error('Błąd podczas generowania raportu PDF:', error);
+      showError('Błąd podczas generowania raportu PDF: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Funkcja do generowania raportu CSV ze stanów magazynowych
+  const generateCsvReport = async () => {
+    try {
+      setLoading(true);
+      showSuccess('Generowanie raportu CSV...');
+
+      // Pobierz wszystkie pozycje magazynowe do raportu (bez paginacji)
+      const allItems = await getAllInventoryItems(
+        selectedWarehouse || null, 
+        null, 
+        null, 
+        debouncedSearchTerm.trim() !== '' ? debouncedSearchTerm : null,
+        debouncedSearchCategory.trim() !== '' ? debouncedSearchCategory : null,
+        tableSort.field,
+        tableSort.order
+      );
+
+      const itemsToExport = Array.isArray(allItems.items) ? allItems.items : allItems;
+
+      // Przygotuj dane do eksportu
+      const data = itemsToExport.map(item => {
+        const bookedQuantity = Number(item.bookedQuantity) || 0;
+        const availableQuantity = Number(item.quantity) - bookedQuantity;
+        
+        return {
+          'Name': item.name || '',
+          'Category': item.category || '',
+          'SKU': item.sku || '',
+          'Total Quantity': (Number(item.quantity) || 0).toFixed(2),
+          'Unit': item.unit || 'pcs.',
+          'Reserved Quantity': bookedQuantity.toFixed(2),
+          'Available Quantity': availableQuantity.toFixed(2),
+          'Location': item.warehouseName || '',
+          'Min Stock Level': item.minStockLevel || '',
+          'Max Stock Level': item.maxStockLevel || '',
+          'Unit Price': item.unitPrice || ''
+        };
+      });
+
+      // Generuj CSV
+      await exportToCSV(data, `Inventory_Stock_Report_${new Date().toISOString().slice(0, 10)}`);
+      showSuccess('Raport CSV został wygenerowany');
+    } catch (error) {
+      console.error('Błąd podczas generowania raportu CSV:', error);
+      showError('Błąd podczas generowania raportu CSV: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (loading) {
@@ -1044,6 +1235,30 @@ const InventoryList = () => {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5">Stany</Typography>
         <Box>
+          <Tooltip title="Generuj raport PDF">
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={generatePdfReport}
+              startIcon={<PdfIcon />}
+              sx={{ mr: 1 }}
+              disabled={loading}
+            >
+              PDF
+            </Button>
+          </Tooltip>
+          <Tooltip title="Generuj raport CSV">
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={generateCsvReport}
+              startIcon={<CsvIcon />}
+              sx={{ mr: 2 }}
+              disabled={loading}
+            >
+              CSV
+            </Button>
+          </Tooltip>
           <Tooltip title="Sprawdź daty ważności produktów">
             <Button 
               variant="outlined" 

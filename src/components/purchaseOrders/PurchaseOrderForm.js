@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -107,7 +107,8 @@ const PurchaseOrderForm = ({ orderId }) => {
     status: PURCHASE_ORDER_STATUSES.DRAFT,
     invoiceLink: '',
     invoiceLinks: [], // Nowe pole dla wielu linków do faktur
-    expandedItems: {}
+    expandedItems: {},
+    expandedCostItems: {} // Nowe pole dla rozwiniętych dodatkowych kosztów
   });
   
   useEffect(() => {
@@ -116,16 +117,15 @@ const PurchaseOrderForm = ({ orderId }) => {
         setLoading(true);
         console.log("Pobieranie danych formularza PO, ID:", currentOrderId);
         
-        // Pobierz dostawców
-        const suppliersData = await getAllSuppliers();
+        // Pobierz wszystkie dane współbieżnie dla przyspieszenia
+        const [suppliersData, itemsData, warehousesData] = await Promise.all([
+          getAllSuppliers(),
+          getAllInventoryItems(), 
+          getAllWarehouses()
+        ]);
+        
         setSuppliers(suppliersData);
-        
-        // Pobierz przedmioty magazynowe
-        const itemsData = await getAllInventoryItems();
         setInventoryItems(itemsData);
-        
-        // Pobierz magazyny
-        const warehousesData = await getAllWarehouses();
         setWarehouses(warehousesData);
         
         // Jeśli edytujemy istniejące zamówienie, pobierz jego dane
@@ -151,84 +151,20 @@ const PurchaseOrderForm = ({ orderId }) => {
           // Konwersja ze starego formatu na nowy (jeśli istnieją tylko stare pola)
           let additionalCostsItems = poDetails.additionalCostsItems || [];
           
-          // Jeśli istnieje tylko stare pole additionalCosts, skonwertuj na nowy format
-          if (!poDetails.additionalCostsItems && (poDetails.additionalCosts > 0 || poDetails.additionalCostsDescription)) {
-            additionalCostsItems = [{
-              id: `cost-${Date.now()}`,
-              value: poDetails.additionalCosts || 0,
-              description: poDetails.additionalCostsDescription || 'Dodatkowe koszty',
-              vatRate: 23 // Domyślna stawka VAT
-            }];
-          }
-          
-          // Upewnij się, że wszystkie pozycje mają ustawione pole vatRate
-          const itemsWithVatRate = poDetails.items ? poDetails.items.map(item => ({
-            ...item,
-            vatRate: typeof item.vatRate === 'number' ? item.vatRate : 23 // Domyślna stawka VAT 23%
-          })) : [];
-          
-          // Upewnij się, że wszystkie dodatkowe koszty mają ustawione pole vatRate
-          const costsWithVatRate = additionalCostsItems.map(cost => ({
-            ...cost,
-            vatRate: typeof cost.vatRate === 'number' ? cost.vatRate : 23 // Domyślna stawka VAT 23%
-          }));
-          
+          // Ustaw cały stan formularza za jednym razem, zamiast wielu wywołań setState
           setPoData({
+            ...poData,
             ...poDetails,
-            supplier: matchedSupplier,
             orderDate: formattedOrderDate,
             expectedDeliveryDate: formattedDeliveryDate,
-            invoiceLink: poDetails.invoiceLink || '',
-            items: itemsWithVatRate,
-            additionalCostsItems: costsWithVatRate
+            supplier: matchedSupplier,
+            additionalCostsItems: additionalCostsItems,
           });
-        } else if (location.state?.materialId) {
-          // Jeśli mamy materialId z parametrów stanu (z prognozy zapotrzebowania),
-          // dodaj od razu pozycję do zamówienia
-          const materialId = location.state.materialId;
-          const requiredQuantity = location.state.requiredQuantity || 1;
-          
-          const inventoryItem = itemsData.find(item => item.id === materialId);
-          if (inventoryItem) {
-            // Znajdź najlepszą cenę dostawcy dla tego materiału
-            const bestPrice = await getBestSupplierPriceForItem(materialId, requiredQuantity);
-            
-            // Znajdź dostawcę
-            let supplier = null;
-            if (bestPrice && bestPrice.supplierId) {
-              supplier = suppliersData.find(s => s.id === bestPrice.supplierId);
-            }
-            
-            // Przygotuj początkowy stan z wybranym dostawcą i materiałem
-            const initialItems = [{
-              id: `temp-${Date.now()}`,
-              inventoryItemId: materialId,
-              name: inventoryItem.name,
-              quantity: requiredQuantity,
-              unit: inventoryItem.unit || 'szt',
-              unitPrice: bestPrice ? bestPrice.price : 0,
-              totalPrice: bestPrice ? bestPrice.price * requiredQuantity : 0
-            }];
-            
-            setPoData(prev => ({
-              ...prev,
-              supplier: supplier,
-              items: initialItems,
-              deliveryAddress: supplier && supplier.addresses && supplier.addresses.length > 0
-                ? formatAddress(supplier.addresses.find(a => a.isMain) || supplier.addresses[0])
-                : ''
-            }));
-            
-            if (supplier) {
-              showInfo(`Znaleziono dostawcę ${supplier.name} z najlepszą ceną dla ${inventoryItem.name}.`);
-            }
-          }
         }
-        
-        setLoading(false);
       } catch (error) {
         console.error('Błąd podczas pobierania danych:', error);
         showError('Nie udało się pobrać danych: ' + error.message);
+      } finally {
         setLoading(false);
       }
     };
@@ -302,7 +238,7 @@ const PurchaseOrderForm = ({ orderId }) => {
   }, [poData.currency]);
 
   // Funkcja do obliczania sumy
-  const calculateTotals = (items, additionalCosts = []) => {
+  const calculateTotals = useCallback((items = [], additionalCosts = []) => {
     // Obliczanie wartości netto i VAT dla pozycji produktów
     let itemsNetTotal = 0;
     let itemsVatTotal = 0;
@@ -356,9 +292,9 @@ const PurchaseOrderForm = ({ orderId }) => {
       additionalCostsVatTotal,
       totalNet,
       totalVat,
-      totalGross,
+      totalGross
     };
-  };
+  }, []);
 
   // Aktualizacja totali przy zmianie elementów
   useEffect(() => {
@@ -373,7 +309,7 @@ const PurchaseOrderForm = ({ orderId }) => {
       additionalCostsNetTotal: totals.additionalCostsNetTotal,
       additionalCostsVatTotal: totals.additionalCostsVatTotal
     }));
-  }, [poData.items, poData.additionalCostsItems]);
+  }, [poData.items, poData.additionalCostsItems, calculateTotals]);
   
   const handleChange = (e, value) => {
     // Obsługa przypadku gdy funkcja jest wywoływana z nazwą i wartością
@@ -1311,7 +1247,11 @@ const PurchaseOrderForm = ({ orderId }) => {
           invoiceNumber: '', // Numer faktury
           invoiceDate: '', // Data faktury
         }
-      ]
+      ],
+      expandedCostItems: {
+        ...prev.expandedCostItems,
+        [newCostId]: true // Automatycznie rozwinięty nowy koszt
+      }
     }));
 
     // Usuwamy wywołanie synchronizeExchangeRates, które może powodować problemy
@@ -2356,140 +2296,175 @@ const PurchaseOrderForm = ({ orderId }) => {
                         <TableCell align="right">Kwota</TableCell>
                         <TableCell align="right">Waluta</TableCell>
                         <TableCell align="right">VAT</TableCell>
-                        <TableCell align="right">Kwota oryg.</TableCell>
-                        <TableCell align="right">Kwota po przew.</TableCell>
-                        <TableCell>Nr faktury</TableCell>
-                        <TableCell>Data faktury</TableCell>
-                        <TableCell>Kurs</TableCell>
                         <TableCell width="50px"></TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {poData.additionalCostsItems.map((cost) => (
-                        <TableRow key={cost.id}>
-                          <TableCell>
-                            <TextField
-                              fullWidth
-                              size="small"
-                              value={cost.description}
-                              onChange={(e) => handleAdditionalCostChange(cost.id, 'description', e.target.value)}
-                              placeholder="Np. cła, transport, ubezpieczenie"
-                              sx={{ minWidth: '250px' }}
-                            />
-                          </TableCell>
-                          <TableCell align="right">
-                            <TextField
-                              type="number"
-                              size="small"
-                              value={cost.currency === poData.currency ? cost.value : (cost.originalValue || 0)}
-                              onChange={(e) => handleAdditionalCostChange(cost.id, 'value', e.target.value)}
-                              inputProps={{ step: 'any' }}
-                              sx={{ width: 120 }}
-                            />
-                          </TableCell>
-                          <TableCell align="right">
-                            <FormControl size="small" sx={{ width: 100 }}>
-                              <Select
-                                value={cost.currency || poData.currency}
-                                onChange={(e) => handleAdditionalCostChange(cost.id, 'currency', e.target.value)}
+                        <React.Fragment key={cost.id}>
+                          <TableRow hover>
+                            <TableCell>
+                              <TextField
+                                fullWidth
                                 size="small"
-                              >
-                                <MenuItem value="EUR">EUR</MenuItem>
-                                <MenuItem value="PLN">PLN</MenuItem>
-                                <MenuItem value="USD">USD</MenuItem>
-                                <MenuItem value="GBP">GBP</MenuItem>
-                                <MenuItem value="CHF">CHF</MenuItem>
-                              </Select>
-                            </FormControl>
-                          </TableCell>
-                          <TableCell align="right">
-                            <FormControl size="small" sx={{ width: 100 }}>
-                              <Select
-                                value={cost.vatRate !== undefined ? cost.vatRate : 23}
-                                onChange={(e) => handleAdditionalCostChange(cost.id, 'vatRate', e.target.value)}
+                                value={cost.description}
+                                onChange={(e) => handleAdditionalCostChange(cost.id, 'description', e.target.value)}
+                                placeholder="Np. cła, transport, ubezpieczenie"
+                                sx={{ minWidth: '250px' }}
+                              />
+                            </TableCell>
+                            <TableCell align="right">
+                              <TextField
+                                type="number"
                                 size="small"
-                              >
-                                <MenuItem value={0}>0%</MenuItem>
-                                <MenuItem value={5}>5%</MenuItem>
-                                <MenuItem value={8}>8%</MenuItem>
-                                <MenuItem value={23}>23%</MenuItem>
-                                <MenuItem value="ZW">ZW</MenuItem>
-                                <MenuItem value="NP">NP</MenuItem>
-                              </Select>
-                            </FormControl>
-                          </TableCell>
-                          <TableCell align="right">
-                            {cost.currency !== poData.currency ? (
-                              <Tooltip title={`Oryginalnie w ${cost.currency}`}>
-                                <Typography variant="body2">
-                                  {formatCurrency(cost.originalValue || 0, cost.currency)}
-                                </Typography>
-                              </Tooltip>
-                            ) : (
-                              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                -
-                              </Typography>
-                            )}
-                          </TableCell>
-                          <TableCell align="right">
-                            {cost.currency !== poData.currency ? (
-                              <Tooltip title={`Po przewalutowaniu na ${poData.currency}`}>
-                                <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                                  {formatCurrency(cost.value || 0, poData.currency)}
-                                </Typography>
-                              </Tooltip>
-                            ) : (
-                              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                -
-                              </Typography>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <TextField
-                              fullWidth
-                              size="small"
-                              value={cost.invoiceNumber || ''}
-                              onChange={(e) => handleAdditionalCostChange(cost.id, 'invoiceNumber', e.target.value)}
-                              placeholder="Nr faktury"
-                              sx={{ minWidth: '150px' }}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <TextField
-                              type="date"
-                              size="small"
-                              value={cost.invoiceDate || ''}
-                              onChange={(e) => handleAdditionalCostChange(cost.id, 'invoiceDate', e.target.value)}
-                              InputLabelProps={{ shrink: true }}
-                              sx={{ width: 150 }}
-                              placeholder="Wybierz datę"
-                              inputProps={{ 
-                                max: formatDateForInput(new Date()), // Maksymalna data to dzisiaj
-                              }}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <TextField
-                              type="number"
-                              size="small"
-                              value={cost.exchangeRate || 0}
-                              onChange={(e) => handleAdditionalCostChange(cost.id, 'exchangeRate', e.target.value)}
-                              placeholder="Kurs"
-                              inputProps={{ min: 0, step: 'any' }}
-                              sx={{ width: 100 }}
-                              disabled={cost.currency === poData.currency}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <IconButton
-                              size="small"
-                              onClick={() => handleRemoveAdditionalCost(cost.id)}
-                              color="error"
-                            >
-                              <DeleteIcon />
-                            </IconButton>
-                          </TableCell>
-                        </TableRow>
+                                value={cost.currency === poData.currency ? cost.value : (cost.originalValue || 0)}
+                                onChange={(e) => handleAdditionalCostChange(cost.id, 'value', e.target.value)}
+                                inputProps={{ step: 'any' }}
+                                sx={{ width: 120 }}
+                              />
+                            </TableCell>
+                            <TableCell align="right">
+                              <FormControl size="small" sx={{ width: 100 }}>
+                                <Select
+                                  value={cost.currency || poData.currency}
+                                  onChange={(e) => handleAdditionalCostChange(cost.id, 'currency', e.target.value)}
+                                  size="small"
+                                >
+                                  <MenuItem value="EUR">EUR</MenuItem>
+                                  <MenuItem value="PLN">PLN</MenuItem>
+                                  <MenuItem value="USD">USD</MenuItem>
+                                  <MenuItem value="GBP">GBP</MenuItem>
+                                  <MenuItem value="CHF">CHF</MenuItem>
+                                </Select>
+                              </FormControl>
+                            </TableCell>
+                            <TableCell align="right">
+                              <FormControl size="small" sx={{ width: 100 }}>
+                                <Select
+                                  value={cost.vatRate !== undefined ? cost.vatRate : 23}
+                                  onChange={(e) => handleAdditionalCostChange(cost.id, 'vatRate', e.target.value)}
+                                  size="small"
+                                >
+                                  <MenuItem value={0}>0%</MenuItem>
+                                  <MenuItem value={5}>5%</MenuItem>
+                                  <MenuItem value={8}>8%</MenuItem>
+                                  <MenuItem value={23}>23%</MenuItem>
+                                  <MenuItem value="ZW">ZW</MenuItem>
+                                  <MenuItem value="NP">NP</MenuItem>
+                                </Select>
+                              </FormControl>
+                            </TableCell>
+                            <TableCell>
+                              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                <Tooltip title="Rozwiń dodatkowe pola">
+                                  <IconButton 
+                                    size="small" 
+                                    onClick={() => {
+                                      const expandedCostItems = { ...poData.expandedCostItems || {} };
+                                      expandedCostItems[cost.id] = !expandedCostItems[cost.id];
+                                      setPoData(prev => ({ ...prev, expandedCostItems }));
+                                    }}
+                                  >
+                                    {poData.expandedCostItems && poData.expandedCostItems[cost.id] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                                  </IconButton>
+                                </Tooltip>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleRemoveAdditionalCost(cost.id)}
+                                  color="error"
+                                >
+                                  <DeleteIcon />
+                                </IconButton>
+                              </Box>
+                            </TableCell>
+                          </TableRow>
+                          
+                          {/* Dodatkowy wiersz z pozostałymi polami - widoczny po rozwinięciu */}
+                          {poData.expandedCostItems && poData.expandedCostItems[cost.id] && (
+                            <TableRow sx={{ backgroundColor: 'action.hover' }}>
+                              <TableCell colSpan={5}>
+                                <Grid container spacing={2} sx={{ py: 1 }}>
+                                  <Grid item xs={12} sm={4}>
+                                    <Typography variant="caption" display="block" gutterBottom>
+                                      Kwota oryginalna
+                                    </Typography>
+                                    {cost.currency !== poData.currency ? (
+                                      <Tooltip title={`Oryginalnie w ${cost.currency}`}>
+                                        <Typography variant="body2">
+                                          {formatCurrency(cost.originalValue || 0, cost.currency)}
+                                        </Typography>
+                                      </Tooltip>
+                                    ) : (
+                                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                        -
+                                      </Typography>
+                                    )}
+                                  </Grid>
+                                  <Grid item xs={12} sm={4}>
+                                    <Typography variant="caption" display="block" gutterBottom>
+                                      Kwota po przewalutowaniu
+                                    </Typography>
+                                    {cost.currency !== poData.currency ? (
+                                      <Tooltip title={`Po przewalutowaniu na ${poData.currency}`}>
+                                        <Typography variant="body2">
+                                          {formatCurrency(cost.value || 0, poData.currency)}
+                                        </Typography>
+                                      </Tooltip>
+                                    ) : (
+                                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                        -
+                                      </Typography>
+                                    )}
+                                  </Grid>
+                                  <Grid item xs={12} sm={4}>
+                                    <Typography variant="caption" display="block" gutterBottom>
+                                      Nr faktury
+                                    </Typography>
+                                    <TextField
+                                      fullWidth
+                                      size="small"
+                                      value={cost.invoiceNumber || ''}
+                                      onChange={(e) => handleAdditionalCostChange(cost.id, 'invoiceNumber', e.target.value)}
+                                      placeholder="Nr faktury"
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12} sm={4}>
+                                    <Typography variant="caption" display="block" gutterBottom>
+                                      Data faktury
+                                    </Typography>
+                                    <TextField
+                                      type="date"
+                                      fullWidth
+                                      size="small"
+                                      value={cost.invoiceDate || ''}
+                                      onChange={(e) => handleAdditionalCostChange(cost.id, 'invoiceDate', e.target.value)}
+                                      InputLabelProps={{ shrink: true }}
+                                      placeholder="Wybierz datę"
+                                      inputProps={{ 
+                                        max: formatDateForInput(new Date()), // Maksymalna data to dzisiaj
+                                      }}
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12} sm={4}>
+                                    <Typography variant="caption" display="block" gutterBottom>
+                                      Kurs
+                                    </Typography>
+                                    <TextField
+                                      type="number"
+                                      fullWidth
+                                      size="small"
+                                      value={cost.exchangeRate || 0}
+                                      onChange={(e) => handleAdditionalCostChange(cost.id, 'exchangeRate', e.target.value)}
+                                      placeholder="Kurs"
+                                      inputProps={{ min: 0, step: 'any' }}
+                                      disabled={cost.currency === poData.currency}
+                                    />
+                                  </Grid>
+                                </Grid>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </React.Fragment>
                       ))}
                       <TableRow>
                         <TableCell align="right" sx={{ fontWeight: 'bold' }}>
@@ -2498,11 +2473,6 @@ const PurchaseOrderForm = ({ orderId }) => {
                         <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                           {parseFloat(poData.additionalCostsItems.reduce((sum, item) => sum + (parseFloat(item.value) || 0), 0))} {poData.currency}
                         </TableCell>
-                        <TableCell />
-                        <TableCell />
-                        <TableCell />
-                        <TableCell />
-                        <TableCell />
                         <TableCell />
                         <TableCell />
                         <TableCell />
@@ -2524,11 +2494,6 @@ const PurchaseOrderForm = ({ orderId }) => {
                               <TableCell align="right" sx={{ fontStyle: 'italic' }}>
                                 {vatValue.toFixed(6)} {poData.currency}
                               </TableCell>
-                              <TableCell />
-                              <TableCell />
-                              <TableCell />
-                              <TableCell />
-                              <TableCell />
                               <TableCell />
                               <TableCell />
                               <TableCell />
@@ -2555,25 +2520,18 @@ const PurchaseOrderForm = ({ orderId }) => {
                         <TableCell />
                         <TableCell />
                         <TableCell />
-                        <TableCell />
-                        <TableCell />
-                        <TableCell />
-                        <TableCell />
-                        <TableCell />
-                        <TableCell />
                       </TableRow>
-                      {/* Informacja o kursach walut */}
-                      {poData.additionalCostsItems.some(cost => cost.currency !== poData.currency) && (
-                        <TableRow>
-                          <TableCell colSpan={10} sx={{ py: 1 }}>
-                            <Typography variant="caption" sx={{ fontStyle: 'italic' }} className="exchange-rate-info">
-                              Wartości w walutach obcych zostały przeliczone według kursów z dnia poprzedzającego datę faktury.
-                            </Typography>
-                          </TableCell>
-                        </TableRow>
-                      )}
                     </TableBody>
                   </Table>
+                  
+                  {/* Informacja o kursach walut */}
+                  {poData.additionalCostsItems.some(cost => cost.currency !== poData.currency) && (
+                    <Box sx={{ py: 1, px: 2 }}>
+                      <Typography variant="caption" sx={{ fontStyle: 'italic' }} className="exchange-rate-info">
+                        Wartości w walutach obcych zostały przeliczone według kursów z dnia poprzedzającego datę faktury.
+                      </Typography>
+                    </Box>
+                  )}
                 </TableContainer>
               )}
             </Grid>
@@ -2942,9 +2900,11 @@ const PurchaseOrderForm = ({ orderId }) => {
                     
                     {/* Informacja o kursach walut przy dodatkowych kosztach */}
                     {poData.additionalCostsItems.some(cost => cost.currency !== poData.currency) && (
-                      <Typography variant="caption" sx={{ pl: 2, fontStyle: 'italic', display: 'block', mt: 1 }} className="exchange-rate-info">
-                        Kwoty w innych walutach zostały przeliczone według kursów z dnia poprzedzającego datę faktury.
-                      </Typography>
+                      <Box sx={{ py: 1, px: 2 }}>
+                        <Typography variant="caption" sx={{ fontStyle: 'italic' }} className="exchange-rate-info">
+                          Wartości w walutach obcych zostały przeliczone według kursów z dnia poprzedzającego datę faktury.
+                        </Typography>
+                      </Box>
                     )}
                   </>
                 )}
