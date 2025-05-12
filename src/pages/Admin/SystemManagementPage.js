@@ -24,6 +24,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../hooks/useNotification';
 import { migrateAIMessageLimits } from '../../services/migrationService';
 import APIKeySettings from '../../components/common/APIKeySettings';
+import CounterEditor from '../../components/admin/CounterEditor';
 
 /**
  * Strona dla administratorów z narzędziami do zarządzania systemem
@@ -70,6 +71,9 @@ const SystemManagementPage = () => {
         
         {/* Sekcja konfiguracji Asystenta AI */}
         <APIKeySettings />
+        
+        {/* Edytor liczników systemowych */}
+        <CounterEditor />
         
         <Card sx={{ mb: 3 }}>
           <CardContent>
