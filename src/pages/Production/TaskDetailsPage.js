@@ -832,8 +832,8 @@ const TaskDetailsPage = () => {
             console.log(`Usuwanie istniejących rezerwacji dla materiału ${materialId} w zadaniu ${id}`);
             await cleanupTaskReservations(id, [materialId]);
           } catch (error) {
-            console.error(`Błąd podczas usuwania rezerwacji dla materiału ${materialId}:`, error);
-            showError(`Nie udało się usunąć poprzednich rezerwacji dla materiału: ${error.message}`);
+            console.error(`Błąd podczas anulowania istniejących rezerwacji dla ${materialId}:`, error);
+            throw error;
           }
         }
       };
@@ -860,7 +860,7 @@ const TaskDetailsPage = () => {
           const materialId = material.inventoryItemId || material.id;
           if (!materialId) continue;
           
-          // Anuluj istniejące rezerwacje dla tego materiału
+          // Najpierw anuluj istniejące rezerwacje dla tego materiału
           await cancelExistingReservations(materialId);
           
           // Użyj rzeczywistej ilości z materialQuantities jeśli jest dostępna
@@ -900,7 +900,7 @@ const TaskDetailsPage = () => {
           const materialId = material.inventoryItemId || material.id;
           if (!materialId) continue;
           
-          // Anuluj istniejące rezerwacje dla tego materiału
+          // Najpierw anuluj istniejące rezerwacje dla tego materiału
           await cancelExistingReservations(materialId);
               
           // Użyj rzeczywistej ilości z materialQuantities jeśli jest dostępna
@@ -1085,7 +1085,7 @@ const TaskDetailsPage = () => {
                                   </Typography>
                                 </TableCell>
                                 <TableCell>
-                                  {batch.unitPrice ? `${parseFloat(batch.unitPrice).toFixed(4)} €` : '—'}
+                                  {batch.unitPrice ? `${parseFloat(batch.unitPrice).toFixed(2)} €` : '—'}
                                 </TableCell>
                                 <TableCell>
                                   <TextField
@@ -1918,7 +1918,7 @@ const TaskDetailsPage = () => {
             if (Math.abs(material.unitPrice - averagePrice) > 0.001) {
             material.unitPrice = averagePrice;
               hasChanges = true;
-            console.log(`Zaktualizowano cenę dla ${material.name}: ${averagePrice.toFixed(4)} €`);
+            console.log(`Zaktualizowano cenę dla ${material.name}: ${averagePrice.toFixed(2)} €`);
             }
           }
         }
@@ -1976,7 +1976,7 @@ const TaskDetailsPage = () => {
                 })
               });
               
-              console.log(`Zaktualizowano koszty materiałów w zadaniu: ${totalMaterialCost.toFixed(4)} € (${unitMaterialCost.toFixed(4)} €/${task.unit})`);
+              console.log(`Zaktualizowano koszty materiałów w zadaniu: ${totalMaterialCost.toFixed(2)} € (${unitMaterialCost.toFixed(2)} €/${task.unit})`);
               showSuccess('Koszty materiałów zostały automatycznie zaktualizowane');
               
               // Odśwież dane zadania, aby wyświetlić zaktualizowane koszty
@@ -2067,7 +2067,7 @@ const TaskDetailsPage = () => {
         })
       });
       
-      console.log(`Zaktualizowano koszty materiałów w zadaniu: ${totalMaterialCost.toFixed(4)} € (${unitMaterialCost.toFixed(4)} €/${task.unit})`);
+      console.log(`Zaktualizowano koszty materiałów w zadaniu: ${totalMaterialCost.toFixed(2)} € (${unitMaterialCost.toFixed(2)} €/${task.unit})`);
       showSuccess('Koszty materiałów zostały zaktualizowane w bazie danych');
       
       // Odśwież dane zadania, aby wyświetlić zaktualizowane koszty
@@ -2117,18 +2117,18 @@ const TaskDetailsPage = () => {
           </Grid>
           <Grid item xs={12} md={6} sx={{ textAlign: 'right' }}>
             <Typography variant="body1">
-              <strong>Całkowity koszt materiałów:</strong> {totalMaterialCost.toFixed(4)} €
+              <strong>Całkowity koszt materiałów:</strong> {totalMaterialCost.toFixed(2)} €
               {task.totalMaterialCost !== undefined && costChanged && (
                 <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                  (W bazie: {task.totalMaterialCost.toFixed(4)} €)
+                  (W bazie: {task.totalMaterialCost.toFixed(2)} €)
                 </Typography>
               )}
             </Typography>
             <Typography variant="body1">
-              <strong>Koszt materiałów na jednostkę:</strong> {unitMaterialCost.toFixed(4)} €/{task.unit}
+              <strong>Koszt materiałów na jednostkę:</strong> {unitMaterialCost} €/{task.unit}
               {task.unitMaterialCost !== undefined && costChanged && (
                 <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                  (W bazie: {task.unitMaterialCost.toFixed(4)} €/{task.unit})
+                  (W bazie: {task.unitMaterialCost} €/{task.unit})
                 </Typography>
               )}
             </Typography>
@@ -2511,14 +2511,14 @@ const TaskDetailsPage = () => {
                             </TableCell>
                             <TableCell>
                               {reservedBatches && reservedBatches.length > 0 ? (
-                                unitPrice.toFixed(4) + ' €'
+                                unitPrice.toFixed(2) + ' €'
                               ) : (
                                 '—'
                               )}
                             </TableCell>
                             <TableCell>
                               {reservedBatches && reservedBatches.length > 0 ? (
-                                cost.toFixed(4) + ' €'
+                                cost.toFixed(2) + ' €'
                               ) : (
                                 '—'
                               )}
