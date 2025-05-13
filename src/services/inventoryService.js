@@ -4101,89 +4101,64 @@ import {
    */
   export const getAwaitingOrdersForInventoryItem = async (inventoryItemId) => {
     try {
-      if (!inventoryItemId) {
-        throw new Error('ID produktu jest wymagane');
-      }
+      // Pobierz zamówienia zakupowe, które mają status inny niż "completed" lub "cancelled"
+      // i zawierają szukany produkt
+      const purchaseOrdersRef = collection(db, 'purchaseOrders');
+      const q = query(
+        purchaseOrdersRef,
+        where('status', 'not-in', ['completed', 'cancelled'])
+      );
       
-      const { getPurchaseOrdersByStatus } = await import('./purchaseOrderService');
+      const querySnapshot = await getDocs(q);
+      const purchaseOrders = [];
       
-      // Pobierz zamówienia o statusach: zamówione, potwierdzone i częściowo dostarczone
-      const orderedPOs = await getPurchaseOrdersByStatus('ordered');
-      const confirmedPOs = await getPurchaseOrdersByStatus('confirmed'); 
-      const partialPOs = await getPurchaseOrdersByStatus('partial');
-      
-      // Połącz wszystkie zamówienia w jedną tablicę
-      const allActivePOs = [...orderedPOs, ...confirmedPOs, ...partialPOs];
-      
-      // Filtruj zamówienia, które zawierają szukany produkt
-      const awaitingOrders = [];
-      
-      for (const po of allActivePOs) {
-        if (po.items && Array.isArray(po.items)) {
-          // Znajdź pozycje pasujące do szukanego produktu
-          const matchingItems = po.items.filter(item => 
-            (item.id === inventoryItemId || 
-             item.itemId === inventoryItemId || 
-             item.inventoryItemId === inventoryItemId)
+      // Przefiltruj zamówienia, które zawierają szukany produkt
+      for (const docRef of querySnapshot.docs) {
+        const poData = docRef.data();
+        
+        if (poData.items && Array.isArray(poData.items)) {
+          const matchingItems = poData.items.filter(item => 
+            item.inventoryItemId === inventoryItemId
           );
           
           if (matchingItems.length > 0) {
-            // Dla każdej pasującej pozycji
-            for (const item of matchingItems) {
-              // Oblicz ilość oczekiwaną (zamówioną minus otrzymaną)
-              const orderedQuantity = parseFloat(item.quantity) || 0;
-              const receivedQuantity = parseFloat(item.received) || 0;
-              const awaitingQuantity = Math.max(0, orderedQuantity - receivedQuantity);
+            // Oblicz pozostałą ilość do dostarczenia dla każdego pasującego elementu
+            const orderedItems = matchingItems.map(item => {
+              const quantityOrdered = parseFloat(item.quantity) || 0;
+              const quantityReceived = parseFloat(item.received) || 0;
+              const quantityRemaining = Math.max(0, quantityOrdered - quantityReceived);
               
-              // Jeśli jest jeszcze oczekiwana ilość, dodaj do listy
-              if (awaitingQuantity > 0) {
-                // Upewnij się, że cena jednostkowa jest liczbą
-                let unitPrice = null;
-                if (item.price) {
-                  unitPrice = parseFloat(item.price);
-                } else if (item.unitPrice) {
-                  unitPrice = parseFloat(item.unitPrice);
-                }
-                
-                awaitingOrders.push({
-                  id: `${po.id}-${item.id || inventoryItemId}`, // Unikalny identyfikator dla wiersza
-                  poNumber: po.number,
-                  poId: po.id,
-                  status: po.status,
-                  expectedDeliveryDate: po.expectedDeliveryDate,
-                  supplier: po.supplier?.name || 'Nieznany dostawca',
-                  itemId: inventoryItemId,
-                  itemName: item.name,
-                  orderedQuantity: orderedQuantity,
-                  receivedQuantity: receivedQuantity,
-                  awaitingQuantity: awaitingQuantity,
-                  unitPrice: unitPrice,
-                  unit: item.unit,
-                  orderDate: po.orderDate,
-                  createdAt: po.createdAt
-                });
-              }
+              return {
+                ...item,
+                quantityOrdered,
+                quantityReceived,
+                quantityRemaining,
+                expectedDeliveryDate: item.plannedDeliveryDate || poData.expectedDeliveryDate,
+                poNumber: poData.number || 'Brak numeru'
+              };
+            });
+            
+            // Dodaj tylko te pozycje, które mają niezerową pozostałą ilość do dostarczenia
+            const relevantItems = orderedItems.filter(item => item.quantityRemaining > 0);
+            
+            if (relevantItems.length > 0) {
+              purchaseOrders.push({
+                id: docRef.id,
+                number: poData.number,
+                status: poData.status,
+                expectedDeliveryDate: poData.expectedDeliveryDate,
+                orderDate: poData.orderDate,
+                items: relevantItems
+              });
             }
           }
         }
       }
       
-      // Posortuj według daty oczekiwanej dostawy (od najwcześniejszej)
-      return awaitingOrders.sort((a, b) => {
-        // Jeśli obie mają daty oczekiwanej dostawy
-        if (a.expectedDeliveryDate && b.expectedDeliveryDate) {
-          return new Date(a.expectedDeliveryDate) - new Date(b.expectedDeliveryDate);
-        }
-        // Jeśli tylko a ma datę oczekiwanej dostawy
-        if (a.expectedDeliveryDate) return -1;
-        // Jeśli tylko b ma datę oczekiwanej dostawy
-        if (b.expectedDeliveryDate) return 1;
-        // Jeśli żadne nie ma daty oczekiwanej dostawy, sortuj wg daty zamówienia
-        return new Date(b.orderDate || b.createdAt) - new Date(a.orderDate || a.createdAt);
-      });
+      return purchaseOrders;
     } catch (error) {
-      console.error('Błąd podczas pobierania oczekujących zamówień:', error);
-      throw error;
+      console.error('Błąd podczas pobierania oczekujących zamówień dla elementu:', error);
+      return [];
     }
   };
 

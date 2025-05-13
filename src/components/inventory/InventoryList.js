@@ -67,7 +67,7 @@ import { exportToCSV } from '../../utils/exportUtils';
 import { useAuth } from '../../hooks/useAuth';
 import LabelDialog from './LabelDialog';
 import EditReservationDialog from './EditReservationDialog';
-import { doc, getDoc, updateDoc, serverTimestamp, collection, getDocs, addDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp, collection, getDocs, addDoc, deleteDoc, query, orderBy, limit, where } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
 import { INVENTORY_CATEGORIES } from '../../utils/constants';
@@ -133,6 +133,12 @@ const InventoryList = () => {
   const [groupItems, setGroupItems] = useState([]);
   const [groupDialogMode, setGroupDialogMode] = useState('add');
   const [savingGroup, setSavingGroup] = useState(false);
+  
+  // Dodaję stany dla zakładki Rezerwacje
+  const [allReservations, setAllReservations] = useState([]);
+  const [filteredAllReservations, setFilteredAllReservations] = useState([]);
+  const [loadingAllReservations, setLoadingAllReservations] = useState(false);
+  const [moFilter, setMoFilter] = useState('');
   
   // Zamiast lokalnego stanu, użyjmy kontekstu preferencji kolumn
   const [columnMenuAnchor, setColumnMenuAnchor] = useState(null);
@@ -236,6 +242,70 @@ const InventoryList = () => {
     }
   }, [debouncedSearchTerm, debouncedSearchCategory]);
 
+  // Dodaj efekt do pobierania wszystkich rezerwacji gdy wybrana jest zakładka Rezerwacje
+  useEffect(() => {
+    if (currentTab === 3) {
+      fetchAllReservations();
+    }
+  }, [currentTab]);
+  
+  // Dodaj funkcję do pobierania wszystkich rezerwacji
+  const fetchAllReservations = async () => {
+    try {
+      setLoadingAllReservations(true);
+      
+      // Pobierz wszystkie transakcje typu booking
+      const transactionsRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
+      const q = query(
+        transactionsRef,
+        where('type', '==', 'booking'),
+        orderBy('createdAt', 'desc'),
+        limit(200) // Limituj ilość wyników dla wydajności
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const reservations = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAtDate: doc.data().createdAt ? new Date(doc.data().createdAt.seconds * 1000) : new Date()
+      }));
+      
+      // Filtruj rezerwacje - tylko te związane z zadaniami produkcyjnymi
+      const productionReservations = reservations.filter(reservation => 
+        reservation.referenceId && 
+        (reservation.taskNumber || reservation.reason === 'Zadanie produkcyjne')
+      );
+      
+      setAllReservations(productionReservations);
+      setFilteredAllReservations(productionReservations);
+      
+      console.log(`Pobrano ${productionReservations.length} rezerwacji dla zadań produkcyjnych`);
+    } catch (error) {
+      console.error('Błąd podczas pobierania rezerwacji:', error);
+      showError('Nie udało się pobrać listy rezerwacji');
+    } finally {
+      setLoadingAllReservations(false);
+    }
+  };
+  
+  // Dodaj funkcję do filtrowania rezerwacji po numerze MO
+  const handleMoFilterChange = (e) => {
+    const value = e.target.value;
+    setMoFilter(value);
+    
+    if (!value) {
+      setFilteredAllReservations(allReservations);
+      return;
+    }
+    
+    const filtered = allReservations.filter(reservation => {
+      const moNumber = reservation.taskNumber || '';
+      return moNumber.toLowerCase().includes(value.toLowerCase());
+    });
+    
+    setFilteredAllReservations(filtered);
+  };
+  
   // Dodaj efekt dla debounced search term
   useEffect(() => {
     if (searchTermTimerRef.current) {
@@ -1296,6 +1366,7 @@ const InventoryList = () => {
         <Tab label="Stany" />
         <Tab label="Lokalizacje" />
         <Tab label="Grupy" />
+        <Tab label="Rezerwacje" />
       </Tabs>
 
       {/* Zawartość pierwszej zakładki - Stany */}
@@ -1855,6 +1926,139 @@ const InventoryList = () => {
                         <IconButton 
                           color="error" 
                           onClick={() => handleDeleteGroup(group.id)}
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </>
+      )}
+
+      {currentTab === 3 && (
+        <>
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" component="h2" gutterBottom>
+              Lista zarezerwowanych partii do zadań produkcyjnych MO
+            </Typography>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              Poniżej znajduje się lista wszystkich materiałów zarezerwowanych do zadań produkcyjnych.
+            </Typography>
+          </Box>
+          
+          <Box sx={{ display: 'flex', mb: 2, gap: 2 }}>
+            <TextField
+              label="Filtruj po numerze MO"
+              variant="outlined"
+              size="small"
+              fullWidth
+              value={moFilter}
+              onChange={handleMoFilterChange}
+              InputProps={{
+                startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
+              }}
+            />
+            <Button 
+              variant="contained" 
+              color="primary"
+              onClick={() => {
+                handleUpdateReservationTasks().then(() => {
+                  fetchAllReservations();
+                });
+              }}
+              disabled={updatingTasks}
+              startIcon={updatingTasks ? <CircularProgress size={24} /> : <HistoryIcon />}
+            >
+              Aktualizuj zadania
+            </Button>
+            <Button 
+              variant="outlined" 
+              color="secondary"
+              onClick={() => {
+                handleCleanupDeletedTaskReservations().then(() => {
+                  fetchAllReservations();
+                });
+              }}
+              disabled={cleaningReservations}
+              startIcon={cleaningReservations ? <CircularProgress size={24} /> : <DeleteForeverIcon />}
+            >
+              Usuń nieaktualne
+            </Button>
+          </Box>
+
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Numer MO</TableCell>
+                  <TableCell>Nazwa zadania</TableCell>
+                  <TableCell>SKU</TableCell>
+                  <TableCell>Ilość zarezerwowana</TableCell>
+                  <TableCell>Numer partii</TableCell>
+                  <TableCell>Data rezerwacji</TableCell>
+                  <TableCell align="right">Akcje</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {loadingAllReservations ? (
+                  <TableRow>
+                    <TableCell colSpan={8} align="center">
+                      <CircularProgress />
+                    </TableCell>
+                  </TableRow>
+                ) : filteredAllReservations.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} align="center">
+                      <Typography>
+                        {moFilter ? 'Nie znaleziono rezerwacji pasujących do filtra' : 'Brak rezerwacji dla zadań produkcyjnych'}
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredAllReservations.map((reservation) => (
+                    <TableRow key={reservation.id}>
+                      <TableCell>
+                        <Typography variant="body2" component="div">
+                          {reservation.taskNumber || 'Bez numeru MO'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" component="div">
+                          {reservation.taskName || '-'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Link component={RouterLink} to={`/inventory/${reservation.itemId}`}>
+                          {reservation.itemName}
+                        </Link>
+                      </TableCell>
+                      <TableCell>{reservation.quantity}</TableCell>
+                      <TableCell>{reservation.batchNumber || '-'}</TableCell>
+                      <TableCell>
+                        {reservation.createdAtDate ? formatDate(reservation.createdAtDate) : '-'}
+                      </TableCell>
+                      <TableCell align="right">
+                        <IconButton
+                          color="primary"
+                          onClick={() => {
+                            // Przygotuj dane do edycji rezerwacji
+                            const item = {
+                              id: reservation.itemId,
+                              name: reservation.itemName
+                            };
+                            setSelectedItem(item);
+                            handleEditReservation(reservation);
+                          }}
+                        >
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton
+                          color="error"
+                          onClick={() => handleDeleteReservation(reservation.id)}
                         >
                           <DeleteIcon />
                         </IconButton>
