@@ -60,8 +60,10 @@ const ConsumptionPage = () => {
   const [materials, setMaterials] = useState([]);
   const [editMode, setEditMode] = useState(false);
   const [materialQuantities, setMaterialQuantities] = useState({});
+  const [batchQuantities, setBatchQuantities] = useState({});
   const [confirmationDialogOpen, setConfirmationDialogOpen] = useState(false);
   const [errors, setErrors] = useState({});
+  const [batchErrors, setBatchErrors] = useState({});
   const [expandedMaterials, setExpandedMaterials] = useState({});
   
   // Pobieranie danych zadania
@@ -97,6 +99,39 @@ const ConsumptionPage = () => {
         });
         
         setMaterialQuantities(quantities);
+        
+        // Inicjalizacja ilości dla partii
+        const batchQty = {};
+        
+        // Dla każdego materiału sprawdź, czy ma przypisane partie
+        materialsList.forEach(material => {
+          const materialId = material.inventoryItemId || material.id;
+          
+          if (taskData.materialBatches && taskData.materialBatches[materialId]) {
+            const materialBatches = taskData.materialBatches[materialId];
+            
+            // Inicjalizuj ilości dla każdej partii
+            materialBatches.forEach(batch => {
+              const batchKey = `${materialId}_${batch.batchId}`;
+              
+              // Jeśli istnieją niestandardowe ilości dla partii, użyj ich
+              if (taskData.batchActualUsage && taskData.batchActualUsage[batchKey] !== undefined) {
+                batchQty[batchKey] = taskData.batchActualUsage[batchKey];
+              } else {
+                // W przeciwnym razie użyj oryginalnej ilości partii
+                batchQty[batchKey] = batch.quantity;
+              }
+            });
+            
+            // Domyślnie rozwiń materiały z partiami
+            setExpandedMaterials(prev => ({
+              ...prev,
+              [materialId]: true
+            }));
+          }
+        });
+        
+        setBatchQuantities(batchQty);
       }
       
       setLoading(false);
@@ -126,6 +161,55 @@ const ConsumptionPage = () => {
     }
   };
   
+  const handleBatchQuantityChange = (materialId, batchId, value) => {
+    const batchKey = `${materialId}_${batchId}`;
+    const numValue = value === '' ? '' : parseFloat(value);
+    
+    if (value === '' || !isNaN(numValue)) {
+      setBatchQuantities(prev => ({
+        ...prev,
+        [batchKey]: numValue
+      }));
+      
+      if (batchErrors[batchKey]) {
+        setBatchErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors[batchKey];
+          return newErrors;
+        });
+      }
+      
+      // Zaktualizuj również całkowitą ilość materiału na podstawie sum partii
+      updateTotalMaterialQuantity(materialId);
+    }
+  };
+  
+  const updateTotalMaterialQuantity = (materialId) => {
+    // Znajdź wszystkie partie dla tego materiału
+    if (!task || !task.materialBatches || !task.materialBatches[materialId]) {
+      return;
+    }
+    
+    const batches = task.materialBatches[materialId];
+    let totalQuantity = 0;
+    
+    // Oblicz sumę ilości wszystkich partii
+    batches.forEach(batch => {
+      const batchKey = `${materialId}_${batch.batchId}`;
+      const batchQty = batchQuantities[batchKey];
+      
+      if (batchQty !== undefined && !isNaN(batchQty)) {
+        totalQuantity += parseFloat(batchQty);
+      }
+    });
+    
+    // Zaktualizuj całkowitą ilość materiału
+    setMaterialQuantities(prev => ({
+      ...prev,
+      [materialId]: totalQuantity
+    }));
+  };
+  
   const validateQuantities = () => {
     const newErrors = {};
     let isValid = true;
@@ -141,6 +225,22 @@ const ConsumptionPage = () => {
     });
     
     setErrors(newErrors);
+    
+    // Sprawdź również ilości partii
+    const newBatchErrors = {};
+    
+    Object.entries(batchQuantities).forEach(([batchKey, quantity]) => {
+      if (isNaN(quantity) || quantity === '') {
+        newBatchErrors[batchKey] = 'Wartość musi być liczbą';
+        isValid = false;
+      } else if (quantity < 0) {
+        newBatchErrors[batchKey] = 'Wartość nie może być ujemna';
+        isValid = false;
+      }
+    });
+    
+    setBatchErrors(newBatchErrors);
+    
     return isValid;
   };
   
@@ -152,7 +252,7 @@ const ConsumptionPage = () => {
       
       setLoading(true);
 
-      // Zbierz wszystkie faktyczne ilości
+      // Zbierz wszystkie faktyczne ilości materiałów
       const updatedQuantities = {};
       
       Object.keys(materialQuantities).forEach(materialId => {
@@ -160,8 +260,16 @@ const ConsumptionPage = () => {
         updatedQuantities[materialId] = value === '' ? 0 : parseFloat(value);
       });
       
-      // Zapisz zmiany
-      const result = await updateActualMaterialUsage(taskId, updatedQuantities);
+      // Zbierz wszystkie faktyczne ilości partii
+      const updatedBatchQuantities = {};
+      
+      Object.keys(batchQuantities).forEach(batchKey => {
+        const value = batchQuantities[batchKey];
+        updatedBatchQuantities[batchKey] = value === '' ? 0 : parseFloat(value);
+      });
+      
+      // Zapisz zmiany z uwzględnieniem partii
+      const result = await updateActualMaterialUsage(taskId, updatedQuantities, updatedBatchQuantities);
       
       showSuccess(result.message || 'Zużycie materiałów zaktualizowane.');
       
@@ -330,7 +438,7 @@ const ConsumptionPage = () => {
       
       <Alert severity="info" sx={{ mb: 3 }}>
         Zużycie materiałów realizowane jest z konkretnych partii (LOT) przypisanych do zadania. 
-        Kliknij ikonę rozwijania przy danym materiale, aby zobaczyć szczegóły przypisanych partii.
+        Kliknij ikonę rozwijania przy danym materiale, aby zobaczyć i edytować szczegóły zużycia dla każdej partii.
         Po potwierdzeniu zużycia, stany magazynowe zostaną zaktualizowane dla konkretnych partii, a nie dla ogólnej pozycji magazynowej.
       </Alert>
       
@@ -355,6 +463,7 @@ const ConsumptionPage = () => {
               materials.map((material) => {
                 const plannedQuantity = material.plannedQuantity || 0;
                 const actualQuantity = materialQuantities[material.id];
+                const materialId = material.inventoryItemId || material.id;
                 
                 // Oblicz różnicę tylko jeśli actualQuantity jest prawidłową liczbą
                 let difference, differenceDisplay;
@@ -367,10 +476,10 @@ const ConsumptionPage = () => {
                 }
                 
                 // Sprawdź, czy materiał ma przypisane partie
-                const hasBatches = task.materialBatches && task.materialBatches[material.id] && 
-                  task.materialBatches[material.id].length > 0;
+                const hasBatches = task.materialBatches && task.materialBatches[materialId] && 
+                  task.materialBatches[materialId].length > 0;
                 
-                const isExpanded = Boolean(expandedMaterials[material.id]);
+                const isExpanded = Boolean(expandedMaterials[materialId]);
                 
                 return (
                   <React.Fragment key={material.id}>
@@ -379,7 +488,7 @@ const ConsumptionPage = () => {
                       <TableCell>{material.category || '-'}</TableCell>
                       <TableCell align="right">{plannedQuantity} {material.unit}</TableCell>
                       <TableCell align="right">
-                        {editMode ? (
+                        {editMode && !hasBatches ? (
                           <TextField
                             type="number"
                             size="small"
@@ -410,11 +519,11 @@ const ConsumptionPage = () => {
                         {hasBatches ? (
                           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                             <Typography variant="body2" sx={{ mr: 1 }}>
-                              {task.materialBatches[material.id].length} {task.materialBatches[material.id].length === 1 ? 'partia' : 'partie'}
+                              {task.materialBatches[materialId].length} {task.materialBatches[materialId].length === 1 ? 'partia' : 'partie'}
                             </Typography>
                             <IconButton 
                               size="small" 
-                              onClick={() => handleToggleMaterialExpand(material.id)}
+                              onClick={() => handleToggleMaterialExpand(materialId)}
                             >
                               {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                             </IconButton>
@@ -427,7 +536,7 @@ const ConsumptionPage = () => {
                       </TableCell>
                     </TableRow>
                     
-                    {/* Rozwijane szczegóły partii (LOT) */}
+                    {/* Rozwijane szczegóły partii (LOT) z możliwością edycji */}
                     {hasBatches && (
                       <TableRow>
                         <TableCell colSpan={6} sx={{ p: 0, borderBottom: 0 }}>
@@ -440,16 +549,62 @@ const ConsumptionPage = () => {
                                 <TableHead>
                                   <TableRow>
                                     <TableCell>Numer partii</TableCell>
-                                    <TableCell align="right">Ilość</TableCell>
+                                    <TableCell align="right">Przypisana ilość</TableCell>
+                                    <TableCell align="right">Rzeczywiste zużycie</TableCell>
+                                    <TableCell align="right">Różnica</TableCell>
                                   </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                  {task.materialBatches[material.id].map((batch, index) => (
-                                    <TableRow key={index}>
-                                      <TableCell>{batch.batchNumber}</TableCell>
-                                      <TableCell align="right">{batch.quantity} {material.unit}</TableCell>
-                                    </TableRow>
-                                  ))}
+                                  {task.materialBatches[materialId].map((batch, index) => {
+                                    const batchKey = `${materialId}_${batch.batchId}`;
+                                    const assignedQuantity = batch.quantity || 0;
+                                    const actualBatchQuantity = batchQuantities[batchKey];
+                                    
+                                    // Oblicz różnicę dla partii
+                                    let batchDifference, batchDifferenceDisplay;
+                                    
+                                    if (actualBatchQuantity !== undefined && !isNaN(actualBatchQuantity) && actualBatchQuantity !== '') {
+                                      batchDifference = actualBatchQuantity - assignedQuantity;
+                                      batchDifferenceDisplay = `${batchDifference > 0 ? '+' : ''}${batchDifference} ${material.unit}`;
+                                    } else {
+                                      batchDifferenceDisplay = '-';
+                                    }
+                                    
+                                    return (
+                                      <TableRow key={index}>
+                                        <TableCell>{batch.batchNumber}</TableCell>
+                                        <TableCell align="right">{assignedQuantity} {material.unit}</TableCell>
+                                        <TableCell align="right">
+                                          {editMode ? (
+                                            <TextField
+                                              type="number"
+                                              size="small"
+                                              value={actualBatchQuantity === '' ? '' : actualBatchQuantity || 0}
+                                              onChange={(e) => handleBatchQuantityChange(materialId, batch.batchId, e.target.value)}
+                                              InputProps={{
+                                                endAdornment: material.unit
+                                              }}
+                                              error={Boolean(batchErrors[batchKey])}
+                                              helperText={batchErrors[batchKey]}
+                                              sx={{ width: '150px' }}
+                                            />
+                                          ) : (
+                                            `${actualBatchQuantity === '' ? '-' : actualBatchQuantity} ${material.unit}`
+                                          )}
+                                        </TableCell>
+                                        <TableCell 
+                                          align="right" 
+                                          sx={{ 
+                                            color: !isNaN(actualBatchQuantity) && actualBatchQuantity !== '' && batchDifference !== 0
+                                              ? batchDifference < 0 ? 'success.main' : 'error.main'
+                                              : 'text.primary'
+                                          }}
+                                        >
+                                          {batchDifferenceDisplay}
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  })}
                                 </TableBody>
                               </Table>
                             </Box>

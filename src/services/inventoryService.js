@@ -3632,17 +3632,30 @@ import {
   };
 
   // Funkcja do usuwania wszystkich rezerwacji związanych z konkretnym zadaniem
-  export const cleanupTaskReservations = async (taskId) => {
+  export const cleanupTaskReservations = async (taskId, itemIds = null) => {
     try {
-      console.log(`Rozpoczynam czyszczenie rezerwacji dla zadania ${taskId}...`);
+      console.log(`Rozpoczynam czyszczenie rezerwacji dla zadania ${taskId}${itemIds ? ' i materiałów ' + itemIds.join(', ') : ''}...`);
       
       // Pobierz wszystkie rezerwacje (transakcje booking) dla tego zadania
+      let q;
       const transactionsRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
-      const q = query(
-        transactionsRef,
-        where('type', '==', 'booking'),
-        where('referenceId', '==', taskId)
-      );
+      
+      if (itemIds && itemIds.length > 0) {
+        // Jeśli mamy listę konkretnych materiałów, pobieramy tylko ich rezerwacje
+        q = query(
+          transactionsRef,
+          where('type', '==', 'booking'),
+          where('referenceId', '==', taskId),
+          where('itemId', 'in', itemIds)
+        );
+      } else {
+        // W przeciwnym razie pobieramy wszystkie rezerwacje dla zadania
+        q = query(
+          transactionsRef,
+          where('type', '==', 'booking'),
+          where('referenceId', '==', taskId)
+        );
+      }
       
       const querySnapshot = await getDocs(q);
       const reservations = querySnapshot.docs.map(doc => ({
@@ -3651,7 +3664,7 @@ import {
       }));
       
       if (reservations.length === 0) {
-        console.log(`Nie znaleziono rezerwacji dla zadania ${taskId}`);
+        console.log(`Nie znaleziono rezerwacji dla zadania ${taskId}${itemIds ? ' i materiałów ' + itemIds.join(', ') : ''}`);
         return { success: true, message: 'Brak rezerwacji do wyczyszczenia', count: 0 };
       }
       
@@ -3702,6 +3715,54 @@ import {
         }
       }
       
+      // Aktualizuj również dane zadania produkcyjnego, aby odzwierciedlić usunięte rezerwacje
+      try {
+        const taskRef = doc(db, 'productionTasks', taskId);
+        const taskDoc = await getDoc(taskRef);
+        
+        if (taskDoc.exists()) {
+          const taskData = taskDoc.data();
+          
+          // Jeśli zadanie ma informacje o zarezerwowanych partiach
+          if (taskData.materialBatches) {
+            let materialBatches = { ...taskData.materialBatches };
+            let updated = false;
+            
+            // Usuń informacje o zarezerwowanych partiach dla określonych materiałów
+            if (itemIds && itemIds.length > 0) {
+              // Usuń tylko konkretne materiały
+              itemIds.forEach(itemId => {
+                if (materialBatches[itemId]) {
+                  delete materialBatches[itemId];
+                  updated = true;
+                }
+              });
+            } else {
+              // Usuń wszystkie zarezerwowane partie
+              materialBatches = {};
+              updated = Object.keys(taskData.materialBatches).length > 0;
+            }
+            
+            // Sprawdź, czy zostały jakiekolwiek zarezerwowane materiały
+            const hasAnyReservations = Object.keys(materialBatches).length > 0;
+            
+            if (updated) {
+              // Aktualizuj zadanie produkcyjne
+              await updateDoc(taskRef, {
+                materialBatches,
+                materialsReserved: hasAnyReservations,
+                updatedAt: serverTimestamp()
+              });
+              
+              console.log(`Zaktualizowano informacje o zarezerwowanych partiach w zadaniu ${taskId}`);
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Błąd podczas aktualizacji informacji o zarezerwowanych partiach w zadaniu ${taskId}:`, error);
+        // Kontynuuj mimo błędu
+      }
+      
       // Emituj zdarzenie o zmianie stanu magazynu
       const event = new CustomEvent('inventory-updated', { 
         detail: { action: 'cleanup-reservations' }
@@ -3710,7 +3771,7 @@ import {
       
       return {
         success: true,
-        message: `Usunięto ${deletedReservations.length} rezerwacji dla zadania ${taskId}`,
+        message: `Usunięto ${deletedReservations.length} rezerwacji dla zadania ${taskId}${itemIds ? ' i materiałów ' + itemIds.join(', ') : ''}`,
         count: deletedReservations.length,
         deletedReservations,
         errors

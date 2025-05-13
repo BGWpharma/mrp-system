@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Typography,
@@ -823,6 +823,21 @@ const TaskDetailsPage = () => {
     try {
       setReservingMaterials(true);
       
+      // Funkcja pomocnicza do anulowania istniejących rezerwacji dla materiału
+      const cancelExistingReservations = async (materialId) => {
+        if (task.materialBatches && task.materialBatches[materialId] && task.materialBatches[materialId].length > 0) {
+          try {
+            // Importuj funkcję do czyszczenia rezerwacji dla zadania
+            const { cleanupTaskReservations } = await import('../../services/inventoryService');
+            console.log(`Usuwanie istniejących rezerwacji dla materiału ${materialId} w zadaniu ${id}`);
+            await cleanupTaskReservations(id, [materialId]);
+          } catch (error) {
+            console.error(`Błąd podczas usuwania rezerwacji dla materiału ${materialId}:`, error);
+            showError(`Nie udało się usunąć poprzednich rezerwacji dla materiału: ${error.message}`);
+          }
+        }
+      };
+      
       // Dla ręcznej rezerwacji
       if (reservationMethod === 'manual') {
         // Walidacja tylko dla pojedynczego materiału lub dla wszystkich materiałów
@@ -844,6 +859,9 @@ const TaskDetailsPage = () => {
         for (const material of materialsToReserve) {
           const materialId = material.inventoryItemId || material.id;
           if (!materialId) continue;
+          
+          // Anuluj istniejące rezerwacje dla tego materiału
+          await cancelExistingReservations(materialId);
           
           // Użyj rzeczywistej ilości z materialQuantities jeśli jest dostępna
           const requiredQuantity = materialQuantities[materialId] !== undefined 
@@ -881,6 +899,9 @@ const TaskDetailsPage = () => {
         for (const material of materialsToReserve) {
           const materialId = material.inventoryItemId || material.id;
           if (!materialId) continue;
+          
+          // Anuluj istniejące rezerwacje dla tego materiału
+          await cancelExistingReservations(materialId);
               
           // Użyj rzeczywistej ilości z materialQuantities jeśli jest dostępna
           const requiredQuantity = materialQuantities[materialId] !== undefined 
@@ -1064,7 +1085,7 @@ const TaskDetailsPage = () => {
                                   </Typography>
                                 </TableCell>
                                 <TableCell>
-                                  {batch.unitPrice ? `${parseFloat(batch.unitPrice).toFixed(2)} €` : '—'}
+                                  {batch.unitPrice ? `${parseFloat(batch.unitPrice).toFixed(4)} €` : '—'}
                                 </TableCell>
                                 <TableCell>
                                   <TextField
@@ -1188,10 +1209,10 @@ const TaskDetailsPage = () => {
                     variant="contained" 
                     color="primary"
                     size="small"
-                    disabled={!isComplete || reservingMaterials || isAlreadyReserved}
+                    disabled={!isComplete || reservingMaterials || (isAlreadyReserved && reservationMethod !== 'manual')}
                     onClick={() => handleReserveMaterials(materialId)}
                   >
-                    {isAlreadyReserved ? 'Zarezerwowany' : 'Rezerwuj ten materiał'}
+                    {isAlreadyReserved ? 'Zaktualizuj rezerwację' : 'Rezerwuj ten materiał'}
                   </Button>
                 </Box>
               </AccordionDetails>
@@ -1897,7 +1918,7 @@ const TaskDetailsPage = () => {
             if (Math.abs(material.unitPrice - averagePrice) > 0.001) {
             material.unitPrice = averagePrice;
               hasChanges = true;
-            console.log(`Zaktualizowano cenę dla ${material.name}: ${averagePrice.toFixed(2)} €`);
+            console.log(`Zaktualizowano cenę dla ${material.name}: ${averagePrice.toFixed(4)} €`);
             }
           }
         }
@@ -1955,7 +1976,7 @@ const TaskDetailsPage = () => {
                 })
               });
               
-              console.log(`Zaktualizowano koszty materiałów w zadaniu: ${totalMaterialCost.toFixed(2)} € (${unitMaterialCost.toFixed(2)} €/${task.unit})`);
+              console.log(`Zaktualizowano koszty materiałów w zadaniu: ${totalMaterialCost.toFixed(4)} € (${unitMaterialCost.toFixed(4)} €/${task.unit})`);
               showSuccess('Koszty materiałów zostały automatycznie zaktualizowane');
               
               // Odśwież dane zadania, aby wyświetlić zaktualizowane koszty
@@ -2046,7 +2067,7 @@ const TaskDetailsPage = () => {
         })
       });
       
-      console.log(`Zaktualizowano koszty materiałów w zadaniu: ${totalMaterialCost.toFixed(2)} € (${unitMaterialCost.toFixed(2)} €/${task.unit})`);
+      console.log(`Zaktualizowano koszty materiałów w zadaniu: ${totalMaterialCost.toFixed(4)} € (${unitMaterialCost.toFixed(4)} €/${task.unit})`);
       showSuccess('Koszty materiałów zostały zaktualizowane w bazie danych');
       
       // Odśwież dane zadania, aby wyświetlić zaktualizowane koszty
@@ -2096,18 +2117,18 @@ const TaskDetailsPage = () => {
           </Grid>
           <Grid item xs={12} md={6} sx={{ textAlign: 'right' }}>
             <Typography variant="body1">
-              <strong>Całkowity koszt materiałów:</strong> {totalMaterialCost.toFixed(2)} €
+              <strong>Całkowity koszt materiałów:</strong> {totalMaterialCost.toFixed(4)} €
               {task.totalMaterialCost !== undefined && costChanged && (
                 <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                  (W bazie: {task.totalMaterialCost.toFixed(2)} €)
+                  (W bazie: {task.totalMaterialCost.toFixed(4)} €)
                 </Typography>
               )}
             </Typography>
             <Typography variant="body1">
-              <strong>Koszt materiałów na jednostkę:</strong> {unitMaterialCost} €/{task.unit}
+              <strong>Koszt materiałów na jednostkę:</strong> {unitMaterialCost.toFixed(4)} €/{task.unit}
               {task.unitMaterialCost !== undefined && costChanged && (
                 <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                  (W bazie: {task.unitMaterialCost} €/{task.unit})
+                  (W bazie: {task.unitMaterialCost.toFixed(4)} €/{task.unit})
                 </Typography>
               )}
             </Typography>
@@ -2490,14 +2511,14 @@ const TaskDetailsPage = () => {
                             </TableCell>
                             <TableCell>
                               {reservedBatches && reservedBatches.length > 0 ? (
-                                unitPrice.toFixed(2) + ' €'
+                                unitPrice.toFixed(4) + ' €'
                               ) : (
                                 '—'
                               )}
                             </TableCell>
                             <TableCell>
                               {reservedBatches && reservedBatches.length > 0 ? (
-                                cost.toFixed(2) + ' €'
+                                cost.toFixed(4) + ' €'
                               ) : (
                                 '—'
                               )}
