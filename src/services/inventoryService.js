@@ -294,7 +294,7 @@ import {
         
         // Przypisz obliczone wartości do pozycji
         item.quantity = totalQuantity;
-        item.bookedQuantity = 0; // To zostanie zaktualizowane później jeśli potrzeba
+        item.bookedQuantity = item.bookedQuantity || 0; // Zachowaj wartość bookedQuantity z bazy lub ustaw 0 jeśli nie istnieje
         item.batches = itemBatches;
         
         // Dodaj nazwę magazynu (jeśli istnieje)
