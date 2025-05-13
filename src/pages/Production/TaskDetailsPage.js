@@ -1085,7 +1085,7 @@ const TaskDetailsPage = () => {
                                   </Typography>
                                 </TableCell>
                                 <TableCell>
-                                  {batch.unitPrice ? `${parseFloat(batch.unitPrice).toFixed(2)} €` : '—'}
+                                  {batch.unitPrice ? `${parseFloat(batch.unitPrice).toFixed(4)} €` : '—'}
                                 </TableCell>
                                 <TableCell>
                                   <TextField
@@ -1378,7 +1378,7 @@ const TaskDetailsPage = () => {
                     <td class="${nameClass}">${material.name}</td>
                     <td>${material.quantity}</td>
                     <td>${material.unit || 'szt.'}</td>
-                    <td>${material.unitPrice ? `${material.unitPrice.toFixed(2)} €` : '—'}</td>
+                    <td>${material.unitPrice ? `${material.unitPrice.toFixed(4)} €` : '—'}</td>
                     <td>${material.cost ? `${material.cost.toFixed(2)} €` : '—'}</td>
                     <td>${material.available ? 'Dostępny' : 'Brak'}</td>
                     <td>${isIncludedInCosts ? 'Tak' : 'Nie'}</td>
@@ -1393,7 +1393,7 @@ const TaskDetailsPage = () => {
                 </tr>
                 <tr>
                   <th colspan="4" style="text-align: right">Koszt materiałów na jednostkę:</th>
-                  <th>${report.unitMaterialCost ? `${report.unitMaterialCost.toFixed(2)} €/${task.unit}` : '—'}</th>
+                  <th>${report.unitMaterialCost ? `~${report.unitMaterialCost.toFixed(4)} €/${task.unit}` : '—'}</th>
                   <th colspan="2"></th>
                 </tr>
               </tbody>
@@ -1426,7 +1426,7 @@ const TaskDetailsPage = () => {
                           <td>${material ? material.name : 'Nieznany materiał'}</td>
                           <td>${batch.batchNumber}</td>
                           <td>${batch.quantity} ${material ? material.unit : 'szt.'}</td>
-                          <td>${batch.unitPrice ? batch.unitPrice.toFixed(2) + ' €' : '—'}</td>
+                          <td>${batch.unitPrice ? batch.unitPrice.toFixed(4) + ' €' : '—'}</td>
                           <td>${batchCost ? batchCost.toFixed(2) + ' €' : '—'}</td>
                           <td>${formatDate(batch.expiryDate)}</td>
                         </tr>
@@ -2125,10 +2125,10 @@ const TaskDetailsPage = () => {
               )}
             </Typography>
             <Typography variant="body1">
-              <strong>Koszt materiałów na jednostkę:</strong> {unitMaterialCost} €/{task.unit}
+              <strong>Koszt materiałów na jednostkę:</strong> ~{unitMaterialCost.toFixed(4)} €/{task.unit}
               {task.unitMaterialCost !== undefined && costChanged && (
                 <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                  (W bazie: {task.unitMaterialCost} €/{task.unit})
+                  (W bazie: ~{task.unitMaterialCost.toFixed(4)} €/{task.unit})
                 </Typography>
               )}
             </Typography>
@@ -2511,7 +2511,7 @@ const TaskDetailsPage = () => {
                             </TableCell>
                             <TableCell>
                               {reservedBatches && reservedBatches.length > 0 ? (
-                                unitPrice.toFixed(2) + ' €'
+                                unitPrice.toFixed(4) + ' €'
                               ) : (
                                 '—'
                               )}
