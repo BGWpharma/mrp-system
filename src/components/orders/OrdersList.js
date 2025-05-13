@@ -901,7 +901,7 @@ const OrdersList = () => {
                 <TableBody>
                   {displayedOrders.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} align="center">
+                      <TableCell colSpan={8} align="center">
                         Brak zamówień
                       </TableCell>
                     </TableRow>
@@ -923,13 +923,6 @@ const OrdersList = () => {
                           </TableCell>
                           <TableCell>
                             <Typography variant="body2" fontWeight="medium">
-                              {typeof order.customer === 'object' && order.customer !== null 
-                                ? (order.customer?.name || 'Brak danych klienta') 
-                                : String(order.customer) || 'Brak danych klienta'}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" fontWeight="medium">
                               {order.orderNumber || (order.id && order.id.substring(0, 8).toUpperCase())}
                             </Typography>
                           </TableCell>
@@ -944,15 +937,20 @@ const OrdersList = () => {
                           </TableCell>
                           <TableCell>
                             <Typography variant="body2" fontWeight="medium">
-                            {order.deadline ? (
-                              typeof order.deadline === 'object' && typeof order.deadline.toDate === 'function' 
-                                ? formatDate(order.deadline.toDate(), false)
-                                : formatDate(order.deadline, false)
-                            ) : '-'}
+                              {typeof order.customer === 'object' && order.customer !== null 
+                                ? (order.customer?.name || 'Brak danych klienta') 
+                                : String(order.customer) || 'Brak danych klienta'}
                             </Typography>
                           </TableCell>
                           <TableCell>
-                            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                            <Chip 
+                              label={order.status} 
+                              color={getStatusChipColor(order.status)}
+                              size="small"
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                               <Typography variant="body2" fontWeight="medium">
                                 {formatCurrency(order.totalValue || 0)}
                               </Typography>
@@ -964,11 +962,13 @@ const OrdersList = () => {
                             </Box>
                           </TableCell>
                           <TableCell>
-                            <Chip 
-                              label={order.status} 
-                              color={getStatusChipColor(order.status)}
-                              size="small"
-                            />
+                            <Typography variant="body2" fontWeight="medium">
+                            {order.deadline ? (
+                              typeof order.deadline === 'object' && typeof order.deadline.toDate === 'function' 
+                                ? formatDate(order.deadline.toDate(), false)
+                                : formatDate(order.deadline, false)
+                            ) : '-'}
+                            </Typography>
                           </TableCell>
                           <TableCell align="right">
                             <Tooltip title="Edytuj">
