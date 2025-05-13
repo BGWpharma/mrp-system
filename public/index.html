@@ -27,7 +27,7 @@
     -->
   <title>BGW-MRP</title>
   <script>
-    const newVersion = '1.0.18';
+    const newVersion = '1.0.20';
 
     // Funkcja do dodawania parametru wersji do zasobów
     function addVersionToResources() {
@@ -55,16 +55,19 @@
         localStorage.setItem('appVersion', newVersion);
         
         if (currentVersion) {
-          // Jeśli to nie jest pierwsze uruchomienie, wymuszamy pełne odświeżenie
-          caches.keys().then(cacheNames => {
-            return Promise.all(
-              cacheNames.map(cacheName => {
-                return caches.delete(cacheName);
-              })
-            );
-          }).then(() => {
-            window.location.reload(true);
-          });
+          // Komunikat dla użytkownika o nowej wersji z opcją potwierdzenia
+          if (confirm('Dostępna jest nowa wersja aplikacji. Naciśnij "OK", aby odświeżyć stronę i załadować najnowszą wersję.')) {
+            // Jeśli użytkownik potwierdził, wymuszamy pełne odświeżenie
+            caches.keys().then(cacheNames => {
+              return Promise.all(
+                cacheNames.map(cacheName => {
+                  return caches.delete(cacheName);
+                })
+              );
+            }).then(() => {
+              window.location.reload(true);
+            });
+          }
         }
       }
     }

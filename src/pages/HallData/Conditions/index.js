@@ -319,7 +319,7 @@ const HallDataConditionsPage = () => {
   if (permissionError) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Typography variant="h4" gutterBottom>Warunki</Typography>
+        <Typography variant="h4" gutterBottom>Warunki środowiskowe</Typography>
         <Paper elevation={3} sx={{ p: 3 }}>
           <Alert severity="error" sx={{ mb: 3 }}>
             <Typography variant="h6">Brak uprawnień do bazy danych Firebase</Typography>
@@ -358,7 +358,7 @@ const HallDataConditionsPage = () => {
   if (error) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Typography variant="h4" gutterBottom>Warunki</Typography>
+        <Typography variant="h4" gutterBottom>Warunki środowiskowe</Typography>
         <Paper elevation={3} sx={{ p: 3, textAlign: 'center' }}>
           <Typography color="error">{error}</Typography>
         </Paper>

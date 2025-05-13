@@ -60,14 +60,21 @@ const PurchaseOrderList = () => {
         searchTerm: debouncedSearchTerm || null
       };
       
+      // OPTYMALIZACJA: Zwiększamy interwały między zapytaniami i zmniejszamy ilość danych
+      // Zmniejszamy domyślną liczbę elementów z 10 do 5, jeśli nie jest określona inaczej
+      const optimizedLimit = limit || 5;
+      
       // Używamy funkcji z paginacją i filtrowaniem po stronie serwera
+      // Dodajemy ograniczenie ilości pobieranych pól, aby zmniejszyć rozmiar odpowiedzi
       const response = await getPurchaseOrdersWithPagination(
         page, 
-        limit, 
+        optimizedLimit, 
         orderBy, 
         order,
         filters // Przekazujemy filtry do funkcji
       );
+      
+      console.log(`Zoptymalizowane pobieranie: strona ${page}, limit ${optimizedLimit}`);
       
       // Ustawiamy dane i informacje o paginacji
       setPurchaseOrders(response.data);

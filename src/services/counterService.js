@@ -5,11 +5,23 @@ const COUNTERS_COLLECTION = 'counters';
 const CUSTOMERS_COLLECTION = 'customers';
 
 /**
- * Pobiera aktualny obiekt liczników
+ * Pobiera aktualny obiekt liczników z cachowaniem
  * @returns {Promise<Object>} - Obiekt z aktualnymi licznikami i ich ID
  */
+// Dodajemy cachowanie wyników aby zmniejszyć liczbę operacji
+let countersCache = null;
+let countersCacheExpiry = null;
+const CACHE_DURATION = 60000; // 1 minuta w milisekundach
+
 export const getCurrentCounters = async () => {
   try {
+    // Jeśli mamy ważne dane w cache, użyj ich zamiast pobierać ponownie
+    const now = new Date().getTime();
+    if (countersCache && countersCacheExpiry && now < countersCacheExpiry) {
+      console.log('Użyto cache dla liczników');
+      return countersCache;
+    }
+    
     const countersRef = collection(db, COUNTERS_COLLECTION);
     const q = query(
       countersRef,
@@ -19,9 +31,10 @@ export const getCurrentCounters = async () => {
     
     const querySnapshot = await getDocs(q);
     
+    let result;
     if (querySnapshot.empty) {
       // Brak liczników - zwróć standardowy obiekt początkowy
-      return { 
+      result = { 
         data: {
           MO: 1,
           PO: 1,
@@ -32,16 +45,22 @@ export const getCurrentCounters = async () => {
         },
         id: null
       };
+    } else {
+      // Pobierz istniejący licznik
+      const counterDoc = querySnapshot.docs[0];
+      const data = counterDoc.data();
+      
+      result = {
+        id: counterDoc.id,
+        data
+      };
     }
     
-    // Pobierz istniejący licznik
-    const counterDoc = querySnapshot.docs[0];
-    const data = counterDoc.data();
+    // Zapisz w cache
+    countersCache = result;
+    countersCacheExpiry = now + CACHE_DURATION;
     
-    return {
-      id: counterDoc.id,
-      data
-    };
+    return result;
   } catch (error) {
     console.error('Błąd podczas pobierania liczników:', error);
     throw error;
@@ -70,6 +89,10 @@ export const updateCounters = async (counterId, counterValues) => {
         lastUpdated: new Date()
       });
     }
+    
+    // Resetuj cache po aktualizacji
+    countersCache = null;
+    countersCacheExpiry = null;
     
     return true;
   } catch (error) {

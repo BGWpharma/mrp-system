@@ -159,6 +159,263 @@ const formatMessagesForOpenAI = (messages, businessData = null) => {
       businessDataContext += `- Timestamp danych: ${summary.timestamp}\n`;
     }
     
+    // Dodaj informacje o dostępnych zbiorach danych
+    businessDataContext += `\n### Dostępne zbiory danych w systemie:\n`;
+    
+    // Lista dostępnych kolekcji
+    if (businessData.accessibleDataFields && businessData.accessibleDataFields.length > 0) {
+      businessDataContext += `Dostępne kolekcje danych:\n`;
+      businessData.accessibleDataFields.forEach(field => {
+        businessDataContext += `- ${field}\n`;
+      });
+    }
+    
+    // Lista niedostępnych kolekcji
+    if (businessData.unavailableDataFields && businessData.unavailableDataFields.length > 0) {
+      businessDataContext += `\nNiedostępne kolekcje danych:\n`;
+      businessData.unavailableDataFields.forEach(field => {
+        businessDataContext += `- ${field}\n`;
+      });
+    }
+    
+    // Dodaj dane o konwersacjach z asystentem AI, jeśli są dostępne
+    if (businessData.data && businessData.data.aiConversations && 
+        businessData.data.aiConversations.length > 0) {
+      
+      businessDataContext += `\n### Dane o konwersacjach z asystentem AI (aiConversations):\n`;
+      businessDataContext += `Liczba konwersacji: ${businessData.data.aiConversations.length}\n`;
+      
+      // Przykładowe ostatnie konwersacje
+      businessDataContext += `\nOstatnie konwersacje:\n`;
+      businessData.data.aiConversations.slice(0, 5).forEach((conv, index) => {
+        businessDataContext += `${index + 1}. ID: ${conv.id}, Tytuł: ${conv.title || 'Bez tytułu'}, Liczba wiadomości: ${conv.messageCount || 0}\n`;
+      });
+    }
+    
+    // Dodaj dane o licznikach systemowych, jeśli są dostępne
+    if (businessData.data && businessData.data.counters && 
+        businessData.data.counters.length > 0) {
+      
+      businessDataContext += `\n### Dane o licznikach systemowych (counters):\n`;
+      businessDataContext += `Liczba liczników: ${businessData.data.counters.length}\n`;
+      
+      // Przykładowe liczniki
+      businessDataContext += `\nPrzykładowe liczniki:\n`;
+      businessData.data.counters.slice(0, 5).forEach((counter, index) => {
+        businessDataContext += `${index + 1}. ID: ${counter.id}, Wartość: ${counter.value || 0}, Typ: ${counter.type || 'Nieznany'}\n`;
+      });
+    }
+    
+    // Dodaj dane o grupach produktów, jeśli są dostępne
+    if (businessData.data && businessData.data.itemGroups && 
+        businessData.data.itemGroups.length > 0) {
+      
+      businessDataContext += `\n### Dane o grupach produktów (itemGroups):\n`;
+      businessDataContext += `Liczba grup: ${businessData.data.itemGroups.length}\n`;
+      
+      // Przykładowe grupy produktów
+      businessDataContext += `\nPrzykładowe grupy produktów:\n`;
+      businessData.data.itemGroups.slice(0, 8).forEach((group, index) => {
+        businessDataContext += `${index + 1}. ID: ${group.id}, Nazwa: ${group.name || 'Bez nazwy'}, Liczba produktów: ${group.itemCount || 0}\n`;
+      });
+    }
+    
+    // Dodaj dane o cenach dostawców, jeśli są dostępne
+    if (businessData.data && businessData.data.inventorySupplierPrices && 
+        businessData.data.inventorySupplierPrices.length > 0) {
+      
+      businessDataContext += `\n### Dane o cenach dostawców (inventorySupplierPrices):\n`;
+      businessDataContext += `Liczba cen: ${businessData.data.inventorySupplierPrices.length}\n`;
+      
+      // Przykładowe ceny dostawców
+      businessDataContext += `\nPrzykładowe ceny dostawców:\n`;
+      businessData.data.inventorySupplierPrices.slice(0, 5).forEach((price, index) => {
+        businessDataContext += `${index + 1}. Produkt: ${price.productId || price.itemId || 'Nieznany'}, Dostawca: ${price.supplierId || 'Nieznany'}, Cena: ${price.price || 0} ${price.currency || 'PLN'}\n`;
+      });
+    }
+    
+    // Dodaj dane o transakcjach magazynowych, jeśli są dostępne
+    if (businessData.data && businessData.data.inventoryTransactions && 
+        businessData.data.inventoryTransactions.length > 0) {
+      
+      businessDataContext += `\n### Dane o transakcjach magazynowych (inventoryTransactions):\n`;
+      businessDataContext += `Liczba transakcji: ${businessData.data.inventoryTransactions.length}\n`;
+      
+      // Przykładowe transakcje magazynowe
+      businessDataContext += `\nOstatnie transakcje magazynowe:\n`;
+      businessData.data.inventoryTransactions.slice(0, 5).forEach((transaction, index) => {
+        businessDataContext += `${index + 1}. ID: ${transaction.id}, Typ: ${transaction.type || 'Nieznany'}, Produkt: ${transaction.itemId || 'Nieznany'}, Ilość: ${transaction.quantity || 0}, Data: ${transaction.date || 'Nieznana'}\n`;
+      });
+    }
+    
+    // Dodaj dane o powiadomieniach, jeśli są dostępne
+    if (businessData.data && businessData.data.notifications && 
+        businessData.data.notifications.length > 0) {
+      
+      businessDataContext += `\n### Dane o powiadomieniach (notifications):\n`;
+      businessDataContext += `Liczba powiadomień: ${businessData.data.notifications.length}\n`;
+      
+      // Przykładowe powiadomienia
+      businessDataContext += `\nOstatnie powiadomienia:\n`;
+      businessData.data.notifications.slice(0, 5).forEach((notification, index) => {
+        businessDataContext += `${index + 1}. ID: ${notification.id}, Tytuł: ${notification.title || 'Bez tytułu'}, Typ: ${notification.type || 'Informacja'}, Data: ${notification.createdAt || 'Nieznana'}\n`;
+      });
+    }
+    
+    // Dodaj dane o elementach cenników, jeśli są dostępne
+    if (businessData.data && businessData.data.priceListItems && 
+        businessData.data.priceListItems.length > 0) {
+      
+      businessDataContext += `\n### Dane o elementach cenników (priceListItems):\n`;
+      businessDataContext += `Liczba elementów: ${businessData.data.priceListItems.length}\n`;
+      
+      // Przykładowe elementy cenników
+      businessDataContext += `\nPrzykładowe elementy cenników:\n`;
+      businessData.data.priceListItems.slice(0, 5).forEach((item, index) => {
+        businessDataContext += `${index + 1}. ID: ${item.id}, Produkt: ${item.productId || 'Nieznany'}, Cennik: ${item.priceListId || 'Nieznany'}, Cena: ${item.price || 0} ${item.currency || 'PLN'}\n`;
+      });
+    }
+    
+    // Dodaj dane o cennikach, jeśli są dostępne
+    if (businessData.data && businessData.data.priceLists && 
+        businessData.data.priceLists.length > 0) {
+      
+      businessDataContext += `\n### Dane o cennikach (priceLists):\n`;
+      businessDataContext += `Liczba cenników: ${businessData.data.priceLists.length}\n`;
+      
+      // Przykładowe cenniki
+      businessDataContext += `\nPrzykładowe cenniki:\n`;
+      businessData.data.priceLists.slice(0, 5).forEach((priceList, index) => {
+        businessDataContext += `${index + 1}. ID: ${priceList.id}, Nazwa: ${priceList.name || 'Bez nazwy'}, Waluta: ${priceList.currency || 'PLN'}, Aktywny: ${priceList.active ? 'Tak' : 'Nie'}\n`;
+      });
+    }
+    
+    // Dodaj dane o historii produkcji, jeśli są dostępne
+    if (businessData.data && businessData.data.productionHistory && 
+        businessData.data.productionHistory.length > 0) {
+      
+      businessDataContext += `\n### Dane o historii produkcji (productionHistory):\n`;
+      businessDataContext += `Liczba wpisów: ${businessData.data.productionHistory.length}\n`;
+      
+      // Przykładowe wpisy historii produkcji
+      businessDataContext += `\nOstatnie wpisy historii produkcji:\n`;
+      businessData.data.productionHistory.slice(0, 5).forEach((history, index) => {
+        businessDataContext += `${index + 1}. ID: ${history.id}, Zadanie: ${history.taskId || 'Nieznane'}, Typ: ${history.eventType || 'Nieznany'}, Data: ${history.timestamp || 'Nieznana'}\n`;
+      });
+    }
+    
+    // Dodaj dane o wersjach receptur, jeśli są dostępne
+    if (businessData.data && businessData.data.recipeVersions && 
+        businessData.data.recipeVersions.length > 0) {
+      
+      businessDataContext += `\n### Dane o wersjach receptur (recipeVersions):\n`;
+      businessDataContext += `Liczba wersji: ${businessData.data.recipeVersions.length}\n`;
+      
+      // Przykładowe wersje receptur
+      businessDataContext += `\nPrzykładowe wersje receptur:\n`;
+      businessData.data.recipeVersions.slice(0, 5).forEach((version, index) => {
+        businessDataContext += `${index + 1}. ID: ${version.id}, Receptura: ${version.recipeId || 'Nieznana'}, Wersja: ${version.version || '1.0'}, Data: ${version.createdAt || 'Nieznana'}\n`;
+      });
+    }
+    
+    // Dodaj dane o ustawieniach systemu, jeśli są dostępne
+    if (businessData.data && businessData.data.settings && 
+        businessData.data.settings.length > 0) {
+      
+      businessDataContext += `\n### Dane o ustawieniach systemu (settings):\n`;
+      businessDataContext += `Liczba ustawień: ${businessData.data.settings.length}\n`;
+      
+      // Przykładowe ustawienia
+      businessDataContext += `\nPrzykładowe ustawienia systemu:\n`;
+      businessData.data.settings.slice(0, 5).forEach((setting, index) => {
+        businessDataContext += `${index + 1}. ID: ${setting.id}, Klucz: ${setting.key || 'Nieznany'}, Wartość: ${setting.value || 'Nieznana'}\n`;
+      });
+    }
+    
+    // Dodaj dane o użytkownikach, jeśli są dostępne
+    if (businessData.data && businessData.data.users && 
+        businessData.data.users.length > 0) {
+      
+      businessDataContext += `\n### Dane o użytkownikach (users):\n`;
+      businessDataContext += `Liczba użytkowników: ${businessData.data.users.length}\n`;
+      
+      // Przykładowi użytkownicy (bez danych wrażliwych)
+      businessDataContext += `\nPrzykładowi użytkownicy:\n`;
+      businessData.data.users.slice(0, 5).forEach((user, index) => {
+        businessDataContext += `${index + 1}. ID: ${user.id}, Rola: ${user.role || 'Użytkownik'}, Aktywny: ${user.active ? 'Tak' : 'Nie'}\n`;
+      });
+    }
+    
+    // Dodaj dane o magazynach, jeśli są dostępne
+    if (businessData.data && businessData.data.warehouses && 
+        businessData.data.warehouses.length > 0) {
+      
+      businessDataContext += `\n### Dane o magazynach (warehouses):\n`;
+      businessDataContext += `Liczba magazynów: ${businessData.data.warehouses.length}\n`;
+      
+      // Przykładowe magazyny
+      businessDataContext += `\nPrzykładowe magazyny:\n`;
+      businessData.data.warehouses.slice(0, 5).forEach((warehouse, index) => {
+        businessDataContext += `${index + 1}. ID: ${warehouse.id}, Nazwa: ${warehouse.name || 'Bez nazwy'}, Adres: ${warehouse.address || 'Brak adresu'}\n`;
+      });
+    }
+    
+    // Dodaj dane o stanowiskach pracy, jeśli są dostępne
+    if (businessData.data && businessData.data.workstations && 
+        businessData.data.workstations.length > 0) {
+      
+      businessDataContext += `\n### Dane o stanowiskach pracy (workstations):\n`;
+      businessDataContext += `Liczba stanowisk: ${businessData.data.workstations.length}\n`;
+      
+      // Przykładowe stanowiska pracy
+      businessDataContext += `\nPrzykładowe stanowiska pracy:\n`;
+      businessData.data.workstations.slice(0, 5).forEach((workstation, index) => {
+        businessDataContext += `${index + 1}. ID: ${workstation.id}, Nazwa: ${workstation.name || 'Bez nazwy'}, Typ: ${workstation.type || 'Standardowe'}, Status: ${workstation.status || 'Aktywne'}\n`;
+      });
+    }
+    
+    // Dodaj dane o partiach magazynowych (InventoryBatches), jeśli są dostępne
+    if (businessData.data && businessData.data.inventoryBatches && 
+        businessData.data.inventoryBatches.length > 0) {
+      
+      businessDataContext += `\n### Dane o partiach magazynowych (InventoryBatches):\n`;
+      businessDataContext += `Liczba partii magazynowych: ${businessData.data.inventoryBatches.length}\n`;
+      
+      // Przykładowe partie magazynowe
+      businessDataContext += `\nPrzykładowe partie magazynowe:\n`;
+      businessData.data.inventoryBatches.slice(0, 5).forEach((batch, index) => {
+        businessDataContext += `${index + 1}. ID: ${batch.id}, Numer partii: ${batch.batchNumber || 'Bez numeru'}, Produkt: ${batch.itemId || batch.productId || 'Nieznany'}\n`;
+        if (batch.quantity) {
+          businessDataContext += `   Ilość: ${batch.quantity} ${batch.unit || 'szt.'}\n`;
+        }
+        if (batch.expiryDate) {
+          businessDataContext += `   Data ważności: ${batch.expiryDate}\n`;
+        }
+        if (batch.supplier) {
+          businessDataContext += `   Dostawca: ${batch.supplier}\n`;
+        }
+      });
+      
+      // Statystyki partii magazynowych
+      const expiredBatches = businessData.data.inventoryBatches.filter(batch => {
+        if (!batch.expiryDate) return false;
+        const expiryDate = new Date(batch.expiryDate);
+        return expiryDate < new Date();
+      }).length;
+      
+      if (expiredBatches > 0) {
+        businessDataContext += `\nLiczba przeterminowanych partii: ${expiredBatches}\n`;
+      }
+      
+      const totalQuantity = businessData.data.inventoryBatches.reduce((sum, batch) => {
+        return sum + (parseFloat(batch.quantity) || 0);
+      }, 0);
+      
+      businessDataContext += `Łączna ilość we wszystkich partiach: ${totalQuantity.toFixed(2)}\n`;
+    }
+    
+    // Teraz kontynuuj z istniejącymi już blokami kodu dla innych kolekcji
+    
     // Dodaj dane o klientach, gdy są dostępne
     if (businessData.data && businessData.data.customers && 
         businessData.data.customers.length > 0) {
@@ -1153,7 +1410,11 @@ getMockResponse = (query, businessData = null) => {
  */
 export const getUserConversations = async (userId, limitCount = 10) => {
   try {
+    // Korzystamy z kolekcji aiConversations
     const conversationsRef = collection(db, 'aiConversations');
+    
+    // OPTYMALIZACJA: Zmniejszamy rozmiar danych, dodając limity
+    // i wybierając tylko te pola, które są niezbędne
     const q = query(
       conversationsRef,
       where('userId', '==', userId),
@@ -1161,10 +1422,16 @@ export const getUserConversations = async (userId, limitCount = 10) => {
       limit(limitCount)
     );
     
+    // Wykonujemy tylko jedno zapytanie zamiast wielokrotnych zapytań
     const querySnapshot = await getDocs(q);
+    
+    // Mapujemy wyniki, ograniczając ilość przetwarzanych danych
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
-      ...doc.data()
+      title: doc.data().title || 'Nowa konwersacja',
+      updatedAt: doc.data().updatedAt,
+      messageCount: doc.data().messageCount || 0
+      // Nie pobieramy pełnych treści wiadomości, tylko niezbędne metadane
     }));
   } catch (error) {
     console.error('Błąd podczas pobierania konwersacji użytkownika:', error);

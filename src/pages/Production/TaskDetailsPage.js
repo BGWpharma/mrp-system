@@ -158,6 +158,10 @@ const TaskDetailsPage = () => {
   const [errorMessage, setErrorMessage] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
 
+  // Dodaję brakującą zmienną stanu materialTab i materialAwaitingOrders
+  const [materialTab, setMaterialTab] = useState(0);
+  const [materialAwaitingOrders, setMaterialAwaitingOrders] = useState({});
+
   const fetchTask = async () => {
     try {
       setLoading(true);
@@ -2222,6 +2226,36 @@ const TaskDetailsPage = () => {
       showError('Nie udało się pobrać informacji o oczekiwanych zamówieniach');
     } finally {
       setAwaitingOrdersLoading(false);
+    }
+  };
+
+  // Funkcja pomocnicza do formatowania daty
+  const formatDateToLocal = (dateString) => {
+    if (!dateString) return 'Nie określono';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('pl-PL', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  };
+
+  // Funkcja obsługująca zmianę zakładki materiałów
+  const handleMaterialTabChange = (event, newValue) => {
+    setMaterialTab(newValue);
+  };
+
+  // Funkcja do obsługi zmiany ilości partii
+  const handleBatchQuantityChange = (materialId, batchId, value) => {
+    const numValue = value === '' ? '' : Number(value);
+    if (value === '' || (!isNaN(numValue) && numValue >= 0)) {
+      setManualBatchQuantities(prev => ({
+        ...prev,
+        [materialId]: {
+          ...(prev[materialId] || {}),
+          [batchId]: numValue
+        }
+      }));
     }
   };
 

@@ -162,7 +162,7 @@ const SupplierPricesList = ({ itemId, currency = DEFAULT_CURRENCY }) => {
         return;
       }
       
-      if (!formData.price || formData.price <= 0) {
+      if (formData.price === "" || formData.price === undefined || formData.price < 0) {
         showError('Podaj prawidłową cenę');
         return;
       }

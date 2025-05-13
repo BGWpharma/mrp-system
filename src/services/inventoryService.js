@@ -216,66 +216,67 @@ import {
         console.log(`Paginacja: strona ${page}, rozmiar ${pageSize}, wyświetlam elementy ${startIndex+1}-${Math.min(endIndex, totalCount)} z ${totalCount}`);
       }
       
-      // Pobierz partie magazynowe tylko dla paginowanych pozycji aby zwiększyć wydajność
-      // Jeśli warehouseId jest określony, pobierz partie tylko dla tego magazynu
-      // W przeciwnym razie pobierz wszystkie partie
-
-      // Implementacja cache dla zapytań o partie
-      const batchesCache = {};
+      // OPTYMALIZACJA: Pobierz partie magazynowe dla wszystkich przedmiotów na raz
+      // zamiast używania wielu zapytań dla każdej części ID przedmiotów
       
-      // Zbierz ID przedmiotów tylko raz
+      // Jeśli warehouseId jest określony, budujemy złożone zapytanie
+      // W przeciwnym przypadku tworzymy jedno zapytanie z klauzulą 'or' dla wszystkich ID przedmiotów
+      
+      let allBatches = [];
       const itemIds = paginatedItems.map(item => item.id);
       
-      // Pobierz partie tylko jeśli mamy jakieś przedmioty do przetworzenia
       if (itemIds.length > 0) {
-        // Pobierz wszystkie partie dla wymaganych przedmiotów za jednym razem
-        // używając kilku zapytań batch (Firebase ma limit 10 elementów w warunku 'in')
-        const chunkSize = 10;
         const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
         
-        // Funkcja pomocnicza do wykonania zapytania dla jednej partii ID przedmiotów
-        const fetchBatchesForItems = async (itemIdsChunk) => {
-          let batchesQuery;
-          if (warehouseId) {
-            batchesQuery = query(
-              batchesRef, 
-              where('itemId', 'in', itemIdsChunk),
-              where('warehouseId', '==', warehouseId)
-            );
-          } else {
-            batchesQuery = query(batchesRef, where('itemId', 'in', itemIdsChunk));
-          }
-          
-          const snapshot = await getDocs(batchesQuery);
-          return snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }));
-        };
-        
-        // Podziel itemIds na mniejsze porcje i wykonaj zapytania równolegle
+        // Zwiększ chunkSize, aby zmniejszyć liczbę zapytań
+        // Firebase obsługuje do 30 elementów w warunku 'in' (wcześniej używaliśmy 10)
+        const chunkSize = 30;
         const chunks = [];
+        
         for (let i = 0; i < itemIds.length; i += chunkSize) {
           chunks.push(itemIds.slice(i, i + chunkSize));
         }
         
-        // Wykonaj wszystkie zapytania równolegle
-        const batchesArrays = await Promise.all(
-          chunks.map(chunk => fetchBatchesForItems(chunk))
+        // Wykonujemy zapytania równolegle w większych porcjach
+        const batchQueries = chunks.map(chunk => {
+          let batchesQuery;
+          if (warehouseId) {
+            batchesQuery = query(
+              batchesRef, 
+              where('itemId', 'in', chunk),
+              where('warehouseId', '==', warehouseId)
+            );
+          } else {
+            batchesQuery = query(batchesRef, where('itemId', 'in', chunk));
+          }
+          return getDocs(batchesQuery);
+        });
+        
+        // Pobierz wszystkie dane równolegle
+        const batchResponses = await Promise.all(batchQueries);
+        
+        // Połącz wyniki wszystkich zapytań
+        allBatches = batchResponses.flatMap(response => 
+          response.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }))
         );
         
-        // Połącz wyniki
-        const allBatches = batchesArrays.flat();
+        console.log(`Zoptymalizowane pobieranie: wykonano ${chunks.length} zapytań zamiast wielu pojedynczych`);
         console.log('Pobrane partie dla stronicowanych pozycji:', allBatches.length);
-        
-        // Indeksuj partie według itemId dla szybszego dostępu
-        for (const batch of allBatches) {
-          const itemId = batch.itemId;
-          if (!batchesCache[itemId]) {
-            batchesCache[itemId] = [];
-          }
-          batchesCache[itemId].push(batch);
+      }
+      
+      // Przygotuj cache dla szybkiego dostępu do partii według itemId
+      const batchesCache = {};
+      
+      // Indeksuj partie według itemId dla szybszego dostępu
+      for (const batch of allBatches) {
+        const itemId = batch.itemId;
+        if (!batchesCache[itemId]) {
+          batchesCache[itemId] = [];
         }
+        batchesCache[itemId].push(batch);
       }
       
       // Przypisz partie do odpowiednich pozycji magazynowych
@@ -3278,8 +3279,8 @@ import {
         throw new Error('ID dostawcy jest wymagane');
       }
       
-      if (typeof supplierPriceData.price !== 'number' || supplierPriceData.price < 0) {
-        throw new Error('Cena musi być liczbą nieujemną');
+      if (typeof supplierPriceData.price !== 'number') {
+        throw new Error('Cena musi być liczbą');
       }
       
       // Sprawdź, czy taki dostawca już istnieje dla tej pozycji
@@ -3324,8 +3325,8 @@ import {
    */
   export const updateSupplierPrice = async (priceId, supplierPriceData, userId) => {
     try {
-      if (typeof supplierPriceData.price !== 'number' || supplierPriceData.price < 0) {
-        throw new Error('Cena musi być liczbą nieujemną');
+      if (typeof supplierPriceData.price !== 'number') {
+        throw new Error('Cena musi być liczbą');
       }
       
       const updatedData = {

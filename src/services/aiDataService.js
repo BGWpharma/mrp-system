@@ -20,7 +20,8 @@ let dataCache = {
   suppliers: { data: null, timestamp: null },
   purchaseOrders: { data: null, timestamp: null },
   materialBatches: { data: null, timestamp: null },
-  batchReservations: { data: null, timestamp: null }
+  batchReservations: { data: null, timestamp: null },
+  inventoryBatches: { data: null, timestamp: null } // Dodajemy buforowanie dla inventoryBatches
 };
 
 // Czas ważności bufora w milisekundach (10 minut)
@@ -1770,6 +1771,66 @@ export const prepareBusinessDataForAI = async (query = '') => {
     const materialBatchesData = await getFullBatchesData({ limit: null });
     console.log(`Pobrano ${materialBatchesData?.batches?.length || 0} partii materiałów i ${materialBatchesData?.reservations?.length || 0} rezerwacji`);
     
+    // Pobierz dane o konwersacjach z asystentem AI
+    const aiConversations = await getAIConversations({ limit: 100 });
+    console.log(`Pobrano ${aiConversations?.length || 0} konwersacji z asystentem AI`);
+    
+    // Pobierz dane o licznikach systemowych
+    const counters = await getCounters({ limit: 100 });
+    console.log(`Pobrano ${counters?.length || 0} liczników systemowych`);
+    
+    // Pobierz dane o cenach dostawców
+    const inventorySupplierPrices = await getInventorySupplierPrices({ limit: 100 });
+    console.log(`Pobrano ${inventorySupplierPrices?.length || 0} cen dostawców`);
+    
+    // Pobierz dane o transakcjach magazynowych
+    const inventoryTransactions = await getInventoryTransactions({ limit: 100 });
+    console.log(`Pobrano ${inventoryTransactions?.length || 0} transakcji magazynowych`);
+    
+    // Pobierz dane o grupach produktów
+    const itemGroups = await getItemGroups({ limit: 100 });
+    console.log(`Pobrano ${itemGroups?.length || 0} grup produktów`);
+    
+    // Pobierz dane o powiadomieniach
+    const notifications = await getNotifications({ limit: 100 });
+    console.log(`Pobrano ${notifications?.length || 0} powiadomień`);
+    
+    // Pobierz dane o elementach cenników
+    const priceListItems = await getPriceListItems({ limit: 100 });
+    console.log(`Pobrano ${priceListItems?.length || 0} elementów cenników`);
+    
+    // Pobierz dane o cennikach
+    const priceLists = await getPriceLists({ limit: 100 });
+    console.log(`Pobrano ${priceLists?.length || 0} cenników`);
+    
+    // Pobierz dane o historii produkcji
+    const productionHistory = await getProductionHistory({ limit: 100 });
+    console.log(`Pobrano ${productionHistory?.length || 0} historii produkcji`);
+    
+    // Pobierz dane o wersjach receptur
+    const recipeVersions = await getRecipeVersions({ limit: 100 });
+    console.log(`Pobrano ${recipeVersions?.length || 0} wersji receptur`);
+    
+    // Pobierz dane o ustawieniach systemu
+    const settings = await getSettingsData({ limit: 100 });
+    console.log(`Pobrano ${settings?.length || 0} ustawień systemu`);
+    
+    // Pobierz dane o użytkownikach
+    const users = await getUsers({ limit: 100 });
+    console.log(`Pobrano ${users?.length || 0} użytkowników`);
+    
+    // Pobierz dane o magazynach
+    const warehouses = await getWarehouses({ limit: 100 });
+    console.log(`Pobrano ${warehouses?.length || 0} magazynów`);
+    
+    // Pobierz dane o stanowiskach pracy
+    const workstations = await getWorkstations({ limit: 100 });
+    console.log(`Pobrano ${workstations?.length || 0} stanowisk pracy`);
+
+    // Pobierz dane o partiach magazynowych (InventoryBatches)
+    const inventoryBatches = await getInventoryBatches({ limit: 100 });
+    console.log(`Pobrano ${inventoryBatches?.length || 0} partii magazynowych`);
+
     // Przygotuj obiekt z danymi bazowymi
     const businessData = {
       data: {
@@ -1781,7 +1842,22 @@ export const prepareBusinessDataForAI = async (query = '') => {
         purchaseOrders: purchaseOrders,
         materialBatches: materialBatchesData?.batches || [],
         batchReservations: materialBatchesData?.reservations || [],
-        customers: customers  // Dodajemy dane o klientach
+        customers: customers,
+        aiConversations: aiConversations,
+        counters: counters,
+        inventorySupplierPrices: inventorySupplierPrices,
+        inventoryTransactions: inventoryTransactions,
+        itemGroups: itemGroups,
+        notifications: notifications,
+        priceListItems: priceListItems,
+        priceLists: priceLists,
+        productionHistory: productionHistory,
+        recipeVersions: recipeVersions,
+        settings: settings,
+        users: users,
+        warehouses: warehouses,
+        workstations: workstations,
+        inventoryBatches: inventoryBatches // Dodajemy dane o partiach magazynowych
       },
       summary: summaryData,
       timestamp: new Date().toISOString(),
@@ -1794,7 +1870,22 @@ export const prepareBusinessDataForAI = async (query = '') => {
         purchaseOrders: purchaseOrders?.length > 0,
         materialBatches: (materialBatchesData?.batches?.length || 0) > 0,
         batchReservations: (materialBatchesData?.reservations?.length || 0) > 0,
-        customers: customers?.length > 0  // Dodajemy informację o dostępności danych klientów
+        customers: customers?.length > 0,
+        aiConversations: aiConversations?.length > 0,
+        counters: counters?.length > 0,
+        inventorySupplierPrices: inventorySupplierPrices?.length > 0,
+        inventoryTransactions: inventoryTransactions?.length > 0,
+        itemGroups: itemGroups?.length > 0,
+        notifications: notifications?.length > 0,
+        priceListItems: priceListItems?.length > 0,
+        priceLists: priceLists?.length > 0,
+        productionHistory: productionHistory?.length > 0,
+        recipeVersions: recipeVersions?.length > 0,
+        settings: settings?.length > 0,
+        users: users?.length > 0,
+        warehouses: warehouses?.length > 0,
+        workstations: workstations?.length > 0,
+        inventoryBatches: inventoryBatches?.length > 0 // Dodajemy informację o dostępności danych partii magazynowych
       },
       // Przekazujemy zapytanie użytkownika, aby móc lepiej dopasować odpowiedź
       query: query
@@ -1926,4 +2017,141 @@ export const analyzePurchaseOrders = (purchaseOrders) => {
     averagePOValue: purchaseOrders.length > 0 ? totalValue / purchaseOrders.length : 0,
     currentPOs
   };
+};
+
+/**
+ * Pobiera dane o konwersacjach z asystentem AI
+ * @param {Object} options - Opcje pobierania
+ * @returns {Promise<Array>} - Lista konwersacji
+ */
+export const getAIConversations = async (options = {}) => {
+  return getCollectionData('aiConversations', options);
+};
+
+/**
+ * Pobiera dane o licznikach systemowych
+ * @param {Object} options - Opcje pobierania
+ * @returns {Promise<Array>} - Lista liczników
+ */
+export const getCounters = async (options = {}) => {
+  return getCollectionData('counters', options);
+};
+
+/**
+ * Pobiera dane o cenach dostawców
+ * @param {Object} options - Opcje pobierania
+ * @returns {Promise<Array>} - Lista cen dostawców
+ */
+export const getInventorySupplierPrices = async (options = {}) => {
+  return getCollectionData('inventorySupplierPrices', options);
+};
+
+/**
+ * Pobiera dane o transakcjach magazynowych
+ * @param {Object} options - Opcje pobierania
+ * @returns {Promise<Array>} - Lista transakcji magazynowych
+ */
+export const getInventoryTransactions = async (options = {}) => {
+  return getCollectionData('inventoryTransactions', options);
+};
+
+/**
+ * Pobiera dane o grupach produktów
+ * @param {Object} options - Opcje pobierania
+ * @returns {Promise<Array>} - Lista grup produktów
+ */
+export const getItemGroups = async (options = {}) => {
+  return getCollectionData('itemGroups', options);
+};
+
+/**
+ * Pobiera dane o powiadomieniach
+ * @param {Object} options - Opcje pobierania
+ * @returns {Promise<Array>} - Lista powiadomień
+ */
+export const getNotifications = async (options = {}) => {
+  return getCollectionData('notifications', options);
+};
+
+/**
+ * Pobiera dane o elementach cenników
+ * @param {Object} options - Opcje pobierania
+ * @returns {Promise<Array>} - Lista elementów cenników
+ */
+export const getPriceListItems = async (options = {}) => {
+  return getCollectionData('priceListItems', options);
+};
+
+/**
+ * Pobiera dane o cennikach
+ * @param {Object} options - Opcje pobierania
+ * @returns {Promise<Array>} - Lista cenników
+ */
+export const getPriceLists = async (options = {}) => {
+  return getCollectionData('priceLists', options);
+};
+
+/**
+ * Pobiera dane o historii produkcji
+ * @param {Object} options - Opcje pobierania
+ * @returns {Promise<Array>} - Lista historii produkcji
+ */
+export const getProductionHistory = async (options = {}) => {
+  return getCollectionData('productionHistory', options);
+};
+
+/**
+ * Pobiera dane o wersjach receptur
+ * @param {Object} options - Opcje pobierania
+ * @returns {Promise<Array>} - Lista wersji receptur
+ */
+export const getRecipeVersions = async (options = {}) => {
+  return getCollectionData('recipeVersions', options);
+};
+
+/**
+ * Pobiera dane o ustawieniach systemu
+ * @param {Object} options - Opcje pobierania
+ * @returns {Promise<Array>} - Lista ustawień
+ */
+export const getSettingsData = async (options = {}) => {
+  return getCollectionData('settings', options);
+};
+
+/**
+ * Pobiera dane o użytkownikach
+ * @param {Object} options - Opcje pobierania
+ * @returns {Promise<Array>} - Lista użytkowników
+ */
+export const getUsers = async (options = {}) => {
+  return getCollectionData('users', options);
+};
+
+/**
+ * Pobiera dane o magazynach
+ * @param {Object} options - Opcje pobierania
+ * @returns {Promise<Array>} - Lista magazynów
+ */
+export const getWarehouses = async (options = {}) => {
+  return getCollectionData('warehouses', options);
+};
+
+/**
+ * Pobiera dane o stanowiskach pracy
+ * @param {Object} options - Opcje pobierania
+ * @returns {Promise<Array>} - Lista stanowisk pracy
+ */
+export const getWorkstations = async (options = {}) => {
+  return getCollectionData('workstations', options);
+};
+
+/**
+ * Pobiera dane o partiach magazynowych (InventoryBatches)
+ * @param {Object} options - Opcje pobierania
+ * @returns {Promise<Array>} - Lista partii magazynowych
+ */
+export const getInventoryBatches = async (options = {}) => {
+  return getDataWithCache('inventoryBatches', async () => {
+    return getCollectionData('inventoryBatches', options);
+  });
 };

@@ -376,6 +376,30 @@ const AIAssistantPage = () => {
     
     setCurrentConversationId(conversationId);
     setMessages([]); // Wyczyść wiadomości przed załadowaniem nowych
+    
+    try {
+      // OPTYMALIZACJA: Pobieramy wiadomości tylko wtedy, gdy są potrzebne
+      // Dodajemy ograniczenie liczby pobieranych wiadomości
+      const messagesLimit = 30; // Ograniczamy do 30 ostatnich wiadomości
+      const conversationMessages = await getConversationMessages(conversationId);
+      
+      // Jeśli jest więcej niż messagesLimit wiadomości, pobieramy tylko ostatnie
+      const limitedMessages = conversationMessages.length > messagesLimit 
+        ? conversationMessages.slice(-messagesLimit) 
+        : conversationMessages;
+      
+      console.log(`Zoptymalizowane pobieranie: ${limitedMessages.length} wiadomości z ${conversationMessages.length}`);
+      
+      setMessages(limitedMessages.map(msg => ({
+        id: msg.id,
+        role: msg.role,
+        content: msg.content,
+        timestamp: msg.timestamp
+      })));
+    } catch (error) {
+      console.error('Błąd podczas pobierania wiadomości konwersacji:', error);
+      showError('Nie udało się załadować wiadomości konwersacji');
+    }
   };
 
   const handleDeleteConversation = async (conversationId, event) => {

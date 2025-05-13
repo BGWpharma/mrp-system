@@ -214,7 +214,7 @@ const Sidebar = ({ onToggle }) => {
       path: '/hall-data',
       hasSubmenu: true,
       children: [
-        { text: 'Warunki', icon: <FactoryIcon />, path: '/hall-data/conditions' },
+        { text: 'Warunki środowiskowe', icon: <FactoryIcon />, path: '/hall-data/conditions' },
         { text: 'Maszyny', icon: <PrecisionManufacturingIcon />, path: '/hall-data/machines' },
       ]
     },
