@@ -1870,7 +1870,9 @@ import {
           try {
             // Sprawdź, czy przedmiot ma zarezerwowaną ilość
             if (inventoryItem.bookedQuantity && inventoryItem.bookedQuantity > 0) {
-              const bookingQuantity = material.quantity || 0;
+              // Anuluj rezerwację na podstawie faktycznego zużycia, a nie planowanej ilości
+              // Używamy consumedQuantity zamiast material.quantity
+              const bookingQuantity = consumedQuantity;
               
               // Anuluj rezerwację tylko jeśli jakąś ilość zarezerwowano
               if (bookingQuantity > 0) {
@@ -1897,7 +1899,10 @@ import {
       
       return {
         success: true,
-        message: 'Zużycie materiałów zostało potwierdzone. Stany magazynowe zostały zaktualizowane.'
+        message: 'Zużycie materiałów zostało potwierdzone. Stany magazynowe zostały zaktualizowane.',
+        materialConsumptionConfirmed: true,
+        materialConsumptionDate: updates.materialConsumptionDate,
+        usedBatches: updates.usedBatches
       };
     } catch (error) {
       console.error('Błąd podczas potwierdzania zużycia materiałów:', error);

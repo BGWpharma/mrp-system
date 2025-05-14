@@ -748,7 +748,9 @@ import {
                 let totalProductQuantity = 0;
                 if (poData.items && Array.isArray(poData.items)) {
                   totalProductQuantity = poData.items.reduce((sum, item) => {
-                    return sum + (parseFloat(item.quantity) || 0);
+                    // Użyj pola initialQuantity (jeśli dostępne), w przeciwnym razie quantity
+                    const quantity = item.initialQuantity !== undefined ? parseFloat(item.initialQuantity) : parseFloat(item.quantity);
+                    return sum + (quantity || 0);
                   }, 0);
                 }
                 
@@ -1693,10 +1695,36 @@ import {
       // Pobierz aktualny stan produktu
       const item = await getInventoryItemById(itemId);
       
+      // Pobierz oryginalne rezerwacje dla tego zadania
+      const originalBookingRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
+      const originalBookingQuery = query(
+        originalBookingRef,
+        where('itemId', '==', itemId),
+        where('referenceId', '==', taskId),
+        where('type', '==', 'booking')
+      );
+      
+      const originalBookingSnapshot = await getDocs(originalBookingQuery);
+      let originalBookedQuantity = 0;
+      
+      originalBookingSnapshot.forEach((bookingDoc) => {
+        const bookingData = bookingDoc.data();
+        if (bookingData.quantity) {
+          originalBookedQuantity += parseFloat(bookingData.quantity);
+        }
+      });
+      
+      console.log(`Anulowanie rezerwacji: itemId=${itemId}, taskId=${taskId}, zużycie=${quantity}, oryginalna rezerwacja=${originalBookedQuantity}`);
+      
+      // Jeśli rzeczywiste zużycie jest większe lub równe oryginalnej rezerwacji,
+      // powinniśmy anulować całą rezerwację
+      const shouldCancelAllBooking = quantity >= originalBookedQuantity;
+      const quantityToCancel = shouldCancelAllBooking ? item.bookedQuantity || 0 : quantity;
+      
       // Sprawdź, czy jest wystarczająca ilość zarezerwowana
-      if (!item.bookedQuantity || item.bookedQuantity < quantity) {
+      if (!item.bookedQuantity || item.bookedQuantity < quantityToCancel) {
         // Jeśli różnica jest bardzo mała (błąd zaokrąglenia), wyzeruj bookedQuantity
-        if (item.bookedQuantity > 0 && Math.abs(item.bookedQuantity - quantity) < 0.00001) {
+        if (item.bookedQuantity > 0 && (Math.abs(item.bookedQuantity - quantityToCancel) < 0.00001 || shouldCancelAllBooking)) {
           // Aktualizuj pole bookedQuantity w produkcie - całkowite wyzerowanie
           const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
           await updateDoc(itemRef, {
@@ -1705,23 +1733,55 @@ import {
             updatedBy: userId
           });
           
-          console.log(`Zerowanie rezerwacji dla ${item.name} z powodu minimalnej różnicy zaokrąglenia: ${item.bookedQuantity} vs ${quantity}`);
+          console.log(`Zerowanie rezerwacji dla ${item.name} z powodu ${shouldCancelAllBooking ? 'zużycia większego niż rezerwacja' : 'minimalnej różnicy zaokrąglenia'}: ${item.bookedQuantity} vs ${quantityToCancel}`);
         } else {
           // Zamiast rzucać błąd, zwracamy sukces i logujemy informację
-          console.warn(`Anulowanie rezerwacji dla ${item.name}: zarezerwowano tylko ${item.bookedQuantity || 0} ${item.unit}, próbowano anulować ${quantity} ${item.unit}`);
+          console.warn(`Anulowanie rezerwacji dla ${item.name}: zarezerwowano tylko ${item.bookedQuantity || 0} ${item.unit}, próbowano anulować ${quantityToCancel} ${item.unit}`);
+          // Jeśli zużycie jest znacząco większe, anulujemy wszystko co jest zarezerwowane
+          if (shouldCancelAllBooking && item.bookedQuantity > 0) {
+            const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
+            await updateDoc(itemRef, {
+              bookedQuantity: 0,
+              updatedAt: serverTimestamp(),
+              updatedBy: userId
+            });
+            console.log(`Zerowanie rezerwacji dla ${item.name} z powodu zużycia większego niż rezerwacja`);
+          } else {
+            // W przeciwnym razie anuluj tylko dostępną ilość
+            if (item.bookedQuantity > 0) {
+              const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
+              await updateDoc(itemRef, {
+                bookedQuantity: 0,
+                updatedAt: serverTimestamp(),
+                updatedBy: userId
+              });
+            }
+          }
+          
           return {
             success: true,
-            message: `Anulowano rezerwację ${Math.min(item.bookedQuantity || 0, quantity)} ${item.unit} produktu ${item.name}`
+            message: `Anulowano rezerwację ${Math.min(item.bookedQuantity || 0, quantityToCancel)} ${item.unit} produktu ${item.name}`
           };
         }
       } else {
         // Aktualizuj pole bookedQuantity w produkcie
         const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
-        await updateDoc(itemRef, {
-          bookedQuantity: increment(-quantity),
-          updatedAt: serverTimestamp(),
-          updatedBy: userId
-        });
+        
+        // Jeśli zużycie jest większe niż rezerwacja, anuluj całą rezerwację
+        if (shouldCancelAllBooking) {
+          await updateDoc(itemRef, {
+            bookedQuantity: 0,
+            updatedAt: serverTimestamp(),
+            updatedBy: userId
+          });
+          console.log(`Zerowanie całej rezerwacji dla ${item.name} z powodu zużycia większego niż rezerwacja`);
+        } else {
+          await updateDoc(itemRef, {
+            bookedQuantity: increment(-quantityToCancel),
+            updatedAt: serverTimestamp(),
+            updatedBy: userId
+          });
+        }
       }
       
       // Pobierz dane zadania produkcyjnego
@@ -1767,20 +1827,19 @@ import {
       await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
       
       // Znajdź i zaktualizuj status wszystkich rezerwacji dla tego zadania na "completed"
-      const bookingRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
-      const bookingQuery = query(
-        bookingRef,
-        where('itemId', '==', itemId),
+      const reservationRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
+      const reservationQuery = query(
+        reservationRef,
         where('referenceId', '==', taskId),
         where('type', '==', 'booking')
       );
       
-      const bookingSnapshot = await getDocs(bookingQuery);
+      const reservationSnapshot = await getDocs(reservationQuery);
       const batch = writeBatch(db);
       
-      bookingSnapshot.forEach((bookingDoc) => {
-        const bookingRef = doc(db, INVENTORY_TRANSACTIONS_COLLECTION, bookingDoc.id);
-        batch.update(bookingRef, { 
+      reservationSnapshot.forEach((bookingDoc) => {
+        const reservationDocRef = doc(db, INVENTORY_TRANSACTIONS_COLLECTION, bookingDoc.id);
+        batch.update(reservationDocRef, { 
           status: 'completed',
           updatedAt: serverTimestamp(),
           completedAt: serverTimestamp()
@@ -1788,7 +1847,7 @@ import {
       });
       
       await batch.commit();
-      console.log(`Zaktualizowano status rezerwacji dla zadania ${taskId} na "completed"`);
+      console.log(`Zaktualizowano status wszystkich rezerwacji dla zadania ${taskId} na "completed"`);
       
       // Emituj zdarzenie o zmianie stanu magazynu
       const event = new CustomEvent('inventory-updated', { 

@@ -50,9 +50,10 @@ import { getInventoryItemById, getItemTransactions, getItemBatches, getSupplierP
 import { getAllSuppliers } from '../../services/supplierService';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
-import { formatDate } from '../../utils/formatters';
+import { formatDate, formatDateTime } from '../../utils/formatters';
 import { Timestamp } from 'firebase/firestore';
 import LabelDialog from '../../components/inventory/LabelDialog';
+import { getUsersDisplayNames } from '../../services/userService';
 
 // TabPanel component
 function TabPanel(props) {
@@ -90,12 +91,32 @@ const ItemDetailsPage = () => {
   const [reservations, setReservations] = useState([]);
   const [filteredReservations, setFilteredReservations] = useState([]);
   const [reservationFilter, setReservationFilter] = useState('all');
-  const [sortField, setSortField] = useState('createdAt');
-  const [sortOrder, setSortOrder] = useState('desc');
+  const [reservationSortField, setReservationSortField] = useState('createdAt');
+  const [reservationSortOrder, setReservationSortOrder] = useState('desc');
   const [updatingReservations, setUpdatingReservations] = useState(false);
   const [refreshingQuantity, setRefreshingQuantity] = useState(false);
-  const [awaitingOrders, setAwaitingOrders] = useState([]);
-  const [loadingAwaitingOrders, setLoadingAwaitingOrders] = useState(false);
+  const [awaitingOrders, setAwaitingOrders] = useState({});
+  const [awaitingOrdersLoading, setAwaitingOrdersLoading] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [userNames, setUserNames] = useState({});
+
+  // Funkcja pobierająca dane użytkowników
+  const fetchUserNames = async (transactions) => {
+    if (!transactions || transactions.length === 0) return;
+    
+    const userIds = transactions
+      .filter(transaction => transaction.createdBy)
+      .map(transaction => transaction.createdBy);
+    
+    if (userIds.length === 0) return;
+    
+    try {
+      const names = await getUsersDisplayNames(userIds);
+      setUserNames(names);
+    } catch (error) {
+      console.error("Błąd podczas pobierania danych użytkowników:", error);
+    }
+  };
 
   useEffect(() => {
     const fetchItemData = async () => {
@@ -107,6 +128,9 @@ const ItemDetailsPage = () => {
         // Pobierz historię transakcji
         const transactionsData = await getItemTransactions(id);
         setTransactions(transactionsData);
+        
+        // Pobierz nazwy użytkowników dla transakcji
+        fetchUserNames(transactionsData);
         
         // Pobierz partie
         const batchesData = await getItemBatches(id);
@@ -242,7 +266,7 @@ const ItemDetailsPage = () => {
       setReservations(groupedReservations);
       
       // Zastosuj filtrowanie i sortowanie
-      filterAndSortReservations(reservationFilter, sortField, sortOrder, groupedReservations);
+      filterAndSortReservations(reservationFilter, reservationSortField, reservationSortOrder, groupedReservations);
     } catch (error) {
       console.error('Błąd podczas pobierania rezerwacji:', error);
       showError('Nie udało się pobrać listy rezerwacji');
@@ -254,14 +278,14 @@ const ItemDetailsPage = () => {
     const filterValue = event.target.value;
     setReservationFilter(filterValue);
     
-    filterAndSortReservations(filterValue, sortField, sortOrder);
+    filterAndSortReservations(filterValue, reservationSortField, reservationSortOrder);
   };
   
   // Funkcja do sortowania rezerwacji
   const handleSort = (field) => {
-    const newSortOrder = field === sortField && sortOrder === 'asc' ? 'desc' : 'asc';
-    setSortOrder(newSortOrder);
-    setSortField(field);
+    const newSortOrder = field === reservationSortField && reservationSortOrder === 'asc' ? 'desc' : 'asc';
+    setReservationSortOrder(newSortOrder);
+    setReservationSortField(field);
     
     filterAndSortReservations(reservationFilter, field, newSortOrder);
   };
@@ -428,14 +452,14 @@ const ItemDetailsPage = () => {
   // Funkcja do pobierania oczekiwanych zamówień
   const fetchAwaitingOrders = async (itemId) => {
     try {
-      setLoadingAwaitingOrders(true);
+      setAwaitingOrdersLoading(true);
       const awaitingOrdersData = await getAwaitingOrdersForInventoryItem(itemId);
       setAwaitingOrders(awaitingOrdersData);
     } catch (error) {
       console.error('Błąd podczas pobierania oczekiwanych zamówień:', error);
       showError('Nie udało się pobrać oczekujących zamówień: ' + error.message);
     } finally {
-      setLoadingAwaitingOrders(false);
+      setAwaitingOrdersLoading(false);
     }
   };
 
@@ -960,28 +984,22 @@ const ItemDetailsPage = () => {
                 <TableHead>
                   <TableRow>
                     <TableCell>Data</TableCell>
-                    <TableCell>Typ</TableCell>
                     <TableCell>Ilość</TableCell>
                     <TableCell>Powód</TableCell>
                     <TableCell>Referencja</TableCell>
                     <TableCell>Notatki</TableCell>
+                    <TableCell>Użytkownik</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {transactions.map((transaction) => (
                     <TableRow key={transaction.id}>
-                      <TableCell>{formatDate(transaction.transactionDate)}</TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={transaction.type === 'RECEIVE' ? 'Przyjęcie' : 'Wydanie'} 
-                          color={transaction.type === 'RECEIVE' ? 'success' : 'warning'} 
-                          size="small" 
-                        />
-                      </TableCell>
+                      <TableCell>{formatDateTime(transaction.transactionDate)}</TableCell>
                       <TableCell>{transaction.quantity} {item.unit}</TableCell>
                       <TableCell>{transaction.reason || '—'}</TableCell>
-                      <TableCell>{transaction.reference || '—'}</TableCell>
+                      <TableCell>{transaction.moNumber || transaction.reference || '—'}</TableCell>
                       <TableCell>{transaction.notes || '—'}</TableCell>
+                      <TableCell>{userNames[transaction.createdBy] || transaction.createdBy || '—'}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -1146,15 +1164,15 @@ const ItemDetailsPage = () => {
             </Typography>
             <Button 
               variant="outlined" 
-              startIcon={loadingAwaitingOrders ? <CircularProgress size={20} /> : <RefreshIcon />}
+              startIcon={awaitingOrdersLoading ? <CircularProgress size={20} /> : <RefreshIcon />}
               onClick={() => fetchAwaitingOrders(id)}
-              disabled={loadingAwaitingOrders}
+              disabled={awaitingOrdersLoading}
             >
               Odśwież
             </Button>
           </Box>
           
-          {loadingAwaitingOrders ? (
+          {awaitingOrdersLoading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
               <CircularProgress />
             </Box>
@@ -1252,7 +1270,7 @@ const ItemDetailsPage = () => {
                             variant="outlined"
                             size="small"
                             component={Link}
-                            to={`/purchase-orders/${order.poId}`}
+                            to={`/purchase-orders/${order.poId}/items/${order.itemId}`}
                           >
                             Szczegóły
                           </Button>
@@ -1266,14 +1284,6 @@ const ItemDetailsPage = () => {
           )}
         </TabPanel>
       </Paper>
-
-      {/* Dialog etykiet */}
-      <LabelDialog
-        open={labelDialogOpen}
-        onClose={handleCloseLabelDialog}
-        item={item}
-        batches={batches}
-      />
     </Container>
   );
 };

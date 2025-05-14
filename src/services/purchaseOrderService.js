@@ -1169,10 +1169,11 @@ const updateBatchPricesWithAdditionalCosts = async (purchaseOrderId, poData, use
     // Oblicz całkowitą ilość produktów w zamówieniu
     let totalProductQuantity = 0;
     if (poData.items && Array.isArray(poData.items)) {
-      // Obliczamy tylko na podstawie rzeczywistej otrzymanej ilości
+      // Obliczamy na podstawie initialQuantity zamiast bieżącej ilości
       totalProductQuantity = poData.items.reduce((sum, item) => {
-        // Użyj pola received, jeśli jest dostępne, w przeciwnym razie quantity
-        const quantity = item.received !== undefined ? parseFloat(item.received) : parseFloat(item.quantity);
+        // Użyj pola initialQuantity (jeśli dostępne), w przeciwnym razie received lub quantity
+        const quantity = item.initialQuantity !== undefined ? parseFloat(item.initialQuantity) : 
+                       (item.received !== undefined ? parseFloat(item.received) : parseFloat(item.quantity));
         return sum + (quantity || 0);
       }, 0);
     }

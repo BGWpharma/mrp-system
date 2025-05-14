@@ -44,6 +44,7 @@ import {
   updateActualMaterialUsage,
   confirmMaterialConsumption
 } from '../../services/productionService';
+import { getInventoryBatch } from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { format } from 'date-fns';
@@ -65,6 +66,7 @@ const ConsumptionPage = () => {
   const [errors, setErrors] = useState({});
   const [batchErrors, setBatchErrors] = useState({});
   const [expandedMaterials, setExpandedMaterials] = useState({});
+  const [editWarningDialogOpen, setEditWarningDialogOpen] = useState(false);
   
   // Pobieranie danych zadania
   useEffect(() => {
@@ -104,15 +106,27 @@ const ConsumptionPage = () => {
         const batchQty = {};
         
         // Dla każdego materiału sprawdź, czy ma przypisane partie
-        materialsList.forEach(material => {
+        for (const material of materialsList) {
           const materialId = material.inventoryItemId || material.id;
           
           if (taskData.materialBatches && taskData.materialBatches[materialId]) {
             const materialBatches = taskData.materialBatches[materialId];
             
             // Inicjalizuj ilości dla każdej partii
-            materialBatches.forEach(batch => {
+            for (const batch of materialBatches) {
               const batchKey = `${materialId}_${batch.batchId}`;
+              
+              // Pobierz aktualne dane partii z serwera, aby uzyskać rzeczywistą ilość
+              try {
+                const batchDetails = await getInventoryBatch(batch.batchId);
+                if (batchDetails) {
+                  // Zapisz oryginalną ilość w partii
+                  batch.originalQuantity = batchDetails.quantity || 0;
+                  batch.batchDetails = batchDetails;
+                }
+              } catch (error) {
+                console.error(`Błąd podczas pobierania danych partii ${batch.batchId}:`, error);
+              }
               
               // Jeśli istnieją niestandardowe ilości dla partii, użyj ich
               if (taskData.batchActualUsage && taskData.batchActualUsage[batchKey] !== undefined) {
@@ -121,7 +135,7 @@ const ConsumptionPage = () => {
                 // W przeciwnym razie użyj oryginalnej ilości partii
                 batchQty[batchKey] = batch.quantity;
               }
-            });
+            }
             
             // Domyślnie rozwiń materiały z partiami
             setExpandedMaterials(prev => ({
@@ -129,7 +143,7 @@ const ConsumptionPage = () => {
               [materialId]: true
             }));
           }
-        });
+        }
         
         setBatchQuantities(batchQty);
       }
@@ -164,12 +178,38 @@ const ConsumptionPage = () => {
   const handleBatchQuantityChange = (materialId, batchId, value) => {
     const batchKey = `${materialId}_${batchId}`;
     const numValue = value === '' ? '' : parseFloat(value);
+
+    // Znajdź partię
+    const material = materials.find(m => (m.inventoryItemId || m.id) === materialId);
+    const batch = task.materialBatches[materialId]?.find(b => b.batchId === batchId);
+    
+    if (!batch) return;
+    
+    // Oblicz dostępną ilość przed zmianą
+    const originalQuantity = batch.originalQuantity || 0;
+    const usedQuantity = task.batchActualUsage && task.batchActualUsage[batchKey] !== undefined 
+      ? task.batchActualUsage[batchKey] : (batch.quantity || 0);
+    
+    // Tylko przy pierwszej zmianie wyświetl informację o dostępnej ilości
+    const prevValue = batchQuantities[batchKey];
+    if (prevValue === batch.quantity && numValue !== '' && !isNaN(numValue) && numValue !== prevValue) {
+      const availableBeforeChange = originalQuantity - numValue + usedQuantity;
+      
+      if (availableBeforeChange < 0) {
+        showError(`Uwaga: Próbujesz użyć ${numValue} ${material?.unit || 'szt.'}, co przekracza dostępną ilość o ${Math.abs(availableBeforeChange).toFixed(2)} ${material?.unit || 'szt.'}`);
+      } else if (availableBeforeChange < 5) {
+        showInfo(`Uwaga: Po tej zmianie pozostanie jedynie ${availableBeforeChange.toFixed(2)} ${material?.unit || 'szt.'} dostępnej ilości w partii`);
+      }
+    }
     
     if (value === '' || !isNaN(numValue)) {
-      setBatchQuantities(prev => ({
-        ...prev,
+      // Natychmiastowa aktualizacja stanu
+      const newBatchQuantities = {
+        ...batchQuantities,
         [batchKey]: numValue
-      }));
+      };
+      
+      setBatchQuantities(newBatchQuantities);
       
       if (batchErrors[batchKey]) {
         setBatchErrors(prev => {
@@ -180,11 +220,12 @@ const ConsumptionPage = () => {
       }
       
       // Zaktualizuj również całkowitą ilość materiału na podstawie sum partii
-      updateTotalMaterialQuantity(materialId);
+      // Przekazujemy zaktualizowany stan bezpośrednio zamiast polegać na asynchronicznej aktualizacji
+      updateTotalMaterialQuantity(materialId, newBatchQuantities);
     }
   };
   
-  const updateTotalMaterialQuantity = (materialId) => {
+  const updateTotalMaterialQuantity = (materialId, currentBatchQuantities = batchQuantities) => {
     // Znajdź wszystkie partie dla tego materiału
     if (!task || !task.materialBatches || !task.materialBatches[materialId]) {
       return;
@@ -196,7 +237,7 @@ const ConsumptionPage = () => {
     // Oblicz sumę ilości wszystkich partii
     batches.forEach(batch => {
       const batchKey = `${materialId}_${batch.batchId}`;
-      const batchQty = batchQuantities[batchKey];
+      const batchQty = currentBatchQuantities[batchKey];
       
       if (batchQty !== undefined && !isNaN(batchQty)) {
         totalQuantity += parseFloat(batchQty);
@@ -281,10 +322,24 @@ const ConsumptionPage = () => {
       }
       
       setEditMode(false);
-      fetchTaskData(); // Odśwież dane
+      
+      // Jeśli zapis był pomyślny, zaktualizuj lokalny stan task, aby umożliwić potwierdzenie zużycia bez pełnego odświeżenia
+      setTask(prevTask => ({
+        ...prevTask,
+        materialConsumptionConfirmed: false,
+        actualMaterialUsage: updatedQuantities,
+        batchActualUsage: updatedBatchQuantities
+      }));
+      
+      // Jeśli zapis był pomyślny, zachowaj lokalne stany zamiast pobierać dane z serwera
+      // Dzięki temu użytkownik będzie widział swoje zmiany natychmiast
+      // fetchTaskData(); // Odśwież dane - to pobiera dane z serwera, co powoduje opóźnienie
     } catch (error) {
       console.error('Błąd podczas zapisywania zmian:', error);
       showError('Nie udało się zapisać zmian: ' + error.message);
+      
+      // W przypadku błędu odśwież dane z serwera, aby upewnić się, że formularz jest w spójnym stanie
+      fetchTaskData();
     } finally {
       setLoading(false);
     }
@@ -295,12 +350,24 @@ const ConsumptionPage = () => {
       setConfirmationDialogOpen(false);
       setLoading(true);
       
-      await confirmMaterialConsumption(taskId);
+      const result = await confirmMaterialConsumption(taskId);
       showSuccess('Zużycie materiałów potwierdzone. Stany magazynowe zostały zaktualizowane.');
-      fetchTaskData(); // Odśwież dane
+      
+      // Zaktualizuj lokalny stan zamiast odświeżać całą stronę
+      setTask(prevTask => ({
+        ...prevTask,
+        materialConsumptionConfirmed: true,
+        materialConsumptionDate: new Date().toISOString(),
+        // Zachowaj informacje o usedBatches jeśli są dostępne w wyniku
+        ...(result && result.usedBatches ? { usedBatches: result.usedBatches } : {})
+      }));
+      
+      // Nie musimy już pobierać danych z serwera - aktualizujemy stan lokalnie
+      // fetchTaskData();
     } catch (error) {
       console.error('Błąd podczas potwierdzania zużycia:', error);
       showError('Nie udało się potwierdzić zużycia materiałów: ' + error.message);
+      fetchTaskData(); // W przypadku błędu nadal odśwież dane
     } finally {
       setLoading(false);
     }
@@ -320,6 +387,14 @@ const ConsumptionPage = () => {
       ...prev,
       [materialId]: !prev[materialId]
     }));
+  };
+  
+  const handleEditClick = () => {
+    if (task.materialConsumptionConfirmed) {
+      setEditWarningDialogOpen(true);
+    } else {
+      setEditMode(true);
+    }
   };
   
   if (loading) {
@@ -380,9 +455,8 @@ const ConsumptionPage = () => {
               <Button
                 variant="outlined"
                 startIcon={<EditIcon />}
-                onClick={() => setEditMode(true)}
+                onClick={handleEditClick}
                 sx={{ mr: 1 }}
-                disabled={task.materialConsumptionConfirmed}
               >
                 Edytuj ilości
               </Button>
@@ -421,6 +495,7 @@ const ConsumptionPage = () => {
       {task.materialConsumptionConfirmed ? (
         <Alert severity="success" sx={{ mb: 3 }}>
           Zużycie materiałów dla tego zadania zostało potwierdzone. Stany magazynowe zostały już zaktualizowane.
+          Możesz edytować ilości, ale będzie to wymagało ponownego potwierdzenia, co spowoduje aktualizację stanów magazynowych.
         </Alert>
       ) : task.status === 'Zakończone' ? (
         <Alert severity="warning" sx={{ mb: 3 }}>
@@ -495,7 +570,7 @@ const ConsumptionPage = () => {
                             value={actualQuantity === '' ? '' : actualQuantity || 0}
                             onChange={(e) => handleQuantityChange(material.id, e.target.value)}
                             InputProps={{
-                              endAdornment: material.unit
+                              endAdornment: <span>{material.unit}</span>
                             }}
                             error={Boolean(errors[material.id])}
                             helperText={errors[material.id]}
@@ -552,6 +627,11 @@ const ConsumptionPage = () => {
                                     <TableCell align="right">Przypisana ilość</TableCell>
                                     <TableCell align="right">Rzeczywiste zużycie</TableCell>
                                     <TableCell align="right">Różnica</TableCell>
+                                    <TableCell align="right">
+                                      <Tooltip title="Dostępna ilość uwzględniająca wprowadzane zmiany (oryginalna ilość - aktualne zużycie + poprzednie zużycie)">
+                                        <span>Dostępna ilość</span>
+                                      </Tooltip>
+                                    </TableCell>
                                   </TableRow>
                                 </TableHead>
                                 <TableBody>
@@ -570,6 +650,18 @@ const ConsumptionPage = () => {
                                       batchDifferenceDisplay = '-';
                                     }
                                     
+                                    // Oblicz dostępną ilość
+                                    const originalQuantity = batch.originalQuantity || 0; // Oryginalna ilość w partii
+                                    const usedQuantity = task.batchActualUsage && task.batchActualUsage[batchKey] !== undefined 
+                                        ? task.batchActualUsage[batchKey] : assignedQuantity; // Poprzednio używana ilość
+                                    
+                                    // Oblicz aktualnie dostępną ilość z uwzględnieniem edycji
+                                    const currentQuantity = actualBatchQuantity !== undefined && !isNaN(actualBatchQuantity) 
+                                        ? actualBatchQuantity : usedQuantity;
+                                    
+                                    // Dostępna ilość = oryginalna ilość - aktualne zużycie + poprzednie zużycie
+                                    const availableQuantity = originalQuantity - currentQuantity + usedQuantity;
+                                    
                                     return (
                                       <TableRow key={index}>
                                         <TableCell>{batch.batchNumber}</TableCell>
@@ -582,7 +674,7 @@ const ConsumptionPage = () => {
                                               value={actualBatchQuantity === '' ? '' : actualBatchQuantity || 0}
                                               onChange={(e) => handleBatchQuantityChange(materialId, batch.batchId, e.target.value)}
                                               InputProps={{
-                                                endAdornment: material.unit
+                                                endAdornment: <span>{material.unit}</span>
                                               }}
                                               error={Boolean(batchErrors[batchKey])}
                                               helperText={batchErrors[batchKey]}
@@ -601,6 +693,19 @@ const ConsumptionPage = () => {
                                           }}
                                         >
                                           {batchDifferenceDisplay}
+                                        </TableCell>
+                                        <TableCell align="right">
+                                          {batch.originalQuantity !== undefined ? 
+                                            <span style={{
+                                              color: availableQuantity < 0 
+                                                ? 'red' 
+                                                : availableQuantity < 5 
+                                                  ? 'orange' 
+                                                  : 'inherit'
+                                            }}>
+                                              {availableQuantity.toFixed(2)} {material.unit}
+                                            </span> : 
+                                            '-'}
                                         </TableCell>
                                       </TableRow>
                                     );
@@ -637,6 +742,48 @@ const ConsumptionPage = () => {
           </Button>
           <Button onClick={handleConfirmConsumption} variant="contained" autoFocus>
             Potwierdź
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Dialog ostrzegający o konsekwencjach edycji po potwierdzeniu zużycia */}
+      <Dialog
+        open={editWarningDialogOpen}
+        onClose={() => setEditWarningDialogOpen(false)}
+      >
+        <DialogTitle>Uwaga - Edycja potwierdzonego zużycia</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Zużycie materiałów dla tego zadania zostało już potwierdzone, a stany magazynowe zaktualizowane.
+            Edycja zużycia spowoduje:
+            <ul>
+              <li>Anulowanie poprzedniego potwierdzenia zużycia</li>
+              <li>Przywrócenie stanów magazynowych do stanu sprzed potwierdzenia</li>
+              <li>Konieczność ponownego potwierdzenia zużycia po wprowadzeniu zmian</li>
+            </ul>
+            Czy na pewno chcesz kontynuować?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditWarningDialogOpen(false)} color="primary">
+            Anuluj
+          </Button>
+          <Button 
+            onClick={() => {
+              setEditWarningDialogOpen(false);
+              setEditMode(true);
+              
+              // Ustawmy lokalny stan tasj.materialConsumptionConfirmed na false,
+              // aby później można było go potwierdzić bez przeładowania strony
+              setTask(prevTask => ({
+                ...prevTask,
+                materialConsumptionConfirmed: false
+              }));
+            }} 
+            color="primary" 
+            variant="contained"
+          >
+            Kontynuuj edycję
           </Button>
         </DialogActions>
       </Dialog>
