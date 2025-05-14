@@ -1571,7 +1571,7 @@ import {
   };
 
   // Aktualizuje faktyczne zużycie materiałów po zakończeniu produkcji
-  export const updateActualMaterialUsage = async (taskId, materialUsage, batchUsage = {}) => {
+  export const updateActualMaterialUsage = async (taskId, materialUsage, batchUsage = {}, userId = null) => {
     try {
       const taskRef = doc(db, 'productionTasks', taskId);
       const taskSnapshot = await getDoc(taskRef);
@@ -1620,7 +1620,8 @@ import {
               batchId: batchAssignment.batchId,
               batchNumber: batchAssignment.batchNumber,
               notes: `Korekta zużycia materiału w zadaniu produkcyjnym: ${task.name || taskId}`,
-              createdAt: serverTimestamp()
+              createdAt: serverTimestamp(),
+              createdBy: userId || 'system'
             });
           }
           
@@ -1632,7 +1633,9 @@ import {
       // Aktualizacja faktycznego zużycia i zresetowanie potwierdzenia
       const updates = {
         actualMaterialUsage: materialUsage,
-        materialConsumptionConfirmed: false // Resetuje potwierdzenie zużycia
+        materialConsumptionConfirmed: false, // Resetuje potwierdzenie zużycia
+        updatedAt: serverTimestamp(),
+        updatedBy: userId || 'system'
       };
       
       // Dodaj informacje o zużyciu na poziomie partii, jeśli zostały przekazane
@@ -1660,7 +1663,7 @@ import {
   };
 
   // Potwierdza zużycie materiałów i aktualizuje stany magazynowe
-  export const confirmMaterialConsumption = async (taskId) => {
+  export const confirmMaterialConsumption = async (taskId, userId = null) => {
     try {
       const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
       const taskSnapshot = await getDoc(taskRef);
@@ -1853,7 +1856,9 @@ import {
               batchId: batchAssignment.batchId,
               batchNumber: batchAssignment.batchNumber,
               notes: `Materiał zużyty w zadaniu produkcyjnym: ${task.name || taskId}`,
-              createdAt: serverTimestamp()
+              createdAt: serverTimestamp(),
+              createdBy: userId || 'system',
+              category: material.category || '-'
             });
           }
           
@@ -1890,8 +1895,11 @@ import {
       // Oznacz zużycie jako potwierdzone i zapisz informacje o wykorzystanych partiach
       const updates = {
         materialConsumptionConfirmed: true,
-        materialConsumptionDate: new Date().toISOString(),
-        usedBatches: task.usedBatches || {}
+        materialConsumptionDate: serverTimestamp(),
+        materialConsumptionBy: userId || 'system',
+        usedBatches: task.usedBatches || {},
+        updatedAt: serverTimestamp(),
+        updatedBy: userId || 'system'
       };
       
       // Zapisz w bazie danych
@@ -1902,6 +1910,7 @@ import {
         message: 'Zużycie materiałów zostało potwierdzone. Stany magazynowe zostały zaktualizowane.',
         materialConsumptionConfirmed: true,
         materialConsumptionDate: updates.materialConsumptionDate,
+        materialConsumptionBy: updates.materialConsumptionBy,
         usedBatches: updates.usedBatches
       };
     } catch (error) {

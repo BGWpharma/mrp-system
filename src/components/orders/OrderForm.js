@@ -2256,6 +2256,23 @@ const OrderForm = ({ orderId }) => {
     }
   };
 
+  // Dodanie stylów dla responsywności pól
+  const inputSx = {
+    '& .MuiOutlinedInput-root': { 
+      borderRadius: '8px',
+      minWidth: { xs: '100px', sm: '120px' }
+    },
+    '& .MuiInputBase-input': {
+      minWidth: { xs: '60px', sm: '80px' }
+    }
+  };
+  
+  const tableCellSx = {
+    minWidth: { xs: '80px', sm: '100px' },
+    whiteSpace: 'normal',
+    wordBreak: 'break-word'
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
@@ -2308,6 +2325,7 @@ const OrderForm = ({ orderId }) => {
                 value={orderData.status}
                 onChange={handleChange}
                 label="Status zamówienia"
+                sx={{ minWidth: { xs: '120px', sm: '200px' } }}
               >
                 {ORDER_STATUSES.map(status => (
                   <MenuItem key={status.value} value={status.value}>
@@ -2337,6 +2355,7 @@ const OrderForm = ({ orderId }) => {
                         error={!!validationErrors.customerName}
                         helperText={validationErrors.customerName}
                         variant="outlined"
+                        sx={inputSx}
                       />
                     )}
                   />
@@ -2365,6 +2384,7 @@ const OrderForm = ({ orderId }) => {
                 error={!!validationErrors.orderDate}
                 helperText={validationErrors.orderDate}
                 variant="outlined"
+                sx={inputSx}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -2375,6 +2395,7 @@ const OrderForm = ({ orderId }) => {
                 onChange={handleCustomerDetailChange}
                 fullWidth
                 variant="outlined"
+                sx={inputSx}
                 InputProps={{
                   startAdornment: <InputAdornment position="start">@</InputAdornment>,
                 }}
@@ -2388,6 +2409,7 @@ const OrderForm = ({ orderId }) => {
                 onChange={handleCustomerDetailChange}
                 fullWidth
                 variant="outlined"
+                sx={inputSx}
                 InputProps={{
                   startAdornment: <InputAdornment position="start">📞</InputAdornment>,
                 }}
@@ -2403,6 +2425,7 @@ const OrderForm = ({ orderId }) => {
                 multiline
                 rows={2}
                 variant="outlined"
+                sx={inputSx}
                 InputProps={{
                   startAdornment: <InputAdornment position="start" sx={{ alignSelf: 'flex-start', mt: 1.5 }}>📍</InputAdornment>,
                 }}
@@ -2420,6 +2443,7 @@ const OrderForm = ({ orderId }) => {
                 InputLabelProps={{ shrink: true }}
                 helperText="Data kiedy zamówienie ma być dostarczone do klienta"
                 variant="outlined"
+                sx={inputSx}
               />
             </Grid>
           </Grid>
@@ -2443,17 +2467,17 @@ const OrderForm = ({ orderId }) => {
           
           <Divider sx={{ mb: 3 }} />
           
-          <TableContainer component={Paper} sx={{ mb: 2, boxShadow: 1, borderRadius: 1, overflow: 'hidden' }}>
+          <TableContainer component={Paper} sx={{ mb: 2, boxShadow: 1, borderRadius: 1, overflow: 'auto' }}>
             <Table>
               <TableHead sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'grey.100' }}>
                 <TableRow>
-                  <TableCell width="25%">Produkt / Receptura</TableCell>
-                  <TableCell width="8%">Ilość</TableCell>
-                  <TableCell width="8%">Jedn.</TableCell>
-                  <TableCell width="10%">Cena EUR</TableCell>
-                  <TableCell width="10%">Wartość</TableCell>
-                  <TableCell width="5%">Z listy</TableCell>
-                  <TableCell width="10%">
+                  <TableCell width="25%" sx={tableCellSx}>Produkt / Receptura</TableCell>
+                  <TableCell width="8%" sx={tableCellSx}>Ilość</TableCell>
+                  <TableCell width="8%" sx={tableCellSx}>Jedn.</TableCell>
+                  <TableCell width="10%" sx={tableCellSx}>Cena EUR</TableCell>
+                  <TableCell width="10%" sx={tableCellSx}>Wartość</TableCell>
+                  <TableCell width="5%" sx={tableCellSx}>Z listy</TableCell>
+                  <TableCell width="10%" sx={tableCellSx}>
                     Zadanie produkcyjne
                     <Tooltip title="Odśwież status zadań produkcyjnych">
                       <IconButton 
@@ -2467,12 +2491,12 @@ const OrderForm = ({ orderId }) => {
                       </IconButton>
                     </Tooltip>
                   </TableCell>
-                  <TableCell width="10%">Koszt produkcji</TableCell>
-                  <TableCell width="10%">Profit</TableCell>
-                  <TableCell width="10%">Ostatni koszt</TableCell>
-                  <TableCell width="10%">Suma wartości pozycji</TableCell>
-                  <TableCell width="10%">Koszt całk./szt.</TableCell>
-                  <TableCell width="5%"></TableCell>
+                  <TableCell width="10%" sx={tableCellSx}>Koszt produkcji</TableCell>
+                  <TableCell width="10%" sx={tableCellSx}>Profit</TableCell>
+                  <TableCell width="10%" sx={tableCellSx}>Ostatni koszt</TableCell>
+                  <TableCell width="10%" sx={tableCellSx}>Suma wartości pozycji</TableCell>
+                  <TableCell width="10%" sx={tableCellSx}>Koszt całk./szt.</TableCell>
+                  <TableCell width="5%" sx={tableCellSx}></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -2568,6 +2592,7 @@ const OrderForm = ({ orderId }) => {
                         helperText={validationErrors[`item_${index}_quantity`]}
                         size="small"
                         variant="outlined"
+                        sx={inputSx}
                       />
                     </TableCell>
                     <TableCell>
@@ -2577,6 +2602,7 @@ const OrderForm = ({ orderId }) => {
                         fullWidth
                         size="small"
                         variant="outlined"
+                        sx={inputSx}
                       />
                     </TableCell>
                     <TableCell>
@@ -2601,12 +2627,13 @@ const OrderForm = ({ orderId }) => {
                             </InputAdornment>
                           ),
                         }}
-                        inputProps={{ min: 0, step: 0.01 }}
+                        inputProps={{ min: 0, step: 'any' }}
                         fullWidth
                         error={!!validationErrors[`item_${index}_price`]}
                         helperText={validationErrors[`item_${index}_price`]}
                         size="small"
                         variant="outlined"
+                        sx={inputSx}
                       />
                     </TableCell>
                     <TableCell>
@@ -2752,6 +2779,7 @@ const OrderForm = ({ orderId }) => {
                   onChange={handleChange}
                   label="Metoda płatności"
                   variant="outlined"
+                  sx={inputSx}
                 >
                   {PAYMENT_METHODS.map(method => (
                     <MenuItem key={method.value} value={method.value}>
@@ -2770,6 +2798,7 @@ const OrderForm = ({ orderId }) => {
                   onChange={handleChange}
                   label="Status płatności"
                   variant="outlined"
+                  sx={inputSx}
                 >
                   <MenuItem value="Nieopłacone">Nieopłacone</MenuItem>
                   <MenuItem value="Opłacone częściowo">Opłacone częściowo</MenuItem>
@@ -2786,6 +2815,7 @@ const OrderForm = ({ orderId }) => {
                 fullWidth
                 placeholder="np. Kurier, Odbiór osobisty"
                 variant="outlined"
+                sx={inputSx}
                 InputProps={{
                   startAdornment: <InputAdornment position="start"><LocalShippingIcon fontSize="small" /></InputAdornment>,
                 }}
@@ -2819,9 +2849,9 @@ const OrderForm = ({ orderId }) => {
                     }
                   }}
                   fullWidth
-                  inputProps={{ min: 0, step: 0.01 }}
+                  inputProps={{ min: 0, step: 'any' }}
                   variant="outlined"
-                  sx={{ flex: 1, mr: 1 }}
+                  sx={{ flex: 1, mr: 1, ...inputSx }}
                 />
                 <FormControl variant="outlined" sx={{ minWidth: 80 }}>
                   <InputLabel>Waluta</InputLabel>
@@ -2894,6 +2924,7 @@ const OrderForm = ({ orderId }) => {
                       }
                     }}
                     label="Waluta"
+                    sx={inputSx}
                   >
                     <MenuItem value="EUR">EUR</MenuItem>
                     <MenuItem value="PLN">PLN</MenuItem>
@@ -2916,6 +2947,7 @@ const OrderForm = ({ orderId }) => {
                 fullWidth
                 placeholder="Wprowadź numer faktury"
                 variant="outlined"
+                sx={inputSx}
                 InputProps={{
                   startAdornment: <InputAdornment position="start">📄</InputAdornment>,
                 }}
@@ -2932,6 +2964,7 @@ const OrderForm = ({ orderId }) => {
                 InputLabelProps={{ shrink: true }}
                 variant="outlined"
                 helperText="Data wystawienia faktury"
+                sx={inputSx}
               />
             </Grid>
           </Grid>
@@ -2982,18 +3015,18 @@ const OrderForm = ({ orderId }) => {
               Brak dodatkowych kosztów lub rabatów. Użyj przycisków powyżej, aby je dodać.
             </Typography>
           ) : (
-            <TableContainer>
+            <TableContainer sx={{ overflow: 'auto', maxWidth: '100%' }}>
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>Opis</TableCell>
-                    <TableCell align="right">Kwota</TableCell>
-                    <TableCell align="right">Waluta</TableCell>
-                    <TableCell align="right">VAT</TableCell>
-                    <TableCell>Nr faktury</TableCell>
-                    <TableCell>Data faktury</TableCell>
-                    <TableCell>Kurs</TableCell>
-                    <TableCell width="50px"></TableCell>
+                    <TableCell sx={tableCellSx}>Opis</TableCell>
+                    <TableCell align="right" sx={tableCellSx}>Kwota</TableCell>
+                    <TableCell align="right" sx={tableCellSx}>Waluta</TableCell>
+                    <TableCell align="right" sx={tableCellSx}>VAT</TableCell>
+                    <TableCell sx={tableCellSx}>Nr faktury</TableCell>
+                    <TableCell sx={tableCellSx}>Data faktury</TableCell>
+                    <TableCell sx={tableCellSx}>Kurs</TableCell>
+                    <TableCell width="50px" sx={tableCellSx}></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -3132,6 +3165,7 @@ const OrderForm = ({ orderId }) => {
             multiline
             rows={4}
             placeholder="Dodatkowe informacje, uwagi..."
+            sx={inputSx}
           />
         </Paper>
 
@@ -3269,62 +3303,64 @@ const OrderForm = ({ orderId }) => {
                   </Typography>
                 </Alert>
               </Box>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'primary.light' }}>
-                    <TableCell>Numer PO</TableCell>
-                    <TableCell>Dostawca</TableCell>
-                    <TableCell>Liczba pozycji</TableCell>
-                    <TableCell align="right">Wartość brutto</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell></TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {linkedPurchaseOrders.map((po, index) => (
-                    <TableRow key={index} hover sx={{ 
-                      bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : 'inherit'
-                    }}>
-                      <TableCell>
-                        <Chip 
-                          label={po.number} 
-                          color="primary" 
-                          variant="outlined" 
-                          size="small"
-                          icon={<ShoppingCartIcon fontSize="small" />}
-                          sx={{ fontWeight: 'bold' }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        {typeof po.supplier === 'object' ? po.supplier.name : po.supplier}
-                      </TableCell>
-                      <TableCell align="center">{po.items}</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 'bold' }}>{formatCurrency(po.totalGross || po.value)}</TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={po.status || "Robocze"} 
-                          color={
-                            po.status === 'completed' ? 'success' : 
-                            po.status === 'in_progress' ? 'warning' : 
-                            'default'
-                          }
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Button 
-                          size="small" 
-                          variant="contained"
-                          onClick={() => navigate(`/purchase-orders/${po.id}`)}
-                          color="primary"
-                        >
-                          Szczegóły
-                        </Button>
-                      </TableCell>
+              <TableContainer sx={{ overflow: 'auto', maxWidth: '100%' }}>
+                <Table>
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'primary.light' }}>
+                      <TableCell sx={tableCellSx}>Numer PO</TableCell>
+                      <TableCell sx={tableCellSx}>Dostawca</TableCell>
+                      <TableCell sx={tableCellSx}>Liczba pozycji</TableCell>
+                      <TableCell align="right" sx={tableCellSx}>Wartość brutto</TableCell>
+                      <TableCell sx={tableCellSx}>Status</TableCell>
+                      <TableCell sx={tableCellSx}></TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHead>
+                  <TableBody>
+                    {linkedPurchaseOrders.map((po, index) => (
+                      <TableRow key={index} hover sx={{ 
+                        bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : 'inherit'
+                      }}>
+                        <TableCell>
+                          <Chip 
+                            label={po.number} 
+                            color="primary" 
+                            variant="outlined" 
+                            size="small"
+                            icon={<ShoppingCartIcon fontSize="small" />}
+                            sx={{ fontWeight: 'bold' }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {typeof po.supplier === 'object' ? po.supplier.name : po.supplier}
+                        </TableCell>
+                        <TableCell align="center">{po.items}</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>{formatCurrency(po.totalGross || po.value)}</TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={po.status || "Robocze"} 
+                            color={
+                              po.status === 'completed' ? 'success' : 
+                              po.status === 'in_progress' ? 'warning' : 
+                              'default'
+                            }
+                            size="small"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Button 
+                            size="small" 
+                            variant="contained"
+                            onClick={() => navigate(`/purchase-orders/${po.id}`)}
+                            color="primary"
+                          >
+                            Szczegóły
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             </>
           ) : (
             <Typography variant="body2" color="text.secondary">
@@ -3405,16 +3441,16 @@ const OrderForm = ({ orderId }) => {
               Brak faktur. Użyj przycisku powyżej, aby dodać fakturę.
             </Typography>
           ) : (
-            <TableContainer>
+            <TableContainer sx={{ overflow: 'auto', maxWidth: '100%' }}>
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>Nr faktury</TableCell>
-                    <TableCell>Data faktury</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell align="right">Kwota</TableCell>
-                    <TableCell align="right">Kwota opłacona</TableCell>
-                    <TableCell width="50px"></TableCell>
+                    <TableCell sx={tableCellSx}>Nr faktury</TableCell>
+                    <TableCell sx={tableCellSx}>Data faktury</TableCell>
+                    <TableCell sx={tableCellSx}>Status</TableCell>
+                    <TableCell align="right" sx={tableCellSx}>Kwota</TableCell>
+                    <TableCell align="right" sx={tableCellSx}>Kwota opłacona</TableCell>
+                    <TableCell width="50px" sx={tableCellSx}></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -3494,63 +3530,65 @@ const OrderForm = ({ orderId }) => {
           
           <Typography variant="subtitle1" sx={{ mb: 2 }}>Materiały do zamówienia:</Typography>
           
-          <Table>
-            <TableHead>
-              <TableRow sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'grey.100' }}>
-                <TableCell>
-                  <Checkbox 
-                    checked={materialsForPO.every(m => m.selected !== false)}
-                    onChange={(e) => {
-                      const newMaterials = materialsForPO.map(material => ({
-                        ...material,
-                        selected: e.target.checked
-                      }));
-                      setMaterialsForPO(newMaterials);
-                    }}
-                    indeterminate={materialsForPO.some(m => m.selected) && !materialsForPO.every(m => m.selected)}
-                  />
-                </TableCell>
-                <TableCell>Nazwa materiału</TableCell>
-                <TableCell align="right">Ilość</TableCell>
-                <TableCell>Jednostka</TableCell>
-                <TableCell>Dla produktu</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {materialsForPO.map((material, index) => (
-                <TableRow key={index} sx={{ 
-                  bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : 'inherit',
-                  '&:nth-of-type(odd)': { 
-                    bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : 'background.paper' 
-                  },
-                  '&:nth-of-type(even)': { 
-                    bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'grey.50' 
-                  },
-                  '&:hover': {
-                    bgcolor: 'action.hover'
-                  }
-                }}>
-                  <TableCell>
+          <TableContainer sx={{ overflow: 'auto', maxWidth: '100%' }}>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'grey.100' }}>
+                  <TableCell sx={tableCellSx}>
                     <Checkbox 
-                      checked={material.selected !== false}
+                      checked={materialsForPO.every(m => m.selected !== false)}
                       onChange={(e) => {
-                        const newMaterials = [...materialsForPO];
-                        newMaterials[index] = {
-                          ...newMaterials[index],
+                        const newMaterials = materialsForPO.map(material => ({
+                          ...material,
                           selected: e.target.checked
-                        };
+                        }));
                         setMaterialsForPO(newMaterials);
                       }}
+                      indeterminate={materialsForPO.some(m => m.selected) && !materialsForPO.every(m => m.selected)}
                     />
                   </TableCell>
-                  <TableCell>{material.name}</TableCell>
-                  <TableCell align="right">{material.quantity}</TableCell>
-                  <TableCell>{material.unit}</TableCell>
-                  <TableCell>{material.forOrderItem}</TableCell>
+                  <TableCell sx={tableCellSx}>Nazwa materiału</TableCell>
+                  <TableCell align="right" sx={tableCellSx}>Ilość</TableCell>
+                  <TableCell sx={tableCellSx}>Jednostka</TableCell>
+                  <TableCell sx={tableCellSx}>Dla produktu</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHead>
+              <TableBody>
+                {materialsForPO.map((material, index) => (
+                  <TableRow key={index} sx={{ 
+                    bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : 'inherit',
+                    '&:nth-of-type(odd)': { 
+                      bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : 'background.paper' 
+                    },
+                    '&:nth-of-type(even)': { 
+                      bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'grey.50' 
+                    },
+                    '&:hover': {
+                      bgcolor: 'action.hover'
+                    }
+                  }}>
+                    <TableCell>
+                      <Checkbox 
+                        checked={material.selected !== false}
+                        onChange={(e) => {
+                          const newMaterials = [...materialsForPO];
+                          newMaterials[index] = {
+                            ...newMaterials[index],
+                            selected: e.target.checked
+                          };
+                          setMaterialsForPO(newMaterials);
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell>{material.name}</TableCell>
+                    <TableCell align="right">{material.quantity}</TableCell>
+                    <TableCell>{material.unit}</TableCell>
+                    <TableCell>{material.forOrderItem}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
           <Button onClick={() => setIsPODialogOpen(false)} variant="outlined">
@@ -3679,6 +3717,7 @@ const OrderForm = ({ orderId }) => {
                   value={selectedPurchaseOrderId}
                   onChange={handlePurchaseOrderSelection}
                   label="Wybierz zamówienie zakupowe"
+                  sx={inputSx}
                 >
                   {availablePurchaseOrders.map(po => (
                     <MenuItem key={po.id} value={po.id}>
@@ -3725,6 +3764,7 @@ const OrderForm = ({ orderId }) => {
             onChange={handleDriveLinkChange}
             placeholder="https://drive.google.com/file/d/..."
             helperText="Link musi pochodzić z Google Drive i być publicznie dostępny"
+            sx={inputSx}
           />
         </DialogContent>
         <DialogActions>

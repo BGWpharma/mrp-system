@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -49,6 +49,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
+import { Timestamp } from 'firebase/firestore';
 
 const ConsumptionPage = () => {
   const { taskId } = useParams();
@@ -310,7 +311,12 @@ const ConsumptionPage = () => {
       });
       
       // Zapisz zmiany z uwzględnieniem partii
-      const result = await updateActualMaterialUsage(taskId, updatedQuantities, updatedBatchQuantities);
+      const result = await updateActualMaterialUsage(
+        taskId, 
+        updatedQuantities, 
+        updatedBatchQuantities,
+        currentUser?.uid || null
+      );
       
       showSuccess(result.message || 'Zużycie materiałów zaktualizowane.');
       
@@ -350,7 +356,7 @@ const ConsumptionPage = () => {
       setConfirmationDialogOpen(false);
       setLoading(true);
       
-      const result = await confirmMaterialConsumption(taskId);
+      const result = await confirmMaterialConsumption(taskId, currentUser?.uid || null);
       showSuccess('Zużycie materiałów potwierdzone. Stany magazynowe zostały zaktualizowane.');
       
       // Zaktualizuj lokalny stan zamiast odświeżać całą stronę
@@ -358,6 +364,7 @@ const ConsumptionPage = () => {
         ...prevTask,
         materialConsumptionConfirmed: true,
         materialConsumptionDate: new Date().toISOString(),
+        materialConsumptionBy: currentUser?.uid || null,
         // Zachowaj informacje o usedBatches jeśli są dostępne w wyniku
         ...(result && result.usedBatches ? { usedBatches: result.usedBatches } : {})
       }));
@@ -373,12 +380,25 @@ const ConsumptionPage = () => {
     }
   };
   
-  const formatDate = (dateString) => {
-    if (!dateString) return '-';
+  const formatDate = (dateValue) => {
+    if (!dateValue) return '-';
     try {
-      return format(new Date(dateString), 'dd.MM.yyyy HH:mm', { locale: pl });
+      // Obsługa obiektu Timestamp z Firebase
+      if (dateValue instanceof Timestamp) {
+        return format(dateValue.toDate(), 'dd.MM.yyyy HH:mm', { locale: pl });
+      }
+      
+      // Obsługa obiektu z polami seconds i nanoseconds (Firestore Timestamp)
+      if (dateValue && typeof dateValue === 'object' && 'seconds' in dateValue) {
+        return format(new Date(dateValue.seconds * 1000), 'dd.MM.yyyy HH:mm', { locale: pl });
+      }
+      
+      // Standardowa obsługa daty lub stringa
+      return format(new Date(dateValue), 'dd.MM.yyyy HH:mm', { locale: pl });
     } catch (e) {
-      return dateString;
+      console.error('Błąd podczas formatowania daty:', e);
+      // Zwróć oryginalny format w przypadku błędu
+      return String(dateValue);
     }
   };
   

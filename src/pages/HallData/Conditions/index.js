@@ -197,7 +197,7 @@ const HallDataConditionsPage = () => {
     // z kluczami jako identyfikatory dokumentów i wartościami jako dane odczytów
     const historyRef = ref(rtdb, 'history/' + selectedSensor);
     
-    // Najpierw pobieramy wszystkie dane i filtrujemy po stronie klienta
+    // Pobieramy wszystkie dane i filtrujemy po stronie klienta
     get(historyRef)
       .then((snapshot) => {
         if (snapshot.exists()) {
@@ -211,10 +211,15 @@ const HallDataConditionsPage = () => {
               
               // Sprawdź czy data mieści się w wybranym zakresie
               if (isValid(date) && date >= startDate && date <= endDate) {
+                // Sprawdź, czy mamy do czynienia z długim przedziałem czasu
+                const isLongRange = (timeRange === 'week' || timeRange === 'month' || 
+                  (timeRange === 'custom' && (endDate - startDate) > (24 * 60 * 60 * 1000)));
+                
                 historyData.push({
                   time: format(date, 'HH:mm'),
                   fullTime: format(date, 'dd.MM.yyyy HH:mm'),
-                  date: format(date, 'dd.MM'),
+                  // Dla długich przedziałów czasu dodajemy datę i godzinę
+                  date: isLongRange ? format(date, 'dd.MM HH:mm') : format(date, 'dd.MM'),
                   timestamp: date,
                   temperature: reading.temperature || 0,
                   humidity: reading.humidity || 0
@@ -228,10 +233,21 @@ const HallDataConditionsPage = () => {
           // Sortuj dane wg czasu
           historyData.sort((a, b) => a.timestamp - b.timestamp);
           
-          // Ogranicz ilość danych do wyświetlenia dla wydajności
-          const limitedData = historyData.length > 500 
-            ? historyData.slice(historyData.length - 500) 
-            : historyData;
+          // Ogranicz ilość danych do wyświetlenia dla wydajności, jeśli jest ich zbyt dużo
+          // Zachowaj reprezentatywną próbkę danych dla dłuższych okresów
+          let limitedData = historyData;
+          
+          // Dla dłuższych okresów stosujemy próbkowanie danych zamiast zwykłego obcięcia
+          if (historyData.length > 500) {
+            const sampleRate = Math.ceil(historyData.length / 500);
+            limitedData = historyData.filter((_, index) => index % sampleRate === 0);
+            
+            // Zawsze dodajemy ostatni punkt danych dla zachowania ciągłości
+            if (historyData.length > 0 && limitedData.length > 0 && 
+                limitedData[limitedData.length - 1] !== historyData[historyData.length - 1]) {
+              limitedData.push(historyData[historyData.length - 1]);
+            }
+          }
           
           // Ustaw minimalną i maksymalną wartość dla osi Y
           if (limitedData.length > 0) {
@@ -263,7 +279,7 @@ const HallDataConditionsPage = () => {
         }
         setLoading(false);
       });
-  }, [selectedSensor, startDate, endDate, refreshTrigger]);
+  }, [selectedSensor, startDate, endDate, refreshTrigger, timeRange]);
 
   // Obsługa zmiany wybranego czujnika
   const handleSensorChange = (event) => {
@@ -309,11 +325,26 @@ const HallDataConditionsPage = () => {
     if (timeRange === 'week' || timeRange === 'month' || 
         (timeRange === 'custom' && startDate && endDate && 
          (endDate - startDate) > (24 * 60 * 60 * 1000))) {
-      return { dataKey: 'date', interval: Math.ceil(historyData.length / 10) };
+      
+      // Dostosuj podział osi X w zależności od ilości danych
+      const interval = Math.max(1, Math.ceil(historyData.length / (isMobile ? 4 : 8)));
+      
+      return { 
+        dataKey: 'date', 
+        interval: interval,
+        // Zapewniamy, że pełna informacja o dacie i godzinie jest widoczna
+        tickFormatter: (value) => value
+      };
     }
     
     // W przeciwnym razie używamy czasu
-    return { dataKey: 'time', interval: Math.ceil(historyData.length / 15) };
+    const interval = Math.max(1, Math.ceil(historyData.length / (isMobile ? 8 : 15)));
+    return { 
+      dataKey: 'time', 
+      interval: interval,
+      // Dodajemy więcej informacji dla tooltipa
+      tickFormatter: (value) => value
+    };
   };
 
   if (permissionError) {
