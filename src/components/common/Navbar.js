@@ -36,7 +36,8 @@ import {
   Translate as TranslateIcon,
   People as PeopleIcon,
   AdminPanelSettings as AdminIcon,
-  BugReport as BugReportIcon
+  BugReport as BugReportIcon,
+  Cancel as CancelIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../contexts/ThemeContext';

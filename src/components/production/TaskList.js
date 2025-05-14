@@ -32,7 +32,12 @@ import {
   Divider,
   Menu,
   ListItemText,
-  Checkbox
+  Checkbox,
+  useTheme,
+  useMediaQuery,
+  Card,
+  CardContent,
+  CardActions
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -57,7 +62,7 @@ import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/dateUtils';
 import { formatDateTime } from '../../utils/formatters';
 import { useTheme as useMuiTheme } from '@mui/material/styles';
-import { useTheme } from '../../contexts/ThemeContext';
+import { useTheme as useThemeContext } from '../../contexts/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import { TIME_INTERVALS } from '../../utils/constants';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
@@ -77,7 +82,7 @@ const TaskList = () => {
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
   const muiTheme = useMuiTheme();
-  const { mode } = useTheme();
+  const { mode } = useThemeContext();
   const navigate = useNavigate();
   const [stopProductionDialogOpen, setStopProductionDialogOpen] = useState(false);
   const [currentTaskId, setCurrentTaskId] = useState(null);
@@ -101,6 +106,10 @@ const TaskList = () => {
   const { getColumnPreferencesForView, updateColumnPreferences } = useColumnPreferences();
   // Pobieramy preferencje dla widoku 'productionTasks'
   const visibleColumns = getColumnPreferencesForView('productionTasks');
+
+  // Dodajemy wykrywanie urządzeń mobilnych
+  const theme = useMuiTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   // Pobierz zadania przy montowaniu komponentu
   useEffect(() => {
@@ -543,28 +552,192 @@ const TaskList = () => {
     updateColumnPreferences('productionTasks', columnName, !visibleColumns[columnName]);
   };
 
+  // Renderowanie zadania jako karta na urządzeniach mobilnych
+  const renderTaskCard = (task) => {
+    // Obliczenie pozostałej ilości do produkcji
+    const totalCompletedQuantity = task.totalCompletedQuantity || 0;
+    const remainingQuantity = Math.max(0, task.quantity - totalCompletedQuantity);
+    
+    return (
+      <Card key={task.id} variant="outlined" sx={{ mb: 1.5, bgcolor: 'rgb(249, 249, 249)' }}>
+        <CardContent sx={{ pb: 1, pt: 1.5, px: 1.5 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <Typography variant="subtitle1" component={Link} to={`/production/tasks/${task.id}`} sx={{ 
+                textDecoration: 'none',
+                color: 'primary.main',
+                fontWeight: 'medium',
+                fontSize: '0.95rem'
+              }}>
+                {task.name}
+              </Typography>
+              <Chip 
+                label={task.status} 
+                color={getStatusColor(task.status)}
+                size="small" 
+                sx={{ fontSize: '0.7rem', height: '24px' }}
+              />
+            </Box>
+            
+            {task.moNumber && (
+              <Chip 
+                size="small" 
+                label={`MO: ${task.moNumber}`} 
+                color="secondary" 
+                variant="outlined" 
+                sx={{ alignSelf: 'flex-start', fontSize: '0.7rem', height: '20px' }}
+              />
+            )}
+            
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+              <Box sx={{ minWidth: '45%' }}>
+                <Typography variant="caption" color="text.secondary">
+                  Produkt:
+                </Typography>
+                <Typography variant="body2">
+                  {task.productName}
+                </Typography>
+              </Box>
+              
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Ilość:
+                </Typography>
+                <Typography variant="body2">
+                  {task.quantity} {task.unit || 'szt.'}
+                </Typography>
+              </Box>
+              
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Pozostało:
+                </Typography>
+                <Typography 
+                  variant="body2" 
+                  color={remainingQuantity === 0 ? 'success.main' : (remainingQuantity < task.quantity * 0.2 ? 'warning.main' : 'inherit')}
+                >
+                  {remainingQuantity} {task.unit || 'szt.'}
+                </Typography>
+              </Box>
+            </Box>
+            
+            {workstationNames[task.workstationId] && (
+              <Box sx={{ mt: 0.5 }}>
+                <Typography variant="caption" color="text.secondary">
+                  Stanowisko:
+                </Typography>
+                <Typography variant="body2">
+                  {workstationNames[task.workstationId] || task.workstationName || '-'}
+                </Typography>
+              </Box>
+            )}
+            
+            {task.materials && task.materials.length > 0 && (
+              <Box sx={{ mt: 0.5 }}>
+                <Typography variant="caption" color="text.secondary">
+                  Surowce:
+                </Typography>
+                <Chip 
+                  label={task.materialsReserved || task.autoReserveMaterials ? "Zarezerwowane" : "Niezarezerwowane"} 
+                  color={task.materialsReserved || task.autoReserveMaterials ? "success" : "warning"} 
+                  size="small" 
+                  variant="outlined"
+                  sx={{ fontSize: '0.7rem', height: '20px', ml: 0.5 }}
+                />
+              </Box>
+            )}
+          </Box>
+        </CardContent>
+        
+        <Divider />
+        
+        <CardActions sx={{ px: 1, py: 0.5, justifyContent: 'flex-end' }}>
+          {getStatusActions(task)}
+          
+          <Tooltip title="Szczegóły zadania">
+            <IconButton
+              size="small"
+              component={Link}
+              to={`/production/tasks/${task.id}`}
+              color="primary"
+            >
+              <InfoIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+
+          <Tooltip title="Edytuj zadanie">
+            <IconButton
+              size="small"
+              component={Link}
+              to={`/production/tasks/${task.id}/edit`}
+              color="secondary"
+            >
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+
+          <Tooltip title="Usuń zadanie">
+            <IconButton
+              size="small"
+              onClick={() => handleDelete(task.id)}
+              color="error"
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </CardActions>
+      </Card>
+    );
+  };
+
   if (loading) {
     return <div>Ładowanie zadań produkcyjnych...</div>;
   }
 
   return (
-    <Container maxWidth="xl">
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" gutterBottom align="center">Zadania Produkcyjne</Typography>
+    <Container maxWidth="xl" sx={{ px: isMobile ? 1 : 2 }}>
+      <Box sx={{ mb: isMobile ? 2 : 4 }}>
+        <Typography variant="h5" gutterBottom align="center" sx={{ fontSize: isMobile ? '1.25rem' : '1.5rem' }}>
+          Zadania Produkcyjne
+        </Typography>
         
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+        <Box sx={{ 
+          display: 'flex', 
+          flexDirection: isMobile ? 'column' : 'row',
+          justifyContent: 'space-between', 
+          mb: 2,
+          gap: isMobile ? 1 : 0
+        }}>
           <Button 
             variant="contained" 
             color="primary" 
             startIcon={<AddIcon />}
             component={Link}
             to="/production/create-from-order"
+            fullWidth={isMobile}
+            size={isMobile ? "small" : "medium"}
+            sx={isMobile ? { mb: 1 } : {}}
           >
             Nowe Zadanie
           </Button>
           
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            <FormControl variant="outlined" size="small" sx={{ minWidth: 200 }}>
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: isMobile ? 'column' : 'row',
+            gap: isMobile ? 1 : 2,
+            width: isMobile ? '100%' : 'auto'
+          }}>
+            <FormControl 
+              variant="outlined" 
+              size="small" 
+              sx={{ 
+                minWidth: isMobile ? '100%' : 200,
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '4px',
+                  bgcolor: 'white',
+                }
+              }}
+            >
               <InputLabel id="status-filter-label">Status</InputLabel>
               <Select
                 labelId="status-filter-label"
@@ -582,22 +755,33 @@ const TaskList = () => {
               </Select>
             </FormControl>
             
-            <TextField
-              variant="outlined"
-              size="small"
-              placeholder="Szukaj zadania..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              InputProps={{
-                startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />
-              }}
-            />
-            
-            <Tooltip title="Konfiguruj widoczne kolumny">
-              <IconButton onClick={handleColumnMenuOpen}>
-                <ViewColumnIcon />
-              </IconButton>
-            </Tooltip>
+            <Box sx={{ 
+              display: 'flex',
+              width: isMobile ? '100%' : 'auto',
+              gap: 1
+            }}>
+              <TextField
+                variant="outlined"
+                size="small"
+                placeholder="Szukaj zadania..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                fullWidth={isMobile}
+                InputProps={{
+                  startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
+                  sx: {
+                    borderRadius: '4px',
+                    bgcolor: 'white'
+                  }
+                }}
+              />
+              
+              <Tooltip title="Konfiguruj widoczne kolumny">
+                <IconButton onClick={handleColumnMenuOpen} size={isMobile ? "small" : "medium"}>
+                  <ViewColumnIcon />
+                </IconButton>
+              </Tooltip>
+            </Box>
           </Box>
         </Box>
         
@@ -609,7 +793,13 @@ const TaskList = () => {
           <Paper sx={{ p: 3, textAlign: 'center' }}>
             <Typography variant="body1">Brak zadań produkcyjnych spełniających kryteria.</Typography>
           </Paper>
+        ) : isMobile ? (
+          // Widok mobilny - karty zamiast tabeli
+          <Box sx={{ mt: 1 }}>
+            {filteredTasks.map(renderTaskCard)}
+          </Box>
         ) : (
+          // Widok desktopowy - tabela
           <TableContainer component={Paper}>
             <Table>
               <TableHead>

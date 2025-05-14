@@ -1,10 +1,20 @@
 import React from 'react';
-import { Container } from '@mui/material';
+import { Container, useMediaQuery, useTheme } from '@mui/material';
 import ProductionCalendar from '../../components/production/ProductionCalendar';
 
 const ProductionCalendarPage = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    <Container 
+      maxWidth="lg" 
+      sx={{ 
+        mt: isMobile ? 2 : 4, 
+        mb: isMobile ? 2 : 4,
+        px: isMobile ? 1 : 2 
+      }}
+    >
       <ProductionCalendar />
     </Container>
   );

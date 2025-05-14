@@ -22,7 +22,10 @@ import {
   MenuItem,
   TextField,
   Divider,
-  CircularProgress
+  CircularProgress,
+  useMediaQuery,
+  useTheme,
+  IconButton
 } from '@mui/material';
 import {
   PieChart,
@@ -74,6 +77,10 @@ const ProductionReportPage = () => {
   const [selectedCustomer, setSelectedCustomer] = useState('all');
   const [workstationNames, setWorkstationNames] = useState({});
   const { showError } = useNotification();
+  
+  // Dodajemy wykrywanie urządzeń mobilnych
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   // Kolory dla wykresów
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
@@ -304,43 +311,76 @@ const ProductionReportPage = () => {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Box sx={{ mb: 3, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h5" gutterBottom>
-          Raporty Produkcyjne
+    <Container maxWidth="lg" sx={{ mt: isMobile ? 1 : 4, mb: 4, px: isMobile ? 0.5 : 3 }}>
+      <Box sx={{ mb: isMobile ? 1 : 2, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <Typography variant="h5" align="center" sx={{ fontSize: isMobile ? '1.15rem' : '1.5rem' }}>
+          Raport
         </Typography>
       </Box>
 
       {/* Filtry */}
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Grid container spacing={3} alignItems="center">
-          <Grid item xs={12} md={3}>
+      <Paper sx={{ p: isMobile ? 1.5 : 3, mb: isMobile ? 1.5 : 3 }}>
+        <Grid container spacing={isMobile ? 1 : 3} alignItems="center">
+          <Grid item xs={12} sm={6} md={3}>
+            <Typography variant="caption" sx={{ display: isMobile ? 'block' : 'none', mb: 0.5 }}>
+              Data początkowa
+            </Typography>
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
               <DatePicker
-                label="Data początkowa"
+                label={isMobile ? "" : "Data początkowa"}
                 value={startDate}
                 onChange={(newDate) => setStartDate(newDate)}
-                slotProps={{ textField: { fullWidth: true } }}
+                slotProps={{ 
+                  textField: { 
+                    fullWidth: true,
+                    size: "small",
+                    placeholder: isMobile ? "Data początkowa" : "",
+                    sx: {
+                      '& .MuiInputLabel-root': {
+                        display: isMobile ? 'none' : 'block'
+                      }
+                    }
+                  } 
+                }}
               />
             </LocalizationProvider>
           </Grid>
-          <Grid item xs={12} md={3}>
+          <Grid item xs={12} sm={6} md={3}>
+            <Typography variant="caption" sx={{ display: isMobile ? 'block' : 'none', mb: 0.5 }}>
+              Data końcowa
+            </Typography>
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
               <DatePicker
-                label="Data końcowa"
+                label={isMobile ? "" : "Data końcowa"}
                 value={endDate}
                 onChange={(newDate) => setEndDate(newDate)}
-                slotProps={{ textField: { fullWidth: true } }}
+                slotProps={{ 
+                  textField: { 
+                    fullWidth: true,
+                    size: "small",
+                    placeholder: isMobile ? "Data końcowa" : "",
+                    sx: {
+                      '& .MuiInputLabel-root': {
+                        display: isMobile ? 'none' : 'block'
+                      }
+                    }
+                  } 
+                }}
               />
             </LocalizationProvider>
           </Grid>
-          <Grid item xs={12} md={3}>
-            <FormControl fullWidth>
-              <InputLabel>Klient</InputLabel>
+          <Grid item xs={12} sm={6} md={3}>
+            <Typography variant="caption" sx={{ display: isMobile ? 'block' : 'none', mb: 0.5 }}>
+              Klient
+            </Typography>
+            <FormControl fullWidth size="small">
+              <InputLabel sx={{ display: isMobile ? 'none' : 'block' }}>Klient</InputLabel>
               <Select
                 value={selectedCustomer}
                 onChange={(e) => setSelectedCustomer(e.target.value)}
-                label="Klient"
+                label={isMobile ? "" : "Klient"}
+                displayEmpty={isMobile}
+                placeholder={isMobile ? "Klient" : ""}
               >
                 <MenuItem value="all">Wszyscy klienci</MenuItem>
                 {customers.map(customer => (
@@ -351,64 +391,79 @@ const ProductionReportPage = () => {
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={12} md={3}>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button variant="outlined" onClick={handlePreviousMonth}>
-                &lt; Poprzedni miesiąc
-              </Button>
-              <Button variant="outlined" onClick={handleNextMonth}>
-                Następny miesiąc &gt;
-              </Button>
+          <Grid item xs={12} sm={6} md={3}>
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              gap: 2,
+              mt: isMobile ? 1 : 0
+            }}>
+              <IconButton 
+                color="primary"
+                onClick={handlePreviousMonth}
+                size="small"
+                sx={{ border: '1px solid rgba(25, 118, 210, 0.5)', borderRadius: 1, width: '100%', p: 1 }}
+              >
+                <PrevIcon />
+              </IconButton>
+              <IconButton 
+                color="primary"
+                onClick={handleNextMonth}
+                size="small"
+                sx={{ border: '1px solid rgba(25, 118, 210, 0.5)', borderRadius: 1, width: '100%', p: 1 }}
+              >
+                <NextIcon />
+              </IconButton>
             </Box>
           </Grid>
         </Grid>
       </Paper>
 
       {/* Podsumowanie */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} md={3}>
+      <Grid container spacing={isMobile ? 1 : 3} sx={{ mb: isMobile ? 1.5 : 3 }}>
+        <Grid item xs={6} sm={6} md={3}>
           <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
+            <CardContent sx={{ p: isMobile ? 1 : 2, '&:last-child': { pb: isMobile ? 1 : 2 } }}>
+              <Typography variant="caption" sx={{ fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
                 Liczba zadań
               </Typography>
-              <Typography variant="h4" color="primary">
+              <Typography variant="h5" color="primary" sx={{ fontSize: isMobile ? '1.2rem' : '1.5rem', mt: 0.5 }}>
                 {filteredTasks.length}
               </Typography>
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
+            <CardContent sx={{ p: isMobile ? 1 : 2, '&:last-child': { pb: isMobile ? 1 : 2 } }}>
+              <Typography variant="caption" sx={{ fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
                 Zadania zakończone
               </Typography>
-              <Typography variant="h4" color="success.main">
+              <Typography variant="h5" color="success.main" sx={{ fontSize: isMobile ? '1.2rem' : '1.5rem', mt: 0.5 }}>
                 {filteredTasks.filter(task => task.status === 'Zakończone').length}
               </Typography>
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
+            <CardContent sx={{ p: isMobile ? 1 : 2, '&:last-child': { pb: isMobile ? 1 : 2 } }}>
+              <Typography variant="caption" sx={{ fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
                 Zadania w trakcie
               </Typography>
-              <Typography variant="h4" color="warning.main">
+              <Typography variant="h5" color="warning.main" sx={{ fontSize: isMobile ? '1.2rem' : '1.5rem', mt: 0.5 }}>
                 {filteredTasks.filter(task => task.status === 'W trakcie').length}
               </Typography>
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Całkowity czas pracy
+            <CardContent sx={{ p: isMobile ? 1 : 2, '&:last-child': { pb: isMobile ? 1 : 2 } }}>
+              <Typography variant="caption" sx={{ fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
+                Czas pracy
               </Typography>
-              <Typography variant="h4" color="info.main">
+              <Typography variant="h5" color="info.main" sx={{ fontSize: isMobile ? '1.2rem' : '1.5rem', mt: 0.5 }}>
                 {formatTime(timeStats.totalMinutes)}
               </Typography>
             </CardContent>
@@ -416,23 +471,23 @@ const ProductionReportPage = () => {
         </Grid>
       </Grid>
 
-      {/* Wykresy */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
+      {/* Wykresy - na urządzeniach mobilnych pokazujemy tylko wykres statusów */}
+      <Grid container spacing={isMobile ? 1 : 3} sx={{ mb: isMobile ? 1.5 : 3 }}>
         <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3, height: '100%' }}>
-            <Typography variant="h6" gutterBottom>
-              Rozkład zadań według statusu
+          <Paper sx={{ p: isMobile ? 1 : 3, height: '100%' }}>
+            <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', mb: 1, fontSize: isMobile ? '0.8rem' : '1rem' }}>
+              Zadania według statusu
             </Typography>
-            <Box sx={{ height: 300 }}>
+            <Box sx={{ height: isMobile ? 200 : 300 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={statusStats}
                     cx="50%"
                     cy="50%"
-                    labelLine={true}
-                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={80}
+                    labelLine={false}
+                    label={false}
+                    outerRadius={isMobile ? 50 : 80}
                     fill="#8884d8"
                     dataKey="value"
                   >
@@ -441,120 +496,187 @@ const ProductionReportPage = () => {
                     ))}
                   </Pie>
                   <Tooltip formatter={(value) => [`${value} zadań`, 'Liczba']} />
-                  <Legend />
+                  <Legend layout="horizontal" align="center" verticalAlign="bottom" wrapperStyle={{ fontSize: isMobile ? '0.7rem' : '0.8rem' }} />
                 </PieChart>
               </ResponsiveContainer>
             </Box>
           </Paper>
         </Grid>
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3, height: '100%' }}>
-            <Typography variant="h6" gutterBottom>
-              Zadania wg klienta
-            </Typography>
-            <Box sx={{ height: 300 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  width={500}
-                  height={300}
-                  data={customerStats}
-                  margin={{
-                    top: 5,
-                    right: 30,
-                    left: 20,
-                    bottom: 5,
-                  }}
-                >
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="value" name="Liczba zadań" fill="#8884d8" />
-                </BarChart>
-              </ResponsiveContainer>
-            </Box>
-          </Paper>
-        </Grid>
+        {!isMobile && (
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 3, height: '100%' }}>
+              <Typography variant="h6" gutterBottom align="center">
+                Zadania wg klienta
+              </Typography>
+              <Box sx={{ height: 300 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    width={500}
+                    height={300}
+                    data={customerStats}
+                    margin={{
+                      top: 5,
+                      right: 30,
+                      left: 20,
+                      bottom: 5,
+                    }}
+                  >
+                    <XAxis dataKey="name" textAnchor="middle" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="value" name="Liczba zadań" fill="#8884d8" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </Paper>
+          </Grid>
+        )}
       </Grid>
 
-      {/* Tabela szczegółowa */}
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Szczegółowa lista zadań
-        </Typography>
-        <Divider sx={{ mb: 2 }} />
-        
-        {filteredTasks.length === 0 ? (
-          <Typography align="center" sx={{ py: 3 }}>
-            Brak zadań produkcyjnych w wybranym okresie.
+      {/* Tabela szczegółowa - na urządzeniach mobilnych pokazujemy prostszą wersję */}
+      {isMobile ? (
+        <Paper sx={{ p: 1.5 }}>
+          <Typography variant="caption" sx={{ display: 'block', mb: 1, fontSize: '0.8rem' }}>
+            Lista zadań
           </Typography>
-        ) : (
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Nazwa zadania</TableCell>
-                  <TableCell>Nr MO</TableCell>
-                  <TableCell>Produkt</TableCell>
-                  <TableCell>Klient</TableCell>
-                  <TableCell>Stanowisko</TableCell>
-                  <TableCell>Zaplanowana data</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell align="right">Czas pracy (min)</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredTasks.map((task) => (
-                  <TableRow 
-                    key={task.id}
-                    hover
-                    onClick={() => navigate(`/production/tasks/${task.id}`)}
-                    sx={{ cursor: 'pointer' }}
-                  >
-                    <TableCell>{task.name}</TableCell>
-                    <TableCell>{task.moNumber}</TableCell>
-                    <TableCell>{task.productName}</TableCell>
-                    <TableCell>{getTaskCustomerName(task)}</TableCell>
-                    <TableCell>
-                      {task.workstationId 
-                        ? (workstationNames[task.workstationId] || "Ładowanie...") 
-                        : "Nie przypisano"
-                      }
-                    </TableCell>
-                    <TableCell>
-                      {task.scheduledDate 
-                        ? format(
-                            typeof task.scheduledDate === 'string'
-                              ? new Date(task.scheduledDate)
-                              : task.scheduledDate instanceof Date
-                                ? task.scheduledDate
-                                : task.scheduledDate.toDate(),
-                            'dd.MM.yyyy'
-                          )
-                        : '-'}
-                    </TableCell>
-                    <TableCell>
+          <Divider sx={{ mb: 1.5 }} />
+          
+          {filteredTasks.length === 0 ? (
+            <Typography align="center" sx={{ py: 2, fontSize: '0.8rem' }}>
+              Brak zadań w wybranym okresie
+            </Typography>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {filteredTasks.map((task) => (
+                <Card 
+                  key={task.id} 
+                  variant="outlined" 
+                  sx={{ 
+                    cursor: 'pointer',
+                    '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.03)' } 
+                  }}
+                  onClick={() => navigate(`/production/tasks/${task.id}`)}
+                >
+                  <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 'medium', fontSize: '0.8rem' }}>
+                        {task.name}
+                      </Typography>
                       <Chip 
                         label={task.status} 
                         sx={{ 
                           backgroundColor: getStatusColor(task.status),
-                          color: 'white'
+                          color: 'white',
+                          fontSize: '0.65rem',
+                          height: '20px'
                         }}
                         size="small" 
                       />
-                    </TableCell>
-                    <TableCell align="right">
-                      {task.productionSessions 
-                        ? task.productionSessions.reduce((sum, session) => sum + (session.timeSpent || 0), 0)
-                        : '-'}
-                    </TableCell>
+                    </Box>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                      <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
+                        {task.productName}
+                      </Typography>
+                      <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
+                        {task.scheduledDate 
+                          ? format(
+                              typeof task.scheduledDate === 'string'
+                                ? new Date(task.scheduledDate)
+                                : task.scheduledDate instanceof Date
+                                  ? task.scheduledDate
+                                  : task.scheduledDate.toDate(),
+                              'dd.MM.yyyy'
+                            )
+                          : '-'}
+                      </Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              ))}
+            </Box>
+          )}
+        </Paper>
+      ) : (
+        <Paper sx={{ p: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            Szczegółowa lista zadań
+          </Typography>
+          <Divider sx={{ mb: 2 }} />
+          
+          {filteredTasks.length === 0 ? (
+            <Typography align="center" sx={{ py: 3 }}>
+              Brak zadań produkcyjnych w wybranym okresie.
+            </Typography>
+          ) : (
+            <TableContainer sx={{ overflowX: 'auto' }}>
+              <Table size="medium" sx={{ minWidth: 850 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Nazwa zadania</TableCell>
+                    <TableCell>Nr MO</TableCell>
+                    <TableCell>Produkt</TableCell>
+                    <TableCell>Klient</TableCell>
+                    <TableCell>Stanowisko</TableCell>
+                    <TableCell>Data</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell align="right">Czas pracy (min)</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
-      </Paper>
+                </TableHead>
+                <TableBody>
+                  {filteredTasks.map((task) => (
+                    <TableRow 
+                      key={task.id}
+                      hover
+                      onClick={() => navigate(`/production/tasks/${task.id}`)}
+                      sx={{ cursor: 'pointer' }}
+                    >
+                      <TableCell>{task.name}</TableCell>
+                      <TableCell>{task.moNumber}</TableCell>
+                      <TableCell>{task.productName}</TableCell>
+                      <TableCell>{getTaskCustomerName(task)}</TableCell>
+                      <TableCell>
+                        {task.workstationId 
+                          ? (workstationNames[task.workstationId] || "Ładowanie...") 
+                          : "Nie przypisano"
+                        }
+                      </TableCell>
+                      <TableCell>
+                        {task.scheduledDate 
+                          ? format(
+                              typeof task.scheduledDate === 'string'
+                                ? new Date(task.scheduledDate)
+                                : task.scheduledDate instanceof Date
+                                  ? task.scheduledDate
+                                  : task.scheduledDate.toDate(),
+                              'dd.MM.yyyy'
+                            )
+                          : '-'}
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={task.status} 
+                          sx={{ 
+                            backgroundColor: getStatusColor(task.status),
+                            color: 'white',
+                            fontSize: '0.75rem'
+                          }}
+                          size="small" 
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        {task.productionSessions 
+                          ? task.productionSessions.reduce((sum, session) => sum + (session.timeSpent || 0), 0)
+                          : '-'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </Paper>
+      )}
     </Container>
   );
 };

@@ -1,6 +1,6 @@
 // src/pages/Production/ProductionPage.js
 import React, { useState } from 'react';
-import { Container, Typography, Box, Tabs, Tab, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, CircularProgress } from '@mui/material';
+import { Container, Typography, Box, Tabs, Tab, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, CircularProgress, useMediaQuery, useTheme, IconButton, Menu, MenuItem, SwipeableDrawer, List, ListItem, ListItemIcon, ListItemText, Divider } from '@mui/material';
 import {
   FormatListBulleted as ListIcon,
   CalendarMonth as CalendarIcon,
@@ -11,7 +11,8 @@ import {
   Description as FormsIcon,
   Business as BusinessIcon,
   Calculate as CalculateIcon,
-  AdminPanelSettings as AdminIcon
+  AdminPanelSettings as AdminIcon,
+  Menu as MenuIcon
 } from '@mui/icons-material';
 import TaskList from '../../components/production/TaskList';
 import ProductionCalendar from '../../components/production/ProductionCalendar';
@@ -33,8 +34,17 @@ const ProductionPage = () => {
   const { currentUser } = useAuth();
   const { showSuccess, showError, showInfo } = useNotification();
   
+  // Dodajemy stan dla menu mobilnego
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
+    if (isMobile) {
+      setMobileMenuOpen(false);
+    }
   };
   
   const handleViewModeChange = () => {
@@ -70,49 +80,154 @@ const ProductionPage = () => {
   
   const isAdmin = currentUser && (currentUser.role === 'admin' || currentUser.isAdmin);
   
+  const tabData = [
+    { icon: <ListIcon />, label: "Lista zadań produkcyjnych", value: 0 },
+    { icon: <CalendarIcon />, label: "Kalendarz", value: 1 },
+    { icon: <ReportIcon />, label: "Raporty", value: 2 },
+    { icon: <FormsIcon />, label: "Formularze", value: 3 },
+    { icon: <BusinessIcon />, label: "Stanowiska produkcyjne", value: 4 },
+    { icon: <ForecastIcon />, label: "Prognoza zapotrzebowania", value: 5 },
+    { icon: <CalculateIcon />, label: "Kalkulator", value: 6 }
+  ];
+  
+  // Funkcja renderująca zawartość aktualnie wybranej zakładki
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 0: return <TaskList />;
+      case 1: return <ProductionCalendar />;
+      case 2: return <ProductionReportPage />;
+      case 3: return <FormsPage />;
+      case 4: return <WorkstationsPage />;
+      case 5: return <ForecastPage />;
+      case 6: return <CalculatorPage />;
+      default: return <TaskList />;
+    }
+  };
+  
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    <Container maxWidth="lg" sx={{ mt: isMobile ? 2 : 4, mb: 4, px: isMobile ? 1 : 2 }}>
       <Box sx={{ mb: 3, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h5" gutterBottom>
-          Produkcja
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+          <Typography variant="h5" gutterBottom sx={{ fontSize: isMobile ? '1.25rem' : '1.5rem', mb: isMobile ? 0 : 1 }}>
+            Produkcja
+          </Typography>
+          
+          {isMobile && (
+            <IconButton 
+              color="primary" 
+              onClick={() => setMobileMenuOpen(true)}
+              size="large"
+            >
+              <MenuIcon />
+            </IconButton>
+          )}
+        </Box>
         
-        {isAdmin && (
+        {isAdmin && !isMobile && (
           <Button 
             variant="outlined" 
             color="secondary" 
             startIcon={<AdminIcon />}
             onClick={() => setAdminDialogOpen(true)}
-            sx={{ ml: 2 }}
+            sx={{ ml: { xs: 0, sm: 2 }, mt: { xs: 1, sm: 0 } }}
+            size={isMobile ? "small" : "medium"}
           >
             Funkcje administracyjne
           </Button>
         )}
       </Box>
       
-      <Tabs 
-        value={activeTab} 
-        onChange={handleTabChange} 
-        variant="scrollable"
-        scrollButtons="auto"
-        sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}
-      >
-        <Tab icon={<ListIcon />} label="Lista zadań produkcyjnych" iconPosition="start" />
-        <Tab icon={<CalendarIcon />} label="Kalendarz" iconPosition="start" />
-        <Tab icon={<ReportIcon />} label="Raporty" iconPosition="start" />
-        <Tab icon={<FormsIcon />} label="Formularze" iconPosition="start" />
-        <Tab icon={<BusinessIcon />} label="Stanowiska produkcyjne" iconPosition="start" />
-        <Tab icon={<ForecastIcon />} label="Prognoza zapotrzebowania" iconPosition="start" />
-        <Tab icon={<CalculateIcon />} label="Kalkulator" iconPosition="start" />
-      </Tabs>
+      {isMobile ? (
+        // Zakładki na ekranie mobilnym - pokazujemy tylko aktualną zakładkę i menu z pełną listą
+        <Box sx={{ width: '100%', mb: 2 }}>
+          <Tabs 
+            value={activeTab} 
+            onChange={handleTabChange} 
+            variant="fullWidth"
+            sx={{ 
+              borderBottom: 1, 
+              borderColor: 'divider',
+              '& .MuiTab-root': {
+                minHeight: '48px',
+                py: 1,
+                fontSize: '0.775rem'
+              }
+            }}
+          >
+            <Tab 
+              icon={tabData[activeTab].icon} 
+              label={tabData[activeTab].label}
+              sx={{ 
+                '& .MuiSvgIcon-root': {
+                  fontSize: '1.2rem',
+                  mr: 1
+                }
+              }}
+            />
+          </Tabs>
+          
+          {/* Menu boczne z wszystkimi zakładkami */}
+          <SwipeableDrawer
+            anchor="left"
+            open={mobileMenuOpen}
+            onClose={() => setMobileMenuOpen(false)}
+            onOpen={() => setMobileMenuOpen(true)}
+          >
+            <Box sx={{ width: 250 }}>
+              <List>
+                <ListItem sx={{ py: 2 }}>
+                  <Typography variant="h6">Menu produkcji</Typography>
+                </ListItem>
+                <Divider />
+                {tabData.map((tab, index) => (
+                  <ListItem 
+                    button 
+                    key={index} 
+                    onClick={() => handleTabChange(null, tab.value)}
+                    selected={activeTab === tab.value}
+                  >
+                    <ListItemIcon>
+                      {tab.icon}
+                    </ListItemIcon>
+                    <ListItemText primary={tab.label.split(' ')[0]} secondary={tab.label.split(' ').slice(1).join(' ')} />
+                  </ListItem>
+                ))}
+                
+                {isAdmin && (
+                  <>
+                    <Divider sx={{ my: 1 }} />
+                    <ListItem button onClick={() => {
+                      setMobileMenuOpen(false);
+                      setAdminDialogOpen(true);
+                    }}>
+                      <ListItemIcon>
+                        <AdminIcon />
+                      </ListItemIcon>
+                      <ListItemText primary="Funkcje administracyjne" />
+                    </ListItem>
+                  </>
+                )}
+              </List>
+            </Box>
+          </SwipeableDrawer>
+        </Box>
+      ) : (
+        // Zakładki na ekranie desktopowym - standardowe wyświetlanie
+        <Tabs 
+          value={activeTab} 
+          onChange={handleTabChange} 
+          variant="scrollable"
+          scrollButtons="auto"
+          sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}
+        >
+          {tabData.map((tab, index) => (
+            <Tab key={index} icon={tab.icon} label={tab.label} iconPosition="start" />
+          ))}
+        </Tabs>
+      )}
       
-      {activeTab === 0 && <TaskList />}
-      {activeTab === 1 && <ProductionCalendar />}
-      {activeTab === 2 && <ProductionReportPage />}
-      {activeTab === 3 && <FormsPage />}
-      {activeTab === 4 && <WorkstationsPage />}
-      {activeTab === 5 && <ForecastPage />}
-      {activeTab === 6 && <CalculatorPage />}
+      {/* Wyświetlamy zawartość aktualnie wybranej zakładki */}
+      {renderTabContent()}
       
       {/* Dialog funkcji administracyjnych */}
       <Dialog open={adminDialogOpen} onClose={() => setAdminDialogOpen(false)}>

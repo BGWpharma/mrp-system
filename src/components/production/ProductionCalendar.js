@@ -15,7 +15,11 @@ import {
   ListItemText,
   Chip,
   FormControlLabel,
-  Switch
+  Switch,
+  useMediaQuery,
+  useTheme,
+  IconButton,
+  Collapse
 } from '@mui/material';
 import {
   CalendarMonth as CalendarIcon,
@@ -26,7 +30,10 @@ import {
   ArrowDropDown as ArrowDropDownIcon,
   FilterList as FilterListIcon,
   Business as BusinessIcon,
-  Work as WorkIcon
+  Work as WorkIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
+  Settings as SettingsIcon
 } from '@mui/icons-material';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -68,6 +75,10 @@ const ProductionCalendar = () => {
   const navigate = useNavigate();
   const { showError, showSuccess } = useNotification();
   const [eventResizableFromStart, setEventResizableFromStart] = useState(true);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [optionsExpanded, setOptionsExpanded] = useState(false);
+  const [legendExpanded, setLegendExpanded] = useState(false);
 
   // Efekt do aktualizacji widoku kalendarza po zmianie stanu view
   useEffect(() => {
@@ -499,69 +510,124 @@ const ProductionCalendar = () => {
     
     // Różny sposób wyświetlania dla widoku Gantta i zwykłego kalendarza
     if (view.startsWith('resourceTimeline')) {
+      // W widoku Gantta pokazujemy więcej szczegółów w zależności od dostępnej przestrzeni
       return (
-        <Tooltip title={
-          <div>
-            <Typography variant="subtitle2">{eventInfo.event.title}</Typography>
-            {eventInfo.event.extendedProps.moNumber && 
-              <Typography variant="body2">Numer MO: {eventInfo.event.extendedProps.moNumber}</Typography>
-            }
-            <Typography variant="body2">Produkt: {eventInfo.event.extendedProps.productName}</Typography>
-            <Typography variant="body2">Ilość: {eventInfo.event.extendedProps.quantity} {eventInfo.event.extendedProps.unit}</Typography>
-            <Typography variant="body2">Status: {eventInfo.event.extendedProps.status}</Typography>
-            <Typography variant="body2">Stanowisko: {workstationName}</Typography>
-            {duration && <Typography variant="body2">Czas trwania: {duration} min</Typography>}
-            <Typography variant="body2">
-              Od: {new Date(eventInfo.event.start).toLocaleString()}
-            </Typography>
-            <Typography variant="body2">
-              Do: {new Date(eventInfo.event.end).toLocaleString()}
-            </Typography>
-          </div>
-        }>
-          <Box sx={{ 
-            overflow: 'hidden', 
-            textOverflow: 'ellipsis', 
-            width: '100%', 
-            height: '100%', 
-            display: 'flex',
-            alignItems: 'center',
-            pl: 1
-          }}>
-            <Typography variant="caption" noWrap>
-              {eventInfo.event.extendedProps.moNumber} - {eventInfo.event.extendedProps.productName || eventInfo.event.title} {durationText}
-            </Typography>
+        <Box sx={{ 
+          overflow: 'hidden', 
+          width: '100%', 
+          height: '100%',
+          fontSize: isMobile ? '0.65rem' : '0.75rem',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center'
+        }}>
+          <Box sx={{ fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {eventInfo.event.title}
           </Box>
-        </Tooltip>
+          {/* Pokazuj dodatkowe informacje tylko jeśli jest wystarczająco miejsca */}
+          {!isMobile && (
+            <>
+              {eventInfo.event.extendedProps.orderNumber && (
+                <Box sx={{ fontSize: '0.7rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  Zamówienie: {eventInfo.event.extendedProps.orderNumber}
+                </Box>
+              )}
+              {eventInfo.event.extendedProps.moNumber && (
+                <Box sx={{ fontSize: '0.7rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  MO: {eventInfo.event.extendedProps.moNumber}
+                </Box>
+              )}
+            </>
+          )}
+          {/* Zawsze pokazuj status, nawet na małych ekranach */}
+          <Box sx={{ 
+            fontSize: isMobile ? '0.6rem' : '0.7rem', 
+            whiteSpace: 'nowrap', 
+            overflow: 'hidden', 
+            textOverflow: 'ellipsis',
+            opacity: 0.8
+          }}>
+            {eventInfo.event.extendedProps.status}
+          </Box>
+        </Box>
+      );
+    } else if (eventInfo.view.type === 'dayGridMonth') {
+      // Dla widoku miesięcznego - bardzo kompaktowy wygląd
+      return (
+        <Box sx={{ 
+          overflow: 'hidden', 
+          width: '100%', 
+          fontSize: isMobile ? '0.65rem' : '0.7rem'
+        }}>
+          <Box 
+            sx={{ 
+              fontWeight: 'bold', 
+              whiteSpace: 'nowrap', 
+              overflow: 'hidden', 
+              textOverflow: 'ellipsis'
+            }}
+          >
+            {eventInfo.event.title}
+          </Box>
+          {!isMobile && workstationName && (
+            <Box 
+              sx={{ 
+                fontSize: '0.65rem', 
+                whiteSpace: 'nowrap', 
+                overflow: 'hidden', 
+                textOverflow: 'ellipsis',
+                mt: 0.5
+              }}
+            >
+              {workstationName}
+            </Box>
+          )}
+        </Box>
+      );
+    } else {
+      // Dla pozostałych widoków (dzień/tydzień)
+      return (
+        <Box sx={{ overflow: 'hidden', width: '100%', fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
+          <Box sx={{ 
+            fontWeight: 'bold', 
+            whiteSpace: 'nowrap', 
+            overflow: 'hidden', 
+            textOverflow: 'ellipsis' 
+          }}>
+            {eventInfo.event.title}
+          </Box>
+          {workstationName && (
+            <Box sx={{ 
+              fontSize: isMobile ? '0.65rem' : '0.75rem', 
+              whiteSpace: 'nowrap', 
+              overflow: 'hidden', 
+              textOverflow: 'ellipsis' 
+            }}>
+              {workstationName}
+            </Box>
+          )}
+          {!isMobile && eventInfo.event.extendedProps.moNumber && (
+            <Box sx={{ 
+              fontSize: '0.7rem', 
+              whiteSpace: 'nowrap', 
+              overflow: 'hidden', 
+              textOverflow: 'ellipsis' 
+            }}>
+              MO: {eventInfo.event.extendedProps.moNumber}
+            </Box>
+          )}
+          {durationText && (
+            <Box sx={{ 
+              fontSize: isMobile ? '0.65rem' : '0.7rem', 
+              opacity: 0.8, 
+              whiteSpace: 'nowrap' 
+            }}>
+              {durationText}
+            </Box>
+          )}
+        </Box>
       );
     }
-    
-    return (
-      <Tooltip title={
-        <div>
-          <Typography variant="subtitle2">{eventInfo.event.title}</Typography>
-          {eventInfo.event.extendedProps.moNumber && 
-            <Typography variant="body2">Numer MO: {eventInfo.event.extendedProps.moNumber}</Typography>
-          }
-          <Typography variant="body2">Produkt: {eventInfo.event.extendedProps.productName}</Typography>
-          <Typography variant="body2">Ilość: {eventInfo.event.extendedProps.quantity} {eventInfo.event.extendedProps.unit}</Typography>
-          <Typography variant="body2">Status: {eventInfo.event.extendedProps.status}</Typography>
-          <Typography variant="body2">Stanowisko: {workstationName}</Typography>
-          {duration && <Typography variant="body2">Czas trwania: {duration} min</Typography>}
-          <Typography variant="body2">
-            Od: {new Date(eventInfo.event.start).toLocaleString()}
-          </Typography>
-          <Typography variant="body2">
-            Do: {new Date(eventInfo.event.end).toLocaleString()}
-          </Typography>
-        </div>
-      }>
-        <Box sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          <Typography variant="caption" noWrap>{eventInfo.timeText}</Typography>
-          <Typography variant="body2" noWrap>{eventInfo.event.title} {durationText}</Typography>
-        </Box>
-      </Tooltip>
-    );
   };
 
   // Funkcja pomocnicza zwracająca etykietę dla aktualnego widoku Gantta
@@ -1180,9 +1246,19 @@ const ProductionCalendar = () => {
     }
   };
 
+  // Function to toggle options visibility
+  const toggleOptions = () => {
+    setOptionsExpanded(!optionsExpanded);
+  };
+
+  // Function to toggle legend visibility
+  const toggleLegend = () => {
+    setLegendExpanded(!legendExpanded);
+  };
+
   return (
     <Paper sx={{ 
-      p: 2, 
+      p: isMobile ? 1 : 2, 
       height: 'calc(100vh - 80px)', 
       display: 'flex', 
       flexDirection: 'column', 
@@ -1190,245 +1266,285 @@ const ProductionCalendar = () => {
       overflow: 'hidden'
     }}>
       {/* Nagłówek kalendarza */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center' }}>
-          <CalendarIcon sx={{ mr: 1 }} />
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        mb: isMobile ? 1 : 2,
+        flexWrap: 'wrap'
+      }}>
+        <Typography 
+          variant={isMobile ? "subtitle1" : "h6"} 
+          sx={{ 
+            display: 'flex', 
+            alignItems: 'center',
+            fontSize: isMobile ? '1.1rem' : '1.25rem',
+            mb: isMobile ? 1 : 0
+          }}
+        >
+          <CalendarIcon sx={{ mr: 1, fontSize: isMobile ? '1.2rem' : '1.5rem' }} />
           Kalendarz produkcji
         </Typography>
+        
+        {/* Toggle button for options - only on mobile */}
+        {isMobile && (
+          <IconButton 
+            size="small" 
+            onClick={toggleOptions} 
+            sx={{ ml: 'auto' }}
+            aria-label="Opcje kalendarza"
+          >
+            <SettingsIcon />
+            {optionsExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+          </IconButton>
+        )}
       </Box>
       
       {/* Pasek narzędziowy - podzielony na logiczne sekcje */}
-      <Box sx={{ 
-        display: 'flex', 
-        flexWrap: 'wrap', 
-        gap: 1, 
-        mb: 2, 
-        pb: 2, 
-        borderBottom: '1px solid #e0e0e0',
-        justifyContent: 'space-between'
-      }}>
-        {/* Grupa 1: Nawigacja i zakres dat */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Button 
-            variant="outlined" 
-            size="small" 
-            onClick={() => handleNavigation('prev')}
-            sx={{ minWidth: 50, height: 36 }}
-          >
-            &lt;
-          </Button>
-          <Button 
-            variant="outlined" 
-            size="small" 
-            onClick={() => handleNavigation('next')}
-            sx={{ minWidth: 50, height: 36 }}
-          >
-            &gt;
-          </Button>
-          <Button 
-            variant="contained" 
-            size="small" 
-            onClick={() => handleNavigation('today')}
-            sx={{ mx: 1, height: 36 }}
-          >
-            Dziś
-          </Button>
-          
-          <Button
-            variant="outlined"
-            onClick={handleDateRangeMenuClick}
-            sx={{ height: 36 }}
-            startIcon={<CalendarIcon />}
-            size="small"
-          >
-            {customDateRange 
-              ? `${format(startDate, 'dd.MM.yyyy')} - ${format(endDate, 'dd.MM.yyyy')}`
-              : 'Wybierz zakres dat'}
-          </Button>
-        </Box>
-
-        {/* Grupa 2: Zmiana widoku */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography variant="body2" sx={{ mr: 1 }}>Widok:</Typography>
-          <ToggleButtonGroup
-            value={view.includes('resourceTimeline') ? 'gantt' : view}
-            exclusive
-            onChange={handleViewChange}
-            aria-label="widok kalendarza"
-            size="small"
-          >
-            <ToggleButton value="timeGridDay" aria-label="dzień">
-              <Tooltip title="Dzień">
-                <DayIcon />
-              </Tooltip>
-            </ToggleButton>
-            <ToggleButton value="timeGridWeek" aria-label="tydzień">
-              <Tooltip title="Tydzień">
-                <WeekIcon />
-              </Tooltip>
-            </ToggleButton>
-            <ToggleButton value="dayGridMonth" aria-label="miesiąc">
-              <Tooltip title="Miesiąc">
-                <MonthIcon />
-              </Tooltip>
-            </ToggleButton>
-            <ToggleButton 
-              value="gantt" 
-              aria-label="gantt"
-              onClick={handleGanttMenuClick}
+      <Collapse in={!isMobile || optionsExpanded}>
+        <Box sx={{ 
+          display: 'flex', 
+          flexWrap: 'wrap', 
+          gap: isMobile ? 0.5 : 1, 
+          mb: isMobile ? 1 : 2, 
+          pb: isMobile ? 1 : 2, 
+          borderBottom: '1px solid #e0e0e0',
+          justifyContent: isMobile ? 'center' : 'space-between'
+        }}>
+          {/* Grupa 1: Nawigacja i zakres dat */}
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 0.5,
+            mb: isMobile ? 1 : 0,
+            width: isMobile ? '100%' : 'auto',
+            justifyContent: isMobile ? 'center' : 'flex-start'
+          }}>
+            <Button 
+              variant="outlined" 
+              size="small" 
+              onClick={() => handleNavigation('prev')}
+              sx={{ minWidth: 30, height: 36, px: isMobile ? 1 : 2 }}
             >
-              <Tooltip title="Wykres Gantta">
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <GanttIcon />
-                  <ArrowDropDownIcon fontSize="small" />
-                </Box>
-              </Tooltip>
-            </ToggleButton>
-          </ToggleButtonGroup>
-        </Box>
-
-        {/* Grupa 3: Filtry i opcje */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={useWorkstationColors}
-                onChange={(e) => setUseWorkstationColors(e.target.checked)}
-                color="primary"
-                size="small"
-              />
-            }
-            label={<Typography variant="body2">Kolory stanowisk</Typography>}
-          />
-          
-          {view.startsWith('resourceTimeline') && (
+              &lt;
+            </Button>
+            <Button 
+              variant="outlined" 
+              size="small" 
+              onClick={() => handleNavigation('next')}
+              sx={{ minWidth: 30, height: 36, px: isMobile ? 1 : 2 }}
+            >
+              &gt;
+            </Button>
+            <Button 
+              variant="contained" 
+              size="small" 
+              onClick={() => handleNavigation('today')}
+              sx={{ mx: 1, height: 36 }}
+            >
+              Dziś
+            </Button>
+            
             <Button
               variant="outlined"
-              onClick={handleDetailMenuClick}
-              sx={{ height: 36 }}
+              onClick={handleDateRangeMenuClick}
+              sx={{ 
+                height: 36, 
+                fontSize: isMobile ? '0.75rem' : '0.875rem',
+                px: isMobile ? 1 : 2
+              }}
+              startIcon={<CalendarIcon />}
               size="small"
             >
-              Szczegółowość: {ganttDetail === 'hour' ? 'Godzina' : ganttDetail === 'day' ? 'Dzień' : 'Tydzień'}
+              {isMobile ? 'Zakres dat' : (customDateRange 
+                ? `${format(startDate, 'dd.MM.yyyy')} - ${format(endDate, 'dd.MM.yyyy')}`
+                : 'Wybierz zakres dat')}
             </Button>
-          )}
-        </Box>
+          </Box>
 
-        {/* Przycisk przełączający tryb widoku Gantt */}
-        {view.includes('resourceTimeline') && (
-          <Button
-            variant="outlined"
-            size="small"
-            sx={{ ml: 1 }}
-            onClick={handleGanttGroupByChange}
-            startIcon={ganttGroupBy === 'workstation' ? <BusinessIcon /> : <WorkIcon />}
-          >
-            {ganttGroupBy === 'workstation' ? 'Stanowiska' : 'Zamówienia'}
-          </Button>
-        )}
-      </Box>
-      
-      {/* Menu i dialogu pozostają bez zmian */}
-      <Menu
-        anchorEl={dateRangeMenuAnchor}
-        open={Boolean(dateRangeMenuAnchor)}
-        onClose={handleDateRangeMenuClose}
-        PaperProps={{
-          sx: { minWidth: '300px', p: 1 }
-        }}
-      >
-        <Box sx={{ p: 1 }}>
-          <Typography variant="subtitle2" gutterBottom>
-            Wybierz zakres dat
-          </Typography>
-          <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <DatePicker
-                label="Data początkowa"
-                value={startDate}
-                onChange={(newValue) => setStartDate(newValue)}
-                sx={{ mr: 1, flex: 1 }}
-                format="dd.MM.yyyy"
-              />
-              <Typography sx={{ mx: 1 }}>-</Typography>
-              <DatePicker
-                label="Data końcowa"
-                value={endDate}
-                minDate={startDate}
-                onChange={(newValue) => setEndDate(newValue)}
-                sx={{ flex: 1 }}
-                format="dd.MM.yyyy"
-              />
-            </Box>
-          </LocalizationProvider>
-          
-          <Button 
-            variant="contained" 
-            fullWidth 
-            onClick={applyCustomDateRange}
-          >
-            Zastosuj zakres
-          </Button>
-        </Box>
-      </Menu>
-
-      <Menu
-        anchorEl={detailMenuAnchor}
-        open={Boolean(detailMenuAnchor)}
-        onClose={handleDetailMenuClose}
-      >
-        <MenuItem 
-          onClick={() => handleGanttDetailChange('hour')}
-          selected={ganttDetail === 'hour'}
-        >
-          Godzina
-        </MenuItem>
-        <MenuItem 
-          onClick={() => handleGanttDetailChange('day')}
-          selected={ganttDetail === 'day'}
-        >
-          Dzień
-        </MenuItem>
-        <MenuItem 
-          onClick={() => handleGanttDetailChange('week')}
-          selected={ganttDetail === 'week'}
-        >
-          Tydzień
-        </MenuItem>
-      </Menu>
-      
-      {/* Legenda statusów/stanowisk */}
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', mb: 2 }}>
-        {useWorkstationColors && workstations.length > 0 ? (
-          <>
-            <Typography variant="body2" sx={{ mr: 1, fontWeight: 'bold' }}>
-              Legenda stanowisk:
+          {/* Grupa 2: Zmiana widoku */}
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 0.5,
+            mb: isMobile ? 1 : 0,
+            width: isMobile ? '100%' : 'auto',
+            justifyContent: isMobile ? 'center' : 'flex-start'
+          }}>
+            <Typography 
+              variant="body2" 
+              sx={{ 
+                mr: 1, 
+                display: isMobile ? 'none' : 'block' 
+              }}
+            >
+              Widok:
             </Typography>
-            {workstations.map(workstation => (
-              <Chip
-                key={workstation.id}
+            <ToggleButtonGroup
+              value={view.includes('resourceTimeline') ? 'gantt' : view}
+              exclusive
+              onChange={handleViewChange}
+              aria-label="widok kalendarza"
+              size="small"
+            >
+              <ToggleButton value="timeGridDay" aria-label="dzień">
+                <Tooltip title="Dzień">
+                  <DayIcon fontSize={isMobile ? 'small' : 'medium'} />
+                </Tooltip>
+              </ToggleButton>
+              <ToggleButton value="timeGridWeek" aria-label="tydzień">
+                <Tooltip title="Tydzień">
+                  <WeekIcon fontSize={isMobile ? 'small' : 'medium'} />
+                </Tooltip>
+              </ToggleButton>
+              <ToggleButton value="dayGridMonth" aria-label="miesiąc">
+                <Tooltip title="Miesiąc">
+                  <MonthIcon fontSize={isMobile ? 'small' : 'medium'} />
+                </Tooltip>
+              </ToggleButton>
+              <ToggleButton 
+                value="gantt" 
+                aria-label="gantt"
+                onClick={handleGanttMenuClick}
+              >
+                <Tooltip title="Wykres Gantta">
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <GanttIcon fontSize={isMobile ? 'small' : 'medium'} />
+                    <ArrowDropDownIcon fontSize={isMobile ? 'small' : 'small'} />
+                  </Box>
+                </Tooltip>
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+
+          {/* Grupa 3: Filtry i opcje */}
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center',
+            flexWrap: 'wrap', 
+            gap: 0.5,
+            width: isMobile ? '100%' : 'auto',
+            justifyContent: isMobile ? 'center' : 'flex-start'
+          }}>
+            {!isMobile && (
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={useWorkstationColors}
+                    onChange={(e) => setUseWorkstationColors(e.target.checked)}
+                    color="primary"
+                    size="small"
+                  />
+                }
+                label={<Typography variant="body2">Kolory stanowisk</Typography>}
+              />
+            )}
+
+            {isMobile && (
+              <Button
+                variant="outlined"
                 size="small"
-                label={workstation.name}
-                sx={{
-                  backgroundColor: workstation.color || '#2196f3',
-                  color: theme => theme.palette.getContrastText(workstation.color || '#2196f3'),
-                  opacity: selectedWorkstations[workstation.id] ? 1 : 0.3
+                onClick={(e) => setUseWorkstationColors(!useWorkstationColors)}
+                sx={{ height: 36, fontSize: '0.75rem' }}
+              >
+                {useWorkstationColors ? 'Kolor: Stanowiska' : 'Kolor: Status'}
+              </Button>
+            )}
+            
+            {view.startsWith('resourceTimeline') && (
+              <Button
+                variant="outlined"
+                onClick={handleDetailMenuClick}
+                sx={{ 
+                  height: 36, 
+                  fontSize: isMobile ? '0.75rem' : '0.875rem'
                 }}
-              />
-            ))}
-          </>
-        ) : (
-          <>
-            <Typography variant="body2" sx={{ mr: 1, fontWeight: 'bold' }}>
-              Legenda statusów:
-            </Typography>
-            <Chip size="small" label="Zaplanowane" sx={{ backgroundColor: '#3788d8', color: '#fff' }} />
-            <Chip size="small" label="W trakcie" sx={{ backgroundColor: '#f39c12', color: '#fff' }} />
-            <Chip size="small" label="Zakończone" sx={{ backgroundColor: '#2ecc71', color: '#fff' }} />
-            <Chip size="small" label="Anulowane" sx={{ backgroundColor: '#e74c3c', color: '#fff' }} />
-            <Chip size="small" label="Wstrzymane" sx={{ backgroundColor: '#757575', color: '#fff' }} />
-          </>
-        )}
-      </Box>
+                size="small"
+              >
+                {isMobile ? 'Szczeg.' : 'Szczegółowość'}: {ganttDetail === 'hour' ? 'Godz.' : ganttDetail === 'day' ? 'Dzień' : 'Tydz.'}
+              </Button>
+            )}
+          
+            {/* Przycisk przełączający tryb widoku Gantt */}
+            {view.includes('resourceTimeline') && (
+              <Button
+                variant="outlined"
+                size="small"
+                sx={{ 
+                  height: 36, 
+                  fontSize: isMobile ? '0.75rem' : '0.875rem'
+                }}
+                onClick={handleGanttGroupByChange}
+                startIcon={ganttGroupBy === 'workstation' ? <BusinessIcon /> : <WorkIcon />}
+              >
+                {isMobile ? (ganttGroupBy === 'workstation' ? 'Stanow.' : 'Zamów.') : (ganttGroupBy === 'workstation' ? 'Stanowiska' : 'Zamówienia')}
+              </Button>
+            )}
+          </Box>
+        </Box>
+      </Collapse>
+      
+      {/* Legenda statusów z przyciskiem toggle na urządzeniach mobilnych */}
+      {isMobile && (
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          mb: 1 
+        }}>
+          <Button 
+            size="small" 
+            onClick={toggleLegend}
+            endIcon={legendExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+            sx={{ fontSize: '0.75rem' }}
+          >
+            Legenda
+          </Button>
+        </Box>
+      )}
+      
+      {/* Legenda statusów */}
+      <Collapse in={!isMobile || legendExpanded}>
+        <Box 
+          sx={{ 
+            display: 'flex', 
+            flexWrap: 'wrap', 
+            gap: 1, 
+            mb: isMobile ? 1 : 2,
+            justifyContent: isMobile ? 'center' : 'flex-start'
+          }}
+        >
+          <Typography variant="body2" sx={{ mr: 1, display: isMobile ? 'none' : 'block' }}>
+            Legenda statusów:
+          </Typography>
+          
+          <Chip 
+            size={isMobile ? "small" : "medium"} 
+            label="Zaplanowane" 
+            sx={{ bgcolor: '#3788d8', color: 'white', fontSize: isMobile ? '0.7rem' : '0.8rem' }} 
+          />
+          <Chip 
+            size={isMobile ? "small" : "medium"} 
+            label="W trakcie" 
+            sx={{ bgcolor: '#f39c12', color: 'white', fontSize: isMobile ? '0.7rem' : '0.8rem' }} 
+          />
+          <Chip 
+            size={isMobile ? "small" : "medium"} 
+            label="Zakończone" 
+            sx={{ bgcolor: '#2ecc71', color: 'white', fontSize: isMobile ? '0.7rem' : '0.8rem' }} 
+          />
+          <Chip 
+            size={isMobile ? "small" : "medium"} 
+            label="Anulowane" 
+            sx={{ bgcolor: '#e74c3c', color: 'white', fontSize: isMobile ? '0.7rem' : '0.8rem' }} 
+          />
+          <Chip 
+            size={isMobile ? "small" : "medium"} 
+            label="Wstrzymane" 
+            sx={{ bgcolor: '#757575', color: 'white', fontSize: isMobile ? '0.7rem' : '0.8rem' }} 
+          />
+        </Box>
+      </Collapse>
       
       {loading && (
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10, bgcolor: 'rgba(255,255,255,0.7)' }}>
@@ -1668,8 +1784,6 @@ const ProductionCalendar = () => {
           initialView={view}
           headerToolbar={false}
           events={getCalendarEvents()}
-          resources={getResources()}
-          eventContent={renderEventContent}
           eventClick={handleEventClick}
           dateClick={null}
           selectable={false}
@@ -1695,7 +1809,7 @@ const ProductionCalendar = () => {
           weekends={true}
           nowIndicator={true}
           schedulerLicenseKey="GPL-My-Project-Is-Open-Source"
-          resourceAreaWidth={view.startsWith('resourceTimeline') ? '30%' : '20%'}
+          resourceAreaWidth={isMobile ? '110px' : (view.startsWith('resourceTimeline') ? '30%' : '20%')}
           editable={editable}
           eventDurationEditable={editable}
           eventStartEditable={editable}
@@ -1719,7 +1833,7 @@ const ProductionCalendar = () => {
             hour12: false
           }}
           slotEventOverlap={true}
-          resourceAreaHeaderContent="Zadania produkcyjne"
+          resourceAreaHeaderContent={ganttGroupBy === 'workstation' ? 'Stanowisko' : 'Zamówienie'}
           resourcesInitiallyExpanded={true}
           stickyHeaderDates={true}
           stickyResourceAreaHeaderContent={true}
@@ -1734,6 +1848,22 @@ const ProductionCalendar = () => {
           fixedWeekCount={false}
           navLinks={false}
           slotMinWidth={customDateRange && (endDate - startDate) / (1000 * 60 * 60 * 24) > 31 ? 40 : 60}
+          resources={getResources()}
+          eventContent={renderEventContent}
+          dayMaxEvents={isMobile ? 2 : true}
+          eventDidMount={(info) => {
+            if (info.event.extendedProps.status === 'Zakończone') {
+              info.el.style.opacity = '0.7';
+            }
+            
+            // Dostosuj style dla urządzeń mobilnych
+            if (isMobile) {
+              // Zmniejsz padding dla lepszego wykorzystania przestrzeni
+              if (info.view.type === 'dayGridMonth') {
+                info.el.style.padding = '1px 2px';
+              }
+            }
+          }}
           slotLabelContent={(args) => {
             if (view.startsWith('resourceTimeline')) {
               const date = args.date;
@@ -1744,7 +1874,7 @@ const ProductionCalendar = () => {
                 const minute = date.getMinutes();
                 return (
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
                       {`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`}
                     </Typography>
                   </Box>
@@ -1760,21 +1890,59 @@ const ProductionCalendar = () => {
                 // Dla pierwszego dnia miesiąca lub początku widoku, pokaż nazwę miesiąca
                 if (day === 1 || (day <= 3 && args.isLabeled)) {
                   return (
-                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                      <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 'bold' }}>
+                    <Box sx={{ 
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      alignItems: 'center',
+                      fontSize: isMobile ? '0.65rem' : '0.75rem'
+                    }}>
+                      <Typography variant="caption" sx={{ 
+                        color: 'primary.main', 
+                        fontWeight: 'bold',
+                        fontSize: 'inherit'
+                      }}>
                         {month}
                       </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{day}</Typography>
-                      <Typography variant="caption" sx={{ textTransform: 'uppercase' }}>{weekday}</Typography>
+                      <Typography variant="body2" sx={{ 
+                        fontWeight: 'bold',
+                        fontSize: 'inherit'
+                      }}>
+                        {day}
+                      </Typography>
+                      {!isMobile && (
+                        <Typography variant="caption" sx={{ 
+                          textTransform: 'uppercase',
+                          fontSize: 'inherit'
+                        }}>
+                          {weekday}
+                        </Typography>
+                      )}
                     </Box>
                   );
                 }
                 
                 // Dla pozostałych dni
                 return (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{day}</Typography>
-                    <Typography variant="caption" sx={{ textTransform: 'uppercase' }}>{weekday}</Typography>
+                  <Box sx={{ 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center',
+                    fontSize: isMobile ? '0.65rem' : '0.75rem'
+                  }}>
+                    <Typography variant="body2" sx={{ 
+                      fontWeight: 'bold',
+                      fontSize: 'inherit'
+                    }}>
+                      {day}
+                    </Typography>
+                    {!isMobile && (
+                      <Typography variant="caption" sx={{ 
+                        textTransform: 'uppercase',
+                        fontSize: 'inherit'
+                      }}>
+                        {weekday}
+                      </Typography>
+                    )}
                   </Box>
                 );
               }
@@ -1788,6 +1956,14 @@ const ProductionCalendar = () => {
               cellEl.style.borderLeft = '2px solid #2196f3';
               cellEl.style.backgroundColor = 'rgba(33, 150, 243, 0.05)';
             }
+            
+            // Dostosuj styl komórek dla urządzeń mobilnych
+            if (isMobile) {
+              const cellEl = arg.el;
+              if (arg.view.type === 'dayGridMonth') {
+                cellEl.style.padding = '2px';
+              }
+            }
           }}
           viewClassNames="custom-timeline-view"
           dayHeaders={true}
@@ -1798,17 +1974,19 @@ const ProductionCalendar = () => {
               dayHeaderFormat: { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }
             },
             timeGridWeek: {
-              dayHeaderFormat: { weekday: 'short', day: 'numeric', month: 'numeric' }
+              dayHeaderFormat: isMobile ? { weekday: 'short' } : { weekday: 'short', day: 'numeric', month: 'numeric' }
             },
             dayGridMonth: {
-              dayHeaderFormat: { weekday: 'short' }
+              dayHeaderFormat: { weekday: 'short' },
+              dayMaxEventRows: isMobile ? 2 : 6
             },
             resourceTimelineDay: {
               slotDuration: { hours: 1 },
               slotLabelFormat: [
                 { hour: '2-digit', minute: '2-digit', hour12: false }
               ],
-              visibleRange: customDateRange ? { start: startDate, end: endDate } : null
+              visibleRange: customDateRange ? { start: startDate, end: endDate } : null,
+              slotMinWidth: isMobile ? 50 : 70
             },
             resourceTimelineWeek: {
               duration: { days: 7 },
@@ -1816,7 +1994,8 @@ const ProductionCalendar = () => {
               slotLabelFormat: [
                 { weekday: 'short', day: 'numeric', month: 'short' }
               ],
-              visibleRange: customDateRange ? { start: startDate, end: endDate } : null
+              visibleRange: customDateRange ? { start: startDate, end: endDate } : null,
+              slotMinWidth: isMobile ? 40 : 60
             },
             resourceTimelineMonth: {
               duration: customDateRange 
@@ -1826,7 +2005,8 @@ const ProductionCalendar = () => {
               slotLabelFormat: [
                 { day: 'numeric', weekday: 'short' }
               ],
-              visibleRange: customDateRange ? { start: startDate, end: endDate } : null
+              visibleRange: customDateRange ? { start: startDate, end: endDate } : null,
+              slotMinWidth: isMobile ? 30 : 50
             }
           }}
           dayHeaderClassNames="custom-day-header"

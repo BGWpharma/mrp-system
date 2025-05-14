@@ -28,7 +28,12 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  CircularProgress
+  CircularProgress,
+  useTheme,
+  useMediaQuery,
+  Card,
+  CardContent,
+  CardActions
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -102,6 +107,9 @@ const RecipeList = () => {
     isLoaded: false,
     lastRefreshed: null
   });
+  
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
   // Obsługa debounce dla wyszukiwania
   useEffect(() => {
@@ -382,160 +390,272 @@ const RecipeList = () => {
   };
 
   // Renderowanie tabeli receptur
-  const renderRecipesTable = (recipesToRender) => (
-    <TableContainer component={Paper} variant="outlined">
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell onClick={() => handleTableSort('name')} style={{ cursor: 'pointer' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    SKU
-                    {tableSort.field === 'name' && (
-                      <ArrowDropUpIcon 
-                        sx={{ 
-                          transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
-                          transition: 'transform 0.2s'
-                        }} 
-                      />
-                    )}
-                  </Box>
-                </TableCell>
-                <TableCell onClick={() => handleTableSort('description')} style={{ cursor: 'pointer' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    Opis
-                    {tableSort.field === 'description' && (
-                      <ArrowDropUpIcon 
-                        sx={{ 
-                          transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
-                          transition: 'transform 0.2s'
-                        }} 
-                      />
-                    )}
-                  </Box>
-                </TableCell>
-                <TableCell onClick={() => handleTableSort('customer')} style={{ cursor: 'pointer' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    Klient
-                    {tableSort.field === 'customer' && (
-                      <ArrowDropUpIcon 
-                        sx={{ 
-                          transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
-                          transition: 'transform 0.2s'
-                        }} 
-                      />
-                    )}
-                  </Box>
-                </TableCell>
-                <TableCell onClick={() => handleTableSort('updatedAt')} style={{ cursor: 'pointer' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    Ostatnia aktualizacja
-                    {tableSort.field === 'updatedAt' && (
-                      <ArrowDropUpIcon 
-                        sx={{ 
-                          transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
-                          transition: 'transform 0.2s'
-                        }} 
-                      />
-                    )}
-                  </Box>
-                </TableCell>
-                <TableCell align="right">Akcje</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
+  const renderRecipesTable = (recipesToRender) => {
+    // Dla urządzeń mobilnych wyświetlamy karty zamiast tabeli
+    if (isMobile) {
+      return (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           {recipesToRender.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={5} align="center">
-                Nie znaleziono receptur
-              </TableCell>
-            </TableRow>
+            <Typography variant="body1" align="center" sx={{ py: 2 }}>
+              Nie znaleziono receptur
+            </Typography>
           ) : (
             recipesToRender.map((recipe) => {
               // Znajdź klienta przypisanego do receptury
               const customer = customers.find(c => c.id === recipe.customerId);
               
               return (
-                <TableRow key={recipe.id}>
-                  <TableCell>
-                    <Link to={`/recipes/${recipe.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                      <Typography variant="body1" component="span" sx={{ fontWeight: 'medium' }}>
+                <Card key={recipe.id} variant="outlined" sx={{ 
+                  mb: 1, 
+                  bgcolor: 'rgb(249, 249, 249)', 
+                  borderRadius: '4px',
+                  boxShadow: 'none',
+                  overflow: 'visible'
+                }}>
+                  <CardContent sx={{ pb: 0, pt: 1.5, px: 1.5 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                      <Typography variant="subtitle1" component="div" sx={{ 
+                        fontWeight: 'bold', 
+                        fontSize: '0.9rem',
+                        mb: 0.5 
+                      }}>
                         {recipe.name}
                       </Typography>
-                    </Link>
-                  </TableCell>
-                  <TableCell>{recipe.description || '-'}</TableCell>
-                  <TableCell>
-                    {customer ? (
-                    <Chip 
-                        icon={<PersonIcon />} 
-                        label={customer.name} 
-                      size="small" 
-                        variant="outlined" 
-                        color="primary"
-                    />
-                    ) : (
-                      <Chip label="Ogólna" size="small" variant="outlined" />
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {recipe.updatedAt 
-                      ? (recipe.updatedAt && typeof recipe.updatedAt === 'object' && typeof recipe.updatedAt.toDate === 'function'
-                         ? formatDate(recipe.updatedAt.toDate()) 
-                         : formatDate(recipe.updatedAt)) 
-                      : '-'}
-                  </TableCell>
-                  <TableCell align="right">
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                      <Tooltip title="Podgląd">
+                      
+                      <Typography variant="body2" color="text.secondary" sx={{ 
+                        fontSize: '0.8rem',
+                        mb: 0.5
+                      }}>
+                        {recipe.description || '-'}
+                      </Typography>
+                      
+                      {customer && (
+                        <Box sx={{ mb: 0.5 }}>
+                          <Box 
+                            component="span" 
+                            sx={{ 
+                              display: 'inline-flex', 
+                              alignItems: 'center',
+                              fontSize: '0.75rem',
+                              color: 'primary.main'
+                            }}
+                          >
+                            <PersonIcon sx={{ fontSize: '0.9rem', mr: 0.5 }} />
+                            {customer.name}
+                          </Box>
+                        </Box>
+                      )}
+                    </Box>
+                  </CardContent>
+                  
+                  <Box sx={{ 
+                    display: 'flex', 
+                    justifyContent: 'flex-end', 
+                    p: 0.5,
+                    mt: 1,
+                    borderTop: '1px solid rgba(0, 0, 0, 0.08)'
+                  }}>
                     <IconButton 
-                          size="small" 
-                          color="primary"
+                      size="small" 
+                      color="primary"
+                      sx={{ padding: '4px' }}
                       component={Link} 
                       to={`/recipes/${recipe.id}`}
                     >
-                          <ViewIcon fontSize="small" />
+                      <ViewIcon fontSize="small" />
                     </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Edytuj">
                     <IconButton 
-                          size="small" 
-                          color="primary"
+                      size="small" 
+                      color="primary"
+                      sx={{ padding: '4px' }}
                       component={Link} 
                       to={`/recipes/${recipe.id}/edit`}
                     >
-                          <EditIcon fontSize="small" />
+                      <EditIcon fontSize="small" />
                     </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Usuń">
-                      <IconButton 
-                          size="small" 
-                          color="error"
-                          onClick={() => handleDeleteRecipe(recipe.id)}
-                      >
-                          <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                      <Tooltip title="Dodaj do magazynu">
                     <IconButton 
-                          size="small" 
-                          color="secondary"
-                          component={Link}
-                          to={`/recipes/${recipe.id}/edit`}
-                          state={{ openProductDialog: true }}
-                        >
-                          <ProductIcon fontSize="small" />
+                      size="small" 
+                      color="error"
+                      sx={{ padding: '4px' }}
+                      onClick={() => handleDeleteRecipe(recipe.id)}
+                    >
+                      <DeleteIcon fontSize="small" />
                     </IconButton>
-                      </Tooltip>
-                    </Box>
-                  </TableCell>
-                </TableRow>
+                    <IconButton 
+                      size="small" 
+                      color="secondary"
+                      sx={{ padding: '4px' }}
+                      component={Link}
+                      to={`/recipes/${recipe.id}/edit`}
+                      state={{ openProductDialog: true }}
+                    >
+                      <ProductIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
+                </Card>
               );
             })
           )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-  );
+        </Box>
+      );
+    }
+    
+    // Dla większych ekranów wyświetlamy standardową tabelę
+    return (
+      <TableContainer component={Paper} variant="outlined">
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell onClick={() => handleTableSort('name')} style={{ cursor: 'pointer' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  SKU
+                  {tableSort.field === 'name' && (
+                    <ArrowDropUpIcon 
+                      sx={{ 
+                        transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
+                        transition: 'transform 0.2s'
+                      }} 
+                    />
+                  )}
+                </Box>
+              </TableCell>
+              <TableCell onClick={() => handleTableSort('description')} style={{ cursor: 'pointer' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  Opis
+                  {tableSort.field === 'description' && (
+                    <ArrowDropUpIcon 
+                      sx={{ 
+                        transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
+                        transition: 'transform 0.2s'
+                      }} 
+                    />
+                  )}
+                </Box>
+              </TableCell>
+              <TableCell onClick={() => handleTableSort('customer')} style={{ cursor: 'pointer' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  Klient
+                  {tableSort.field === 'customer' && (
+                    <ArrowDropUpIcon 
+                      sx={{ 
+                        transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
+                        transition: 'transform 0.2s'
+                      }} 
+                    />
+                  )}
+                </Box>
+              </TableCell>
+              <TableCell onClick={() => handleTableSort('updatedAt')} style={{ cursor: 'pointer' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  Ostatnia aktualizacja
+                  {tableSort.field === 'updatedAt' && (
+                    <ArrowDropUpIcon 
+                      sx={{ 
+                        transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
+                        transition: 'transform 0.2s'
+                      }} 
+                    />
+                  )}
+                </Box>
+              </TableCell>
+              <TableCell align="right">Akcje</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {recipesToRender.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} align="center">
+                  Nie znaleziono receptur
+                </TableCell>
+              </TableRow>
+            ) : (
+              recipesToRender.map((recipe) => {
+                // Znajdź klienta przypisanego do receptury
+                const customer = customers.find(c => c.id === recipe.customerId);
+                
+                return (
+                  <TableRow key={recipe.id}>
+                    <TableCell>
+                      <Link to={`/recipes/${recipe.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                        <Typography variant="body1" component="span" sx={{ fontWeight: 'medium' }}>
+                          {recipe.name}
+                        </Typography>
+                      </Link>
+                    </TableCell>
+                    <TableCell>{recipe.description || '-'}</TableCell>
+                    <TableCell>
+                      {customer ? (
+                        <Chip 
+                          icon={<PersonIcon />} 
+                          label={customer.name} 
+                          size="small" 
+                          variant="outlined" 
+                          color="primary"
+                        />
+                      ) : (
+                        <Chip label="Ogólna" size="small" variant="outlined" />
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {recipe.updatedAt 
+                        ? (recipe.updatedAt && typeof recipe.updatedAt === 'object' && typeof recipe.updatedAt.toDate === 'function'
+                          ? formatDate(recipe.updatedAt.toDate()) 
+                          : formatDate(recipe.updatedAt)) 
+                        : '-'}
+                    </TableCell>
+                    <TableCell align="right">
+                      <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <Tooltip title="Podgląd">
+                          <IconButton 
+                            size="small" 
+                            color="primary"
+                            component={Link} 
+                            to={`/recipes/${recipe.id}`}
+                          >
+                            <ViewIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Edytuj">
+                          <IconButton 
+                            size="small" 
+                            color="primary"
+                            component={Link} 
+                            to={`/recipes/${recipe.id}/edit`}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Usuń">
+                          <IconButton 
+                            size="small" 
+                            color="error"
+                            onClick={() => handleDeleteRecipe(recipe.id)}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Dodaj do magazynu">
+                          <IconButton 
+                            size="small" 
+                            color="secondary"
+                            component={Link}
+                            to={`/recipes/${recipe.id}/edit`}
+                            state={{ openProductDialog: true }}
+                          >
+                            <ProductIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    );
+  };
   
   // Renderowanie widoku zgrupowanego wg klientów jako zwijane panele
   const renderGroupedRecipes = () => {
@@ -608,12 +728,18 @@ const RecipeList = () => {
   };
 
   return (
-    <Box sx={{ maxWidth: '1200px', mx: 'auto', py: 3 }}>
+    <Box sx={{ 
+      maxWidth: '1200px', 
+      mx: 'auto', 
+      py: isMobile ? 1 : 3, 
+      px: isMobile ? 1 : 0,
+      bgcolor: isMobile ? '#f5f5f5' : 'transparent'
+    }}>
       {/* Alert o potrzebnym indeksie */}
       {showIndexAlert && (
         <Alert 
           severity="warning" 
-          sx={{ mb: 3 }}
+          sx={{ mb: isMobile ? 2 : 3 }}
           action={
             <Button color="inherit" size="small" onClick={() => setShowIndexAlert(false)}>
               Zamknij
@@ -630,47 +756,103 @@ const RecipeList = () => {
         </Alert>
       )}
       
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ 
+        display: 'flex', 
+        flexDirection: isMobile ? 'column' : 'row',
+        justifyContent: 'space-between', 
+        alignItems: isMobile ? 'stretch' : 'center', 
+        mb: isMobile ? 2 : 3,
+        gap: isMobile ? 1 : 0
+      }}>
         <Typography variant="h5">Receptury</Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ 
+          display: 'flex', 
+          gap: 1, 
+          flexWrap: isMobile ? 'wrap' : 'nowrap',
+          justifyContent: isMobile ? 'space-between' : 'flex-end'
+        }}>
           {/* Przycisk do odświeżania indeksu wyszukiwania */}
-          <Tooltip title="Odśwież indeks wyszukiwania">
-            <Button
-              variant="outlined"
-              startIcon={<CachedIcon />}
-              onClick={refreshSearchIndex}
-              disabled={loading}
-            >
-              Odśwież indeks
-            </Button>
-          </Tooltip>
+          {!isMobile && (
+            <Tooltip title="Odśwież indeks wyszukiwania">
+              <Button
+                variant="outlined"
+                startIcon={<CachedIcon />}
+                onClick={refreshSearchIndex}
+                disabled={loading}
+                size={isMobile ? "small" : "medium"}
+              >
+                Odśwież indeks
+              </Button>
+            </Tooltip>
+          )}
           
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          component={Link}
-          to="/recipes/new"
-        >
-          Dodaj recepturę
-        </Button>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            component={Link}
+            to="/recipes/new"
+            size={isMobile ? "small" : "medium"}
+            fullWidth={isMobile}
+            sx={isMobile ? {
+              bgcolor: '#1976d2',
+              color: 'white',
+              fontWeight: 'normal',
+              textTransform: 'none',
+              borderRadius: '4px',
+              py: 1,
+              fontSize: '0.9rem'
+            } : {}}
+          >
+            {isMobile ? 'Dodaj recepturę' : 'Dodaj recepturę'}
+          </Button>
         </Box>
       </Box>
       
-      <Box sx={{ mb: 3, display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+      <Box sx={{ 
+        mb: isMobile ? 2 : 3, 
+        display: 'flex', 
+        flexDirection: isMobile ? 'column' : 'row',
+        flexWrap: 'wrap', 
+        gap: isMobile ? 1 : 2
+      }}>
         <TextField
           placeholder="Szukaj receptur..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           variant="outlined"
           size="small"
-          sx={{ flexGrow: 1, minWidth: '200px' }}
+          fullWidth={isMobile}
+          sx={{ 
+            flexGrow: 1, 
+            minWidth: isMobile ? 'auto' : '200px',
+            '& .MuiOutlinedInput-root': isMobile ? {
+              borderRadius: '4px',
+              bgcolor: 'white',
+              '& fieldset': {
+                borderColor: 'rgba(0, 0, 0, 0.15)',
+              },
+            } : {}
+          }}
           InputProps={{
             startAdornment: <SearchIcon sx={{ color: 'action.active', mr: 1 }} />
           }}
         />
         
-        <FormControl sx={{ minWidth: '200px' }} size="small">
-          <InputLabel id="customer-filter-label">Filtruj wg klienta</InputLabel>
+        <FormControl 
+          sx={{ 
+            minWidth: isMobile ? 'auto' : '200px',
+            '& .MuiOutlinedInput-root': isMobile ? {
+              borderRadius: '4px',
+              bgcolor: 'white',
+              '& fieldset': {
+                borderColor: 'rgba(0, 0, 0, 0.15)',
+              },
+            } : {}
+          }} 
+          size="small"
+          fullWidth={isMobile}
+        >
+          <InputLabel id="customer-filter-label" sx={isMobile ? { fontSize: '0.9rem' } : {}}>Filtruj wg klienta</InputLabel>
           <Select
             labelId="customer-filter-label"
             value={selectedCustomerId}
@@ -691,8 +873,8 @@ const RecipeList = () => {
       
       {/* Informacja o indeksie wyszukiwania */}
       {searchIndexStatus.isLoaded && (
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="body2" color="text.secondary">
+        <Box sx={{ mb: isMobile ? 1 : 2 }}>
+          <Typography variant="body2" color="text.secondary" sx={isMobile ? { fontSize: '0.75rem' } : {}}>
             Indeks wyszukiwania aktywny
             {searchIndexStatus.lastRefreshed && 
               ` (ostatnie odświeżenie: ${formatDate(searchIndexStatus.lastRefreshed)})`}
@@ -700,8 +882,22 @@ const RecipeList = () => {
         </Box>
       )}
       
-      <Box sx={{ mb: 3 }}>
-        <Tabs value={tabValue} onChange={handleTabChange} textColor="primary" indicatorColor="primary">
+      <Box sx={{ mb: isMobile ? 2 : 3 }}>
+        <Tabs 
+          value={tabValue} 
+          onChange={handleTabChange} 
+          textColor="primary" 
+          indicatorColor="primary"
+          variant={isMobile ? "fullWidth" : "standard"}
+          sx={isMobile ? {
+            '& .MuiTab-root': {
+              textTransform: 'none',
+              fontSize: '0.85rem',
+              fontWeight: 'medium',
+              minHeight: '40px'
+            }
+          } : {}}
+        >
           <Tab label="Lista receptur" />
           <Tab label="Grupowane wg klienta" />
         </Tabs>
@@ -716,35 +912,49 @@ const RecipeList = () => {
           <>
             {renderRecipesTable(filteredRecipes)}
             
-            {/* Dodajemy kontrolki paginacji */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Typography variant="body2">
-                  Wierszy na stronę:
-                </Typography>
-                <Select
-                  value={limit}
-                  onChange={handleChangeRowsPerPage}
-                  size="small"
-                >
-                  {[5, 10, 25, 50].map(pageSize => (
-                    <MenuItem key={pageSize} value={pageSize}>
-                      {pageSize}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </Box>
+            {/* Kontrolki paginacji dostosowane do urządzeń mobilnych */}
+            <Box sx={{ 
+              display: 'flex', 
+              flexDirection: isMobile ? 'column' : 'row',
+              justifyContent: 'space-between', 
+              alignItems: isMobile ? 'center' : 'center', 
+              mt: isMobile ? 2 : 3,
+              gap: isMobile ? 2 : 0
+            }}>
+              {!isMobile && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Typography variant="body2">
+                    Wierszy na stronę:
+                  </Typography>
+                  <Select
+                    value={limit}
+                    onChange={handleChangeRowsPerPage}
+                    size="small"
+                  >
+                    {[5, 10, 25, 50].map(pageSize => (
+                      <MenuItem key={pageSize} value={pageSize}>
+                        {pageSize}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </Box>
+              )}
+              
               <Pagination 
                 count={totalPages}
                 page={page}
                 onChange={handleChangePage}
                 color="primary"
-                showFirstButton
-                showLastButton
+                showFirstButton={!isMobile}
+                showLastButton={!isMobile}
+                size={isMobile ? "small" : "medium"}
               />
-              <Typography variant="body2">
-                Wyświetlanie {filteredRecipes.length > 0 ? (page - 1) * limit + 1 : 0}-{Math.min(page * limit, totalItems)} z {totalItems}
-              </Typography>
+              
+              {!isMobile && (
+                <Typography variant="body2">
+                  Wyświetlanie {filteredRecipes.length > 0 ? (page - 1) * limit + 1 : 0}-{Math.min(page * limit, totalItems)} z {totalItems}
+                </Typography>
+              )}
             </Box>
           </>
         ) : (
