@@ -26,7 +26,14 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle
+  DialogTitle,
+  InputAdornment,
+  TextField,
+  Autocomplete,
+  Badge,
+  Stack,
+  ListItemIcon,
+  ListItemText
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
@@ -34,7 +41,11 @@ import {
   Print as PrintIcon,
   Download as DownloadIcon,
   Info as InfoIcon,
-  Warning as WarningIcon
+  Warning as WarningIcon,
+  Search as SearchIcon,
+  FilterList as FilterIcon,
+  Sort as SortIcon,
+  Category as CategoryIcon
 } from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -62,6 +73,11 @@ const ForecastPage = () => {
   const [endDate, setEndDate] = useState(addDays(new Date(), 30));
   const [timeRange, setTimeRange] = useState('30days');
   const [calculatingForecast, setCalculatingForecast] = useState(false);
+  
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortField, setSortField] = useState('balance');
+  const [sortDirection, setSortDirection] = useState('asc');
   
   // State do formatowania liczb
   const formatNumber = (num) => {
@@ -338,9 +354,14 @@ const ForecastPage = () => {
       for (const material of itemsData) {
         if (materialRequirements[material.id]) {
           materialRequirements[material.id].availableQuantity = parseFloat(material.quantity) || 0;
-          // Dodaj informację o cenie z magazynu
+          // Dodaj informację o cenie i kategorii z magazynu
           materialRequirements[material.id].price = material.price || 0;
           materialRequirements[material.id].cost = material.price * materialRequirements[material.id].requiredQuantity;
+          
+          // Aktualizuj kategorię z danych magazynowych
+          if (material.category) {
+            materialRequirements[material.id].category = material.category;
+          }
         }
       }
       
@@ -514,6 +535,95 @@ const ForecastPage = () => {
     }
   };
   
+  // Pobieranie unikalnych kategorii z danych
+  const getUniqueCategories = useCallback(() => {
+    if (!forecastData || forecastData.length === 0) return [];
+    
+    const categories = new Set();
+    forecastData.forEach(item => {
+      if (item.category) {
+        categories.add(item.category);
+      }
+    });
+    
+    return Array.from(categories).sort();
+  }, [forecastData]);
+  
+  // Filtrowanie danych
+  const filteredData = useCallback(() => {
+    if (!forecastData) return [];
+    
+    let filtered = [...forecastData];
+    
+    // Filtrowanie po kategorii
+    if (categoryFilter) {
+      filtered = filtered.filter(item => item.category === categoryFilter);
+    }
+    
+    // Filtrowanie po wyszukiwaniu
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter(item => 
+        item.name.toLowerCase().includes(searchLower) || 
+        (item.category && item.category.toLowerCase().includes(searchLower))
+      );
+    }
+    
+    // Sortowanie
+    filtered.sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortField) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name);
+          break;
+        case 'category':
+          comparison = (a.category || '').localeCompare(b.category || '');
+          break;
+        case 'availableQuantity':
+          comparison = a.availableQuantity - b.availableQuantity;
+          break;
+        case 'requiredQuantity':
+          comparison = a.requiredQuantity - b.requiredQuantity;
+          break;
+        case 'balance':
+          comparison = a.balance - b.balance;
+          break;
+        case 'balanceWithDeliveries':
+          comparison = a.balanceWithFutureDeliveries - b.balanceWithFutureDeliveries;
+          break;
+        case 'cost':
+          comparison = a.cost - b.cost;
+          break;
+        default:
+          comparison = a.balance - b.balance;
+      }
+      
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+    
+    return filtered;
+  }, [forecastData, categoryFilter, searchTerm, sortField, sortDirection]);
+  
+  // Obsługa zmiany sortowania
+  const handleSortChange = (field) => {
+    if (field === sortField) {
+      // Zmień kierunek sortowania, jeśli kliknięto ponownie na to samo pole
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Ustaw nowe pole sortowania i domyślny kierunek sortowania
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+  
+  // Renderowanie ikony sortowania
+  const renderSortIcon = (field) => {
+    if (field !== sortField) return null;
+    
+    return sortDirection === 'asc' ? '▲' : '▼';
+  };
+  
   // Renderowanie statusu dostępności materiału
   const renderAvailabilityStatus = (item) => {
     const balance = item.balance;
@@ -629,40 +739,56 @@ const ForecastPage = () => {
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h5">
+        <Typography variant="h5" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
+          <FilterIcon sx={{ mr: 1 }} color="primary" />
           Prognoza zapotrzebowania materiałów
         </Typography>
         <Box>
           <Button 
-            variant="outlined"
+            variant="contained"
             startIcon={<RefreshIcon />}
             onClick={handleRefresh}
             sx={{ mr: 1 }}
             disabled={loading || calculatingForecast}
+            color="primary"
           >
             Odśwież
           </Button>
-          <Button 
-            variant="outlined"
-            startIcon={<DownloadIcon />}
-            onClick={handleGenerateReport}
-            disabled={forecastData.length === 0 || loading || calculatingForecast}
-          >
-            Generuj raport
-          </Button>
+          <Tooltip title="Generuje szczegółowy raport CSV ze wszystkimi danymi o zapotrzebowaniu materiałów, w tym statusach, kosztach i dostawach">
+            <Button 
+              variant="contained"
+              startIcon={<DownloadIcon />}
+              onClick={handleGenerateReport}
+              disabled={forecastData.length === 0 || loading || calculatingForecast}
+              color="secondary"
+              sx={{ display: 'flex', alignItems: 'center' }}
+            >
+              Generuj raport CSV
+              <Badge 
+                color="info" 
+                variant="dot" 
+                sx={{ ml: 1 }}
+              />
+            </Button>
+          </Tooltip>
         </Box>
       </Box>
       
-      <Paper sx={{ p: 3, mb: 3 }}>
+      <Paper sx={{ p: 3, mb: 3, borderRadius: 2, boxShadow: 3 }}>
         <Grid container spacing={3} alignItems="center">
           <Grid item xs={12} md={4}>
-            <FormControl fullWidth>
+            <FormControl fullWidth variant="outlined" sx={{ mb: 1 }}>
               <InputLabel>Zakres czasowy</InputLabel>
               <Select
                 value={timeRange}
                 onChange={handleTimeRangeChange}
                 label="Zakres czasowy"
                 disabled={loading || calculatingForecast}
+                startAdornment={
+                  <InputAdornment position="start">
+                    <CategoryIcon color="primary" />
+                  </InputAdornment>
+                }
               >
                 <MenuItem value="7days">7 dni</MenuItem>
                 <MenuItem value="14days">14 dni</MenuItem>
@@ -680,11 +806,31 @@ const ForecastPage = () => {
                 label="Data początkowa"
                 value={startDate}
                 onChange={(newDate) => {
-                  setStartDate(newDate);
-                  setTimeRange('custom');
+                  if (newDate && !isNaN(new Date(newDate).getTime())) {
+                    setStartDate(newDate);
+                    setTimeRange('custom');
+                  }
                 }}
-                sx={{ width: '100%' }}
                 disabled={loading || calculatingForecast}
+                format="dd.MM.yyyy"
+                slotProps={{ 
+                  textField: { 
+                    fullWidth: true,
+                    variant: "outlined",
+                    margin: "normal",
+                    error: false,
+                    InputProps: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <CategoryIcon color="primary" />
+                        </InputAdornment>
+                      ),
+                    }
+                  },
+                  field: {
+                    clearable: true
+                  }
+                }}
               />
             </LocalizationProvider>
           </Grid>
@@ -694,59 +840,122 @@ const ForecastPage = () => {
               <DatePicker
                 label="Data końcowa"
                 value={endDate}
+                minDate={startDate}
                 onChange={(newDate) => {
-                  setEndDate(newDate);
-                  setTimeRange('custom');
+                  if (newDate && !isNaN(new Date(newDate).getTime())) {
+                    setEndDate(newDate);
+                    setTimeRange('custom');
+                  }
                 }}
-                sx={{ width: '100%' }}
                 disabled={loading || calculatingForecast}
+                format="dd.MM.yyyy"
+                slotProps={{ 
+                  textField: { 
+                    fullWidth: true,
+                    variant: "outlined",
+                    margin: "normal",
+                    error: false,
+                    InputProps: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <CategoryIcon color="primary" />
+                        </InputAdornment>
+                      ),
+                    }
+                  },
+                  field: {
+                    clearable: true
+                  }
+                }}
               />
             </LocalizationProvider>
           </Grid>
         </Grid>
+        
+        {!loading && !calculatingForecast && forecastData.length > 0 && (
+          <Box sx={{ mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+            <TextField
+              label="Szukaj materiału"
+              variant="outlined"
+              size="small"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              sx={{ minWidth: 200, flex: 1 }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            
+            <FormControl variant="outlined" size="small" sx={{ minWidth: 200, flex: 1 }}>
+              <InputLabel>Filtruj po kategorii</InputLabel>
+              <Select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                label="Filtruj po kategorii"
+                startAdornment={
+                  <InputAdornment position="start">
+                    <FilterIcon />
+                  </InputAdornment>
+                }
+              >
+                <MenuItem value="">Wszystkie kategorie</MenuItem>
+                {getUniqueCategories().map(category => (
+                  <MenuItem key={category} value={category}>
+                    {category}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+        )}
       </Paper>
       
       <Box sx={{ mb: 2 }}>
-        <Typography variant="subtitle1" gutterBottom>
+        <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
+          <InfoIcon sx={{ mr: 1 }} color="info" />
           Prognoza na okres: {formatDateDisplay(startDate)} - {formatDateDisplay(endDate)}
         </Typography>
         
         {summary && (
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12} sm={6} md={2}>
-              <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'background.darker' }}>
+              <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'background.darker', borderRadius: 2, boxShadow: 2 }}>
                 <Typography variant="body2" color="text.secondary">Łączna liczba materiałów</Typography>
-                <Typography variant="h6">{summary.totalItems}</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{summary.totalItems}</Typography>
               </Paper>
             </Grid>
             <Grid item xs={12} sm={6} md={2}>
-              <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'background.darker' }}>
+              <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'error.lighter', borderRadius: 2, boxShadow: 2 }}>
                 <Typography variant="body2" color="text.secondary">Materiały wymagające zakupu</Typography>
-                <Typography variant="h6">{summary.requiredItems}</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'error.main' }}>{summary.requiredItems}</Typography>
               </Paper>
             </Grid>
             <Grid item xs={12} sm={6} md={2}>
-              <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'background.darker' }}>
+              <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'warning.lighter', borderRadius: 2, boxShadow: 2 }}>
                 <Typography variant="body2" color="text.secondary">Materiały z niedoborem po dostawach</Typography>
-                <Typography variant="h6">{summary.requiredItemsAfterDeliveries}</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'warning.dark' }}>{summary.requiredItemsAfterDeliveries}</Typography>
               </Paper>
             </Grid>
             <Grid item xs={12} sm={6} md={2}>
-              <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'background.darker' }}>
+              <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'error.lighter', borderRadius: 2, boxShadow: 2 }}>
                 <Typography variant="body2" color="text.secondary">Wartość niedoborów</Typography>
-                <Typography variant="h6">{formatCurrency(summary.shortageValue)}</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'error.main' }}>{formatCurrency(summary.shortageValue)}</Typography>
               </Paper>
             </Grid>
             <Grid item xs={12} sm={6} md={2}>
-              <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'background.darker' }}>
+              <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'warning.lighter', borderRadius: 2, boxShadow: 2 }}>
                 <Typography variant="body2" color="text.secondary">Wartość niedoborów po dostawach</Typography>
-                <Typography variant="h6">{formatCurrency(summary.shortageValueAfterDeliveries)}</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'warning.dark' }}>{formatCurrency(summary.shortageValueAfterDeliveries)}</Typography>
               </Paper>
             </Grid>
             <Grid item xs={12} sm={6} md={2}>
-              <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'background.darker' }}>
+              <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'info.lighter', borderRadius: 2, boxShadow: 2 }}>
                 <Typography variant="body2" color="text.secondary">Szacowany koszt całkowity</Typography>
-                <Typography variant="h6">{formatCurrency(summary.totalCost)}</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'info.main' }}>{formatCurrency(summary.totalCost)}</Typography>
               </Paper>
             </Grid>
           </Grid>
@@ -767,47 +976,76 @@ const ForecastPage = () => {
           Brak danych do wyświetlenia w wybranym okresie. Wybierz inny zakres dat lub upewnij się, że istnieją zaplanowane zadania produkcyjne.
         </Alert>
       ) : (
-        <Paper sx={{ mt: 2 }}>
+        <Paper sx={{ mt: 2, borderRadius: 2, overflow: 'hidden', boxShadow: 3 }}>
           <TableContainer>
             <Table size="small">
-              <TableHead>
+              <TableHead sx={{ bgcolor: 'primary.lighter' }}>
                 <TableRow>
-                  <TableCell width="25%">Materiał</TableCell>
-                  <TableCell align="right" width="10%">Dostępna ilość</TableCell>
-                  <TableCell align="right" width="10%">Potrzebna ilość</TableCell>
-                  <TableCell align="right" width="10%">Bilans</TableCell>
+                  <TableCell width="25%" onClick={() => handleSortChange('name')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                    Materiał {renderSortIcon('name')}
+                  </TableCell>
+                  <TableCell align="right" width="10%" onClick={() => handleSortChange('availableQuantity')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                    Dostępna ilość {renderSortIcon('availableQuantity')}
+                  </TableCell>
+                  <TableCell align="right" width="10%" onClick={() => handleSortChange('requiredQuantity')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                    Potrzebna ilość {renderSortIcon('requiredQuantity')}
+                  </TableCell>
+                  <TableCell align="right" width="10%" onClick={() => handleSortChange('balance')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                    Bilans {renderSortIcon('balance')}
+                  </TableCell>
                   <TableCell align="right" width="10%">Oczekiwane dostawy</TableCell>
-                  <TableCell align="right" width="10%">Bilans z dostawami</TableCell>
-                  <TableCell align="right" width="10%">Szacowany koszt</TableCell>
+                  <TableCell align="right" width="10%" onClick={() => handleSortChange('balanceWithDeliveries')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                    Bilans z dostawami {renderSortIcon('balanceWithDeliveries')}
+                  </TableCell>
+                  <TableCell align="right" width="10%" onClick={() => handleSortChange('cost')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                    Szacowany koszt {renderSortIcon('cost')}
+                  </TableCell>
                   <TableCell width="10%">Status</TableCell>
                   <TableCell align="center" width="5%">Akcje</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {forecastData.map((item) => {
+                {filteredData().map((item) => {
                   const balance = item.balance;
                   const balanceWithDeliveries = item.balanceWithFutureDeliveries;
                   let statusColor = 'success';
                   let statusText = 'Wystarczająca ilość';
+                  let rowBgColor = '';
                   
                   // Sprawdzenie statusu uwzględniając przyszłe dostawy
                   if (balanceWithDeliveries < 0) {
                     statusColor = 'error';
                     statusText = 'Niedobór';
+                    rowBgColor = 'error.lighter';
                   } else if (balance < 0 && balanceWithDeliveries >= 0) {
                     statusColor = 'warning';
                     statusText = 'Uzupełniany dostawami';
+                    rowBgColor = 'warning.lighter';
                   }
                   
                   return (
-                    <TableRow key={item.id} hover>
+                    <TableRow 
+                      key={item.id} 
+                      hover 
+                      sx={{ 
+                        bgcolor: rowBgColor,
+                        '&:hover': {
+                          bgcolor: rowBgColor ? `${rowBgColor}!important` : undefined
+                        }
+                      }}
+                    >
                       <TableCell>
-                        <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                          {item.name}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {item.category}
-                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+                          <CategoryIcon sx={{ mr: 1, mt: 0.5, fontSize: 'small', color: 'text.secondary' }} />
+                          <Box>
+                            <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                              {item.name}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {item.category || 'Bez kategorii'}
+                            </Typography>
+                          </Box>
+                        </Box>
                       </TableCell>
                       <TableCell align="right">
                         {formatNumber(item.availableQuantity)} {item.unit}
@@ -819,7 +1057,9 @@ const ForecastPage = () => {
                         <Typography 
                           color={balance < 0 ? 'error' : 'success'}
                           fontWeight={balance < 0 ? 'bold' : 'normal'}
+                          sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}
                         >
+                          {balance < 0 && <WarningIcon fontSize="small" sx={{ mr: 0.5 }} />}
                           {formatNumber(balance)} {item.unit}
                         </Typography>
                       </TableCell>
@@ -830,54 +1070,62 @@ const ForecastPage = () => {
                               `${delivery.poNumber}: ${formatNumber(delivery.quantity)} ${item.unit} (${delivery.expectedDeliveryDate ? formatDateDisplay(new Date(delivery.expectedDeliveryDate)) : 'brak daty'})`
                             ).join('\n') : 'Brak szczegółów'
                           }>
-                            <Typography sx={{ cursor: 'pointer' }}>
+                            <Typography sx={{ cursor: 'pointer', fontWeight: 'medium', color: 'primary.main' }}>
                               {formatNumber(item.futureDeliveriesTotal)} {item.unit}
                             </Typography>
                           </Tooltip>
                         ) : (
-                          <Typography>0 {item.unit}</Typography>
+                          <Typography color="text.secondary">0 {item.unit}</Typography>
                         )}
                       </TableCell>
                       <TableCell align="right">
                         <Typography 
                           color={balanceWithDeliveries < 0 ? 'error' : 'success'}
                           fontWeight={balanceWithDeliveries < 0 ? 'bold' : 'normal'}
+                          sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}
                         >
+                          {balanceWithDeliveries < 0 && <WarningIcon fontSize="small" sx={{ mr: 0.5 }} />}
                           {formatNumber(balanceWithDeliveries)} {item.unit}
                         </Typography>
                       </TableCell>
                       <TableCell align="right">
-                        {formatCurrency(item.cost)}
+                        <Typography fontWeight="medium">{formatCurrency(item.cost)}</Typography>
                       </TableCell>
                       <TableCell>
                         <Chip 
                           label={statusText} 
                           color={statusColor} 
                           size="small" 
-                          sx={{ minWidth: '120px' }}
+                          sx={{ minWidth: '120px', fontWeight: 'medium' }}
                         />
                       </TableCell>
                       <TableCell align="center">
-                        <IconButton 
-                          size="small" 
-                          color="primary" 
-                          onClick={() => handleItemClick(item)}
-                          title="Pokaż szczegóły"
-                        >
-                          <InfoIcon fontSize="small" />
-                        </IconButton>
-                        {balance < 0 && (
-                          <IconButton
-                            size="small"
-                            color="primary"
-                            onClick={() => navigate('/purchase-orders/new', { 
-                              state: { materialId: item.id, requiredQuantity: Math.abs(balance) }
-                            })}
-                            title="Zamów materiał"
-                          >
-                            <ShoppingCartIcon fontSize="small" />
-                          </IconButton>
-                        )}
+                        <Stack direction="row" spacing={1} justifyContent="center">
+                          <Tooltip title="Pokaż szczegóły">
+                            <IconButton 
+                              size="small" 
+                              color="info" 
+                              onClick={() => handleItemClick(item)}
+                              sx={{ boxShadow: 1 }}
+                            >
+                              <InfoIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          {balance < 0 && (
+                            <Tooltip title="Zamów materiał">
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => navigate('/purchase-orders/new', { 
+                                  state: { materialId: item.id, requiredQuantity: Math.abs(balance) }
+                                })}
+                                sx={{ boxShadow: 1 }}
+                              >
+                                <ShoppingCartIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Stack>
                       </TableCell>
                     </TableRow>
                   );
@@ -885,6 +1133,25 @@ const ForecastPage = () => {
               </TableBody>
             </Table>
           </TableContainer>
+          {filteredData().length === 0 && (
+            <Box sx={{ p: 2, textAlign: 'center' }}>
+              <Typography color="text.secondary">Nie znaleziono materiałów pasujących do filtrów</Typography>
+            </Box>
+          )}
+          {(searchTerm || categoryFilter) && filteredData().length > 0 && (
+            <Box sx={{ p: 1, display: 'flex', justifyContent: 'flex-end' }}>
+              <Button 
+                size="small" 
+                onClick={() => {
+                  setSearchTerm('');
+                  setCategoryFilter('');
+                }}
+                startIcon={<FilterIcon />}
+              >
+                Wyczyść filtry
+              </Button>
+            </Box>
+          )}
         </Paper>
       )}
       

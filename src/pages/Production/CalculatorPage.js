@@ -472,6 +472,9 @@ const CalculatorPage = () => {
         'Objętość;Liczba sztuk;Nazwa produktu;Składnik;Ilość;Jednostka;Sprawdzone;Wstawione w mieszalnik;Zrobione\n' : 
         'Objętość;Nazwa produktu;Składnik;Ilość;Jednostka;Sprawdzone;Wstawione w mieszalnik;Zrobione\n';
       
+      // Przygotowanie sumy dla każdego surowca
+      let ingredientTotals = {};
+      
       // Dodanie wierszy dla każdego mieszania i jego składników
       mixings.forEach(mixing => {
         // Dodaj wyróżniony nagłówek dla każdego mieszania
@@ -481,6 +484,14 @@ const CalculatorPage = () => {
         // Dodaj wiersz z informacją o objętości mieszania i liczbie sztuk (jeśli w trybie sztuk)
         const formattedVolumeToMix = `="${Number(mixing.volumeToMix).toFixed(4)}"`;
         
+        // Dodaj jednorazowo objętość i liczbę sztuk pod nagłówkiem mieszania
+        if (usePieces) {
+          const formattedPiecesCount = `="${mixing.piecesCount || 0}"`;
+          csvContent += `${formattedVolumeToMix};${formattedPiecesCount};${mixing.recipeName};;;;;\n`;
+        } else {
+          csvContent += `${formattedVolumeToMix};${mixing.recipeName};;;;;\n`;
+        }
+        
         // Używamy przefiltrowanych składników bez opakowań
         mixing.ingredients.forEach(ingredient => {
           // Sprawdzenie czy składnik nie jest opakowaniem (dodatkowo zabezpieczenie)
@@ -489,19 +500,25 @@ const CalculatorPage = () => {
             let formattedQuantity;
             if (typeof ingredient.quantity === 'number' && !isNaN(ingredient.quantity)) {
               formattedQuantity = `="${ingredient.quantity.toFixed(4)}"`; 
+              
+              // Dodaj wartość do sumy dla danego surowca
+              if (!ingredientTotals[ingredient.name]) {
+                ingredientTotals[ingredient.name] = {
+                  quantity: 0,
+                  unit: ingredient.unit
+                };
+              }
+              ingredientTotals[ingredient.name].quantity += ingredient.quantity;
             } else {
               formattedQuantity = '="0.0000"';
             }
             
             if (usePieces) {
-              // Format dla trybu sztuk produktu
-              const formattedPiecesCount = `="${mixing.piecesCount || 0}"`;
-              // Dodajemy puste kolumny na końcu
-              csvContent += `${formattedVolumeToMix};${formattedPiecesCount};${mixing.recipeName};${ingredient.name};${formattedQuantity};${ingredient.unit};;;\n`;
+              // Format dla trybu sztuk produktu - bez powtarzania objętości i liczby sztuk
+              csvContent += `;;;${ingredient.name};${formattedQuantity};${ingredient.unit};;;\n`;
             } else {
-              // Format dla trybu kilogramów
-              // Dodajemy puste kolumny na końcu
-              csvContent += `${formattedVolumeToMix};${mixing.recipeName};${ingredient.name};${formattedQuantity};${ingredient.unit};;;\n`;
+              // Format dla trybu kilogramów - bez powtarzania objętości
+              csvContent += `;;${ingredient.name};${formattedQuantity};${ingredient.unit};;;\n`;
             }
           }
         });
@@ -514,20 +531,34 @@ const CalculatorPage = () => {
       if (calculationResult) {
         csvContent += `${';'.repeat(usePieces ? 5 : 4)}\n`;
         
+        // Dodaj podsumowanie dla każdego surowca
+        csvContent += `"Podsumowanie:"${';'.repeat(usePieces ? 8 : 7)}\n`;
+        
+        // Dodaj sumy dla każdego surowca
+        csvContent += `"Sumy według surowców:"${';'.repeat(usePieces ? 8 : 7)}\n`;
+        Object.keys(ingredientTotals).forEach(ingredientName => {
+          const ingredientData = ingredientTotals[ingredientName];
+          const formattedQuantity = `="${ingredientData.quantity.toFixed(4)}"`;
+          
+          if (usePieces) {
+            csvContent += `;;;${ingredientName};${formattedQuantity};${ingredientData.unit};;;\n`;
+          } else {
+            csvContent += `;;${ingredientName};${formattedQuantity};${ingredientData.unit};;;\n`;
+          }
+        });
+        
+        csvContent += `${';'.repeat(usePieces ? 8 : 7)}\n`;
+        
         if (usePieces) {
           // Podsumowanie dla trybu sztuk
-          csvContent += `"Podsumowanie:";;;;;
-"Całkowita liczba sztuk:";="${calculationResult.targetAmount}";;;;
-"Waga jednej sztuki:";="${calculationResult.singlePieceWeight?.toFixed(4)}";kg;;;
-"Całkowita waga:";="${calculationResult.totalWeight?.toFixed(4)}";kg;;;
-"Liczba mieszań:";="${calculationResult.totalMixings}";;;;
-${';'.repeat(5)}\n`;
+          csvContent += `"Całkowita liczba sztuk:";="${calculationResult.targetAmount}";;;;;\n`;
+          csvContent += `"Waga jednej sztuki:";="${calculationResult.singlePieceWeight?.toFixed(4)}";kg;;;\n`;
+          csvContent += `"Całkowita waga:";="${calculationResult.totalWeight?.toFixed(4)}";kg;;;\n`;
+          csvContent += `"Liczba mieszań:";="${calculationResult.totalMixings}";;;;;\n`;
         } else {
           // Podsumowanie dla trybu kilogramów
-          csvContent += `"Podsumowanie:";;;;;
-"Docelowa ilość:";="${calculationResult.targetAmount}";kg;;;
-"Liczba mieszań:";="${calculationResult.totalMixings}";;;;
-${';'.repeat(4)}\n`;
+          csvContent += `"Docelowa ilość:";="${calculationResult.targetAmount}";kg;;;\n`;
+          csvContent += `"Liczba mieszań:";="${calculationResult.totalMixings}";;;\n`;
         }
       }
       

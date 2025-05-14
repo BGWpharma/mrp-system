@@ -1197,16 +1197,44 @@ import {
 
       console.log(`Generuję raport za okres ${formattedStartDate} - ${formattedEndDate}`);
 
-      // Dla uproszczenia generujemy raport w formie CSV
-      const headers = ["Materiał", "Kategoria", "Dostępna ilość", "Potrzebna ilość", "Bilans", "Jednostka"];
+      // Rozszerzony zestaw nagłówków CSV
+      const headers = [
+        "Materiał", 
+        "Kategoria", 
+        "Dostępna ilość", 
+        "Potrzebna ilość", 
+        "Bilans", 
+        "Oczekiwane dostawy", 
+        "Bilans z dostawami", 
+        "Jednostka", 
+        "Koszt materiału", 
+        "Koszt niedoboru", 
+        "Status",
+        "Ilość na jednostkę produktu"
+      ];
+      
       let csvContent = headers.join(",") + "\n";
       
-      // Dodaj dane materiałów
+      // Dodaj dane materiałów z kompletnymi informacjami
       forecastData.forEach(item => {
         // Sprawdź, czy wartości są liczbami i ustaw domyślne wartości, jeśli nie są
         const availableQuantity = isNaN(parseFloat(item.availableQuantity)) ? 0 : parseFloat(item.availableQuantity);
         const requiredQuantity = isNaN(parseFloat(item.requiredQuantity)) ? 0 : parseFloat(item.requiredQuantity);
         const balance = availableQuantity - requiredQuantity;
+        const futureDeliveries = isNaN(parseFloat(item.futureDeliveriesTotal)) ? 0 : parseFloat(item.futureDeliveriesTotal);
+        const balanceWithDeliveries = balance + futureDeliveries;
+        const price = isNaN(parseFloat(item.price)) ? 0 : parseFloat(item.price);
+        const cost = requiredQuantity * price;
+        const shortageCost = balance < 0 ? Math.abs(balance) * price : 0;
+        const perUnitQuantity = isNaN(parseFloat(item.perUnit || item.perUnitQuantity)) ? "" : parseFloat(item.perUnit || item.perUnitQuantity).toFixed(4);
+        
+        // Określ status
+        let status = "Wystarczająca ilość";
+        if (balanceWithDeliveries < 0) {
+          status = "Niedobór";
+        } else if (balance < 0 && balanceWithDeliveries >= 0) {
+          status = "Uzupełniany dostawami";
+        }
         
         const row = [
           `"${(item.name || 'Nieznany').replace(/"/g, '""')}"`, 
@@ -1214,10 +1242,71 @@ import {
           availableQuantity.toFixed(2),
           requiredQuantity.toFixed(2),
           balance.toFixed(2),
-          `"${(item.unit || 'szt.').replace(/"/g, '""')}"`
+          futureDeliveries.toFixed(2),
+          balanceWithDeliveries.toFixed(2),
+          `"${(item.unit || 'szt.').replace(/"/g, '""')}"`,
+          cost.toFixed(2),
+          shortageCost.toFixed(2),
+          `"${status}"`,
+          perUnitQuantity
         ];
         csvContent += row.join(",") + "\n";
       });
+      
+      // Dodaj podsumowanie do raportu
+      csvContent += "\n";
+      csvContent += "Podsumowanie:,,,,,,,,,,,\n";
+      
+      // Oblicz sumy
+      const totalItems = forecastData.length;
+      const requiredItems = forecastData.filter(item => 
+        (item.availableQuantity - item.requiredQuantity) < 0
+      ).length;
+      const requiredItemsAfterDeliveries = forecastData.filter(item => {
+        const balance = item.availableQuantity - item.requiredQuantity;
+        const futureDeliveries = isNaN(parseFloat(item.futureDeliveriesTotal)) ? 0 : parseFloat(item.futureDeliveriesTotal);
+        return (balance + futureDeliveries) < 0;
+      }).length;
+      
+      const totalCost = forecastData.reduce((sum, item) => {
+        const reqQuantity = isNaN(parseFloat(item.requiredQuantity)) ? 0 : parseFloat(item.requiredQuantity);
+        const price = isNaN(parseFloat(item.price)) ? 0 : parseFloat(item.price);
+        return sum + (reqQuantity * price);
+      }, 0);
+      
+      const shortageValue = forecastData.reduce((sum, item) => {
+        const availableQuantity = isNaN(parseFloat(item.availableQuantity)) ? 0 : parseFloat(item.availableQuantity);
+        const requiredQuantity = isNaN(parseFloat(item.requiredQuantity)) ? 0 : parseFloat(item.requiredQuantity);
+        const balance = availableQuantity - requiredQuantity;
+        const price = isNaN(parseFloat(item.price)) ? 0 : parseFloat(item.price);
+        
+        if (balance < 0) {
+          return sum + (Math.abs(balance) * price);
+        }
+        return sum;
+      }, 0);
+      
+      const shortageValueAfterDeliveries = forecastData.reduce((sum, item) => {
+        const availableQuantity = isNaN(parseFloat(item.availableQuantity)) ? 0 : parseFloat(item.availableQuantity);
+        const requiredQuantity = isNaN(parseFloat(item.requiredQuantity)) ? 0 : parseFloat(item.requiredQuantity);
+        const futureDeliveries = isNaN(parseFloat(item.futureDeliveriesTotal)) ? 0 : parseFloat(item.futureDeliveriesTotal);
+        const balance = availableQuantity - requiredQuantity + futureDeliveries;
+        const price = isNaN(parseFloat(item.price)) ? 0 : parseFloat(item.price);
+        
+        if (balance < 0) {
+          return sum + (Math.abs(balance) * price);
+        }
+        return sum;
+      }, 0);
+      
+      // Dodaj dane podsumowania do raportu
+      csvContent += `Łączna liczba materiałów:,${totalItems},,,,,,,,,,\n`;
+      csvContent += `Materiały wymagające zakupu:,${requiredItems},,,,,,,,,,\n`;
+      csvContent += `Materiały z niedoborem po dostawach:,${requiredItemsAfterDeliveries},,,,,,,,,,\n`;
+      csvContent += `Wartość niedoborów:,${shortageValue.toFixed(2)} PLN,,,,,,,,,,\n`;
+      csvContent += `Wartość niedoborów po dostawach:,${shortageValueAfterDeliveries.toFixed(2)} PLN,,,,,,,,,,\n`;
+      csvContent += `Szacowany koszt całkowity:,${totalCost.toFixed(2)} PLN,,,,,,,,,,\n`;
+      csvContent += `Okres raportu:,${formattedStartDate} - ${formattedEndDate},,,,,,,,,,\n`;
       
       console.log('Raport wygenerowany, tworzę blob');
       
