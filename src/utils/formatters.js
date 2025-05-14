@@ -117,6 +117,46 @@ export const formatDate = (date, options = {}) => {
       return String(value);
     }
   };
+
+  /**
+   * Formatuje ilość towaru w pozycji magazynowej z zaokrągleniem do 4 cyfr po przecinku
+   * bez wyświetlania nadmiarowych zer
+   * 
+   * @param {number} value - Wartość do sformatowania
+   * @returns {string} Sformatowana liczba
+   */
+  export const formatQuantity = (value) => {
+    if (value === undefined || value === null) return '—';
+    
+    try {
+      // Upewnij się, że value jest liczbą
+      if (typeof value === 'string') {
+        value = parseFloat(value);
+      }
+      
+      if (isNaN(value)) {
+        console.warn('Nieprawidłowa wartość ilości:', value);
+        return '—';
+      }
+      
+      // Zaokrąglij do 4 miejsc po przecinku
+      const roundedValue = parseFloat(value.toFixed(4));
+      
+      // Konwertuj na string i usuń niepotrzebne zera na końcu
+      let result = roundedValue.toString();
+      
+      // Jeśli jest kropka dziesiętna, usuń niepotrzebne zera po przecinku
+      if (result.includes('.')) {
+        result = result.replace(/\.?0+$/, '');
+      }
+      
+      // W polskim formacie używamy przecinka zamiast kropki
+      return result.replace('.', ',');
+    } catch (error) {
+      console.error('Error formatting quantity:', error);
+      return String(value);
+    }
+  };
   
   /**
    * Tworzy skrócony tekst z wielokropkiem

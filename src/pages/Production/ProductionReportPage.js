@@ -395,24 +395,42 @@ const ProductionReportPage = () => {
             <Box sx={{ 
               display: 'flex', 
               justifyContent: 'center', 
-              gap: 2,
+              alignItems: 'center',
+              height: '100%',
+              gap: 1,
               mt: isMobile ? 1 : 0
             }}>
               <IconButton 
                 color="primary"
                 onClick={handlePreviousMonth}
                 size="small"
-                sx={{ border: '1px solid rgba(25, 118, 210, 0.5)', borderRadius: 1, width: '100%', p: 1 }}
+                sx={{ 
+                  border: '1px solid rgba(25, 118, 210, 0.5)', 
+                  borderRadius: 1, 
+                  width: 36, 
+                  height: 36,
+                  minWidth: 36, 
+                  p: 0.5,
+                  mx: 0.5
+                }}
               >
-                <PrevIcon />
+                <PrevIcon fontSize="small" />
               </IconButton>
               <IconButton 
                 color="primary"
                 onClick={handleNextMonth}
                 size="small"
-                sx={{ border: '1px solid rgba(25, 118, 210, 0.5)', borderRadius: 1, width: '100%', p: 1 }}
+                sx={{ 
+                  border: '1px solid rgba(25, 118, 210, 0.5)', 
+                  borderRadius: 1, 
+                  width: 36, 
+                  height: 36,
+                  minWidth: 36, 
+                  p: 0.5,
+                  mx: 0.5
+                }}
               >
-                <NextIcon />
+                <NextIcon fontSize="small" />
               </IconButton>
             </Box>
           </Grid>

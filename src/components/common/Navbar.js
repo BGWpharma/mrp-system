@@ -1,5 +1,5 @@
 // src/components/common/Navbar.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   AppBar, 
@@ -101,6 +101,19 @@ const Navbar = () => {
   const navigate = useNavigate();
   const searchTimeout = useRef(null);
   const searchResultsRef = useRef(null);
+  
+  // Dodajemy cache do przechowywania danych
+  const dataCache = useRef({
+    purchaseOrders: null,
+    customerOrders: null,
+    productionTasks: null,
+    inventoryItems: null,
+    batches: null,
+    lastFetchTime: null
+  });
+  
+  // Czas ważności cache (5 minut)
+  const CACHE_EXPIRY_TIME = 5 * 60 * 1000;
   
   const isAdmin = currentUser?.role === 'administrator';
   
@@ -222,6 +235,100 @@ const Navbar = () => {
     };
   }, []);
 
+  // Funkcja do pobierania danych z cache lub z bazy danych
+  const fetchDataWithCache = async () => {
+    const currentTime = Date.now();
+    const isCacheValid = dataCache.current.lastFetchTime && 
+                          (currentTime - dataCache.current.lastFetchTime) < CACHE_EXPIRY_TIME;
+    
+    // Jeśli cache jest ważny i zawiera dane, użyj go
+    if (isCacheValid && 
+        dataCache.current.purchaseOrders && 
+        dataCache.current.customerOrders && 
+        dataCache.current.productionTasks && 
+        dataCache.current.inventoryItems) {
+      return [
+        dataCache.current.purchaseOrders,
+        dataCache.current.customerOrders,
+        dataCache.current.productionTasks,
+        dataCache.current.inventoryItems,
+        dataCache.current.batches
+      ];
+    }
+    
+    // W przeciwnym razie pobierz dane z bazy
+    try {
+      const [purchaseOrders, customerOrders, productionTasks, inventoryItems] = await Promise.all([
+        getAllPurchaseOrders(),
+        getAllOrders(),
+        getAllTasks(),
+        getAllInventoryItems()
+      ]);
+      
+      const batchesSnapshot = await getDocs(collection(db, 'inventoryBatches'));
+      const batches = batchesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // Zapisz dane w cache
+      dataCache.current = {
+        purchaseOrders,
+        customerOrders,
+        productionTasks,
+        inventoryItems,
+        batches,
+        lastFetchTime: currentTime
+      };
+      
+      return [purchaseOrders, customerOrders, productionTasks, inventoryItems, batches];
+    } catch (error) {
+      console.error('Błąd podczas pobierania danych:', error);
+      // W przypadku błędu zwróć dane z cache (nawet jeśli są nieaktualne) lub puste tablice
+      if (dataCache.current.lastFetchTime) {
+        return [
+          dataCache.current.purchaseOrders || [],
+          dataCache.current.customerOrders || [],
+          dataCache.current.productionTasks || [],
+          dataCache.current.inventoryItems || [],
+          dataCache.current.batches || []
+        ];
+      }
+      return [[], [], [], [], []];
+    }
+  };
+
+  // Nowa funkcja do inteligentnego przeszukiwania danych
+  const searchData = (data, query, fields) => {
+    const queryLower = query.toLowerCase();
+    const queryTerms = queryLower.split(/\s+/).filter(term => term.length > 0);
+    
+    // Jeśli nie ma terminów do wyszukiwania, zwróć pustą tablicę
+    if (queryTerms.length === 0) return [];
+    
+    return data.filter(item => {
+      // Sprawdź, czy przedmiot pasuje do wszystkich terminów
+      return queryTerms.every(term => {
+        // Sprawdź, czy term występuje w którymkolwiek z pól
+        return fields.some(field => {
+          const fieldPath = field.split('.');
+          let value = item;
+          
+          // Obsłuż zagnieżdżone pola (np. supplier.name)
+          for (const path of fieldPath) {
+            if (value == null) return false;
+            value = value[path];
+          }
+          
+          if (typeof value === 'string') {
+            return value.toLowerCase().includes(term);
+          }
+          return false;
+        });
+      });
+    });
+  };
+
   const handleSearch = async (query) => {
     if (query.trim() === '') {
       setSearchResults([]);
@@ -231,22 +338,11 @@ const Navbar = () => {
     setIsSearching(true);
     
     try {
-      // Pobierz dane z różnych źródeł
-      const [purchaseOrders, customerOrders, productionTasks, inventoryItems] = await Promise.all([
-        getAllPurchaseOrders(),
-        getAllOrders(),
-        getAllTasks(),
-        getAllInventoryItems()
-      ]);
+      // Pobierz dane z cache lub bazy danych
+      const [purchaseOrders, customerOrders, productionTasks, inventoryItems, batches] = await fetchDataWithCache();
       
-      const queryLower = query.toLowerCase();
-      
-      // Filtruj zamówienia zakupowe
-      const filteredPOs = purchaseOrders
-        .filter(po => 
-          po.number?.toLowerCase().includes(queryLower) || 
-          po.supplier?.name?.toLowerCase().includes(queryLower)
-        )
+      // Inteligentne przeszukiwanie danych
+      const filteredPOs = searchData(purchaseOrders, query, ['number', 'supplier.name'])
         .map(po => ({
           id: po.id,
           number: po.number,
@@ -256,12 +352,7 @@ const Navbar = () => {
           status: po.status
         }));
       
-      // Filtruj zamówienia klientów
-      const filteredCOs = customerOrders
-        .filter(co => 
-          co.orderNumber?.toLowerCase().includes(queryLower) || 
-          co.customer?.name?.toLowerCase().includes(queryLower)
-        )
+      const filteredCOs = searchData(customerOrders, query, ['orderNumber', 'customer.name'])
         .map(co => ({
           id: co.id,
           number: co.orderNumber,
@@ -271,14 +362,7 @@ const Navbar = () => {
           status: co.status
         }));
       
-      // Filtruj zadania produkcyjne (dodaj wyszukiwanie po lotNumber)
-      const filteredMOs = productionTasks
-        .filter(mo => 
-          mo.moNumber?.toLowerCase().includes(queryLower) || 
-          mo.name?.toLowerCase().includes(queryLower) ||
-          mo.productName?.toLowerCase().includes(queryLower) ||
-          mo.lotNumber?.toLowerCase().includes(queryLower)
-        )
+      const filteredMOs = searchData(productionTasks, query, ['moNumber', 'name', 'productName', 'lotNumber'])
         .map(mo => ({
           id: mo.id,
           number: mo.moNumber,
@@ -286,26 +370,11 @@ const Navbar = () => {
           type: 'productionTask',
           date: mo.scheduledDate || mo.createdAt,
           status: mo.status,
-          // Dodaj informację o LOT jeśli dostępna
           lotInfo: mo.lotNumber ? `LOT: ${mo.lotNumber}` : null
         }));
-        
-      // Pobierz wszystkie partie z bazy danych
-      const batchesSnapshot = await getDocs(collection(db, 'inventoryBatches'));
-      const batches = batchesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
       
-      // Filtruj partie po LOT, numerze partii, nazwie produktu
-      const filteredBatches = batches
-        .filter(batch => 
-          batch.lotNumber?.toLowerCase().includes(queryLower) || 
-          batch.batchNumber?.toLowerCase().includes(queryLower) ||
-          batch.itemName?.toLowerCase().includes(queryLower)
-        )
+      const filteredBatches = searchData(batches, query, ['lotNumber', 'batchNumber', 'itemName'])
         .map(batch => {
-          // Znajdź nazwę produktu dla partii
           const item = inventoryItems.find(item => item.id === batch.itemId);
           return {
             id: batch.id,
@@ -320,9 +389,33 @@ const Navbar = () => {
           };
         });
       
-      // Połącz wyniki i ogranicz liczbę
-      const combinedResults = [...filteredPOs, ...filteredCOs, ...filteredMOs, ...filteredBatches]
-        .sort((a, b) => new Date(b.date) - new Date(a.date))
+      // Ustawienie priorytetu wyników - dokładne dopasowania na górze
+      const exactMatches = [];
+      const partialMatches = [];
+      
+      const queryLower = query.toLowerCase();
+      
+      [...filteredPOs, ...filteredCOs, ...filteredMOs, ...filteredBatches].forEach(result => {
+        if (result.number?.toLowerCase() === queryLower || 
+            result.title?.toLowerCase().includes(queryLower + ' -')) {
+          exactMatches.push(result);
+        } else {
+          partialMatches.push(result);
+        }
+      });
+      
+      // Połącz wyniki z zachowaniem priorytetu i ogranicz liczbę
+      const combinedResults = [...exactMatches, ...partialMatches]
+        .sort((a, b) => {
+          // Najpierw sortuj według dokładności dopasowania
+          const aExact = exactMatches.includes(a);
+          const bExact = exactMatches.includes(b);
+          if (aExact && !bExact) return -1;
+          if (!aExact && bExact) return 1;
+          
+          // Następnie sortuj według daty
+          return new Date(b.date) - new Date(a.date);
+        })
         .slice(0, 15);
       
       setSearchResults(combinedResults);
@@ -333,6 +426,7 @@ const Navbar = () => {
     }
   };
   
+  // Zoptymalizowana wersja funkcji obsługującej zmiany w polu wyszukiwania
   const handleSearchChange = (event) => {
     const query = event.target.value;
     setSearchQuery(query);
@@ -342,10 +436,13 @@ const Navbar = () => {
       clearTimeout(searchTimeout.current);
     }
     
-    // Opóźnij wyszukiwanie, aby zmniejszyć obciążenie bazy danych
+    // Opóźnij wyszukiwanie, aby zmniejszyć obciążenie systemu
+    // Krótsze opóźnienie dla krótkich zapytań
+    const delay = query.length <= 2 ? 500 : 300;
+    
     searchTimeout.current = setTimeout(() => {
       handleSearch(query);
-    }, 300);
+    }, delay);
   };
   
   const handleSearchFocus = () => {
@@ -353,6 +450,22 @@ const Navbar = () => {
     if (searchQuery.trim() !== '') {
       handleSearch(searchQuery);
     }
+  };
+
+  const handleSearchKeyPress = (event) => {
+    if (event.key === 'Enter' && searchQuery.trim() !== '') {
+      handleSearch(searchQuery);
+      
+      // Jeśli jest tylko jeden wynik, przejdź do niego automatycznie
+      if (searchResults.length === 1) {
+        handleResultClick(searchResults[0]);
+      }
+    }
+  };
+  
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setSearchResults([]);
   };
   
   const handleResultClick = (result) => {
@@ -420,10 +533,11 @@ const Navbar = () => {
               value={searchQuery}
               onChange={handleSearchChange}
               onFocus={handleSearchFocus}
+              onKeyPress={handleSearchKeyPress}
               sx={{
                 width: '100%',
                 '& .MuiInputBase-input': {
-                  paddingRight: isSearching ? '30px' : '8px',
+                  paddingRight: (searchQuery.length > 0 || isSearching) ? '42px' : '8px',
                 }
               }}
             />
@@ -438,6 +552,23 @@ const Navbar = () => {
                   color: theme => theme.palette.text.secondary
                 }} 
               />
+            )}
+            {searchQuery.length > 0 && !isSearching && (
+              <IconButton
+                aria-label="Wyczyść wyszukiwanie"
+                onClick={handleClearSearch}
+                sx={{
+                  position: 'absolute',
+                  right: 8,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'inherit',
+                  padding: '4px'
+                }}
+                size="small"
+              >
+                <CancelIcon fontSize="small" />
+              </IconButton>
             )}
             
             {/* Wyniki wyszukiwania */}

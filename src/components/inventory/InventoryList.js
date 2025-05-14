@@ -35,7 +35,9 @@ import {
   ListItemIcon,
   ListItemText,
   Checkbox,
-  Pagination
+  Pagination,
+  InputAdornment,
+  TablePagination
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -57,11 +59,12 @@ import {
   ViewColumn as ViewColumnIcon,
   ArrowDropUp as ArrowDropUpIcon,
   PictureAsPdf as PdfIcon,
-  TableChart as CsvIcon
+  TableChart as CsvIcon,
+  Clear as ClearIcon
 } from '@mui/icons-material';
 import { getAllInventoryItems, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, getItemBatches, updateReservation, updateReservationTasks, cleanupDeletedTaskReservations, deleteReservation, getInventoryItemById, recalculateAllInventoryQuantities, cleanupMicroReservations } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
-import { formatDate } from '../../utils/formatters';
+import { formatDate, formatQuantity } from '../../utils/formatters';
 import { toast } from 'react-hot-toast';
 import { exportToCSV } from '../../utils/exportUtils';
 import { useAuth } from '../../hooks/useAuth';
@@ -72,7 +75,7 @@ import { db } from '../../services/firebase/config';
 import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
 import { INVENTORY_CATEGORIES } from '../../utils/constants';
 
-// Definicje stałych (takie same jak w inventoryService.js)
+// Definicje stałych
 const INVENTORY_TRANSACTIONS_COLLECTION = 'inventoryTransactions';
 
 const InventoryList = () => {
@@ -121,6 +124,17 @@ const InventoryList = () => {
   const [warehouseItems, setWarehouseItems] = useState([]);
   const [selectedWarehouseForView, setSelectedWarehouseForView] = useState(null);
   const [warehouseItemsLoading, setWarehouseItemsLoading] = useState(false);
+  const [batchesDialogOpen, setBatchesDialogOpen] = useState(false);
+  const [warehouseSearchTerm, setWarehouseSearchTerm] = useState('');
+  const [warehouseItemsPage, setWarehouseItemsPage] = useState(1);
+  const [warehouseItemsPageSize, setWarehouseItemsPageSize] = useState(10);
+  const [warehouseItemsTotalCount, setWarehouseItemsTotalCount] = useState(0);
+  const [warehouseItemsTotalPages, setWarehouseItemsTotalPages] = useState(1);
+  const [warehouseItemsSort, setWarehouseItemsSort] = useState({
+    field: 'name',
+    order: 'asc'
+  });
+  const warehouseSearchTermRef = useRef(null);
   const [groups, setGroups] = useState([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
   const [groupFormData, setGroupFormData] = useState({
@@ -916,11 +930,34 @@ const InventoryList = () => {
   }, [currentTab]);
 
   // Funkcja do pobierania pozycji z wybranego magazynu
-  const fetchWarehouseItems = async (warehouseId) => {
+  const fetchWarehouseItems = async (warehouseId, newSortField = null, newSortOrder = null) => {
     setWarehouseItemsLoading(true);
     try {
-      const items = await getAllInventoryItems(warehouseId);
-      setWarehouseItems(items);
+      // Użyj przekazanych parametrów sortowania lub tych z stanu
+      const sortFieldToUse = newSortField || warehouseItemsSort.field;
+      const sortOrderToUse = newSortOrder || warehouseItemsSort.order;
+      
+      // Wywołaj getAllInventoryItems z parametrami paginacji, wyszukiwania i sortowania
+      const result = await getAllInventoryItems(
+        warehouseId, 
+        warehouseItemsPage, 
+        warehouseItemsPageSize, 
+        warehouseSearchTerm.trim() !== '' ? warehouseSearchTerm : null,
+        null, // brak filtrowania po kategorii
+        sortFieldToUse,
+        sortOrderToUse
+      );
+      
+      // Jeśli wynik to obiekt z właściwościami items i totalCount, to używamy paginacji
+      if (result && result.items) {
+        // Nie filtrujemy - pokazujemy wszystkie pozycje
+        setWarehouseItems(result.items);
+        setWarehouseItemsTotalCount(result.totalCount);
+        setWarehouseItemsTotalPages(Math.ceil(result.totalCount / warehouseItemsPageSize));
+      } else {
+        // Stara logika dla kompatybilności
+        setWarehouseItems(result);
+      }
     } catch (error) {
       console.error('Błąd podczas pobierania pozycji z magazynu:', error);
       showError('Nie udało się pobrać pozycji z magazynu');
@@ -932,6 +969,8 @@ const InventoryList = () => {
   // Funkcja do obsługi kliknięcia w magazyn
   const handleWarehouseClick = async (warehouse) => {
     setSelectedWarehouseForView(warehouse);
+    setWarehouseItemsPage(1); // Reset strony
+    setWarehouseSearchTerm(''); // Reset wyszukiwania
     await fetchWarehouseItems(warehouse.id);
   };
 
@@ -939,6 +978,31 @@ const InventoryList = () => {
   const handleBackToWarehouses = () => {
     setSelectedWarehouseForView(null);
     setWarehouseItems([]);
+  };
+
+  // Funkcja do pokazywania dialogu z partiami dla przedmiotu w lokalizacji
+  const handleShowItemBatches = async (item) => {
+    setSelectedItem(item);
+    try {
+      setLoadingBatches(true);
+      const batches = await getItemBatches(item.id, selectedWarehouseForView?.id);
+      setSelectedItemBatches(batches);
+      setBatchesDialogOpen(true);
+    } catch (error) {
+      console.error('Błąd podczas pobierania partii:', error);
+      showError('Nie udało się pobrać partii dla tego produktu');
+    } finally {
+      setLoadingBatches(false);
+    }
+  };
+
+  // Funkcja do zamykania dialogu z partiami
+  const handleCloseBatchesDialog = () => {
+    setBatchesDialogOpen(false);
+    setTimeout(() => {
+      setSelectedItem(null);
+      setSelectedItemBatches([]);
+    }, 300);
   };
 
   // Funkcja do otwierania dialogu tworzenia/edycji grupy
@@ -1295,6 +1359,61 @@ const InventoryList = () => {
       setLoading(false);
     }
   };
+
+  // Funkcje do obsługi wyszukiwania w lokalizacji
+  const handleWarehouseSearchTermChange = (e) => {
+    setWarehouseSearchTerm(e.target.value);
+    
+    // Implementacja debounce
+    if (warehouseSearchTermRef.current) {
+      clearTimeout(warehouseSearchTermRef.current);
+    }
+    
+    warehouseSearchTermRef.current = setTimeout(() => {
+      setWarehouseItemsPage(1); // Reset paginacji
+      fetchWarehouseItems(selectedWarehouseForView.id);
+    }, 500);
+  };
+  
+  const clearWarehouseSearch = () => {
+    setWarehouseSearchTerm('');
+    setWarehouseItemsPage(1); // Reset paginacji
+    fetchWarehouseItems(selectedWarehouseForView.id);
+  };
+  
+  // Funkcje do obsługi paginacji w lokalizacji
+  const handleWarehousePageChange = (event, newPage) => {
+    setWarehouseItemsPage(newPage + 1); // Konwersja z indeksu 0-based na 1-based
+    fetchWarehouseItems(selectedWarehouseForView.id); // Pobierz dane dla nowej strony
+  };
+  
+  const handleWarehousePageSizeChange = (event) => {
+    setWarehouseItemsPageSize(parseInt(event.target.value, 10));
+    setWarehouseItemsPage(1); // Reset strony
+    fetchWarehouseItems(selectedWarehouseForView.id); // Pobierz dane z nowym rozmiarem strony
+  };
+  
+  // Funkcja do sortowania w widoku lokalizacji
+  const handleWarehouseTableSort = (field) => {
+    const newOrder = warehouseItemsSort.field === field && warehouseItemsSort.order === 'asc' ? 'desc' : 'asc';
+    setWarehouseItemsSort({
+      field,
+      order: newOrder
+    });
+    
+    // Reset paginacji i pobierz dane z nowym sortowaniem
+    setWarehouseItemsPage(1);
+    fetchWarehouseItems(selectedWarehouseForView.id, field, newOrder);
+  };
+  
+  /* Usuwam zbędny efekt, ponieważ fetchWarehouseItems jest już wywoływane w funkcjach obsługujących zmianę strony
+  // Efekt do pobierania danych przy zmianie strony lub rozmiaru strony w widoku lokalizacji
+  useEffect(() => {
+    if (selectedWarehouseForView) {
+      fetchWarehouseItems(selectedWarehouseForView.id);
+    }
+  }, [warehouseItemsPage, warehouseItemsPageSize]);
+  */
 
   if (loading) {
     return <div>Ładowanie pozycji ze stanów...</div>;
@@ -1816,28 +1935,86 @@ const InventoryList = () => {
                 </Typography>
               </Box>
 
+              <Paper sx={{ mb: 3, p: 2 }}>
+                <Grid container spacing={2} alignItems="center">
+                  <Grid item xs={12} sm={6} md={4}>
+                    <TextField
+                      fullWidth
+                      variant="outlined"
+                      placeholder="Szukaj pozycji..."
+                      value={warehouseSearchTerm}
+                      onChange={handleWarehouseSearchTermChange}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <SearchIcon />
+                          </InputAdornment>
+                        ),
+                        endAdornment: warehouseSearchTerm && (
+                          <InputAdornment position="end">
+                            <IconButton size="small" onClick={clearWarehouseSearch}>
+                              <ClearIcon />
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={8}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                      <Typography variant="body2" color="textSecondary">
+                        Znaleziono {warehouseItemsTotalCount} pozycji
+                      </Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Paper>
+
               <TableContainer component={Paper}>
                 <Table>
                   <TableHead>
                     <TableRow>
-                      <TableCell>SKU</TableCell>
-                      <TableCell>Kategoria</TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={warehouseItemsSort.field === 'name'}
+                          direction={warehouseItemsSort.field === 'name' ? warehouseItemsSort.order : 'asc'}
+                          onClick={() => handleWarehouseTableSort('name')}
+                        >
+                          SKU
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={warehouseItemsSort.field === 'category'}
+                          direction={warehouseItemsSort.field === 'category' ? warehouseItemsSort.order : 'asc'}
+                          onClick={() => handleWarehouseTableSort('category')}
+                        >
+                          Kategoria
+                        </TableSortLabel>
+                      </TableCell>
                       <TableCell>Jednostka</TableCell>
-                      <TableCell align="right">Ilość</TableCell>
-                      <TableCell align="right">Cena jedn.</TableCell>
+                      <TableCell align="right">
+                        <TableSortLabel
+                          active={warehouseItemsSort.field === 'totalQuantity'}
+                          direction={warehouseItemsSort.field === 'totalQuantity' ? warehouseItemsSort.order : 'asc'}
+                          onClick={() => handleWarehouseTableSort('totalQuantity')}
+                        >
+                          Ilość
+                        </TableSortLabel>
+                      </TableCell>
                       <TableCell align="right">Akcje</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {warehouseItemsLoading ? (
                       <TableRow>
-                        <TableCell colSpan={6} align="center">
+                        <TableCell colSpan={5} align="center">
                           <CircularProgress />
                         </TableCell>
                       </TableRow>
                     ) : warehouseItems.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} align="center">
+                        <TableCell colSpan={5} align="center">
                           Brak pozycji w tej lokalizacji
                         </TableCell>
                       </TableRow>
@@ -1851,9 +2028,16 @@ const InventoryList = () => {
                           </TableCell>
                           <TableCell>{item.category || '-'}</TableCell>
                           <TableCell>{item.unit || 'szt.'}</TableCell>
-                          <TableCell align="right">{item.quantity || 0}</TableCell>
-                          <TableCell align="right">{item.price ? `${item.price} €` : '-'}</TableCell>
+                          <TableCell align="right">{formatQuantity(item.quantity) || 0}</TableCell>
                           <TableCell align="right">
+                            <Tooltip title="Pokaż partie">
+                              <IconButton 
+                                color="info"
+                                onClick={() => handleShowItemBatches(item)}
+                              >
+                                <ViewListIcon />
+                              </IconButton>
+                            </Tooltip>
                             <IconButton 
                               color="primary" 
                               component={RouterLink} 
@@ -1867,7 +2051,18 @@ const InventoryList = () => {
                     )}
                   </TableBody>
                 </Table>
-            </TableContainer>
+                <TablePagination
+                  rowsPerPageOptions={[5, 10, 25, 50]}
+                  component="div"
+                  count={warehouseItemsTotalCount}
+                  rowsPerPage={warehouseItemsPageSize}
+                  page={warehouseItemsPage - 1} // TablePagination używa indeksu 0, a my używamy indeksu 1
+                  onPageChange={handleWarehousePageChange}
+                  onRowsPerPageChange={handleWarehousePageSizeChange}
+                  labelRowsPerPage="Pozycji na stronę:"
+                  labelDisplayedRows={({ from, to, count }) => `${from}-${to} z ${count}`}
+                />
+              </TableContainer>
             </>
           )}
         </>
@@ -2438,6 +2633,64 @@ const InventoryList = () => {
         selectedItemBatches={selectedItemBatches}
         loadingBatches={loadingBatches}
       />
+
+      {/* Dialog wyświetlający partie dla danego przedmiotu w lokalizacji */}
+      <Dialog
+        open={batchesDialogOpen}
+        onClose={handleCloseBatchesDialog}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          Partie dla: {selectedItem?.name} (Lokalizacja: {selectedWarehouseForView?.name})
+        </DialogTitle>
+        <DialogContent>
+          {loadingBatches ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : selectedItemBatches.length === 0 ? (
+            <Typography variant="body1" align="center" sx={{ py: 3 }}>
+              Nie znaleziono partii dla tej pozycji w wybranej lokalizacji
+            </Typography>
+          ) : (
+            <TableContainer component={Paper} variant="outlined">
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Numer partii/LOT</TableCell>
+                    <TableCell>Ilość</TableCell>
+                    <TableCell>Data ważności</TableCell>
+                    <TableCell>Dostawca</TableCell>
+                    <TableCell>Data przyjęcia</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {selectedItemBatches.map((batch) => (
+                    <TableRow key={batch.id}>
+                      <TableCell>{batch.batchNumber || batch.lotNumber || '-'}</TableCell>
+                      <TableCell>{batch.quantity} {selectedItem?.unit || 'szt.'}</TableCell>
+                      <TableCell>
+                        {batch.expiryDate ? formatDate(batch.expiryDate) : '-'}
+                      </TableCell>
+                      <TableCell>
+                        {batch.purchaseOrderDetails?.supplier?.name || 
+                         batch.supplier?.name || '-'}
+                      </TableCell>
+                      <TableCell>
+                        {batch.receivedDate ? formatDate(batch.receivedDate) : '-'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseBatchesDialog}>Zamknij</Button>
+        </DialogActions>
+      </Dialog>
 
     </div>
   );

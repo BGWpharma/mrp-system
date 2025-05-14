@@ -45,7 +45,7 @@ import {
 } from '@mui/icons-material';
 import { getInventoryItemById, getItemBatches, getAllWarehouses, transferBatch, deleteBatch } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
-import { formatDate } from '../../utils/formatters';
+import { formatDate, formatQuantity } from '../../utils/formatters';
 import { Timestamp } from 'firebase/firestore';
 import { useAuth } from '../../hooks/useAuth';
 import LabelDialog from '../../components/inventory/LabelDialog';
@@ -474,7 +474,7 @@ const BatchesPage = () => {
           <Grid item xs={12} sm={6} md={8}>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
               <Typography variant="body2" sx={{ mr: 2 }}>
-                <strong>Stan całkowity:</strong> {item.quantity} {item.unit}
+                <strong>Stan całkowity:</strong> {formatQuantity(item.quantity)} {item.unit}
               </Typography>
               <Tooltip title="Partie są wydawane według zasady FEFO (First Expiry, First Out)">
                 <IconButton size="small">

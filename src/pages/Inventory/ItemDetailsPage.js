@@ -50,7 +50,7 @@ import { getInventoryItemById, getItemTransactions, getItemBatches, getSupplierP
 import { getAllSuppliers } from '../../services/supplierService';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
-import { formatDate, formatDateTime } from '../../utils/formatters';
+import { formatDate, formatDateTime, formatQuantity } from '../../utils/formatters';
 import { Timestamp } from 'firebase/firestore';
 import LabelDialog from '../../components/inventory/LabelDialog';
 import { getUsersDisplayNames } from '../../services/userService';
@@ -440,7 +440,7 @@ const ItemDetailsPage = () => {
       const updatedItem = await getInventoryItemById(id);
       setItem(updatedItem);
       
-      showSuccess(`Odświeżono ilość towaru. Aktualny stan: ${newQuantity} ${updatedItem.unit}`);
+      showSuccess(`Odświeżono ilość towaru. Aktualny stan: ${formatQuantity(newQuantity)} ${updatedItem.unit}`);
     } catch (error) {
       console.error('Błąd podczas odświeżania ilości:', error);
       showError('Wystąpił błąd podczas odświeżania ilości: ' + error.message);
@@ -578,7 +578,7 @@ const ItemDetailsPage = () => {
             minWidth: '150px'
           }}>
             <Typography variant="h6" fontWeight="bold" color="primary">
-              {item.quantity}
+              {formatQuantity(item.quantity)}
             </Typography>
             <Typography variant="subtitle1">
               {item.unit}
@@ -685,7 +685,7 @@ const ItemDetailsPage = () => {
             <Typography>
               W magazynie znajduje się <strong>{expiredBatches.length}</strong> {expiredBatches.length === 1 ? 'przeterminowana partia' : 
               expiredBatches.length < 5 ? 'przeterminowane partie' : 'przeterminowanych partii'} tego produktu.
-              Łącznie <strong>{expiredBatches.reduce((sum, batch) => sum + batch.quantity, 0)} {item?.unit}</strong>.
+              Łącznie <strong>{formatQuantity(expiredBatches.reduce((sum, batch) => sum + batch.quantity, 0))} {item?.unit}</strong>.
             </Typography>
           </Alert>
         </Paper>
@@ -698,7 +698,7 @@ const ItemDetailsPage = () => {
             <Typography>
               W magazynie znajduje się <strong>{expiringBatches.length}</strong> {expiringBatches.length === 1 ? 'partia' : 
               expiringBatches.length < 5 ? 'partie' : 'partii'} tego produktu z terminem ważności krótszym niż 30 dni.
-              Łącznie <strong>{expiringBatches.reduce((sum, batch) => sum + batch.quantity, 0)} {item?.unit}</strong>.
+              Łącznie <strong>{formatQuantity(expiringBatches.reduce((sum, batch) => sum + batch.quantity, 0))} {item?.unit}</strong>.
             </Typography>
           </Alert>
         </Paper>
@@ -736,19 +736,19 @@ const ItemDetailsPage = () => {
                     <TableBody>
                       <TableRow>
                         <TableCell component="th" sx={{ width: '40%', fontWeight: 'medium' }}>Minimalny stan</TableCell>
-                        <TableCell>{item.minStock ? `${item.minStock} ${item.unit}` : 'Nie określono'}</TableCell>
+                        <TableCell>{item.minStock ? `${formatQuantity(item.minStock)} ${item.unit}` : 'Nie określono'}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell component="th" sx={{ fontWeight: 'medium' }}>Maksymalny stan</TableCell>
-                        <TableCell>{item.maxStock ? `${item.maxStock} ${item.unit}` : 'Nie określono'}</TableCell>
+                        <TableCell>{item.maxStock ? `${formatQuantity(item.maxStock)} ${item.unit}` : 'Nie określono'}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell component="th" sx={{ fontWeight: 'medium' }}>Ilość kartonów na paletę</TableCell>
-                        <TableCell>{item.boxesPerPallet ? `${item.boxesPerPallet} szt.` : 'Nie określono'}</TableCell>
+                        <TableCell>{item.boxesPerPallet ? `${formatQuantity(item.boxesPerPallet)} szt.` : 'Nie określono'}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell component="th" sx={{ fontWeight: 'medium' }}>Ilość produktu per karton</TableCell>
-                        <TableCell>{item.itemsPerBox ? `${item.itemsPerBox} ${item.unit}` : 'Nie określono'}</TableCell>
+                        <TableCell>{item.itemsPerBox ? `${formatQuantity(item.itemsPerBox)} ${item.unit}` : 'Nie określono'}</TableCell>
                       </TableRow>
                     </TableBody>
                   </Table>

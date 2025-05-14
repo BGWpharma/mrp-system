@@ -2166,49 +2166,117 @@ import {
         }
       }
       
-      // Aktualizuj partię źródłową
-      await updateDoc(batchRef, {
-        quantity: increment(-transferQuantity),
-        updatedAt: serverTimestamp(),
-        updatedBy: userId
-      });
+      // Sprawdź, czy przenosimy całą partię
+      const isFullTransfer = transferQuantity === availableQuantity;
       
-      if (isNewBatch) {
-        // Utwórz nową partię w magazynie docelowym
-        const newBatchData = {
-          ...batchData,
-          id: undefined, // Usuń ID, aby Firebase wygenerowało nowe
-          quantity: transferQuantity,
-          initialQuantity: transferQuantity,
-          warehouseId: targetWarehouseId,
-          transferredFrom: sourceWarehouseId,
-          transferredAt: serverTimestamp(),
-          transferredBy: userId,
-          transferNotes: notes,
-          createdAt: serverTimestamp(),
-          createdBy: userId
+      if (isFullTransfer) {
+        // Jeśli przenosimy całą partię, usuń ją
+        console.log(`Przenoszona jest cała partia (${transferQuantity}/${availableQuantity}). Partia źródłowa zostanie usunięta.`);
+        // Zachowaj informacje o partii przed usunięciem jej
+        const batchDataToKeep = { ...batchData };
+        
+        // Usuń partię źródłową
+        await deleteDoc(batchRef);
+        
+        // Dodaj transakcję informującą o usunięciu partii źródłowej
+        const deleteTransactionData = {
+          type: 'DELETE_BATCH_AFTER_TRANSFER',
+          itemId,
+          itemName: itemData.name,
+          batchId,
+          batchNumber: batchData.batchNumber || 'Nieznana partia',
+          quantity: 0,
+          warehouseId: sourceWarehouseId,
+          notes: `Usunięcie pustej partii po przeniesieniu całości do magazynu ${targetWarehouseId}`,
+          createdBy: userId,
+          createdAt: serverTimestamp()
         };
         
-        // Wyczyść pole timestamp z istniejącej referencji dokumentu
-        const newBatchDataForFirestore = {};
-        Object.entries(newBatchData).forEach(([key, value]) => {
-          if (value !== undefined && key !== 'id') {
-            newBatchDataForFirestore[key] = value;
-          }
+        await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), deleteTransactionData);
+        
+        // Utwórz nową partię lub zaktualizuj istniejącą w magazynie docelowym
+        if (isNewBatch) {
+          // Utwórz nową partię w magazynie docelowym
+          const newBatchData = {
+            ...batchDataToKeep,
+            id: undefined, // Usuń ID, aby Firebase wygenerowało nowe
+            quantity: transferQuantity,
+            initialQuantity: transferQuantity,
+            warehouseId: targetWarehouseId,
+            transferredFrom: sourceWarehouseId,
+            transferredAt: serverTimestamp(),
+            transferredBy: userId,
+            transferNotes: notes,
+            createdAt: serverTimestamp(),
+            createdBy: userId
+          };
+          
+          // Wyczyść pole timestamp z istniejącej referencji dokumentu
+          const newBatchDataForFirestore = {};
+          Object.entries(newBatchData).forEach(([key, value]) => {
+            if (value !== undefined && key !== 'id') {
+              newBatchDataForFirestore[key] = value;
+            }
+          });
+          
+          const newBatchRef = await addDoc(collection(db, INVENTORY_BATCHES_COLLECTION), newBatchDataForFirestore);
+          targetBatchId = newBatchRef.id;
+        } else {
+          // Zaktualizuj istniejącą partię w magazynie docelowym
+          const targetBatchRef = doc(db, INVENTORY_BATCHES_COLLECTION, targetBatchId);
+          await updateDoc(targetBatchRef, {
+            quantity: increment(transferQuantity),
+            updatedAt: serverTimestamp(),
+            updatedBy: userId,
+            lastTransferFrom: sourceWarehouseId,
+            lastTransferAt: serverTimestamp()
+          });
+        }
+      } else {
+        // Jeśli przenosimy tylko część partii, aktualizuj ilość partii źródłowej
+        await updateDoc(batchRef, {
+          quantity: increment(-transferQuantity),
+          updatedAt: serverTimestamp(),
+          updatedBy: userId
         });
         
-        const newBatchRef = await addDoc(collection(db, INVENTORY_BATCHES_COLLECTION), newBatchDataForFirestore);
-        targetBatchId = newBatchRef.id;
-      } else {
-        // Zaktualizuj istniejącą partię w magazynie docelowym
-        const targetBatchRef = doc(db, INVENTORY_BATCHES_COLLECTION, targetBatchId);
-        await updateDoc(targetBatchRef, {
-          quantity: increment(transferQuantity),
-          updatedAt: serverTimestamp(),
-          updatedBy: userId,
-          lastTransferFrom: sourceWarehouseId,
-          lastTransferAt: serverTimestamp()
-        });
+        if (isNewBatch) {
+          // Utwórz nową partię w magazynie docelowym
+          const newBatchData = {
+            ...batchData,
+            id: undefined, // Usuń ID, aby Firebase wygenerowało nowe
+            quantity: transferQuantity,
+            initialQuantity: transferQuantity,
+            warehouseId: targetWarehouseId,
+            transferredFrom: sourceWarehouseId,
+            transferredAt: serverTimestamp(),
+            transferredBy: userId,
+            transferNotes: notes,
+            createdAt: serverTimestamp(),
+            createdBy: userId
+          };
+          
+          // Wyczyść pole timestamp z istniejącej referencji dokumentu
+          const newBatchDataForFirestore = {};
+          Object.entries(newBatchData).forEach(([key, value]) => {
+            if (value !== undefined && key !== 'id') {
+              newBatchDataForFirestore[key] = value;
+            }
+          });
+          
+          const newBatchRef = await addDoc(collection(db, INVENTORY_BATCHES_COLLECTION), newBatchDataForFirestore);
+          targetBatchId = newBatchRef.id;
+        } else {
+          // Zaktualizuj istniejącą partię w magazynie docelowym
+          const targetBatchRef = doc(db, INVENTORY_BATCHES_COLLECTION, targetBatchId);
+          await updateDoc(targetBatchRef, {
+            quantity: increment(transferQuantity),
+            updatedAt: serverTimestamp(),
+            updatedBy: userId,
+            lastTransferFrom: sourceWarehouseId,
+            lastTransferAt: serverTimestamp()
+          });
+        }
       }
       
       // Dodaj transakcję
@@ -2237,7 +2305,9 @@ import {
         sourceWarehouseId,
         targetWarehouseId,
         quantity: transferQuantity,
-        message: 'Transfer zakończony pomyślnie'
+        message: isFullTransfer 
+          ? 'Transfer całej partii zakończony pomyślnie - partia źródłowa została usunięta'
+          : 'Transfer zakończony pomyślnie'
       };
     } catch (error) {
       console.error('Błąd podczas transferu partii:', error);

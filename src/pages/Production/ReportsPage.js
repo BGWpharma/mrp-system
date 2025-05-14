@@ -31,7 +31,10 @@ import {
   Print as PrintIcon,
   Download as DownloadIcon,
   Assessment as AssessmentIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  DateRange as DateRangeIcon,
+  NavigateBefore as PrevIcon,
+  NavigateNext as NextIcon
 } from '@mui/icons-material';
 import {
   getProductionReports,
@@ -48,6 +51,27 @@ import { formatDateTime } from '../../utils/formatters';
 
 // Symulacja komponentu wykresu, później można zastąpić prawdziwą biblioteką
 const SimplePieChart = ({ data }) => {
+  // Sprawdzamy, czy dane są obiektem i czy nie są puste
+  const hasValidData = data && typeof data === 'object' && Object.keys(data).length > 0;
+  
+  if (!hasValidData) {
+    return (
+      <Box sx={{ 
+        height: '200px', 
+        display: 'flex', 
+        flexDirection: 'column', 
+        justifyContent: 'center', 
+        alignItems: 'center',
+        border: '1px dashed #ccc',
+        borderRadius: '4px'
+      }}>
+        <Typography variant="body2" color="textSecondary">
+          Brak danych do wyświetlenia
+        </Typography>
+      </Box>
+    );
+  }
+  
   return (
     <Box sx={{ 
       height: '200px', 
@@ -68,6 +92,27 @@ const SimplePieChart = ({ data }) => {
 
 // Symulacja komponentu wykresu słupkowego
 const SimpleBarChart = ({ data }) => {
+  // Sprawdzamy, czy dane są obiektem i czy nie są puste
+  const hasValidData = data && typeof data === 'object' && Object.keys(data).length > 0;
+  
+  if (!hasValidData) {
+    return (
+      <Box sx={{ 
+        height: '200px', 
+        display: 'flex', 
+        flexDirection: 'column', 
+        justifyContent: 'center', 
+        alignItems: 'center',
+        border: '1px dashed #ccc',
+        borderRadius: '4px'
+      }}>
+        <Typography variant="body2" color="textSecondary">
+          Brak danych do wyświetlenia
+        </Typography>
+      </Box>
+    );
+  }
+  
   return (
     <Box sx={{ 
       height: '200px', 
@@ -110,16 +155,37 @@ const ReportsPage = () => {
       
       // Pobierz dane raportów
       const reports = await getProductionReports(startDate, endDate);
-      setReportsData(reports);
+      setReportsData(reports || []);
       
       // Pobierz statystyki
       const stats = await getCompletedTasksStats(startDate, endDate);
-      setStatsData(stats);
+      
+      // Upewniamy się, że obiekt statystyk ma prawidłową strukturę
+      const defaultStats = {
+        completedTasks: 0,
+        producedItems: 0,
+        avgProductionTime: 0,
+        productivityByCategory: {},
+        dailyOutput: {},
+        materialsUsage: []
+      };
+      
+      setStatsData(stats || defaultStats);
       
       setLoading(false);
     } catch (error) {
       console.error('Błąd podczas pobierania danych raportów:', error);
       showError('Nie udało się pobrać danych raportów');
+      // W przypadku błędu inicjalizujemy dane domyślnymi wartościami
+      setReportsData([]);
+      setStatsData({
+        completedTasks: 0,
+        producedItems: 0,
+        avgProductionTime: 0,
+        productivityByCategory: {},
+        dailyOutput: {},
+        materialsUsage: []
+      });
       setLoading(false);
     }
   };
@@ -183,16 +249,32 @@ const ReportsPage = () => {
   const StatisticsTab = () => {
     if (!statsData) return <Alert severity="info">Brak danych statystycznych do wyświetlenia</Alert>;
     
+    // Dodatkowe sprawdzenie struktury danych
+    const hasDataStructure = statsData && 
+      typeof statsData.completedTasks !== 'undefined' && 
+      typeof statsData.producedItems !== 'undefined';
+    
+    if (!hasDataStructure) {
+      return <Alert severity="warning">Struktura danych statystycznych jest nieprawidłowa</Alert>;
+    }
+    
     return (
       <Box>
         <Grid container spacing={3}>
           <Grid item xs={12} md={4}>
-            <Card>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <Typography color="textSecondary" gutterBottom>
+            <Card sx={{ 
+              boxShadow: 3,
+              transition: 'transform 0.3s, box-shadow 0.3s',
+              '&:hover': {
+                transform: 'translateY(-5px)',
+                boxShadow: 6
+              }
+            }}>
+              <CardContent sx={{ textAlign: 'center', py: 3 }}>
+                <Typography color="primary" gutterBottom variant="subtitle1" fontWeight="bold">
                   Ukończone zadania
                 </Typography>
-                <Typography variant="h3" component="div" color="primary.main">
+                <Typography variant="h3" component="div" color="primary.main" fontWeight="bold">
                   {statsData.completedTasks || 0}
                 </Typography>
               </CardContent>
@@ -200,12 +282,19 @@ const ReportsPage = () => {
           </Grid>
           
           <Grid item xs={12} md={4}>
-            <Card>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <Typography color="textSecondary" gutterBottom>
+            <Card sx={{ 
+              boxShadow: 3,
+              transition: 'transform 0.3s, box-shadow 0.3s',
+              '&:hover': {
+                transform: 'translateY(-5px)',
+                boxShadow: 6
+              }
+            }}>
+              <CardContent sx={{ textAlign: 'center', py: 3 }}>
+                <Typography color="secondary" gutterBottom variant="subtitle1" fontWeight="bold">
                   Wyprodukowane produkty
                 </Typography>
-                <Typography variant="h3" component="div" color="secondary.main">
+                <Typography variant="h3" component="div" color="secondary.main" fontWeight="bold">
                   {statsData.producedItems || 0}
                 </Typography>
               </CardContent>
@@ -213,12 +302,19 @@ const ReportsPage = () => {
           </Grid>
           
           <Grid item xs={12} md={4}>
-            <Card>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <Typography color="textSecondary" gutterBottom>
+            <Card sx={{ 
+              boxShadow: 3,
+              transition: 'transform 0.3s, box-shadow 0.3s',
+              '&:hover': {
+                transform: 'translateY(-5px)',
+                boxShadow: 6
+              }
+            }}>
+              <CardContent sx={{ textAlign: 'center', py: 3 }}>
+                <Typography color="success.dark" gutterBottom variant="subtitle1" fontWeight="bold">
                   Średni czas produkcji
                 </Typography>
-                <Typography variant="h3" component="div" color="success.main">
+                <Typography variant="h3" component="div" color="success.main" fontWeight="bold">
                   {statsData.avgProductionTime ? `${statsData.avgProductionTime}h` : 'N/A'}
                 </Typography>
               </CardContent>
@@ -226,23 +322,33 @@ const ReportsPage = () => {
           </Grid>
           
           <Grid item xs={12} md={6}>
-            <Card sx={{ mt: 3 }}>
+            <Card sx={{ 
+              mt: 3, 
+              boxShadow: 3,
+              height: '100%'
+            }}>
               <CardContent>
-                <Typography variant="h6" gutterBottom>
+                <Typography variant="h6" gutterBottom color="primary.dark" fontWeight="medium">
                   Produktywność według kategorii
                 </Typography>
-                <SimplePieChart data={statsData.productivityByCategory} />
+                <Divider sx={{ mb: 2 }} />
+                <SimplePieChart data={statsData.productivityByCategory || {}} />
               </CardContent>
             </Card>
           </Grid>
           
           <Grid item xs={12} md={6}>
-            <Card sx={{ mt: 3 }}>
+            <Card sx={{ 
+              mt: 3, 
+              boxShadow: 3,
+              height: '100%'
+            }}>
               <CardContent>
-                <Typography variant="h6" gutterBottom>
+                <Typography variant="h6" gutterBottom color="secondary.dark" fontWeight="medium">
                   Wynik dzienny
                 </Typography>
-                <SimpleBarChart data={statsData.dailyOutput} />
+                <Divider sx={{ mb: 2 }} />
+                <SimpleBarChart data={statsData.dailyOutput || {}} />
               </CardContent>
             </Card>
           </Grid>
@@ -253,40 +359,70 @@ const ReportsPage = () => {
   
   // Komponent z listą zadań ukończonych
   const CompletedTasksTab = () => {
+    const completedTasks = reportsData.filter(task => task && task.status === 'Zakończone');
+    
+    if (completedTasks.length === 0) {
+      return <Alert severity="info">Brak ukończonych zadań w wybranym okresie</Alert>;
+    }
+    
     return (
-      <TableContainer component={Paper}>
+      <TableContainer component={Paper} sx={{ boxShadow: 3 }}>
         <Table size="small">
-          <TableHead>
+          <TableHead sx={{ bgcolor: 'primary.main' }}>
             <TableRow>
-              <TableCell>Zadanie</TableCell>
-              <TableCell>Produkt</TableCell>
-              <TableCell align="right">Ilość</TableCell>
-              <TableCell>Data rozpoczęcia</TableCell>
-              <TableCell>Data zakończenia</TableCell>
-              <TableCell>Czas produkcji</TableCell>
-              <TableCell>Status</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Zadanie</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Produkt</TableCell>
+              <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>Ilość</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Data rozpoczęcia</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Data zakończenia</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Czas produkcji</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Status</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {reportsData.filter(task => task.status === 'Zakończone').map((task) => (
-              <TableRow key={task.id}>
-                <TableCell>{task.name}</TableCell>
-                <TableCell>{task.productName}</TableCell>
-                <TableCell align="right">{task.quantity} {task.unit}</TableCell>
-                <TableCell>{task.startDate ? formatDateTime(new Date(task.startDate)) : '-'}</TableCell>
-                <TableCell>{task.completionDate ? formatDateTime(new Date(task.completionDate)) : '-'}</TableCell>
-                <TableCell>
-                  {task.productionTime ? `${task.productionTime}h` : '-'}
-                </TableCell>
-                <TableCell>
-                  <Chip 
-                    label={task.status} 
-                    color="success" 
-                    size="small" 
-                  />
-                </TableCell>
-              </TableRow>
-            ))}
+            {completedTasks.map((task, index) => {
+              // Bezpieczne konwersje dat
+              let startDate = '-';
+              let completionDate = '-';
+              
+              try {
+                if (task.startDate) {
+                  startDate = formatDateTime(new Date(task.startDate));
+                }
+                if (task.completionDate) {
+                  completionDate = formatDateTime(new Date(task.completionDate));
+                }
+              } catch (error) {
+                console.error('Błąd podczas formatowania dat:', error);
+              }
+              
+              return (
+                <TableRow 
+                  key={task.id || `task-${index}`}
+                  sx={{ 
+                    '&:nth-of-type(odd)': { bgcolor: 'action.hover' },
+                    '&:hover': { bgcolor: 'action.selected' }
+                  }}
+                >
+                  <TableCell sx={{ fontWeight: 'medium' }}>{task.name || 'Brak nazwy'}</TableCell>
+                  <TableCell>{task.productName || 'Brak produktu'}</TableCell>
+                  <TableCell align="right">{task.quantity || 0} {task.unit || 'szt.'}</TableCell>
+                  <TableCell>{startDate}</TableCell>
+                  <TableCell>{completionDate}</TableCell>
+                  <TableCell>
+                    {task.productionTime ? `${task.productionTime}h` : '-'}
+                  </TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={task.status || 'Nieznany'} 
+                      color="success" 
+                      size="small" 
+                      sx={{ fontWeight: 'bold' }}
+                    />
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </TableContainer>
@@ -295,29 +431,36 @@ const ReportsPage = () => {
   
   // Komponent z zestawieniem zużytych materiałów
   const MaterialsUsageTab = () => {
-    if (!statsData || !statsData.materialsUsage || statsData.materialsUsage.length === 0) {
+    // Sprawdź czy statsData i materialsUsage istnieją
+    if (!statsData || !Array.isArray(statsData.materialsUsage) || statsData.materialsUsage.length === 0) {
       return <Alert severity="info">Brak danych o zużyciu materiałów</Alert>;
     }
     
     return (
-      <TableContainer component={Paper}>
+      <TableContainer component={Paper} sx={{ boxShadow: 3 }}>
         <Table size="small">
-          <TableHead>
+          <TableHead sx={{ bgcolor: 'secondary.main' }}>
             <TableRow>
-              <TableCell>Materiał</TableCell>
-              <TableCell>Kategoria</TableCell>
-              <TableCell align="right">Zużyta ilość</TableCell>
-              <TableCell align="right">Średnie zużycie dzienne</TableCell>
-              <TableCell align="right">Koszt</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Materiał</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Kategoria</TableCell>
+              <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>Zużyta ilość</TableCell>
+              <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>Średnie zużycie dzienne</TableCell>
+              <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>Koszt</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {statsData.materialsUsage.map((material) => (
-              <TableRow key={material.id}>
-                <TableCell>{material.name}</TableCell>
-                <TableCell>{material.category}</TableCell>
-                <TableCell align="right">{material.usedQuantity} {material.unit}</TableCell>
-                <TableCell align="right">{material.avgDailyUsage} {material.unit}</TableCell>
+            {statsData.materialsUsage.map((material, index) => (
+              <TableRow 
+                key={material.id || `material-${index}`}
+                sx={{ 
+                  '&:nth-of-type(odd)': { bgcolor: 'action.hover' },
+                  '&:hover': { bgcolor: 'action.selected' }
+                }}
+              >
+                <TableCell sx={{ fontWeight: 'medium' }}>{material.name || 'Nieznany'}</TableCell>
+                <TableCell>{material.category || 'Inne'}</TableCell>
+                <TableCell align="right">{material.usedQuantity || 0} {material.unit || 'szt.'}</TableCell>
+                <TableCell align="right">{material.avgDailyUsage || 0} {material.unit || 'szt.'}</TableCell>
                 <TableCell align="right">{material.cost ? `${material.cost} zł` : 'N/A'}</TableCell>
               </TableRow>
             ))}
@@ -335,17 +478,21 @@ const ReportsPage = () => {
         </Typography>
         <Box>
           <Button 
-            variant="outlined"
+            variant="contained"
+            color="primary"
             startIcon={<RefreshIcon />}
             onClick={fetchReportsData}
-            sx={{ mr: 1 }}
+            sx={{ mr: 2 }}
+            size="medium"
           >
             Odśwież
           </Button>
           <Button 
-            variant="outlined"
+            variant="contained"
+            color="secondary"
             startIcon={<DownloadIcon />}
             onClick={() => handleGenerateReport('summary')}
+            size="medium"
           >
             Eksportuj raport
           </Button>
@@ -371,7 +518,7 @@ const ReportsPage = () => {
             </FormControl>
           </Grid>
           
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={3}>
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
               <DatePicker
                 label="Data początkowa"
@@ -385,7 +532,7 @@ const ReportsPage = () => {
             </LocalizationProvider>
           </Grid>
           
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={3}>
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
               <DatePicker
                 label="Data końcowa"
@@ -397,6 +544,45 @@ const ReportsPage = () => {
                 sx={{ width: '100%' }}
               />
             </LocalizationProvider>
+          </Grid>
+          
+          <Grid item xs={12} md={2} sx={{ display: 'flex', justifyContent: 'center' }}>
+            <Box sx={{ display: 'flex', flexDirection: 'row' }}>
+              <Button 
+                variant="outlined" 
+                onClick={() => {
+                  const prevStart = new Date(startDate);
+                  const prevEnd = new Date(endDate);
+                  const diff = endDate - startDate;
+                  prevStart.setTime(prevStart.getTime() - diff);
+                  prevEnd.setTime(prevEnd.getTime() - diff);
+                  setStartDate(prevStart);
+                  setEndDate(prevEnd);
+                  setReportPeriod('custom');
+                }}
+                sx={{ mr: 1, minWidth: 0, p: 1 }}
+                size="small"
+              >
+                <PrevIcon fontSize="small" />
+              </Button>
+              <Button 
+                variant="outlined" 
+                onClick={() => {
+                  const nextStart = new Date(startDate);
+                  const nextEnd = new Date(endDate);
+                  const diff = endDate - startDate;
+                  nextStart.setTime(nextStart.getTime() + diff);
+                  nextEnd.setTime(nextEnd.getTime() + diff);
+                  setStartDate(nextStart);
+                  setEndDate(nextEnd);
+                  setReportPeriod('custom');
+                }}
+                sx={{ minWidth: 0, p: 1 }}
+                size="small"
+              >
+                <NextIcon fontSize="small" />
+              </Button>
+            </Box>
           </Grid>
         </Grid>
       </Paper>
@@ -411,11 +597,41 @@ const ReportsPage = () => {
         </Box>
       ) : (
         <>
-          <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-            <Tabs value={selectedTab} onChange={handleTabChange} aria-label="raporty produkcyjne">
-              <Tab label="Statystyki" icon={<AssessmentIcon />} iconPosition="start" />
-              <Tab label="Ukończone zadania" />
-              <Tab label="Zużycie materiałów" />
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+            <Tabs 
+              value={selectedTab} 
+              onChange={handleTabChange} 
+              aria-label="raporty produkcyjne"
+              sx={{
+                '& .MuiTab-root': {
+                  fontWeight: 'bold',
+                  py: 2
+                },
+                '& .Mui-selected': {
+                  color: 'primary.main',
+                  fontWeight: 'bold'
+                },
+                '& .MuiTabs-indicator': {
+                  height: 3,
+                  borderTopLeftRadius: 3,
+                  borderTopRightRadius: 3
+                }
+              }}
+            >
+              <Tab 
+                label="Statystyki" 
+                icon={<AssessmentIcon />} 
+                iconPosition="start"
+                sx={{ fontSize: '1rem' }}
+              />
+              <Tab 
+                label="Ukończone zadania"
+                sx={{ fontSize: '1rem' }}
+              />
+              <Tab 
+                label="Zużycie materiałów"
+                sx={{ fontSize: '1rem' }}
+              />
             </Tabs>
           </Box>
           
