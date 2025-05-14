@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -19,7 +19,8 @@ import {
   useMediaQuery,
   useTheme,
   IconButton,
-  Collapse
+  Collapse,
+  TextField
 } from '@mui/material';
 import {
   CalendarMonth as CalendarIcon,
@@ -79,14 +80,35 @@ const ProductionCalendar = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [optionsExpanded, setOptionsExpanded] = useState(false);
   const [legendExpanded, setLegendExpanded] = useState(false);
+  
+  // Referencja do przechowywania aktywnych tooltipów
+  const activeTooltipsRef = useRef([]);
+  
+  // Dodaję stan do śledzenia zmodyfikowanych zadań
+  const [modifiedTasks, setModifiedTasks] = useState({});
 
+  // Funkcja do czyszczenia wszystkich aktywnych tooltipów
+  const clearAllTooltips = useCallback(() => {
+    if (activeTooltipsRef.current.length > 0) {
+      activeTooltipsRef.current.forEach(tooltip => {
+        if (tooltip && tooltip.parentNode) {
+          tooltip.parentNode.removeChild(tooltip);
+        }
+      });
+      activeTooltipsRef.current = [];
+    }
+  }, []);
+  
   // Efekt do aktualizacji widoku kalendarza po zmianie stanu view
   useEffect(() => {
     if (calendarRef.current) {
       const calendarApi = calendarRef.current.getApi();
       calendarApi.changeView(view);
+      
+      // Wyczyść wszystkie tooltipów przy zmianie widoku
+      clearAllTooltips();
     }
-  }, [view]);
+  }, [view, clearAllTooltips]);
   
   useEffect(() => {
     fetchWorkstations();
@@ -180,6 +202,9 @@ const ProductionCalendar = () => {
   const handleViewChange = (event, newView) => {
     if (newView !== null) {
       try {
+        // Wyczyść wszystkie tooltipów przed zmianą widoku
+        clearAllTooltips();
+        
         // Jeśli wybrano widok Gantta, użyj aktualnie wybranego widoku Gantta
         const viewToUse = newView === 'gantt' ? ganttView : newView;
         
@@ -237,6 +262,9 @@ const ProductionCalendar = () => {
 
   const handleGanttViewChange = (newGanttView) => {
     try {
+      // Wyczyść wszystkie tooltipów przed zmianą widoku Gantt
+      clearAllTooltips();
+      
       // Zamknij menu Gantta
       handleGanttMenuClose();
       
@@ -285,6 +313,8 @@ const ProductionCalendar = () => {
 
   // Obsługa kliknięcia w zdarzenie
   const handleEventClick = (info) => {
+    // Wyczyść wszystkie tooltipów przed przejściem do strony MO
+    clearAllTooltips();
     navigate(`/production/tasks/${info.event.id}`);
   };
 
@@ -350,6 +380,7 @@ const ProductionCalendar = () => {
     return getStatusColor(task.status);
   };
 
+  // Główna funkcja renderowania wydarzeń - aktualizuje również oryginalne zadanie w extendedProps
   const getCalendarEvents = () => {
     if (!tasks || tasks.length === 0) {
       return [];
@@ -384,8 +415,16 @@ const ProductionCalendar = () => {
         if (endDate.toDate) {
           endDate = endDate.toDate().toISOString();
         } else if (endDate instanceof Date) {
-          endDate = startDate.toISOString();
+          endDate = endDate.toISOString();
         }
+      }
+      
+      // Jeśli endDate nie jest ustawione, oblicz go na podstawie scheduledDate i estimatedDuration
+      if (!endDate && startDate && task.estimatedDuration) {
+        const start = new Date(startDate);
+        const durationMs = task.estimatedDuration * 60 * 1000; // konwersja minut na milisekundy
+        const calculatedEnd = new Date(start.getTime() + durationMs);
+        endDate = calculatedEnd.toISOString();
       }
       
       // Określ zasób, do którego przypisane jest zadanie, w zależności od trybu grupowania
@@ -401,6 +440,57 @@ const ProductionCalendar = () => {
       
       // Tworzenie unikalnego ID dla zadania, uwzględniając MO w ramach jednego CO
       const uniqueId = task.id;
+      
+      // Sprawdź, czy mamy zmodyfikowane dane dla tego zadania
+      const modifiedTask = modifiedTasks[uniqueId];
+      if (modifiedTask) {
+        console.log(`Używam zmodyfikowanych danych podczas renderowania zdarzenia: ${uniqueId}`, {
+          original: { startDate, endDate },
+          modified: {
+            startDate: modifiedTask.scheduledDate instanceof Date 
+              ? modifiedTask.scheduledDate.toISOString()
+              : modifiedTask.scheduledDate,
+            endDate: modifiedTask.endDate instanceof Date
+              ? modifiedTask.endDate.toISOString()
+              : modifiedTask.endDate
+          }
+        });
+        
+        // Użyj zmodyfikowanych danych dla dat
+        if (modifiedTask.scheduledDate) {
+          startDate = modifiedTask.scheduledDate instanceof Date 
+            ? modifiedTask.scheduledDate.toISOString()
+            : modifiedTask.scheduledDate;
+        }
+        
+        if (modifiedTask.endDate) {
+          endDate = modifiedTask.endDate instanceof Date
+            ? modifiedTask.endDate.toISOString()
+            : modifiedTask.endDate;
+        }
+      }
+      
+      // Zapis aktualnych danych do LocalStorage dla synchronizacji tooltipów
+      // Używamy ID zadania jako klucza dla łatwego dostępu
+      try {
+        localStorage.setItem(`task_${uniqueId}`, JSON.stringify({
+          id: uniqueId,
+          moNumber: task.moNumber,
+          name: task.name,
+          productName: task.productName,
+          quantity: task.quantity,
+          unit: task.unit,
+          status: task.status,
+          workstationId: task.workstationId,
+          workstationName: workstations.find(w => w.id === workstationId)?.name,
+          scheduledDate: startDate,
+          endDate: endDate,
+          estimatedDuration: task.estimatedDuration,
+          lastUpdated: Date.now()
+        }));
+      } catch (error) {
+        console.warn('Nie można zapisać danych zadania do LocalStorage:', error);
+      }
       
       // Zwróć obiekt zdarzenia
       return {
@@ -715,6 +805,9 @@ const ProductionCalendar = () => {
   // Kompletnie przepisana funkcja do zastosowania zakresu dat
   const applyCustomDateRange = () => {
     try {
+      // Wyczyść wszystkie tooltipów przed aplikowaniem nowego zakresu dat
+      clearAllTooltips();
+      
       // Najpierw zamknij menu
       handleDateRangeMenuClose();
       
@@ -764,12 +857,23 @@ const ProductionCalendar = () => {
         const durationDays = Math.ceil((endDateWithTime - startDate) / (1000 * 60 * 60 * 24)) + 1;
         console.log("Długość trwania w dniach:", durationDays);
         
-        // Wybór odpowiedniego widoku
+        // Wybór odpowiedniego widoku na podstawie wybranej szczegółowości i długości trwania
         let targetView = 'resourceTimelineMonth';
-        if (durationDays <= 1) {
-          targetView = 'resourceTimelineDay';
-        } else if (durationDays <= 7) {
-          targetView = 'resourceTimelineWeek';
+        
+        // Respektuj aktualną szczegółowość
+        if (ganttDetail === 'hour') {
+          // Jeśli wybrano szczegółowość godzinową, dla każdego zakresu dat używamy specjalnego widoku
+          // Dla większej liczby dni niż 1, używamy widoku tygodniowego z wymuszonym ustawieniem slotDuration na godziny
+          targetView = durationDays > 3 ? 'resourceTimelineWeek' : 'resourceTimelineDay';
+        } else {
+          // Dla innych szczegółowości, wybierz odpowiedni widok na podstawie długości zakresu
+          if (durationDays <= 1) {
+            targetView = 'resourceTimelineDay';
+          } else if (durationDays <= 7) {
+            targetView = 'resourceTimelineWeek';
+          } else {
+            targetView = 'resourceTimelineMonth';
+          }
         }
         
         // KOMPLETNY RESET KALENDARZA - znacznie radykalniejsze podejście
@@ -782,9 +886,7 @@ const ProductionCalendar = () => {
           calendarApi.changeView(targetView);
           
           // 3. Ustaw domyślną durationę dla widoku (unikając konfliktu z slotDuration)
-          if (targetView === 'resourceTimelineMonth') {
-            calendarApi.setOption('duration', { days: durationDays });
-          }
+          calendarApi.setOption('duration', { days: durationDays });
           
           // 4. KLUCZOWE: Ustaw dokładny zakres dat (visibleRange jest nadrzędny wobec duration)
           calendarApi.setOption('visibleRange', {
@@ -795,10 +897,24 @@ const ProductionCalendar = () => {
           // 5. Przejdź do daty początkowej
           calendarApi.gotoDate(startDate);
           
-          // 6. Zaktualizuj widok
+          // 6. Jeśli wybrano widok godzinowy, upewnij się że slotDuration jest ustawione na godziny
+          if (ganttDetail === 'hour') {
+            calendarApi.setOption('slotDuration', { hours: 1 });
+            // Dla widoku godzinowego z wieloma dniami, ustaw slotLabelFormat aby pokazywał też datę
+            if (durationDays > 1) {
+              calendarApi.setOption('slotLabelFormat', [
+                { day: 'numeric', month: 'short' }, // Pierwszy poziom - data (dzień, miesiąc)
+                { hour: '2-digit', minute: '2-digit', hour12: false } // Drugi poziom - godzina
+              ]);
+            }
+          } else {
+            calendarApi.setOption('slotDuration', { days: 1 });
+          }
+          
+          // 7. Zaktualizuj widok
           calendarApi.updateSize();
           
-          // 7. Pobierz dane dla dokładnego zakresu
+          // 8. Pobierz dane dla dokładnego zakresu
           console.log("Pobieranie zadań dla wybranego zakresu:", startDate.toISOString(), "-", endDateWithTime.toISOString());
           fetchTasks({
             startStr: startDate.toISOString(),
@@ -834,9 +950,12 @@ const ProductionCalendar = () => {
     }
   };
 
-  // Obsługa przeciągnięcia wydarzenia (zmiana daty/czasu)
+  // Modyfikuję handleEventDrop z wymuszonym pełnym odświeżeniem kalendarza
   const handleEventDrop = async (info) => {
     try {
+      // Wyczyść wszystkie tooltipów przed operacją
+      clearAllTooltips();
+      
       setLoading(true);
       const { event } = info;
       const taskId = event.id;
@@ -849,15 +968,52 @@ const ProductionCalendar = () => {
       
       console.log(`Zadanie przeciągnięte: ${taskId}`, updateData);
       
+      // Aktualizuj stan modifiedTasks - to jest kluczowe dla tooltipów
+      setModifiedTasks(prev => ({
+        ...prev,
+        [taskId]: {
+          id: taskId,
+          scheduledDate: event.start,
+          endDate: event.end,
+          lastModified: new Date(),
+          // Zachowaj wszystkie inne właściwości z oryginalnego zadania
+          ...event.extendedProps.task,
+          // Ale upewnij się, że daty są zaktualizowane
+          scheduledDate: event.start,
+          endDate: event.end
+        }
+      }));
+      
       // Aktualizacja zadania w bazie danych
       await updateTask(taskId, updateData, 'system');
       showSuccess('Zadanie zostało zaktualizowane pomyślnie');
       
-      // Odświeżenie widoku
-      fetchTasks({
-        startStr: calendarRef.current.getApi().view.activeStart.toISOString(),
-        endStr: calendarRef.current.getApi().view.activeEnd.toISOString()
-      });
+      // Odświeżenie widoku - używając nowego podejścia, które aktualizuje cały obiekt task
+      const updatedTasks = await getTasksByDateRange(
+        calendarRef.current.getApi().view.activeStart.toISOString(),
+        calendarRef.current.getApi().view.activeEnd.toISOString()
+      );
+      setTasks(updatedTasks);
+      
+      // KLUCZOWA ZMIANA: Wymuszenie pełnego przeładowania kalendarza
+      try {
+        if (calendarRef.current) {
+          const api = calendarRef.current.getApi();
+          
+          // Krótka pauza przed refreshem
+          setTimeout(() => {
+            // Wymuś pełne odświeżenie widoku kalendarza
+            api.refetchEvents();
+            api.updateSize();
+            
+            // Dodatkowy krok - możemy też spróbować przeładować cały kalendarz
+            api.destroy();
+            api.render();
+          }, 100);
+        }
+      } catch (error) {
+        console.error('Błąd podczas odświeżania kalendarza:', error);
+      }
     } catch (error) {
       console.error('Błąd podczas aktualizacji zadania:', error);
       showError('Błąd podczas aktualizacji zadania: ' + error.message);
@@ -866,15 +1022,13 @@ const ProductionCalendar = () => {
       setLoading(false);
     }
   };
-  
-  // Obsługa przełącznika dla opcji zmiany rozmiaru od początku
-  const handleResizableFromStartToggle = (event) => {
-    setEventResizableFromStart(event.target.checked);
-  };
 
-  // Obsługa zmiany rozmiaru wydarzenia od początku (gdy eventResizableFromStart jest true)
+  // Podobnie modyfikuję handleEventResize
   const handleEventResize = async (info) => {
     try {
+      // Wyczyść wszystkie tooltipów przed operacją
+      clearAllTooltips();
+      
       setLoading(true);
       const { event } = info;
       const taskId = event.id;
@@ -892,6 +1046,20 @@ const ProductionCalendar = () => {
       
       console.log(`Zmieniono rozmiar zadania: ${taskId}`, updateData);
       
+      // Aktualizuj stan modifiedTasks - to jest kluczowe dla tooltipów
+      setModifiedTasks(prev => ({
+        ...prev,
+        [taskId]: {
+          id: taskId,
+          // Zachowaj wszystkie inne właściwości z oryginalnego zadania
+          ...event.extendedProps.task,
+          // Ale upewnij się, że daty są zaktualizowane
+          scheduledDate: updateData.scheduledDate || event.start,
+          endDate: event.end,
+          lastModified: new Date()
+        }
+      }));
+      
       // Sprawdź czy zadanie jest częścią zamówienia i ma przypisany orderId
       const orderId = taskData.orderId;
       console.log(`Zadanie należy do zamówienia: ${orderId || 'brak'}`);
@@ -900,11 +1068,32 @@ const ProductionCalendar = () => {
       await updateTask(taskId, updateData, 'system');
       showSuccess('Czas trwania zadania został zaktualizowany pomyślnie');
       
-      // Odświeżenie widoku
-      fetchTasks({
-        startStr: calendarRef.current.getApi().view.activeStart.toISOString(),
-        endStr: calendarRef.current.getApi().view.activeEnd.toISOString()
-      });
+      // Odświeżenie widoku - używając nowego podejścia, które aktualizuje cały obiekt task
+      const updatedTasks = await getTasksByDateRange(
+        calendarRef.current.getApi().view.activeStart.toISOString(),
+        calendarRef.current.getApi().view.activeEnd.toISOString()
+      );
+      setTasks(updatedTasks);
+      
+      // KLUCZOWA ZMIANA: Wymuszenie pełnego przeładowania kalendarza
+      try {
+        if (calendarRef.current) {
+          const api = calendarRef.current.getApi();
+          
+          // Krótka pauza przed refreshem
+          setTimeout(() => {
+            // Wymuś pełne odświeżenie widoku kalendarza
+            api.refetchEvents();
+            api.updateSize();
+            
+            // Dodatkowy krok - możemy też spróbować przeładować cały kalendarz
+            api.destroy();
+            api.render();
+          }, 100);
+        }
+      } catch (error) {
+        console.error('Błąd podczas odświeżania kalendarza:', error);
+      }
     } catch (error) {
       console.error('Błąd podczas aktualizacji czasu trwania zadania:', error);
       showError('Błąd podczas aktualizacji zadania: ' + error.message);
@@ -929,6 +1118,9 @@ const ProductionCalendar = () => {
   // Funkcja do obsługi nawigacji kalendarza (prev, next, today buttons)
   const handleNavigation = (action) => {
     if (calendarRef.current) {
+      // Wyczyść wszystkie tooltipów przed nawigacją
+      clearAllTooltips();
+      
       // Pokazujemy loader
       setLoading(true);
       
@@ -1015,59 +1207,74 @@ const ProductionCalendar = () => {
 
   const handleGanttDetailChange = (detail) => {
     handleDetailMenuClose();
+    
+    // Najpierw tylko ustawiam szczegółowość
     setGanttDetail(detail);
     
-    if (calendarRef.current) {
-      try {
-        const calendarApi = calendarRef.current.getApi();
-        
-        // Dostosuj widok Gantta do wybranej szczegółowości
-        let viewToUse = ganttView;
-        
-        // Aktualizuj widok odpowiednio do wybranej szczegółowości
-        if (detail === 'hour') {
-          // Dla widoku godzinowego używamy widoku dnia z podziałem na godziny
-          viewToUse = 'resourceTimelineDay';
-        } else if (detail === 'day') {
-          // Dla widoku dziennego używamy widoku tygodnia lub miesiąca,
-          // w zależności od długości wybranego zakresu dat
-          const diffInDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
-          if (diffInDays <= 7) {
-            viewToUse = 'resourceTimelineWeek';
-          } else {
-            viewToUse = 'resourceTimelineMonth';
-          }
-        } else if (detail === 'week') {
-          // Dla widoku tygodniowego używamy widoku miesiąca lub roku
-          viewToUse = 'resourceTimelineYear';
-        }
-        
-        // Aktualizuj stany tylko jeśli widok się zmienił
-        if (viewToUse !== view) {
-          setGanttView(viewToUse);
-          setView(viewToUse);
+    // Używam requestAnimationFrame, aby oddzielić aktualizacje stanu React od manipulacji DOM-em
+    requestAnimationFrame(() => {
+      if (calendarRef.current) {
+        try {
+          const calendarApi = calendarRef.current.getApi();
           
-          // Daj czas na aktualizację stanu
-          setTimeout(() => {
-            try {
-              calendarApi.changeView(viewToUse);
-              
-              // Pobierz zadania dla aktualnie widocznego zakresu
-              fetchTasks({
-                startStr: calendarApi.view.activeStart.toISOString(),
-                endStr: calendarApi.view.activeEnd.toISOString()
-              });
-            } catch (error) {
-              console.error('Błąd podczas zmiany szczegółowości widoku:', error);
-              showError('Wystąpił błąd podczas zmiany widoku: ' + error.message);
+          // Dostosuj widok Gantta do wybranej szczegółowości
+          let viewToUse = ganttView;
+          
+          // Aktualizuj widok odpowiednio do wybranej szczegółowości
+          if (detail === 'hour') {
+            // Dla widoku godzinowego używamy widoku dnia z podziałem na godziny
+            viewToUse = 'resourceTimelineDay';
+          } else if (detail === 'day') {
+            // Dla widoku dziennego używamy widoku tygodnia lub miesiąca,
+            // w zależności od długości wybranego zakresu dat
+            const diffInDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+            if (diffInDays <= 7) {
+              viewToUse = 'resourceTimelineWeek';
+            } else {
+              viewToUse = 'resourceTimelineMonth';
             }
-          }, 0);
+          } else if (detail === 'week') {
+            // Dla widoku tygodniowego używamy widoku miesiąca lub roku
+            viewToUse = 'resourceTimelineYear';
+          }
+          
+          // Ustaw stan, tylko jeśli widok się zmienił
+          if (viewToUse !== view) {
+            setGanttView(viewToUse);
+            setView(viewToUse);
+            
+            // Oddzielamy aktualizację widoku od aktualizacji stanu
+            // Używamy setTimeout z większym opóźnieniem, aby dać czas React na zakończenie renderowania
+            setTimeout(() => {
+              try {
+                if (!calendarRef.current) return;
+                const api = calendarRef.current.getApi();
+                
+                // Najpierw zmieniamy widok
+                api.changeView(viewToUse);
+                api.updateSize();
+                
+                // Następnie pobieramy zadania
+                setTimeout(() => {
+                  if (!calendarRef.current) return;
+                  const updatedApi = calendarRef.current.getApi();
+                  fetchTasks({
+                    startStr: updatedApi.view.activeStart.toISOString(),
+                    endStr: updatedApi.view.activeEnd.toISOString()
+                  });
+                }, 50);
+              } catch (error) {
+                console.error('Błąd podczas zmiany szczegółowości widoku:', error);
+                showError('Wystąpił błąd podczas zmiany widoku: ' + error.message);
+              }
+            }, 100);
+          }
+        } catch (error) {
+          console.error('Błąd podczas zmiany szczegółowości widoku:', error);
+          showError('Wystąpił błąd podczas zmiany widoku: ' + error.message);
         }
-      } catch (error) {
-        console.error('Błąd podczas zmiany szczegółowości widoku:', error);
-        showError('Wystąpił błąd podczas zmiany widoku: ' + error.message);
       }
-    }
+    });
   };
 
   // Funkcja do przełączania grupowania Gantta
@@ -1255,6 +1462,13 @@ const ProductionCalendar = () => {
   const toggleLegend = () => {
     setLegendExpanded(!legendExpanded);
   };
+
+  // Dodaj czyszczenie tooltipów po odmontowaniu komponentu
+  useEffect(() => {
+    return () => {
+      clearAllTooltips();
+    };
+  }, [clearAllTooltips]);
 
   return (
     <Paper sx={{ 
@@ -1515,34 +1729,53 @@ const ProductionCalendar = () => {
           }}
         >
           <Typography variant="body2" sx={{ mr: 1, display: isMobile ? 'none' : 'block' }}>
-            Legenda statusów:
+            {useWorkstationColors ? 'Legenda stanowisk:' : 'Legenda statusów:'}
           </Typography>
           
-          <Chip 
-            size={isMobile ? "small" : "medium"} 
-            label="Zaplanowane" 
-            sx={{ bgcolor: '#3788d8', color: 'white', fontSize: isMobile ? '0.7rem' : '0.8rem' }} 
-          />
-          <Chip 
-            size={isMobile ? "small" : "medium"} 
-            label="W trakcie" 
-            sx={{ bgcolor: '#f39c12', color: 'white', fontSize: isMobile ? '0.7rem' : '0.8rem' }} 
-          />
-          <Chip 
-            size={isMobile ? "small" : "medium"} 
-            label="Zakończone" 
-            sx={{ bgcolor: '#2ecc71', color: 'white', fontSize: isMobile ? '0.7rem' : '0.8rem' }} 
-          />
-          <Chip 
-            size={isMobile ? "small" : "medium"} 
-            label="Anulowane" 
-            sx={{ bgcolor: '#e74c3c', color: 'white', fontSize: isMobile ? '0.7rem' : '0.8rem' }} 
-          />
-          <Chip 
-            size={isMobile ? "small" : "medium"} 
-            label="Wstrzymane" 
-            sx={{ bgcolor: '#757575', color: 'white', fontSize: isMobile ? '0.7rem' : '0.8rem' }} 
-          />
+          {useWorkstationColors ? (
+            // Legenda dla kolorów stanowisk
+            workstations.map(workstation => (
+              <Chip 
+                key={workstation.id}
+                size={isMobile ? "small" : "medium"} 
+                label={workstation.name} 
+                sx={{ 
+                  bgcolor: workstation.color || getWorkstationColor(workstation.id), 
+                  color: getContrastYIQ(workstation.color || getWorkstationColor(workstation.id)), 
+                  fontSize: isMobile ? '0.7rem' : '0.8rem' 
+                }} 
+              />
+            ))
+          ) : (
+            // Legenda dla statusów
+            <>
+              <Chip 
+                size={isMobile ? "small" : "medium"} 
+                label="Zaplanowane" 
+                sx={{ bgcolor: '#3788d8', color: 'white', fontSize: isMobile ? '0.7rem' : '0.8rem' }} 
+              />
+              <Chip 
+                size={isMobile ? "small" : "medium"} 
+                label="W trakcie" 
+                sx={{ bgcolor: '#f39c12', color: 'white', fontSize: isMobile ? '0.7rem' : '0.8rem' }} 
+              />
+              <Chip 
+                size={isMobile ? "small" : "medium"} 
+                label="Zakończone" 
+                sx={{ bgcolor: '#2ecc71', color: 'white', fontSize: isMobile ? '0.7rem' : '0.8rem' }} 
+              />
+              <Chip 
+                size={isMobile ? "small" : "medium"} 
+                label="Anulowane" 
+                sx={{ bgcolor: '#e74c3c', color: 'white', fontSize: isMobile ? '0.7rem' : '0.8rem' }} 
+              />
+              <Chip 
+                size={isMobile ? "small" : "medium"} 
+                label="Wstrzymane" 
+                sx={{ bgcolor: '#757575', color: 'white', fontSize: isMobile ? '0.7rem' : '0.8rem' }} 
+              />
+            </>
+          )}
         </Box>
       </Collapse>
       
@@ -1800,7 +2033,7 @@ const ProductionCalendar = () => {
           allDaySlot={true}
           slotMinTime="00:00:00"
           slotMaxTime="23:59:59"
-          slotDuration={view === 'resourceTimelineDay' ? { hours: 1 } : { days: 1 }}
+          slotDuration={ganttDetail === 'hour' || view === 'resourceTimelineDay' ? { hours: 1 } : { days: 1 }}
           businessHours={{
             daysOfWeek: [1, 2, 3, 4, 5],
             startTime: '08:00',
@@ -1819,7 +2052,7 @@ const ProductionCalendar = () => {
           eventDrop={handleEventDrop}
           eventResize={handleEventResize}
           eventOverlap={true}
-          snapDuration="00:15:00"
+          snapDuration={ganttDetail === 'hour' ? "00:15:00" : "01:00:00"}
           slotLabelFormat={{
             hour: '2-digit',
             minute: '2-digit',
@@ -1863,6 +2096,226 @@ const ProductionCalendar = () => {
                 info.el.style.padding = '1px 2px';
               }
             }
+            
+            // Dodaj tooltip z podsumowaniem informacji o MO
+            if (info.event) {
+              // Funkcja do dynamicznego tworzenia treści tooltipa
+              // Ta funkcja będzie wywoływana za każdym razem, gdy pokazujemy tooltip
+              // dzięki czemu zawsze będziemy mieć aktualne dane
+              const createTooltipContent = () => {
+                const tooltipContent = document.createElement('div');
+                tooltipContent.className = 'mo-tooltip';
+                
+                // Pobierz ID zadania
+                const taskId = info.event.id;
+                
+                // Sprawdź, czy zadanie było zmodyfikowane (najpierw sprawdź w stan komponentu)
+                const modifiedTask = modifiedTasks[taskId];
+                
+                // Podstawowe dane z wydarzenia
+                const eventData = {
+                  id: taskId,
+                  title: info.event.title,
+                  start: info.event.start,
+                  end: info.event.end,
+                  extendedProps: info.event.extendedProps
+                };
+                
+                // Pobierz aktualne dane o zadaniu z najlepszego dostępnego źródła
+                let taskData;
+                
+                if (modifiedTask) {
+                  // Jeśli zadanie było modyfikowane, użyj tych danych jako podstawy
+                  taskData = {
+                    ...modifiedTask,
+                    // Ale zawsze aktualizuj daty z aktualnego widoku wydarzenia
+                    scheduledDate: info.event.start || modifiedTask.scheduledDate,
+                    endDate: info.event.end || modifiedTask.endDate
+                  };
+                  
+                  console.log('Używam zmodyfikowanych danych dla zadania:', taskId);
+                } else {
+                  // W przeciwnym razie użyj danych z wydarzenia i extendedProps
+                  const task = info.event.extendedProps.task || {};
+                  
+                  taskData = {
+                    id: taskId,
+                    name: info.event.title || task.name,
+                    moNumber: task.moNumber,
+                    productName: task.productName,
+                    quantity: task.quantity,
+                    unit: task.unit,
+                    status: task.status,
+                    workstationId: task.workstationId,
+                    workstationName: task.workstationName || workstations.find(w => w.id === task.workstationId)?.name,
+                    scheduledDate: info.event.start,
+                    endDate: info.event.end,
+                    estimatedDuration: task.estimatedDuration
+                  };
+                }
+                
+                // Bezpieczne formatowanie dat
+                const formatDateSafe = (dateValue) => {
+                  try {
+                    if (!dateValue) return '';
+                    
+                    // Obsługa różnych typów dat
+                    let date;
+                    
+                    // Jeśli dateValue jest już obiektem Date
+                    if (dateValue instanceof Date) {
+                      date = dateValue;
+                    } 
+                    // Jeśli to string (ISO)
+                    else if (typeof dateValue === 'string') {
+                      date = new Date(dateValue);
+                    }
+                    // Jeśli to obiekt Firebase Timestamp (ma metodę toDate)
+                    else if (dateValue && typeof dateValue.toDate === 'function') {
+                      date = dateValue.toDate();
+                    }
+                    // Inne przypadki
+                    else {
+                      date = new Date(dateValue);
+                    }
+                    
+                    // Sprawdź czy data jest poprawna
+                    if (isNaN(date.getTime())) {
+                      console.warn('Nieprawidłowa data:', dateValue);
+                      return 'Nieprawidłowa data';
+                    }
+                    
+                    return format(date, 'dd.MM.yyyy HH:mm');
+                  } catch (error) {
+                    console.error('Błąd podczas formatowania daty:', error, 'Wartość:', dateValue);
+                    return 'Nieprawidłowa data';
+                  }
+                };
+                
+                // Formatujemy daty zawsze używając aktualnych danych
+                const scheduledDate = taskData.scheduledDate || info.event.start;
+                const endDate = taskData.endDate || info.event.end;
+                
+                const scheduledDateFormatted = scheduledDate ? formatDateSafe(scheduledDate) : '';
+                const endDateFormatted = endDate ? formatDateSafe(endDate) : '';
+                
+                // Oblicz aktualny czas trwania na podstawie dat
+                let durationInMinutes = '';
+                if (scheduledDate && endDate) {
+                  // Konwertuj do dat jeśli są stringami
+                  const start = typeof scheduledDate === 'string' ? new Date(scheduledDate) : scheduledDate;
+                  const end = typeof endDate === 'string' ? new Date(endDate) : endDate;
+                  
+                  if (start instanceof Date && end instanceof Date) {
+                    durationInMinutes = Math.round((end - start) / (1000 * 60));
+                  }
+                }
+                
+                if (!durationInMinutes && taskData.estimatedDuration) {
+                  durationInMinutes = taskData.estimatedDuration;
+                }
+                
+                // Diagnoza - wypisz informacje o datach do konsoli
+                console.log('Tooltip info dla zadania:', taskId, {
+                  'info.event.start': info.event.start,
+                  'info.event.end': info.event.end,
+                  'taskData.scheduledDate': taskData.scheduledDate,
+                  'taskData.endDate': taskData.endDate,
+                  'używane daty': {
+                    scheduledDate,
+                    endDate,
+                    scheduledDateFormatted,
+                    endDateFormatted,
+                    durationInMinutes
+                  }
+                });
+                
+                // Ustaw treść tooltipa
+                tooltipContent.innerHTML = `
+                  <div style="background-color: white; border: 1px solid #ccc; border-radius: 4px; padding: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 300px; z-index: 10000;">
+                    <div style="font-weight: bold; margin-bottom: 4px; font-size: 14px; color: #1976d2;">${taskData.name || 'Zlecenie produkcyjne'}</div>
+                    <div style="font-size: 12px; margin-bottom: 2px;"><b>MO:</b> ${taskData.moNumber || 'Brak'}</div>
+                    ${taskData.productName ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Produkt:</b> ${taskData.productName}</div>` : ''}
+                    ${taskData.quantity ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Ilość:</b> ${taskData.quantity} ${taskData.unit || ''}</div>` : ''}
+                    ${taskData.workstationName ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Stanowisko:</b> ${taskData.workstationName}</div>` : ''}
+                    ${taskData.status ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Status:</b> ${taskData.status}</div>` : ''}
+                    ${scheduledDateFormatted ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Planowany start:</b> ${scheduledDateFormatted}</div>` : ''}
+                    ${endDateFormatted ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Planowany koniec:</b> ${endDateFormatted}</div>` : ''}
+                    ${durationInMinutes ? `<div style="font-size: 12px;"><b>Szacowany czas:</b> ${durationInMinutes} min</div>` : ''}
+                  </div>
+                `;
+                
+                // Dodaj unikalne ID
+                tooltipContent.id = 'tooltip-' + info.event.id + '-' + Date.now();
+                
+                return tooltipContent;
+              };
+              
+              // Funkcja do pokazywania tooltipa
+              const showTooltip = () => {
+                // Najpierw wyczyść wszystkie inne tooltipów
+                clearAllTooltips();
+                
+                // Dynamicznie utwórz tooltip z najnowszymi danymi
+                const tooltipContent = createTooltipContent();
+                
+                // Dodaj tooltip do ciała dokumentu
+                document.body.appendChild(tooltipContent);
+                
+                // Dodaj tooltip do listy aktywnych tooltipów
+                activeTooltipsRef.current.push(tooltipContent);
+                
+                // Funkcja do pozycjonowania tooltipa przy kursorze
+                const positionTooltip = (e) => {
+                  if (tooltipContent.parentNode) {
+                    tooltipContent.style.position = 'absolute';
+                    tooltipContent.style.left = `${e.pageX + 10}px`;
+                    tooltipContent.style.top = `${e.pageY + 10}px`;
+                    tooltipContent.style.zIndex = '10000'; // Zapewnienie najwyższego z-index
+                  }
+                };
+                
+                // Dodaj pierwszy raz pozycjonowanie
+                const initialMouseEvent = window.event;
+                if (initialMouseEvent) {
+                  positionTooltip(initialMouseEvent);
+                }
+                
+                // Nasłuchiwanie ruchu myszy dla aktualizacji pozycji
+                document.addEventListener('mousemove', positionTooltip);
+                
+                // Funkcja do ukrywania tooltipa
+                const hideTooltip = () => {
+                  document.removeEventListener('mousemove', positionTooltip);
+                  
+                  if (tooltipContent.parentNode) {
+                    tooltipContent.parentNode.removeChild(tooltipContent);
+                    
+                    // Usuń tooltip z listy aktywnych tooltipów
+                    activeTooltipsRef.current = activeTooltipsRef.current.filter(t => t !== tooltipContent);
+                  }
+                };
+                
+                // Usuń tooltip po opuszczeniu elementu
+                info.el.addEventListener('mouseleave', hideTooltip, { once: true });
+                
+                // Dodaj obsługę globalnego kliknięcia
+                document.addEventListener('click', (e) => {
+                  if (!info.el.contains(e.target) && !tooltipContent.contains(e.target)) {
+                    hideTooltip();
+                  }
+                }, { once: true });
+                
+                // Obsługa usunięcia elementu
+                info.el.addEventListener('remove', hideTooltip, { once: true });
+              };
+              
+              // Dodajemy nasłuchiwanie zdarzenia mouseenter
+              info.el.addEventListener('mouseenter', showTooltip);
+              
+              // Dla urządzeń dotykowych - touch
+              info.el.addEventListener('touchstart', showTooltip);
+            }
           }}
           slotLabelContent={(args) => {
             if (view.startsWith('resourceTimeline')) {
@@ -1870,25 +2323,12 @@ const ProductionCalendar = () => {
               
               // Dla widoku dziennego (godziny)
               if (view === 'resourceTimelineDay') {
-                const hour = date.getHours();
-                const minute = date.getMinutes();
-                return (
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
-                      {`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`}
-                    </Typography>
-                  </Box>
-                );
-              }
-              
-              // Dla widoku tygodniowego lub miesięcznego (dni)
-              if (view === 'resourceTimelineWeek' || view === 'resourceTimelineMonth') {
-                const day = date.getDate();
-                const weekday = new Intl.DateTimeFormat('pl', { weekday: 'short' }).format(date);
-                const month = new Intl.DateTimeFormat('pl', { month: 'short' }).format(date);
-                
-                // Dla pierwszego dnia miesiąca lub początku widoku, pokaż nazwę miesiąca
-                if (day === 1 || (day <= 3 && args.isLabeled)) {
+                // Sprawdź, czy to jest górny wiersz nagłówka (label) czy dolny (godziny)
+                if (args.level === 0 && customDateRange && Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) > 1) {
+                  // Górny wiersz (data) - pokazuj tylko w pierwszej komórce dla każdego dnia
+                  const day = date.getDate();
+                  const month = new Intl.DateTimeFormat('pl', { month: 'short' }).format(date);
+                  
                   return (
                     <Box sx={{ 
                       display: 'flex', 
@@ -1909,6 +2349,129 @@ const ProductionCalendar = () => {
                       }}>
                         {day}
                       </Typography>
+                    </Box>
+                  );
+                } else {
+                  // Dolny wiersz (godziny) lub jedyny wiersz dla pojedynczego dnia
+                  const hour = date.getHours();
+                  const minute = date.getMinutes();
+                  return (
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
+                        {`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`}
+                      </Typography>
+                    </Box>
+                  );
+                }
+              }
+              
+              // Dla widoku tygodniowego lub miesięcznego (dni)
+              if (view === 'resourceTimelineWeek' || view === 'resourceTimelineMonth') {
+                // Dla widoku tygodniowego z szczegółowością godzinową
+                if (view === 'resourceTimelineWeek' && ganttDetail === 'hour') {
+                  // Sprawdź, czy to jest górny wiersz nagłówka (label) czy dolny (godziny)
+                  if (args.level === 0) {
+                    // Górny wiersz (data)
+                    const day = date.getDate();
+                    const weekday = new Intl.DateTimeFormat('pl', { weekday: 'short' }).format(date);
+                    const month = new Intl.DateTimeFormat('pl', { month: 'short' }).format(date);
+                    
+                    return (
+                      <Box sx={{ 
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        alignItems: 'center',
+                        fontSize: isMobile ? '0.65rem' : '0.75rem'
+                      }}>
+                        <Typography variant="caption" sx={{ 
+                          color: 'primary.main', 
+                          fontWeight: 'bold',
+                          fontSize: 'inherit'
+                        }}>
+                          {month}
+                        </Typography>
+                        <Typography variant="body2" sx={{ 
+                          fontWeight: 'bold',
+                          fontSize: 'inherit'
+                        }}>
+                          {day}
+                        </Typography>
+                        {!isMobile && (
+                          <Typography variant="caption" sx={{ 
+                            textTransform: 'uppercase',
+                            fontSize: 'inherit'
+                          }}>
+                            {weekday}
+                          </Typography>
+                        )}
+                      </Box>
+                    );
+                  } else {
+                    // Dolny wiersz (godziny)
+                    const hour = date.getHours();
+                    const minute = date.getMinutes();
+                    return (
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
+                          {`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`}
+                        </Typography>
+                      </Box>
+                    );
+                  }
+                } else {
+                  // Standardowy widok dla dni (dla miesięcznego lub tygodniowego bez godzin)
+                  const day = date.getDate();
+                  const weekday = new Intl.DateTimeFormat('pl', { weekday: 'short' }).format(date);
+                  const month = new Intl.DateTimeFormat('pl', { month: 'short' }).format(date);
+                  
+                  // Dla pierwszego dnia miesiąca lub początku widoku, pokaż nazwę miesiąca
+                  if (day === 1 || (day <= 3 && args.isLabeled)) {
+                    return (
+                      <Box sx={{ 
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        alignItems: 'center',
+                        fontSize: isMobile ? '0.65rem' : '0.75rem'
+                      }}>
+                        <Typography variant="caption" sx={{ 
+                          color: 'primary.main', 
+                          fontWeight: 'bold',
+                          fontSize: 'inherit'
+                        }}>
+                          {month}
+                        </Typography>
+                        <Typography variant="body2" sx={{ 
+                          fontWeight: 'bold',
+                          fontSize: 'inherit'
+                        }}>
+                          {day}
+                        </Typography>
+                        {!isMobile && (
+                          <Typography variant="caption" sx={{ 
+                            textTransform: 'uppercase',
+                            fontSize: 'inherit'
+                          }}>
+                            {weekday}
+                          </Typography>
+                        )}
+                      </Box>
+                    );
+                  }
+                  
+                  // Dla pozostałych dni
+                  return (
+                    <Box sx={{ 
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      alignItems: 'center',
+                      fontSize: isMobile ? '0.65rem' : '0.75rem'
+                    }}>
+                      <Typography variant="body2" sx={{ 
+                        fontWeight: 'bold',
+                        fontSize: 'inherit'
+                      }}>
+                        {day}
+                      </Typography>
                       {!isMobile && (
                         <Typography variant="caption" sx={{ 
                           textTransform: 'uppercase',
@@ -1920,31 +2483,6 @@ const ProductionCalendar = () => {
                     </Box>
                   );
                 }
-                
-                // Dla pozostałych dni
-                return (
-                  <Box sx={{ 
-                    display: 'flex', 
-                    flexDirection: 'column', 
-                    alignItems: 'center',
-                    fontSize: isMobile ? '0.65rem' : '0.75rem'
-                  }}>
-                    <Typography variant="body2" sx={{ 
-                      fontWeight: 'bold',
-                      fontSize: 'inherit'
-                    }}>
-                      {day}
-                    </Typography>
-                    {!isMobile && (
-                      <Typography variant="caption" sx={{ 
-                        textTransform: 'uppercase',
-                        fontSize: 'inherit'
-                      }}>
-                        {weekday}
-                      </Typography>
-                    )}
-                  </Box>
-                );
               }
             }
             return null;
@@ -1982,20 +2520,35 @@ const ProductionCalendar = () => {
             },
             resourceTimelineDay: {
               slotDuration: { hours: 1 },
-              slotLabelFormat: [
-                { hour: '2-digit', minute: '2-digit', hour12: false }
-              ],
+              slotLabelFormat: customDateRange && Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) > 1 
+                ? [
+                    { day: 'numeric', month: 'short' }, // Pierwszy poziom - data (dzień, miesiąc)
+                    { hour: '2-digit', minute: '2-digit', hour12: false } // Drugi poziom - godzina
+                  ] 
+                : [
+                    { hour: '2-digit', minute: '2-digit', hour12: false }
+                  ],
               visibleRange: customDateRange ? { start: startDate, end: endDate } : null,
-              slotMinWidth: isMobile ? 50 : 70
+              slotMinWidth: isMobile ? 50 : 70,
+              duration: customDateRange 
+                ? { days: Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) } 
+                : { days: 1 }
             },
             resourceTimelineWeek: {
-              duration: { days: 7 },
-              slotDuration: { days: 1 },
-              slotLabelFormat: [
-                { weekday: 'short', day: 'numeric', month: 'short' }
-              ],
+              duration: customDateRange 
+                ? { days: Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) } 
+                : { days: 7 },
+              slotDuration: ganttDetail === 'hour' ? { hours: 1 } : { days: 1 },
+              slotLabelFormat: ganttDetail === 'hour' 
+                ? [
+                    { day: 'numeric', month: 'short', weekday: 'short' }, // Pierwszy poziom - data z dniem tygodnia
+                    { hour: '2-digit', minute: '2-digit', hour12: false } // Drugi poziom - godzina
+                  ]
+                : [
+                    { weekday: 'short', day: 'numeric', month: 'short' }
+                  ],
               visibleRange: customDateRange ? { start: startDate, end: endDate } : null,
-              slotMinWidth: isMobile ? 40 : 60
+              slotMinWidth: ganttDetail === 'hour' ? 70 : (isMobile ? 40 : 60)
             },
             resourceTimelineMonth: {
               duration: customDateRange 
@@ -2012,8 +2565,84 @@ const ProductionCalendar = () => {
           dayHeaderClassNames="custom-day-header"
         />
       </Box>
+      
+      {/* Date Range Menu */}
+      <Menu
+        anchorEl={dateRangeMenuAnchor}
+        open={Boolean(dateRangeMenuAnchor)}
+        onClose={handleDateRangeMenuClose}
+      >
+        <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 250 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+            Wybierz zakres dat
+          </Typography>
+          
+          <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+            <DatePicker
+              label="Data początkowa"
+              value={startDate}
+              onChange={(newValue) => {
+                if (newValue) {
+                  setStartDate(newValue);
+                }
+              }}
+              format="dd.MM.yyyy"
+            />
+            
+            <DatePicker
+              label="Data końcowa"
+              value={endDate}
+              onChange={(newValue) => {
+                if (newValue) {
+                  setEndDate(newValue);
+                }
+              }}
+              format="dd.MM.yyyy"
+            />
+          </LocalizationProvider>
+          
+          <Button
+            variant="contained"
+            onClick={applyCustomDateRange}
+            fullWidth
+          >
+            Zastosuj
+          </Button>
+        </Box>
+      </Menu>
+      
+      {/* Detail Level Menu */}
+      <Menu
+        anchorEl={detailMenuAnchor}
+        open={Boolean(detailMenuAnchor)}
+        onClose={handleDetailMenuClose}
+      >
+        <MenuItem onClick={() => handleGanttDetailChange('hour')}>
+          <ListItemText primary="Godzina" />
+        </MenuItem>
+        <MenuItem onClick={() => handleGanttDetailChange('day')}>
+          <ListItemText primary="Dzień" />
+        </MenuItem>
+      </Menu>
+      
+      {/* Gantt View Menu */}
+      <Menu
+        anchorEl={ganttMenuAnchor}
+        open={Boolean(ganttMenuAnchor)}
+        onClose={handleGanttMenuClose}
+      >
+        <MenuItem onClick={() => handleGanttViewChange('resourceTimelineDay')}>
+          <ListItemText primary="Dzień" />
+        </MenuItem>
+        <MenuItem onClick={() => handleGanttViewChange('resourceTimelineWeek')}>
+          <ListItemText primary="Tydzień" />
+        </MenuItem>
+        <MenuItem onClick={() => handleGanttViewChange('resourceTimelineMonth')}>
+          <ListItemText primary="Miesiąc" />
+        </MenuItem>
+      </Menu>
     </Paper>
   );
 };
 
-export default ProductionCalendar; 
+export default ProductionCalendar;
