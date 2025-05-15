@@ -25,7 +25,7 @@ import {
   ListItemIcon
 } from '@mui/material';
 import { 
-  Notifications, 
+  Notifications as NotificationsIcon, 
   ExitToApp, 
   Person,
   Search as SearchIcon,
@@ -760,6 +760,11 @@ const Navbar = () => {
                   <Divider />
                 </>
               )}
+              
+              <MenuItem component={Link} to="/notifications/history" onClick={handleClose}>
+                <ListItemIcon><NotificationsIcon fontSize="small" /></ListItemIcon>
+                Historia powiadomień
+              </MenuItem>
               
               <MenuItem onClick={handleLogout}>
                 <ListItemIcon><ExitToApp fontSize="small" /></ListItemIcon>

@@ -67,7 +67,6 @@ const PurchaseOrderDetails = ({ orderId }) => {
   const [expandedItems, setExpandedItems] = useState({});
   const [tempInvoiceLinks, setTempInvoiceLinks] = useState([]);
   const [warehouseNames, setWarehouseNames] = useState({});
-  const [createCODialogOpen, setCreateCODialogOpen] = useState(false);
   
   const printRef = useRef(null);
   
@@ -702,32 +701,6 @@ const PurchaseOrderDetails = ({ orderId }) => {
   const hasDynamicFields = purchaseOrder?.additionalCostsItems?.length > 0 || 
                           (purchaseOrder?.additionalCosts && parseFloat(purchaseOrder.additionalCosts) > 0);
   
-  // Funkcja otwierająca dialog tworzenia nowego zamówienia klienta
-  const handleCreateCOClick = () => {
-    setCreateCODialogOpen(true);
-  };
-
-  // Funkcja do tworzenia nowego zamówienia klienta
-  const handleCreateCO = () => {
-    try {
-      // Przekierowanie do formularza tworzenia nowego zamówienia klienta
-      // z parametrem oznaczającym, że pochodzi z PO
-      navigate('/orders/new', { 
-        state: { 
-          fromPO: true, 
-          poId: orderId, 
-          poNumber: purchaseOrder?.number 
-        } 
-      });
-      setCreateCODialogOpen(false);
-      showSuccess('Przekierowano do formularza nowego zamówienia klienta');
-    } catch (error) {
-      console.error('Błąd podczas tworzenia nowego zamówienia klienta:', error);
-      showError('Nie udało się utworzyć nowego zamówienia klienta: ' + error.message);
-      setCreateCODialogOpen(false);
-    }
-  };
-  
   return (
     <Container maxWidth="lg" sx={{ my: 4 }}>
       {loading ? (
@@ -778,16 +751,6 @@ const PurchaseOrderDetails = ({ orderId }) => {
                 sx={{ mr: 1 }}
               >
                 Edytuj
-              </Button>
-              
-              <Button
-                variant="contained" 
-                color="secondary"
-                startIcon={<ShoppingCartIcon />}
-                onClick={handleCreateCOClick}
-                sx={{ mr: 1 }}
-              >
-                Nowe CO
               </Button>
               
               <IconButton
@@ -1499,25 +1462,6 @@ const PurchaseOrderDetails = ({ orderId }) => {
         <DialogActions>
           <Button onClick={() => setInvoiceLinkDialogOpen(false)}>Anuluj</Button>
           <Button onClick={handleInvoiceLinkSave} color="primary">Zapisz</Button>
-        </DialogActions>
-      </Dialog>
-      
-      {/* Dialog tworzenia nowego zamówienia klienta */}
-      <Dialog
-        open={createCODialogOpen}
-        onClose={() => setCreateCODialogOpen(false)}
-      >
-        <DialogTitle>Utwórz nowe zamówienie klienta</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Czy chcesz utworzyć nowe zamówienie klienta (CO) powiązane z tym zamówieniem zakupowym?
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCreateCODialogOpen(false)}>Anuluj</Button>
-          <Button onClick={handleCreateCO} color="primary" variant="contained">
-            Utwórz zamówienie
-          </Button>
         </DialogActions>
       </Dialog>
     </Container>

@@ -131,6 +131,9 @@ import UsersManagementPage from './pages/Admin/UsersManagementPage';
 import SystemManagementPage from './pages/Admin/SystemManagementPage';
 import BugReportsPage from './pages/Admin/BugReportsPage';
 
+// Powiadomienia
+import NotificationsHistoryPage from './pages/Notifications/NotificationsHistoryPage';
+
 // Hall Data
 import HallDataConditionsPage from './pages/HallData/Conditions';
 import HallDataMachinesPage from './pages/HallData/Machines';
@@ -313,6 +316,9 @@ function App() {
                 <Route path="/inventory/interactions/new" element={<PrivateLayout><InteractionFormPage /></PrivateLayout>} />
                 <Route path="/inventory/interactions/:interactionId" element={<PrivateLayout><InteractionDetailsPage /></PrivateLayout>} />
                 <Route path="/inventory/interactions/:interactionId/edit" element={<PrivateLayout><InteractionFormPage /></PrivateLayout>} />
+                
+                {/* Powiadomienia */}
+                <Route path="/notifications/history" element={<PrivateLayout><NotificationsHistoryPage /></PrivateLayout>} />
                 
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

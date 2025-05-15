@@ -32,7 +32,8 @@ import {
   LocalShipping as WaybillIcon,
   Description as CmrIcon,
   Refresh as RefreshIcon,
-  Inventory as InventoryIcon
+  Inventory as InventoryIcon,
+  History as HistoryIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
@@ -492,6 +493,17 @@ const NotificationsMenu = () => {
               >
                 Oznacz wszystkie jako przeczytane
               </Button>
+              <Button 
+                fullWidth 
+                onClick={() => {
+                  handleClose();
+                  navigate('/notifications/history');
+                }}
+                sx={{ mt: 1 }}
+                startIcon={<HistoryIcon />}
+              >
+                Zobacz historię powiadomień
+              </Button>
             </Box>
           </Box>
         ) : (
@@ -499,6 +511,17 @@ const NotificationsMenu = () => {
             <Typography variant="body2" color="text.secondary">
               Brak powiadomień
             </Typography>
+            <Button 
+              fullWidth 
+              onClick={() => {
+                handleClose();
+                navigate('/notifications/history');
+              }}
+              startIcon={<HistoryIcon />}
+              sx={{ mt: 2 }}
+            >
+              Zobacz historię powiadomień
+            </Button>
           </Box>
         )}
       </Menu>
