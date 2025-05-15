@@ -645,6 +645,15 @@ const TaskDetailsPage = () => {
       const batchesData = {};
       const initialSelectedBatches = {};
       
+      // Pobierz wszystkie magazyny na początku, aby uniknąć wielu zapytań
+      const { getAllWarehouses } = await import('../../services/inventoryService');
+      const allWarehouses = await getAllWarehouses();
+      // Stwórz mapę magazynów dla szybkiego dostępu po ID
+      const warehousesMap = {};
+      allWarehouses.forEach(warehouse => {
+        warehousesMap[warehouse.id] = warehouse.name;
+      });
+      
       for (const material of task.materials) {
         const materialId = material.inventoryItemId || material.id;
         if (!materialId) continue;
@@ -653,7 +662,7 @@ const TaskDetailsPage = () => {
         const batches = await getItemBatches(materialId);
         
         if (batches && batches.length > 0) {
-          // Dla każdej partii pobierz informacje o rezerwacjach
+          // Dla każdej partii pobierz informacje o rezerwacjach i magazynie
           const batchesWithReservations = await Promise.all(
             batches.map(async (batch) => {
               const reservations = await getBatchReservations(batch.id);
@@ -667,10 +676,26 @@ const TaskDetailsPage = () => {
               // Oblicz faktycznie dostępną ilość po uwzględnieniu rezerwacji
               const effectiveQuantity = Math.max(0, batch.quantity - reservedByOthers);
               
+              // Przygotuj informacje o magazynie z prawidłową nazwą
+              let warehouseInfo = {
+                id: 'main',
+                name: 'Magazyn główny'
+              };
+              
+              if (batch.warehouseId) {
+                // Pobierz nazwę magazynu z naszej mapy
+                const warehouseName = warehousesMap[batch.warehouseId];
+                warehouseInfo = {
+                  id: batch.warehouseId,
+                  name: warehouseName || `Magazyn ${batch.warehouseId.substring(0, 6)}`
+                };
+              }
+              
               return {
                 ...batch,
                 reservedByOthers,
-                effectiveQuantity
+                effectiveQuantity,
+                warehouseInfo
               };
             })
           );
@@ -1037,6 +1062,7 @@ const TaskDetailsPage = () => {
                         <TableHead>
                           <TableRow>
                             <TableCell>Nr partii</TableCell>
+                            <TableCell>Magazyn</TableCell>
                             <TableCell>Data ważności</TableCell>
                             <TableCell>Dostępna ilość</TableCell>
                             <TableCell>Cena jedn.</TableCell>
@@ -1069,6 +1095,9 @@ const TaskDetailsPage = () => {
                                       variant="outlined" 
                                     />
                                   )}
+                                </TableCell>
+                                <TableCell>
+                                  {batch.warehouseInfo ? batch.warehouseInfo.name : 'Magazyn główny'}
                                 </TableCell>
                                 <TableCell>
                                   {batch.expiryDate ? formatDate(batch.expiryDate) : 'Brak'}

@@ -636,64 +636,90 @@ const BatchesPage = () => {
                           {(() => {
                             let source = '-';
                             
-                            // Sprawdź czy partia pochodzi z zamówienia zakupu (PO)
-                            if (batch.source === 'purchase' || (batch.sourceDetails && batch.sourceDetails.sourceType === 'purchase')) {
-                              // Jeśli mamy szczegółowe dane o PO
-                              if (batch.purchaseOrderDetails) {
-                                const po = batch.purchaseOrderDetails;
-                                return (
-                                  <Box>
-                                    <Typography variant="body2">
-                                      <strong>Z zamówienia zakupu:</strong>
+                            // Sprawdź czy partia ma powiązanie z zamówieniem zakupowym (PO)
+                            // Najpierw sprawdź nowy model danych z purchaseOrderDetails
+                            if (batch.purchaseOrderDetails && batch.purchaseOrderDetails.id) {
+                              const po = batch.purchaseOrderDetails;
+                              return (
+                                <Box>
+                                  <Typography variant="body2">
+                                    <strong>Z zamówienia zakupu:</strong>
+                                  </Typography>
+                                  <Typography variant="body2">
+                                    PO: {po.number || '-'}
+                                  </Typography>
+                                  {po.supplier && (
+                                    <Typography variant="body2" color="text.secondary">
+                                      Dostawca: {po.supplier.name || '-'}
                                     </Typography>
-                                    <Typography variant="body2">
-                                      PO: {po.number || '-'}
+                                  )}
+                                  {po.orderDate && (
+                                    <Typography variant="body2" color="text.secondary" fontSize="0.8rem">
+                                      Data zamówienia: {typeof po.orderDate === 'string' 
+                                        ? new Date(po.orderDate).toLocaleDateString('pl-PL') 
+                                        : po.orderDate instanceof Date 
+                                          ? po.orderDate.toLocaleDateString('pl-PL')
+                                          : po.orderDate && po.orderDate.toDate
+                                            ? po.orderDate.toDate().toLocaleDateString('pl-PL')
+                                            : '-'}
                                     </Typography>
-                                    {po.supplier && (
-                                      <Typography variant="body2" color="text.secondary">
-                                        Dostawca: {po.supplier.name || '-'}
-                                      </Typography>
-                                    )}
-                                    {po.orderDate && (
-                                      <Typography variant="body2" color="text.secondary" fontSize="0.8rem">
-                                        Data zamówienia: {typeof po.orderDate === 'string' 
-                                          ? new Date(po.orderDate).toLocaleDateString('pl-PL') 
-                                          : po.orderDate instanceof Date 
-                                            ? po.orderDate.toLocaleDateString('pl-PL')
-                                            : po.orderDate && po.orderDate.toDate
-                                              ? po.orderDate.toDate().toLocaleDateString('pl-PL')
-                                              : '-'}
-                                      </Typography>
-                                    )}
-                                    {po.id && (
-                                      <Button 
-                                        size="small" 
-                                        variant="outlined" 
-                                        color="primary"
-                                        component={Link}
-                                        to={`/purchase-orders/${po.id}`}
-                                        sx={{ mt: 1, fontSize: '0.7rem', py: 0.3 }}
-                                      >
-                                        Szczegóły PO
-                                      </Button>
-                                    )}
-                                  </Box>
-                                );
-                              }
-                              
+                                  )}
+                                  {po.id && (
+                                    <Button 
+                                      size="small" 
+                                      variant="outlined" 
+                                      color="primary"
+                                      component={Link}
+                                      to={`/purchase-orders/${po.id}`}
+                                      sx={{ mt: 1, fontSize: '0.7rem', py: 0.3 }}
+                                    >
+                                      Szczegóły PO
+                                    </Button>
+                                  )}
+                                </Box>
+                              );
+                            }
+                            
+                            // Stara metoda - sprawdź czy partia pochodzi z zamówienia zakupu (PO)
+                            else if (batch.source === 'purchase' || (batch.sourceDetails && batch.sourceDetails.sourceType === 'purchase')) {
                               // Fallback dla starszych rekordów bez szczegółów PO
                               source = 'Z zamówienia zakupu';
                               if (batch.orderNumber) {
                                 source += ` (PO: ${batch.orderNumber})`;
+                              } else if (batch.sourceDetails && batch.sourceDetails.orderNumber) {
+                                source += ` (PO: ${batch.sourceDetails.orderNumber})`;
                               }
+                              
                               if (batch.sourceDetails && batch.sourceDetails.supplierName) {
                                 source += ` od ${batch.sourceDetails.supplierName}`;
                               }
+                              
+                              // Jeśli mamy orderId w sourceDetails, dodaj link do PO
+                              if (batch.sourceDetails && batch.sourceDetails.orderId) {
+                                return (
+                                  <Box>
+                                    <Typography variant="body2">
+                                      {source}
+                                    </Typography>
+                                    <Button 
+                                      size="small" 
+                                      variant="outlined" 
+                                      color="primary"
+                                      component={Link}
+                                      to={`/purchase-orders/${batch.sourceDetails.orderId}`}
+                                      sx={{ mt: 1, fontSize: '0.7rem', py: 0.3 }}
+                                    >
+                                      Szczegóły PO
+                                    </Button>
+                                  </Box>
+                                );
+                              }
+                              
                               return source;
                             }
                             
                             // Produkcja - wyświetlanie informacji o MO i CO
-                            if (batch.source === 'Produkcja' || batch.source === 'production') {
+                            else if (batch.source === 'Produkcja' || batch.source === 'production') {
                               source = 'Z produkcji';
                               // Dodaj informacje o MO i CO, jeśli są dostępne
                               if (batch.moNumber) {
@@ -805,14 +831,14 @@ const BatchesPage = () => {
               )}
               
               {/* Dodaj informacje o pochodzeniu partii, jeśli są dostępne */}
-              {(selectedBatch.moNumber || selectedBatch.orderNumber || selectedBatch.source || selectedBatch.purchaseOrderDetails) && (
+              {(selectedBatch.purchaseOrderDetails || selectedBatch.moNumber || selectedBatch.orderNumber || selectedBatch.source) && (
                 <>
                   <Typography variant="subtitle2" sx={{ mt: 1 }}>
                     Informacje o pochodzeniu:
                   </Typography>
                   
-                  {/* Szczegóły PO */}
-                  {selectedBatch.purchaseOrderDetails && (
+                  {/* Szczegóły PO - najpierw sprawdź nowy format danych */}
+                  {selectedBatch.purchaseOrderDetails && selectedBatch.purchaseOrderDetails.id && (
                     <Box sx={{ mt: 1, p: 1, bgcolor: '#f5f5f5', borderRadius: 1 }}>
                       <Typography variant="body2" gutterBottom>
                         <strong>Zamówienie zakupu:</strong> {selectedBatch.purchaseOrderDetails.number || '-'}
@@ -849,22 +875,55 @@ const BatchesPage = () => {
                     </Box>
                   )}
                   
-                  {selectedBatch.source && !selectedBatch.purchaseOrderDetails && (
-                    <Typography variant="body2" gutterBottom>
-                      <strong>Źródło:</strong> {selectedBatch.source === 'production' ? 'Z produkcji' : selectedBatch.source}
-                    </Typography>
+                  {/* Sprawdź starszy format danych */}
+                  {!selectedBatch.purchaseOrderDetails && selectedBatch.sourceDetails && selectedBatch.sourceDetails.sourceType === 'purchase' && (
+                    <Box sx={{ mt: 1, p: 1, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+                      <Typography variant="body2" gutterBottom>
+                        <strong>Zamówienie zakupu:</strong> {selectedBatch.sourceDetails.orderNumber || '-'}
+                      </Typography>
+                      {selectedBatch.sourceDetails.supplierName && (
+                        <Typography variant="body2" gutterBottom>
+                          <strong>Dostawca:</strong> {selectedBatch.sourceDetails.supplierName || '-'}
+                        </Typography>
+                      )}
+                      {selectedBatch.sourceDetails.orderId && (
+                        <Button 
+                          size="small" 
+                          variant="outlined" 
+                          color="primary"
+                          component={Link}
+                          to={`/purchase-orders/${selectedBatch.sourceDetails.orderId}`}
+                          sx={{ mt: 1 }}
+                          onClick={closeTransferDialog}
+                        >
+                          Zobacz szczegóły PO
+                        </Button>
+                      )}
+                    </Box>
                   )}
                   
-                  {selectedBatch.moNumber && (
-                    <Typography variant="body2" gutterBottom>
-                      <strong>Numer MO:</strong> {selectedBatch.moNumber}
-                    </Typography>
-                  )}
-                  
-                  {selectedBatch.orderNumber && (
-                    <Typography variant="body2" gutterBottom>
-                      <strong>Numer CO:</strong> {selectedBatch.orderNumber}
-                    </Typography>
+                  {/* Wyświetl informacje o pochodzeniu z produkcji tylko jeśli nie ma danych o PO */}
+                  {!selectedBatch.purchaseOrderDetails && 
+                  !(selectedBatch.sourceDetails && selectedBatch.sourceDetails.sourceType === 'purchase') && (
+                    <>
+                      {selectedBatch.source && (
+                        <Typography variant="body2" gutterBottom>
+                          <strong>Źródło:</strong> {selectedBatch.source === 'production' ? 'Z produkcji' : selectedBatch.source}
+                        </Typography>
+                      )}
+                      
+                      {selectedBatch.moNumber && (
+                        <Typography variant="body2" gutterBottom>
+                          <strong>Numer MO:</strong> {selectedBatch.moNumber}
+                        </Typography>
+                      )}
+                      
+                      {selectedBatch.orderNumber && (
+                        <Typography variant="body2" gutterBottom>
+                          <strong>Numer CO:</strong> {selectedBatch.orderNumber}
+                        </Typography>
+                      )}
+                    </>
                   )}
                 </>
               )}
@@ -958,7 +1017,7 @@ const BatchesPage = () => {
               </Typography>
               
               {/* Dodatkowe informacje jeśli partia pochodzi z PO */}
-              {selectedBatchForDelete.purchaseOrderDetails && (
+              {selectedBatchForDelete.purchaseOrderDetails && selectedBatchForDelete.purchaseOrderDetails.id && (
                 <Box sx={{ mt: 2, p: 1, bgcolor: '#fff4e5', borderRadius: 1 }}>
                   <Typography variant="subtitle2" gutterBottom>
                     Ta partia jest powiązana z zamówieniem zakupowym:
@@ -971,6 +1030,46 @@ const BatchesPage = () => {
                       Dostawca: {selectedBatchForDelete.purchaseOrderDetails.supplier.name || '-'}
                     </Typography>
                   )}
+                  <Button 
+                    size="small" 
+                    variant="outlined" 
+                    color="primary"
+                    component={Link}
+                    to={`/purchase-orders/${selectedBatchForDelete.purchaseOrderDetails.id}`}
+                    sx={{ mt: 1 }}
+                    onClick={closeDeleteDialog}
+                  >
+                    Zobacz szczegóły PO
+                  </Button>
+                </Box>
+              )}
+              
+              {/* Dodatkowe informacje dla starszego formatu danych */}
+              {!selectedBatchForDelete.purchaseOrderDetails && selectedBatchForDelete.sourceDetails && 
+                selectedBatchForDelete.sourceDetails.sourceType === 'purchase' && selectedBatchForDelete.sourceDetails.orderId && (
+                <Box sx={{ mt: 2, p: 1, bgcolor: '#fff4e5', borderRadius: 1 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Ta partia jest powiązana z zamówieniem zakupowym:
+                  </Typography>
+                  <Typography variant="body2">
+                    PO: {selectedBatchForDelete.sourceDetails.orderNumber || '-'}
+                  </Typography>
+                  {selectedBatchForDelete.sourceDetails.supplierName && (
+                    <Typography variant="body2">
+                      Dostawca: {selectedBatchForDelete.sourceDetails.supplierName || '-'}
+                    </Typography>
+                  )}
+                  <Button 
+                    size="small" 
+                    variant="outlined" 
+                    color="primary"
+                    component={Link}
+                    to={`/purchase-orders/${selectedBatchForDelete.sourceDetails.orderId}`}
+                    sx={{ mt: 1 }}
+                    onClick={closeDeleteDialog}
+                  >
+                    Zobacz szczegóły PO
+                  </Button>
                 </Box>
               )}
               
