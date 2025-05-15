@@ -591,8 +591,6 @@ const Navbar = () => {
                   {searchResults.map((result) => (
                     <ListItem 
                       key={`${result.type}-${result.id}`} 
-                      button
-                      onClick={() => handleResultClick(result)}
                       sx={{
                         borderLeft: '4px solid',
                         borderColor: () => {
@@ -601,20 +599,22 @@ const Navbar = () => {
                           if (result.type === 'productionTask') return '#ff9800';
                           if (result.type === 'inventoryBatch') return '#e91e63';
                           return 'transparent';
-                        }
+                        },
+                        cursor: 'pointer'
                       }}
+                      onClick={() => handleResultClick(result)}
                     >
                       <ListItemText 
                         primary={
-                          <>
+                          <Box component="div">
                             {result.title}
                             {result.lotInfo && <Chip size="small" label={result.lotInfo} sx={{ ml: 1, height: 20, fontSize: '0.7rem' }} />}
-                          </>
+                          </Box>
                         }
                         secondary={
                           <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             {result.type === 'inventoryBatch' ? (
-                              <>
+                              <Box component="div" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <Chip 
                                   label={`Ilość: ${result.quantity} ${result.unit}`} 
                                   size="small" 
@@ -623,16 +623,16 @@ const Navbar = () => {
                                 {result.expiryDate && 
                                   `Ważne do: ${new Date(result.expiryDate).toLocaleDateString('pl-PL')}`
                                 }
-                              </>
+                              </Box>
                             ) : (
-                              <>
+                              <Box component="div" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <Chip 
                                   label={result.status} 
                                   size="small" 
                                   sx={{ height: 20, fontSize: '0.7rem' }}
                                 />
                                 {result.date && new Date(result.date).toLocaleDateString()}
-                              </>
+                              </Box>
                             )}
                           </Typography>
                         }
@@ -737,7 +737,7 @@ const Navbar = () => {
               </MenuItem>
               
               {isAdmin && (
-                <>
+                <Box component="div">
                   <Divider />
                   <Typography variant="caption" color="text.secondary" sx={{ px: 2, py: 1, display: 'block' }}>
                     Administracja
@@ -758,7 +758,7 @@ const Navbar = () => {
                     Zgłoszenia błędów
                   </MenuItem>
                   <Divider />
-                </>
+                </Box>
               )}
               
               <MenuItem component={Link} to="/notifications/history" onClick={handleClose}>

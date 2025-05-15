@@ -363,7 +363,7 @@ const Sidebar = ({ onToggle }) => {
                   </ListItemIcon>
                 </Tooltip>
                 {isDrawerOpen && (
-                  <>
+                  <Box component="div" sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
                     <ListItemText 
                       primary={item.text} 
                       primaryTypographyProps={{ 
@@ -373,7 +373,7 @@ const Sidebar = ({ onToggle }) => {
                       }} 
                     />
                     {openSubmenu === item.text ? <ExpandLess /> : <ExpandMore />}
-                  </>
+                  </Box>
                 )}
               </StyledListItemButton>
               <Collapse 
@@ -457,14 +457,16 @@ const Sidebar = ({ onToggle }) => {
         p: 1.5
       }}>
         <StyledListItem 
-          button 
-          onClick={() => setBugReportDialogOpen(true)}
+          component="div"
+          button={false}
           sx={{
             color: 'error.main',
             '&:hover': {
               backgroundColor: alpha('#f44336', 0.08),
             },
+            cursor: 'pointer'
           }}
+          onClick={() => setBugReportDialogOpen(true)}
         >
           <Tooltip title="Zgłoś błąd" placement="right" arrow>
             <ListItemIcon sx={{ minWidth: 36, color: 'error.main' }}>

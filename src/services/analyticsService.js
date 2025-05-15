@@ -19,6 +19,14 @@ import { getAllTests } from './qualityService';
 
 const INVENTORY_TRANSACTIONS_COLLECTION = 'inventoryTransactions';
 
+// Cache'owanie ostatnich wyników zapytań, aby uniknąć niepotrzebnych odwołań do bazy
+let kpiDataCache = {
+  timestamp: null,
+  data: null,
+  ttl: 60000, // czas życia cache w milisekundach (60 sekund)
+  fetchInProgress: false // flaga zapobiegająca równoległym zapytaniom
+};
+
 /**
  * Pobiera podstawowe dane statystyczne dla dashboardu
  * @param {Object} options - opcje pobierania (jakie dane pobrać)
@@ -27,72 +35,127 @@ export const getKpiData = async (options = { sales: true, inventory: true, produ
   try {
     console.log('Pobieranie podstawowych danych statystycznych...', options);
     
+    // Sprawdź, czy mamy ważne dane w cache
+    const now = Date.now();
+    if (kpiDataCache.data && kpiDataCache.timestamp && (now - kpiDataCache.timestamp < kpiDataCache.ttl)) {
+      console.log('Zwracam dane z cache (ważne przez', Math.round((kpiDataCache.timestamp + kpiDataCache.ttl - now) / 1000), 'sekund)');
+      return kpiDataCache.data;
+    }
+    
+    // Jeśli zapytanie jest już w toku, poczekaj na jego zakończenie 
+    // zamiast uruchamiania kolejnego równoległego zapytania
+    if (kpiDataCache.fetchInProgress) {
+      console.log('Zapytanie już w toku, oczekuję na jego zakończenie...');
+      
+      // Czekaj maksymalnie 3 sekundy na zakończenie trwającego zapytania
+      let waitTime = 0;
+      const waitInterval = 100; // 100ms
+      const maxWaitTime = 3000; // 3 sekundy
+      
+      while (kpiDataCache.fetchInProgress && waitTime < maxWaitTime) {
+        await new Promise(resolve => setTimeout(resolve, waitInterval));
+        waitTime += waitInterval;
+      }
+      
+      // Jeśli dane są dostępne po oczekiwaniu, zwróć je
+      if (kpiDataCache.data && !kpiDataCache.fetchInProgress) {
+        console.log('Zapytanie zostało zakończone przez inny proces, zwracam dane z cache');
+        return kpiDataCache.data;
+      }
+      
+      // Jeśli nadal trwa zapytanie, zresetuj flagę (na wypadek błędu) i kontynuuj
+      if (kpiDataCache.fetchInProgress) {
+        console.log('Przekroczono czas oczekiwania na inne zapytanie, kontynuuję własne zapytanie');
+        kpiDataCache.fetchInProgress = false;
+      }
+    }
+    
+    // Ustaw flagę, że zapytanie jest w toku
+    kpiDataCache.fetchInProgress = true;
+    
     let result = {};
     
-    // Pobieranie równoległe wszystkich danych
-    const fetchPromises = [];
-    const fetchedData = {};
-    
-    if (options.sales) {
-      // Pobieranie statystyk zamówień
-      const salesPromise = getOrdersStats().then(ordersStats => {
-        fetchedData.ordersStats = ordersStats;
-      });
-      fetchPromises.push(salesPromise);
-    }
-    
-    if (options.inventory) {
-      // Pobieranie danych magazynowych
-      const inventoryPromise = getAllInventoryItems().then(items => {
-        fetchedData.inventoryItems = items;
-      });
-      fetchPromises.push(inventoryPromise);
-    }
-    
-    if (options.production) {
-      // Pobieranie danych produkcyjnych
-      const tasksInProgressPromise = getTasksByStatus('W trakcie').then(data => {
-        fetchedData.tasksInProgress = data;
-      });
-      fetchPromises.push(tasksInProgressPromise);
+    try {
+      // Pobieranie równoległe wszystkich danych
+      const fetchPromises = [];
+      const fetchedData = {};
       
-      const completedTasksPromise = getTasksByStatus('Zakończone').then(data => {
-        fetchedData.completedTasks = data;
-      });
-      fetchPromises.push(completedTasksPromise);
-    }
-    
-    // Czekamy na zakończenie wszystkich zapytań
-    await Promise.all(fetchPromises);
-    
-    // Teraz budujemy obiekt z danymi na podstawie tego co udało się pobrać
-    if (options.sales && fetchedData.ordersStats) {
-      result.sales = {
-        totalOrders: fetchedData.ordersStats?.total || 0,
-        totalValue: fetchedData.ordersStats?.totalValue || 0,
-        ordersInProgress: fetchedData.ordersStats?.byStatus?.['W realizacji'] || 0,
-        completedOrders: fetchedData.ordersStats?.byStatus?.['Dostarczone'] || 0
+      // Przygotowanie wszystkich zapytań, które będą wykonane równolegle
+      if (options.sales) {
+        // Pobieranie statystyk zamówień
+        const salesPromise = getOrdersStats().then(ordersStats => {
+          fetchedData.ordersStats = ordersStats;
+        });
+        fetchPromises.push(salesPromise);
+      }
+      
+      if (options.inventory) {
+        // Pobieranie danych magazynowych
+        const inventoryPromise = getAllInventoryItems().then(items => {
+          fetchedData.inventoryItems = items;
+        });
+        fetchPromises.push(inventoryPromise);
+      }
+      
+      if (options.production) {
+        // Pobieranie danych produkcyjnych - pobieramy tylko raz dla każdego statusu
+        const tasksInProgressPromise = getTasksByStatus('W trakcie').then(data => {
+          fetchedData.tasksInProgress = data;
+        });
+        fetchPromises.push(tasksInProgressPromise);
+        
+        const completedTasksPromise = getTasksByStatus('Zakończone').then(data => {
+          fetchedData.completedTasks = data;
+        });
+        fetchPromises.push(completedTasksPromise);
+      }
+      
+      // Czekamy na zakończenie wszystkich zapytań
+      await Promise.all(fetchPromises);
+      
+      // Teraz budujemy obiekt z danymi na podstawie tego co udało się pobrać
+      if (options.sales && fetchedData.ordersStats) {
+        result.sales = {
+          totalOrders: fetchedData.ordersStats?.total || 0,
+          totalValue: fetchedData.ordersStats?.totalValue || 0,
+          ordersInProgress: fetchedData.ordersStats?.byStatus?.['W realizacji'] || 0,
+          completedOrders: fetchedData.ordersStats?.byStatus?.['Dostarczone'] || 0
+        };
+      }
+      
+      if (options.inventory && fetchedData.inventoryItems) {
+        const inventoryItems = fetchedData.inventoryItems;
+        result.inventory = {
+          totalItems: inventoryItems?.length || 0,
+          totalValue: calculateInventoryValue(inventoryItems)
+        };
+      }
+      
+      if (options.production) {
+        result.production = {
+          tasksInProgress: fetchedData.tasksInProgress?.length || 0,
+          completedTasks: fetchedData.completedTasks?.length || 0
+        };
+      }
+      
+      // Zapisz wynik do cache
+      kpiDataCache = {
+        timestamp: now, 
+        data: result,
+        ttl: 60000,
+        fetchInProgress: false
       };
+      
+      return result;
+    } catch (error) {
+      // W przypadku błędu, wyczyść flagę
+      kpiDataCache.fetchInProgress = false;
+      throw error;
     }
-    
-    if (options.inventory && fetchedData.inventoryItems) {
-      const inventoryItems = fetchedData.inventoryItems;
-      result.inventory = {
-        totalItems: inventoryItems?.length || 0,
-        totalValue: calculateInventoryValue(inventoryItems)
-      };
-    }
-    
-    if (options.production) {
-      result.production = {
-        tasksInProgress: fetchedData.tasksInProgress?.length || 0,
-        completedTasks: fetchedData.completedTasks?.length || 0
-      };
-    }
-    
-    return result;
   } catch (error) {
     console.error('Błąd podczas pobierania danych statystycznych:', error);
+    // Upewnij się, że flaga jest zresetowana nawet w przypadku błędu
+    kpiDataCache.fetchInProgress = false;
     throw error;
   }
 };
@@ -157,6 +220,8 @@ export const getChartData = async (chartType, timeFrame = 'month', limit = 12) =
         return await getProductionChartData(timeFrame);
       case 'quality':
         return await getQualityChartData(timeFrame);
+      case 'categories':
+        return await getProductCategoriesChartData();
       default:
         throw new Error('Nieznany typ wykresu');
     }
@@ -674,32 +739,58 @@ const getProductionChartData = async (timeFrame) => {
     
     // Przetwórz dane zadań
     allTasks.forEach(task => {
-      // Bezpieczne pobieranie daty - obsługa różnych formatów
-      let taskDate = null;
-      if (task.deadline) {
-        if (task.deadline instanceof Date) {
-          taskDate = task.deadline;
-        } else if (task.deadline.toDate && typeof task.deadline.toDate === 'function') {
-          taskDate = task.deadline.toDate();
-        } else if (typeof task.deadline === 'string') {
-          taskDate = new Date(task.deadline);
-        }
-      }
-      
-      if (!taskDate || isNaN(taskDate.getTime())) {
-        console.log('Nieprawidłowa data zadania:', task.id);
-        return;
-      }
-      
-      const monthKey = `${taskDate.getFullYear()}-${(taskDate.getMonth() + 1).toString().padStart(2, '0')}`;
-      if (monthlyData.has(monthKey)) {
-        const data = monthlyData.get(monthKey);
-        data.planned++;
+      try {
+        // Bezpieczne pobieranie daty - obsługa różnych formatów
+        let taskDate = null;
         
-        // Sprawdź, czy zadanie zostało zakończone
-        if (task.status === 'Zakończone' || task.status === 'Zrealizowane' || task.status === 'Completed') {
-          data.completed++;
+        // Najpierw próbujemy użyć daty zaplanowania lub harmonogramu
+        if (task.scheduledDate) {
+          if (task.scheduledDate instanceof Date) {
+            taskDate = task.scheduledDate;
+          } else if (task.scheduledDate.toDate && typeof task.scheduledDate.toDate === 'function') {
+            taskDate = task.scheduledDate.toDate();
+          } else if (typeof task.scheduledDate === 'string') {
+            taskDate = new Date(task.scheduledDate);
+          }
+        } 
+        // Jeśli nie ma daty zaplanowania, próbujemy użyć terminu (deadline)
+        else if (task.deadline) {
+          if (task.deadline instanceof Date) {
+            taskDate = task.deadline;
+          } else if (task.deadline.toDate && typeof task.deadline.toDate === 'function') {
+            taskDate = task.deadline.toDate();
+          } else if (typeof task.deadline === 'string') {
+            taskDate = new Date(task.deadline);
+          }
         }
+        // Jeśli nie ma ani daty zaplanowania, ani terminu, próbujemy użyć daty utworzenia
+        else if (task.createdAt) {
+          if (task.createdAt instanceof Date) {
+            taskDate = task.createdAt;
+          } else if (task.createdAt.toDate && typeof task.createdAt.toDate === 'function') {
+            taskDate = task.createdAt.toDate();
+          } else if (typeof task.createdAt === 'string') {
+            taskDate = new Date(task.createdAt);
+          }
+        }
+        
+        if (!taskDate || isNaN(taskDate.getTime())) {
+          console.log('Nieprawidłowa data zadania:', task.id);
+          return;
+        }
+        
+        const monthKey = `${taskDate.getFullYear()}-${(taskDate.getMonth() + 1).toString().padStart(2, '0')}`;
+        if (monthlyData.has(monthKey)) {
+          const data = monthlyData.get(monthKey);
+          data.planned++;
+          
+          // Sprawdź, czy zadanie zostało zakończone
+          if (task.status === 'Zakończone' || task.status === 'Zrealizowane' || task.status === 'Completed') {
+            data.completed++;
+          }
+        }
+      } catch (taskError) {
+        console.error('Błąd podczas przetwarzania zadania:', taskError);
       }
     });
     
@@ -713,21 +804,20 @@ const getProductionChartData = async (timeFrame) => {
       planned: Math.max(0, item.planned)
     }));
     
-    // Zdefiniuj minimalną wartość jeśli wszystkie dane są zerami
-    const allZeros = validData.every(item => item.completed === 0);
+    // Sprawdź, czy mamy rzeczywiste dane
+    const hasRealData = validData.some(item => item.completed > 0 || item.planned > 0);
     
-    // Jeśli wszystkie dane są zerami, wygeneruj przykładowe dane
-    if (allZeros) {
-      console.log('Wszystkie wartości są zerami, generuję przykładowe dane');
+    // Jeśli nie mamy rzeczywistych danych, wygeneruj przykładowe
+    if (!hasRealData) {
+      console.log('Brak rzeczywistych danych produkcyjnych, generuję przykładowe dane');
       return generateDummyProductionData();
     }
     
-    // Wybierz najwyższą wartość dla czytelności wykresu
-    const scaleValue = validData.map(item => Math.max(item.completed, 50));
-    
+    // Przygotuj dane dla obu serii - zarówno ukończonych, jak i zaplanowanych zadań
     return {
       labels: validData.map(item => item.period),
-      data: validData.map(item => item.completed || (Math.floor(Math.random() * 15) + 50))
+      data: validData.map(item => item.completed),
+      plannedData: validData.map(item => item.planned)  // Dodajemy drugą serię danych
     };
   } catch (error) {
     console.error('Błąd podczas pobierania danych produkcyjnych dla wykresu:', error);
@@ -856,5 +946,87 @@ const generateDummyQualityData = () => {
   return {
     labels,
     data
+  };
+};
+
+/**
+ * Pobiera dane wykresu kategorii produktów magazynowych
+ */
+export const getProductCategoriesChartData = async () => {
+  try {
+    // Pobierz wszystkie przedmioty z magazynu
+    const items = await getAllInventoryItems();
+    
+    if (!items || items.length === 0) {
+      console.log('Brak przedmiotów w magazynie, generuję przykładowe dane');
+      return generateDummyCategoriesData();
+    }
+    
+    // Grupuj według kategorii
+    const categories = {};
+    
+    items.forEach(item => {
+      const category = item.category || 'Inne';
+      const value = parseFloat(item.quantity || 0) * parseFloat(item.unitPrice || 0);
+      
+      if (!categories[category]) {
+        categories[category] = {
+          count: 0,
+          value: 0
+        };
+      }
+      
+      categories[category].count++;
+      categories[category].value += value;
+    });
+    
+    // Przygotuj dane do wykresu
+    const categoriesData = Object.entries(categories).map(([name, data]) => ({
+      name,
+      count: data.count,
+      value: data.value
+    }));
+    
+    // Sortuj według wartości (od najwyższej)
+    categoriesData.sort((a, b) => b.value - a.value);
+    
+    // Ogranicz do 10 najważniejszych kategorii
+    const topCategories = categoriesData.slice(0, 10);
+    
+    return {
+      labels: topCategories.map(item => item.name),
+      data: topCategories.map(item => item.value),
+      countData: topCategories.map(item => item.count)
+    };
+  } catch (error) {
+    console.error('Błąd podczas pobierania danych kategorii produktów:', error);
+    return generateDummyCategoriesData();
+  }
+};
+
+/**
+ * Generuje przykładowe dane kategorii produktów (używana w przypadku braku danych rzeczywistych)
+ */
+const generateDummyCategoriesData = () => {
+  const categories = [
+    { name: 'Surowce', value: 120000, count: 25 },
+    { name: 'Opakowania', value: 45000, count: 15 },
+    { name: 'Produkty gotowe', value: 85000, count: 30 },
+    { name: 'Części zamienne', value: 35000, count: 40 },
+    { name: 'Materiały biurowe', value: 5000, count: 10 },
+    { name: 'Środki czystości', value: 7500, count: 8 },
+    { name: 'Narzędzia', value: 15000, count: 12 },
+    { name: 'Substancje chemiczne', value: 65000, count: 18 },
+    { name: 'Półprodukty', value: 42000, count: 15 },
+    { name: 'Inne', value: 25000, count: 10 }
+  ];
+  
+  // Sortuj według wartości (od najwyższej)
+  categories.sort((a, b) => b.value - a.value);
+  
+  return {
+    labels: categories.map(item => item.name),
+    data: categories.map(item => item.value),
+    countData: categories.map(item => item.count)
   };
 }; 

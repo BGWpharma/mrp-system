@@ -164,3 +164,32 @@ Limit wiadomości jest ustawiany automatycznie na podstawie roli użytkownika. Z
 ### Migracja danych
 
 Dla istniejących użytkowników można uruchomić migrację limitów poprzez panel administracyjny w sekcji "Narzędzia systemowe". Migracja przypisuje limity na podstawie ról: administratorzy otrzymują 250 wiadomości, a pracownicy 50.
+
+## Optymalizacja wydajności dashboardu
+
+W celu poprawy wydajności dashboardu i ograniczenia zbędnych zapytań do bazy danych wprowadzono następujące optymalizacje:
+
+### 1. Mechanizm cache'owania
+- Dodano cache po stronie klienta dla funkcji:
+  - `getKpiData` w `analyticsService.js`
+  - `getTasksByStatus` w `productionService.js` 
+  - `getOrdersStats` w `orderService.js`
+- Każda funkcja przechowuje wyniki w pamięci podręcznej przez 60 sekund
+- Dodano flagi `fetchInProgress` zapobiegające równoległym zapytaniom o te same dane
+
+### 2. Blokowanie równoległych zapytań
+- Każda funkcja potrafi wykryć, że już trwa pobieranie danych
+- Dodano mechanizm oczekiwania na zakończenie równoległego zapytania
+- Zabezpieczenia przed nieskończonym oczekiwaniem (timeout)
+
+### 3. Optymalizacja komponentu Dashboard
+- Dodano zabezpieczenia przed równoległymi wywołaniami funkcji pobierających dane
+- Ulepszono mechanizm `Promise.all` do ładowania danych
+- Dodano obsługę błędów dla każdego pojedynczego zapytania
+- Wprowadzono flagę `isMounted` zapobiegającą aktualizacji stanu po odmontowaniu komponentu
+
+### 4. Inne usprawnienia
+- Funkcje używają teraz bezpośrednio niższego poziomu API zamiast funkcji pomocniczych
+- Dodano zależności do funkcji `useCallback` aby dokładniej śledzić stan
+
+Te optymalizacje znacząco zmniejszą liczbę zapytań do bazy danych podczas ładowania dashboardu oraz zapobiegną typowym problemom związanym z równoległym wykonywaniem tego samego zapytania z różnych części aplikacji.

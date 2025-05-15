@@ -20,6 +20,14 @@ import { formatDateForInput } from '../utils/dateUtils';
 const ORDERS_COLLECTION = 'orders';
 const CUSTOMERS_COLLECTION = 'customers';
 
+// Cache dla statystyk zamówień
+const ordersStatsCache = {
+  data: null,
+  timestamp: null,
+  fetchInProgress: false,
+  ttl: 60000 // 60 sekund cache
+};
+
 /**
  * Pobiera wszystkie zamówienia
  * Możliwość filtrowania po statusie
@@ -616,75 +624,126 @@ export const getCustomerOrders = async (customerId) => {
  */
 export const getOrdersStats = async (forDashboard = false) => {
   try {
-    const allOrders = await getAllOrders();
-    
-    // Podstawowe statystyki
-    const stats = {
-      total: allOrders.length,
-      totalValue: 0,
-      byStatus: {
-        'Nowe': 0,
-        'W realizacji': 0,
-        'Gotowe do wysyłki': 0,
-        'Wysłane': 0,
-        'Dostarczone': 0,
-        'Anulowane': 0
-      },
-      byMonth: {},
-      recentOrders: []
-    };
-    
-    // Przetwarzanie zamówień w celu obliczenia pełnych wartości
-    for (const order of allOrders) {
-      // Aktualizuj statystyki
-      if (order.status) {
-        if (stats.byStatus[order.status] !== undefined) {
-          stats.byStatus[order.status]++;
-        }
-      }
-      
-      // Aktualizacja całkowitej wartości - używamy tylko wartości CO z bazy danych
-      const orderValue = parseFloat(order.totalValue || 0);
-      stats.totalValue += orderValue;
-      
-      // Aktualizacja statystyk miesięcznych
-      const date = order.orderDate ? new Date(order.orderDate) : new Date();
-      const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
-      
-      if (!stats.byMonth[monthKey]) {
-        stats.byMonth[monthKey] = {
-          count: 0,
-          value: 0,
-          month: date.getMonth() + 1,
-          year: date.getFullYear()
-        };
-      }
-      
-      stats.byMonth[monthKey].count++;
-      stats.byMonth[monthKey].value += orderValue;
+    // Sprawdź czy mamy dane w cache i czy są wciąż aktualne
+    const now = Date.now();
+    if (ordersStatsCache.data && ordersStatsCache.timestamp && (now - ordersStatsCache.timestamp < ordersStatsCache.ttl)) {
+      console.log('Statystyki zamówień pobrane z cache (ważne przez', Math.round((ordersStatsCache.timestamp + ordersStatsCache.ttl - now) / 1000), 'sekund)');
+      return ordersStatsCache.data;
     }
     
-    // Sortuj zamówienia według daty (najnowsze pierwsze)
-    allOrders.sort((a, b) => {
-      const dateA = a.orderDate ? new Date(a.orderDate) : new Date(0);
-      const dateB = b.orderDate ? new Date(b.orderDate) : new Date(0);
-      return dateB - dateA;
-    });
+    // Jeśli zapytanie jest już w toku, poczekaj na jego zakończenie
+    if (ordersStatsCache.fetchInProgress) {
+      console.log('Zapytanie o statystyki zamówień już w toku, oczekuję na jego zakończenie...');
+      
+      // Czekaj maksymalnie 2 sekundy na zakończenie trwającego zapytania
+      let waitTime = 0;
+      const waitInterval = 100; // 100ms
+      const maxWaitTime = 2000; // 2 sekundy
+      
+      while (ordersStatsCache.fetchInProgress && waitTime < maxWaitTime) {
+        await new Promise(resolve => setTimeout(resolve, waitInterval));
+        waitTime += waitInterval;
+      }
+      
+      // Jeśli dane są dostępne po oczekiwaniu, zwróć je
+      if (ordersStatsCache.data && !ordersStatsCache.fetchInProgress) {
+        console.log('Zapytanie o statystyki zamówień zostało zakończone przez inny proces, zwracam dane z cache');
+        return ordersStatsCache.data;
+      }
+      
+      // Jeśli nadal trwa zapytanie, zresetuj flagę (na wypadek błędu) i kontynuuj
+      if (ordersStatsCache.fetchInProgress) {
+        console.log('Przekroczono czas oczekiwania na zapytanie o statystyki zamówień, kontynuuję własne zapytanie');
+        ordersStatsCache.fetchInProgress = false;
+      }
+    }
     
-    // Listy ostatnich zamówień
-    stats.recentOrders = allOrders.slice(0, 10).map(order => ({
-      id: order.id,
-      orderNumber: order.orderNumber,
-      date: order.orderDate,
-      status: order.status,
-      value: order.value || 0,
-      totalValue: parseFloat(order.totalValue || 0)
-    }));
+    // Ustaw flagę, że zapytanie jest w toku
+    ordersStatsCache.fetchInProgress = true;
     
-    console.log('Statystyki zamówień zostały obliczone', stats);
-    return stats;
+    try {
+      const allOrders = await getAllOrders();
+      
+      // Podstawowe statystyki
+      const stats = {
+        total: allOrders.length,
+        totalValue: 0,
+        byStatus: {
+          'Nowe': 0,
+          'W realizacji': 0,
+          'Gotowe do wysyłki': 0,
+          'Wysłane': 0,
+          'Dostarczone': 0,
+          'Anulowane': 0
+        },
+        byMonth: {},
+        recentOrders: []
+      };
+      
+      // Przetwarzanie zamówień w celu obliczenia pełnych wartości
+      for (const order of allOrders) {
+        // Aktualizuj statystyki
+        if (order.status) {
+          if (stats.byStatus[order.status] !== undefined) {
+            stats.byStatus[order.status]++;
+          }
+        }
+        
+        // Aktualizacja całkowitej wartości - używamy tylko wartości CO z bazy danych
+        const orderValue = parseFloat(order.totalValue || 0);
+        stats.totalValue += orderValue;
+        
+        // Aktualizacja statystyk miesięcznych
+        const date = order.orderDate ? new Date(order.orderDate) : new Date();
+        const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+        
+        if (!stats.byMonth[monthKey]) {
+          stats.byMonth[monthKey] = {
+            count: 0,
+            value: 0,
+            month: date.getMonth() + 1,
+            year: date.getFullYear()
+          };
+        }
+        
+        stats.byMonth[monthKey].count++;
+        stats.byMonth[monthKey].value += orderValue;
+      }
+      
+      // Sortuj zamówienia według daty (najnowsze pierwsze)
+      allOrders.sort((a, b) => {
+        const dateA = a.orderDate ? new Date(a.orderDate) : new Date(0);
+        const dateB = b.orderDate ? new Date(b.orderDate) : new Date(0);
+        return dateB - dateA;
+      });
+      
+      // Listy ostatnich zamówień
+      stats.recentOrders = allOrders.slice(0, 10).map(order => ({
+        id: order.id,
+        orderNumber: order.orderNumber,
+        date: order.orderDate,
+        status: order.status,
+        value: order.value || 0,
+        totalValue: parseFloat(order.totalValue || 0)
+      }));
+      
+      console.log('Statystyki zamówień zostały obliczone', stats);
+      
+      // Zapisz dane do cache
+      ordersStatsCache.data = stats;
+      ordersStatsCache.timestamp = now;
+      ordersStatsCache.fetchInProgress = false;
+      
+      return stats;
+    } catch (error) {
+      // Zresetuj flagę w przypadku błędu
+      ordersStatsCache.fetchInProgress = false;
+      throw error;
+    }
   } catch (error) {
     console.error('Błąd podczas pobierania statystyk zamówień:', error);
+    // Upewnij się, że flaga jest zresetowana nawet w przypadku błędu
+    ordersStatsCache.fetchInProgress = false;
     throw error;
   }
 };

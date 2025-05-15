@@ -84,20 +84,20 @@ const NotificationsMenu = () => {
   // Efekt dla nasłuchiwania w Realtime Database
   useEffect(() => {
     if (currentUser) {
-      console.log("NotificationsMenu: Inicjalizacja dla użytkownika", currentUser.uid);
+      // console.log("NotificationsMenu: Inicjalizacja dla użytkownika", currentUser.uid);
       
       // Pobierz początkowe dane
       fetchUnreadCount();
       
       // Nasłuchuj na zmiany liczby nieprzeczytanych powiadomień
       const unsubscribeCount = subscribeToUnreadCount(currentUser.uid, (count) => {
-        console.log("NotificationsMenu: Otrzymano nową liczbę nieprzeczytanych powiadomień:", count);
+        // console.log("NotificationsMenu: Otrzymano nową liczbę nieprzeczytanych powiadomień:", count);
         setUnreadCount(count);
       });
       
       // Nasłuchuj na nowe powiadomienia
       const unsubscribeNotifications = subscribeToUserNotifications(currentUser.uid, (newNotification) => {
-        console.log("NotificationsMenu: Otrzymano nowe powiadomienie:", newNotification);
+        // console.log("NotificationsMenu: Otrzymano nowe powiadomienie:", newNotification);
         
         // Dodaj nowe powiadomienie do stanu
         setNotifications(prevNotifications => [newNotification, ...prevNotifications]);
@@ -112,11 +112,11 @@ const NotificationsMenu = () => {
         unreadCount: unsubscribeCount
       };
       
-      console.log("NotificationsMenu: Subskrypcje zostały ustanowione");
+      // console.log("NotificationsMenu: Subskrypcje zostały ustanowione");
       
       // Czyszczenie przy odmontowaniu
       return () => {
-        console.log("NotificationsMenu: Czyszczenie subskrypcji");
+        // console.log("NotificationsMenu: Czyszczenie subskrypcji");
         if (unsubscribeRefs.current.notifications) {
           unsubscribeRefs.current.notifications();
         }
@@ -173,7 +173,7 @@ const NotificationsMenu = () => {
   // Aktualizacja listy powiadomień, gdy menu jest otwarte
   useEffect(() => {
     if (open && currentUser) {
-      console.log("NotificationsMenu: Menu zostało otwarte, pobieranie powiadomień");
+      // console.log("NotificationsMenu: Menu zostało otwarte, pobieranie powiadomień");
       fetchNotifications();
     }
   }, [open, currentUser]);
@@ -183,9 +183,9 @@ const NotificationsMenu = () => {
     
     try {
       // Próbuj najpierw z Realtime Database
-      console.log("NotificationsMenu: Pobieranie liczby nieprzeczytanych z Realtime Database");
+      // console.log("NotificationsMenu: Pobieranie liczby nieprzeczytanych z Realtime Database");
       const realtimeCount = await getUnreadRealtimeNotificationsCount(currentUser.uid);
-      console.log("NotificationsMenu: Liczba nieprzeczytanych z Realtime:", realtimeCount);
+      // console.log("NotificationsMenu: Liczba nieprzeczytanych z Realtime:", realtimeCount);
       
       // Ustawiamy licznik tylko na podstawie Realtime Database, nie mieszamy z Firestore
       setUnreadCount(realtimeCount);
@@ -200,15 +200,15 @@ const NotificationsMenu = () => {
     setLoading(true);
     try {
       // Używamy tylko Realtime Database dla spójności
-      console.log("NotificationsMenu: Pobieranie powiadomień z Realtime Database");
+      // console.log("NotificationsMenu: Pobieranie powiadomień z Realtime Database");
       try {
         const notificationsData = await getRealtimeUserNotifications(currentUser.uid, false, 10);
-        console.log("NotificationsMenu: Powiadomienia z Realtime:", notificationsData);
+        // console.log("NotificationsMenu: Powiadomienia z Realtime:", notificationsData);
         setNotifications(notificationsData);
       } catch (offlineError) {
         console.warn("NotificationsMenu: Błąd sieci podczas pobierania powiadomień:", offlineError.message);
         // W trybie offline zachowujemy istniejące powiadomienia
-        console.log("NotificationsMenu: Działanie w trybie offline - używanie istniejących powiadomień");
+        // console.log("NotificationsMenu: Działanie w trybie offline - używanie istniejących powiadomień");
       }
     } catch (error) {
       console.error('NotificationsMenu: Błąd podczas pobierania powiadomień:', error);
@@ -231,7 +231,7 @@ const NotificationsMenu = () => {
     if (!notification.read) {
       try {
         await markRealtimeNotificationAsRead(notification.id, currentUser.uid);
-        console.log("Oznaczono jako przeczytane w Realtime Database");
+        // console.log("Oznaczono jako przeczytane w Realtime Database");
         
         // Aktualizuj lokalną listę powiadomień
         setNotifications(prevNotifications => 
@@ -370,7 +370,7 @@ const NotificationsMenu = () => {
     return (
       <ListItem
         key={notification.id}
-        button
+        component="li"
         alignItems="flex-start"
         onClick={() => handleNotificationClick(notification)}
         sx={{ 
@@ -378,7 +378,8 @@ const NotificationsMenu = () => {
           '&:hover': {
             backgroundColor: 'rgba(144, 202, 249, 0.16)',
           },
-          borderBottom: '1px solid rgba(0, 0, 0, 0.12)'
+          borderBottom: '1px solid rgba(0, 0, 0, 0.12)',
+          cursor: 'pointer'
         }}
       >
         <ListItemIcon sx={{ minWidth: 40 }}>
@@ -396,16 +397,14 @@ const NotificationsMenu = () => {
             </Box>
           }
           secondary={
-            <>
-              <Typography
-                component="span"
-                variant="body2"
-                color="textPrimary"
-              >
-                {message}
-              </Typography>
+            <Typography
+              component="div"
+              variant="body2"
+              color="textPrimary"
+            >
+              {message}
               {userInfo}
-            </>
+            </Typography>
           }
         />
       </ListItem>
@@ -526,7 +525,6 @@ const NotificationsMenu = () => {
         )}
       </Menu>
       
-      {/* Toast notification */}
       <Snackbar
         open={toastOpen}
         autoHideDuration={2000}
@@ -540,10 +538,10 @@ const NotificationsMenu = () => {
           elevation={6}
           variant="filled"
         >
-          <Typography variant="subtitle1" fontWeight="bold">
+          <Typography variant="subtitle1" component="div" fontWeight="bold">
             {toastTitle}
           </Typography>
-          <Typography variant="body2">
+          <Typography variant="body2" component="div">
             {toastMessage}
           </Typography>
         </Alert>

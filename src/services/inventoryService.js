@@ -123,7 +123,8 @@ import {
   // Pobieranie wszystkich pozycji magazynowych z możliwością filtrowania po magazynie
   export const getAllInventoryItems = async (warehouseId = null, page = null, pageSize = null, searchTerm = null, searchCategory = null, sortField = null, sortOrder = null) => {
     try {
-      console.log('Pobieranie pozycji magazynowych z paginacją:', { warehouseId, page, pageSize, searchTerm, searchCategory, sortField, sortOrder });
+      // Usuwamy zbędne logowanie
+      // console.log('Pobieranie pozycji magazynowych z paginacją:', { warehouseId, page, pageSize, searchTerm, searchCategory, sortField, sortOrder });
       const itemsRef = collection(db, INVENTORY_COLLECTION);
       
       // Mapowanie nazw pól sortowania na pola w bazie danych
@@ -160,7 +161,8 @@ import {
         allItems = allItems.filter(item => 
           (item.name && item.name.toLowerCase().includes(searchTermLower))
         );
-        console.log(`Znaleziono ${allItems.length} pozycji pasujących do SKU "${searchTerm}"`);
+        // Usuwamy zbędne logowanie
+        // console.log(`Znaleziono ${allItems.length} pozycji pasujących do SKU "${searchTerm}"`);
       }
       
       // Filtruj po kategorii (jeśli podana)
@@ -169,7 +171,8 @@ import {
         allItems = allItems.filter(item => 
           (item.category && item.category.toLowerCase().includes(searchCategoryLower))
         );
-        console.log(`Znaleziono ${allItems.length} pozycji z kategorii "${searchCategory}"`);
+        // Usuwamy zbędne logowanie
+        // console.log(`Znaleziono ${allItems.length} pozycji z kategorii "${searchCategory}"`);
       }
       
       // Dla pól, które wymagają specjalnego sortowania (np. availableQuantity)
@@ -216,7 +219,8 @@ import {
         
         // Wyciągnij tylko pozycje dla bieżącej strony
         paginatedItems = allItems.slice(startIndex, endIndex);
-        console.log(`Paginacja: strona ${page}, rozmiar ${pageSize}, wyświetlam elementy ${startIndex+1}-${Math.min(endIndex, totalCount)} z ${totalCount}`);
+        // Usuwamy zbędne logowanie
+        // console.log(`Paginacja: strona ${page}, rozmiar ${pageSize}, wyświetlam elementy ${startIndex+1}-${Math.min(endIndex, totalCount)} z ${totalCount}`);
       }
       
       // OPTYMALIZACJA: Pobierz partie magazynowe dla wszystkich przedmiotów na raz
@@ -266,8 +270,10 @@ import {
           }))
         );
         
-        console.log(`Zoptymalizowane pobieranie: wykonano ${chunks.length} zapytań zamiast wielu pojedynczych`);
-        console.log('Pobrane partie dla stronicowanych pozycji:', allBatches.length);
+        // Usuwamy zbędne logowanie
+        // console.log(`Zoptymalizowane pobieranie: wykonano ${chunks.length} zapytań zamiast wielu pojedynczych`);
+        // Usuwamy zbędne logowanie
+        // console.log('Pobrane partie dla stronicowanych pozycji:', allBatches.length);
       }
       
       // Przygotuj cache dla szybkiego dostępu do partii według itemId
@@ -4076,7 +4082,8 @@ import {
   // Funkcja czyszcząca mikrorezerwacje (bardzo małe wartości zaokrągleń)
   export const cleanupMicroReservations = async () => {
     try {
-      console.log('Rozpoczynam czyszczenie mikrorezerwacji...');
+      // Usuwamy zbędne logowanie
+      // console.log('Rozpoczynam czyszczenie mikrorezerwacji...');
       
       // Pobierz wszystkie transakcje rezerwacji
       const transactionsRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
@@ -4102,7 +4109,8 @@ import {
         }
       }
       
-      console.log(`Znaleziono ${microReservations.length} mikrorezerwacji do usunięcia`);
+      // Usuwamy zbędne logowanie
+      // console.log(`Znaleziono ${microReservations.length} mikrorezerwacji do usunięcia`);
       
       // Usuń mikrorezerwacje i zaktualizuj bookedQuantity w produktach
       for (const reservation of microReservations) {
@@ -4128,14 +4136,16 @@ import {
               updatedAt: serverTimestamp()
             });
             
-            console.log(`Zaktualizowano bookedQuantity dla ${itemId}: ${bookedQuantity} -> ${newBookedQuantity}`);
+            // Usuwamy zbędne logowanie
+            // console.log(`Zaktualizowano bookedQuantity dla ${itemId}: ${bookedQuantity} -> ${newBookedQuantity}`);
           }
           
           // Usuń rezerwację
           const reservationRef = doc(db, INVENTORY_TRANSACTIONS_COLLECTION, reservation.id);
           await deleteDoc(reservationRef);
           
-          console.log(`Usunięto mikrorezerwację ${reservation.id} o wartości ${reservation.quantity}`);
+          // Usuwamy zbędne logowanie
+          // console.log(`Usunięto mikrorezerwację ${reservation.id} o wartości ${reservation.quantity}`);
         } catch (error) {
           console.error(`Błąd podczas usuwania mikrorezerwacji ${reservation.id}:`, error);
         }
@@ -4172,7 +4182,7 @@ import {
    */
   export const cleanupItemReservations = async (itemId, userId) => {
     try {
-      console.log(`Rozpoczynam czyszczenie rezerwacji dla produktu ${itemId}...`);
+      // console.log(`Rozpoczynam czyszczenie rezerwacji dla produktu ${itemId}...`);
       
       // Pobierz wszystkie rezerwacje (transakcje booking) dla tego produktu
       const transactionsRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
@@ -4189,7 +4199,7 @@ import {
       }));
       
       if (reservations.length === 0) {
-        console.log(`Nie znaleziono rezerwacji dla produktu ${itemId}`);
+        // console.log(`Nie znaleziono rezerwacji dla produktu ${itemId}`);
         return { success: true, message: 'Brak rezerwacji do wyczyszczenia', count: 0 };
       }
       
@@ -4203,7 +4213,7 @@ import {
           const reservationRef = doc(db, INVENTORY_TRANSACTIONS_COLLECTION, reservation.id);
           await deleteDoc(reservationRef);
           
-          console.log(`Usunięto rezerwację ${reservation.id} dla produktu ${itemId}`);
+          // console.log(`Usunięto rezerwację ${reservation.id} dla produktu ${itemId}`);
           deletedReservations.push(reservation);
         } catch (error) {
           console.error(`Błąd podczas usuwania rezerwacji ${reservation.id}:`, error);
@@ -4222,7 +4232,7 @@ import {
         updatedBy: userId || 'system'
       });
       
-      console.log(`Wyzerowano bookedQuantity dla produktu ${itemId}`);
+      // console.log(`Wyzerowano bookedQuantity dla produktu ${itemId}`);
       
       // Emituj zdarzenie o zmianie stanu magazynu
       const event = new CustomEvent('inventory-updated', { 
@@ -4258,7 +4268,7 @@ import {
       const batchSnapshot = await getDoc(batchRef);
 
       if (!batchSnapshot.exists()) {
-        console.log(`Nie znaleziono partii o ID ${batchId}`);
+        // console.log(`Nie znaleziono partii o ID ${batchId}`);
         return null;
       }
 

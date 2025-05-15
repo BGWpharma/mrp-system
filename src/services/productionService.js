@@ -37,6 +37,14 @@ import {
   
   const PRODUCTION_TASKS_COLLECTION = 'productionTasks';
   
+  // Cache dla danych zadań produkcyjnych
+  const tasksCache = {
+    byStatus: {}, // Dane cache'owane według statusu
+    timestamp: {}, // Znaczniki czasu dla każdego statusu
+    fetchInProgress: {}, // Flagi zapobiegające równoległym zapytaniom o te same dane
+    ttl: 60000 // Czas życia cache w ms (60 sekund)
+  };
+  
   // Pobieranie wszystkich zadań produkcyjnych
   export const getAllTasks = async () => {
     const tasksRef = collection(db, PRODUCTION_TASKS_COLLECTION);
@@ -707,6 +715,48 @@ import {
       return [];
     }
     
+    // Sprawdź, czy mamy dane w cache i czy są aktualne
+    const now = Date.now();
+    if (
+      tasksCache.byStatus[status] && 
+      tasksCache.timestamp[status] && 
+      (now - tasksCache.timestamp[status] < tasksCache.ttl)
+    ) {
+      console.log(`Zwracam zadania o statusie "${status}" z cache. Dane ważne przez ${Math.round((tasksCache.timestamp[status] + tasksCache.ttl - now) / 1000)} sekund.`);
+      return tasksCache.byStatus[status];
+    }
+    
+    // Jeśli zapytanie jest już w toku, poczekaj na jego zakończenie 
+    // zamiast uruchamiania kolejnego równoległego zapytania
+    if (tasksCache.fetchInProgress[status]) {
+      console.log(`Zapytanie o zadania ze statusem "${status}" już w toku, oczekuję na jego zakończenie...`);
+      
+      // Czekaj maksymalnie 2 sekundy na zakończenie trwającego zapytania
+      let waitTime = 0;
+      const waitInterval = 100; // 100ms
+      const maxWaitTime = 2000; // 2 sekundy
+      
+      while (tasksCache.fetchInProgress[status] && waitTime < maxWaitTime) {
+        await new Promise(resolve => setTimeout(resolve, waitInterval));
+        waitTime += waitInterval;
+      }
+      
+      // Jeśli dane są dostępne po oczekiwaniu, zwróć je
+      if (tasksCache.byStatus[status] && !tasksCache.fetchInProgress[status]) {
+        console.log(`Zapytanie o zadania ze statusem "${status}" zostało zakończone przez inny proces, zwracam dane z cache`);
+        return tasksCache.byStatus[status];
+      }
+      
+      // Jeśli nadal trwa zapytanie, zresetuj flagę (na wypadek błędu) i kontynuuj
+      if (tasksCache.fetchInProgress[status]) {
+        console.log(`Przekroczono czas oczekiwania na zapytanie o zadania ze statusem "${status}", kontynuuję własne zapytanie`);
+        tasksCache.fetchInProgress[status] = false;
+      }
+    }
+    
+    // Ustaw flagę, że zapytanie jest w toku
+    tasksCache.fetchInProgress[status] = true;
+    
     try {
       const tasksRef = collection(db, PRODUCTION_TASKS_COLLECTION);
       
@@ -737,9 +787,18 @@ import {
       
       console.log(`Znaleziono ${tasks.length} zadań o statusie "${status}"`);
       
+      // Zapisz wyniki do cache
+      tasksCache.byStatus[status] = tasks;
+      tasksCache.timestamp[status] = now;
+      
+      // Zakończ zapytanie
+      tasksCache.fetchInProgress[status] = false;
+      
       return tasks;
     } catch (error) {
       console.error(`Błąd podczas pobierania zadań o statusie "${status}":`, error);
+      // Zresetuj flagę w przypadku błędu
+      tasksCache.fetchInProgress[status] = false;
       throw error;
     }
   };

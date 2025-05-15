@@ -372,12 +372,19 @@ const InventoryList = () => {
     }
   }, [selectedWarehouse]);
 
+  // Dodajemy stan śledzący inicjalizację komponentu
+  const [isInitialized, setIsInitialized] = useState(false);
+  const isFirstRender = useRef(true);
+
   // Zmodyfikuj funkcję fetchInventoryItems, aby przyjmowała parametry sortowania
   const fetchInventoryItems = async (newSortField = null, newSortOrder = null) => {
     setLoading(true);
     try {
-      // Najpierw wyczyść mikrorezerwacje
-      await cleanupMicroReservations();
+      // Wyczyść mikrorezerwacje tylko raz podczas inicjalizacji lub gdy użytkownik wymusi odświeżenie
+      if (isFirstRender.current) {
+        await cleanupMicroReservations();
+        isFirstRender.current = false;
+      }
       
       // Użyj przekazanych parametrów sortowania lub tych z stanu
       const sortFieldToUse = newSortField || tableSort.field;
@@ -427,8 +434,15 @@ const InventoryList = () => {
 
   // Modyfikujemy efekt, który ponownie pobiera dane po zmianie strony lub rozmiaru strony
   useEffect(() => {
+    // Inicjalizacja komponentu
+    if (!isInitialized) {
+      setIsInitialized(true);
+      return;
+    }
+
+    // Pobierz dane tylko jeśli komponent jest już zainicjalizowany
     fetchInventoryItems(tableSort.field, tableSort.order);
-  }, [page, pageSize]);
+  }, [page, pageSize, isInitialized]);
 
   const fetchExpiryData = async () => {
     try {

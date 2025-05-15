@@ -65,6 +65,8 @@ const Dashboard = () => {
 
   // Pobieranie zadań produkcyjnych - useCallback
   const fetchTasks = useCallback(async () => {
+    if (tasksLoading) return; // Zapobiegaj równoległym zapytaniom
+    
     try {
       setTasksLoading(true);
       console.log('Próba pobrania zadań w trakcie...');
@@ -92,10 +94,12 @@ const Dashboard = () => {
     } finally {
       setTasksLoading(false);
     }
-  }, []);
+  }, [tasksLoading]);
   
   // Pobieranie receptur - useCallback
   const fetchRecipes = useCallback(async () => {
+    if (recipesLoading) return; // Zapobiegaj równoległym zapytaniom
+    
     try {
       setRecipesLoading(true);
       const allRecipes = await getAllRecipes();
@@ -108,10 +112,12 @@ const Dashboard = () => {
     } finally {
       setRecipesLoading(false);
     }
-  }, []);
+  }, [recipesLoading]);
   
   // Pobieranie statystyk zamówień - useCallback
   const fetchOrderStats = useCallback(async () => {
+    if (ordersLoading) return; // Zapobiegaj równoległym zapytaniom
+    
     try {
       setOrdersLoading(true);
       const stats = await getOrdersStats(true);
@@ -124,10 +130,12 @@ const Dashboard = () => {
     } finally {
       setOrdersLoading(false);
     }
-  }, []);
+  }, [ordersLoading]);
   
   // Pobieranie danych analitycznych - useCallback
   const fetchAnalytics = useCallback(async () => {
+    if (analyticsLoading) return; // Zapobiegaj równoległym zapytaniom
+    
     try {
       setAnalyticsLoading(true);
       const kpiData = await getKpiData();
@@ -140,10 +148,35 @@ const Dashboard = () => {
     } finally {
       setAnalyticsLoading(false);
     }
-  }, []);
+  }, [analyticsLoading]);
+
+  // Odświeżanie pojedynczej sekcji danych
+  const refreshSection = useCallback((section) => {
+    // Zapobiegaj próbom odświeżenia podczas ładowania
+    if (loading) return;
+    
+    switch (section) {
+      case 'tasks':
+        if (!tasksLoading) fetchTasks();
+        break;
+      case 'recipes':
+        if (!recipesLoading) fetchRecipes();
+        break;
+      case 'orders':
+        if (!ordersLoading) fetchOrderStats();
+        break;
+      case 'analytics':
+        if (!analyticsLoading) fetchAnalytics();
+        break;
+      default:
+        break;
+    }
+  }, [fetchTasks, fetchRecipes, fetchOrderStats, fetchAnalytics, loading, tasksLoading, recipesLoading, ordersLoading, analyticsLoading]);
 
   // Odświeżanie wszystkich sekcji danych naraz za pomocą Promise.all
   const refreshAllData = useCallback(async () => {
+    if (loading) return; // Zapobiegaj równoległym odświeżeniom
+    
     try {
       setLoading(true);
       
@@ -161,32 +194,103 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [fetchRecipes, fetchOrderStats, fetchAnalytics, fetchTasks]);
+  }, [fetchRecipes, fetchOrderStats, fetchAnalytics, fetchTasks, loading]);
 
-  // Pierwsze ładowanie danych - równolegle za pomocą Promise.all
+  // Pierwsze ładowanie danych - tylko raz przy montowaniu komponentu
   useEffect(() => {
+    let isMounted = true; // Flaga zapobiegająca aktualizacji stanu po odmontowaniu
+    
     const loadData = async () => {
       try {
+        if (!isMounted) return;
         setLoading(true);
         
         // Uruchamiamy wszystkie zapytania równolegle
-        await Promise.all([
-          fetchRecipes(),
-          fetchOrderStats(),
-          fetchAnalytics(),
-          fetchTasks()
+        const [recipesData, ordersStatsData, analyticsData, tasksData] = await Promise.all([
+          getAllRecipes().catch(err => {
+            console.error('Błąd podczas pobierania receptur:', err);
+            return [];
+          }),
+          getOrdersStats(true).catch(err => {
+            console.error('Błąd podczas pobierania statystyk zamówień:', err);
+            return null;
+          }),
+          getKpiData().catch(err => {
+            console.error('Błąd podczas pobierania danych KPI:', err);
+            return null;
+          }),
+          getTasksByStatus('W trakcie').catch(err => {
+            console.error('Błąd podczas pobierania zadań:', err);
+            return [];
+          })
         ]);
         
+        // Zaktualizuj stan tylko jeśli komponent jest nadal zamontowany
+        if (!isMounted) return;
+        
         console.log('Wszystkie dane zostały załadowane równolegle');
+        
+        // Aktualizuj stany tylko jeśli dane są dostępne
+        if (recipesData) {
+          console.log('Wszystkie receptury:', recipesData);
+          setRecipes(recipesData);
+          setDataLoadStatus(prev => ({ ...prev, recipes: true }));
+        }
+        
+        if (ordersStatsData) {
+          console.log('Statystyki zamówień:', ordersStatsData);
+          setOrderStats(ordersStatsData);
+          setDataLoadStatus(prev => ({ ...prev, orders: true }));
+        }
+        
+        if (analyticsData) {
+          console.log('Dane KPI:', analyticsData);
+          setAnalyticsData(analyticsData);
+          setDataLoadStatus(prev => ({ ...prev, analytics: true }));
+        }
+        
+        if (tasksData) {
+          if (tasksData.length === 0) {
+            console.log('Brak zadań w trakcie, sprawdzam zadania zaplanowane...');
+            try {
+              const plannedTasks = await getTasksByStatus('Zaplanowane');
+              if (!isMounted) return;
+              
+              if (plannedTasks && plannedTasks.length > 0) {
+                console.log('Znaleziono zadania zaplanowane, ale brak zadań w trakcie');
+              } else {
+                console.log('Brak jakichkolwiek zadań produkcyjnych w bazie');
+              }
+            } catch (error) {
+              console.error('Błąd podczas pobierania zaplanowanych zadań:', error);
+            }
+          } else {
+            console.log(`Ustawiam ${tasksData.length} zadań w trakcie`);
+          }
+          setTasks(tasksData);
+          setDataLoadStatus(prev => ({ ...prev, tasks: true }));
+        }
       } catch (error) {
+        if (!isMounted) return;
         console.error('Błąd podczas ładowania danych dashboardu:', error);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+          setTasksLoading(false);
+          setRecipesLoading(false);
+          setOrdersLoading(false);
+          setAnalyticsLoading(false);
+        }
       }
     };
     
     loadData();
-  }, [fetchRecipes, fetchOrderStats, fetchAnalytics, fetchTasks]);
+    
+    // Funkcja czyszcząca
+    return () => {
+      isMounted = false;
+    };
+  }, []); // Pusta tablica zależności = uruchomienie tylko raz przy montowaniu
 
   // Mapowanie statusów zamówień na kolory
   const getStatusColor = useMemo(() => (status) => {

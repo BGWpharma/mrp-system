@@ -620,13 +620,13 @@ export const markRealtimeNotificationAsRead = async (notificationId, userId) => 
  */
 export const markAllRealtimeNotificationsAsRead = async (userId) => {
   try {
-    console.log(`[RTDB] Oznaczanie wszystkich powiadomień jako przeczytane dla użytkownika ${userId}`);
+    // console.log(`[RTDB] Oznaczanie wszystkich powiadomień jako przeczytane dla użytkownika ${userId}`);
     // Pobierz wszystkie powiadomienia dla użytkownika
     const userNotificationsRef = ref(rtdb, REALTIME_NOTIFICATIONS_PATH);
     const snapshot = await get(userNotificationsRef);
     
     if (!snapshot.exists()) {
-      console.log(`[RTDB] Brak powiadomień do oznaczenia jako przeczytane`);
+      // console.log(`[RTDB] Brak powiadomień do oznaczenia jako przeczytane`);
       return true;
     }
     
@@ -649,15 +649,15 @@ export const markAllRealtimeNotificationsAsRead = async (userId) => {
       }
     });
     
-    console.log(`[RTDB] Znaleziono ${foundUnreadCount} nieprzeczytanych powiadomień do aktualizacji`);
+    // console.log(`[RTDB] Znaleziono ${foundUnreadCount} nieprzeczytanych powiadomień do aktualizacji`);
     
     // Zastosuj wszystkie zmiany w jednej operacji
     if (Object.keys(updates).length > 0) {
-      console.log(`[RTDB] Aktualizacja ${Object.keys(updates).length} powiadomień`);
+      // console.log(`[RTDB] Aktualizacja ${Object.keys(updates).length} powiadomień`);
       await update(ref(rtdb), updates);
-      console.log(`[RTDB] Powiadomienia zaktualizowane pomyślnie`);
+      // console.log(`[RTDB] Powiadomienia zaktualizowane pomyślnie`);
     } else {
-      console.log(`[RTDB] Brak powiadomień do aktualizacji`);
+      // console.log(`[RTDB] Brak powiadomień do aktualizacji`);
     }
     
     // Sprawdź aktualną liczbę nieprzeczytanych powiadomień po aktualizacji
@@ -674,7 +674,7 @@ export const markAllRealtimeNotificationsAsRead = async (userId) => {
       });
     }
     
-    console.log(`[RTDB] Po aktualizacji pozostało ${remainingUnread} nieprzeczytanych powiadomień`);
+    // console.log(`[RTDB] Po aktualizacji pozostało ${remainingUnread} nieprzeczytanych powiadomień`);
     
     return true;
   } catch (error) {
@@ -691,18 +691,18 @@ export const markAllRealtimeNotificationsAsRead = async (userId) => {
  * @returns {Function} - Funkcja do anulowania nasłuchiwania
  */
 export const subscribeToUserNotifications = (userId, callback) => {
-  console.log(`[RTDB] Subskrypcja nowych powiadomień dla użytkownika ${userId}`);
+  // console.log(`[RTDB] Subskrypcja nowych powiadomień dla użytkownika ${userId}`);
   const notificationsRef = ref(rtdb, REALTIME_NOTIFICATIONS_PATH);
   
   // Używamy onChildAdded, aby reagować tylko na nowe powiadomienia
   const unsubscribe = onChildAdded(notificationsRef, (snapshot) => {
     try {
-      console.log(`[RTDB] Otrzymano nowe/istniejące powiadomienie: ${snapshot.key}`);
+      // console.log(`[RTDB] Otrzymano nowe/istniejące powiadomienie: ${snapshot.key}`);
       const notification = snapshot.val();
       
       // Sprawdź czy powiadomienie jest dla tego użytkownika
       if (notification && notification.userIds && notification.userIds.includes(userId)) {
-        console.log(`[RTDB] Powiadomienie ${snapshot.key} jest dla użytkownika ${userId}`);
+        // console.log(`[RTDB] Powiadomienie ${snapshot.key} jest dla użytkownika ${userId}`);
         // Utwórz obiekt z danymi powiadomienia i ID
         const notificationWithId = {
           id: snapshot.key,
@@ -712,10 +712,10 @@ export const subscribeToUserNotifications = (userId, callback) => {
         };
         
         // Wywołaj callback z nowym powiadomieniem
-        console.log(`[RTDB] Wywołuję callback z powiadomieniem ${snapshot.key}`);
+        // console.log(`[RTDB] Wywołuję callback z powiadomieniem ${snapshot.key}`);
         callback(notificationWithId);
       } else {
-        console.log(`[RTDB] Powiadomienie ${snapshot.key} nie jest dla użytkownika ${userId}, pomijam`);
+        // console.log(`[RTDB] Powiadomienie ${snapshot.key} nie jest dla użytkownika ${userId}, pomijam`);
       }
     } catch (error) {
       console.error(`[RTDB] Błąd podczas przetwarzania nowego powiadomienia:`, error);
@@ -739,16 +739,16 @@ export const subscribeToUserNotifications = (userId, callback) => {
  */
 export const getRealtimeUserNotifications = async (userId, onlyUnread = false, limitCount = 20) => {
   try {
-    console.log(`[RTDB] Pobieranie powiadomień dla użytkownika ${userId} (onlyUnread: ${onlyUnread}, limit: ${limitCount})`);
+    // console.log(`[RTDB] Pobieranie powiadomień dla użytkownika ${userId} (onlyUnread: ${onlyUnread}, limit: ${limitCount})`);
     const notificationsRef = ref(rtdb, REALTIME_NOTIFICATIONS_PATH);
     
     try {
       const snapshot = await get(notificationsRef);
       
-      console.log(`[RTDB] Otrzymano odpowiedź z bazy danych, istnieje: ${snapshot.exists()}`);
+      // console.log(`[RTDB] Otrzymano odpowiedź z bazy danych, istnieje: ${snapshot.exists()}`);
       
       if (!snapshot.exists()) {
-        console.log('[RTDB] Brak danych w węźle powiadomień');
+        // console.log('[RTDB] Brak danych w węźle powiadomień');
         return [];
       }
       
@@ -757,16 +757,16 @@ export const getRealtimeUserNotifications = async (userId, onlyUnread = false, l
       snapshot.forEach((childSnapshot) => {
         try {
           const notification = childSnapshot.val();
-          console.log(`[RTDB] Sprawdzanie powiadomienia ${childSnapshot.key}:`, notification);
+          // console.log(`[RTDB] Sprawdzanie powiadomienia ${childSnapshot.key}:`, notification);
           
           // Sprawdź czy powiadomienie jest dla tego użytkownika
           if (notification && notification.userIds && notification.userIds.includes(userId)) {
-            console.log(`[RTDB] Powiadomienie ${childSnapshot.key} jest dla użytkownika ${userId}`);
+            // console.log(`[RTDB] Powiadomienie ${childSnapshot.key} jest dla użytkownika ${userId}`);
             const isRead = notification.read?.[userId] || false;
             
             // Jeśli chcemy tylko nieprzeczytane i to jest przeczytane, pomijamy
             if (onlyUnread && isRead) {
-              console.log(`[RTDB] Pomijanie powiadomienia ${childSnapshot.key} - jest już przeczytane`);
+              // console.log(`[RTDB] Pomijanie powiadomienia ${childSnapshot.key} - jest już przeczytane`);
               return;
             }
             
@@ -776,9 +776,9 @@ export const getRealtimeUserNotifications = async (userId, onlyUnread = false, l
               ...notification,
               read: isRead
             });
-            console.log(`[RTDB] Dodano powiadomienie ${childSnapshot.key} do wyników`);
+            // console.log(`[RTDB] Dodano powiadomienie ${childSnapshot.key} do wyników`);
           } else {
-            console.log(`[RTDB] Powiadomienie ${childSnapshot.key} nie jest dla użytkownika ${userId} lub ma nieprawidłową strukturę`);
+            // console.log(`[RTDB] Powiadomienie ${childSnapshot.key} nie jest dla użytkownika ${userId} lub ma nieprawidłową strukturę`);
           }
         } catch (itemError) {
           console.warn(`[RTDB] Błąd podczas przetwarzania powiadomienia ${childSnapshot.key}:`, itemError);
@@ -796,16 +796,16 @@ export const getRealtimeUserNotifications = async (userId, onlyUnread = false, l
         }
       });
       
-      console.log(`[RTDB] Znaleziono ${notifications.length} powiadomień dla użytkownika ${userId}`);
+      // console.log(`[RTDB] Znaleziono ${notifications.length} powiadomień dla użytkownika ${userId}`);
       
       // Zastosuj limit
       const limitedNotifications = notifications.slice(0, limitCount);
-      console.log(`[RTDB] Zwracanie ${limitedNotifications.length} powiadomień po zastosowaniu limitu ${limitCount}`);
+      // console.log(`[RTDB] Zwracanie ${limitedNotifications.length} powiadomień po zastosowaniu limitu ${limitCount}`);
       
       return limitedNotifications;
     } catch (networkError) {
       console.warn('[RTDB] Błąd sieci podczas pobierania powiadomień:', networkError);
-      console.log('[RTDB] Działanie w trybie offline - zwracamy pustą listę');
+      // console.log('[RTDB] Działanie w trybie offline - zwracamy pustą listę');
       return [];
     }
   } catch (error) {
@@ -822,16 +822,16 @@ export const getRealtimeUserNotifications = async (userId, onlyUnread = false, l
  */
 export const getUnreadRealtimeNotificationsCount = async (userId) => {
   try {
-    console.log(`[RTDB] Pobieranie liczby nieprzeczytanych powiadomień dla użytkownika ${userId}`);
+    // console.log(`[RTDB] Pobieranie liczby nieprzeczytanych powiadomień dla użytkownika ${userId}`);
     const notificationsRef = ref(rtdb, REALTIME_NOTIFICATIONS_PATH);
     
     try {
       const snapshot = await get(notificationsRef);
       
-      console.log(`[RTDB] Otrzymano odpowiedź, istnieje: ${snapshot.exists()}`);
+      // console.log(`[RTDB] Otrzymano odpowiedź, istnieje: ${snapshot.exists()}`);
       
       if (!snapshot.exists()) {
-        console.log(`[RTDB] Brak danych w węźle powiadomień`);
+        // console.log(`[RTDB] Brak danych w węźle powiadomień`);
         return 0;
       }
       
@@ -839,7 +839,7 @@ export const getUnreadRealtimeNotificationsCount = async (userId) => {
       const allNotificationsCount = snapshot.size; // Całkowita liczba powiadomień
       let userNotificationsCount = 0; // Liczba powiadomień dla tego użytkownika
       
-      console.log(`[RTDB] Łącznie znaleziono ${allNotificationsCount} powiadomień w bazie`);
+      // console.log(`[RTDB] Łącznie znaleziono ${allNotificationsCount} powiadomień w bazie`);
       
       snapshot.forEach((childSnapshot) => {
         const notification = childSnapshot.val();
@@ -854,18 +854,18 @@ export const getUnreadRealtimeNotificationsCount = async (userId) => {
           
           if (!isRead) {
             count++;
-            console.log(`[RTDB] Nieprzeczytane powiadomienie ID: ${notificationId}, tytuł: "${notification.title || '(brak tytułu)'}", status odczytu: ${isRead}`);
+            // console.log(`[RTDB] Nieprzeczytane powiadomienie ID: ${notificationId}, tytuł: "${notification.title || '(brak tytułu)'}", status odczytu: ${isRead}`);
           }
         }
       });
       
-      console.log(`[RTDB] Znaleziono ${userNotificationsCount} powiadomień dla użytkownika ${userId}, z czego ${count} nieprzeczytanych`);
-      console.log(`[RTDB] Łączna liczba nieprzeczytanych powiadomień dla użytkownika ${userId}: ${count}`);
+      // console.log(`[RTDB] Znaleziono ${userNotificationsCount} powiadomień dla użytkownika ${userId}, z czego ${count} nieprzeczytanych`);
+      // console.log(`[RTDB] Łączna liczba nieprzeczytanych powiadomień dla użytkownika ${userId}: ${count}`);
       return count;
     } catch (networkError) {
       // Obsługa błędu offline - zwróć 0 lub dane z pamięci podręcznej
       console.warn('[RTDB] Błąd sieci podczas pobierania nieprzeczytanych powiadomień:', networkError.message);
-      console.log('[RTDB] Działanie w trybie offline - zwracanie 0 jako liczby nieprzeczytanych powiadomień');
+      // console.log('[RTDB] Działanie w trybie offline - zwracanie 0 jako liczby nieprzeczytanych powiadomień');
       return 0;
     }
   } catch (error) {
@@ -882,16 +882,16 @@ export const getUnreadRealtimeNotificationsCount = async (userId) => {
  * @returns {Function} - Funkcja do anulowania nasłuchiwania
  */
 export const subscribeToUnreadCount = (userId, callback) => {
-  console.log(`[RTDB] Subskrypcja liczby nieprzeczytanych powiadomień dla użytkownika ${userId}`);
+  // console.log(`[RTDB] Subskrypcja liczby nieprzeczytanych powiadomień dla użytkownika ${userId}`);
   const notificationsRef = ref(rtdb, REALTIME_NOTIFICATIONS_PATH);
   
   // Używamy onValue, aby reagować na wszystkie zmiany w powiadomieniach
   const unsubscribe = onValue(notificationsRef, (snapshot) => {
     try {
-      console.log(`[RTDB] Otrzymano aktualizację dla liczby nieprzeczytanych, istnieje: ${snapshot.exists()}`);
+      // console.log(`[RTDB] Otrzymano aktualizację dla liczby nieprzeczytanych, istnieje: ${snapshot.exists()}`);
       
       if (!snapshot.exists()) {
-        console.log(`[RTDB] Brak danych w węźle powiadomień, zwracam 0`);
+        // console.log(`[RTDB] Brak danych w węźle powiadomień, zwracam 0`);
         callback(0);
         return;
       }
@@ -914,7 +914,7 @@ export const subscribeToUnreadCount = (userId, callback) => {
             
             if (!isRead) {
               count++;
-              console.log(`[RTDB] [Subskrypcja] Wykryto nieprzeczytane powiadomienie ID: ${notificationId}`);
+              // console.log(`[RTDB] [Subskrypcja] Wykryto nieprzeczytane powiadomienie ID: ${notificationId}`);
             }
           }
         } catch (itemError) {
@@ -923,8 +923,8 @@ export const subscribeToUnreadCount = (userId, callback) => {
         }
       });
       
-      console.log(`[RTDB] [Subskrypcja] Znaleziono ${userNotificationsCount} powiadomień dla użytkownika, ${count} nieprzeczytanych`);
-      console.log(`[RTDB] Aktualizacja liczby nieprzeczytanych powiadomień dla użytkownika ${userId}: ${count}`);
+      // console.log(`[RTDB] [Subskrypcja] Znaleziono ${userNotificationsCount} powiadomień dla użytkownika, ${count} nieprzeczytanych`);
+      // console.log(`[RTDB] Aktualizacja liczby nieprzeczytanych powiadomień dla użytkownika ${userId}: ${count}`);
       callback(count);
     } catch (error) {
       console.error(`[RTDB] [Subskrypcja] Błąd podczas przetwarzania aktualizacji powiadomień:`, error);

@@ -98,15 +98,19 @@ const OrdersList = () => {
   const [statusChangeInfo, setStatusChangeInfo] = useState(null);
   const [customers, setCustomers] = useState([]);
   const [customersLoading, setCustomersLoading] = useState(false);
+  // Dodajemy flagę, aby śledzić czy komponent jest już zamontowany
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const { currentUser } = useAuth();
   const { showSuccess, showError, showInfo } = useNotification();
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Główny efekt inicjalizacyjny - wykonuje się tylko raz przy pierwszym renderowaniu
   useEffect(() => {
-    fetchOrders();
     fetchCustomers();
+    // Nie wywołujemy tu fetchOrders() - zostanie wywołane przez efekt zależny od parametrów
+    setIsInitialized(true);
   }, []);
 
   // Obsługa debounce dla wyszukiwania
@@ -128,9 +132,13 @@ const OrdersList = () => {
     };
   }, [searchTerm]);
   
+  // Efekt odpowiedzialny za pobieranie zamówień przy zmianach parametrów
   useEffect(() => {
-    fetchOrders();
-  }, [page, rowsPerPage, orderBy, orderDirection, debouncedSearchTerm]);
+    // Wywołujemy fetchOrders tylko jeśli komponent jest już zainicjalizowany
+    if (isInitialized) {
+      fetchOrders();
+    }
+  }, [page, rowsPerPage, orderBy, orderDirection, debouncedSearchTerm, isInitialized]);
 
   const fetchOrders = async () => {
     try {
@@ -156,7 +164,8 @@ const OrdersList = () => {
       setTotalItems(result.pagination.totalItems);
       setTotalPages(result.pagination.totalPages);
       
-      console.log("Pobrano zamówienia z paginacją:", result);
+      // Usuwamy zbędne logowanie, które generuje wielokrotne komunikaty
+      // console.log("Pobrano zamówienia z paginacją:", result);
     } catch (error) {
       console.error('Błąd podczas pobierania zamówień:', error);
       showError('Nie udało się pobrać listy zamówień');
