@@ -209,17 +209,17 @@ const calculateInventoryValue = (items) => {
 /**
  * Pobiera dane do wykresów
  */
-export const getChartData = async (chartType, timeFrame = 'month', limit = 12) => {
+export const getChartData = async (chartType, timeFrame = 'month', limit = 12, dateParams = {}) => {
   try {
     switch (chartType) {
       case 'sales':
-        return await getSalesChartData(timeFrame, limit);
+        return await getSalesChartData(timeFrame, limit, dateParams);
       case 'inventory':
-        return await getInventoryChartData();
+        return await getInventoryChartData(timeFrame, dateParams);
       case 'production':
-        return await getProductionChartData(timeFrame);
+        return await getProductionChartData(timeFrame, limit, dateParams);
       case 'quality':
-        return await getQualityChartData(timeFrame);
+        return await getQualityChartData(timeFrame, dateParams);
       case 'categories':
         return await getProductCategoriesChartData();
       default:
@@ -537,7 +537,7 @@ const getRealQualityData = async () => {
 /**
  * Pobiera dane do wykresu sprzedaży
  */
-const getSalesChartData = async (timeFrame, limitCount) => {
+const getSalesChartData = async (timeFrame, limitCount, dateParams = {}) => {
   try {
     // Pobierz statystyki zamówień
     const ordersStats = await getOrdersStats();
@@ -551,14 +551,29 @@ const getSalesChartData = async (timeFrame, limitCount) => {
       // Sortuj miesiące chronologicznie
       const months = Object.keys(ordersStats.byMonth).sort();
       
-      // Ogranicz liczbę miesięcy zgodnie z parametrem limitCount
-      const limitedMonths = months.slice(-limitCount);
+      // Filtruj miesiące według zakresu dat, jeśli podany
+      let filteredMonths = months;
+      
+      if (timeFrame === 'custom' && dateParams.startDate && dateParams.endDate) {
+        // Konwertuj daty na format używany w danych (YYYY-MM)
+        const startParts = dateParams.startDate.split('-');
+        const endParts = dateParams.endDate.split('-');
+        const startYearMonth = `${startParts[0]}-${startParts[1]}`;
+        const endYearMonth = `${endParts[0]}-${endParts[1]}`;
+        
+        filteredMonths = months.filter(month => {
+          return month >= startYearMonth && month <= endYearMonth;
+        });
+      } else {
+        // Ogranicz liczbę miesięcy zgodnie z parametrem limitCount
+        filteredMonths = months.slice(-limitCount);
+      }
       
       // Przygotuj dane do wykresu
       const labels = [];
       const data = [];
       
-      for (const monthKey of limitedMonths) {
+      for (const monthKey of filteredMonths) {
         const [year, month] = monthKey.split('-');
         const monthNames = ['Sty', 'Lut', 'Mar', 'Kwi', 'Maj', 'Cze', 'Lip', 'Sie', 'Wrz', 'Paź', 'Lis', 'Gru'];
         const monthData = ordersStats.byMonth[monthKey];
@@ -620,19 +635,46 @@ const generateDummySalesData = (limitCount) => {
 /**
  * Pobiera dane do wykresu wartości magazynu
  */
-const getInventoryChartData = async () => {
+const getInventoryChartData = async (timeFrame = 'month', dateParams = {}) => {
   try {
     // Pobierz wszystkie przedmioty z magazynu
     const items = await getAllInventoryItems();
     
-    // Pobierz wszystkie transakcje magazynowe z ostatnich 30 dni
-    const today = new Date();
-    const thirtyDaysAgo = new Date(today.setDate(today.getDate() - 30));
+    // Ustal zakres dat
+    let startDate, endDate;
     
+    if (timeFrame === 'custom' && dateParams.startDate && dateParams.endDate) {
+      startDate = new Date(dateParams.startDate);
+      endDate = new Date(dateParams.endDate);
+    } else {
+      // Domyślnie ostatnie 30 dni
+      endDate = new Date();
+      
+      if (timeFrame === 'week') {
+        startDate = new Date(endDate);
+        startDate.setDate(endDate.getDate() - 7);
+      } else if (timeFrame === 'month') {
+        startDate = new Date(endDate);
+        startDate.setDate(endDate.getDate() - 30);
+      } else if (timeFrame === 'quarter') {
+        startDate = new Date(endDate);
+        startDate.setDate(endDate.getDate() - 90);
+      } else if (timeFrame === 'year') {
+        startDate = new Date(endDate);
+        startDate.setDate(endDate.getDate() - 365);
+      } else {
+        // Domyślnie miesiąc
+        startDate = new Date(endDate);
+        startDate.setDate(endDate.getDate() - 30);
+      }
+    }
+    
+    // Pobierz transakcje magazynowe z wybranego okresu
     const transactionsRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
     const q = query(
       transactionsRef,
-      where('date', '>=', Timestamp.fromDate(thirtyDaysAgo)),
+      where('date', '>=', Timestamp.fromDate(startDate)),
+      where('date', '<=', Timestamp.fromDate(endDate)),
       orderBy('date', 'asc')
     );
     
@@ -646,9 +688,10 @@ const getInventoryChartData = async () => {
     const dailyValues = new Map();
     let currentValue = calculateInventoryValue(items);
 
-    // Inicjalizuj wartości dla ostatnich 30 dni
-    for (let i = 0; i < 30; i++) {
-      const date = new Date();
+    // Inicjalizuj wartości dla dni w zakresie
+    const daysDiff = Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+    for (let i = 0; i < daysDiff; i++) {
+      const date = new Date(endDate);
       date.setDate(date.getDate() - i);
       const dateKey = date.toISOString().split('T')[0];
       dailyValues.set(dateKey, currentValue);
@@ -679,10 +722,16 @@ const getInventoryChartData = async () => {
       }),
       data: sortedDates.map(date => dailyValues.get(date))
     };
+    
   } catch (error) {
     console.error('Błąd podczas pobierania danych do wykresu magazynu:', error);
     // Zwróć przykładowe dane w przypadku błędu
-    const labels = Array.from({ length: 30 }, (_, i) => {
+    const dayCount = timeFrame === 'week' ? 7 : 
+                     timeFrame === 'month' ? 30 : 
+                     timeFrame === 'quarter' ? 90 : 
+                     timeFrame === 'year' ? 365 : 30;
+    
+    const labels = Array.from({ length: dayCount }, (_, i) => {
       const date = new Date();
       date.setDate(date.getDate() - i);
       return `${date.getDate()}.${date.getMonth() + 1}`;
@@ -706,7 +755,7 @@ const getInventoryChartData = async () => {
 /**
  * Pobiera dane do wykresu produkcji
  */
-const getProductionChartData = async (timeFrame) => {
+const getProductionChartData = async (timeFrame, limit = 6, dateParams = {}) => {
   try {
     // Pobierz wszystkie zadania produkcyjne
     const allTasks = await getAllTasks();
@@ -722,11 +771,41 @@ const getProductionChartData = async (timeFrame) => {
     const monthlyData = new Map();
     const months = ['Sty', 'Lut', 'Mar', 'Kwi', 'Maj', 'Cze', 'Lip', 'Sie', 'Wrz', 'Paź', 'Lis', 'Gru'];
     
-    // Inicjalizuj ostatnie 6 miesięcy
-    const now = new Date();
-    for (let i = 5; i >= 0; i--) {
-      const date = new Date();
-      date.setMonth(now.getMonth() - i);
+    // Ustal zakres dat
+    let startDate, endDate;
+    
+    if (timeFrame === 'custom' && dateParams.startDate && dateParams.endDate) {
+      startDate = new Date(dateParams.startDate);
+      endDate = new Date(dateParams.endDate);
+    } else {
+      endDate = new Date();
+      
+      if (timeFrame === 'week') {
+        startDate = new Date(endDate);
+        startDate.setMonth(endDate.getMonth() - 1); // Pokaż zawsze minimum 1 miesiąc
+      } else if (timeFrame === 'month') {
+        startDate = new Date(endDate);
+        startDate.setMonth(endDate.getMonth() - 6); // Pokaż 6 miesięcy
+      } else if (timeFrame === 'quarter') {
+        startDate = new Date(endDate);
+        startDate.setMonth(endDate.getMonth() - 6); 
+      } else if (timeFrame === 'year') {
+        startDate = new Date(endDate);
+        startDate.setMonth(endDate.getMonth() - 12);
+      } else {
+        // Domyślnie 6 miesięcy
+        startDate = new Date(endDate);
+        startDate.setMonth(endDate.getMonth() - 6);
+      }
+    }
+    
+    // Inicjalizuj miesiące w zakresie dat
+    const monthDiff = (endDate.getFullYear() - startDate.getFullYear()) * 12 + endDate.getMonth() - startDate.getMonth() + 1;
+    const monthCount = Math.min(monthDiff, limit);
+    
+    for (let i = monthCount - 1; i >= 0; i--) {
+      const date = new Date(endDate);
+      date.setMonth(endDate.getMonth() - i);
       const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
       const displayName = `${months[date.getMonth()]} ${date.getFullYear()}`;
       
@@ -776,6 +855,11 @@ const getProductionChartData = async (timeFrame) => {
         
         if (!taskDate || isNaN(taskDate.getTime())) {
           console.log('Nieprawidłowa data zadania:', task.id);
+          return;
+        }
+        
+        // Sprawdź, czy zadanie jest w wybranym zakresie dat
+        if (taskDate < startDate || taskDate > endDate) {
           return;
         }
         
@@ -858,7 +942,7 @@ const generateDummyProductionData = () => {
 /**
  * Pobiera dane do wykresu jakości
  */
-const getQualityChartData = async (timeFrame) => {
+const getQualityChartData = async (timeFrame, dateParams = {}) => {
   try {
     // Pobierz wszystkie testy jakości
     const tests = await getAllTests();

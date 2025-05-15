@@ -12,8 +12,14 @@ import {
   MenuItem,
   CircularProgress,
   ToggleButtonGroup,
-  ToggleButton
+  ToggleButton,
+  TextField
 } from '@mui/material';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { pl } from 'date-fns/locale';
+import { format, subMonths, subWeeks, subDays, startOfMonth, endOfMonth } from 'date-fns';
 import { Line, Bar, Pie, Doughnut } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -46,7 +52,8 @@ const timeRanges = [
   { value: 'week', label: 'Ostatnie 7 dni' },
   { value: 'month', label: 'Ostatnie 30 dni' },
   { value: 'quarter', label: 'Ostatnie 90 dni' },
-  { value: 'year', label: 'Ostatni rok' }
+  { value: 'year', label: 'Ostatni rok' },
+  { value: 'custom', label: 'Niestandardowy zakres' }
 ];
 
 const Charts = () => {
@@ -56,6 +63,11 @@ const Charts = () => {
   const [productionView, setProductionView] = useState('completed'); // 'completed' lub 'both'
   const [categoriesView, setCategoriesView] = useState('value'); // 'value' lub 'count'
   const [categoriesChartType, setCategoriesChartType] = useState('pie'); // 'pie' lub 'doughnut'
+  
+  // Dodane stany dla niestandardowego zakresu dat
+  const [startDate, setStartDate] = useState(subMonths(new Date(), 1));
+  const [endDate, setEndDate] = useState(new Date());
+  const [dateRangeError, setDateRangeError] = useState(false);
   
   const [chartData, setChartData] = useState({
     sales: {
@@ -127,11 +139,28 @@ const Charts = () => {
       try {
         setLoading(true);
         
-        // Pobierz dane dla każdego wykresu
+        // Przygotuj parametry daty do zapytań
+        let dateParams = {};
+        if (timeRange === 'custom') {
+          if (startDate && endDate && startDate <= endDate) {
+            dateParams = {
+              startDate: format(startDate, 'yyyy-MM-dd'),
+              endDate: format(endDate, 'yyyy-MM-dd')
+            };
+            setDateRangeError(false);
+          } else {
+            // Błędny zakres dat
+            setDateRangeError(true);
+            setLoading(false);
+            return;
+          }
+        }
+        
+        // Pobierz dane dla każdego wykresu z uwzględnieniem zakresu dat
         const [salesData, inventoryData, productionData, categoriesData] = await Promise.all([
-          getChartData('sales', timeRange),
-          getChartData('inventory', timeRange),
-          getChartData('production', timeRange),
+          getChartData('sales', timeRange, 12, dateParams),
+          getChartData('inventory', timeRange, 30, dateParams),
+          getChartData('production', timeRange, 6, dateParams),
           getChartData('categories')
         ]);
 
@@ -144,23 +173,57 @@ const Charts = () => {
 
         // Przygotuj dane wykresów
         const salesChartData = {
-          labels: salesData.labels || [],
+          labels: [],
           datasets: [{
             label: 'Sprzedaż (PLN)',
-            data: salesData.data || [],
+            data: [],
             borderColor: 'rgb(75, 192, 192)',
             backgroundColor: 'rgba(75, 192, 192, 0.5)',
             tension: 0.1,
             fill: chartType === 'bar'
           }]
         };
+        
+        // Weryfikacja i przygotowanie danych sprzedaży
+        if (salesData && Array.isArray(salesData.labels) && Array.isArray(salesData.data)) {
+          // Utwórz pary etykieta-dane i odfiltruj nieprawidłowe
+          const validPairs = salesData.labels
+            .map((label, index) => ({ 
+              label, 
+              value: salesData.data[index]
+            }))
+            .filter(pair => 
+              pair.label && 
+              pair.label !== "undefined" && 
+              pair.label !== "NaN" &&
+              !isNaN(pair.value) && 
+              pair.value !== null && 
+              pair.value !== undefined
+            );
+          
+          // Jeśli pozostały jakieś poprawne dane, użyj ich
+          if (validPairs.length > 0) {
+            salesChartData.labels = validPairs.map(pair => pair.label);
+            salesChartData.datasets[0].data = validPairs.map(pair => pair.value);
+          } else {
+            // Jeśli nie ma poprawnych danych, użyj danych przykładowych
+            const defaultLabels = ['Sty', 'Lut', 'Mar', 'Kwi', 'Maj', 'Cze'];
+            salesChartData.labels = defaultLabels;
+            salesChartData.datasets[0].data = [20000, 25000, 23000, 30000, 29000, 35000];
+          }
+        } else {
+          // Jeśli nie ma poprawnej struktury danych, użyj danych przykładowych
+          const defaultLabels = ['Sty', 'Lut', 'Mar', 'Kwi', 'Maj', 'Cze'];
+          salesChartData.labels = defaultLabels;
+          salesChartData.datasets[0].data = [20000, 25000, 23000, 30000, 29000, 35000];
+        }
 
         // Przygotuj dane wykresu produkcji - obsługa zarówno ukończonych, jak i zaplanowanych zadań
         const productionChartData = {
-          labels: productionData.labels || [],
+          labels: [],
           datasets: [{
             label: 'Ukończone zadania',
-            data: productionData.data || [],
+            data: [],
             borderColor: 'rgb(255, 99, 132)',
             backgroundColor: 'rgba(255, 99, 132, 0.5)',
             tension: 0.1,
@@ -168,23 +231,87 @@ const Charts = () => {
           }]
         };
         
-        // Dodaj drugą serię danych (zaplanowane zadania), jeśli są dostępne
-        if (productionData.plannedData && productionView === 'both') {
-          productionChartData.datasets.push({
-            label: 'Zaplanowane zadania',
-            data: productionData.plannedData || [],
-            borderColor: 'rgb(54, 162, 235)',
-            backgroundColor: 'rgba(54, 162, 235, 0.5)',
-            tension: 0.1,
-            fill: chartType === 'bar'
-          });
+        // Weryfikacja i przygotowanie danych produkcji
+        if (productionData && Array.isArray(productionData.labels) && Array.isArray(productionData.data)) {
+          // Utwórz pary etykieta-dane i odfiltruj nieprawidłowe
+          const validPairs = productionData.labels
+            .map((label, index) => ({ 
+              label, 
+              value: productionData.data[index]
+            }))
+            .filter(pair => 
+              pair.label && 
+              pair.label !== "undefined" && 
+              pair.label !== "NaN" &&
+              !isNaN(pair.value) && 
+              pair.value !== null && 
+              pair.value !== undefined
+            );
+          
+          // Jeśli pozostały jakieś poprawne dane, użyj ich
+          if (validPairs.length > 0) {
+            productionChartData.labels = validPairs.map(pair => pair.label);
+            productionChartData.datasets[0].data = validPairs.map(pair => pair.value);
+            
+            // Dodaj drugą serię danych (zaplanowane zadania), jeśli są dostępne
+            if (productionData.plannedData && productionView === 'both') {
+              // Filtruj zaplanowane dane, korzystając z tych samych etykiet
+              const validPlannedData = validPairs.map((pair, index) => {
+                const plannedValue = productionData.plannedData[index];
+                return !isNaN(plannedValue) && plannedValue !== null && plannedValue !== undefined ? plannedValue : null;
+              }).filter(value => value !== null);
+              
+              if (validPlannedData.length > 0) {
+                productionChartData.datasets.push({
+                  label: 'Zaplanowane zadania',
+                  data: validPlannedData,
+                  borderColor: 'rgb(54, 162, 235)',
+                  backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                  tension: 0.1,
+                  fill: chartType === 'bar'
+                });
+              }
+            }
+          } else {
+            // Jeśli nie ma poprawnych danych, użyj danych przykładowych
+            const defaultLabels = ['Sty', 'Lut', 'Mar', 'Kwi', 'Maj', 'Cze'];
+            productionChartData.labels = defaultLabels;
+            productionChartData.datasets[0].data = [50, 55, 60, 65, 70, 75];
+            
+            if (productionView === 'both') {
+              productionChartData.datasets.push({
+                label: 'Zaplanowane zadania',
+                data: [60, 65, 70, 75, 85, 90],
+                borderColor: 'rgb(54, 162, 235)',
+                backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                tension: 0.1,
+                fill: chartType === 'bar'
+              });
+            }
+          }
+        } else {
+          // Jeśli nie ma poprawnej struktury danych, użyj danych przykładowych
+          const defaultLabels = ['Sty', 'Lut', 'Mar', 'Kwi', 'Maj', 'Cze'];
+          productionChartData.labels = defaultLabels;
+          productionChartData.datasets[0].data = [50, 55, 60, 65, 70, 75];
+          
+          if (productionView === 'both') {
+            productionChartData.datasets.push({
+              label: 'Zaplanowane zadania',
+              data: [60, 65, 70, 75, 85, 90],
+              borderColor: 'rgb(54, 162, 235)',
+              backgroundColor: 'rgba(54, 162, 235, 0.5)',
+              tension: 0.1,
+              fill: chartType === 'bar'
+            });
+          }
         }
 
         const inventoryChartData = {
-          labels: inventoryData.labels || [],
+          labels: [],
           datasets: [{
             label: 'Wartość magazynu (PLN)',
-            data: inventoryData.data || [],
+            data: [],
             borderColor: 'rgb(54, 162, 235)',
             backgroundColor: 'rgba(54, 162, 235, 0.5)',
             tension: 0.1,
@@ -192,12 +319,54 @@ const Charts = () => {
           }]
         };
         
+        // Weryfikacja i przygotowanie danych magazynu
+        if (inventoryData && Array.isArray(inventoryData.labels) && Array.isArray(inventoryData.data)) {
+          // Utwórz pary etykieta-dane i odfiltruj nieprawidłowe
+          const validPairs = inventoryData.labels
+            .map((label, index) => ({ 
+              label, 
+              value: inventoryData.data[index]
+            }))
+            .filter(pair => 
+              pair.label && 
+              pair.label !== "undefined" && 
+              pair.label !== "NaN" &&
+              !isNaN(pair.value) && 
+              pair.value !== null && 
+              pair.value !== undefined
+            );
+          
+          // Jeśli pozostały jakieś poprawne dane, użyj ich
+          if (validPairs.length > 0) {
+            inventoryChartData.labels = validPairs.map(pair => pair.label);
+            inventoryChartData.datasets[0].data = validPairs.map(pair => pair.value);
+          } else {
+            // Jeśli nie ma poprawnych danych, użyj danych przykładowych
+            const labels = Array.from({length: 30}, (_, i) => {
+              const date = new Date();
+              date.setDate(date.getDate() - (29 - i));
+              return `${date.getDate()}.${date.getMonth() + 1}`;
+            });
+            inventoryChartData.labels = labels;
+            inventoryChartData.datasets[0].data = Array.from({length: 30}, (_, i) => 200000 + (i * 100));
+          }
+        } else {
+          // Jeśli nie ma poprawnej struktury danych, użyj danych przykładowych
+          const labels = Array.from({length: 30}, (_, i) => {
+            const date = new Date();
+            date.setDate(date.getDate() - (29 - i));
+            return `${date.getDate()}.${date.getMonth() + 1}`;
+          });
+          inventoryChartData.labels = labels;
+          inventoryChartData.datasets[0].data = Array.from({length: 30}, (_, i) => 200000 + (i * 100));
+        }
+        
         // Przygotuj dane wykresu kategorii produktów
         const categoriesChartData = {
-          labels: categoriesData.labels || [],
+          labels: [],
           datasets: [{
             label: categoriesView === 'value' ? 'Wartość według kategorii (PLN)' : 'Liczba produktów',
-            data: categoriesView === 'value' ? categoriesData.data : categoriesData.countData,
+            data: [],
             backgroundColor: [
               'rgba(255, 99, 132, 0.7)',
               'rgba(54, 162, 235, 0.7)',
@@ -225,58 +394,55 @@ const Charts = () => {
             borderWidth: 1
           }]
         };
-
-        // Upewnij się, że dane są poprawne przed aktualizacją stanu
-        // Jeśli dane są niepoprawne, użyj domyślnych wartości
-        if (!validateChartData(salesChartData)) {
-          console.warn('Wykryto nieprawidłowe dane dla wykresu sprzedaży, używam wartości domyślnych');
-          salesChartData.labels = ['Sty', 'Lut', 'Mar', 'Kwi', 'Maj', 'Cze'];
-          salesChartData.datasets[0].data = [20000, 25000, 23000, 30000, 29000, 35000];
-        }
-
-        if (!validateChartData(productionChartData)) {
-          console.warn('Wykryto nieprawidłowe dane dla wykresu produkcji, używam wartości domyślnych');
-          productionChartData.labels = ['Sty', 'Lut', 'Mar', 'Kwi', 'Maj', 'Cze'];
-          productionChartData.datasets[0].data = [50, 55, 60, 65, 70, 75];
+        
+        // Weryfikacja i przygotowanie danych kategorii
+        if (categoriesData && Array.isArray(categoriesData.labels)) {
+          const dataSource = categoriesView === 'value' ? categoriesData.data : categoriesData.countData;
           
-          if (productionChartData.datasets.length > 1) {
-            productionChartData.datasets[1].data = [60, 65, 70, 75, 85, 90];
+          if (Array.isArray(dataSource) && categoriesData.labels.length === dataSource.length) {
+            // Utwórz pary etykieta-dane i odfiltruj nieprawidłowe
+            const validPairs = categoriesData.labels
+              .map((label, index) => ({ 
+                label, 
+                value: dataSource[index]
+              }))
+              .filter(pair => 
+                pair.label && 
+                pair.label !== "undefined" && 
+                pair.label !== "NaN" &&
+                !isNaN(pair.value) && 
+                pair.value !== null && 
+                pair.value !== undefined
+              );
+            
+            // Jeśli pozostały jakieś poprawne dane, użyj ich
+            if (validPairs.length > 0) {
+              categoriesChartData.labels = validPairs.map(pair => pair.label);
+              categoriesChartData.datasets[0].data = validPairs.map(pair => pair.value);
+            } else {
+              // Jeśli nie ma poprawnych danych, użyj danych przykładowych
+              categoriesChartData.labels = ['Surowce', 'Produkty gotowe', 'Opakowania', 'Półprodukty', 'Inne'];
+              categoriesChartData.datasets[0].data = categoriesView === 'value' 
+                ? [120000, 85000, 45000, 30000, 15000]
+                : [25, 30, 15, 10, 5];
+            }
+          } else {
+            // Jeśli dane są niezgodne, użyj danych przykładowych
+            categoriesChartData.labels = ['Surowce', 'Produkty gotowe', 'Opakowania', 'Półprodukty', 'Inne'];
+            categoriesChartData.datasets[0].data = categoriesView === 'value' 
+              ? [120000, 85000, 45000, 30000, 15000]
+              : [25, 30, 15, 10, 5];
           }
-        }
-
-        if (!validateChartData(inventoryChartData)) {
-          console.warn('Wykryto nieprawidłowe dane dla wykresu magazynu, używam wartości domyślnych');
-          inventoryChartData.labels = Array.from({length: 30}, (_, i) => {
-            const date = new Date();
-            date.setDate(date.getDate() - (29 - i));
-            return `${date.getDate()}.${date.getMonth() + 1}`;
-          });
-          inventoryChartData.datasets[0].data = Array.from({length: 30}, (_, i) => 200000 + (i * 100));
-        }
-        
-        if (!validateCategoriesChartData(categoriesChartData)) {
-          console.warn('Wykryto nieprawidłowe dane dla wykresu kategorii, używam wartości domyślnych');
+        } else {
+          // Jeśli nie ma poprawnej struktury danych, użyj danych przykładowych
           categoriesChartData.labels = ['Surowce', 'Produkty gotowe', 'Opakowania', 'Półprodukty', 'Inne'];
-          categoriesChartData.datasets[0].data = [120000, 85000, 45000, 30000, 15000];
+          categoriesChartData.datasets[0].data = categoriesView === 'value' 
+            ? [120000, 85000, 45000, 30000, 15000]
+            : [25, 30, 15, 10, 5];
         }
 
-        // Filtruj nieprawidłowe etykiety
-        salesChartData.labels = salesChartData.labels.filter(label => 
-          label !== undefined && label !== "undefined" && label !== "NaN" && label !== null
-        );
+        // Nie używamy już funkcji validateChartData, ponieważ weryfikujemy dane podczas przypisania
         
-        productionChartData.labels = productionChartData.labels.filter(label => 
-          label !== undefined && label !== "undefined" && label !== "NaN" && label !== null
-        );
-        
-        inventoryChartData.labels = inventoryChartData.labels.filter(label => 
-          label !== undefined && label !== "undefined" && label !== "NaN" && label !== null
-        );
-        
-        categoriesChartData.labels = categoriesChartData.labels.filter(label => 
-          label !== undefined && label !== "undefined" && label !== "NaN" && label !== null
-        );
-
         setChartData({
           sales: salesChartData,
           production: productionChartData,
@@ -360,10 +526,38 @@ const Charts = () => {
     };
 
     fetchData();
-  }, [timeRange, chartType, productionView, categoriesView, categoriesChartType]);
+  }, [timeRange, chartType, productionView, categoriesView, categoriesChartType, startDate, endDate]);
 
   const handleTimeRangeChange = (event) => {
-    setTimeRange(event.target.value);
+    const newTimeRange = event.target.value;
+    setTimeRange(newTimeRange);
+    
+    // Automatycznie ustaw odpowiednie daty dla predefiniowanych zakresów
+    if (newTimeRange === 'week') {
+      setStartDate(subWeeks(new Date(), 1));
+      setEndDate(new Date());
+    } else if (newTimeRange === 'month') {
+      setStartDate(subMonths(new Date(), 1));
+      setEndDate(new Date());
+    } else if (newTimeRange === 'quarter') {
+      setStartDate(subMonths(new Date(), 3));
+      setEndDate(new Date());
+    } else if (newTimeRange === 'year') {
+      setStartDate(subMonths(new Date(), 12));
+      setEndDate(new Date());
+    }
+  };
+  
+  const handleStartDateChange = (newDate) => {
+    setStartDate(newDate);
+    // Zresetuj błąd zakresu dat, sprawdzimy go przy pobieraniu danych
+    setDateRangeError(false);
+  };
+  
+  const handleEndDateChange = (newDate) => {
+    setEndDate(newDate);
+    // Zresetuj błąd zakresu dat, sprawdzimy go przy pobieraniu danych
+    setDateRangeError(false);
   };
   
   const handleChartTypeChange = (event, newType) => {
@@ -430,7 +624,7 @@ const Charts = () => {
         ticks: {
           callback: function(value, index) {
             const label = this.getLabelForValue(value);
-            // Naprawia problem z undefined/NaN
+            // Upewnij się, że nieprawidłowe etykiety nie są renderowane
             if (!label || label === "undefined" || label === "NaN") {
               return '';
             }
@@ -442,7 +636,7 @@ const Charts = () => {
         beginAtZero: true,
         ticks: {
           callback: function(value) {
-            if (isNaN(value)) {
+            if (value === undefined || value === null || isNaN(value)) {
               return '0';
             }
             
@@ -564,22 +758,57 @@ const Charts = () => {
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
-        <FormControl>
-          <InputLabel>Zakres czasowy</InputLabel>
-          <Select
-            value={timeRange}
-            label="Zakres czasowy"
-            onChange={handleTimeRangeChange}
-            sx={{ minWidth: 200 }}
-          >
-            {timeRanges.map((range) => (
-              <MenuItem key={range.value} value={range.value}>
-                {range.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+      <Box sx={{ mb: 4, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, flexWrap: 'wrap', gap: 2 }}>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, width: { xs: '100%', md: 'auto' } }}>
+          <FormControl sx={{ minWidth: 180 }}>
+            <InputLabel>Zakres czasowy</InputLabel>
+            <Select
+              value={timeRange}
+              label="Zakres czasowy"
+              onChange={handleTimeRangeChange}
+            >
+              {timeRanges.map((range) => (
+                <MenuItem key={range.value} value={range.value}>
+                  {range.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          
+          {timeRange === 'custom' && (
+            <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+                <DatePicker
+                  label="Data początkowa"
+                  value={startDate}
+                  onChange={handleStartDateChange}
+                  slotProps={{
+                    textField: {
+                      size: "small",
+                      error: dateRangeError,
+                      helperText: dateRangeError ? "Nieprawidłowy zakres" : null,
+                      sx: { width: 150 }
+                    }
+                  }}
+                />
+                <Box sx={{ mx: 0.5 }}>-</Box>
+                <DatePicker
+                  label="Data końcowa"
+                  value={endDate}
+                  onChange={handleEndDateChange}
+                  slotProps={{
+                    textField: {
+                      size: "small",
+                      error: dateRangeError,
+                      helperText: dateRangeError ? "Nieprawidłowy zakres" : null,
+                      sx: { width: 150 }
+                    }
+                  }}
+                />
+              </Box>
+            </LocalizationProvider>
+          )}
+        </Box>
         
         <ToggleButtonGroup
           value={chartType}
