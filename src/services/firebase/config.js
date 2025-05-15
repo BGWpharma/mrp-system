@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore, initializeFirestore, CACHE_SIZE_UNLIMITED } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
-import { getDatabase } from 'firebase/database';
+import { getDatabase, connectDatabaseEmulator, goOnline, goOffline, ref, onValue } from 'firebase/database';
 
 // Zastąp poniższe dane danymi z Twojego projektu Firebase
 const firebaseConfig = {
@@ -28,6 +28,32 @@ const db = initializeFirestore(app, {
 const auth = getAuth(app);
 const storage = getStorage(app);
 const rtdb = getDatabase(app);
+
+// Konfiguracja trwałości danych Realtime Database (offline persistence)
+// Ta konfiguracja pomaga obsłużyć problemy z trybem offline
+try {
+  // Opcje konfiguracyjne dla bazy danych
+  const rtdbConfig = {
+    // Włączenie trwałości - działa automatycznie, ale możemy sterować opcjami
+  };
+  
+  // Inicjalizacja obsługi błędów dla Realtime Database
+  const handleRTDBConnectionStatus = () => {
+    const connectedRef = ref(rtdb, '.info/connected');
+    onValue(connectedRef, (snap) => {
+      if (snap.val() === true) {
+        console.log('Połączono z Realtime Database');
+      } else {
+        console.log('Brak połączenia z Realtime Database - działanie w trybie offline');
+      }
+    });
+  };
+  
+  // Nie trzeba wywoływać tej funkcji natychmiast, można ją wywołać z komponentu,
+  // lub ustawić jako część inicjalizacji aplikacji
+} catch (error) {
+  console.error('Błąd podczas konfiguracji trwałości Realtime Database:', error);
+}
 
 // Funkcja do wymazywania danych IndexedDB (przydatna przy problemach z wersjami)
 const clearFirestoreCache = async () => {
@@ -57,5 +83,27 @@ const clearFirestoreCache = async () => {
   }
 };
 
-// Eksportujemy funkcję clearFirestoreCache dla przypadku, gdyby była potrzebna
-export { db, auth, storage, rtdb, clearFirestoreCache };
+// Funkcja do przełączania stanu połączenia dla Realtime Database
+const toggleRTDBConnection = async (enable = true) => {
+  try {
+    if (enable) {
+      goOnline(rtdb);
+      console.log('Połączenie z Realtime Database zostało włączone');
+    } else {
+      goOffline(rtdb);
+      console.log('Połączenie z Realtime Database zostało wyłączone (tryb offline)');
+    }
+  } catch (error) {
+    console.error(`Błąd podczas ${enable ? 'włączania' : 'wyłączania'} połączenia z Realtime Database:`, error);
+  }
+};
+
+// Eksportujemy funkcje potrzebne do zarządzania bazą danych
+export { 
+  db, 
+  auth, 
+  storage, 
+  rtdb, 
+  clearFirestoreCache,
+  toggleRTDBConnection
+};

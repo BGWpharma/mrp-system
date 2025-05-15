@@ -79,10 +79,32 @@ const BatchesPage = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const itemData = await getInventoryItemById(id);
-        setItem(itemData);
         
-        const batchesData = await getItemBatches(id);
+        let itemData = null;
+        let batchesData = [];
+        
+        // Próbuj pobrać informacje o produkcie
+        itemData = await getInventoryItemById(id);
+        setItem(itemData); // może być null, co jest teraz obsługiwane
+        
+        try {
+          // Pobierz partie niezależnie od tego, czy udało się pobrać produkt
+          batchesData = await getItemBatches(id);
+        } catch (batchError) {
+          console.error('Error fetching batches:', batchError);
+          showError('Nie znaleziono partii: ' + batchError.message);
+          setLoading(false);
+          return;
+        }
+        
+        // Jeśli nie ma partii, wyświetl informację
+        if (batchesData.length === 0) {
+          setBatches([]);
+          setFilteredBatches([]);
+          setLoading(false);
+          return;
+        }
+        
         const warehousesData = await getAllWarehouses();
         setWarehouses(warehousesData);
         
@@ -394,10 +416,10 @@ const BatchesPage = () => {
     return <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>Ładowanie danych...</Container>;
   }
 
-  if (!item) {
+  if (!item && batches.length === 0) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Typography variant="h5">Pozycja nie została znaleziona</Typography>
+        <Typography variant="h5">Nie znaleziono pozycji magazynowej ani partii</Typography>
         <Button 
           variant="contained" 
           component={Link} 
@@ -416,31 +438,35 @@ const BatchesPage = () => {
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Button 
           startIcon={<ArrowBackIcon />} 
-          onClick={() => navigate(`/inventory/${id}`)}
+          onClick={() => navigate('/inventory')}
         >
-          Powrót do szczegółów
+          Powrót do magazynu
         </Button>
         <Typography variant="h5">
-          Partie: {item.name}
+          {item ? `Partie: ${item.name}` : 'Partie (Produkt niedostępny)'}
         </Typography>
         <Box>
-          <Button 
-            variant="outlined"
-            color="secondary" 
-            startIcon={<QrCodeIcon />}
-            onClick={handleOpenItemLabelDialog}
-            sx={{ mr: 2 }}
-          >
-            Drukuj etykietę
-          </Button>
-          <Button 
-            variant="contained" 
-            color="primary" 
-            component={Link}
-            to={`/inventory/${id}/receive`}
-          >
-            Przyjmij nową partię
-          </Button>
+          {item && (
+            <Button 
+              variant="outlined"
+              color="secondary" 
+              startIcon={<QrCodeIcon />}
+              onClick={handleOpenItemLabelDialog}
+              sx={{ mr: 2 }}
+            >
+              Drukuj etykietę
+            </Button>
+          )}
+          {item && (
+            <Button 
+              variant="contained" 
+              color="primary" 
+              component={Link}
+              to={`/inventory/${id}/receive`}
+            >
+              Przyjmij nową partię
+            </Button>
+          )}
         </Box>
       </Box>
 
@@ -473,9 +499,15 @@ const BatchesPage = () => {
           </Grid>
           <Grid item xs={12} sm={6} md={8}>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <Typography variant="body2" sx={{ mr: 2 }}>
-                <strong>Stan całkowity:</strong> {formatQuantity(item.quantity)} {item.unit}
-              </Typography>
+              {item ? (
+                <Typography variant="body2" sx={{ mr: 2 }}>
+                  <strong>Stan całkowity:</strong> {formatQuantity(item.quantity)} {item.unit}
+                </Typography>
+              ) : (
+                <Typography variant="body2" sx={{ mr: 2 }}>
+                  <strong>Stan całkowity:</strong> {formatQuantity(batches.reduce((sum, batch) => sum + parseFloat(batch.quantity || 0), 0))} {batches[0]?.unit || 'szt.'}
+                </Typography>
+              )}
               <Tooltip title="Partie są wydawane według zasady FEFO (First Expiry, First Out)">
                 <IconButton size="small">
                   <InfoIcon />
@@ -558,10 +590,10 @@ const BatchesPage = () => {
                           {batch.warehouseAddress || batch.warehouseName}
                         </TableCell>
                         <TableCell>
-                          {batch.initialQuantity} {item.unit}
+                          {batch.initialQuantity} {item?.unit || batch.unit || 'szt.'}
                         </TableCell>
                         <TableCell>
-                          {batch.quantity} {item.unit}
+                          {batch.quantity} {item?.unit || batch.unit || 'szt.'}
                         </TableCell>
                         <TableCell>
                           {(() => {
@@ -684,7 +716,7 @@ const BatchesPage = () => {
                               <IconButton 
                                 size="small" 
                                 color="primary"
-                                onClick={() => navigate(`/inventory/${id}/batches/${batch.id}/edit`)}
+                                onClick={() => navigate(`/inventory/batch/${batch.id}`)}
                               >
                                 <EditIcon />
                               </IconButton>
@@ -757,7 +789,7 @@ const BatchesPage = () => {
                 <strong>Bieżący magazyn:</strong> {selectedBatch.warehouseAddress || selectedBatch.warehouseName || 'Magazyn podstawowy'}
               </Typography>
               <Typography variant="body2" gutterBottom>
-                <strong>Dostępna ilość:</strong> {selectedBatch.quantity} {item?.unit || 'szt.'}
+                <strong>Dostępna ilość:</strong> {selectedBatch.quantity} {item?.unit || selectedBatch.unit || 'szt.'}
               </Typography>
               
               {/* Dodaj informacje o cenie jednostkowej z rozbiciem na bazową i dodatkowe koszty */}

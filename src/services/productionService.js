@@ -486,85 +486,107 @@ import {
       if (oldStatus !== updates.status) {
         // Jeśli zaimportowano usługę powiadomień, utwórz powiadomienie o zmianie statusu
         try {
-          const { createStatusChangeNotification } = require('./notificationService');
-          await createStatusChangeNotification(
-            userId,
+          const { createRealtimeStatusChangeNotification } = require('./notificationService');
+          
+          // Określ użytkowników, którzy powinni otrzymać powiadomienie
+          // Na przykład: użytkownik wykonujący zmianę oraz opcjonalnie menadżerowie produkcji
+          const userIds = [userId];
+          
+          await createRealtimeStatusChangeNotification(
+            userIds,
             'productionTask',
             taskId,
             task.moNumber || task.name || taskId.substring(0, 8),
             oldStatus || 'Nowe',
-            updates.status
+            updates.status,
+            userId // Przekazanie ID użytkownika, który zmienił status
           );
         } catch (notificationError) {
-          console.warn('Nie udało się utworzyć powiadomienia:', notificationError);
-        }
-        
-        // Jeśli zadanie jest powiązane z zamówieniem klienta, zaktualizuj informacje w zamówieniu
-        if (task.orderId) {
+          console.warn('Nie udało się utworzyć powiadomienia w czasie rzeczywistym:', notificationError);
+          
+          // Fallback do starego systemu powiadomień, jeśli Realtime Database nie zadziała
           try {
-            console.log(`Próba aktualizacji zadania ${taskId} w zamówieniu ${task.orderId}`);
-            
-            // Pobierz bezpośrednio z bazy danych aktualne dane zamówienia
-            const orderRef = doc(db, 'orders', task.orderId);
-            const orderDoc = await getDoc(orderRef);
-            
-            if (!orderDoc.exists()) {
-              console.error(`Zamówienie o ID ${task.orderId} nie istnieje`);
-              return { success: true, message: `Status zadania zmieniony na ${updates.status}, ale zamówienie nie istnieje` };
-            }
-            
-            const orderData = orderDoc.data();
-            const productionTasks = orderData.productionTasks || [];
-            
-            // Znajdź indeks zadania w tablicy zadań produkcyjnych
-            const taskIndex = productionTasks.findIndex(t => t.id === taskId);
-            
-            if (taskIndex === -1) {
-              console.error(`Zadanie ${taskId} nie znaleziono w zamówieniu ${task.orderId}`);
-              
-              // Jeśli nie znaleziono zadania w zamówieniu, dodaj je
-              productionTasks.push({
-                id: taskId,
-                moNumber: task.moNumber,
-                name: task.name,
-                status: updates.status,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                productName: task.productName,
-                quantity: task.quantity,
-                unit: task.unit
-              });
-              
-              await updateDoc(orderRef, {
-                productionTasks,
-                updatedAt: serverTimestamp(),
-                updatedBy: userId
-              });
-              
-              console.log(`Dodano zadanie ${taskId} do zamówienia ${task.orderId}`);
-            } else {
-              // Aktualizuj informacje o zadaniu w zamówieniu
-              productionTasks[taskIndex] = {
-                ...productionTasks[taskIndex],
-                status: updates.status,
-                updatedAt: new Date().toISOString(),
-                ...(updates.completionDate ? { completionDate: updates.completionDate } : {}),
-                // Zachowaj orderItemId, jeśli istnieje
-                orderItemId: productionTasks[taskIndex].orderItemId || task.orderItemId || null
-              };
-              
-              await updateDoc(orderRef, {
-                productionTasks: productionTasks,
-                updatedAt: serverTimestamp(),
-                updatedBy: userId
-              });
-              
-              console.log(`Zaktualizowano status zadania ${taskId} w zamówieniu ${task.orderId}`);
-            }
-          } catch (orderUpdateError) {
-            console.error(`Błąd podczas aktualizacji zadania w zamówieniu: ${orderUpdateError.message}`, orderUpdateError);
-            // Nie przerywamy głównej operacji, jeśli aktualizacja zamówienia się nie powiedzie
+            const { createStatusChangeNotification } = require('./notificationService');
+            await createStatusChangeNotification(
+              userId,
+              'productionTask',
+              taskId,
+              task.moNumber || task.name || taskId.substring(0, 8),
+              oldStatus || 'Nowe',
+              updates.status
+            );
+          } catch (fallbackError) {
+            console.warn('Nie udało się również utworzyć powiadomienia w Firestore:', fallbackError);
           }
+        }
+      }
+      
+      // Jeśli zadanie jest powiązane z zamówieniem klienta, zaktualizuj informacje w zamówieniu
+      if (task.orderId) {
+        try {
+          console.log(`Próba aktualizacji zadania ${taskId} w zamówieniu ${task.orderId}`);
+          
+          // Pobierz bezpośrednio z bazy danych aktualne dane zamówienia
+          const orderRef = doc(db, 'orders', task.orderId);
+          const orderDoc = await getDoc(orderRef);
+          
+          if (!orderDoc.exists()) {
+            console.error(`Zamówienie o ID ${task.orderId} nie istnieje`);
+            return { success: true, message: `Status zadania zmieniony na ${updates.status}, ale zamówienie nie istnieje` };
+          }
+          
+          const orderData = orderDoc.data();
+          const productionTasks = orderData.productionTasks || [];
+          
+          // Znajdź indeks zadania w tablicy zadań produkcyjnych
+          const taskIndex = productionTasks.findIndex(t => t.id === taskId);
+          
+          if (taskIndex === -1) {
+            console.error(`Zadanie ${taskId} nie znaleziono w zamówieniu ${task.orderId}`);
+            
+            // Jeśli nie znaleziono zadania w zamówieniu, dodaj je
+            productionTasks.push({
+              id: taskId,
+              moNumber: task.moNumber,
+              name: task.name,
+              status: updates.status,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              productName: task.productName,
+              quantity: task.quantity,
+              unit: task.unit
+            });
+            
+            await updateDoc(orderRef, {
+              productionTasks,
+              updatedAt: serverTimestamp(),
+              updatedBy: userId
+            });
+            
+            console.log(`Dodano zadanie ${taskId} do zamówienia ${task.orderId}`);
+          } else {
+            // Aktualizuj informacje o zadaniu w zamówieniu
+            productionTasks[taskIndex] = {
+              ...productionTasks[taskIndex],
+              status: updates.status,
+              updatedAt: new Date().toISOString(),
+              ...(updates.completionDate ? { completionDate: updates.completionDate } : {}),
+              // Zachowaj orderItemId, jeśli istnieje
+              orderItemId: productionTasks[taskIndex].orderItemId || task.orderItemId || null
+            };
+            
+            // Zaktualizuj zamówienie
+            await updateDoc(orderRef, {
+              productionTasks: productionTasks,
+              updatedAt: serverTimestamp(),
+              updatedBy: userId
+            });
+            
+            console.log(`Zaktualizowano status zadania ${taskId} w zamówieniu ${task.orderId}`);
+          }
+        } catch (orderUpdateError) {
+          console.error(`Błąd podczas aktualizacji zadania w zamówieniu: ${orderUpdateError.message}`, orderUpdateError);
+          // Nie przerywamy głównej operacji, jeśli aktualizacja zamówienia się nie powiedzie
         }
       }
       

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -144,6 +144,7 @@ const OrderForm = ({ orderId }) => {
   const { currentUser } = useAuth();
   const { showSuccess, showError, showInfo } = useNotification();
   const navigate = useNavigate();
+  const location = useLocation();
   const fileInputRef = React.useRef(null);
 
   const [costCalculation, setCostCalculation] = useState(null);
@@ -152,6 +153,11 @@ const OrderForm = ({ orderId }) => {
   const [loadingRates, setLoadingRates] = useState(false);
 
   const [invoices, setInvoices] = useState([]);
+
+  // Sprawdź, czy formularz został otwarty z PO
+  const fromPO = location.state?.fromPO || false;
+  const poId = location.state?.poId || null;
+  const poNumber = location.state?.poNumber || null;
 
   const handleAddInvoice = () => {
     setInvoices(prev => [
@@ -178,6 +184,8 @@ const OrderForm = ({ orderId }) => {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setLoading(true);
+        
         if (orderId) {
           const fetchedOrder = await getOrderById(orderId);
           
@@ -343,6 +351,25 @@ const OrderForm = ({ orderId }) => {
         const fetchedSuppliers = await getAllSuppliers();
         setSuppliers(fetchedSuppliers);
         
+        // Jeśli tworzymy nowe zamówienie na podstawie PO, pokaż informację
+        if (fromPO && poNumber) {
+          showInfo(`Tworzenie nowego zamówienia klienta powiązanego z zamówieniem zakupowym: ${poNumber}`);
+          
+          // Ustaw powiązanie z PO w danych zamówienia
+          setOrderData(prev => ({
+            ...prev,
+            notes: prev.notes ? 
+              `${prev.notes}\nPowiązane z zamówieniem zakupowym: ${poNumber}` : 
+              `Powiązane z zamówieniem zakupowym: ${poNumber}`,
+            // Dodajemy informację o PO do pola linkedPurchaseOrders jeśli mamy ID
+            ...(poId ? {
+              linkedPurchaseOrders: [
+                ...(prev.linkedPurchaseOrders || []),
+                { id: poId, number: poNumber, isLinkedFromPO: true }
+              ]
+            } : {})
+          }));
+        }
       } catch (error) {
         showError('Błąd podczas ładowania danych: ' + error.message);
         console.error('Error fetching data:', error);
@@ -352,7 +379,7 @@ const OrderForm = ({ orderId }) => {
     };
     
     fetchData();
-  }, [orderId, showError]);
+  }, [orderId, showError, fromPO, poId, poNumber, showInfo]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

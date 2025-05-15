@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   IconButton, 
   Badge, 
@@ -15,7 +15,9 @@ import {
   CircularProgress,
   styled,
   Tooltip,
-  Paper
+  Paper,
+  Snackbar,
+  Alert
 } from '@mui/material';
 import { 
   Notifications as NotificationsIcon,
@@ -28,7 +30,9 @@ import {
   Engineering as ProductionTaskIcon,
   Receipt as InvoiceIcon,
   LocalShipping as WaybillIcon,
-  Description as CmrIcon
+  Description as CmrIcon,
+  Refresh as RefreshIcon,
+  Inventory as InventoryIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
@@ -38,7 +42,13 @@ import {
   getUserNotifications, 
   markNotificationAsRead, 
   markAllNotificationsAsRead,
-  getUnreadNotificationsCount
+  getUnreadNotificationsCount,
+  getRealtimeUserNotifications, 
+  markRealtimeNotificationAsRead, 
+  markAllRealtimeNotificationsAsRead,
+  subscribeToUserNotifications,
+  subscribeToUnreadCount,
+  getUnreadRealtimeNotificationsCount
 } from '../../services/notificationService';
 
 // Styled badge for notifications
@@ -57,25 +67,112 @@ const NotificationsMenu = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   const open = Boolean(anchorEl);
+  
+  // Stan dla powiadomień wyskakujących (toast)
+  const [toastOpen, setToastOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastSeverity, setToastSeverity] = useState('info');
+  const [toastTitle, setToastTitle] = useState('');
+  
+  // Referencje do funkcji wyrejestrowania subskrypcji
+  const unsubscribeRefs = useRef({
+    notifications: null,
+    unreadCount: null
+  });
 
-  // Pobierz nieprzeczytane powiadomienia przy montowaniu komponentu
+  // Efekt dla nasłuchiwania w Realtime Database
   useEffect(() => {
     if (currentUser) {
+      console.log("NotificationsMenu: Inicjalizacja dla użytkownika", currentUser.uid);
+      
+      // Pobierz początkowe dane
       fetchUnreadCount();
       
-      // Ustaw interwał do okresowego sprawdzania nowych powiadomień (co 2 minuty)
-      const interval = setInterval(() => {
-        fetchUnreadCount();
-      }, 2 * 60 * 1000);
+      // Nasłuchuj na zmiany liczby nieprzeczytanych powiadomień
+      const unsubscribeCount = subscribeToUnreadCount(currentUser.uid, (count) => {
+        console.log("NotificationsMenu: Otrzymano nową liczbę nieprzeczytanych powiadomień:", count);
+        setUnreadCount(count);
+      });
       
-      // Wyczyść interwał przy odmontowaniu komponentu
-      return () => clearInterval(interval);
+      // Nasłuchuj na nowe powiadomienia
+      const unsubscribeNotifications = subscribeToUserNotifications(currentUser.uid, (newNotification) => {
+        console.log("NotificationsMenu: Otrzymano nowe powiadomienie:", newNotification);
+        
+        // Dodaj nowe powiadomienie do stanu
+        setNotifications(prevNotifications => [newNotification, ...prevNotifications]);
+        
+        // Pokaż toast z nowym powiadomieniem
+        showToastNotification(newNotification);
+      });
+      
+      // Zapisz funkcje wyrejestrowania
+      unsubscribeRefs.current = {
+        notifications: unsubscribeNotifications,
+        unreadCount: unsubscribeCount
+      };
+      
+      console.log("NotificationsMenu: Subskrypcje zostały ustanowione");
+      
+      // Czyszczenie przy odmontowaniu
+      return () => {
+        console.log("NotificationsMenu: Czyszczenie subskrypcji");
+        if (unsubscribeRefs.current.notifications) {
+          unsubscribeRefs.current.notifications();
+        }
+        if (unsubscribeRefs.current.unreadCount) {
+          unsubscribeRefs.current.unreadCount();
+        }
+      };
     }
   }, [currentUser]);
 
-  // Pobierz powiadomienia po otwarciu menu
+  // Funkcja do wyświetlania powiadomienia toast
+  const showToastNotification = (notification) => {
+    if (!notification) return;
+    
+    // Ustaw treść i typ powiadomienia toast
+    setToastTitle(notification.title || '');
+    
+    // Dodajemy informację o użytkowniku, który utworzył powiadomienie
+    let message = notification.message || '';
+    if (notification.createdByName && notification.createdByName !== 'System') {
+      message = `${message} - ${notification.createdByName}`;
+    }
+    setToastMessage(message);
+    
+    // Ustaw odpowiedni typ alertu
+    switch (notification.type) {
+      case 'success':
+        setToastSeverity('success');
+        break;
+      case 'error':
+        setToastSeverity('error');
+        break;
+      case 'warning':
+        setToastSeverity('warning');
+        break;
+      case 'info':
+      default:
+        setToastSeverity('info');
+        break;
+    }
+    
+    // Pokaż toast
+    setToastOpen(true);
+  };
+
+  // Obsługa zamknięcia toasta
+  const handleCloseToast = (event, reason) => {
+    if (reason === 'clickaway') {
+      return;
+    }
+    setToastOpen(false);
+  };
+
+  // Aktualizacja listy powiadomień, gdy menu jest otwarte
   useEffect(() => {
     if (open && currentUser) {
+      console.log("NotificationsMenu: Menu zostało otwarte, pobieranie powiadomień");
       fetchNotifications();
     }
   }, [open, currentUser]);
@@ -84,20 +181,37 @@ const NotificationsMenu = () => {
     if (!currentUser) return;
     
     try {
-      const count = await getUnreadNotificationsCount(currentUser.uid);
-      setUnreadCount(count);
+      // Próbuj najpierw z Realtime Database
+      console.log("NotificationsMenu: Pobieranie liczby nieprzeczytanych z Realtime Database");
+      const realtimeCount = await getUnreadRealtimeNotificationsCount(currentUser.uid);
+      console.log("NotificationsMenu: Liczba nieprzeczytanych z Realtime:", realtimeCount);
+      
+      // Ustawiamy licznik tylko na podstawie Realtime Database, nie mieszamy z Firestore
+      setUnreadCount(realtimeCount);
     } catch (error) {
-      console.error('Błąd podczas pobierania liczby nieprzeczytanych powiadomień:', error);
+      console.error('NotificationsMenu: Błąd podczas pobierania liczby nieprzeczytanych powiadomień:', error);
+      // W przypadku błędu, ustaw na 0
+      setUnreadCount(0);
     }
   };
 
   const fetchNotifications = async () => {
     setLoading(true);
     try {
-      const notificationsData = await getUserNotifications(currentUser.uid, false, 10);
-      setNotifications(notificationsData);
+      // Używamy tylko Realtime Database dla spójności
+      console.log("NotificationsMenu: Pobieranie powiadomień z Realtime Database");
+      try {
+        const notificationsData = await getRealtimeUserNotifications(currentUser.uid, false, 10);
+        console.log("NotificationsMenu: Powiadomienia z Realtime:", notificationsData);
+        setNotifications(notificationsData);
+      } catch (offlineError) {
+        console.warn("NotificationsMenu: Błąd sieci podczas pobierania powiadomień:", offlineError.message);
+        // W trybie offline zachowujemy istniejące powiadomienia
+        console.log("NotificationsMenu: Działanie w trybie offline - używanie istniejących powiadomień");
+      }
     } catch (error) {
-      console.error('Błąd podczas pobierania powiadomień:', error);
+      console.error('NotificationsMenu: Błąd podczas pobierania powiadomień:', error);
+      // Nie czyścimy powiadomień w przypadku błędu, aby zachować dane
     } finally {
       setLoading(false);
     }
@@ -115,17 +229,20 @@ const NotificationsMenu = () => {
     // Jeśli powiadomienie nie jest jeszcze przeczytane, oznacz jako przeczytane
     if (!notification.read) {
       try {
-        await markNotificationAsRead(notification.id);
+        await markRealtimeNotificationAsRead(notification.id, currentUser.uid);
+        console.log("Oznaczono jako przeczytane w Realtime Database");
         
-        // Aktualizuj lokalną listę powiadomień, aby oznaczyć to jako przeczytane
+        // Aktualizuj lokalną listę powiadomień
         setNotifications(prevNotifications => 
           prevNotifications.map(n => 
             n.id === notification.id ? { ...n, read: true } : n
           )
         );
         
-        // Aktualizuj licznik nieprzeczytanych
-        setUnreadCount(prevCount => Math.max(0, prevCount - 1));
+        // Aktualizuj licznik tylko jeśli nie używamy nasłuchiwania Realtime
+        if (!unsubscribeRefs.current.unreadCount) {
+          setUnreadCount(prevCount => Math.max(0, prevCount - 1));
+        }
       } catch (error) {
         console.error('Błąd podczas oznaczania powiadomienia jako przeczytane:', error);
       }
@@ -152,6 +269,9 @@ const NotificationsMenu = () => {
         case 'cmr':
           navigate(`/logistics/cmr/${notification.entityId}`);
           break;
+        case 'inventory':
+          navigate(`/inventory/${notification.entityId}`);
+          break;
         default:
           // W przypadku nieznanych typów nie robimy nic
           break;
@@ -163,15 +283,18 @@ const NotificationsMenu = () => {
 
   const handleMarkAllAsRead = async () => {
     try {
-      await markAllNotificationsAsRead(currentUser.uid);
+      await markAllRealtimeNotificationsAsRead(currentUser.uid);
+      console.log("Oznaczono wszystkie jako przeczytane w Realtime Database");
       
-      // Aktualizuj lokalną listę powiadomień, aby oznaczyć wszystkie jako przeczytane
+      // Wymuś odświeżenie licznika nieprzeczytanych powiadomień
+      await handleRefreshUnreadCount();
+      
+      // Aktualizuj lokalną listę powiadomień
       setNotifications(prevNotifications => 
         prevNotifications.map(n => ({ ...n, read: true }))
       );
       
-      // Zresetuj licznik nieprzeczytanych
-      setUnreadCount(0);
+      handleClose();
     } catch (error) {
       console.error('Błąd podczas oznaczania wszystkich powiadomień jako przeczytane:', error);
     }
@@ -193,6 +316,8 @@ const NotificationsMenu = () => {
           return <WaybillIcon color="primary" />;
         case 'cmr':
           return <CmrIcon color="primary" />;
+        case 'inventory':
+          return <InventoryIcon color="primary" />;
         default:
           break;
       }
@@ -224,8 +349,86 @@ const NotificationsMenu = () => {
     }
   };
 
+  // Renderowanie elementów powiadomień
+  const renderNotificationItem = (notification) => {
+    const timeAgo = formatTime(notification.createdAt);
+    const icon = getNotificationIcon(notification);
+    
+    // Dodajemy informację o użytkowniku, który utworzył powiadomienie
+    let message = notification.message || '';
+    let userInfo = null;
+    
+    if (notification.createdByName && notification.createdByName !== 'System') {
+      userInfo = (
+        <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 0.5, fontStyle: 'italic' }}>
+          Użytkownik: {notification.createdByName}
+        </Typography>
+      );
+    }
+    
+    return (
+      <ListItem
+        key={notification.id}
+        button
+        alignItems="flex-start"
+        onClick={() => handleNotificationClick(notification)}
+        sx={{ 
+          backgroundColor: notification.read ? 'inherit' : 'rgba(144, 202, 249, 0.08)',
+          '&:hover': {
+            backgroundColor: 'rgba(144, 202, 249, 0.16)',
+          },
+          borderBottom: '1px solid rgba(0, 0, 0, 0.12)'
+        }}
+      >
+        <ListItemIcon sx={{ minWidth: 40 }}>
+          {icon}
+        </ListItemIcon>
+        <ListItemText
+          primary={
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="subtitle2" component="span">
+                {notification.title}
+              </Typography>
+              <Typography variant="caption" color="textSecondary">
+                {timeAgo}
+              </Typography>
+            </Box>
+          }
+          secondary={
+            <>
+              <Typography
+                component="span"
+                variant="body2"
+                color="textPrimary"
+              >
+                {message}
+              </Typography>
+              {userInfo}
+            </>
+          }
+        />
+      </ListItem>
+    );
+  };
+
+  // Dodaję funkcję odświeżającą liczbę powiadomień
+  const handleRefreshUnreadCount = async () => {
+    if (!currentUser) return;
+    
+    console.log("NotificationsMenu: Ręczne odświeżanie liczby nieprzeczytanych powiadomień");
+    
+    try {
+      const realtimeCount = await getUnreadRealtimeNotificationsCount(currentUser.uid);
+      console.log("NotificationsMenu: Odświeżona liczba nieprzeczytanych powiadomień:", realtimeCount);
+      setUnreadCount(realtimeCount);
+    } catch (error) {
+      console.error("NotificationsMenu: Błąd podczas odświeżania liczby nieprzeczytanych powiadomień:", error);
+      // W przypadku błędu nie zmieniamy stanu licznika
+    }
+  };
+
   return (
-    <div>
+    <div style={{ display: 'flex', alignItems: 'center' }}>
       <Tooltip title="Powiadomienia">
         <IconButton 
           color="inherit" 
@@ -235,6 +438,17 @@ const NotificationsMenu = () => {
           <StyledBadge badgeContent={unreadCount} max={99}>
             <NotificationsIcon />
           </StyledBadge>
+        </IconButton>
+      </Tooltip>
+      
+      <Tooltip title="Odśwież liczbę powiadomień">
+        <IconButton 
+          color="inherit" 
+          onClick={handleRefreshUnreadCount} 
+          size="small" 
+          sx={{ ml: 0.5 }}
+        >
+          <RefreshIcon fontSize="small" />
         </IconButton>
       </Tooltip>
       
@@ -267,54 +481,7 @@ const NotificationsMenu = () => {
         ) : notifications.length > 0 ? (
           <Box sx={{ width: '100%' }}>
             <List sx={{ p: 0 }}>
-              {notifications.map((notification) => (
-                <ListItem 
-                  key={notification.id} 
-                  onClick={() => handleNotificationClick(notification)}
-                  sx={{ 
-                    backgroundColor: notification.read ? 'transparent' : 'rgba(25, 118, 210, 0.08)',
-                    '&:hover': {
-                      backgroundColor: notification.read ? 'rgba(0, 0, 0, 0.04)' : 'rgba(25, 118, 210, 0.12)'
-                    },
-                    cursor: 'pointer'
-                  }}
-                >
-                  <ListItemIcon sx={{ minWidth: '40px' }}>
-                    {getNotificationIcon(notification)}
-                  </ListItemIcon>
-                  <ListItemText 
-                    primary={
-                      <Typography 
-                        variant="body2" 
-                        sx={{ 
-                          fontWeight: notification.read ? 'normal' : 'bold',
-                          fontSize: '0.875rem'
-                        }}
-                      >
-                        {notification.title}
-                      </Typography>
-                    }
-                    secondary={
-                      <Box>
-                        <Typography 
-                          variant="body2" 
-                          color="text.secondary" 
-                          sx={{ fontSize: '0.8rem' }}
-                        >
-                          {notification.message}
-                        </Typography>
-                        <Typography 
-                          variant="caption" 
-                          color="text.secondary" 
-                          sx={{ display: 'block', mt: 0.5, fontSize: '0.7rem' }}
-                        >
-                          {formatTime(notification.createdAt)}
-                        </Typography>
-                      </Box>
-                    }
-                  />
-                </ListItem>
-              ))}
+              {notifications.map((notification) => renderNotificationItem(notification))}
             </List>
             
             <Box sx={{ p: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
@@ -335,6 +502,29 @@ const NotificationsMenu = () => {
           </Box>
         )}
       </Menu>
+      
+      {/* Toast notification */}
+      <Snackbar
+        open={toastOpen}
+        autoHideDuration={2000}
+        onClose={handleCloseToast}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert 
+          onClose={handleCloseToast} 
+          severity={toastSeverity} 
+          sx={{ width: '100%', maxWidth: 400 }}
+          elevation={6}
+          variant="filled"
+        >
+          <Typography variant="subtitle1" fontWeight="bold">
+            {toastTitle}
+          </Typography>
+          <Typography variant="body2">
+            {toastMessage}
+          </Typography>
+        </Alert>
+      </Snackbar>
     </div>
   );
 };

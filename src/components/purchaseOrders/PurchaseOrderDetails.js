@@ -24,7 +24,8 @@ import {
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
   Label as LabelIcon,
-  Add as AddIcon
+  Add as AddIcon,
+  ShoppingCart as ShoppingCartIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -37,7 +38,7 @@ import {
   PURCHASE_ORDER_STATUSES,
   translateStatus
 } from '../../services/purchaseOrderService';
-import { getBatchesByPurchaseOrderId } from '../../services/inventoryService';
+import { getBatchesByPurchaseOrderId, getInventoryBatch, getWarehouseById } from '../../services/inventoryService';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../hooks/useNotification';
 import { useReactToPrint } from 'react-to-print';
@@ -65,6 +66,8 @@ const PurchaseOrderDetails = ({ orderId }) => {
   const [loadingBatches, setLoadingBatches] = useState(false);
   const [expandedItems, setExpandedItems] = useState({});
   const [tempInvoiceLinks, setTempInvoiceLinks] = useState([]);
+  const [warehouseNames, setWarehouseNames] = useState({});
+  const [createCODialogOpen, setCreateCODialogOpen] = useState(false);
   
   const printRef = useRef(null);
   
@@ -128,12 +131,41 @@ const PurchaseOrderDetails = ({ orderId }) => {
     }
   }, [orderId, showError]);
   
-  // Dodajemy nową funkcję do pobierania powiązanych partii (LOT)
   const fetchRelatedBatches = async (poId) => {
     try {
       setLoadingBatches(true);
       const batches = await getBatchesByPurchaseOrderId(poId);
-      setRelatedBatches(batches);
+      
+      const warehouseIds = [...new Set(batches
+        .filter(batch => batch.warehouseId)
+        .map(batch => batch.warehouseId))];
+      
+      const warehouseData = {};
+      for (const whId of warehouseIds) {
+        try {
+          const warehouse = await getWarehouseById(whId);
+          if (warehouse) {
+            warehouseData[whId] = warehouse.name || whId;
+          }
+        } catch (error) {
+          console.error(`Błąd podczas pobierania informacji o magazynie ${whId}:`, error);
+          warehouseData[whId] = whId;
+        }
+      }
+      
+      setWarehouseNames(warehouseData);
+      
+      const batchesWithWarehouseNames = batches.map(batch => {
+        if (batch.warehouseId && warehouseData[batch.warehouseId]) {
+          return { 
+            ...batch, 
+            warehouseName: warehouseData[batch.warehouseId]
+          };
+        }
+        return batch;
+      });
+      
+      setRelatedBatches(batchesWithWarehouseNames);
       setLoadingBatches(false);
     } catch (error) {
       console.error('Błąd podczas pobierania powiązanych partii:', error);
@@ -141,33 +173,67 @@ const PurchaseOrderDetails = ({ orderId }) => {
     }
   };
   
-  // Funkcja do grupowania LOTów według pozycji zamówienia
   const getBatchesByItemId = (itemId) => {
     if (!relatedBatches || relatedBatches.length === 0) return [];
     
     return relatedBatches.filter(batch => {
-      // Sprawdź różne możliwe powiązania między LOTem a pozycją zamówienia
       return (
         (batch.purchaseOrderDetails && batch.purchaseOrderDetails.itemPoId === itemId) ||
         (batch.sourceDetails && batch.sourceDetails.itemPoId === itemId) ||
-        (itemId === undefined) // Jeśli itemId nie jest podane, zwróć wszystkie
+        (itemId === undefined)
       );
     });
   };
   
-  // Funkcja do nawigacji do szczegółów partii (LOTu)
-  const handleBatchClick = (batchId, itemId) => {
-    if (!batchId) return;
-    if (itemId) {
-      // Jeśli znamy ID produktu, przekieruj do listy partii produktu
-      navigate(`/inventory/${itemId}/batches`);
-    } else {
-      // Jeśli nie znamy ID produktu, pobierz partię i przekieruj na podstawie jej itemId
-      navigate(`/inventory/batch/${batchId}`);
+  const refreshBatches = async () => {
+    try {
+      setLoadingBatches(true);
+      const batches = await getBatchesByPurchaseOrderId(orderId);
+      setRelatedBatches(batches);
+      showSuccess('Lista partii została odświeżona');
+    } catch (error) {
+      console.error('Błąd podczas odświeżania partii:', error);
+      showError('Nie udało się odświeżyć listy partii: ' + error.message);
+    } finally {
+      setLoadingBatches(false);
     }
   };
   
-  // Funkcja do przełączania rozwinięcia/zwinięcia listy LOTów dla danej pozycji
+  const handleBatchClick = async (batchId, itemId) => {
+    if (!batchId) return;
+    
+    if (batchId.toString().startsWith('temp-')) {
+      showError('Nie można wyświetlić szczegółów dla tymczasowej partii, która nie została jeszcze zapisana w bazie danych.');
+      return;
+    }
+    
+    if (itemId) {
+      navigate(`/inventory/${itemId}/batches`);
+      return;
+    }
+    
+    try {
+      setLoadingBatches(true);
+      const batch = await getInventoryBatch(batchId);
+      setLoadingBatches(false);
+      
+      if (batch && batch.itemId) {
+        navigate(`/inventory/${batch.itemId}/batches`);
+      } else {
+        navigate(`/inventory/batch/${batchId}`);
+      }
+    } catch (error) {
+      console.error('Błąd podczas pobierania danych partii:', error);
+      setLoadingBatches(false);
+      
+      if (error.message?.includes('nie istnieje')) {
+        showError('Nie znaleziono partii w bazie danych.');
+      } else {
+        navigate(`/inventory/batch/${batchId}`);
+      }
+    }
+  };
+  
   const toggleItemExpansion = (itemId) => {
     setExpandedItems(prev => ({
       ...prev,
@@ -175,7 +241,6 @@ const PurchaseOrderDetails = ({ orderId }) => {
     }));
   };
   
-  // Funkcja zwracająca nazwę użytkownika zamiast ID
   const getUserName = (userId) => {
     return userNames[userId] || userId || 'System';
   };
@@ -219,14 +284,11 @@ const PurchaseOrderDetails = ({ orderId }) => {
     }
     
     try {
-      // Aktualizacja statusu
       await updatePurchaseOrderStatus(orderId, newStatus, currentUser?.uid);
       
-      // Pobierz zaktualizowane dane zamówienia
       const updatedData = await getPurchaseOrderById(orderId);
       setPurchaseOrder(updatedData);
       
-      // Jeśli historia statusu została zaktualizowana, pobierz dane nowych użytkowników
       if (updatedData.statusHistory && updatedData.statusHistory.length > 0) {
         const userIds = updatedData.statusHistory.map(change => change.changedBy).filter(id => id);
         const uniqueUserIds = [...new Set(userIds)];
@@ -262,12 +324,10 @@ const PurchaseOrderDetails = ({ orderId }) => {
       return;
     }
     
-    // Upewnij się, że cena jednostkowa jest liczbą
     const unitPrice = typeof itemToReceive.unitPrice === 'number' 
       ? itemToReceive.unitPrice 
       : parseFloat(itemToReceive.unitPrice || 0);
     
-    // Przekieruj do strony przyjęcia towaru z parametrami
     const queryParams = new URLSearchParams();
     queryParams.append('poNumber', purchaseOrder.number);
     queryParams.append('orderId', orderId);
@@ -277,25 +337,20 @@ const PurchaseOrderDetails = ({ orderId }) => {
     queryParams.append('source', 'purchase'); 
     queryParams.append('sourceId', orderId);
     
-    // Dodaj dodatkowe informacje, które pomogą zidentyfikować pozycję w zamówieniu
     if (itemToReceive.id) {
       queryParams.append('itemPOId', itemToReceive.id);
     } else if (itemToReceive.itemId) {
       queryParams.append('itemPOId', itemToReceive.itemId);
     }
     
-    // Dodaj nazwę produktu dla łatwiejszego dopasowania w zamówieniu
     if (itemToReceive.name) {
       queryParams.append('itemName', itemToReceive.name);
     }
     
-    // Dodaj referencję do numeru zamówienia
     queryParams.append('reference', purchaseOrder.number);
     
-    // Dodaj parametr returnTo, aby strona wiedziała, gdzie wrócić po wykonaniu operacji
     queryParams.append('returnTo', `/purchase-orders/${orderId}`);
     
-    // Ustaw flagę, która spowoduje odświeżenie danych po powrocie
     localStorage.setItem('refreshPurchaseOrder', orderId);
     
     navigate(`/inventory/${itemToReceive.inventoryItemId}/receive?${queryParams.toString()}`);
@@ -306,7 +361,6 @@ const PurchaseOrderDetails = ({ orderId }) => {
     setInvoiceLink(purchaseOrder.invoiceLink || '');
     setInvoiceLinkDialogOpen(true);
     
-    // Inicjalizuj tablicę invoiceLinks jeśli nie istnieje, ale jest stare pole invoiceLink
     if ((!purchaseOrder.invoiceLinks || purchaseOrder.invoiceLinks.length === 0) && purchaseOrder.invoiceLink) {
       setTempInvoiceLinks([{
         id: `invoice-${Date.now()}`,
@@ -320,17 +374,14 @@ const PurchaseOrderDetails = ({ orderId }) => {
 
   const handleInvoiceLinkSave = async () => {
     try {
-      // Przygotuj dane do aktualizacji
       const updatedData = {
         ...purchaseOrder,
         invoiceLink: tempInvoiceLinks.length > 0 ? tempInvoiceLinks[0].url : '',
         invoiceLinks: tempInvoiceLinks
       };
       
-      // Zaktualizuj zamówienie w bazie danych
       await updatePurchaseOrder(orderId, updatedData);
       
-      // Zaktualizuj lokalny stan
       setPurchaseOrder({
         ...purchaseOrder,
         invoiceLink: tempInvoiceLinks.length > 0 ? tempInvoiceLinks[0].url : '',
@@ -381,19 +432,15 @@ const PurchaseOrderDetails = ({ orderId }) => {
   const formatDate = (dateIsoString) => {
     if (!dateIsoString) return 'Nie określono';
     try {
-      // Obsłuż różne rodzaje dat
       let date;
       
-      // Jeśli to Timestamp z Firebase
       if (dateIsoString && typeof dateIsoString.toDate === 'function') {
         date = dateIsoString.toDate();
       } 
-      // Jeśli to string ISO lub wartość, którą można przekształcić na Date
       else {
         date = new Date(dateIsoString);
       }
       
-      // Sprawdź, czy data jest prawidłowa
       if (isNaN(date.getTime())) {
         console.warn(`Nieprawidłowa wartość daty: ${dateIsoString}`);
         return 'Nie określono';
@@ -420,7 +467,6 @@ const PurchaseOrderDetails = ({ orderId }) => {
     return mainAddress || supplier.addresses[0];
   };
   
-  // Sprawdza, czy zamówienie jest w stanie, w którym można przyjąć towary do magazynu
   const canReceiveItems = purchaseOrder.status === PURCHASE_ORDER_STATUSES.ORDERED || 
                           purchaseOrder.status === 'ordered' || 
                           purchaseOrder.status === 'partial' || 
@@ -432,7 +478,6 @@ const PurchaseOrderDetails = ({ orderId }) => {
                           purchaseOrder.status === PURCHASE_ORDER_STATUSES.DELIVERED || 
                           purchaseOrder.status === 'delivered';
   
-  // Dodajemy alternatywną funkcję do drukowania w przypadku problemów
   const handleDirectPrint = () => {
     console.log('Używam alternatywnej metody drukowania...');
     console.log('printRef:', printRef.current);
@@ -443,13 +488,10 @@ const PurchaseOrderDetails = ({ orderId }) => {
     }
     
     try {
-      // Otwieramy nowe okno
       const printWindow = window.open('', '_blank', 'width=800,height=600');
       
-      // Obliczamy wartości VAT
       const vatValues = calculateVATValues(purchaseOrder.items, purchaseOrder.additionalCostsItems);
       
-      // Przygotowujemy zawartość HTML dla stawek VAT produktów
       let vatProductsHtml = '';
       Array.from(new Set(purchaseOrder.items.map(item => item.vatRate)))
         .sort((a, b) => a - b)
@@ -463,7 +505,6 @@ const PurchaseOrderDetails = ({ orderId }) => {
           vatProductsHtml += `<p>VAT ${vatRate}%: ${formatCurrency(vatValue, purchaseOrder.currency)} (od ${formatCurrency(sumNet, purchaseOrder.currency)})</p>`;
         });
       
-      // Przygotowujemy zawartość HTML dla dodatkowych kosztów
       let additionalCostsHtml = '';
       if (purchaseOrder.additionalCostsItems && purchaseOrder.additionalCostsItems.length > 0) {
         additionalCostsHtml = '<h4>Dodatkowe koszty:</h4>';
@@ -480,7 +521,6 @@ const PurchaseOrderDetails = ({ orderId }) => {
         });
       }
       
-      // Przygotowujemy zawartość HTML
       const printContent = `
         <!DOCTYPE html>
         <html>
@@ -604,7 +644,6 @@ const PurchaseOrderDetails = ({ orderId }) => {
         </html>
       `;
       
-      // Wpisujemy do nowego okna
       printWindow.document.open();
       printWindow.document.write(printContent);
       printWindow.document.close();
@@ -614,9 +653,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
     }
   };
   
-  // Funkcja obliczająca wartości VAT dla każdej pozycji i każdego kosztu
   const calculateVATValues = (items = [], additionalCostsItems = []) => {
-    // Obliczanie wartości netto i VAT dla pozycji produktów
     let itemsNetTotal = 0;
     let itemsVatTotal = 0;
     
@@ -624,13 +661,11 @@ const PurchaseOrderDetails = ({ orderId }) => {
       const itemNet = parseFloat(item.totalPrice) || 0;
       itemsNetTotal += itemNet;
       
-      // Obliczanie VAT dla pozycji na podstawie jej indywidualnej stawki VAT
       const vatRate = typeof item.vatRate === 'number' ? item.vatRate : 0;
       const itemVat = (itemNet * vatRate) / 100;
       itemsVatTotal += itemVat;
     });
     
-    // Obliczanie wartości netto i VAT dla dodatkowych kosztów
     let additionalCostsNetTotal = 0;
     let additionalCostsVatTotal = 0;
     
@@ -638,19 +673,15 @@ const PurchaseOrderDetails = ({ orderId }) => {
       const costNet = parseFloat(cost.value) || 0;
       additionalCostsNetTotal += costNet;
       
-      // Obliczanie VAT dla dodatkowego kosztu na podstawie jego indywidualnej stawki VAT
       const vatRate = typeof cost.vatRate === 'number' ? cost.vatRate : 0;
       const costVat = (costNet * vatRate) / 100;
       additionalCostsVatTotal += costVat;
     });
     
-    // Suma wartości netto: produkty + dodatkowe koszty
     const totalNet = itemsNetTotal + additionalCostsNetTotal;
     
-    // Suma VAT: VAT od produktów + VAT od dodatkowych kosztów
     const totalVat = itemsVatTotal + additionalCostsVatTotal;
     
-    // Wartość brutto: suma netto + suma VAT
     const totalGross = totalNet + totalVat;
     
     return {
@@ -668,9 +699,34 @@ const PurchaseOrderDetails = ({ orderId }) => {
     };
   };
   
-  // Sprawdzamy czy zamówienie ma dodatkowe koszty do rozliczenia
   const hasDynamicFields = purchaseOrder?.additionalCostsItems?.length > 0 || 
                           (purchaseOrder?.additionalCosts && parseFloat(purchaseOrder.additionalCosts) > 0);
+  
+  // Funkcja otwierająca dialog tworzenia nowego zamówienia klienta
+  const handleCreateCOClick = () => {
+    setCreateCODialogOpen(true);
+  };
+
+  // Funkcja do tworzenia nowego zamówienia klienta
+  const handleCreateCO = () => {
+    try {
+      // Przekierowanie do formularza tworzenia nowego zamówienia klienta
+      // z parametrem oznaczającym, że pochodzi z PO
+      navigate('/orders/new', { 
+        state: { 
+          fromPO: true, 
+          poId: orderId, 
+          poNumber: purchaseOrder?.number 
+        } 
+      });
+      setCreateCODialogOpen(false);
+      showSuccess('Przekierowano do formularza nowego zamówienia klienta');
+    } catch (error) {
+      console.error('Błąd podczas tworzenia nowego zamówienia klienta:', error);
+      showError('Nie udało się utworzyć nowego zamówienia klienta: ' + error.message);
+      setCreateCODialogOpen(false);
+    }
+  };
   
   return (
     <Container maxWidth="lg" sx={{ my: 4 }}>
@@ -724,6 +780,16 @@ const PurchaseOrderDetails = ({ orderId }) => {
                 Edytuj
               </Button>
               
+              <Button
+                variant="contained" 
+                color="secondary"
+                startIcon={<ShoppingCartIcon />}
+                onClick={handleCreateCOClick}
+                sx={{ mr: 1 }}
+              >
+                Nowe CO
+              </Button>
+              
               <IconButton
                 color="primary"
                 aria-label="menu"
@@ -771,7 +837,6 @@ const PurchaseOrderDetails = ({ orderId }) => {
                     </Typography>
                   )}
                   
-                  {/* Stary pojedynczy link do faktury (dla kompatybilności) */}
                   {purchaseOrder.invoiceLink && (!purchaseOrder.invoiceLinks || purchaseOrder.invoiceLinks.length === 0) && (
                     <Typography variant="body1" gutterBottom>
                       <strong>Faktura:</strong>{' '}
@@ -781,7 +846,6 @@ const PurchaseOrderDetails = ({ orderId }) => {
                     </Typography>
                   )}
                   
-                  {/* Wiele linków do faktur */}
                   {purchaseOrder.invoiceLinks && purchaseOrder.invoiceLinks.length > 0 && (
                     <>
                       <Typography variant="body1" gutterBottom>
@@ -816,7 +880,6 @@ const PurchaseOrderDetails = ({ orderId }) => {
                           </Box>
                         )}
                         
-                        {/* Adres główny dostawcy */}
                         {getSupplierMainAddress(purchaseOrder.supplier) && (
                           <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 1 }}>
                             <LocationOnIcon sx={{ mr: 1, fontSize: 16, mt: 0.5 }} />
@@ -848,7 +911,6 @@ const PurchaseOrderDetails = ({ orderId }) => {
               </Grid>
             </Paper>
             
-            {/* Historia zmian statusu */}
             {purchaseOrder.statusHistory && purchaseOrder.statusHistory.length > 0 && (
               <Paper sx={{ p: 3, mb: 3 }}>
                 <Typography variant="h6" gutterBottom>
@@ -988,7 +1050,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                               cursor: 'pointer',
                                               '&:hover': { bgcolor: 'action.hover' }
                                             }}
-                                            onClick={() => handleBatchClick(batch.id, item.id)}
+                                            onClick={() => handleBatchClick(batch.id, batch.itemId || item.inventoryItemId)}
                                           >
                                             <ListItemIcon>
                                               <LabelIcon color="info" />
@@ -1007,19 +1069,24 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                                   )}
                                                   {batch.warehouseId && (
                                                     <Typography component="span" variant="body2" display="block" color="text.secondary">
-                                                      Magazyn: {batch.warehouseName || batch.warehouseId}
+                                                      Magazyn: {batch.warehouseName || warehouseNames[batch.warehouseId] || batch.warehouseId}
                                                     </Typography>
                                                   )}
                                                 </React.Fragment>
                                               }
                                             />
-                                            <Chip 
-                                              size="small" 
-                                              label="Przejdź do szczegółów" 
-                                              color="primary" 
-                                              variant="outlined" 
+                                            <Button
+                                              size="small"
+                                              variant="outlined"
+                                              color="primary"
                                               sx={{ ml: 1 }}
-                                            />
+                                              onClick={(e) => {
+                                                e.stopPropagation(); // Zapobiega propagacji kliknięcia do rodzica
+                                                handleBatchClick(batch.id, batch.itemId || item.inventoryItemId);
+                                              }}
+                                            >
+                                              Szczegóły
+                                            </Button>
                                           </ListItem>
                                         ))}
                                       </List>
@@ -1432,6 +1499,25 @@ const PurchaseOrderDetails = ({ orderId }) => {
         <DialogActions>
           <Button onClick={() => setInvoiceLinkDialogOpen(false)}>Anuluj</Button>
           <Button onClick={handleInvoiceLinkSave} color="primary">Zapisz</Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Dialog tworzenia nowego zamówienia klienta */}
+      <Dialog
+        open={createCODialogOpen}
+        onClose={() => setCreateCODialogOpen(false)}
+      >
+        <DialogTitle>Utwórz nowe zamówienie klienta</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Czy chcesz utworzyć nowe zamówienie klienta (CO) powiązane z tym zamówieniem zakupowym?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCreateCODialogOpen(false)}>Anuluj</Button>
+          <Button onClick={handleCreateCO} color="primary" variant="contained">
+            Utwórz zamówienie
+          </Button>
         </DialogActions>
       </Dialog>
     </Container>

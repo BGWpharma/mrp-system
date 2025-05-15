@@ -6,6 +6,8 @@ import { NotificationProvider } from './contexts/NotificationContext';
 import { useTheme } from './contexts/ThemeContext';
 import { ColumnPreferencesProvider } from './contexts/ColumnPreferencesContext';
 import Notifications from './components/common/Notifications';
+import { rtdb } from './services/firebase/config';
+import { ref, onValue } from 'firebase/database';
 
 // Inicjujemy przechwytywanie logów konsoli
 import './services/logsCaptureService';
@@ -132,6 +134,25 @@ import BugReportsPage from './pages/Admin/BugReportsPage';
 // Hall Data
 import HallDataConditionsPage from './pages/HallData/Conditions';
 import HallDataMachinesPage from './pages/HallData/Machines';
+
+// Inicjalizacja monitorowania stanu połączenia z bazą danych
+const initializeConnectionMonitoring = () => {
+  try {
+    const connectedRef = ref(rtdb, '.info/connected');
+    onValue(connectedRef, (snap) => {
+      if (snap.val() === true) {
+        console.log('Połączono z Realtime Database');
+      } else {
+        console.log('Brak połączenia z Realtime Database - działanie w trybie offline');
+      }
+    });
+  } catch (error) {
+    console.error('Błąd podczas inicjalizacji monitorowania połączenia:', error);
+  }
+};
+
+// Wywołanie inicjalizacji
+initializeConnectionMonitoring();
 
 function App() {
   return (

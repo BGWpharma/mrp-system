@@ -339,9 +339,40 @@ export const createOrder = async (orderData, userId) => {
     };
     
     const docRef = await addDoc(collection(db, ORDERS_COLLECTION), orderWithMeta);
+    const newOrderId = docRef.id;
     
+    // Tworzenie powiadomienia o nowym zamówieniu
+    try {
+      const { createRealtimeNotification } = require('./notificationService');
+      
+      // ID użytkowników, którzy powinni otrzymać powiadomienie
+      // W tym przypadku wysyłamy powiadomienie do użytkownika, który utworzył zamówienie
+      // Dodatkowo można pobierać listę administratorów z bazy danych
+      const userIds = [userId];
+      
+      // Dane klienta do powiadomienia
+      const customerName = orderData.customer?.name || 'Nowy klient';
+      const customerInfo = customerId ? `(${customerName})` : customerName;
+      
+      // Tworzymy powiadomienie
+      await createRealtimeNotification({
+        userIds,
+        title: `Nowe zamówienie klienta (CO)`,
+        message: `Utworzono nowe zamówienie klienta ${orderNumber} dla ${customerInfo}. Wartość: ${totalValue.toFixed(2)} EUR`,
+        type: 'success',
+        entityType: 'order',
+        entityId: newOrderId,
+        createdBy: userId
+      });
+      
+      console.log(`Utworzono powiadomienie o nowym zamówieniu ${orderNumber}`);
+    } catch (notificationError) {
+      console.warn('Nie udało się utworzyć powiadomienia o nowym zamówieniu:', notificationError);
+    }
+    
+    // Zwracamy obiekt zawierający ID oraz dane zamówienia (dla zachowania kompatybilności)
     return {
-      id: docRef.id,
+      id: newOrderId,
       ...orderWithMeta
     };
   } catch (error) {
@@ -369,9 +400,38 @@ export const createPurchaseOrder = async (orderData, userId) => {
     };
     
     const docRef = await addDoc(collection(db, ORDERS_COLLECTION), orderWithMeta);
+    const newOrderId = docRef.id;
+    
+    // Tworzenie powiadomienia o nowym zamówieniu zakupowym
+    try {
+      const { createRealtimeNotification } = require('./notificationService');
+      
+      // ID użytkowników, którzy powinni otrzymać powiadomienie
+      const userIds = [userId];
+      
+      // Dane dostawcy do powiadomienia
+      const supplierName = orderData.supplier?.name || 'Nowy dostawca';
+      const currencySymbol = orderData.currency || 'EUR';
+      const totalValue = parseFloat(orderData.totalValue || 0).toFixed(2);
+      
+      // Tworzymy powiadomienie
+      await createRealtimeNotification({
+        userIds,
+        title: `Nowe zamówienie zakupowe (PO)`,
+        message: `Utworzono nowe zamówienie zakupowe ${orderNumber} dla ${supplierName}. Wartość: ${totalValue} ${currencySymbol}`,
+        type: 'success',
+        entityType: 'purchaseOrder',
+        entityId: newOrderId,
+        createdBy: userId
+      });
+      
+      console.log(`Utworzono powiadomienie o nowym zamówieniu zakupowym ${orderNumber}`);
+    } catch (notificationError) {
+      console.warn('Nie udało się utworzyć powiadomienia o nowym zamówieniu zakupowym:', notificationError);
+    }
     
     return {
-      id: docRef.id,
+      id: newOrderId,
       ...orderWithMeta
     };
   } catch (error) {
@@ -470,17 +530,39 @@ export const updateOrderStatus = async (orderId, status, userId) => {
       
       // Jeśli zaimportowano usługę powiadomień, utwórz powiadomienie o zmianie statusu
       try {
-        const { createStatusChangeNotification } = require('./notificationService');
-        await createStatusChangeNotification(
-          userId,
+        const { createRealtimeStatusChangeNotification } = require('./notificationService');
+        
+        // Pobierz wszystkich administratorów, którzy powinni otrzymać powiadomienie
+        // W tym przypadku powiadomienie wysyłamy tylko do użytkownika, który zmienił status,
+        // ale można tu dodać więcej użytkowników, np. administratorów systemu
+        const userIds = [userId];
+        
+        await createRealtimeStatusChangeNotification(
+          userIds,
           'order',
           orderId,
           orderData.orderNumber || orderId.substring(0, 8),
           oldStatus || 'Nowy',
-          status
+          status,
+          userId // Przekazanie ID użytkownika, który zmienił status
         );
       } catch (notificationError) {
-        console.warn('Nie udało się utworzyć powiadomienia:', notificationError);
+        console.warn('Nie udało się utworzyć powiadomienia w czasie rzeczywistym:', notificationError);
+        
+        // Fallback do starego systemu powiadomień, jeśli Realtime Database nie zadziała
+        try {
+          const { createStatusChangeNotification } = require('./notificationService');
+          await createStatusChangeNotification(
+            userId,
+            'order',
+            orderId,
+            orderData.orderNumber || orderId.substring(0, 8),
+            oldStatus || 'Nowy',
+            status
+          );
+        } catch (fallbackError) {
+          console.warn('Nie udało się również utworzyć powiadomienia w Firestore:', fallbackError);
+        }
       }
     }
     

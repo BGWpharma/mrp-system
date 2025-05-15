@@ -631,20 +631,62 @@ export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, user
       
       await updateDoc(poRef, updateFields);
       
-      // Jeśli zaimportowano usługę powiadomień, utwórz powiadomienie o zmianie statusu
+      // Mapuj angielskie statusy na polskie
+      const statusTranslations = {
+        'draft': 'Szkic',
+        'pending': 'Oczekujące',
+        'approved': 'Zatwierdzone',
+        'ordered': 'Zamówione',
+        'partial': 'Częściowo dostarczone',
+        'shipped': 'Wysłane',
+        'delivered': 'Dostarczone',
+        'cancelled': 'Anulowane',
+        'completed': 'Zakończone',
+        'confirmed': 'Potwierdzone'
+      };
+      
+      const oldStatusPL = statusTranslations[oldStatus] || oldStatus || 'Szkic';
+      const newStatusPL = statusTranslations[newStatus] || newStatus;
+      
+      // Spróbuj utworzyć powiadomienie w czasie rzeczywistym
       try {
-        await createNotification({
-          userId,
-          type: 'statusChange',
-          entityType: 'purchaseOrder',
-          entityId: purchaseOrderId,
-          entityName: poData.number || purchaseOrderId.substring(0, 8),
-          oldStatus: oldStatus || 'Szkic',
-          newStatus: newStatus,
-          createdAt: new Date().toISOString()
-        });
+        const { createRealtimeStatusChangeNotification } = require('./notificationService');
+        
+        // Powiadomienie wysyłamy nie tylko do użytkownika, który zmienił status,
+        // ale do wszystkich administratorów
+        // Tutaj można dodać logikę pobierania administratorów z DB
+        const userIds = [userId]; // Tymczasowo tylko dla użytkownika zmieniającego
+        
+        await createRealtimeStatusChangeNotification(
+          userIds,
+          'purchaseOrder',
+          purchaseOrderId,
+          poData.number || purchaseOrderId.substring(0, 8),
+          oldStatusPL,
+          newStatusPL,
+          userId // Przekazanie ID użytkownika, który zmienił status
+        );
+        
+        console.log(`Utworzono powiadomienie o zmianie statusu zamówienia ${poData.number} z "${oldStatusPL}" na "${newStatusPL}"`);
       } catch (notificationError) {
-        console.warn('Nie udało się utworzyć powiadomienia:', notificationError);
+        console.warn('Nie udało się utworzyć powiadomienia w czasie rzeczywistym:', notificationError);
+        
+        // Fallback do starego systemu powiadomień, jeśli Realtime Database nie zadziała
+        try {
+          const { createStatusChangeNotification } = require('./notificationService');
+          await createStatusChangeNotification(
+            userId,
+            'purchaseOrder',
+            purchaseOrderId,
+            poData.number || purchaseOrderId.substring(0, 8),
+            oldStatusPL,
+            newStatusPL
+          );
+          
+          console.log(`Utworzono powiadomienie (fallback) o zmianie statusu zamówienia ${poData.number}`);
+        } catch (fallbackError) {
+          console.warn('Nie udało się również utworzyć powiadomienia w Firestore:', fallbackError);
+        }
       }
     }
     

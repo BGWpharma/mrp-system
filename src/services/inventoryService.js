@@ -27,6 +27,9 @@ import {
   } from 'firebase/firestore';
   import { db } from './firebase/config';
   import { generateLOTNumber } from '../utils/numberGenerators';
+  // Dodaję import funkcji powiadomień
+  import { createRealtimeInventoryReceiveNotification, createRealtimeBatchLocationChangeNotification } from '../services/notificationService';
+  import { getAllUsers } from '../services/userService';
   
   const INVENTORY_COLLECTION = 'inventory';
   const INVENTORY_TRANSACTIONS_COLLECTION = 'inventoryTransactions';
@@ -333,7 +336,9 @@ import {
         ...docSnap.data()
       };
     } else {
-      throw new Error('Pozycja magazynowa nie istnieje');
+      // Zamiast rzucać błąd, zwracamy null
+      console.log(`Pozycja magazynowa o ID ${itemId} nie istnieje`);
+      return null;
     }
   };
   
@@ -461,6 +466,11 @@ import {
   // Pobieranie partii dla danej pozycji magazynowej
   export const getItemBatches = async (itemId, warehouseId = null) => {
     try {
+      // Sprawdź czy itemId został podany
+      if (!itemId) {
+        throw new Error('Nie podano ID pozycji/produktu dla partii');
+      }
+      
       // Utwórz podstawowe zapytanie
       let q;
       
@@ -481,6 +491,12 @@ import {
       
       // Wykonaj zapytanie
       const querySnapshot = await getDocs(q);
+      
+      // Jeśli nie znaleziono żadnych partii, zwróć pustą tablicę
+      if (querySnapshot.empty) {
+        console.log(`Nie znaleziono partii dla pozycji o ID ${itemId}`);
+        return [];
+      }
       
       // Pobierz i zwróć wyniki - bez filtrowania dat
       return querySnapshot.docs.map(doc => ({
@@ -866,6 +882,47 @@ import {
         detail: { itemId, action: 'receive', quantity: Number(quantity) }
       });
       window.dispatchEvent(event);
+      
+      // Wyślij powiadomienie o przyjęciu towaru na magazyn
+      try {
+        // Pobierz nazwę magazynu
+        const warehouseRef = doc(db, WAREHOUSES_COLLECTION, transactionData.warehouseId);
+        const warehouseSnap = await getDoc(warehouseRef);
+        const warehouseName = warehouseSnap.exists() ? warehouseSnap.data().name : 'Nieznany';
+        
+        // Pobierz użytkowników z rolami administratora i magazynu do powiadomienia
+        const allUsers = await getAllUsers();
+        
+        // Filtruj użytkowników według ról
+        const adminUsers = allUsers.filter(user => user.role === 'administrator');
+        const warehouseUsers = allUsers.filter(user => user.role === 'warehouse' || user.role === 'magazynier');
+        
+        // Stwórz tablicę unikalnych identyfikatorów użytkowników
+        const userIdsToNotify = [...new Set([
+          ...adminUsers.map(user => user.id),
+          ...warehouseUsers.map(user => user.id)
+        ])];
+        
+        if (userIdsToNotify.length > 0) {
+          // Utwórz i wyślij powiadomienie
+          await createRealtimeInventoryReceiveNotification(
+            userIdsToNotify,
+            itemId,
+            currentItem.name,
+            Number(quantity),
+            transactionData.warehouseId,
+            warehouseName,
+            batch.lotNumber,
+            transactionData.source || 'other',
+            transactionData.sourceId || null,
+            userId
+          );
+          console.log('Wysłano powiadomienie o przyjęciu towaru na magazyn');
+        }
+      } catch (notificationError) {
+        console.error('Błąd podczas wysyłania powiadomienia o przyjęciu towaru:', notificationError);
+        // Kontynuuj mimo błędu - przyjęcie towaru jest ważniejsze
+      }
       
       return {
         id: itemId,
@@ -2299,6 +2356,50 @@ import {
       // Przelicz i zaktualizuj ilość głównej pozycji na podstawie partii
       // (nie jest to konieczne przy transferze między magazynami, ale zapewniamy spójność danych)
       await recalculateItemQuantity(itemId);
+      
+      // Wyślij powiadomienie o zmianie lokalizacji partii
+      try {
+        // Pobierz nazwy magazynów
+        const sourceWarehouseDoc = await getDoc(doc(db, WAREHOUSES_COLLECTION, sourceWarehouseId));
+        const targetWarehouseDoc = await getDoc(doc(db, WAREHOUSES_COLLECTION, targetWarehouseId));
+        
+        const sourceWarehouseName = sourceWarehouseDoc.exists() ? sourceWarehouseDoc.data().name : 'Nieznany';
+        const targetWarehouseName = targetWarehouseDoc.exists() ? targetWarehouseDoc.data().name : 'Nieznany';
+        
+        // Pobierz użytkowników z rolami administratora i magazynu do powiadomienia
+        const allUsers = await getAllUsers();
+        
+        // Filtruj użytkowników według ról
+        const adminUsers = allUsers.filter(user => user.role === 'administrator');
+        const warehouseUsers = allUsers.filter(user => user.role === 'warehouse' || user.role === 'magazynier');
+        
+        // Stwórz tablicę unikalnych identyfikatorów użytkowników
+        const userIdsToNotify = [...new Set([
+          ...adminUsers.map(user => user.id),
+          ...warehouseUsers.map(user => user.id)
+        ])];
+        
+        if (userIdsToNotify.length > 0) {
+          // Utwórz i wyślij powiadomienie
+          await createRealtimeBatchLocationChangeNotification(
+            userIdsToNotify,
+            batchId,
+            batchData.lotNumber || batchData.batchNumber || 'Nieznany',
+            itemId,
+            itemData.name,
+            sourceWarehouseId,
+            sourceWarehouseName,
+            targetWarehouseId,
+            targetWarehouseName,
+            transferQuantity,
+            userId
+          );
+          console.log('Wysłano powiadomienie o zmianie lokalizacji partii');
+        }
+      } catch (notificationError) {
+        console.error('Błąd podczas wysyłania powiadomienia o zmianie lokalizacji partii:', notificationError);
+        // Kontynuuj mimo błędu - transfer partii jest ważniejszy
+      }
       
       return {
         success: true,
