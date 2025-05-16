@@ -175,18 +175,77 @@ import {
         // console.log(`Znaleziono ${allItems.length} pozycji z kategorii "${searchCategory}"`);
       }
       
+      // Pobierz partie z bazy danych przed sortowaniem
+      // Będziemy potrzebować tych informacji do prawidłowego sortowania po ilości
+      const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
+      const batchesCache = {};
+      
+      // Jeśli przekazano warehouseId, pobierz partie tylko dla danego magazynu
+      if (warehouseId) {
+        const warehouseBatchesQuery = query(batchesRef, where('warehouseId', '==', warehouseId));
+        const warehouseBatchesSnapshot = await getDocs(warehouseBatchesQuery);
+        
+        // Grupuj partie według itemId
+        warehouseBatchesSnapshot.docs.forEach(doc => {
+          const batch = { id: doc.id, ...doc.data() };
+          const itemId = batch.itemId;
+          
+          if (!batchesCache[itemId]) {
+            batchesCache[itemId] = [];
+          }
+          
+          batchesCache[itemId].push(batch);
+        });
+      } else {
+        // Jeśli nie podano warehouseId, pobierz wszystkie partie
+        const allBatchesQuery = query(batchesRef);
+        const allBatchesSnapshot = await getDocs(allBatchesQuery);
+        
+        allBatchesSnapshot.docs.forEach(doc => {
+          const batch = { id: doc.id, ...doc.data() };
+          const itemId = batch.itemId;
+          
+          if (!batchesCache[itemId]) {
+            batchesCache[itemId] = [];
+          }
+          
+          batchesCache[itemId].push(batch);
+        });
+      }
+      
+      // Oblicz rzeczywiste ilości dla wszystkich pozycji na podstawie partii
+      for (const item of allItems) {
+        const itemBatches = batchesCache[item.id] || [];
+        let totalQuantity = 0;
+        
+        itemBatches.forEach(batch => {
+          totalQuantity += parseFloat(batch.quantity || 0);
+        });
+        
+        // Przypisz obliczone wartości do pozycji
+        item.quantity = totalQuantity;
+        item.bookedQuantity = item.bookedQuantity || 0;
+        item.availableQuantity = totalQuantity - (item.bookedQuantity || 0);
+        item.batches = itemBatches;
+        
+        // Dodaj informację o magazynie, jeśli filtrujemy po konkretnym magazynie
+        if (warehouseId && itemBatches.length > 0) {
+          item.warehouseId = warehouseId;
+        }
+      }
+      
       // Dla pól, które wymagają specjalnego sortowania (np. availableQuantity)
       if (sortField === 'availableQuantity') {
         // Sortowanie po ilości dostępnej (quantity - bookedQuantity)
         allItems.sort((a, b) => {
-          const availableA = Number(a.quantity || 0) - Number(a.bookedQuantity || 0);
-          const availableB = Number(b.quantity || 0) - Number(b.bookedQuantity || 0);
+          const availableA = Number(a.availableQuantity || 0);
+          const availableB = Number(b.availableQuantity || 0);
           
           return sortOrder === 'desc' ? availableB - availableA : availableA - availableB;
         });
       }
       // Dla pozostałych pól, które nie mogą być sortowane po stronie serwera
-      else if (sortField && !['name', 'category', 'createdAt', 'updatedAt', 'quantity', 'bookedQuantity'].includes(fieldMapping[sortField])) {
+      else if (sortField === 'totalQuantity' || sortField === 'reservedQuantity') {
         // Sortowanie po stronie klienta dla pól obliczanych
         allItems.sort((a, b) => {
           let valueA, valueB;
@@ -197,10 +256,6 @@ import {
           } else if (sortField === 'reservedQuantity') {
             valueA = Number(a.bookedQuantity || 0);
             valueB = Number(b.bookedQuantity || 0);
-          } else {
-            // Domyślnie
-            valueA = a[sortField] || 0;
-            valueB = b[sortField] || 0;
           }
           
           return sortOrder === 'desc' ? valueB - valueA : valueA - valueB;
@@ -219,97 +274,6 @@ import {
         
         // Wyciągnij tylko pozycje dla bieżącej strony
         paginatedItems = allItems.slice(startIndex, endIndex);
-        // Usuwamy zbędne logowanie
-        // console.log(`Paginacja: strona ${page}, rozmiar ${pageSize}, wyświetlam elementy ${startIndex+1}-${Math.min(endIndex, totalCount)} z ${totalCount}`);
-      }
-      
-      // OPTYMALIZACJA: Pobierz partie magazynowe dla wszystkich pozycji na raz
-      // zamiast używania wielu zapytań dla każdej części ID przedmiotów
-      
-      // Jeśli warehouseId jest określony, budujemy złożone zapytanie
-      // W przeciwnym przypadku tworzymy jedno zapytanie z klauzulą 'or' dla wszystkich ID przedmiotów
-      
-      let allBatches = [];
-      const itemIds = paginatedItems.map(item => item.id);
-      
-      if (itemIds.length > 0) {
-        const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
-        
-        // Zwiększ chunkSize, aby zmniejszyć liczbę zapytań
-        // Firebase obsługuje do 30 elementów w warunku 'in' (wcześniej używaliśmy 10)
-        const chunkSize = 30;
-        const chunks = [];
-        
-        for (let i = 0; i < itemIds.length; i += chunkSize) {
-          chunks.push(itemIds.slice(i, i + chunkSize));
-        }
-        
-        // Wykonujemy zapytania równolegle w większych porcjach
-        const batchQueries = chunks.map(chunk => {
-          let batchesQuery;
-          if (warehouseId) {
-            batchesQuery = query(
-              batchesRef, 
-              where('itemId', 'in', chunk),
-              where('warehouseId', '==', warehouseId)
-            );
-          } else {
-            batchesQuery = query(batchesRef, where('itemId', 'in', chunk));
-          }
-          return getDocs(batchesQuery);
-        });
-        
-        // Pobierz wszystkie dane równolegle
-        const batchResponses = await Promise.all(batchQueries);
-        
-        // Połącz wyniki wszystkich zapytań
-        allBatches = batchResponses.flatMap(response => 
-          response.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }))
-        );
-        
-        // Usuwamy zbędne logowanie
-        // console.log(`Zoptymalizowane pobieranie: wykonano ${chunks.length} zapytań zamiast wielu pojedynczych`);
-        // Usuwamy zbędne logowanie
-        // console.log('Pobrane partie dla stronicowanych pozycji:', allBatches.length);
-      }
-      
-      // Przygotuj cache dla szybkiego dostępu do partii według itemId
-      const batchesCache = {};
-      
-      // Indeksuj partie według itemId dla szybszego dostępu
-      for (const batch of allBatches) {
-        const itemId = batch.itemId;
-        if (!batchesCache[itemId]) {
-          batchesCache[itemId] = [];
-        }
-        batchesCache[itemId].push(batch);
-      }
-      
-      // Przypisz partie do odpowiednich pozycji magazynowych
-      // i oblicz ilości dostępne
-      for (const item of paginatedItems) {
-        // Znajdź wszystkie partie dla danej pozycji z cache
-        const itemBatches = batchesCache[item.id] || [];
-        
-        // Oblicz łączną ilość dostępną
-        let totalQuantity = 0;
-        
-        itemBatches.forEach(batch => {
-          totalQuantity += parseFloat(batch.quantity || 0);
-        });
-        
-        // Przypisz obliczone wartości do pozycji
-        item.quantity = totalQuantity;
-        item.bookedQuantity = item.bookedQuantity || 0; // Zachowaj wartość bookedQuantity z bazy lub ustaw 0 jeśli nie istnieje
-        item.batches = itemBatches;
-        
-        // Dodaj nazwę magazynu (jeśli istnieje)
-        if (warehouseId && itemBatches.length > 0) {
-          item.warehouseId = warehouseId;
-        }
       }
       
       // Zwróć obiekt z paginowanymi danymi i informacjami o paginacji
