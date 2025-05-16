@@ -223,7 +223,7 @@ import {
         // console.log(`Paginacja: strona ${page}, rozmiar ${pageSize}, wyświetlam elementy ${startIndex+1}-${Math.min(endIndex, totalCount)} z ${totalCount}`);
       }
       
-      // OPTYMALIZACJA: Pobierz partie magazynowe dla wszystkich przedmiotów na raz
+      // OPTYMALIZACJA: Pobierz partie magazynowe dla wszystkich pozycji na raz
       // zamiast używania wielu zapytań dla każdej części ID przedmiotów
       
       // Jeśli warehouseId jest określony, budujemy złożone zapytanie
@@ -778,7 +778,17 @@ import {
                 
                 // Jeśli mamy dodatkowe koszty i ilość produktów > 0, oblicz dodatkowy koszt na jednostkę
                 if (additionalCostsTotal > 0 && totalProductQuantity > 0) {
-                  const additionalCostPerUnit = additionalCostsTotal / totalProductQuantity;
+                  // Pobierz ilość przyjmowanej partii
+                  const batchQuantity = Number(quantity);
+                  
+                  // Oblicz proporcjonalny udział dodatkowych kosztów dla tej partii
+                  const batchProportion = batchQuantity / totalProductQuantity;
+                  const batchAdditionalCostTotal = additionalCostsTotal * batchProportion;
+                  
+                  // Oblicz dodatkowy koszt na jednostkę dla tej konkretnej partii
+                  const additionalCostPerUnit = batchQuantity > 0 
+                    ? batchAdditionalCostTotal / batchQuantity 
+                    : 0;
                   
                   // Aktualizuj cenę jednostkową w partii
                   let baseUnitPrice = parseFloat(transactionData.unitPrice) || 0;
@@ -792,7 +802,7 @@ import {
                   // Zachowaj oryginalną cenę jednostkową
                   batch.baseUnitPrice = baseUnitPrice;
                   
-                  console.log(`Zaktualizowano cenę jednostkową partii z ${baseUnitPrice} na ${batch.unitPrice} (dodatkowy koszt: ${additionalCostPerUnit} per jednostka)`);
+                  console.log(`Zaktualizowano cenę jednostkową partii z ${baseUnitPrice} na ${batch.unitPrice} (dodatkowy koszt: ${additionalCostPerUnit} per jednostka, proporcja: ${batchProportion}, koszt całkowity partii: ${batchAdditionalCostTotal})`);
                 }
               } catch (error) {
                 console.error('Błąd podczas aktualizacji ceny jednostkowej na podstawie dodatkowych kosztów:', error);
@@ -2264,7 +2274,9 @@ import {
             ...batchDataToKeep,
             id: undefined, // Usuń ID, aby Firebase wygenerowało nowe
             quantity: transferQuantity,
-            initialQuantity: transferQuantity,
+            // Zachowaj oryginalną wartość initialQuantity dla poprawnego rozliczania kosztów
+            // zamiast ustawiać ją na wartość transferu
+            initialQuantity: batchDataToKeep.initialQuantity,
             warehouseId: targetWarehouseId,
             transferredFrom: sourceWarehouseId,
             transferredAt: serverTimestamp(),
@@ -2287,8 +2299,20 @@ import {
         } else {
           // Zaktualizuj istniejącą partię w magazynie docelowym
           const targetBatchRef = doc(db, INVENTORY_BATCHES_COLLECTION, targetBatchId);
+          
+          // Pobierz obecne dane partii docelowej przed aktualizacją
+          const targetBatchDoc = await getDoc(targetBatchRef);
+          const targetBatchData = targetBatchDoc.exists() ? targetBatchDoc.data() : {};
+          
+          // Przy pełnym transferze, przenosimy całą wartość initialQuantity
+          const initialQuantityToTransfer = batchDataToKeep.initialQuantity || 0;
+          
+          console.log(`Transfer całej partii: dodanie initialQuantity=${initialQuantityToTransfer} do partii docelowej`);
+          
           await updateDoc(targetBatchRef, {
             quantity: increment(transferQuantity),
+            // Zaktualizuj również initialQuantity, dodając przeniesioną wartość
+            initialQuantity: increment(initialQuantityToTransfer),
             updatedAt: serverTimestamp(),
             updatedBy: userId,
             lastTransferFrom: sourceWarehouseId,
@@ -2297,19 +2321,44 @@ import {
         }
       } else {
         // Jeśli przenosimy tylko część partii, aktualizuj ilość partii źródłowej
+        
+        // Oblicz proporcję przenoszonej ilości do ilości całkowitej partii źródłowej
+        const transferProportion = transferQuantity / availableQuantity;
+        
+        // Oblicz wartość initialQuantity do odjęcia od partii źródłowej
+        const initialQuantityToRemove = batchData.initialQuantity * transferProportion;
+        const newSourceInitialQuantity = batchData.initialQuantity - initialQuantityToRemove;
+        
+        console.log(`Transfer częściowy: odjęcie proportion=${transferProportion}, initialQuantityToRemove=${initialQuantityToRemove} od partii źródłowej`);
+        console.log(`Partia źródłowa przed aktualizacją: initialQuantity=${batchData.initialQuantity}, quantity=${batchData.quantity}`);
+        console.log(`Partia źródłowa po aktualizacji: initialQuantity=${newSourceInitialQuantity}, quantity=${batchData.quantity - transferQuantity}`);
+        
         await updateDoc(batchRef, {
           quantity: increment(-transferQuantity),
+          // Zaktualizuj również wartość initialQuantity partii źródłowej
+          initialQuantity: newSourceInitialQuantity,
           updatedAt: serverTimestamp(),
           updatedBy: userId
         });
         
         if (isNewBatch) {
-          // Utwórz nową partię w magazynie docelowym
+          // Utwórz nową partię w magazynie docelowym, ale zachowaj oryginalną initialQuantity
+          // zamiast ustawiać ją na wartość transferu, co prowadziło do dublowania w rozliczaniu kosztów
+          
+          // Oblicz proporcję przenoszonej ilości do ilości całkowitej partii źródłowej
+          const transferProportion = transferQuantity / availableQuantity;
+          
+          // Oblicz wartość initialQuantity do przeniesienia proporcjonalnie
+          const proportionalInitialQuantity = batchData.initialQuantity * transferProportion;
+          
+          console.log(`Transfer częściowy do nowej partii: initialQuantity=${proportionalInitialQuantity}, quantity=${transferQuantity}`);
+          
           const newBatchData = {
             ...batchData,
             id: undefined, // Usuń ID, aby Firebase wygenerowało nowe
             quantity: transferQuantity,
-            initialQuantity: transferQuantity,
+            // Ustaw wartość initialQuantity proporcjonalnie do przenoszonej ilości
+            initialQuantity: proportionalInitialQuantity,
             warehouseId: targetWarehouseId,
             transferredFrom: sourceWarehouseId,
             transferredAt: serverTimestamp(),
@@ -2332,8 +2381,26 @@ import {
         } else {
           // Zaktualizuj istniejącą partię w magazynie docelowym
           const targetBatchRef = doc(db, INVENTORY_BATCHES_COLLECTION, targetBatchId);
+          
+          // Pobierz obecne dane partii docelowej przed aktualizacją
+          const targetBatchDoc = await getDoc(targetBatchRef);
+          const targetBatchData = targetBatchDoc.exists() ? targetBatchDoc.data() : {};
+          
+          // Oblicz proporcję przenoszonej ilości do ilości całkowitej partii źródłowej
+          const transferProportion = transferQuantity / availableQuantity;
+          
+          // Oblicz wartość initialQuantity do przeniesienia proporcjonalnie
+          const initialQuantityToTransfer = batchData.initialQuantity * transferProportion;
+          
+          console.log(`Transfer częściowy do istniejącej partii: dodanie initialQuantity=${initialQuantityToTransfer} do partii docelowej`);
+          console.log(`Partia docelowa przed aktualizacją: initialQuantity=${targetBatchData.initialQuantity || 0}, quantity=${targetBatchData.quantity || 0}`);
+          console.log(`Partia docelowa po aktualizacji: initialQuantity=${(targetBatchData.initialQuantity || 0) + initialQuantityToTransfer}, quantity=${(targetBatchData.quantity || 0) + transferQuantity}`);
+          
+          // Aktualizuj istniejącą partię w magazynie docelowym
           await updateDoc(targetBatchRef, {
             quantity: increment(transferQuantity),
+            // Zaktualizuj również initialQuantity, dodając proporcjonalną część
+            initialQuantity: increment(initialQuantityToTransfer),
             updatedAt: serverTimestamp(),
             updatedBy: userId,
             lastTransferFrom: sourceWarehouseId,

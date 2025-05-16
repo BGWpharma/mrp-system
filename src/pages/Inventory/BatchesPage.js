@@ -288,8 +288,10 @@ const BatchesPage = () => {
       errors.transferQuantity = 'Podaj ilość do przeniesienia';
     } else {
       const qty = parseFloat(transferQuantity);
-      if (isNaN(qty) || qty <= 0) {
-        errors.transferQuantity = 'Podaj prawidłową ilość większą od zera';
+      if (isNaN(qty)) {
+        errors.transferQuantity = 'Podaj prawidłową wartość liczbową';
+      } else if (qty <= 0) {
+        errors.transferQuantity = 'Ilość musi być większa od zera';
       } else if (qty > selectedBatch.quantity) {
         errors.transferQuantity = `Maksymalna dostępna ilość to ${selectedBatch.quantity}`;
       }
@@ -526,7 +528,6 @@ const BatchesPage = () => {
                 <TableCell>Numer partii</TableCell>
                 <TableCell>Data ważności</TableCell>
                 <TableCell>Magazyn</TableCell>
-                <TableCell>Ilość początkowa</TableCell>
                 <TableCell>Ilość aktualna</TableCell>
                 <TableCell>Cena jedn.</TableCell>
                 <TableCell>Status</TableCell>
@@ -538,7 +539,7 @@ const BatchesPage = () => {
             <TableBody>
               {filteredBatches.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} align="center">
+                  <TableCell colSpan={9} align="center">
                     Brak partii dla tego produktu
                   </TableCell>
                 </TableRow>
@@ -587,10 +588,7 @@ const BatchesPage = () => {
                           })()}
                         </TableCell>
                         <TableCell>
-                          {batch.warehouseAddress || batch.warehouseName}
-                        </TableCell>
-                        <TableCell>
-                          {batch.initialQuantity} {item?.unit || batch.unit || 'szt.'}
+                          {batch.warehouseName || 'Magazyn podstawowy'}
                         </TableCell>
                         <TableCell>
                           {batch.quantity} {item?.unit || batch.unit || 'szt.'}
@@ -958,10 +956,24 @@ const BatchesPage = () => {
                       label="Ilość do przeniesienia"
                       type="number"
                       value={transferQuantity}
-                      onChange={(e) => setTransferQuantity(e.target.value)}
-                      inputProps={{ min: 0, max: selectedBatch.quantity, step: 'any' }}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value);
+                        // Walidacja bezpośrednio przy zmianie wartości
+                        if (!isNaN(value)) {
+                          // Ograniczamy wartość do przedziału (0, selectedBatch.quantity]
+                          const validatedValue = Math.min(Math.max(0, value), selectedBatch.quantity);
+                          setTransferQuantity(validatedValue.toString());
+                        } else {
+                          setTransferQuantity(e.target.value);
+                        }
+                      }}
+                      inputProps={{ 
+                        min: 0.00001, 
+                        max: selectedBatch.quantity, 
+                        step: 'any' 
+                      }}
                       error={!!transferErrors.transferQuantity}
-                      helperText={transferErrors.transferQuantity || ''}
+                      helperText={transferErrors.transferQuantity || `Maksymalna dostępna ilość: ${selectedBatch.quantity}`}
                     />
                   </Grid>
                 </Grid>
