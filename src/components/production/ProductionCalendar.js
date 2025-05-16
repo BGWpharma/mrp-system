@@ -34,7 +34,9 @@ import {
   Work as WorkIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  Visibility as VisibilityIcon,
+  VisibilityOff as VisibilityOffIcon
 } from '@mui/icons-material';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -80,6 +82,8 @@ const ProductionCalendar = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [optionsExpanded, setOptionsExpanded] = useState(false);
   const [legendExpanded, setLegendExpanded] = useState(false);
+  // Dodaję nowy stan do kontrolowania widoczności legendy
+  const [showLegend, setShowLegend] = useState(true);
   
   // Referencja do przechowywania aktywnych tooltipów
   const activeTooltipsRef = useRef([]);
@@ -1477,6 +1481,11 @@ const ProductionCalendar = () => {
     setLegendExpanded(!legendExpanded);
   };
 
+  // Funkcja do przełączania widoczności legendy
+  const toggleLegendVisibility = () => {
+    setShowLegend(!showLegend);
+  };
+
   // Dodaj czyszczenie tooltipów po odmontowaniu komponentu
   useEffect(() => {
     return () => {
@@ -1679,6 +1688,18 @@ const ProductionCalendar = () => {
               </Button>
             )}
             
+            {/* Przycisk do pokazywania/ukrywania legendy */}
+            <Tooltip title={showLegend ? "Ukryj legendę" : "Pokaż legendę"}>
+              <IconButton 
+                size="small" 
+                onClick={toggleLegendVisibility}
+                color={showLegend ? "primary" : "default"}
+                sx={{ height: 36 }}
+              >
+                {showLegend ? <VisibilityIcon /> : <VisibilityOffIcon />}
+              </IconButton>
+            </Tooltip>
+            
             {view.startsWith('resourceTimeline') && (
               <Button
                 variant="outlined"
@@ -1713,7 +1734,7 @@ const ProductionCalendar = () => {
       </Collapse>
       
       {/* Legenda statusów z przyciskiem toggle na urządzeniach mobilnych */}
-      {isMobile && (
+      {isMobile && showLegend && (
         <Box sx={{ 
           display: 'flex', 
           justifyContent: 'center', 
@@ -1732,7 +1753,7 @@ const ProductionCalendar = () => {
       )}
       
       {/* Legenda statusów */}
-      <Collapse in={!isMobile || legendExpanded}>
+      <Collapse in={((!isMobile && showLegend) || (isMobile && legendExpanded && showLegend))}>
         <Box 
           sx={{ 
             display: 'flex', 
