@@ -513,8 +513,8 @@ const ProductionCalendar = () => {
           estimatedDuration: task.estimatedDuration
         },
         resourceId: resourceId,
-        editable: canEditTask(task) && editable,
-        groupId: task.orderId ? `order-${task.orderId}` : null // Dodanie groupId dla zadań z tego samego zamówienia
+        editable: canEditTask(task) && editable
+        // Usunięto groupId, które powodowało grupowe przemieszczanie zleceń z tego samego zamówienia
       };
     }).filter(event => {
       // Filtruj zdarzenia, które nie mają resourceId, jeśli jesteśmy w widoku zasobów
@@ -960,10 +960,16 @@ const ProductionCalendar = () => {
       const { event } = info;
       const taskId = event.id;
       
+      // Oblicz czas trwania w minutach na podstawie różnicy między datami
+      const startTime = new Date(event.start);
+      const endTime = new Date(event.end);
+      const durationInMinutes = Math.round((endTime - startTime) / (1000 * 60));
+      
       // Przygotowanie danych do aktualizacji
       const updateData = {
         scheduledDate: event.start,
-        endDate: event.end
+        endDate: event.end,
+        estimatedDuration: durationInMinutes
       };
       
       console.log(`Zadanie przeciągnięte: ${taskId}`, updateData);
@@ -975,10 +981,11 @@ const ProductionCalendar = () => {
           id: taskId,
           scheduledDate: event.start,
           endDate: event.end,
+          estimatedDuration: durationInMinutes,
           lastModified: new Date(),
           // Zachowaj wszystkie inne właściwości z oryginalnego zadania
           ...event.extendedProps.task,
-          // Ale upewnij się, że daty są zaktualizowane
+          // Ale upewnij się, że daty i czas trwania są zaktualizowane
           scheduledDate: event.start,
           endDate: event.end
         }
@@ -1033,10 +1040,16 @@ const ProductionCalendar = () => {
       const { event } = info;
       const taskId = event.id;
       const taskData = event.extendedProps.task;
+      
+      // Oblicz czas trwania w minutach na podstawie różnicy między datami
+      const startTime = new Date(event.start);
+      const endTime = new Date(event.end);
+      const durationInMinutes = Math.round((endTime - startTime) / (1000 * 60));
     
       // Przygotowanie danych do aktualizacji
       const updateData = {
-        endDate: event.end
+        endDate: event.end,
+        estimatedDuration: durationInMinutes
       };
       
       // Jeśli rozciąganie od początku jest włączone i zmienił się początek wydarzenia
@@ -1053,9 +1066,10 @@ const ProductionCalendar = () => {
           id: taskId,
           // Zachowaj wszystkie inne właściwości z oryginalnego zadania
           ...event.extendedProps.task,
-          // Ale upewnij się, że daty są zaktualizowane
+          // Ale upewnij się, że daty i czas trwania są zaktualizowane
           scheduledDate: updateData.scheduledDate || event.start,
           endDate: event.end,
+          estimatedDuration: durationInMinutes,
           lastModified: new Date()
         }
       }));
@@ -2042,7 +2056,7 @@ const ProductionCalendar = () => {
           weekends={true}
           nowIndicator={true}
           schedulerLicenseKey="GPL-My-Project-Is-Open-Source"
-          resourceAreaWidth={isMobile ? '110px' : (view.startsWith('resourceTimeline') ? '30%' : '20%')}
+          resourceAreaWidth={isMobile ? '90px' : (view.startsWith('resourceTimeline') ? '20%' : '15%')}
           editable={editable}
           eventDurationEditable={editable}
           eventStartEditable={editable}

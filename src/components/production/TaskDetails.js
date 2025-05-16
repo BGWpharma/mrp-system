@@ -346,7 +346,7 @@ const TaskDetails = ({ task }) => {
                     Całkowity planowany czas produkcji:
                   </Typography>
                   <Typography variant="body1" component="span" sx={{ ml: 1 }}>
-                    {task.estimatedDuration.toFixed(2)} godz.
+                    {(task.estimatedDuration / 60).toFixed(2)} godz.
                   </Typography>
                 </Box>
               )}

@@ -57,6 +57,155 @@ import {
     }));
   };
   
+  /**
+   * Pobiera zadania produkcyjne z paginacją
+   * @param {number} page - Numer strony (numeracja od 1)
+   * @param {number} limit - Liczba elementów na stronę
+   * @param {string} sortField - Pole, po którym sortujemy (domyślnie 'scheduledDate')
+   * @param {string} sortOrder - Kierunek sortowania (asc/desc) (domyślnie 'asc')
+   * @param {Object} filters - Opcjonalne filtry (status, nazwa, itd.)
+   * @returns {Object} - Obiekt zawierający dane i informacje o paginacji
+   */
+  export const getTasksWithPagination = async (page = 1, limit = 10, sortField = 'scheduledDate', sortOrder = 'asc', filters = {}) => {
+    try {
+      // Pobierz całkowitą liczbę zadań (przed filtrowaniem)
+      let countQuery = collection(db, PRODUCTION_TASKS_COLLECTION);
+      
+      // Dodaj filtry do zapytania liczącego
+      if (filters.status) {
+        countQuery = query(
+          countQuery,
+          where('status', '==', filters.status)
+        );
+      } else if (filters.statuses && Array.isArray(filters.statuses) && filters.statuses.length > 0) {
+        countQuery = query(
+          countQuery,
+          where('status', 'in', filters.statuses)
+        );
+      }
+      
+      if (filters.workstationId) {
+        countQuery = query(
+          countQuery,
+          where('workstationId', '==', filters.workstationId)
+        );
+      }
+      
+      const countSnapshot = await getDocs(countQuery);
+      const totalCount = countSnapshot.size;
+      
+      // Ustaw realne wartości dla page i limit
+      const pageNum = Math.max(1, page);
+      const itemsPerPage = Math.max(1, limit);
+      
+      // Oblicz liczbę stron
+      const totalPages = Math.ceil(totalCount / itemsPerPage);
+      
+      // Jeśli żądana strona jest większa niż liczba stron, ustaw na ostatnią stronę
+      const safePageNum = Math.min(pageNum, Math.max(1, totalPages));
+      
+      // Przygotuj zapytanie z sortowaniem
+      let q = query(
+        collection(db, PRODUCTION_TASKS_COLLECTION),
+        orderBy(sortField, sortOrder)
+      );
+      
+      // Dodaj filtry do głównego zapytania
+      if (filters.status) {
+        q = query(
+          collection(db, PRODUCTION_TASKS_COLLECTION),
+          where('status', '==', filters.status),
+          orderBy(sortField, sortOrder)
+        );
+      } else if (filters.statuses && Array.isArray(filters.statuses) && filters.statuses.length > 0) {
+        q = query(
+          collection(db, PRODUCTION_TASKS_COLLECTION),
+          where('status', 'in', filters.statuses),
+          orderBy(sortField, sortOrder)
+        );
+      }
+      
+      if (filters.workstationId) {
+        q = query(
+          collection(db, PRODUCTION_TASKS_COLLECTION),
+          where('workstationId', '==', filters.workstationId),
+          orderBy(sortField, sortOrder)
+        );
+      }
+      
+      // Pobierz wszystkie dokumenty dla sortowania
+      const querySnapshot = await getDocs(q);
+      const allDocs = querySnapshot.docs;
+      
+      // Filtruj wyniki na serwerze jeśli podano searchTerm
+      let filteredDocs = allDocs;
+      if (filters.searchTerm && filters.searchTerm.trim() !== '') {
+        const searchTermLower = filters.searchTerm.toLowerCase().trim();
+        filteredDocs = allDocs.filter(doc => {
+          const data = doc.data();
+          return (
+            (data.name && data.name.toLowerCase().includes(searchTermLower)) ||
+            (data.description && data.description.toLowerCase().includes(searchTermLower)) ||
+            (data.productName && data.productName.toLowerCase().includes(searchTermLower)) ||
+            (data.moNumber && data.moNumber.toLowerCase().includes(searchTermLower))
+          );
+        });
+        
+        // Aktualizujemy liczby po filtrowaniu
+        const filteredTotalCount = filteredDocs.length;
+        const filteredTotalPages = Math.ceil(filteredTotalCount / itemsPerPage);
+        const filteredSafePageNum = Math.min(pageNum, Math.max(1, filteredTotalPages));
+        
+        // Ręczna paginacja po filtrowaniu
+        const startIndex = (filteredSafePageNum - 1) * itemsPerPage;
+        const endIndex = Math.min(startIndex + itemsPerPage, filteredDocs.length);
+        const paginatedDocs = filteredDocs.slice(startIndex, endIndex);
+        
+        // Mapujemy dokumenty na obiekty
+        const tasks = paginatedDocs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        // Zwróć dane wraz z informacjami o paginacji
+        return {
+          data: tasks,
+          pagination: {
+            page: filteredSafePageNum,
+            limit: itemsPerPage,
+            totalItems: filteredTotalCount,
+            totalPages: filteredTotalPages
+          }
+        };
+      }
+      
+      // Standardowa paginacja bez wyszukiwania
+      const startIndex = (safePageNum - 1) * itemsPerPage;
+      const endIndex = Math.min(startIndex + itemsPerPage, allDocs.length);
+      const paginatedDocs = allDocs.slice(startIndex, endIndex);
+      
+      // Mapujemy dokumenty na obiekty
+      const tasks = paginatedDocs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // Zwróć dane wraz z informacjami o paginacji
+      return {
+        data: tasks,
+        pagination: {
+          page: safePageNum,
+          limit: itemsPerPage,
+          totalItems: totalCount,
+          totalPages: totalPages
+        }
+      };
+    } catch (error) {
+      console.error('Błąd podczas pobierania zadań produkcyjnych z paginacją:', error);
+      throw error;
+    }
+  };
+  
   // Pobieranie zadań produkcyjnych na dany okres
   export const getTasksByDateRange = async (startDate, endDate) => {
     const tasksRef = collection(db, PRODUCTION_TASKS_COLLECTION);

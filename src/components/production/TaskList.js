@@ -37,7 +37,8 @@ import {
   useMediaQuery,
   Card,
   CardContent,
-  CardActions
+  CardActions,
+  Pagination
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -56,7 +57,7 @@ import {
   ViewColumn as ViewColumnIcon,
   BuildCircle as BuildCircleIcon
 } from '@mui/icons-material';
-import { getAllTasks, updateTaskStatus, deleteTask, addTaskProductToInventory, stopProduction } from '../../services/productionService';
+import { getAllTasks, updateTaskStatus, deleteTask, addTaskProductToInventory, stopProduction, getTasksWithPagination } from '../../services/productionService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/dateUtils';
@@ -111,31 +112,49 @@ const TaskList = () => {
   const theme = useMuiTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  // Pobierz zadania przy montowaniu komponentu
+  // Stany do obsługi paginacji
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10); 
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [searchTimeout, setSearchTimeout] = useState(null);
+
+  // Obsługa debounce dla wyszukiwania
+  useEffect(() => {
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
+    
+    const timeoutId = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300); // 300ms opóźnienia
+    
+    setSearchTimeout(timeoutId);
+    
+    return () => {
+      if (searchTimeout) {
+        clearTimeout(searchTimeout);
+      }
+    };
+  }, [searchTerm]);
+
+  // Reset strony do pierwszej przy zmianie wyszukiwania
+  useEffect(() => {
+    if (debouncedSearchTerm !== searchTerm) {
+      setPage(1);
+    }
+  }, [debouncedSearchTerm]);
+
+  // Pobierz zadania przy montowaniu komponentu i zmianie paginacji
   useEffect(() => {
     fetchTasks();
-  }, []);
+  }, [page, limit, debouncedSearchTerm, statusFilter]);
 
   // Filtruj zadania przy zmianie searchTerm, statusFilter lub tasks
   useEffect(() => {
-    let filtered = [...tasks];
-    
-    // Filtruj według statusu
-    if (statusFilter) {
-      filtered = filtered.filter(task => task.status === statusFilter);
-    }
-    
-    // Filtruj według wyszukiwanego tekstu
-    if (searchTerm.trim() !== '') {
-      filtered = filtered.filter(task => 
-        task.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        task.productName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        task.description?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-    
-    setFilteredTasks(filtered);
-  }, [searchTerm, statusFilter, tasks]);
+    setFilteredTasks(tasks);
+  }, [tasks]);
 
   // Pobierz nazwy stanowisk dla zadań
   useEffect(() => {
@@ -162,19 +181,62 @@ const TaskList = () => {
     }
   }, [tasks]);
 
+  // Obsługa zmiany filtra statusu
+  const handleStatusFilterChange = (event) => {
+    setStatusFilter(event.target.value);
+    setPage(1); // Reset do pierwszej strony po zmianie filtra
+  };
+
+  // Obsługa zmiany pola wyszukiwania
+  const handleSearchChange = (event) => {
+    setSearchTerm(event.target.value);
+    // Reset strony zostanie obsłużony przez efekt debounce, który ustawi debouncedSearchTerm
+  };
+
   const fetchTasks = async () => {
     try {
       setLoading(true);
-      const fetchedTasks = await getAllTasks();
-      console.log("Pobrane zadania:", fetchedTasks);
-      setTasks(fetchedTasks);
-      setFilteredTasks(fetchedTasks);
+      
+      // Przygotuj filtry dla zapytania
+      const filters = {};
+      if (statusFilter) {
+        filters.status = statusFilter;
+      }
+      if (debouncedSearchTerm) {
+        filters.searchTerm = debouncedSearchTerm;
+      }
+      
+      // Użyj nowej funkcji z paginacją
+      const result = await getTasksWithPagination(
+        page,
+        limit,
+        'scheduledDate',
+        'asc',
+        filters
+      );
+      
+      console.log("Pobrane zadania z paginacją:", result.data);
+      setTasks(result.data);
+      setFilteredTasks(result.data);
+      setTotalItems(result.pagination.totalItems);
+      setTotalPages(result.pagination.totalPages);
     } catch (error) {
       showError('Błąd podczas pobierania zadań: ' + error.message);
       console.error('Error fetching tasks:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Obsługa zmiany strony
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  // Obsługa zmiany liczby elementów na stronie
+  const handleChangeRowsPerPage = (event) => {
+    setLimit(parseInt(event.target.value, 10));
+    setPage(1); // Reset do pierwszej strony po zmianie limitu
   };
 
   const handleDelete = async (id) => {
@@ -734,7 +796,7 @@ const TaskList = () => {
                 minWidth: isMobile ? '100%' : 200,
                 '& .MuiOutlinedInput-root': {
                   borderRadius: '4px',
-                  bgcolor: 'white',
+                  bgcolor: mode === 'dark' ? 'background.paper' : 'white',
                 }
               }}
             >
@@ -743,7 +805,7 @@ const TaskList = () => {
                 labelId="status-filter-label"
                 id="status-filter"
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={handleStatusFilterChange}
                 label="Status"
               >
                 <MenuItem value="">Wszystkie</MenuItem>
@@ -765,13 +827,13 @@ const TaskList = () => {
                 size="small"
                 placeholder="Szukaj zadania..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={handleSearchChange}
                 fullWidth={isMobile}
                 InputProps={{
                   startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
                   sx: {
                     borderRadius: '4px',
-                    bgcolor: 'white'
+                    bgcolor: mode === 'dark' ? 'background.paper' : 'white'
                   }
                 }}
               />
@@ -1199,6 +1261,35 @@ const TaskList = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Komponent Pagination */}
+      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, flexDirection: 'column', alignItems: 'center' }}>
+        <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography variant="body2" color="textSecondary">
+            Wyświetlanie {tasks.length > 0 ? (page - 1) * limit + 1 : 0} - {Math.min(page * limit, totalItems)} z {totalItems} zadań
+          </Typography>
+          
+          <FormControl variant="outlined" size="small" sx={{ minWidth: 80 }}>
+            <Select
+              value={limit}
+              onChange={handleChangeRowsPerPage}
+            >
+              <MenuItem value={5}>5</MenuItem>
+              <MenuItem value={10}>10</MenuItem>
+              <MenuItem value={25}>25</MenuItem>
+              <MenuItem value={50}>50</MenuItem>
+            </Select>
+          </FormControl>
+        </Box>
+        
+        <Pagination
+          count={totalPages}
+          page={page}
+          onChange={handleChangePage}
+          shape="rounded"
+          color="primary"
+        />
+      </Box>
     </Container>
   );
 };

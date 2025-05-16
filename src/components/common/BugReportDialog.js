@@ -659,7 +659,7 @@ const BugReportDialog = ({ open, onClose }) => {
           padding: '16px 24px'
         }}>
           <BugIcon color="error" />
-          <Typography variant="h6">Zgłoś błąd</Typography>
+          <Typography component="span" variant="h6">Zgłoś błąd</Typography>
         </DialogTitle>
         
         <DialogContent sx={{ p: 3, mt: 1 }}>

@@ -1841,7 +1841,7 @@ const TaskDetailsPage = () => {
           <table>
             <tr><th>Planowany start:</th><td>${formatDateForPrint(task.scheduledDate)}</td></tr>
             <tr><th>Planowane zakończenie:</th><td>${formatDateForPrint(task.endDate)}</td></tr>
-            <tr><th>Szacowany czas produkcji:</th><td>${task.estimatedDuration ? task.estimatedDuration.toFixed(2) + ' godz.' : 'Nie określono'}</td></tr>
+            <tr><th>Szacowany czas produkcji:</th><td>${task.estimatedDuration ? (task.estimatedDuration / 60).toFixed(2) + ' godz.' : 'Nie określono'}</td></tr>
             <tr><th>Czas na jednostkę:</th><td>${task.productionTimePerUnit ? parseFloat(task.productionTimePerUnit).toFixed(2) + ' min./szt.' : 'Nie określono'}</td></tr>
           </table>
         </div>

@@ -458,7 +458,6 @@ const Sidebar = ({ onToggle }) => {
       }}>
         <StyledListItem 
           component="div"
-          button={false}
           sx={{
             color: 'error.main',
             '&:hover': {
