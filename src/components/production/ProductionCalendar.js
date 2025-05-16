@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -56,6 +56,9 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 
+// Stałe dla mechanizmu cachowania
+const CACHE_EXPIRY_TIME = 5 * 60 * 1000; // 5 minut w milisekundach
+
 const ProductionCalendar = () => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -90,7 +93,26 @@ const ProductionCalendar = () => {
   
   // Dodaję stan do śledzenia zmodyfikowanych zadań
   const [modifiedTasks, setModifiedTasks] = useState({});
-
+  
+  // Stan do przechowywania cache'u zadań
+  const [tasksCache, setTasksCache] = useState({});
+  
+  // Funkcja do generowania klucza cache'u na podstawie zakresu dat
+  const generateCacheKey = useCallback((startDate, endDate) => {
+    // Format: "START_DATE-END_DATE"
+    return `${new Date(startDate).toISOString()}-${new Date(endDate).toISOString()}`;
+  }, []);
+  
+  // Funkcja do sprawdzania, czy cache jest nadal ważny
+  const isCacheValid = useCallback((cacheEntry) => {
+    if (!cacheEntry || !cacheEntry.timestamp) {
+      return false;
+    }
+    
+    const now = Date.now();
+    return (now - cacheEntry.timestamp) < CACHE_EXPIRY_TIME;
+  }, []);
+  
   // Funkcja do czyszczenia wszystkich aktywnych tooltipów
   const clearAllTooltips = useCallback(() => {
     if (activeTooltipsRef.current.length > 0) {
@@ -163,6 +185,35 @@ const ProductionCalendar = () => {
         rangeEndDate = new Date(today.getFullYear(), today.getMonth() + 1, today.getDate()).toISOString();
       }
       
+      // Generuj klucz cache'u
+      const cacheKey = generateCacheKey(rangeStartDate, rangeEndDate);
+      
+      // Sprawdź, czy dane są już w cache'u i czy są nadal ważne
+      if (tasksCache[cacheKey] && isCacheValid(tasksCache[cacheKey])) {
+        console.log('Używam zadań z cache dla zakresu dat:', rangeStartDate, '-', rangeEndDate);
+        setTasks(tasksCache[cacheKey].data);
+        
+        // Aktualizuj widok kalendarza
+        if (calendarRef.current) {
+          try {
+            const calendarApi = calendarRef.current.getApi();
+            calendarApi.updateSize();
+            
+            if (customDateRange) {
+              calendarApi.setOption('visibleRange', {
+                start: startDate,
+                end: endDate
+              });
+            }
+          } catch (error) {
+            console.error("Błąd podczas aktualizacji kalendarza z cache:", error);
+          }
+        }
+        
+        setLoading(false);
+        return;
+      }
+      
       console.log('Pobieranie zadań dla zakresu dat:', rangeStartDate, '-', rangeEndDate);
       
       // Dodajemy timeout, żeby React miał czas na aktualizację stanu
@@ -170,6 +221,16 @@ const ProductionCalendar = () => {
         try {
           const fetchedTasks = await getTasksByDateRange(rangeStartDate, rangeEndDate);
           console.log('Pobrano zadania:', fetchedTasks);
+          
+          // Zapisz dane w cache z aktualnym timestampem
+          setTasksCache(prevCache => ({
+            ...prevCache,
+            [cacheKey]: {
+              data: fetchedTasks,
+              timestamp: Date.now()
+            }
+          }));
+          
           setTasks(fetchedTasks);
           
           // Dodatkowe wymuszenie przerysowania
@@ -1493,6 +1554,28 @@ const ProductionCalendar = () => {
     };
   }, [clearAllTooltips]);
 
+  // Memoizacja kalendarza - unikamy zbędnych przeliczeń
+  const memoizedCalendarEvents = useMemo(() => getCalendarEvents(), [tasks, ganttGroupBy, useWorkstationColors, workstations, modifiedTasks]);
+  
+  // Memoizacja zasobów dla widoku Gantt
+  const memoizedResources = useMemo(() => getResources(), [workstations, selectedWorkstations, ganttGroupBy, tasks]);
+
+  // Funkcja do ręcznego odświeżania cache'u
+  const refreshCache = useCallback(() => {
+    console.log('Ręczne odświeżanie cache zadań');
+    
+    if (calendarRef.current) {
+      const calendarApi = calendarRef.current.getApi();
+      const currentView = calendarApi.view;
+      
+      // Pobierz aktualny zakres dat z widoku kalendarza
+      fetchTasks({
+        startStr: currentView.activeStart.toISOString(),
+        endStr: currentView.activeEnd.toISOString()
+      });
+    }
+  }, []);
+
   return (
     <Paper sx={{ 
       p: isMobile ? 1 : 2, 
@@ -2051,7 +2134,7 @@ const ProductionCalendar = () => {
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, timelinePlugin, resourceTimelinePlugin]}
           initialView={view}
           headerToolbar={false}
-          events={getCalendarEvents()}
+          events={memoizedCalendarEvents}
           eventClick={handleEventClick}
           dateClick={null}
           selectable={false}
@@ -2116,7 +2199,7 @@ const ProductionCalendar = () => {
           fixedWeekCount={false}
           navLinks={false}
           slotMinWidth={customDateRange && (endDate - startDate) / (1000 * 60 * 60 * 24) > 31 ? 40 : 60}
-          resources={getResources()}
+          resources={memoizedResources}
           eventContent={renderEventContent}
           dayMaxEvents={isMobile ? 2 : true}
           eventDidMount={(info) => {
@@ -2680,4 +2763,5 @@ const ProductionCalendar = () => {
   );
 };
 
-export default ProductionCalendar;
+// Eksportujemy zmemoizowany komponent dla lepszej wydajności
+export default memo(ProductionCalendar);
