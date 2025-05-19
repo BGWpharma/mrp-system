@@ -25,7 +25,13 @@ import {
     startAt,
     endAt
   } from 'firebase/firestore';
-  import { db } from './firebase/config';
+  import { 
+    db, 
+    storage, 
+    uploadFileToStorage, 
+    deleteFileFromStorage
+  } from './firebase/config';
+  import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
   import { generateLOTNumber } from '../utils/numberGenerators';
   // Dodaję import funkcji powiadomień
   import { createRealtimeInventoryReceiveNotification, createRealtimeBatchLocationChangeNotification } from '../services/notificationService';
@@ -573,6 +579,14 @@ import {
       // Pobierz bieżącą pozycję
       const currentItem = await getInventoryItemById(itemId);
       
+      // Skopiuj dane transakcji, aby nie modyfikować oryginalnego obiektu
+      const transactionCopy = { ...transactionData };
+      
+      // Usuń certificateFile z danych transakcji - nie można zapisać obiektu File w Firestore
+      if (transactionCopy.certificateFile) {
+        delete transactionCopy.certificateFile;
+      }
+      
       // Dodaj transakcję
       const transaction = {
         itemId,
@@ -580,31 +594,31 @@ import {
         type: 'RECEIVE',
         quantity: Number(quantity),
         previousQuantity: currentItem.quantity,
-        warehouseId: transactionData.warehouseId,
-        ...transactionData,
+        warehouseId: transactionCopy.warehouseId,
+        ...transactionCopy,
         transactionDate: serverTimestamp(),
         createdBy: userId
       };
       
       // Dodaj dodatkowe pola dotyczące pochodzenia, jeśli istnieją
-      if (transactionData.moNumber) {
-        transaction.moNumber = transactionData.moNumber;
+      if (transactionCopy.moNumber) {
+        transaction.moNumber = transactionCopy.moNumber;
       }
       
-      if (transactionData.orderNumber) {
-        transaction.orderNumber = transactionData.orderNumber;
+      if (transactionCopy.orderNumber) {
+        transaction.orderNumber = transactionCopy.orderNumber;
       }
       
-      if (transactionData.orderId) {
-        transaction.orderId = transactionData.orderId;
+      if (transactionCopy.orderId) {
+        transaction.orderId = transactionCopy.orderId;
       }
       
-      if (transactionData.source) {
-        transaction.source = transactionData.source;
+      if (transactionCopy.source) {
+        transaction.source = transactionCopy.source;
       }
       
-      if (transactionData.sourceId) {
-        transaction.sourceId = transactionData.sourceId;
+      if (transactionCopy.sourceId) {
+        transaction.sourceId = transactionCopy.sourceId;
       }
       
       const transactionRef = await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transaction);
@@ -637,6 +651,48 @@ import {
         unitPrice: transactionData.unitPrice || 0,
         createdBy: userId
       };
+      
+          // Obsługa certyfikatu, jeśli został przekazany
+    if (transactionData.certificateFile) {
+      try {
+        const certificateFile = transactionData.certificateFile;
+        
+        // Funkcja pomocnicza do konwersji pliku na string base64
+        const fileToBase64 = (file) => {
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = (error) => reject(error);
+          });
+        };
+        
+        // Konwertuj plik na base64
+        const base64Data = await fileToBase64(certificateFile);
+        
+        // Sprawdź rozmiar pliku po konwersji
+        const base64Size = base64Data.length;
+        const fileSizeInMB = base64Size / (1024 * 1024);
+        
+        // Firestore ma limit 1MB na dokument, więc sprawdzamy czy plik nie jest za duży
+        if (fileSizeInMB > 0.9) {
+          console.error(`Plik certyfikatu jest zbyt duży (${fileSizeInMB.toFixed(2)} MB). Maksymalny rozmiar to 0.9 MB.`);
+          throw new Error(`Plik certyfikatu jest zbyt duży (${fileSizeInMB.toFixed(2)} MB). Maksymalny rozmiar to 0.9 MB.`);
+        }
+        
+        // Dodaj informacje o certyfikacie do partii
+        batch.certificateFileName = certificateFile.name;
+        batch.certificateContentType = certificateFile.type;
+        batch.certificateBase64 = base64Data;
+        batch.certificateUploadedAt = serverTimestamp();
+        batch.certificateUploadedBy = userId;
+        
+        console.log('Dodano certyfikat do partii:', certificateFile.name);
+      } catch (certificateError) {
+        console.error('Błąd podczas przetwarzania certyfikatu:', certificateError);
+        // Nie przerywamy całej operacji, tylko logujemy błąd
+      }
+    }
       
       // Ustaw datę ważności tylko jeśli została jawnie podana
       // Dzięki temu unikniemy automatycznej konwersji null -> 1.01.1970
@@ -4555,3 +4611,102 @@ import {
       throw error;
     }
   };
+
+  /**
+ * Przesyła certyfikat partii do Firebase Storage
+ * @param {File} file - Plik certyfikatu
+ * @param {string} batchId - ID partii
+ * @param {string} userId - ID użytkownika przesyłającego certyfikat
+ * @returns {Promise<string>} URL do przesłanego certyfikatu
+ */
+export const uploadBatchCertificate = async (file, batchId, userId) => {
+  try {
+    if (!file || !batchId) {
+      throw new Error('Brak pliku lub ID partii');
+    }
+
+    // Funkcja pomocnicza do konwersji pliku na string base64
+    const fileToBase64 = (file) => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = (error) => reject(error);
+      });
+    };
+
+    // Konwertuj plik na base64
+    const base64Data = await fileToBase64(file);
+    
+    // Sprawdź rozmiar pliku po konwersji
+    const base64Size = base64Data.length;
+    const fileSizeInMB = base64Size / (1024 * 1024);
+    
+    // Firestore ma limit 1MB na dokument, więc sprawdzamy czy plik nie jest za duży
+    if (fileSizeInMB > 0.9) {
+      throw new Error(`Plik jest zbyt duży (${fileSizeInMB.toFixed(2)} MB). Maksymalny rozmiar to 0.9 MB.`);
+    }
+    
+    // Aktualizacja dokumentu partii o informacje o certyfikacie
+    const batchRef = doc(db, INVENTORY_BATCHES_COLLECTION, batchId);
+    await updateDoc(batchRef, {
+      certificateFileName: file.name,
+      certificateContentType: file.type,
+      certificateBase64: base64Data,
+      certificateUploadedAt: serverTimestamp(),
+      certificateUploadedBy: userId,
+      updatedAt: serverTimestamp(),
+      updatedBy: userId
+    });
+    
+    return "data-url-certificate";
+  } catch (error) {
+    console.error('Błąd podczas przesyłania certyfikatu partii:', error);
+    throw new Error('Błąd podczas przesyłania certyfikatu: ' + error.message);
+  }
+};
+
+  /**
+ * Usuwa certyfikat partii z bazy danych
+ * @param {string} batchId - ID partii
+ * @param {string} userId - ID użytkownika usuwającego certyfikat
+ * @returns {Promise<boolean>} - Wynik operacji
+ */
+export const deleteBatchCertificate = async (batchId, userId) => {
+  try {
+    if (!batchId) {
+      throw new Error('Brak ID partii');
+    }
+    
+    // Pobierz aktualne dane partii
+    const batchRef = doc(db, INVENTORY_BATCHES_COLLECTION, batchId);
+    const batchDoc = await getDoc(batchRef);
+    
+    if (!batchDoc.exists()) {
+      throw new Error('Partia nie istnieje');
+    }
+    
+    const batchData = batchDoc.data();
+    
+    // Sprawdź czy partia ma certyfikat
+    if (!batchData.certificateBase64 && !batchData.certificateFileName) {
+      throw new Error('Partia nie ma przypisanego certyfikatu');
+    }
+    
+    // Aktualizuj dokument partii - usuń informacje o certyfikacie
+    await updateDoc(batchRef, {
+      certificateBase64: deleteField(),
+      certificateFileName: deleteField(),
+      certificateContentType: deleteField(),
+      certificateUploadedAt: deleteField(),
+      certificateUploadedBy: deleteField(),
+      updatedAt: serverTimestamp(),
+      updatedBy: userId
+    });
+    
+    return true;
+  } catch (error) {
+    console.error('Błąd podczas usuwania certyfikatu partii:', error);
+    throw new Error('Błąd podczas usuwania certyfikatu: ' + error.message);
+  }
+};

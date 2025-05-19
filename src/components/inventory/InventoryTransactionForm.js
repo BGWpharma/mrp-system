@@ -1,5 +1,5 @@
 // src/components/inventory/InventoryTransactionForm.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -32,7 +32,8 @@ import {
   ExpandMore as ExpandMoreIcon,
   AccessTime as AccessTimeIcon,
   Calculate as CalculateIcon,
-  Inventory as InventoryIcon
+  Inventory as InventoryIcon,
+  FileUpload as FileUploadIcon
 } from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -51,6 +52,7 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
   const navigate = useNavigate();
+  const fileInputRef = useRef(null);
   
   const isReceive = transactionType === 'receive';
   
@@ -77,6 +79,10 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
     batchId: '', // Dla wydania - ID wybranej partii
     noExpiryDate: false // Nowe pole do oznaczenia braku terminu ważności
   });
+
+  // Dodanie stanu dla certyfikatu
+  const [certificateFile, setCertificateFile] = useState(null);
+  const [certificatePreviewUrl, setCertificatePreviewUrl] = useState(null);
 
   useEffect(() => {
     if (initialData) {
@@ -154,6 +160,25 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
     fetchData();
   }, [itemId, navigate, showError, isReceive, transactionData.warehouseId, initialData]);
 
+  // Obsługa zmiany pliku certyfikatu
+  const handleCertificateFileChange = (event) => {
+    if (event.target.files && event.target.files.length > 0) {
+      const file = event.target.files[0];
+      setCertificateFile(file);
+      
+      // Tworzenie URL dla podglądu
+      if (file.type === 'application/pdf' || 
+          file.type.startsWith('image/') || 
+          file.type === 'application/msword' || 
+          file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        const previewUrl = URL.createObjectURL(file);
+        setCertificatePreviewUrl(previewUrl);
+      } else {
+        setCertificatePreviewUrl(null);
+      }
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setProcessing(true);
@@ -223,6 +248,11 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
             const expiryDate = new Date(batchData.expiryDate);
             transactionPayload.expiryDate = Timestamp.fromDate(expiryDate);
           }
+          
+          // Dodaj certyfikat, jeśli został wybrany
+          if (certificateFile) {
+            transactionPayload.certificateFile = certificateFile;
+          }
         } else {
           // Dla wydania - ID istniejącej partii
           if (!batchData.batchId) {
@@ -286,6 +316,15 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
   const handleDateChange = (date) => {
     setBatchData(prev => ({ ...prev, expiryDate: date }));
   };
+
+  // Usuń podgląd przy odmontowaniu komponentu
+  useEffect(() => {
+    return () => {
+      if (certificatePreviewUrl) {
+        URL.revokeObjectURL(certificatePreviewUrl);
+      }
+    };
+  }, [certificatePreviewUrl]);
 
   if (loading) {
     return <div>Ładowanie danych...</div>;
@@ -694,6 +733,74 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
                       sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
                       placeholder="Dodatkowe informacje o partii, certyfikaty, itp."
                     />
+                  </Grid>
+                  
+                  {/* Dodanie sekcji z wyborem certyfikatu */}
+                  <Grid item xs={12}>
+                    <Box sx={{ mt: 2, mb: 2 }}>
+                      <Typography variant="subtitle2" gutterBottom>
+                        Certyfikat produktu
+                      </Typography>
+                      <input
+                        accept="application/pdf,image/*,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        style={{ display: 'none' }}
+                        id="certificate-file-upload"
+                        type="file"
+                        onChange={handleCertificateFileChange}
+                        ref={fileInputRef}
+                      />
+                      <label htmlFor="certificate-file-upload">
+                        <Button
+                          variant="outlined"
+                          component="span"
+                          startIcon={<FileUploadIcon />}
+                          fullWidth
+                          sx={{ mb: 2 }}
+                        >
+                          Wybierz plik certyfikatu
+                        </Button>
+                      </label>
+                      
+                      {certificateFile && (
+                        <Box sx={{ mb: 2 }}>
+                          <Typography variant="body2" gutterBottom>
+                            Wybrany plik: {certificateFile.name}
+                          </Typography>
+                          
+                          {certificatePreviewUrl && (
+                            <Box sx={{ mt: 2, border: '1px solid #e0e0e0', borderRadius: 1, p: 2 }}>
+                              <Typography variant="subtitle2" gutterBottom>
+                                Podgląd dokumentu:
+                              </Typography>
+                              
+                              {certificateFile.type.startsWith('image/') ? (
+                                <Box sx={{ mt: 1, textAlign: 'center' }}>
+                                  <img 
+                                    src={certificatePreviewUrl} 
+                                    alt="Podgląd certyfikatu" 
+                                    style={{ maxWidth: '100%', maxHeight: '300px', objectFit: 'contain' }} 
+                                  />
+                                </Box>
+                              ) : certificateFile.type === 'application/pdf' ? (
+                                <Box sx={{ mt: 1, textAlign: 'center', height: '300px' }}>
+                                  <iframe 
+                                    src={certificatePreviewUrl} 
+                                    title="Podgląd PDF" 
+                                    width="100%" 
+                                    height="100%" 
+                                    style={{ border: 'none' }}
+                                  />
+                                </Box>
+                              ) : (
+                                <Typography variant="body2" color="text.secondary">
+                                  Podgląd dla tego typu pliku nie jest dostępny. Dokument zostanie zapisany w systemie.
+                                </Typography>
+                              )}
+                            </Box>
+                          )}
+                        </Box>
+                      )}
+                    </Box>
                   </Grid>
                 </>
               ) : (

@@ -29,6 +29,97 @@ const auth = getAuth(app);
 const storage = getStorage(app);
 const rtdb = getDatabase(app);
 
+// Funkcja pomocnicza do przesyłania plików do Firebase Storage z obejściem CORS
+// Wykorzystuje tokeny i niestandardowe nagłówki, aby umożliwić dostęp z localhost
+const uploadFileToStorage = async (file, path) => {
+  try {
+    // Pobieramy token uwierzytelniający
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error("Użytkownik nie jest zalogowany");
+    }
+
+    const token = await currentUser.getIdToken();
+    
+    // Tworzymy unikalny identyfikator pliku
+    const timestamp = new Date().getTime();
+    const fileName = encodeURIComponent(`${timestamp}_${file.name}`);
+    const fullPath = `${path}/${fileName}`;
+    
+    // Przygotowujemy FormData z plikiem
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    // URL do API Firebase Storage
+    const storageUrl = `https://firebasestorage.googleapis.com/v0/b/${firebaseConfig.storageBucket}/o/${encodeURIComponent(fullPath)}`;
+    
+    // Wysyłamy plik z tokenem uwierzytelniającym
+    const response = await fetch(storageUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Origin': window.location.origin
+      },
+      body: formData
+    });
+    
+    if (!response.ok) {
+      console.error('Błąd odpowiedzi:', response);
+      throw new Error(`Błąd przesyłania pliku: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    // Konstruujemy URL do pobrania pliku
+    const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${firebaseConfig.storageBucket}/o/${encodeURIComponent(data.name)}?alt=media`;
+    
+    return {
+      name: data.name,
+      downloadUrl,
+      fullPath: data.fullPath || fullPath,
+      contentType: data.contentType
+    };
+  } catch (error) {
+    console.error('Błąd podczas przesyłania pliku do Firebase Storage:', error);
+    throw error;
+  }
+};
+
+// Funkcja do usuwania plików z Firebase Storage
+const deleteFileFromStorage = async (path) => {
+  try {
+    // Pobieramy token uwierzytelniający
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error("Użytkownik nie jest zalogowany");
+    }
+
+    const token = await currentUser.getIdToken();
+    
+    // URL do API Firebase Storage
+    const storageUrl = `https://firebasestorage.googleapis.com/v0/b/${firebaseConfig.storageBucket}/o/${encodeURIComponent(path)}`;
+    
+    // Wysyłamy żądanie usunięcia z tokenem uwierzytelniającym
+    const response = await fetch(storageUrl, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Origin': window.location.origin
+      }
+    });
+    
+    if (!response.ok && response.status !== 404) {
+      console.error('Błąd odpowiedzi:', response);
+      throw new Error(`Błąd usuwania pliku: ${response.status} ${response.statusText}`);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Błąd podczas usuwania pliku z Firebase Storage:', error);
+    throw error;
+  }
+};
+
 // Konfiguracja trwałości danych Realtime Database (offline persistence)
 // Ta konfiguracja pomaga obsłużyć problemy z trybem offline
 try {
@@ -105,5 +196,7 @@ export {
   storage, 
   rtdb, 
   clearFirestoreCache,
-  toggleRTDBConnection
+  toggleRTDBConnection,
+  uploadFileToStorage,
+  deleteFileFromStorage
 };

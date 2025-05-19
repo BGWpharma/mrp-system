@@ -29,7 +29,8 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  FormHelperText
+  FormHelperText,
+  CircularProgress
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -41,9 +42,19 @@ import {
   SwapHoriz as SwapHorizIcon,
   QrCode as QrCodeIcon,
   Print as PrintIcon,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  FileUpload as FileUploadIcon,
+  InsertDriveFile as InsertDriveFileIcon
 } from '@mui/icons-material';
-import { getInventoryItemById, getItemBatches, getAllWarehouses, transferBatch, deleteBatch } from '../../services/inventoryService';
+import { 
+  getInventoryItemById, 
+  getItemBatches, 
+  getAllWarehouses, 
+  transferBatch, 
+  deleteBatch,
+  uploadBatchCertificate,
+  deleteBatchCertificate
+} from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate, formatQuantity } from '../../utils/formatters';
 import { Timestamp } from 'firebase/firestore';
@@ -74,6 +85,14 @@ const BatchesPage = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedBatchForDelete, setSelectedBatchForDelete] = useState(null);
   const [processingDelete, setProcessingDelete] = useState(false);
+  const [certificateDialogOpen, setCertificateDialogOpen] = useState(false);
+  const [selectedBatchForCertificate, setSelectedBatchForCertificate] = useState(null);
+  const [certificateFile, setCertificateFile] = useState(null);
+  const [certificatePreviewUrl, setCertificatePreviewUrl] = useState(null);
+  const [uploadingCertificate, setUploadingCertificate] = useState(false);
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
+  const [selectedCertificateForPreview, setSelectedCertificateForPreview] = useState(null);
+  const fileInputRef = React.useRef(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -375,6 +394,125 @@ const BatchesPage = () => {
     setDeleteDialogOpen(false);
     setSelectedBatchForDelete(null);
   };
+  
+  // Funkcje do obsługi certyfikatów
+  const openCertificateDialog = (batch) => {
+    setSelectedBatchForCertificate(batch);
+    setCertificateDialogOpen(true);
+  };
+  
+  const closeCertificateDialog = () => {
+    setCertificateDialogOpen(false);
+    setSelectedBatchForCertificate(null);
+    setCertificateFile(null);
+    setCertificatePreviewUrl(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+  
+  const openPreviewDialog = (batch) => {
+    setSelectedCertificateForPreview(batch);
+    setPreviewDialogOpen(true);
+  };
+  
+  const closePreviewDialog = () => {
+    setPreviewDialogOpen(false);
+    setSelectedCertificateForPreview(null);
+  };
+  
+  const handleCertificateFileChange = (event) => {
+    if (event.target.files && event.target.files.length > 0) {
+      const file = event.target.files[0];
+      setCertificateFile(file);
+      
+      // Tworzenie URL dla podglądu
+      if (file.type === 'application/pdf' || 
+          file.type.startsWith('image/') || 
+          file.type === 'application/msword' || 
+          file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        const previewUrl = URL.createObjectURL(file);
+        setCertificatePreviewUrl(previewUrl);
+      } else {
+        setCertificatePreviewUrl(null);
+      }
+    }
+  };
+  
+  const handleUploadCertificate = async () => {
+    if (!certificateFile || !selectedBatchForCertificate) {
+      showError('Wybierz plik certyfikatu');
+      return;
+    }
+    
+    try {
+      setUploadingCertificate(true);
+      // Sprawdź czy user istnieje i pobierz uid lub użyj 'unknown'
+      const userId = user?.uid || 'unknown';
+      await uploadBatchCertificate(certificateFile, selectedBatchForCertificate.id, userId);
+      showSuccess('Certyfikat został pomyślnie dodany do partii');
+      
+      // Odśwież dane partii
+      const refreshedBatches = await getItemBatches(id);
+      const warehousesData = await getAllWarehouses();
+      
+      // Dodaj informacje o magazynie
+      const enhancedBatches = refreshedBatches.map(batch => {
+        const warehouse = warehousesData.find(w => w.id === batch.warehouseId);
+        return {
+          ...batch,
+          warehouseName: warehouse?.name || 'Magazyn podstawowy',
+          warehouseAddress: warehouse?.address || '',
+        };
+      });
+      
+      setBatches(enhancedBatches);
+      setFilteredBatches(enhancedBatches);
+      
+      closeCertificateDialog();
+    } catch (error) {
+      console.error('Błąd podczas przesyłania certyfikatu:', error);
+      showError(error.message || 'Wystąpił błąd podczas przesyłania certyfikatu');
+    } finally {
+      setUploadingCertificate(false);
+    }
+  };
+  
+  const handleDeleteCertificate = async (batch) => {
+    if (!window.confirm('Czy na pewno chcesz usunąć certyfikat tej partii? Ta operacja jest nieodwracalna.')) {
+      return;
+    }
+    
+    try {
+      setUploadingCertificate(true);
+      // Sprawdź czy user istnieje i pobierz uid lub użyj 'unknown'
+      const userId = user?.uid || 'unknown';
+      await deleteBatchCertificate(batch.id, userId);
+      showSuccess('Certyfikat został pomyślnie usunięty');
+      
+      // Odśwież dane partii
+      const refreshedBatches = await getItemBatches(id);
+      const warehousesData = await getAllWarehouses();
+      
+      // Dodaj informacje o magazynie
+      const enhancedBatches = refreshedBatches.map(batch => {
+        const warehouse = warehousesData.find(w => w.id === batch.warehouseId);
+        return {
+          ...batch,
+          warehouseName: warehouse?.name || 'Magazyn podstawowy',
+          warehouseAddress: warehouse?.address || '',
+        };
+      });
+      
+      setBatches(enhancedBatches);
+      setFilteredBatches(enhancedBatches);
+    } catch (error) {
+      console.error('Błąd podczas usuwania certyfikatu:', error);
+      showError(error.message || 'Wystąpił błąd podczas usuwania certyfikatu');
+    } finally {
+      setUploadingCertificate(false);
+    }
+  };
 
   const handleDeleteBatch = async () => {
     if (!selectedBatchForDelete) return;
@@ -532,6 +670,7 @@ const BatchesPage = () => {
                 <TableCell>Cena jedn.</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Pochodzenie</TableCell>
+                <TableCell>Certyfikat</TableCell>
                 <TableCell>Uwagi</TableCell>
                 <TableCell>Akcje</TableCell>
               </TableRow>
@@ -732,6 +871,50 @@ const BatchesPage = () => {
                             
                             return source;
                           })()}
+                        </TableCell>
+                        <TableCell>
+                          {batch.certificateBase64 || batch.certificateFileName ? (
+                            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                              <Tooltip title={`Podgląd certyfikatu: ${batch.certificateFileName || 'Dokument'}`}>
+                                <Box 
+                                  sx={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center',
+                                    cursor: 'pointer',
+                                    '&:hover': {
+                                      textDecoration: 'underline',
+                                      color: 'primary.main'
+                                    }
+                                  }}
+                                  onClick={() => openPreviewDialog(batch)}
+                                >
+                                  <InsertDriveFileIcon color="primary" fontSize="small" sx={{ mr: 1 }} />
+                                  <Typography variant="body2" noWrap sx={{ maxWidth: 120 }}>
+                                    {batch.certificateFileName || 'Dokument'}
+                                  </Typography>
+                                </Box>
+                              </Tooltip>
+                              <Tooltip title="Usuń certyfikat">
+                                <IconButton 
+                                  size="small" 
+                                  color="error"
+                                  onClick={() => handleDeleteCertificate(batch)}
+                                >
+                                  <DeleteIcon />
+                                </IconButton>
+                              </Tooltip>
+                            </Box>
+                          ) : (
+                            <Tooltip title="Dodaj certyfikat">
+                              <IconButton 
+                                size="small" 
+                                color="primary"
+                                onClick={() => openCertificateDialog(batch)}
+                              >
+                                <FileUploadIcon />
+                              </IconButton>
+                            </Tooltip>
+                          )}
                         </TableCell>
                         <TableCell>{batch.notes || '-'}</TableCell>
                         <TableCell>
@@ -1119,6 +1302,203 @@ const BatchesPage = () => {
             disabled={processingDelete}
           >
             {processingDelete ? 'Usuwanie...' : 'Usuń partię'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Dialog do zarządzania certyfikatem partii */}
+      <Dialog open={certificateDialogOpen} onClose={closeCertificateDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          Dodaj certyfikat do partii
+        </DialogTitle>
+        <DialogContent>
+          {selectedBatchForCertificate && (
+            <Box sx={{ pt: 1 }}>
+              <Typography variant="subtitle1" gutterBottom>
+                Informacje o partii:
+              </Typography>
+              <Typography variant="body2" gutterBottom>
+                <strong>Numer partii/LOT:</strong> {selectedBatchForCertificate.batchNumber || selectedBatchForCertificate.lotNumber || '-'}
+              </Typography>
+              <Typography variant="body2" gutterBottom>
+                <strong>Magazyn:</strong> {selectedBatchForCertificate.warehouseName || 'Magazyn podstawowy'}
+              </Typography>
+              
+              <Box sx={{ mt: 3 }}>
+                <input
+                  accept="application/pdf,image/*,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  style={{ display: 'none' }}
+                  id="certificate-file-upload"
+                  type="file"
+                  onChange={handleCertificateFileChange}
+                  ref={fileInputRef}
+                />
+                <label htmlFor="certificate-file-upload">
+                  <Button
+                    variant="outlined"
+                    component="span"
+                    startIcon={<FileUploadIcon />}
+                    fullWidth
+                    sx={{ mb: 2 }}
+                  >
+                    Wybierz plik certyfikatu
+                  </Button>
+                </label>
+                
+                {certificateFile && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="body2" gutterBottom>
+                      Wybrany plik: {certificateFile.name}
+                    </Typography>
+                    
+                    {certificatePreviewUrl && (
+                      <Box sx={{ mt: 2, border: '1px solid #e0e0e0', borderRadius: 1, p: 2 }}>
+                        <Typography variant="subtitle2" gutterBottom>
+                          Podgląd dokumentu:
+                        </Typography>
+                        
+                        {certificateFile.type.startsWith('image/') ? (
+                          <Box sx={{ mt: 1, textAlign: 'center' }}>
+                            <img 
+                              src={certificatePreviewUrl} 
+                              alt="Podgląd certyfikatu" 
+                              style={{ maxWidth: '100%', maxHeight: '300px', objectFit: 'contain' }} 
+                            />
+                          </Box>
+                        ) : certificateFile.type === 'application/pdf' ? (
+                          <Box sx={{ mt: 1, textAlign: 'center', height: '300px' }}>
+                            <iframe 
+                              src={certificatePreviewUrl} 
+                              title="Podgląd PDF" 
+                              width="100%" 
+                              height="100%" 
+                              style={{ border: 'none' }}
+                            />
+                          </Box>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            Podgląd dla tego typu pliku nie jest dostępny. Dokument zostanie zapisany w systemie.
+                          </Typography>
+                        )}
+                      </Box>
+                    )}
+                  </Box>
+                )}
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={closeCertificateDialog} 
+            color="inherit"
+            disabled={uploadingCertificate}
+          >
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleUploadCertificate} 
+            color="primary" 
+            variant="contained"
+            disabled={!certificateFile || uploadingCertificate}
+            startIcon={uploadingCertificate ? <CircularProgress size={20} /> : null}
+          >
+            {uploadingCertificate ? 'Przesyłanie...' : 'Prześlij certyfikat'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Dialog podglądu certyfikatu */}
+      <Dialog 
+        open={previewDialogOpen} 
+        onClose={closePreviewDialog} 
+        maxWidth="md" 
+        fullWidth
+      >
+        <DialogTitle>
+          Podgląd certyfikatu
+        </DialogTitle>
+        <DialogContent>
+          {selectedCertificateForPreview && (
+            <Box sx={{ pt: 1 }}>
+              <Typography variant="subtitle1" gutterBottom>
+                Informacje o certyfikacie:
+              </Typography>
+              <Typography variant="body2" gutterBottom>
+                <strong>Nazwa pliku:</strong> {selectedCertificateForPreview.certificateFileName || "Dokument"}
+              </Typography>
+              <Typography variant="body2" gutterBottom>
+                <strong>Numer partii:</strong> {selectedCertificateForPreview.batchNumber || selectedCertificateForPreview.lotNumber || "—"}
+              </Typography>
+              {selectedCertificateForPreview.certificateUploadedAt && (
+                <Typography variant="body2" gutterBottom>
+                  <strong>Data dodania:</strong> {
+                    selectedCertificateForPreview.certificateUploadedAt.toDate 
+                      ? formatDate(selectedCertificateForPreview.certificateUploadedAt.toDate()) 
+                      : formatDate(new Date(selectedCertificateForPreview.certificateUploadedAt))
+                  }
+                </Typography>
+              )}
+              
+              <Box sx={{ mt: 3, p: 2, borderRadius: 1, minHeight: '300px' }}>
+                {selectedCertificateForPreview.certificateBase64 ? (
+                  selectedCertificateForPreview.certificateContentType && selectedCertificateForPreview.certificateContentType.startsWith('image/') ? (
+                    // Podgląd obrazu
+                    <Box sx={{ textAlign: 'center' }}>
+                      <img 
+                        src={selectedCertificateForPreview.certificateBase64} 
+                        alt="Podgląd certyfikatu" 
+                        style={{ maxWidth: '100%', maxHeight: '500px', objectFit: 'contain' }} 
+                      />
+                    </Box>
+                  ) : selectedCertificateForPreview.certificateContentType === 'application/pdf' ? (
+                    // Podgląd PDF
+                    <Box sx={{ height: '500px', border: '1px solid #e0e0e0' }}>
+                      <iframe 
+                        src={selectedCertificateForPreview.certificateBase64} 
+                        title="Podgląd PDF" 
+                        width="100%" 
+                        height="100%" 
+                        style={{ border: 'none' }}
+                      />
+                    </Box>
+                  ) : (
+                    // Inne typy plików - informacja o nieobsługiwanym formacie
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="body2" color="text.secondary" paragraph>
+                        Podgląd dla tego typu dokumentu nie jest dostępny.
+                      </Typography>
+                      <a 
+                        href={selectedCertificateForPreview.certificateBase64} 
+                        download={selectedCertificateForPreview.certificateFileName}
+                        style={{ textDecoration: 'none' }}
+                      >
+                        <Button
+                          variant="contained"
+                          color="primary"
+                          startIcon={<InsertDriveFileIcon />}
+                          sx={{ mt: 1 }}
+                        >
+                          Pobierz certyfikat
+                        </Button>
+                      </a>
+                    </Box>
+                  )
+                ) : (
+                  // Brak danych certyfikatu
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="body2" color="error">
+                      Nie można wyświetlić certyfikatu. Dane są uszkodzone lub niekompletne.
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closePreviewDialog}>
+            Zamknij
           </Button>
         </DialogActions>
       </Dialog>
