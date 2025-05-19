@@ -3,18 +3,21 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   Container, Typography, Paper, Box, TextField, Button, Grid, Divider,
   List, ListItem, ListItemText, IconButton, Card, CardContent, CardHeader,
-  Dialog, DialogTitle, DialogContent, DialogActions, FormControlLabel, Checkbox
+  Dialog, DialogTitle, DialogContent, DialogActions, FormControlLabel, Checkbox,
+  InputAdornment, CircularProgress
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   LocationOn as LocationIcon,
-  ArrowBack as ArrowBackIcon
+  ArrowBack as ArrowBackIcon,
+  Search as SearchIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { getSupplierById, createSupplier, updateSupplier } from '../../services/supplierService';
+import { validateNipFormat, getBasicCompanyDataByNip } from '../../services/nipValidationService';
 
 const SupplierForm = ({ viewOnly = false, supplierId }) => {
   const navigate = useNavigate();
@@ -23,6 +26,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
   
   const [loading, setLoading] = useState(!!supplierId);
   const [saving, setSaving] = useState(false);
+  const [verifyingNip, setVerifyingNip] = useState(false);
   
   const [supplierData, setSupplierData] = useState({
     name: '',
@@ -74,6 +78,74 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
     if (viewOnly) return;
     const { name, value } = e.target;
     setSupplierData(prev => ({ ...prev, [name]: value }));
+  };
+  
+  // Funkcja weryfikująca NIP i uzupełniająca dane
+  const verifyNip = async () => {
+    try {
+      if (!supplierData.taxId) {
+        showError('Wprowadź numer NIP do weryfikacji');
+        return;
+      }
+      
+      if (!validateNipFormat(supplierData.taxId)) {
+        showError('Niepoprawny format numeru NIP');
+        return;
+      }
+      
+      setVerifyingNip(true);
+      
+      const companyData = await getBasicCompanyDataByNip(supplierData.taxId);
+      
+      if (!companyData) {
+        showError('Nie znaleziono firmy o podanym numerze NIP');
+        setVerifyingNip(false);
+        return;
+      }
+      
+      // Aktualizuj dane dostawcy na podstawie wyników z API
+      let updatedSupplierData = { ...supplierData };
+      
+      // Jeśli nazwa jest pusta, uzupełnij ją danymi z API
+      if (!supplierData.name.trim()) {
+        updatedSupplierData.name = companyData.name;
+      }
+      
+      // Jeśli nie ma adresu głównego, dodaj adres z danych z API
+      let hasMainAddress = supplierData.addresses.some(addr => addr.isMain);
+      
+      if (!hasMainAddress && companyData.workingAddress) {
+        // Przygotuj adres z danych API
+        const addressParts = companyData.workingAddress.split(', ');
+        const streetPart = addressParts[0] || '';
+        const cityPart = addressParts[1] || '';
+        
+        const postalCodeMatch = cityPart.match(/(\d{2}-\d{3})\s+(.+)/);
+        const postalCode = postalCodeMatch ? postalCodeMatch[1] : '';
+        const city = postalCodeMatch ? postalCodeMatch[2] : cityPart;
+        
+        const newAddress = {
+          id: `api_${Date.now()}`,
+          name: 'Adres główny',
+          street: streetPart,
+          city: city,
+          postalCode: postalCode,
+          country: 'Polska',
+          isMain: true
+        };
+        
+        updatedSupplierData.addresses = [...updatedSupplierData.addresses, newAddress];
+      }
+      
+      setSupplierData(updatedSupplierData);
+      showSuccess('Pomyślnie zweryfikowano NIP i zaktualizowano dane');
+      
+    } catch (error) {
+      console.error('Błąd podczas weryfikacji NIP:', error);
+      showError('Wystąpił błąd podczas weryfikacji NIP: ' + error.message);
+    } finally {
+      setVerifyingNip(false);
+    }
   };
   
   // Funkcje do zarządzania adresami
@@ -294,19 +366,32 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
                 value={supplierData.taxId}
                 onChange={handleChange}
                 fullWidth
-                disabled={viewOnly}
+                disabled={viewOnly || verifyingNip}
                 InputProps={{
-                  readOnly: viewOnly
+                  readOnly: viewOnly,
+                  endAdornment: !viewOnly && (
+                    <InputAdornment position="end">
+                      <IconButton
+                        edge="end"
+                        onClick={verifyNip}
+                        disabled={verifyingNip || !supplierData.taxId}
+                        title="Zweryfikuj NIP"
+                      >
+                        {verifyingNip ? <CircularProgress size={24} /> : <SearchIcon />}
+                      </IconButton>
+                    </InputAdornment>
+                  )
                 }}
+                helperText="Format: 0000000000 (bez myślników)"
               />
             </Grid>
             
-            {/* VAT EU */}
+            {/* VAT-EU */}
             <Grid item xs={12} md={6}>
               <TextField
                 name="vatEu"
-                label="VAT EU"
-                value={supplierData.vatEu || ''}
+                label="VAT-EU"
+                value={supplierData.vatEu}
                 onChange={handleChange}
                 fullWidth
                 disabled={viewOnly}
@@ -316,16 +401,16 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
               />
             </Grid>
             
-            {/* Uwagi */}
+            {/* Notatki */}
             <Grid item xs={12}>
               <TextField
                 name="notes"
-                label="Uwagi"
-                value={supplierData.notes || ''}
+                label="Notatki"
+                value={supplierData.notes}
                 onChange={handleChange}
                 fullWidth
                 multiline
-                rows={4}
+                rows={3}
                 disabled={viewOnly}
                 InputProps={{
                   readOnly: viewOnly
@@ -335,87 +420,82 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
             
             {/* Adresy */}
             <Grid item xs={12}>
-              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+              <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography variant="h6">Adresy</Typography>
                 {!viewOnly && (
                   <Button
                     startIcon={<AddIcon />}
                     onClick={() => openAddressDialog()}
-                    variant="outlined"
+                    disabled={saving}
                   >
                     Dodaj adres
                   </Button>
                 )}
               </Box>
               
-              {supplierData.addresses.length === 0 ? (
-                <Typography variant="body2" color="textSecondary">
-                  Brak adresów
-                </Typography>
-              ) : (
+              {supplierData.addresses.length > 0 ? (
                 <List>
                   {supplierData.addresses.map((address, index) => (
-                    <Card key={address.id || index} sx={{ mb: 1 }}>
-                      <CardContent>
-                        <Box display="flex" justifyContent="space-between" alignItems="center">
-                          <Box>
-                            <Typography variant="h6">
-                              {address.name} {address.isMain && " (główny)"}
-                            </Typography>
-                            <Typography variant="body1">
-                              {address.street}, {address.postalCode} {address.city}
-                            </Typography>
-                            <Typography variant="body2" color="textSecondary">
-                              {address.country}
-                            </Typography>
-                          </Box>
-                          {!viewOnly && (
+                    <Card key={address.id || index} sx={{ mb: 2 }}>
+                      <CardHeader
+                        title={address.name + (address.isMain ? ' (Główny)' : '')}
+                        action={
+                          !viewOnly && (
                             <Box>
-                              <IconButton color="primary" onClick={() => openAddressDialog(index)}>
+                              <IconButton onClick={() => openAddressDialog(index)}>
                                 <EditIcon />
                               </IconButton>
-                              <IconButton color="error" onClick={() => handleDeleteAddress(index)}>
+                              <IconButton onClick={() => handleDeleteAddress(index)}>
                                 <DeleteIcon />
                               </IconButton>
                             </Box>
-                          )}
-                        </Box>
+                          )
+                        }
+                      />
+                      <CardContent>
+                        <Typography component="div">
+                          <LocationIcon sx={{ fontSize: 'small', verticalAlign: 'middle', mr: 1 }} />
+                          {address.street}, {address.postalCode} {address.city}, {address.country}
+                        </Typography>
                       </CardContent>
                     </Card>
                   ))}
                 </List>
+              ) : (
+                <Typography variant="body2" color="textSecondary">
+                  Brak adresów
+                </Typography>
               )}
             </Grid>
             
-            {/* Przyciski */}
-            <Grid item xs={12}>
-              <Divider sx={{ my: 2 }} />
-              <Box display="flex" justifyContent="flex-end" gap={2}>
+            {/* Przyciski formularza */}
+            {!viewOnly && (
+              <Grid item xs={12} sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
                 <Button
-                  variant="outlined"
+                  type="button"
                   onClick={() => navigate('/suppliers')}
+                  sx={{ mr: 2 }}
+                  disabled={saving}
                 >
-                  {viewOnly ? 'Powrót' : 'Anuluj'}
+                  Anuluj
                 </Button>
-                
-                {!viewOnly && (
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    color="primary"
-                    disabled={saving}
-                  >
-                    {supplierId ? 'Aktualizuj' : 'Zapisz'}
-                  </Button>
-                )}
-              </Box>
-            </Grid>
+                <Button
+                  type="submit"
+                  variant="contained"
+                  color="primary"
+                  disabled={saving}
+                  startIcon={saving && <CircularProgress size={24} color="inherit" />}
+                >
+                  {saving ? 'Zapisywanie...' : 'Zapisz'}
+                </Button>
+              </Grid>
+            )}
           </Grid>
         </form>
       </Paper>
       
       {/* Dialog dodawania/edycji adresu */}
-      <Dialog open={addressDialogOpen} onClose={() => setAddressDialogOpen(false)}>
+      <Dialog open={addressDialogOpen} onClose={() => setAddressDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>
           {editingAddressIndex >= 0 ? 'Edytuj adres' : 'Dodaj nowy adres'}
         </DialogTitle>
@@ -424,7 +504,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
             <Grid item xs={12}>
               <TextField
                 name="name"
-                label="Nazwa adresu (np. Siedziba, Magazyn)"
+                label="Nazwa adresu"
                 value={addressFormData.name}
                 onChange={handleAddressChange}
                 fullWidth
@@ -441,21 +521,21 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
                 required
               />
             </Grid>
-            <Grid item xs={12} md={7}>
+            <Grid item xs={12} md={6}>
               <TextField
-                name="city"
-                label="Miasto"
-                value={addressFormData.city}
+                name="postalCode"
+                label="Kod pocztowy"
+                value={addressFormData.postalCode}
                 onChange={handleAddressChange}
                 fullWidth
                 required
               />
             </Grid>
-            <Grid item xs={12} md={5}>
+            <Grid item xs={12} md={6}>
               <TextField
-                name="postalCode"
-                label="Kod pocztowy"
-                value={addressFormData.postalCode}
+                name="city"
+                label="Miasto"
+                value={addressFormData.city}
                 onChange={handleAddressChange}
                 fullWidth
                 required
@@ -480,7 +560,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
                     onChange={handleAddressChange}
                   />
                 }
-                label="Główny adres"
+                label="Adres główny"
               />
             </Grid>
           </Grid>
@@ -489,7 +569,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
           <Button onClick={() => setAddressDialogOpen(false)}>
             Anuluj
           </Button>
-          <Button onClick={handleSaveAddress} color="primary">
+          <Button onClick={handleSaveAddress} variant="contained" color="primary">
             Zapisz
           </Button>
         </DialogActions>

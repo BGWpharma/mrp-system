@@ -4,19 +4,26 @@ import {
   Button,
   TextField,
   Grid,
-  CircularProgress
+  CircularProgress,
+  InputAdornment,
+  IconButton
 } from '@mui/material';
+import { 
+  Search as SearchIcon
+} from '@mui/icons-material';
 import { 
   createCustomer, 
   updateCustomer, 
   DEFAULT_CUSTOMER 
 } from '../../services/customerService';
+import { validateNipFormat, getBasicCompanyDataByNip } from '../../services/nipValidationService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 
 const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
   const [formData, setFormData] = useState({ ...DEFAULT_CUSTOMER });
   const [loading, setLoading] = useState(false);
+  const [verifyingNip, setVerifyingNip] = useState(false);
   const [errors, setErrors] = useState({});
 
   const { currentUser } = useAuth();
@@ -54,6 +61,56 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
         delete newErrors[name];
         return newErrors;
       });
+    }
+  };
+
+  // Funkcja weryfikująca NIP i uzupełniająca dane
+  const verifyNip = async () => {
+    try {
+      if (!formData.vatEu) {
+        showError('Wprowadź numer NIP do weryfikacji');
+        return;
+      }
+      
+      // Usuń prefiks "PL" jeśli istnieje, do weryfikacji potrzebujemy tylko numeru
+      const nip = formData.vatEu.replace(/^PL/i, '');
+      
+      if (!validateNipFormat(nip)) {
+        showError('Niepoprawny format numeru NIP');
+        return;
+      }
+      
+      setVerifyingNip(true);
+      
+      const companyData = await getBasicCompanyDataByNip(nip);
+      
+      if (!companyData) {
+        showError('Nie znaleziono firmy o podanym numerze NIP');
+        setVerifyingNip(false);
+        return;
+      }
+      
+      // Aktualizuj dane klienta na podstawie wyników z API
+      let updatedData = { ...formData };
+      
+      // Jeśli nazwa jest pusta, uzupełnij ją danymi z API
+      if (!formData.name.trim()) {
+        updatedData.name = companyData.name;
+      }
+      
+      // Jeśli adres do faktury jest pusty, uzupełnij go danymi z API
+      if (!formData.billingAddress.trim() && companyData.workingAddress) {
+        updatedData.billingAddress = companyData.workingAddress;
+      }
+      
+      setFormData(updatedData);
+      showSuccess('Pomyślnie zweryfikowano NIP i zaktualizowano dane');
+      
+    } catch (error) {
+      console.error('Błąd podczas weryfikacji NIP:', error);
+      showError('Wystąpił błąd podczas weryfikacji NIP: ' + error.message);
+    } finally {
+      setVerifyingNip(false);
     }
   };
 
@@ -130,10 +187,26 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
         <Grid item xs={12} md={6}>
           <TextField
             name="vatEu"
-            label="VAT-EU"
+            label="VAT-EU / NIP"
             value={formData.vatEu || ''}
             onChange={handleChange}
             fullWidth
+            disabled={verifyingNip}
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    edge="end"
+                    onClick={verifyNip}
+                    disabled={verifyingNip || !formData.vatEu}
+                    title="Zweryfikuj NIP"
+                  >
+                    {verifyingNip ? <CircularProgress size={24} /> : <SearchIcon />}
+                  </IconButton>
+                </InputAdornment>
+              )
+            }}
+            helperText="Format: PL0000000000 lub 0000000000"
           />
         </Grid>
         
