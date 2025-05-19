@@ -19,7 +19,11 @@ import {
   LinearProgress,
   Icon,
   CircularProgress,
-  Skeleton
+  Skeleton,
+  TextField,
+  IconButton,
+  Alert,
+  Snackbar
 } from '@mui/material';
 import {
   MenuBook as RecipesIcon,
@@ -34,7 +38,12 @@ import {
   Timeline as TimelineIcon,
   Storage as WarehouseIcon,
   Business as WorkstationIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  Edit as EditIcon,
+  Save as SaveIcon,
+  Cancel as CancelIcon,
+  Announcement as AnnouncementIcon,
+  ListAlt as FormsIcon
 } from '@mui/icons-material';
 import { getTasksByStatus } from '../../services/productionService';
 import { getAllRecipes } from '../../services/recipeService';
@@ -44,6 +53,10 @@ import { useAuth } from '../../hooks/useAuth';
 import { formatDate } from '../../utils/formatters';
 import { formatCurrency } from '../../utils/formatUtils';
 import { formatTimestamp } from '../../utils/dateUtils';
+import { db } from '../../services/firebase/config';
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { createRealtimeNotification } from '../../services/notificationService';
+import { getAllActiveUsers } from '../../services/userService';
 
 const Dashboard = () => {
   const { currentUser } = useAuth();
@@ -62,7 +75,25 @@ const Dashboard = () => {
     orders: false,
     analytics: false
   });
-
+  
+  // Stan dla systemu ogłoszeń
+  const [announcement, setAnnouncement] = useState('');
+  const [isEditingAnnouncement, setIsEditingAnnouncement] = useState(false);
+  const [editedAnnouncement, setEditedAnnouncement] = useState('');
+  const [announcementLoading, setAnnouncementLoading] = useState(true);
+  const [announcementMeta, setAnnouncementMeta] = useState({ 
+    updatedBy: '', 
+    updatedAt: null,
+    updatedByName: ''
+  });
+  
+  // Stan dla notyfikacji
+  const [notification, setNotification] = useState({
+    open: false,
+    message: '',
+    severity: 'success'
+  });
+  
   // Pobieranie zadań produkcyjnych - useCallback
   const fetchTasks = useCallback(async () => {
     if (tasksLoading) return; // Zapobiegaj równoległym zapytaniom
@@ -150,6 +181,142 @@ const Dashboard = () => {
     }
   }, [analyticsLoading]);
 
+  // Pobieranie ogłoszeń
+  const fetchAnnouncement = useCallback(async () => {
+    try {
+      setAnnouncementLoading(true);
+      
+      // Pobieranie z Firebase
+      const announcementDoc = await getDoc(doc(db, 'settings', 'dashboard'));
+      
+      if (announcementDoc.exists()) {
+        const data = announcementDoc.data();
+        setAnnouncement(data.announcement || '');
+        setAnnouncementMeta({
+          updatedBy: data.updatedBy || '',
+          updatedAt: data.updatedAt ? data.updatedAt.toDate() : null,
+          updatedByName: data.updatedByName || ''
+        });
+      } else {
+        // Tworzenie dokumentu jeśli nie istnieje
+        await setDoc(doc(db, 'settings', 'dashboard'), {
+          announcement: '',
+          updatedAt: serverTimestamp(),
+          updatedBy: currentUser.uid,
+          updatedByName: currentUser.displayName || currentUser.email
+        });
+        setAnnouncement('');
+        setAnnouncementMeta({
+          updatedBy: currentUser.uid,
+          updatedAt: new Date(),
+          updatedByName: currentUser.displayName || currentUser.email
+        });
+      }
+    } catch (error) {
+      console.error('Błąd podczas pobierania ogłoszenia:', error);
+      // Fallback do localStorage
+      const savedAnnouncement = localStorage.getItem('dashboardAnnouncement') || '';
+      setAnnouncement(savedAnnouncement);
+    } finally {
+      setAnnouncementLoading(false);
+    }
+  }, [currentUser.uid, currentUser.displayName, currentUser.email]);
+
+  // Funkcja obsługująca zamknięcie notyfikacji
+  const handleCloseNotification = (event, reason) => {
+    if (reason === 'clickaway') {
+      return;
+    }
+    setNotification({ ...notification, open: false });
+  };
+  
+  // Pokazanie notyfikacji
+  const showNotification = (message, severity = 'success') => {
+    setNotification({
+      open: true,
+      message,
+      severity
+    });
+  };
+
+  // Zapisywanie ogłoszeń z dodaną obsługą powiadomień
+  const saveAnnouncement = useCallback(async () => {
+    try {
+      // Zapisywanie do Firebase
+      await updateDoc(doc(db, 'settings', 'dashboard'), {
+        announcement: editedAnnouncement,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid,
+        updatedByName: currentUser.displayName || currentUser.email
+      });
+      
+      // Równolegle aktualizujemy local state
+      setAnnouncement(editedAnnouncement);
+      setIsEditingAnnouncement(false);
+      
+      // Zachowujemy też w localStorage jako backup
+      localStorage.setItem('dashboardAnnouncement', editedAnnouncement);
+      
+      // Wyświetlamy notyfikację o sukcesie
+      showNotification('Ogłoszenie zostało pomyślnie zaktualizowane!');
+      
+      // Dodajemy powiadomienie dla wszystkich użytkowników w systemie
+      try {
+        // Pobierz wszystkich aktywnych użytkowników
+        const users = await getAllActiveUsers();
+        const userIds = users.map(user => user.id);
+        
+        // Stwórz powiadomienie w systemie powiadomień
+        if (userIds.length > 0) {
+          const userName = currentUser.displayName || currentUser.email || 'Użytkownik';
+          await createRealtimeNotification({
+            userIds,
+            title: 'Aktualizacja ogłoszenia w systemie',
+            message: `${userName} zaktualizował ogłoszenie: ${editedAnnouncement.length > 80 
+              ? `${editedAnnouncement.substring(0, 80)}...` 
+              : editedAnnouncement}`,
+            type: 'info',
+            entityType: 'announcement',
+            entityId: 'dashboard',
+            createdBy: currentUser.uid,
+            createdByName: currentUser.displayName || currentUser.email
+          });
+          console.log('Powiadomienie o aktualizacji ogłoszenia zostało utworzone');
+        }
+      } catch (notificationError) {
+        console.error('Błąd podczas tworzenia powiadomienia o ogłoszeniu:', notificationError);
+        // Nie zwracamy błędu, ponieważ zapis ogłoszenia się udał
+      }
+    } catch (error) {
+      console.error('Błąd podczas zapisywania ogłoszenia:', error);
+      // Fallback do localStorage
+      localStorage.setItem('dashboardAnnouncement', editedAnnouncement);
+      setAnnouncement(editedAnnouncement);
+      setIsEditingAnnouncement(false);
+      
+      // Wyświetlamy notyfikację o błędzie
+      showNotification('Wystąpił błąd podczas zapisywania ogłoszenia. Zapisano lokalnie.', 'error');
+    }
+  }, [editedAnnouncement, currentUser.uid, currentUser.displayName, currentUser.email]);
+  
+  // Obsługa naciśnięcia klawisza Enter w polu tekstowym
+  const handleKeyDown = (event) => {
+    if (event.key === 'Enter' && event.ctrlKey) {
+      saveAnnouncement();
+    }
+  };
+
+  // Rozpoczęcie edycji ogłoszenia
+  const startEditingAnnouncement = useCallback(() => {
+    setEditedAnnouncement(announcement);
+    setIsEditingAnnouncement(true);
+  }, [announcement]);
+
+  // Anulowanie edycji ogłoszenia
+  const cancelEditingAnnouncement = useCallback(() => {
+    setIsEditingAnnouncement(false);
+  }, []);
+
   // Odświeżanie pojedynczej sekcji danych
   const refreshSection = useCallback((section) => {
     // Zapobiegaj próbom odświeżenia podczas ładowania
@@ -188,13 +355,16 @@ const Dashboard = () => {
         fetchTasks()
       ]);
       
+      // Pobieramy ogłoszenia
+      await fetchAnnouncement();
+      
       console.log('Wszystkie dane zostały pobrane równolegle');
     } catch (error) {
       console.error('Błąd podczas odświeżania danych dashboardu:', error);
     } finally {
       setLoading(false);
     }
-  }, [fetchRecipes, fetchOrderStats, fetchAnalytics, fetchTasks, loading]);
+  }, [fetchRecipes, fetchOrderStats, fetchAnalytics, fetchTasks, fetchAnnouncement, loading]);
 
   // Pierwsze ładowanie danych - tylko raz przy montowaniu komponentu
   useEffect(() => {
@@ -224,6 +394,9 @@ const Dashboard = () => {
             return [];
           })
         ]);
+        
+        // Pobieramy ogłoszenia
+        await fetchAnnouncement();
         
         // Zaktualizuj stan tylko jeśli komponent jest nadal zamontowany
         if (!isMounted) return;
@@ -330,6 +503,22 @@ const Dashboard = () => {
     </Box>
   );
 
+  // Renderowanie informacji o ostatniej aktualizacji
+  const renderLastUpdatedInfo = () => {
+    if (!announcementMeta.updatedAt) return null;
+    
+    const formattedDate = announcementMeta.updatedAt 
+      ? formatTimestamp(announcementMeta.updatedAt, true) 
+      : '';
+      
+    return (
+      <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block', textAlign: 'right' }}>
+        Ostatnia aktualizacja: {formattedDate}
+        {announcementMeta.updatedByName && ` przez ${announcementMeta.updatedByName}`}
+      </Typography>
+    );
+  };
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -346,15 +535,99 @@ const Dashboard = () => {
           {loading && <CircularProgress size={16} sx={{ ml: 1 }} />}
         </Button>
       </Box>
-      <Typography variant="subtitle1" sx={{ mb: 4 }}>
+      <Typography variant="subtitle1" sx={{ mb: 2 }}>
         Witaj, {currentUser.displayName || currentUser.email}
       </Typography>
+
+      {/* Sekcja Ogłoszeń */}
+      <Paper sx={{ p: 2, mb: 4, bgcolor: '#f8f9fa', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+          <AnnouncementIcon sx={{ mr: 1, color: 'primary.main' }} />
+          <Typography variant="h6">Ogłoszenia</Typography>
+          {!isEditingAnnouncement && (
+            <IconButton 
+              size="small" 
+              onClick={startEditingAnnouncement}
+              sx={{ ml: 'auto' }}
+              title="Edytuj ogłoszenie"
+            >
+              <EditIcon fontSize="small" />
+            </IconButton>
+          )}
+        </Box>
+        
+        {announcementLoading ? (
+          <Skeleton variant="rectangular" width="100%" height={60} />
+        ) : isEditingAnnouncement ? (
+          <Box sx={{ mt: 2 }}>
+            <TextField
+              fullWidth
+              multiline
+              rows={3}
+              variant="outlined"
+              placeholder="Wpisz treść ogłoszenia dla wszystkich użytkowników..."
+              value={editedAnnouncement}
+              onChange={(e) => setEditedAnnouncement(e.target.value)}
+              onKeyDown={handleKeyDown}
+              helperText="Naciśnij Ctrl+Enter, aby zatwierdzić"
+            />
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2, gap: 1 }}>
+              <Button 
+                variant="outlined" 
+                startIcon={<CancelIcon />}
+                onClick={cancelEditingAnnouncement}
+              >
+                Anuluj
+              </Button>
+              <Button 
+                variant="contained" 
+                color="primary"
+                startIcon={<SaveIcon />}
+                onClick={saveAnnouncement}
+              >
+                Zapisz
+              </Button>
+            </Box>
+          </Box>
+        ) : announcement ? (
+          <>
+            <Typography variant="body1" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>
+              {announcement}
+            </Typography>
+            {renderLastUpdatedInfo()}
+          </>
+        ) : (
+          <>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1, fontStyle: 'italic' }}>
+              Brak ogłoszeń. Kliknij ikonę edycji, aby dodać ogłoszenie.
+            </Typography>
+            {renderLastUpdatedInfo()}
+          </>
+        )}
+      </Paper>
+      
+      {/* Notyfikacja */}
+      <Snackbar 
+        open={notification.open} 
+        autoHideDuration={6000} 
+        onClose={handleCloseNotification}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert 
+          onClose={handleCloseNotification} 
+          severity={notification.severity} 
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {notification.message}
+        </Alert>
+      </Snackbar>
 
       <Grid container spacing={3}>
         {/* Główne karty KPI */}
         <Grid item xs={12} md={3}>
-          <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
-            <CardContent sx={{ textAlign: 'center', p: 3 }}>
+          <Card sx={{ borderRadius: 2, boxShadow: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ textAlign: 'center', p: 3, flexGrow: 1 }}>
               <RecipesIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
               <Typography variant="h6">Receptury</Typography>
               {recipesLoading ? (
@@ -370,27 +643,17 @@ const Dashboard = () => {
                 </Typography>
               </Box>
             </CardContent>
-            <CardActions sx={{ p: 2, pt: 0, justifyContent: 'space-between' }}>
+            <CardActions sx={{ p: 2, pt: 0, justifyContent: 'center' }}>
               <Button component={Link} to="/recipes" sx={{ flexGrow: 1 }}>
                 Przejdź
-              </Button>
-              <Button 
-                component={Link} 
-                to="/recipes/new" 
-                color="primary"
-                variant="contained"
-                sx={{ flexGrow: 1 }}
-                startIcon={<AddIcon />}
-              >
-                Nowa
               </Button>
             </CardActions>
           </Card>
         </Grid>
 
         <Grid item xs={12} md={3}>
-          <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
-            <CardContent sx={{ textAlign: 'center', p: 3 }}>
+          <Card sx={{ borderRadius: 2, boxShadow: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ textAlign: 'center', p: 3, flexGrow: 1 }}>
               <ProductionIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
               <Typography variant="h6">Produkcja</Typography>
               {analyticsLoading ? (
@@ -415,8 +678,8 @@ const Dashboard = () => {
         </Grid>
 
         <Grid item xs={12} md={3}>
-          <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
-            <CardContent sx={{ textAlign: 'center', p: 3 }}>
+          <Card sx={{ borderRadius: 2, boxShadow: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ textAlign: 'center', p: 3, flexGrow: 1 }}>
               <InventoryIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
               <Typography variant="h6">Stany Magazynowe</Typography>
               {analyticsLoading ? (
@@ -432,51 +695,35 @@ const Dashboard = () => {
                 </Typography>
               </Box>
             </CardContent>
-            <CardActions sx={{ p: 2, pt: 0, justifyContent: 'space-between' }}>
+            <CardActions sx={{ p: 2, pt: 0, justifyContent: 'center' }}>
               <Button component={Link} to="/inventory" sx={{ flexGrow: 1 }}>
                 Przejdź
-              </Button>
-              <Button 
-                component={Link} 
-                to="/inventory/new" 
-                color="primary"
-                variant="contained"
-                sx={{ flexGrow: 1 }}
-                startIcon={<AddIcon />}
-              >
-                Przyjmij
               </Button>
             </CardActions>
           </Card>
         </Grid>
 
         <Grid item xs={12} md={3}>
-          <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
-            <CardContent sx={{ textAlign: 'center', p: 3 }}>
-              <WorkstationIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
-              <Typography variant="h6">Stanowiska</Typography>
-              <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
-                Stanowiska robocze
-              </Typography>
+          <Card sx={{ borderRadius: 2, boxShadow: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ textAlign: 'center', p: 3, flexGrow: 1 }}>
+              <FormsIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
+              <Typography variant="h6">Formularze</Typography>
+              {analyticsLoading ? (
+                <Skeleton variant="text" width="100%" height={40} />
+              ) : (
+                <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
+                  Formularze produkcyjne
+                </Typography>
+              )}
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Typography variant="body2" color="text.secondary">
-                  Zarządzaj stanowiskami produkcyjnymi
+                  Zarządzaj formularzami produkcyjnymi
                 </Typography>
               </Box>
             </CardContent>
-            <CardActions sx={{ p: 2, pt: 0, justifyContent: 'space-between' }}>
-              <Button component={Link} to="/production/workstations" sx={{ flexGrow: 1 }}>
+            <CardActions sx={{ p: 2, pt: 0, justifyContent: 'center' }}>
+              <Button component={Link} to="/production/forms" sx={{ flexGrow: 1 }}>
                 Przejdź
-              </Button>
-              <Button 
-                component={Link} 
-                to="/production/workstations/new" 
-                color="primary"
-                variant="contained"
-                sx={{ flexGrow: 1 }}
-                startIcon={<AddIcon />}
-              >
-                Nowe
               </Button>
             </CardActions>
           </Card>

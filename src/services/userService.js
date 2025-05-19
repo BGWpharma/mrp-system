@@ -151,6 +151,21 @@ export const getAllUsers = async () => {
 };
 
 /**
+ * Pobiera listę wszystkich aktywnych użytkowników (niewyłączonych z systemu)
+ * @returns {Promise<Array>} - Lista aktywnych użytkowników
+ */
+export const getAllActiveUsers = async () => {
+  try {
+    const users = await getAllUsers();
+    // Filtruj tylko aktywnych użytkowników (gdzie disabled !== true)
+    return users.filter(user => !user.disabled);
+  } catch (error) {
+    console.error('Błąd podczas pobierania aktywnych użytkowników:', error);
+    throw error;
+  }
+};
+
+/**
  * Sprawdza czy użytkownik może wysłać kolejną wiadomość do asystenta AI
  * i zwiększa licznik wykorzystanych wiadomości
  * @param {string} userId - ID użytkownika
@@ -229,5 +244,6 @@ export default {
   getUsersDisplayNames,
   changeUserRole,
   getAllUsers,
+  getAllActiveUsers,
   checkAndUpdateAIMessageQuota
 }; 
