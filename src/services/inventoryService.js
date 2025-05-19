@@ -44,6 +44,7 @@ import {
   const INVENTORY_STOCKTAKING_COLLECTION = 'stocktaking';
   const INVENTORY_STOCKTAKING_ITEMS_COLLECTION = 'stocktakingItems';
   const INVENTORY_SUPPLIER_PRICES_COLLECTION = 'inventorySupplierPrices';
+  const INVENTORY_SUPPLIER_PRICE_HISTORY_COLLECTION = 'inventorySupplierPriceHistory';
   
   // ------ ZARZĄDZANIE MAGAZYNAMI ------
   
@@ -3652,6 +3653,27 @@ import {
         throw new Error('Cena musi być liczbą');
       }
       
+      // Pobierz aktualną cenę przed aktualizacją, aby zapisać jej historię
+      const priceDocRef = doc(db, INVENTORY_SUPPLIER_PRICES_COLLECTION, priceId);
+      const priceDoc = await getDoc(priceDocRef);
+      
+      if (priceDoc.exists()) {
+        const currentPriceData = priceDoc.data();
+        
+        // Jeśli cena się zmieniła, zapisz historię
+        if (currentPriceData.price !== supplierPriceData.price) {
+          await addSupplierPriceHistory({
+            priceId,
+            itemId: supplierPriceData.itemId,
+            supplierId: supplierPriceData.supplierId,
+            oldPrice: currentPriceData.price,
+            newPrice: supplierPriceData.price,
+            currency: currentPriceData.currency || supplierPriceData.currency,
+            changedBy: userId
+          });
+        }
+      }
+      
       const updatedData = {
         ...supplierPriceData,
         updatedBy: userId,
@@ -4710,3 +4732,109 @@ export const deleteBatchCertificate = async (batchId, userId) => {
     throw new Error('Błąd podczas usuwania certyfikatu: ' + error.message);
   }
 };
+
+  /**
+   * Dodaje wpis do historii cen dostawcy
+   * @param {Object} historyData - Dane historyczne
+   * @returns {Promise<Object>} - Dodany wpis historii
+   */
+  export const addSupplierPriceHistory = async (historyData) => {
+    try {
+      if (!historyData.priceId) {
+        throw new Error('ID ceny dostawcy jest wymagane');
+      }
+      
+      if (!historyData.itemId) {
+        throw new Error('ID pozycji magazynowej jest wymagane');
+      }
+      
+      if (!historyData.supplierId) {
+        throw new Error('ID dostawcy jest wymagane');
+      }
+      
+      if (typeof historyData.oldPrice !== 'number') {
+        throw new Error('Stara cena musi być liczbą');
+      }
+      
+      if (typeof historyData.newPrice !== 'number') {
+        throw new Error('Nowa cena musi być liczbą');
+      }
+      
+      const historyEntry = {
+        ...historyData,
+        createdAt: serverTimestamp()
+      };
+      
+      const docRef = await addDoc(collection(db, INVENTORY_SUPPLIER_PRICE_HISTORY_COLLECTION), historyEntry);
+      
+      return {
+        id: docRef.id,
+        ...historyEntry
+      };
+    } catch (error) {
+      console.error('Błąd podczas dodawania wpisu do historii cen dostawcy:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Pobiera historię cen dostawcy
+   * @param {string} priceId - ID ceny dostawcy
+   * @returns {Promise<Array>} - Lista wpisów historii cen
+   */
+  export const getSupplierPriceHistory = async (priceId) => {
+    try {
+      const historyRef = collection(db, INVENTORY_SUPPLIER_PRICE_HISTORY_COLLECTION);
+      const q = query(
+        historyRef,
+        where('priceId', '==', priceId),
+        orderBy('createdAt', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const history = [];
+      
+      querySnapshot.forEach(doc => {
+        history.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+      
+      return history;
+    } catch (error) {
+      console.error('Błąd podczas pobierania historii cen dostawcy:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Pobiera historię cen dla pozycji magazynowej
+   * @param {string} itemId - ID pozycji magazynowej
+   * @returns {Promise<Array>} - Lista wpisów historii cen
+   */
+  export const getItemSupplierPriceHistory = async (itemId) => {
+    try {
+      const historyRef = collection(db, INVENTORY_SUPPLIER_PRICE_HISTORY_COLLECTION);
+      const q = query(
+        historyRef,
+        where('itemId', '==', itemId),
+        orderBy('createdAt', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const history = [];
+      
+      querySnapshot.forEach(doc => {
+        history.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+      
+      return history;
+    } catch (error) {
+      console.error('Błąd podczas pobierania historii cen dla pozycji magazynowej:', error);
+      throw error;
+    }
+  };

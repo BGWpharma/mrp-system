@@ -39,6 +39,7 @@ import { getAllSuppliers } from '../../services/supplierService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { DEFAULT_CURRENCY } from '../../config';
+import SupplierPriceHistory from './SupplierPriceHistory';
 
 /**
  * Komponent do zarządzania cenami dostawców dla pozycji magazynowej
@@ -312,6 +313,12 @@ const SupplierPricesList = ({ itemId, currency = DEFAULT_CURRENCY }) => {
                     >
                       <DeleteIcon />
                     </IconButton>
+                    <SupplierPriceHistory 
+                      priceId={item.id}
+                      supplierId={item.supplierId}
+                      itemId={itemId}
+                      currency={item.currency || currency}
+                    />
                   </TableCell>
                 </TableRow>
               ))}
