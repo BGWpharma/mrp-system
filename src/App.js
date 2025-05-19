@@ -126,6 +126,9 @@ import PriceListsPage from './pages/Sales/PriceLists/PriceListsPage';
 import PriceListFormPage from './pages/Sales/PriceLists/PriceListFormPage';
 import PriceListDetailsPage from './pages/Sales/PriceLists/PriceListDetailsPage';
 
+// CO Reports - nowy moduł raportów CO
+import COReportsPage from './pages/Sales/COReports/COReportsPage';
+
 // Admin Pages
 import UsersManagementPage from './pages/Admin/UsersManagementPage';
 import SystemManagementPage from './pages/Admin/SystemManagementPage';
@@ -261,6 +264,9 @@ function App() {
                 <Route path="/sales/price-lists/new" element={<PrivateLayout><PriceListFormPage /></PrivateLayout>} />
                 <Route path="/sales/price-lists/:id" element={<PrivateLayout><PriceListDetailsPage /></PrivateLayout>} />
                 <Route path="/sales/price-lists/:id/edit" element={<PrivateLayout><PriceListFormPage /></PrivateLayout>} />
+                
+                {/* CO Reports Routes - nowy moduł raportów CO */}
+                <Route path="/sales/co-reports" element={<PrivateLayout><COReportsPage /></PrivateLayout>} />
                 
                 {/* Invoices Routes */}
                 <Route path="/invoices" element={<PrivateLayout><InvoicesListPage /></PrivateLayout>} />
