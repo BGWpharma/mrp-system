@@ -27,7 +27,22 @@ export const RECIPE_STATUSES = {
   };
   
   // Jednostki miary
-  export const UNITS_OF_MEASURE = ['szt.', 'kg', 'caps'];
+  export const UNITS_OF_MEASURE = ['szt.', 'kg', 'g', 'l', 'ml', 'caps'];
+  
+  // Grupy jednostek miary (jednostki, które można między sobą konwertować)
+  export const UNIT_GROUPS = {
+    WEIGHT: ['kg', 'g'],
+    VOLUME: ['l', 'ml'],
+    COUNT: ['szt.', 'caps']
+  };
+  
+  // Współczynniki konwersji jednostek (względem jednostki bazowej w grupie)
+  export const UNIT_CONVERSION_FACTORS = {
+    'kg': 1000, // bazowa jednostka w g
+    'g': 1,
+    'l': 1000, // bazowa jednostka w ml
+    'ml': 1
+  };
   
   // Kategorie testów jakościowych
   export const QUALITY_TEST_CATEGORIES = {

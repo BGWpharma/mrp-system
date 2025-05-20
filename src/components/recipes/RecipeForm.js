@@ -31,7 +31,8 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
-  FormHelperText
+  FormHelperText,
+  Tooltip
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -43,7 +44,8 @@ import {
   Edit as EditIcon,
   Build as BuildIcon,
   ProductionQuantityLimits as ProductIcon,
-  AccessTime as AccessTimeIcon
+  AccessTime as AccessTimeIcon,
+  SwapHoriz as SwapIcon
 } from '@mui/icons-material';
 import { createRecipe, updateRecipe, getRecipeById, fixRecipeYield } from '../../services/recipeService';
 import { getAllInventoryItems, getIngredientPrices, createInventoryItem, getAllWarehouses } from '../../services/inventoryService';
@@ -53,6 +55,7 @@ import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 import { getAllCustomers } from '../../services/customerService';
 import { getAllWorkstations } from '../../services/workstationService';
+import { UNIT_GROUPS, UNIT_CONVERSION_FACTORS } from '../../utils/constants';
 
 const RecipeForm = ({ recipeId }) => {
   const { currentUser } = useAuth();
@@ -104,6 +107,168 @@ const RecipeForm = ({ recipeId }) => {
   // Dodajemy stan dla listy stanowisk produkcyjnych
   const [workstations, setWorkstations] = useState([]);
   const [loadingWorkstations, setLoadingWorkstations] = useState(false);
+
+  // Dodajemy stany do obsługi konwersji jednostek
+  const [displayUnits, setDisplayUnits] = useState({});
+  const [showDisplayUnits, setShowDisplayUnits] = useState(false);
+  const [costUnitDisplay, setCostUnitDisplay] = useState(null);
+  const [timeUnitDisplay, setTimeUnitDisplay] = useState(null);
+  
+  // Funkcje pomocnicze do konwersji jednostek
+  const getUnitGroup = (unit) => {
+    for (const [group, units] of Object.entries(UNIT_GROUPS)) {
+      if (units.includes(unit)) {
+        return { group, units };
+      }
+    }
+    return null;
+  };
+  
+  const canConvertUnit = (unit) => {
+    return getUnitGroup(unit) !== null;
+  };
+  
+  const convertValue = (value, fromUnit, toUnit) => {
+    if (!value || !fromUnit || !toUnit || fromUnit === toUnit) {
+      return value;
+    }
+    
+    const fromFactor = UNIT_CONVERSION_FACTORS[fromUnit] || 1;
+    const toFactor = UNIT_CONVERSION_FACTORS[toUnit] || 1;
+    
+    // Konwersja do wartości bazowej, a następnie do docelowej jednostki
+    const baseValue = parseFloat(value) * fromFactor;
+    const convertedValue = baseValue / toFactor;
+    
+    return convertedValue;
+  };
+  
+  const toggleIngredientUnit = (index) => {
+    const ingredient = recipeData.ingredients[index];
+    const unitGroup = getUnitGroup(ingredient.unit);
+    
+    if (!unitGroup) return; // Nie można konwertować tej jednostki
+    
+    // Znajdź dostępne jednostki i wybierz następną w kolejności
+    const availableUnits = unitGroup.units;
+    const currentIndex = availableUnits.indexOf(ingredient.unit);
+    const nextUnit = availableUnits[(currentIndex + 1) % availableUnits.length];
+    
+    // Ustaw jednostkę wyświetlania dla tego składnika
+    setDisplayUnits(prev => ({
+      ...prev,
+      [index]: nextUnit
+    }));
+    
+    // Włącz tryb wyświetlania jednostek alternatywnych
+    setShowDisplayUnits(true);
+    
+    // Pokaż informację o konwersji
+    showInfo(`Składnik "${ingredient.name}" jest teraz wyświetlany w ${nextUnit}, ale będzie zapisany w ${ingredient.unit}`);
+  };
+  
+  const toggleCostUnit = () => {
+    // Sprawdź czy można konwertować jednostkę kosztu
+    const unit = 'szt.'; // Domyślna jednostka dla kosztu
+    const unitGroup = getUnitGroup(unit);
+    
+    if (!unitGroup) return; // Nie można konwertować tej jednostki
+    
+    // Jeśli nie ma ustawionej jednostki wyświetlania, użyj pierwszej alternatywnej
+    if (!costUnitDisplay) {
+      const availableUnits = unitGroup.units;
+      const altUnit = availableUnits.find(u => u !== unit);
+      if (altUnit) {
+        setCostUnitDisplay(altUnit);
+        setShowDisplayUnits(true);
+        showInfo(`Koszty są teraz wyświetlane w ${altUnit}, ale będą zapisane w szt.`);
+      }
+    } else {
+      // Jeśli już jest ustawiona, wyczyść
+      setCostUnitDisplay(null);
+      showInfo('Przywrócono oryginalną jednostkę kosztów (szt.)');
+    }
+  };
+  
+  const toggleTimeUnit = () => {
+    // Sprawdź czy można konwertować jednostkę czasu
+    const unit = 'szt.'; // Domyślna jednostka dla czasu
+    const unitGroup = getUnitGroup(unit);
+    
+    if (!unitGroup) return; // Nie można konwertować tej jednostki
+    
+    // Jeśli nie ma ustawionej jednostki wyświetlania, użyj pierwszej alternatywnej
+    if (!timeUnitDisplay) {
+      const availableUnits = unitGroup.units;
+      const altUnit = availableUnits.find(u => u !== unit);
+      if (altUnit) {
+        setTimeUnitDisplay(altUnit);
+        setShowDisplayUnits(true);
+        showInfo(`Czas produkcji jest teraz wyświetlany w ${altUnit}, ale będzie zapisany w szt.`);
+      }
+    } else {
+      // Jeśli już jest ustawiona, wyczyść
+      setTimeUnitDisplay(null);
+      showInfo('Przywrócono oryginalną jednostkę czasu produkcji (szt.)');
+    }
+  };
+  
+  const getDisplayValue = (index, quantity, unit) => {
+    if (!showDisplayUnits || !displayUnits[index] || quantity === '' || quantity === null || quantity === undefined) {
+      return quantity;
+    }
+    
+    const numValue = parseFloat(quantity);
+    if (isNaN(numValue)) {
+      return quantity;
+    }
+    
+    return convertValue(numValue, unit, displayUnits[index]);
+  };
+  
+  const getDisplayUnit = (index, unit) => {
+    if (!showDisplayUnits || !displayUnits[index]) {
+      return unit;
+    }
+    
+    return displayUnits[index];
+  };
+  
+  const formatDisplayValue = (value) => {
+    if (value === null || value === undefined || value === '') {
+      return '';
+    }
+    
+    const numValue = parseFloat(value);
+    
+    // Jeśli wartość jest liczbą całkowitą, wyświetl bez miejsc po przecinku
+    if (Number.isInteger(numValue)) {
+      return numValue.toString();
+    }
+    
+    // W przeciwnym razie wyświetl maksymalnie 3 miejsca po przecinku
+    return numValue.toFixed(3).replace(/\.?0+$/, '');
+  };
+
+  const getCostDisplayValue = () => {
+    if (!costUnitDisplay) {
+      return recipeData.processingCostPerUnit || 0;
+    }
+    
+    const numValue = parseFloat(recipeData.processingCostPerUnit) || 0;
+    const convertedValue = convertValue(numValue, 'szt.', costUnitDisplay);
+    return formatDisplayValue(convertedValue);
+  };
+  
+  const getTimeDisplayValue = () => {
+    if (!timeUnitDisplay) {
+      return recipeData.productionTimePerUnit || 0;
+    }
+    
+    const numValue = parseFloat(recipeData.productionTimePerUnit) || 0;
+    const convertedValue = convertValue(numValue, 'szt.', timeUnitDisplay);
+    return formatDisplayValue(convertedValue);
+  };
 
   useEffect(() => {
     if (recipeId) {
@@ -208,6 +373,11 @@ const RecipeForm = ({ recipeId }) => {
     setSaving(true);
     
     try {
+      // Wyświetl informację, jeśli używane są konwertowane jednostki
+      if (showDisplayUnits && (Object.keys(displayUnits).length > 0 || costUnitDisplay || timeUnitDisplay)) {
+        showInfo('Receptura zostanie zapisana w oryginalnych jednostkach, bez względu na aktualnie wyświetlane jednostki');
+      }
+      
       if (recipeId) {
         await updateRecipe(recipeId, recipeData, currentUser.uid);
         showSuccess('Receptura została zaktualizowana');
@@ -227,6 +397,46 @@ const RecipeForm = ({ recipeId }) => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setRecipeData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleCostInputChange = (e) => {
+    if (!costUnitDisplay) {
+      // Jeśli nie ma aktywnej konwersji, użyj normalnej metody
+      handleChange(e);
+      return;
+    }
+    
+    const { value } = e.target;
+    const numValue = parseFloat(value) || 0;
+    
+    // Konwertuj z jednostki wyświetlania do oryginalnej jednostki (szt.)
+    const originalValue = convertValue(numValue, costUnitDisplay, 'szt.');
+    
+    // Aktualizuj stan używając oryginalnej jednostki
+    setRecipeData(prev => ({ 
+      ...prev, 
+      processingCostPerUnit: originalValue
+    }));
+  };
+  
+  const handleTimeInputChange = (e) => {
+    if (!timeUnitDisplay) {
+      // Jeśli nie ma aktywnej konwersji, użyj normalnej metody
+      handleChange(e);
+      return;
+    }
+    
+    const { value } = e.target;
+    const numValue = parseFloat(value) || 0;
+    
+    // Konwertuj z jednostki wyświetlania do oryginalnej jednostki (szt.)
+    const originalValue = convertValue(numValue, timeUnitDisplay, 'szt.');
+    
+    // Aktualizuj stan używając oryginalnej jednostki
+    setRecipeData(prev => ({ 
+      ...prev, 
+      productionTimePerUnit: originalValue
+    }));
   };
 
   const handleYieldChange = (e) => {
@@ -254,10 +464,30 @@ const RecipeForm = ({ recipeId }) => {
 
   const handleIngredientChange = (index, field, value) => {
     const updatedIngredients = [...recipeData.ingredients];
-    updatedIngredients[index] = {
-      ...updatedIngredients[index],
-      [field]: value
-    };
+    
+    if (field === 'quantity' && showDisplayUnits && displayUnits[index]) {
+      // Jeśli zmieniamy ilość i mamy aktywną konwersję jednostek, musimy przeliczyć wartość
+      const ingredient = recipeData.ingredients[index];
+      const originalUnit = ingredient.unit;
+      const displayUnit = displayUnits[index];
+      
+      const numValue = parseFloat(value) || 0;
+      
+      // Konwertuj z jednostki wyświetlania do oryginalnej jednostki
+      const originalValue = convertValue(numValue, displayUnit, originalUnit);
+      
+      // Aktualizuj składnik z oryginalną wartością
+      updatedIngredients[index] = {
+        ...updatedIngredients[index],
+        quantity: originalValue
+      };
+    } else {
+      // Standardowa aktualizacja bez konwersji
+      updatedIngredients[index] = {
+        ...updatedIngredients[index],
+        [field]: value
+      };
+    }
     
     setRecipeData(prev => ({
       ...prev,
@@ -586,6 +816,11 @@ const RecipeForm = ({ recipeId }) => {
             {saving ? 'Zapisywanie...' : 'Zapisz'}
           </Button>
           {recipeId && renderCreateProductButton()}
+          <Tooltip title="Kliknij ikonę konwersji (↔) obok jednostek, aby przełączać między kg/g, l/ml">
+            <IconButton color="info">
+              <SwapIcon />
+            </IconButton>
+          </Tooltip>
         </Box>
       </Paper>
 
@@ -682,7 +917,7 @@ const RecipeForm = ({ recipeId }) => {
             
             <Grid item xs={12} sm={6} md={4}>
               <TextField
-                label="Koszt procesowy na sztukę (EUR)"
+                label={`Koszt procesowy na ${costUnitDisplay || 'sztukę'} (EUR)`}
                 name="processingCostPerUnit"
                 type="number"
                 InputProps={{ 
@@ -692,17 +927,31 @@ const RecipeForm = ({ recipeId }) => {
                       <CalculateIcon fontSize="small" />
                     </Box>
                   ),
+                  endAdornment: canConvertUnit('szt.') && (
+                    <Tooltip title="Przełącz jednostkę miary">
+                      <IconButton 
+                        size="small" 
+                        color="primary" 
+                        onClick={toggleCostUnit}
+                        sx={{ ml: 1 }}
+                      >
+                        <SwapIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  )
                 }}
-                value={recipeData.processingCostPerUnit || 0}
-                onChange={handleChange}
+                value={getCostDisplayValue()}
+                onChange={handleCostInputChange}
                 fullWidth
-                helperText="Koszt procesowy lub robocizny na jedną sztukę produktu"
+                helperText={costUnitDisplay 
+                  ? `Koszt w oryginalnej jednostce: ${formatDisplayValue(recipeData.processingCostPerUnit || 0)} EUR/szt.` 
+                  : "Koszt procesowy lub robocizny na jedną sztukę produktu"}
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
               />
             </Grid>
             <Grid item xs={12} sm={6} md={4}>
               <TextField
-                label="Czas produkcji na sztukę (min)"
+                label={`Czas produkcji na ${timeUnitDisplay || 'sztukę'} (min)`}
                 name="productionTimePerUnit"
                 type="number"
                 InputProps={{ 
@@ -712,11 +961,25 @@ const RecipeForm = ({ recipeId }) => {
                       <AccessTimeIcon fontSize="small" />
                     </Box>
                   ),
+                  endAdornment: canConvertUnit('szt.') && (
+                    <Tooltip title="Przełącz jednostkę miary">
+                      <IconButton 
+                        size="small" 
+                        color="primary" 
+                        onClick={toggleTimeUnit}
+                        sx={{ ml: 1 }}
+                      >
+                        <SwapIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  )
                 }}
-                value={recipeData.productionTimePerUnit || 0}
-                onChange={handleChange}
+                value={getTimeDisplayValue()}
+                onChange={handleTimeInputChange}
                 fullWidth
-                helperText="Czas potrzebny na wyprodukowanie jednej sztuki produktu"
+                helperText={timeUnitDisplay 
+                  ? `Czas w oryginalnej jednostce: ${formatDisplayValue(recipeData.productionTimePerUnit || 0)} min/szt.` 
+                  : "Czas potrzebny na wyprodukowanie jednej sztuki produktu"}
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
               />
             </Grid>
@@ -890,6 +1153,26 @@ const RecipeForm = ({ recipeId }) => {
             />
           </Box>
           
+          {showDisplayUnits && Object.keys(displayUnits).length > 0 && (
+            <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', bgcolor: 'info.lighter', p: 1, borderRadius: '8px' }}>
+              <Typography variant="body2" color="info.dark" sx={{ flex: 1 }}>
+                <b>Uwaga:</b> Niektóre jednostki są wyświetlane w alternatywnej formie dla wygody. Receptura będzie zapisana w oryginalnych jednostkach.
+              </Typography>
+              <Button 
+                variant="outlined" 
+                size="small" 
+                color="info" 
+                startIcon={<SwapIcon />}
+                onClick={() => {
+                  setDisplayUnits({});
+                  setShowDisplayUnits(false);
+                }}
+              >
+                Przywróć oryginalne jednostki
+              </Button>
+            </Box>
+          )}
+          
           {recipeData.ingredients.length > 0 ? (
             <TableContainer sx={{ borderRadius: '8px', border: '1px solid', borderColor: 'divider' }}>
               <Table>
@@ -920,18 +1203,43 @@ const RecipeForm = ({ recipeId }) => {
                           fullWidth
                           variant="standard"
                           type="number"
-                          value={ingredient.quantity}
+                          value={showDisplayUnits && displayUnits[index] 
+                            ? formatDisplayValue(getDisplayValue(index, ingredient.quantity, ingredient.unit))
+                            : ingredient.quantity}
                           onChange={(e) => handleIngredientChange(index, 'quantity', e.target.value)}
+                          InputProps={{
+                            endAdornment: showDisplayUnits && displayUnits[index] && (
+                              <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                                (oryginalnie: {formatDisplayValue(ingredient.quantity)} {ingredient.unit})
+                              </Typography>
+                            )
+                          }}
                         />
                       </TableCell>
                       <TableCell>
-                        <TextField
-                          fullWidth
-                          variant="standard"
-                          value={ingredient.unit}
-                          onChange={(e) => handleIngredientChange(index, 'unit', e.target.value)}
-                          disabled={!!ingredient.id}
-                        />
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                          <TextField
+                            fullWidth
+                            variant="standard"
+                            value={showDisplayUnits && displayUnits[index] 
+                              ? getDisplayUnit(index, ingredient.unit)
+                              : ingredient.unit}
+                            onChange={(e) => handleIngredientChange(index, 'unit', e.target.value)}
+                            disabled={!!ingredient.id}
+                          />
+                          {canConvertUnit(ingredient.unit) && (
+                            <Tooltip title="Przełącz jednostkę miary">
+                              <IconButton 
+                                size="small" 
+                                color="primary" 
+                                onClick={() => toggleIngredientUnit(index)}
+                                sx={{ ml: 1 }}
+                              >
+                                <SwapIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Box>
                       </TableCell>
                       <TableCell>
                         <TextField

@@ -12,6 +12,9 @@ const CACHE_KEYS = {
 // Czas ważności cache w milisekundach (6 godzin)
 const CACHE_TTL = 6 * 60 * 60 * 1000;
 
+// Czas ważności cache dla receptur (5 minut)
+const RECIPES_CACHE_TTL = 5 * 60 * 1000;
+
 /**
  * Klasa przechowująca indeks wyszukiwania lokalnie w pamięci
  * Przyszła implementacja może zostać rozszerzona o Algolię lub ElasticSearch
@@ -33,7 +36,7 @@ class SearchIndexService {
         const cachedData = localStorage.getItem(key);
         if (cachedData) {
           const parsed = JSON.parse(cachedData);
-          if (this.isCacheValid(parsed.timestamp)) {
+          if (this.isCacheValid(parsed.timestamp, key)) {
             this.indexes[key] = parsed.data;
             this.lastRefreshTime[key] = parsed.timestamp;
             console.log(`Załadowano indeks wyszukiwania z cache: ${key}`);
@@ -50,9 +53,14 @@ class SearchIndexService {
   /**
    * Sprawdza czy cache jest aktualny
    * @param {number} timestamp - Czas ostatniej aktualizacji cache
+   * @param {string} key - Klucz indeksu do sprawdzenia (opcjonalny)
    * @returns {boolean} - Czy cache jest aktualny
    */
-  isCacheValid(timestamp) {
+  isCacheValid(timestamp, key) {
+    // Jeśli to indeks receptur, użyj krótszego czasu ważności
+    if (key === CACHE_KEYS.RECIPES) {
+      return Date.now() - timestamp < RECIPES_CACHE_TTL;
+    }
     return Date.now() - timestamp < CACHE_TTL;
   }
 
@@ -79,11 +87,11 @@ class SearchIndexService {
    * Pobiera lub tworzy indeks dla kolekcji receptur
    * @returns {Promise<Array>} - Zindeksowane dane
    */
-  async getOrCreateRecipesIndex() {
+  async getOrCreateRecipesIndex(forceRefresh = false) {
     const key = CACHE_KEYS.RECIPES;
     
     // Sprawdź czy indeks istnieje i jest aktualny
-    if (this.indexes[key] && this.isCacheValid(this.lastRefreshTime[key])) {
+    if (this.indexes[key] && this.isCacheValid(this.lastRefreshTime[key], key) && !forceRefresh) {
       console.log('Używam buforowanego indeksu dla receptur');
       return this.indexes[key];
     }
@@ -263,28 +271,37 @@ class SearchIndexService {
   }
 
   /**
-   * Odświeża indeks dla danej kolekcji
-   * @param {string} collectionName - Nazwa kolekcji ('recipes', 'purchaseOrders', itd.)
+   * Odświeża indeks wyszukiwania dla podanej kolekcji
+   * @param {string} collectionName - Nazwa kolekcji do odświeżenia
+   * @returns {Promise<boolean>} - Czy udało się odświeżyć indeks
    */
   async refreshIndex(collectionName) {
-    const key = CACHE_KEYS[collectionName.toUpperCase()];
-    if (!key) {
-      throw new Error(`Nieznana kolekcja: ${collectionName}`);
+    try {
+      let result = false;
+      
+      // Odśwież indeks w zależności od kolekcji
+      if (collectionName === 'recipes') {
+        await this.getOrCreateRecipesIndex(true); // Dodajemy parametr forceRefresh
+        result = true;
+      } else if (collectionName === 'inventory') {
+        // TODO: Zaimplementować odświeżanie indeksu dla inventory
+        result = false;
+      } else if (collectionName === 'purchase_orders') {
+        // TODO: Zaimplementować odświeżanie indeksu dla purchase_orders
+        result = false;
+      } else if (collectionName === 'production_tasks') {
+        // TODO: Zaimplementować odświeżanie indeksu dla production_tasks
+        result = false;
+      }
+      
+      return result;
+    } catch (error) {
+      console.error(`Błąd podczas odświeżania indeksu dla ${collectionName}:`, error);
+      return false;
     }
-    
-    // Usuń istniejący indeks
-    delete this.indexes[key];
-    
-    // Odtwórz indeks
-    if (collectionName.toUpperCase() === 'RECIPES') {
-      await this.getOrCreateRecipesIndex();
-    }
-    // Tutaj można dodać inne kolekcje w miarę potrzeb
-    
-    return true;
   }
 }
 
-// Eksportujemy singleton
-const searchService = new SearchIndexService();
-export default searchService; 
+// Eksportuj singleton instancję klasy
+const searchIndexService = new SearchIndexService();
+export default searchIndexService; 

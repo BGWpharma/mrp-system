@@ -27,6 +27,9 @@ let dataCache = {
 // Czas ważności bufora w milisekundach (10 minut)
 const CACHE_EXPIRY = 10 * 60 * 1000;
 
+// Czas ważności bufora receptur w milisekundach (1 minuta)
+const RECIPES_CACHE_EXPIRY = 1 * 60 * 1000;
+
 /**
  * Pobiera dane z wielu kolekcji w jednym zapytaniu, aby zmniejszyć liczbę operacji odczytu
  * @param {Array} collectionsConfig - Tablica z konfiguracją kolekcji do pobrania [{name, options}]
@@ -48,9 +51,12 @@ export const batchGetData = async (collectionsConfig = []) => {
     for (const config of collectionsConfig) {
       const { name, options = {} } = config;
       
+      // Wybierz odpowiedni czas ważności cache'u w zależności od typu danych
+      const cacheExpiry = name === 'recipes' ? RECIPES_CACHE_EXPIRY : CACHE_EXPIRY;
+      
       // Sprawdź, czy dane są w buforze i czy nie są przeterminowane
       if (dataCache[name] && dataCache[name].data && dataCache[name].timestamp && 
-          (now - dataCache[name].timestamp < CACHE_EXPIRY)) {
+          (now - dataCache[name].timestamp < cacheExpiry)) {
         // Dane są w cache
         console.log(`Używam zbuforowanych danych dla ${name} (wiek: ${Math.round((now - dataCache[name].timestamp) / 1000)}s)`);
         results[name] = dataCache[name].data;
@@ -113,8 +119,11 @@ export const getDataWithCache = async (cacheKey, fetchFunction, options = {}) =>
   const now = new Date().getTime();
   const cache = dataCache[cacheKey];
   
+  // Wybierz odpowiedni czas ważności cache'u w zależności od typu danych
+  const cacheExpiry = cacheKey === 'recipes' ? RECIPES_CACHE_EXPIRY : CACHE_EXPIRY;
+  
   // Sprawdź czy dane są w buforze i czy nie są przeterminowane
-  if (cache.data && cache.timestamp && (now - cache.timestamp < CACHE_EXPIRY)) {
+  if (cache.data && cache.timestamp && (now - cache.timestamp < cacheExpiry)) {
     console.log(`Używam zbuforowanych danych dla ${cacheKey} (wiek: ${Math.round((now - cache.timestamp) / 1000)}s)`);
     
     // Jeśli są filtry, musimy filtrować dane z bufora

@@ -13,6 +13,7 @@ import {
     serverTimestamp 
   } from 'firebase/firestore';
   import { db } from './firebase/config';
+  import { clearCache } from './aiDataService';
   
   const RECIPES_COLLECTION = 'recipes';
   const RECIPE_VERSIONS_COLLECTION = 'recipeVersions';
@@ -235,6 +236,20 @@ import {
       createdAt: serverTimestamp()
     });
     
+    // Wyczyść cache receptur, aby mieć pewność, że nowa receptura będzie widoczna
+    clearCache('recipes');
+    
+    // Odśwież indeks wyszukiwania receptur
+    try {
+      const searchService = (await import('./searchService')).default;
+      if (searchService && typeof searchService.refreshIndex === 'function') {
+        await searchService.refreshIndex(RECIPES_COLLECTION);
+      }
+    } catch (error) {
+      console.error('Błąd podczas odświeżania indeksu wyszukiwania receptur:', error);
+      // Błąd odświeżania indeksu nie powinien przerwać całej operacji
+    }
+    
     return {
       id: docRef.id,
       ...recipeWithMeta
@@ -288,6 +303,20 @@ import {
         createdBy: userId,
         createdAt: serverTimestamp()
       });
+      
+      // Wyczyść cache receptur, aby mieć pewność, że zaktualizowana receptura będzie widoczna
+      clearCache('recipes');
+      
+      // Odśwież indeks wyszukiwania receptur
+      try {
+        const searchService = (await import('./searchService')).default;
+        if (searchService && typeof searchService.refreshIndex === 'function') {
+          await searchService.refreshIndex(RECIPES_COLLECTION);
+        }
+      } catch (error) {
+        console.error('Błąd podczas odświeżania indeksu wyszukiwania receptur po aktualizacji:', error);
+        // Błąd odświeżania indeksu nie powinien przerwać całej operacji
+      }
       
       return {
         id: recipeId,
@@ -356,6 +385,20 @@ import {
         await Promise.all(batch);
       }
       
+      // Wyczyść cache receptur, aby usunięta receptura nie była widoczna
+      clearCache('recipes');
+      
+      // Odśwież indeks wyszukiwania receptur
+      try {
+        const searchService = (await import('./searchService')).default;
+        if (searchService && typeof searchService.refreshIndex === 'function') {
+          await searchService.refreshIndex(RECIPES_COLLECTION);
+        }
+      } catch (error) {
+        console.error('Błąd podczas odświeżania indeksu wyszukiwania receptur po usunięciu:', error);
+        // Błąd odświeżania indeksu nie powinien przerwać całej operacji
+      }
+      
       return true;
     } catch (error) {
       console.error('Error deleting recipe:', error);
@@ -396,6 +439,20 @@ import {
         restoredFrom: versionNumber
       });
       
+      // Wyczyść cache receptur, aby przywrócona wersja receptury była widoczna
+      clearCache('recipes');
+      
+      // Odśwież indeks wyszukiwania receptur
+      try {
+        const searchService = (await import('./searchService')).default;
+        if (searchService && typeof searchService.refreshIndex === 'function') {
+          await searchService.refreshIndex(RECIPES_COLLECTION);
+        }
+      } catch (error) {
+        console.error('Błąd podczas odświeżania indeksu wyszukiwania receptur po przywróceniu:', error);
+        // Błąd odświeżania indeksu nie powinien przerwać całej operacji
+      }
+      
       return {
         id: recipeId,
         ...restoredData
@@ -427,12 +484,53 @@ import {
         updatedBy: userId
       });
       
+      // Wyczyść cache receptur po naprawieniu wydajności
+      clearCache('recipes');
+      
+      // Odśwież indeks wyszukiwania receptur
+      try {
+        const searchService = (await import('./searchService')).default;
+        if (searchService && typeof searchService.refreshIndex === 'function') {
+          await searchService.refreshIndex(RECIPES_COLLECTION);
+        }
+      } catch (error) {
+        console.error('Błąd podczas odświeżania indeksu wyszukiwania receptur po naprawie wydajności:', error);
+        // Błąd odświeżania indeksu nie powinien przerwać całej operacji
+      }
+      
       return {
         success: true,
         message: 'Wydajność receptury została naprawiona'
       };
     } catch (error) {
       console.error('Błąd podczas naprawiania wydajności receptury:', error);
+      throw error;
+    }
+  };
+  
+  // Funkcja do odświeżania cache'u receptur
+  export const refreshRecipesCache = async () => {
+    try {
+      // Wyczyść cache receptur w aiDataService
+      clearCache('recipes');
+      
+      // Wyczyść również lokalny indeks wyszukiwania receptur
+      try {
+        const searchService = (await import('./searchService')).default;
+        if (searchService && typeof searchService.refreshIndex === 'function') {
+          await searchService.refreshIndex(RECIPES_COLLECTION);
+        }
+      } catch (error) {
+        console.error('Błąd podczas odświeżania indeksu wyszukiwania receptur:', error);
+        // Błąd odświeżania indeksu nie powinien przerwać całej operacji
+      }
+      
+      return {
+        success: true,
+        message: 'Cache receptur został odświeżony'
+      };
+    } catch (error) {
+      console.error('Błąd podczas odświeżania cache receptur:', error);
       throw error;
     }
   };
