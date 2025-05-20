@@ -27,6 +27,90 @@ import html2canvas from 'html2canvas';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 
+// Mapowanie polskich kategorii na angielskie
+const categoryTranslations = {
+  'Opakowania jednostkowe': 'Unit packaging',
+  'Surowce': 'Raw materials',
+  'Produkty gotowe': 'Finished products',
+  'Gotowe produkty': 'Finished products',
+  'Materiały eksploatacyjne': 'Consumables',
+  'Opakowania zbiorcze': 'Bulk packaging',
+  'Komponenty': 'Components',
+  'Półprodukty': 'Semi-finished products',
+  'Pozostałe': 'Other'
+};
+
+// Mapowanie polskich jednostek na angielskie
+const unitTranslations = {
+  'szt.': 'pcs',
+  'kg': 'kg',
+  'g': 'g',
+  'l': 'l',
+  'ml': 'ml',
+  'm': 'm',
+  'cm': 'cm',
+  'mm': 'mm'
+};
+
+// Funkcja do bezpiecznego formatowania daty
+const formatDate = (dateValue) => {
+  if (!dateValue) return '';
+  
+  try {
+    // Obsługa różnych formatów daty
+    let date;
+    
+    // Jeśli to obiekt Date
+    if (dateValue instanceof Date) {
+      date = dateValue;
+    }
+    // Jeśli to timestamp Firestore
+    else if (dateValue.toDate && typeof dateValue.toDate === 'function') {
+      date = dateValue.toDate();
+    }
+    // Jeśli to timestamp z sekundami
+    else if (dateValue.seconds) {
+      date = new Date(dateValue.seconds * 1000);
+    }
+    // Jeśli to string
+    else if (typeof dateValue === 'string') {
+      // Usuń ewentualne spacje
+      const trimmedDate = dateValue.trim();
+      
+      // Sprawdź różne formaty daty
+      if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(trimmedDate)) {
+        // Format MM/DD/YYYY lub M/D/YYYY
+        const [month, day, year] = trimmedDate.split('/');
+        date = new Date(year, month - 1, day);
+      } else if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(trimmedDate)) {
+        // Format ISO YYYY-MM-DD
+        date = new Date(trimmedDate);
+      } else {
+        // Standardowe parsowanie daty
+        date = new Date(trimmedDate);
+      }
+      
+      // Sprawdź czy data jest poprawna
+      if (isNaN(date.getTime())) {
+        console.error('Invalid date format:', dateValue);
+        return 'Invalid Date';
+      }
+    } else {
+      return 'Invalid Date';
+    }
+    
+    // Formatuj datę do wyświetlenia w formacie DD/MM/YYYY
+    return date.toLocaleDateString('en-GB', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+  } catch (error) {
+    console.error('Error formatting date:', error, dateValue);
+    return 'Invalid Date';
+  }
+};
+
 const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null, boxQuantity = '', labelType = 'batch' }, ref) => {
   const labelRef = useRef(null);
   const labelPaperRef = useRef(null);
@@ -43,7 +127,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
 
   const [isEditing, setIsEditing] = useState(false);
   const [labelData, setLabelData] = useState({
-    title: item?.name || 'Produkt',
+    title: item?.name || 'Product',
     additionalInfo: '',
     fontSize: 20,
     codeType: 'barcode', // domyślnie kod kreskowy
@@ -56,11 +140,21 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
   const [groups, setGroups] = useState([]);
   const [itemGroups, setItemGroups] = useState([]);
 
+  // Funkcja do tłumaczenia kategorii
+  const translateCategory = (category) => {
+    return categoryTranslations[category] || category;
+  };
+
+  // Funkcja do tłumaczenia jednostek
+  const translateUnit = (unit) => {
+    return unitTranslations[unit] || unit || 'pcs';
+  };
+
   useEffect(() => {
     if (item) {
       setLabelData(prev => ({
         ...prev,
-        title: item.name || 'Produkt',
+        title: item.name || 'Product',
         boxQuantity: boxQuantity || item?.itemsPerBox || '',
         showAddress: !!address
       }));
@@ -92,7 +186,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
       
       setItemGroups(productGroups);
     } catch (error) {
-      console.error('Błąd podczas pobierania grup:', error);
+      console.error('Error fetching groups:', error);
     }
   };
 
@@ -100,8 +194,8 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
   const handlePrint = async () => {
     try {
       if (!labelRef.current) {
-        console.error('Brak elementu do wydruku');
-        alert('Błąd drukowania: brak elementu etykiety');
+        console.error('No element to print');
+        alert('Print error: no label element');
         return;
       }
       
@@ -112,65 +206,65 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
       const codeImageUrl = await getCodeImage();
       
       // Debugowanie
-      console.log("Wygenerowany obraz kodu:", codeImageUrl);
+      console.log("Generated code image:", codeImageUrl);
       
       // Przygotowujemy style i zawartość HTML - dostosowane do proporcji 2:3
       const htmlContent = `
         <!DOCTYPE html>
         <html>
         <head>
-          <title>Druk etykiety</title>
+          <title>Print label</title>
           <style>
             @page {
-              size: 10cm 15cm; /* proporcja 2:3 - landscape */
+              size: 10cm 15cm; /* proporcja 2:3 */
               margin: 0;
             }
             body {
               margin: 0;
               padding: 0;
+              font-family: Arial, sans-serif;
             }
             .label-container {
               width: 10cm;
               height: 15cm;
               background-color: white;
               color: black;
-              padding: 0.6cm;
+              padding: 0.2cm;
               display: flex;
               flex-direction: column;
-              justify-content: space-between;
+              justify-content: flex-start;
               box-sizing: border-box;
-              font-family: Arial, sans-serif;
               border: 1px solid #ddd;
             }
             .label-title {
-              font-size: ${labelData.fontSize + 6}px;
+              font-size: ${Math.max(14, labelData.fontSize)}px;
               font-weight: bold;
               text-align: center;
-              margin-bottom: 0.4cm;
+              margin-bottom: 0.1cm;
             }
             .label-info {
-              font-size: 16px;
+              font-size: 12px;
               text-align: center;
-              margin-bottom: 0.2cm;
+              margin-bottom: 0.05cm;
             }
             .divider {
               border-top: 1px solid rgba(0, 0, 0, 0.2);
-              margin: 0.3cm 0;
+              margin: 0.1cm 0;
             }
             .label-lot {
-              font-size: 20px;
+              font-size: 14px;
               font-weight: bold;
               text-align: center;
-              margin-bottom: 0.2cm;
+              margin-bottom: 0.05cm;
             }
             .code-container {
               background-color: white;
-              margin: 0.3cm auto;
-              padding: 0.3cm;
+              margin: 0.1cm auto;
+              padding: 0.1cm;
               border-radius: 4px;
               text-align: center;
               border: 1px solid #eee;
-              width: ${labelData.codeType === 'qrcode' ? '4cm' : '7.5cm'};
+              width: ${labelData.codeType === 'qrcode' ? '4cm' : '7cm'};
             }
             .info-box {
               text-align: center;
@@ -181,10 +275,28 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
             .address-container {
               text-align: left;
               border: 1px solid #ccc;
-              padding: 0.3cm;
-              margin-top: 0.5cm;
+              padding: 0.1cm;
+              margin-top: 0.1cm;
               white-space: pre-line;
-              line-height: 1.3;
+              line-height: 1.1;
+              font-size: 11px;
+            }
+            .compact-info {
+              display: flex;
+              justify-content: space-between;
+              flex-wrap: wrap;
+            }
+            .compact-info-item {
+              width: 48%;
+              text-align: center;
+              margin-bottom: 0.05cm;
+              font-size: 12px;
+            }
+            .footer {
+              font-size: 8px;
+              text-align: center;
+              margin-top: auto;
+              padding-top: 0.1cm;
             }
           </style>
         </head>
@@ -192,45 +304,71 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
           <div class="label-container">
             <div class="info-box">
               <div class="label-title">${labelData.title}</div>
-              <div class="label-info">Kategoria: ${item?.category || 'Brak kategorii'}</div>
+              <div class="label-info">Category: ${translateCategory(item?.category) || 'No category'}</div>
               ${itemGroups.length > 0 ? 
-                `<div class="label-info">Grupa: ${itemGroups.map(g => g.name).join(', ')}</div>` : 
+                `<div class="label-info">Group: ${itemGroups.map(g => g.name).join(', ')}</div>` : 
                 ''}
               
               <div class="divider"></div>
               
               ${labelType === 'batch' && batch ? `
-                <div class="label-lot">LOT: ${batch.lotNumber || batch.batchNumber || 'Brak numeru'}</div>
-                ${batch.moNumber ? `
-                  <div class="label-info bold-info">MO: ${batch.moNumber}</div>
-                ` : ''}
-                ${batch.orderNumber ? `
-                  <div class="label-info bold-info">CO: ${batch.orderNumber}</div>
-                ` : ''}
-                ${batch.expiryDate ? `
-                  <div class="label-info">Data ważności: ${new Date(batch.expiryDate).toLocaleDateString('pl-PL')}</div>
-                ` : ''}
-                <div class="label-info">Ilość: ${batch.quantity} ${item?.unit || 'szt.'}</div>
+                <div class="label-lot">LOT: ${batch.lotNumber || batch.batchNumber || 'No number'}</div>
+                
+                <div class="compact-info">
+                  ${batch.moNumber ? `
+                    <div class="compact-info-item bold-info">MO: ${batch.moNumber}</div>
+                  ` : ''}
+                  ${batch.orderNumber ? `
+                    <div class="compact-info-item bold-info">CO: ${batch.orderNumber}</div>
+                  ` : ''}
+                  ${batch.purchaseOrderDetails && batch.purchaseOrderDetails.number ? `
+                    <div class="compact-info-item bold-info">PO: ${batch.purchaseOrderDetails.number}</div>
+                  ` : (batch.poNumber ? `
+                    <div class="compact-info-item bold-info">PO: ${batch.poNumber}</div>
+                  ` : '')}
+                  ${batch.purchaseOrderDetails && batch.purchaseOrderDetails.supplier && batch.purchaseOrderDetails.supplier.name ? `
+                    <div class="compact-info-item">Supplier: ${batch.purchaseOrderDetails.supplier.name}</div>
+                  ` : (batch.supplier ? `
+                    <div class="compact-info-item">Supplier: ${batch.supplier}</div>
+                  ` : '')}
+                  ${batch.expiryDate ? `
+                    <div class="compact-info-item">Exp: ${formatDate(batch.expiryDate)}</div>
+                  ` : ''}
+                  <div class="compact-info-item">Qty: ${batch.quantity} ${translateUnit(item?.unit)}</div>
+                </div>
               ` : ''}
               
               ${labelType === 'box' ? `
-                <div class="label-lot">Ilość w kartonie: ${labelData.boxQuantity} ${item?.unit || 'szt.'}</div>
+                <div class="label-lot">Box quantity: ${labelData.boxQuantity} ${translateUnit(item?.unit)}</div>
                 ${batch ? `
-                  <div class="label-lot">LOT: ${batch.lotNumber || batch.batchNumber || 'Brak numeru'}</div>
-                  ${batch.moNumber ? `
-                    <div class="label-info bold-info">MO: ${batch.moNumber}</div>
-                  ` : ''}
-                  ${batch.orderNumber ? `
-                    <div class="label-info bold-info">CO: ${batch.orderNumber}</div>
-                  ` : ''}
-                  ${batch.expiryDate ? `
-                    <div class="label-info">Data ważności: ${new Date(batch.expiryDate).toLocaleDateString('pl-PL')}</div>
-                  ` : ''}
+                  <div class="label-lot">LOT: ${batch.lotNumber || batch.batchNumber || 'No number'}</div>
+                  
+                  <div class="compact-info">
+                    ${batch.moNumber ? `
+                      <div class="compact-info-item bold-info">MO: ${batch.moNumber}</div>
+                    ` : ''}
+                    ${batch.orderNumber ? `
+                      <div class="compact-info-item bold-info">CO: ${batch.orderNumber}</div>
+                    ` : ''}
+                    ${batch.purchaseOrderDetails && batch.purchaseOrderDetails.number ? `
+                      <div class="compact-info-item bold-info">PO: ${batch.purchaseOrderDetails.number}</div>
+                    ` : (batch.poNumber ? `
+                      <div class="compact-info-item bold-info">PO: ${batch.poNumber}</div>
+                    ` : '')}
+                    ${batch.purchaseOrderDetails && batch.purchaseOrderDetails.supplier && batch.purchaseOrderDetails.supplier.name ? `
+                      <div class="compact-info-item">Supplier: ${batch.purchaseOrderDetails.supplier.name}</div>
+                    ` : (batch.supplier ? `
+                      <div class="compact-info-item">Supplier: ${batch.supplier}</div>
+                    ` : '')}
+                    ${batch.expiryDate ? `
+                      <div class="compact-info-item">Exp: ${formatDate(batch.expiryDate)}</div>
+                    ` : ''}
+                  </div>
                 ` : ''}
               ` : ''}
               
               ${labelData.palletQuantity ? `
-                <div class="label-info bold-info">Ilość na palecie: ${labelData.palletQuantity} ${item?.unit || 'szt.'}</div>
+                <div class="label-info bold-info">Pallet quantity: ${labelData.palletQuantity} ${translateUnit(item?.unit)}</div>
               ` : ''}
               
               ${labelData.additionalInfo ? `
@@ -250,6 +388,10 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
                 <img src="${codeImageUrl}" style="max-width: 100%; height: auto;" />
               </div>
             ` : ''}
+            
+            <div class="footer">
+              Printed: ${new Date().toLocaleString('en-GB')}
+            </div>
           </div>
         </body>
         </html>
@@ -348,8 +490,8 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
     try {
       // Używamy dedykowanej referencji do elementu etykiety
       if (!labelPaperRef.current) {
-        console.error('Brak elementu etykiety do pobrania');
-        alert('Błąd: nie znaleziono elementu etykiety');
+        console.error('Label element not found');
+        alert('Error: label element not found');
         return;
       }
       
@@ -364,7 +506,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
         <!DOCTYPE html>
         <html>
         <head>
-          <title>Etykieta</title>
+          <title>Label</title>
           <style>
             body {
               margin: 0;
@@ -380,7 +522,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
               height: 15cm;
               background-color: white;
               color: black;
-              padding: 0.6cm;
+              padding: 0.3cm;
               display: flex;
               flex-direction: column;
               justify-content: space-between;
@@ -390,34 +532,34 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
               box-shadow: 0 2px 5px rgba(0,0,0,0.1);
             }
             .label-title {
-              font-size: ${labelData.fontSize + 6}px;
+              font-size: ${Math.max(14, labelData.fontSize)}px;
               font-weight: bold;
               text-align: center;
-              margin-bottom: 0.4cm;
+              margin-bottom: 0.1cm;
             }
             .label-info {
-              font-size: 16px;
+              font-size: 12px;
               text-align: center;
-              margin-bottom: 0.2cm;
+              margin-bottom: 0.05cm;
             }
             .divider {
               border-top: 1px solid rgba(0, 0, 0, 0.2);
-              margin: 0.3cm 0;
+              margin: 0.1cm 0;
             }
             .label-lot {
-              font-size: 20px;
+              font-size: 14px;
               font-weight: bold;
               text-align: center;
-              margin-bottom: 0.2cm;
+              margin-bottom: 0.1cm;
             }
             .code-container {
               background-color: white;
-              margin: 0.3cm auto;
-              padding: 0.3cm;
+              margin: 0.1cm auto;
+              padding: 0.1cm;
               border-radius: 4px;
               text-align: center;
               border: 1px solid #eee;
-              width: ${labelData.codeType === 'qrcode' ? '4cm' : '7.5cm'};
+              width: ${labelData.codeType === 'qrcode' ? '4cm' : '7cm'};
             }
             .info-box {
               text-align: center;
@@ -428,10 +570,22 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
             .address-container {
               text-align: left;
               border: 1px solid #ccc;
-              padding: 0.3cm;
-              margin-top: 0.5cm;
+              padding: 0.2cm;
+              margin-top: 0.1cm;
               white-space: pre-line;
-              line-height: 1.3;
+              line-height: 1.1;
+              font-size: 10px;
+            }
+            .compact-info {
+              display: flex;
+              justify-content: space-between;
+              flex-wrap: wrap;
+            }
+            .compact-info-item {
+              width: 48%;
+              text-align: center;
+              margin-bottom: 0.05cm;
+              font-size: 12px;
             }
             #capture-button {
               position: fixed;
@@ -453,51 +607,83 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
             #download-link {
               display: none;
             }
+            .footer {
+              font-size: 8px;
+              text-align: center;
+              margin-top: auto;
+              padding-top: 0.1cm;
+            }
           </style>
         </head>
         <body>
           <div class="label-container" id="label-to-capture">
             <div class="info-box">
               <div class="label-title">${labelData.title}</div>
-              <div class="label-info">Kategoria: ${item?.category || 'Brak kategorii'}</div>
+              <div class="label-info">Category: ${translateCategory(item?.category) || 'No category'}</div>
               ${itemGroups.length > 0 ? 
-                `<div class="label-info">Grupa: ${itemGroups.map(g => g.name).join(', ')}</div>` : 
+                `<div class="label-info">Group: ${itemGroups.map(g => g.name).join(', ')}</div>` : 
                 ''}
               
               <div class="divider"></div>
               
               ${labelType === 'batch' && batch ? `
-                <div class="label-lot">LOT: ${batch.lotNumber || batch.batchNumber || 'Brak numeru'}</div>
-                ${batch.moNumber ? `
-                  <div class="label-info bold-info">MO: ${batch.moNumber}</div>
-                ` : ''}
-                ${batch.orderNumber ? `
-                  <div class="label-info bold-info">CO: ${batch.orderNumber}</div>
-                ` : ''}
-                ${batch.expiryDate ? `
-                  <div class="label-info">Data ważności: ${new Date(batch.expiryDate).toLocaleDateString('pl-PL')}</div>
-                ` : ''}
-                <div class="label-info">Ilość: ${batch.quantity} ${item?.unit || 'szt.'}</div>
+                <div class="label-lot">LOT: ${batch.lotNumber || batch.batchNumber || 'No number'}</div>
+                
+                <div class="compact-info">
+                  ${batch.moNumber ? `
+                    <div class="compact-info-item bold-info">MO: ${batch.moNumber}</div>
+                  ` : ''}
+                  ${batch.orderNumber ? `
+                    <div class="compact-info-item bold-info">CO: ${batch.orderNumber}</div>
+                  ` : ''}
+                  ${batch.purchaseOrderDetails && batch.purchaseOrderDetails.number ? `
+                    <div class="compact-info-item bold-info">PO: ${batch.purchaseOrderDetails.number}</div>
+                  ` : (batch.poNumber ? `
+                    <div class="compact-info-item bold-info">PO: ${batch.poNumber}</div>
+                  ` : '')}
+                  ${batch.purchaseOrderDetails && batch.purchaseOrderDetails.supplier && batch.purchaseOrderDetails.supplier.name ? `
+                    <div class="compact-info-item">Supplier: ${batch.purchaseOrderDetails.supplier.name}</div>
+                  ` : (batch.supplier ? `
+                    <div class="compact-info-item">Supplier: ${batch.supplier}</div>
+                  ` : '')}
+                  ${batch.expiryDate ? `
+                    <div class="compact-info-item">Exp: ${formatDate(batch.expiryDate)}</div>
+                  ` : ''}
+                  <div class="compact-info-item">Qty: ${batch.quantity} ${translateUnit(item?.unit)}</div>
+                </div>
               ` : ''}
               
               ${labelType === 'box' ? `
-                <div class="label-lot">Ilość w kartonie: ${labelData.boxQuantity} ${item?.unit || 'szt.'}</div>
+                <div class="label-lot">Box quantity: ${labelData.boxQuantity} ${translateUnit(item?.unit)}</div>
                 ${batch ? `
-                  <div class="label-lot">LOT: ${batch.lotNumber || batch.batchNumber || 'Brak numeru'}</div>
-                  ${batch.moNumber ? `
-                    <div class="label-info bold-info">MO: ${batch.moNumber}</div>
-                  ` : ''}
-                  ${batch.orderNumber ? `
-                    <div class="label-info bold-info">CO: ${batch.orderNumber}</div>
-                  ` : ''}
-                  ${batch.expiryDate ? `
-                    <div class="label-info">Data ważności: ${new Date(batch.expiryDate).toLocaleDateString('pl-PL')}</div>
-                  ` : ''}
+                  <div class="label-lot">LOT: ${batch.lotNumber || batch.batchNumber || 'No number'}</div>
+                  
+                  <div class="compact-info">
+                    ${batch.moNumber ? `
+                      <div class="compact-info-item bold-info">MO: ${batch.moNumber}</div>
+                    ` : ''}
+                    ${batch.orderNumber ? `
+                      <div class="compact-info-item bold-info">CO: ${batch.orderNumber}</div>
+                    ` : ''}
+                    ${batch.purchaseOrderDetails && batch.purchaseOrderDetails.number ? `
+                      <div class="compact-info-item bold-info">PO: ${batch.purchaseOrderDetails.number}</div>
+                    ` : (batch.poNumber ? `
+                      <div class="compact-info-item bold-info">PO: ${batch.poNumber}</div>
+                    ` : '')}
+                    ${batch.purchaseOrderDetails && batch.purchaseOrderDetails.supplier && batch.purchaseOrderDetails.supplier.name ? `
+                      <div class="compact-info-item">Supplier: ${batch.purchaseOrderDetails.supplier.name}</div>
+                    ` : (batch.supplier ? `
+                      <div class="compact-info-item">Supplier: ${batch.supplier}</div>
+                    ` : '')}
+                    ${batch.expiryDate ? `
+                      <div class="compact-info-item">Exp: ${formatDate(batch.expiryDate)}</div>
+                    ` : ''}
+                  </div>
                 ` : ''}
               ` : ''}
               
               ${labelData.palletQuantity ? `
-                <div class="label-info bold-info">Ilość na palecie: ${labelData.palletQuantity} ${item?.unit || 'szt.'}</div>
+                <div class="label-info bold-info">Pallet quantity: ${labelData.palletQuantity} ${translateUnit(item?.unit)}</div>
               ` : ''}
               
               ${labelData.additionalInfo ? `
@@ -517,33 +703,34 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
                 <img src="${codeImageUrl}" style="max-width: 100%; height: auto;" />
               </div>
             ` : ''}
+            
+            <div class="footer">
+              Printed: ${new Date().toLocaleString('en-GB')}
+            </div>
           </div>
-          <button id="capture-button">Pobierz etykietę</button>
-          <a id="download-link"></a>
-          
-          <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+          <button id="capture-button">Capture and Download</button>
+          <a id="download-link" download="label_${item?.id || 'product'}_${batch ? batch.batchNumber || batch.lotNumber || '' : ''}.png"></a>
           <script>
             document.getElementById('capture-button').addEventListener('click', function() {
-              var element = document.getElementById('label-to-capture');
-              html2canvas(element, {
-                scale: 2,
-                backgroundColor: '#ffffff',
-                logging: false,
-                useCORS: true,
-                allowTaint: true
-              }).then(function(canvas) {
-                // Utwórz link do pobrania pliku
-                var dataUrl = canvas.toDataURL('image/png');
-                var downloadLink = document.getElementById('download-link');
-                downloadLink.href = dataUrl;
-                downloadLink.download = '${labelType === 'batch' ? 'batch' : 'box'}-label-${item?.name?.replace(/\s+/g, '-') || 'product'}-${new Date().toISOString().slice(0, 10)}.png';
-                downloadLink.click();
-                
-                // Zamknij okno po pobraniu
-                setTimeout(function() {
+              const labelElement = document.getElementById('label-to-capture');
+              const downloadLink = document.getElementById('download-link');
+              const button = this;
+              
+              button.textContent = 'Processing...';
+              button.disabled = true;
+              
+              // Używamy html2canvas z setTimeout dla lepszego renderowania
+              setTimeout(function() {
+                html2canvas(labelElement, {
+                  scale: 3,
+                  backgroundColor: '#FFFFFF'
+                }).then(function(canvas) {
+                  const pngData = canvas.toDataURL('image/png');
+                  downloadLink.href = pngData;
+                  downloadLink.click();
                   window.close();
-                }, 100);
-              });
+                });
+              }, 300);
             });
           </script>
         </body>
@@ -556,8 +743,8 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
       tempWindow.document.close();
       
     } catch (error) {
-      console.error('Błąd podczas zapisywania etykiety jako obrazu:', error);
-      alert('Wystąpił błąd podczas zapisywania etykiety. Spróbuj ponownie.');
+      console.error('Error saving label as image:', error);
+      alert('An error occurred while saving the label. Please try again.');
     }
   };
 
@@ -579,35 +766,51 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
 
   // Przygotuj dane do kodów
   const codeData = item?.id ? 
-    (batch ? `${batch.lotNumber || batch.batchNumber || 'LOT'}` : item.id) : 
-    'brak-id';
+    (batch ? 
+      `${item.id}_${batch.lotNumber || batch.batchNumber || 'LOT'}${
+        (batch.purchaseOrderDetails && batch.purchaseOrderDetails.number) 
+          ? '_PO' + batch.purchaseOrderDetails.number 
+          : (batch.poNumber ? '_PO' + batch.poNumber : '')
+      }` : 
+      item.id) : 
+    'no-id';
   
-  // Uproszczone dane dla kodu QR - tylko najważniejsze informacje
-  const qrData = JSON.stringify({
-    name: item?.name || '',
-    lot: batch?.lotNumber || batch?.batchNumber || '',
-    qty: batch?.quantity || '',
-    exp: batch?.expiryDate ? new Date(batch.expiryDate).toLocaleDateString('en-US', {year: 'numeric', month: '2-digit', day: '2-digit'}) : '',
-    group: itemGroups.length > 0 ? itemGroups[0].name : '',
-    moNumber: batch?.moNumber || '',
-    orderNumber: batch?.orderNumber || '',
-    boxQty: labelData.boxQuantity || '',
-    palletQty: labelData.palletQuantity || '',
-    address: address || ''
-  });
+  // Dane dla kodu QR w formie czytelnej dla użytkownika - format wieloliniowy
+  const qrData = 
+    `NAME: ${item?.name || 'Product'}\n` +
+    `ID: ${item?.id || ''}\n` +
+    `CATEGORY: ${translateCategory(item?.category) || 'No category'}\n` +
+    (batch ? `LOT: ${batch.lotNumber || batch.batchNumber || 'No number'}\n` : '') +
+    (batch && batch.quantity ? `QTY: ${batch.quantity} ${translateUnit(item?.unit)}\n` : '') +
+    (batch && batch.expiryDate ? `EXP: ${formatDate(batch.expiryDate)}\n` : '') +
+    (batch && batch.moNumber ? `MO: ${batch.moNumber}\n` : '') +
+    (batch && batch.orderNumber ? `CO: ${batch.orderNumber}\n` : '') +
+    // Pobieranie danych PO z zagnieżdżonej struktury purchaseOrderDetails
+    (batch && batch.purchaseOrderDetails && batch.purchaseOrderDetails.number ? `PO: ${batch.purchaseOrderDetails.number}\n` : '') +
+    (batch && batch.poNumber ? `PO: ${batch.poNumber}\n` : '') +
+    (batch && batch.purchaseOrderDetails && batch.purchaseOrderDetails.id ? `PO ID: ${batch.purchaseOrderDetails.id}\n` : '') +
+    (batch && batch.purchaseOrderId ? `PO ID: ${batch.purchaseOrderId}\n` : '') +
+    // Dane dostawcy z zagnieżdżonej struktury
+    (batch && batch.purchaseOrderDetails && batch.purchaseOrderDetails.supplier && batch.purchaseOrderDetails.supplier.name 
+      ? `SUPPLIER: ${batch.purchaseOrderDetails.supplier.name}\n` : '') +
+    (batch && batch.supplier ? `SUPPLIER: ${batch.supplier}\n` : '') +
+    (labelType === 'box' && labelData.boxQuantity ? `BOX QTY: ${labelData.boxQuantity} ${translateUnit(item?.unit)}\n` : '') +
+    (labelData.palletQuantity ? `PALLET QTY: ${labelData.palletQuantity} ${translateUnit(item?.unit)}\n` : '') +
+    (itemGroups.length > 0 ? `GROUP: ${itemGroups.map(g => g.name).join(', ')}\n` : '') +
+    `PRINT DATE: ${new Date().toLocaleDateString('en-GB')}`;
 
   return (
     <Box ref={labelRef} sx={{ width: '100%', maxWidth: 400, mx: 'auto', mb: 2 }}>
       {isEditing ? (
         <Paper sx={{ p: 2, mb: 2 }}>
           <Typography variant="h6" gutterBottom>
-            Edytuj etykietę
+            Edit Label
           </Typography>
           <Grid container spacing={2}>
             <Grid item xs={12}>
               <TextField
                 fullWidth
-                label="Tytuł etykiety"
+                label="Label Title"
                 name="title"
                 value={labelData.title}
                 onChange={handleChange}
@@ -616,7 +819,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
             <Grid item xs={12}>
               <TextField
                 fullWidth
-                label="Dodatkowe informacje"
+                label="Additional Information"
                 name="additionalInfo"
                 value={labelData.additionalInfo}
                 onChange={handleChange}
@@ -627,7 +830,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
             <Grid item xs={6}>
               <TextField
                 fullWidth
-                label="Rozmiar czcionki tytułu"
+                label="Title Font Size"
                 name="fontSize"
                 type="number"
                 value={labelData.fontSize}
@@ -637,14 +840,14 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
             </Grid>
             <Grid item xs={6}>
               <FormControl component="fieldset">
-                <FormLabel component="legend">Typ kodu</FormLabel>
+                <FormLabel component="legend">Code Type</FormLabel>
                 <RadioGroup
                   name="codeType"
                   value={labelData.codeType}
                   onChange={handleChange}
                 >
-                  <FormControlLabel value="barcode" control={<Radio />} label="Kod kreskowy" />
-                  <FormControlLabel value="qrcode" control={<Radio />} label="Kod QR" />
+                  <FormControlLabel value="barcode" control={<Radio />} label="Barcode" />
+                  <FormControlLabel value="qrcode" control={<Radio />} label="QR Code" />
                 </RadioGroup>
               </FormControl>
             </Grid>
@@ -657,31 +860,31 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
                     name="showCode"
                   />
                 }
-                label="Pokaż kod na etykiecie"
+                label="Show code on label"
               />
             </Grid>
             {labelType === 'box' && (
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Ilość produktu w kartonie"
+                  label="Box Quantity"
                   name="boxQuantity"
                   type="number"
                   value={labelData.boxQuantity}
                   onChange={handleChange}
-                  InputProps={{ endAdornment: item?.unit || 'szt.' }}
+                  InputProps={{ endAdornment: translateUnit(item?.unit) }}
                 />
               </Grid>
             )}
             <Grid item xs={12}>
               <TextField
                 fullWidth
-                label="Ilość na palecie"
+                label="Pallet Quantity"
                 name="palletQuantity"
                 type="number"
                 value={labelData.palletQuantity}
                 onChange={handleChange}
-                InputProps={{ endAdornment: item?.unit || 'szt.' }}
+                InputProps={{ endAdornment: translateUnit(item?.unit) }}
               />
             </Grid>
             {address && (
@@ -694,7 +897,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
                       name="showAddress"
                     />
                   }
-                  label="Pokaż adres na etykiecie"
+                  label="Show address on label"
                 />
               </Grid>
             )}
@@ -706,14 +909,14 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
               onClick={() => setIsEditing(false)}
               sx={{ mr: 1 }}
             >
-              Anuluj
+              Cancel
             </Button>
             <Button
               variant="contained"
               color="primary"
               onClick={handleSave}
             >
-              Zapisz zmiany
+              Save Changes
             </Button>
           </Box>
         </Paper>
@@ -724,7 +927,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
             startIcon={<EditIcon />}
             onClick={handleEdit}
           >
-            Edytuj etykietę
+            Edit Label
           </Button>
         </Box>
       )}
@@ -744,12 +947,12 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
         </Typography>
         
         <Typography variant="subtitle1" sx={{ textAlign: 'center', mb: 1 }}>
-          Kategoria: {item?.category || 'Brak kategorii'}
+          Category: {translateCategory(item?.category) || 'No category'}
         </Typography>
         
         {itemGroups.length > 0 && (
           <Typography variant="subtitle1" sx={{ textAlign: 'center', mb: 1 }}>
-            Grupa: {itemGroups.map(g => g.name).join(', ')}
+            Group: {itemGroups.map(g => g.name).join(', ')}
           </Typography>
         )}
         
@@ -758,29 +961,53 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
         {labelType === 'batch' && batch && (
           <>
             <Typography variant="h6" sx={{ textAlign: 'center', fontWeight: 'bold', mb: 0.5 }}>
-              LOT: {batch.lotNumber || batch.batchNumber || 'Brak numeru'}
+              LOT: {batch.lotNumber || batch.batchNumber || 'No number'}
             </Typography>
             
             {batch.moNumber && (
-              <Typography variant="subtitle1" sx={{ textAlign: 'center', fontWeight: 'bold', mb: 0.5 }}>
+              <Typography variant="body1" sx={{ textAlign: 'center', fontWeight: 'bold', mb: 0.5 }}>
                 MO: {batch.moNumber}
               </Typography>
             )}
             
             {batch.orderNumber && (
-              <Typography variant="subtitle1" sx={{ textAlign: 'center', fontWeight: 'bold', mb: 0.5 }}>
+              <Typography variant="body1" sx={{ textAlign: 'center', fontWeight: 'bold', mb: 0.5 }}>
                 CO: {batch.orderNumber}
               </Typography>
             )}
             
+            {(batch.purchaseOrderDetails && batch.purchaseOrderDetails.number) ? (
+              <Typography variant="body1" sx={{ textAlign: 'center', fontWeight: 'bold', mb: 0.5 }}>
+                PO: {batch.purchaseOrderDetails.number}
+              </Typography>
+            ) : (
+              batch.poNumber && (
+                <Typography variant="body1" sx={{ textAlign: 'center', fontWeight: 'bold', mb: 0.5 }}>
+                  PO: {batch.poNumber}
+                </Typography>
+              )
+            )}
+            
+            {(batch.purchaseOrderDetails && batch.purchaseOrderDetails.supplier && batch.purchaseOrderDetails.supplier.name) ? (
+              <Typography variant="body1" sx={{ textAlign: 'center', mb: 0.5 }}>
+                Supplier: {batch.purchaseOrderDetails.supplier.name}
+              </Typography>
+            ) : (
+              batch.supplier && (
+                <Typography variant="body1" sx={{ textAlign: 'center', mb: 0.5 }}>
+                  Supplier: {batch.supplier}
+                </Typography>
+              )
+            )}
+            
             {batch.expiryDate && (
               <Typography variant="body1" sx={{ textAlign: 'center', mb: 0.5 }}>
-                Data ważności: {new Date(batch.expiryDate).toLocaleDateString('pl-PL')}
+                Expiry date: {formatDate(batch.expiryDate)}
               </Typography>
             )}
             
             <Typography variant="body1" sx={{ textAlign: 'center', mb: 1 }}>
-              Ilość: {batch.quantity} {item?.unit || 'szt.'}
+              Quantity: {batch.quantity} {translateUnit(item?.unit)}
             </Typography>
           </>
         )}
@@ -788,30 +1015,54 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
         {labelType === 'box' && (
           <>
             <Typography variant="h6" sx={{ textAlign: 'center', fontWeight: 'bold', mb: 1 }}>
-              Ilość w kartonie: {labelData.boxQuantity} {item?.unit || 'szt.'}
+              Box quantity: {labelData.boxQuantity} {translateUnit(item?.unit)}
             </Typography>
             
             {batch && (
               <>
                 <Typography variant="h6" sx={{ textAlign: 'center', fontWeight: 'bold', mb: 0.5 }}>
-                  LOT: {batch.lotNumber || batch.batchNumber || 'Brak numeru'}
+                  LOT: {batch.lotNumber || batch.batchNumber || 'No number'}
                 </Typography>
                 
                 {batch.moNumber && (
-                  <Typography variant="subtitle1" sx={{ textAlign: 'center', fontWeight: 'bold', mb: 0.5 }}>
+                  <Typography variant="body1" sx={{ textAlign: 'center', fontWeight: 'bold', mb: 0.5 }}>
                     MO: {batch.moNumber}
                   </Typography>
                 )}
                 
                 {batch.orderNumber && (
-                  <Typography variant="subtitle1" sx={{ textAlign: 'center', fontWeight: 'bold', mb: 0.5 }}>
+                  <Typography variant="body1" sx={{ textAlign: 'center', fontWeight: 'bold', mb: 0.5 }}>
                     CO: {batch.orderNumber}
                   </Typography>
                 )}
                 
+                {(batch.purchaseOrderDetails && batch.purchaseOrderDetails.number) ? (
+                  <Typography variant="body1" sx={{ textAlign: 'center', fontWeight: 'bold', mb: 0.5 }}>
+                    PO: {batch.purchaseOrderDetails.number}
+                  </Typography>
+                ) : (
+                  batch.poNumber && (
+                    <Typography variant="body1" sx={{ textAlign: 'center', fontWeight: 'bold', mb: 0.5 }}>
+                      PO: {batch.poNumber}
+                    </Typography>
+                  )
+                )}
+                
+                {(batch.purchaseOrderDetails && batch.purchaseOrderDetails.supplier && batch.purchaseOrderDetails.supplier.name) ? (
+                  <Typography variant="body1" sx={{ textAlign: 'center', mb: 0.5 }}>
+                    Supplier: {batch.purchaseOrderDetails.supplier.name}
+                  </Typography>
+                ) : (
+                  batch.supplier && (
+                    <Typography variant="body1" sx={{ textAlign: 'center', mb: 0.5 }}>
+                      Supplier: {batch.supplier}
+                    </Typography>
+                  )
+                )}
+                
                 {batch.expiryDate && (
                   <Typography variant="body1" sx={{ textAlign: 'center', mb: 0.5 }}>
-                    Data ważności: {new Date(batch.expiryDate).toLocaleDateString('pl-PL')}
+                    Expiry date: {formatDate(batch.expiryDate)}
                   </Typography>
                 )}
               </>
@@ -821,7 +1072,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
         
         {labelData.palletQuantity && (
           <Typography variant="body1" sx={{ textAlign: 'center', fontWeight: 'bold', mb: 0.5 }}>
-            Ilość na palecie: {labelData.palletQuantity} {item?.unit || 'szt.'}
+            Pallet quantity: {labelData.palletQuantity} {translateUnit(item?.unit)}
           </Typography>
         )}
         
@@ -857,28 +1108,17 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
           >
             {labelData.codeType === 'qrcode' ? (
               <QRCode 
-                value={
-                  `${item?.name || 'Product'}\n` +
-                  (batch ? `LOT: ${batch.lotNumber || batch.batchNumber || 'No'}\n` : '') +
-                  (batch && batch.expiryDate ? `EXP: ${new Date(batch.expiryDate).toLocaleDateString('en-US')}\n` : '') +
-                  (batch && batch.moNumber ? `MO: ${batch.moNumber}\n` : '') +
-                  (batch && batch.orderNumber ? `CO: ${batch.orderNumber}\n` : '') +
-                  `${(labelType === 'box' && labelData.boxQuantity) ? `BOX QTY: ${labelData.boxQuantity} ${item?.unit || 'pcs'}\n` : ''}` +
-                  `CAT: ${item?.category || 'No category'}`
-                }
+                value={qrData}
                 size={128}
               />
             ) : (
               <Barcode 
-                value={
-                  labelType === 'batch' 
-                    ? (batch?.batchNumber || batch?.lotNumber || item?.id || '0000000000') 
-                    : (batch?.batchNumber || batch?.lotNumber || item?.id || '0000000000')
-                }
+                value={codeData}
                 width={1.5}
                 height={60}
                 fontSize={12}
                 margin={5}
+                text={batch?.batchNumber || batch?.lotNumber || item?.id || ''}
               />
             )}
           </Box>
@@ -892,7 +1132,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
           startIcon={<DownloadIcon />}
           onClick={handleSaveAsPNG}
         >
-          Zapisz jako obraz
+          Save as Image
         </Button>
         <Button
           variant="contained"
@@ -900,7 +1140,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
           startIcon={<PrintIcon />}
           onClick={handlePrint}
         >
-          Drukuj
+          Print
         </Button>
       </Box>
     </Box>

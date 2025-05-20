@@ -246,4 +246,112 @@ export const generateCmrNumber = () => {
   const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
   
   return `CMR-${year}${month}${day}-${random}`;
+};
+
+// Generowanie raportu z dokumentów CMR
+export const generateCmrReport = async (filters = {}) => {
+  try {
+    // Budowanie zapytania z filtrami
+    const cmrRef = collection(db, CMR_COLLECTION);
+    let q = query(cmrRef, orderBy('issueDate', 'desc'));
+    
+    // Dodawanie filtrów do zapytania
+    if (filters.startDate && filters.endDate) {
+      const startDate = Timestamp.fromDate(new Date(filters.startDate));
+      const endDate = Timestamp.fromDate(new Date(filters.endDate));
+      q = query(q, where('issueDate', '>=', startDate), where('issueDate', '<=', endDate));
+    }
+    
+    if (filters.sender) {
+      q = query(q, where('sender', '==', filters.sender));
+    }
+    
+    if (filters.recipient) {
+      q = query(q, where('recipient', '==', filters.recipient));
+    }
+    
+    if (filters.status) {
+      q = query(q, where('status', '==', filters.status));
+    }
+    
+    // Pobierz dokumenty CMR według filtrów
+    const snapshot = await getDocs(q);
+    
+    // Mapowanie dokumentów do raportu
+    const cmrDocuments = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        cmrNumber: data.cmrNumber,
+        issueDate: data.issueDate ? data.issueDate.toDate() : null,
+        deliveryDate: data.deliveryDate ? data.deliveryDate.toDate() : null,
+        sender: data.sender,
+        recipient: data.recipient,
+        loadingPlace: data.loadingPlace,
+        deliveryPlace: data.deliveryPlace,
+        status: data.status,
+        items: [], // Zostawiamy puste, pobierzemy później jeśli potrzeba
+        createdAt: data.createdAt ? data.createdAt.toDate() : null
+      };
+    });
+    
+    // Opcjonalnie pobieramy elementy dla każdego dokumentu
+    if (filters.includeItems) {
+      const promises = cmrDocuments.map(async (doc) => {
+        const itemsRef = collection(db, CMR_ITEMS_COLLECTION);
+        const itemsQuery = query(itemsRef, where('cmrId', '==', doc.id));
+        const itemsSnapshot = await getDocs(itemsQuery);
+        
+        doc.items = itemsSnapshot.docs.map(itemDoc => ({
+          id: itemDoc.id,
+          ...itemDoc.data()
+        }));
+        
+        return doc;
+      });
+      
+      // Czekamy na zakończenie wszystkich zapytań
+      await Promise.all(promises);
+    }
+    
+    // Statystyki raportu
+    const statistics = {
+      totalDocuments: cmrDocuments.length,
+      byStatus: {},
+      bySender: {},
+      byRecipient: {}
+    };
+    
+    // Obliczanie statystyk
+    cmrDocuments.forEach(doc => {
+      // Statystyki według statusu
+      if (!statistics.byStatus[doc.status]) {
+        statistics.byStatus[doc.status] = 0;
+      }
+      statistics.byStatus[doc.status]++;
+      
+      // Statystyki według nadawcy
+      if (!statistics.bySender[doc.sender]) {
+        statistics.bySender[doc.sender] = 0;
+      }
+      statistics.bySender[doc.sender]++;
+      
+      // Statystyki według odbiorcy
+      if (!statistics.byRecipient[doc.recipient]) {
+        statistics.byRecipient[doc.recipient] = 0;
+      }
+      statistics.byRecipient[doc.recipient]++;
+    });
+    
+    return {
+      documents: cmrDocuments,
+      statistics,
+      filters,
+      generatedAt: new Date(),
+      reportName: `Raport CMR ${format(new Date(), 'dd.MM.yyyy')}`
+    };
+  } catch (error) {
+    console.error('Błąd podczas generowania raportu CMR:', error);
+    throw error;
+  }
 }; 

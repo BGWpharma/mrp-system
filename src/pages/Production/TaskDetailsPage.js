@@ -3136,6 +3136,115 @@ const TaskDetailsPage = () => {
         </DialogActions>
       </Dialog>
       
+      {/* Dialog dodawania wpisu historii produkcji */}
+      <Dialog
+        open={addHistoryDialogOpen}
+        onClose={() => setAddHistoryDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Dodaj wpis historii produkcji</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Wprowadź dane nowej sesji produkcyjnej.
+          </DialogContentText>
+          
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <TextField
+                label="Wyprodukowana ilość"
+                type="number"
+                value={editedHistoryItem.quantity}
+                onChange={(e) => setEditedHistoryItem(prev => ({ 
+                  ...prev, 
+                  quantity: e.target.value === '' ? '' : parseFloat(e.target.value) 
+                }))}
+                inputProps={{ min: 0, step: 'any' }}
+                fullWidth
+                required
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Data i czas rozpoczęcia"
+                type="datetime-local"
+                value={editedHistoryItem.startTime instanceof Date 
+                  ? editedHistoryItem.startTime.toISOString().slice(0, 16) 
+                  : ''}
+                onChange={(e) => {
+                  const newDate = e.target.value ? new Date(e.target.value) : new Date();
+                  setEditedHistoryItem(prev => ({ 
+                    ...prev, 
+                    startTime: newDate
+                  }));
+                }}
+                InputLabelProps={{ shrink: true }}
+                fullWidth
+                required
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Data i czas zakończenia"
+                type="datetime-local"
+                value={editedHistoryItem.endTime instanceof Date 
+                  ? editedHistoryItem.endTime.toISOString().slice(0, 16) 
+                  : ''}
+                onChange={(e) => {
+                  const newDate = e.target.value ? new Date(e.target.value) : new Date();
+                  setEditedHistoryItem(prev => ({ 
+                    ...prev, 
+                    endTime: newDate
+                  }));
+                }}
+                InputLabelProps={{ shrink: true }}
+                fullWidth
+                required
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAddHistoryDialogOpen(false)}>
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleAddHistoryItem} 
+            variant="contained" 
+            color="primary"
+            disabled={loading}
+          >
+            {loading ? <CircularProgress size={24} /> : 'Dodaj sesję'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Dialog usuwania wpisu historii produkcji */}
+      <Dialog
+        open={deleteHistoryDialogOpen}
+        onClose={() => setDeleteHistoryDialogOpen(false)}
+      >
+        <DialogTitle>Potwierdź usunięcie</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Czy na pewno chcesz usunąć wybrany wpis z historii produkcji? Ta operacja jest nieodwracalna.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteHistoryDialogOpen(false)}>
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleConfirmDeleteHistoryItem} 
+            variant="contained" 
+            color="error"
+            disabled={loading}
+          >
+            {loading ? <CircularProgress size={24} /> : 'Usuń wpis'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
     </Container>
   );
 };

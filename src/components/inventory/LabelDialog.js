@@ -26,6 +26,65 @@ import { updateInventoryItem } from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 
+// Funkcja do bezpiecznego formatowania daty
+const formatDate = (dateValue) => {
+  if (!dateValue) return '';
+  
+  try {
+    // Obsługa różnych formatów daty
+    let date;
+    
+    // Jeśli to obiekt Date
+    if (dateValue instanceof Date) {
+      date = dateValue;
+    }
+    // Jeśli to timestamp Firestore
+    else if (dateValue.toDate && typeof dateValue.toDate === 'function') {
+      date = dateValue.toDate();
+    }
+    // Jeśli to timestamp z sekundami
+    else if (dateValue.seconds) {
+      date = new Date(dateValue.seconds * 1000);
+    }
+    // Jeśli to string
+    else if (typeof dateValue === 'string') {
+      // Usuń ewentualne spacje
+      const trimmedDate = dateValue.trim();
+      
+      // Sprawdź różne formaty daty
+      if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(trimmedDate)) {
+        // Format MM/DD/YYYY lub M/D/YYYY
+        const [month, day, year] = trimmedDate.split('/');
+        date = new Date(year, month - 1, day);
+      } else if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(trimmedDate)) {
+        // Format ISO YYYY-MM-DD
+        date = new Date(trimmedDate);
+      } else {
+        // Standardowe parsowanie daty
+        date = new Date(trimmedDate);
+      }
+      
+      // Sprawdź czy data jest poprawna
+      if (isNaN(date.getTime())) {
+        console.error('Invalid date format:', dateValue);
+        return 'No expiry date';
+      }
+    } else {
+      return 'No expiry date';
+    }
+    
+    // Formatuj datę do wyświetlenia w formacie DD/MM/YYYY (format brytyjski)
+    return date.toLocaleDateString('en-GB', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+  } catch (error) {
+    console.error('Error formatting date:', error, dateValue);
+    return 'No expiry date';
+  }
+};
+
 const LabelDialog = ({ open, onClose, item, batches = [] }) => {
   const [selectedTab, setSelectedTab] = useState(0);
   const [selectedBatch, setSelectedBatch] = useState(batches?.length > 0 ? batches[0] : null);
@@ -39,7 +98,7 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
     street: '',
     city: '',
     postalCode: '',
-    country: 'Polska'
+    country: 'Poland'
   });
   const [boxQuantity, setBoxQuantity] = useState(item?.itemsPerBox || '');
   const [isSaving, setIsSaving] = useState(false);
@@ -60,7 +119,7 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
       const customersData = await getAllCustomers();
       setCustomers(customersData);
     } catch (error) {
-      console.error('Błąd podczas pobierania klientów:', error);
+      console.error('Error fetching customers:', error);
     } finally {
       setLoadingCustomers(false);
     }
@@ -83,7 +142,7 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
   const handleAddressTypeChange = (event) => {
     setAddressType(event.target.value);
     
-    // Resetuj wybrany adres, jeśli wybrano "Brak adresu"
+    // Reset selected address if "No address" is selected
     if (event.target.value === 'none') {
       setSelectedCustomer(null);
       setManualAddress({
@@ -91,7 +150,7 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
         street: '',
         city: '',
         postalCode: '',
-        country: 'Polska'
+        country: 'Poland'
       });
     }
   };
@@ -118,26 +177,26 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
     try {
       setIsSaving(true);
       
-      // Zapisz nową wartość itemsPerBox w pozycji magazynowej
+      // Save new itemsPerBox value to inventory item
       await updateInventoryItem(item.id, { itemsPerBox: boxQuantity }, currentUser.uid);
       
-      showSuccess('Zaktualizowano ilość produktu w kartonie');
+      showSuccess('Box quantity updated successfully');
     } catch (error) {
-      console.error('Błąd podczas zapisywania ilości w kartonie:', error);
-      showError('Nie udało się zapisać ilości w kartonie');
+      console.error('Error saving box quantity:', error);
+      showError('Failed to save box quantity');
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Formatowanie adresu do wyświetlenia
+  // Format address for display
   const formatAddress = (address) => {
     if (!address) return '';
     const { name, street, postalCode, city, country } = address;
     return `${name ? name + '\n' : ''}${street}\n${postalCode} ${city}\n${country}`;
   };
 
-  // Przygotowanie obiektu adresu do przekazania do etykiety
+  // Prepare address object for label
   const getAddressForLabel = () => {
     if (addressType === 'none') return null;
     
@@ -146,13 +205,13 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
     }
     
     if (addressType === 'customer' && selectedCustomer) {
-      // Wybierz adres dostawy lub adres do faktury (jeśli adres dostawy nie istnieje)
+      // Choose shipping address or billing address (if shipping address doesn't exist)
       const customerAddress = {
         name: selectedCustomer.name,
         street: selectedCustomer.shippingAddress || selectedCustomer.billingAddress || '',
         city: '',
         postalCode: '',
-        country: 'Polska'
+        country: 'Poland'
       };
       
       return selectedCustomer.shippingAddress || selectedCustomer.billingAddress || null;
@@ -175,28 +234,28 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
       }}
     >
       <DialogTitle>
-        Generuj etykietę: {item?.name || 'Produkt'}
+        Generate Label: {item?.name || 'Product'}
       </DialogTitle>
       <DialogContent>
         <Tabs value={selectedTab} onChange={handleTabChange} sx={{ mb: 2 }}>
-          <Tab label="Etykieta kartonu" />
-          <Tab label="Etykieta partii" disabled={!batches || batches.length === 0} />
+          <Tab label="Box Label" />
+          <Tab label="Batch Label" disabled={!batches || batches.length === 0} />
         </Tabs>
         
         {selectedTab === 0 && (
           <Box sx={{ mb: 3 }}>
             <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
-              <Typography variant="subtitle1" gutterBottom>Ilość produktu w kartonie</Typography>
+              <Typography variant="subtitle1" gutterBottom>Box Quantity</Typography>
               <Grid container spacing={2} alignItems="center">
                 <Grid item xs>
                   <TextField
                     fullWidth
-                    label="Ilość w kartonie"
+                    label="Box Quantity"
                     type="number"
                     value={boxQuantity}
                     onChange={handleBoxQuantityChange}
-                    InputProps={{ endAdornment: item?.unit || 'szt.' }}
-                    helperText="Określ ilość produktu w jednym kartonie"
+                    InputProps={{ endAdornment: item?.unit || 'pcs' }}
+                    helperText="Specify quantity of product in one box"
                   />
                 </Grid>
                 <Grid item>
@@ -206,7 +265,7 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
                     onClick={handleSaveBoxQuantity}
                     disabled={isSaving}
                   >
-                    {isSaving ? 'Zapisywanie...' : 'Zapisz do pozycji'}
+                    {isSaving ? 'Saving...' : 'Save to Item'}
                   </Button>
                 </Grid>
               </Grid>
@@ -214,19 +273,19 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
             
             {batches && batches.length > 0 && (
               <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
-                <Typography variant="subtitle1" gutterBottom>Wybierz partię dla etykiety kartonu</Typography>
+                <Typography variant="subtitle1" gutterBottom>Select Batch for Box Label</Typography>
                 <FormControl fullWidth>
-                  <InputLabel>Wybierz partię</InputLabel>
+                  <InputLabel>Select Batch</InputLabel>
                   <Select
                     value={selectedBatch?.id || ''}
                     onChange={handleBatchChange}
-                    label="Wybierz partię"
+                    label="Select Batch"
                   >
-                    <MenuItem value="">Brak partii</MenuItem>
+                    <MenuItem value="">No batch</MenuItem>
                     {batches.map((batch) => (
                       <MenuItem key={batch.id} value={batch.id}>
-                        Numer partii: {batch.batchNumber || batch.lotNumber || 'brak'} | Ilość: {batch.quantity} | 
-                        {batch.expiryDate ? ` Termin ważności: ${new Date(batch.expiryDate).toLocaleDateString('pl-PL')}` : ' Brak terminu ważności'}
+                        Batch number: {batch.batchNumber || batch.lotNumber || 'none'} | Quantity: {batch.quantity} | 
+                        Expiry date: {formatDate(batch.expiryDate)}
                       </MenuItem>
                     ))}
                   </Select>
@@ -239,16 +298,16 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
         {selectedTab === 1 && batches && batches.length > 0 && (
           <Box sx={{ mb: 3 }}>
             <FormControl fullWidth>
-              <InputLabel>Wybierz partię</InputLabel>
+              <InputLabel>Select Batch</InputLabel>
               <Select
                 value={selectedBatch?.id || ''}
                 onChange={handleBatchChange}
-                label="Wybierz partię"
+                label="Select Batch"
               >
                 {batches.map((batch) => (
                   <MenuItem key={batch.id} value={batch.id}>
-                    Numer partii: {batch.batchNumber || batch.lotNumber || 'brak'} | Ilość: {batch.quantity} | 
-                    {batch.expiryDate ? ` Termin ważności: ${new Date(batch.expiryDate).toLocaleDateString('pl-PL')}` : ' Brak terminu ważności'}
+                    Batch number: {batch.batchNumber || batch.lotNumber || 'none'} | Quantity: {batch.quantity} | 
+                    Expiry date: {formatDate(batch.expiryDate)}
                   </MenuItem>
                 ))}
               </Select>
@@ -258,18 +317,18 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
 
         {/* Dodaj opcje adresu */}
         <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
-          <Typography variant="subtitle1" gutterBottom>Adres na etykiecie</Typography>
+          <Typography variant="subtitle1" gutterBottom>Address on Label</Typography>
           
           <FormControl fullWidth sx={{ mb: 2 }}>
-            <InputLabel>Rodzaj adresu</InputLabel>
+            <InputLabel>Address Type</InputLabel>
             <Select
               value={addressType}
               onChange={handleAddressTypeChange}
-              label="Rodzaj adresu"
+              label="Address Type"
             >
-              <MenuItem value="none">Brak adresu</MenuItem>
-              <MenuItem value="manual">Wprowadź ręcznie</MenuItem>
-              <MenuItem value="customer">Wybierz z listy klientów</MenuItem>
+              <MenuItem value="none">No address</MenuItem>
+              <MenuItem value="manual">Enter manually</MenuItem>
+              <MenuItem value="customer">Select from customer list</MenuItem>
             </Select>
           </FormControl>
 
@@ -278,7 +337,7 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Nazwa odbiorcy"
+                  label="Recipient Name"
                   name="name"
                   value={manualAddress.name}
                   onChange={handleManualAddressChange}
@@ -287,7 +346,7 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Ulica i numer"
+                  label="Street and Number"
                   name="street"
                   value={manualAddress.street}
                   onChange={handleManualAddressChange}
@@ -296,7 +355,7 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
               <Grid item xs={6}>
                 <TextField
                   fullWidth
-                  label="Kod pocztowy"
+                  label="Postal Code"
                   name="postalCode"
                   value={manualAddress.postalCode}
                   onChange={handleManualAddressChange}
@@ -306,7 +365,7 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
               <Grid item xs={6}>
                 <TextField
                   fullWidth
-                  label="Miasto"
+                  label="City"
                   name="city"
                   value={manualAddress.city}
                   onChange={handleManualAddressChange}
@@ -315,7 +374,7 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Kraj"
+                  label="Country"
                   name="country"
                   value={manualAddress.country}
                   onChange={handleManualAddressChange}
@@ -335,23 +394,23 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
                   onChange={handleCustomerChange}
                   value={selectedCustomer}
                   renderInput={(params) => (
-                    <TextField {...params} label="Wybierz klienta" fullWidth />
+                    <TextField {...params} label="Select Customer" fullWidth />
                   )}
                 />
               )}
               
               {selectedCustomer && (
                 <Paper variant="outlined" sx={{ p: 2, mt: 2 }}>
-                  <Typography variant="subtitle2" gutterBottom>Adres dostawy:</Typography>
+                  <Typography variant="subtitle2" gutterBottom>Shipping Address:</Typography>
                   <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                    {selectedCustomer.shippingAddress || 'Brak adresu dostawy'}
+                    {selectedCustomer.shippingAddress || 'No shipping address'}
                   </Typography>
                   
                   <Divider sx={{ my: 2 }} />
                   
-                  <Typography variant="subtitle2" gutterBottom>Adres do faktury:</Typography>
+                  <Typography variant="subtitle2" gutterBottom>Billing Address:</Typography>
                   <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                    {selectedCustomer.billingAddress || 'Brak adresu do faktury'}
+                    {selectedCustomer.billingAddress || 'No billing address'}
                   </Typography>
                 </Paper>
               )}
@@ -372,7 +431,7 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleClose}>Zamknij</Button>
+        <Button onClick={handleClose}>Close</Button>
         <Button 
           onClick={() => {
             if (labelRef.current) {
@@ -383,7 +442,7 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
           color="primary"
           disabled={loading}
         >
-          Drukuj etykietę
+          Print Label
         </Button>
         <Button 
           onClick={() => {
@@ -395,7 +454,7 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
           color="primary"
           disabled={loading}
         >
-          Zapisz jako obraz
+          Save as Image
         </Button>
       </DialogActions>
     </Dialog>

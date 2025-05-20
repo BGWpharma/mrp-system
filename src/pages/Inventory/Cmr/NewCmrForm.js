@@ -59,7 +59,7 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
   const emptyItem = {
     marks: '',               // Pole 6 - Znaki i numery
     numberOfPackages: '',    // Pole 7 - Ilość sztuk
-    packagingMethod: 'szt.', // Pole 8 - Sposób pakowania
+    packagingMethod: '',     // Pole 8 - Sposób pakowania 
     description: '',         // Pole 9 - Rodzaj towaru
     weight: '',              // Pole 11 - Waga brutto w kg
     volume: ''               // Pole 12 - Objętość w m³
@@ -68,14 +68,14 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
   const emptyFormData = {
     cmrNumber: '',           // Numer CMR (generowany automatycznie)
     issueDate: new Date(),   // Data wystawienia (pole 21)
-    copies: '30',            // Liczba egzemplarzy
+    copies: '',              // Liczba egzemplarzy
     
     // Pole 1 - Nadawca
     sender: '',              // Nazwa nadawcy
     senderAddress: '',       // Adres nadawcy
     senderPostalCode: '',    // Kod pocztowy nadawcy
     senderCity: '',          // Miasto nadawcy
-    senderCountry: 'Polska', // Kraj nadawcy
+    senderCountry: '',       // Kraj nadawcy
     
     // Pole 2 - Odbiorca
     recipient: '',           // Nazwa odbiorcy

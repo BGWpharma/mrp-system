@@ -28,6 +28,81 @@ let dataCache = {
 const CACHE_EXPIRY = 10 * 60 * 1000;
 
 /**
+ * Pobiera dane z wielu kolekcji w jednym zapytaniu, aby zmniejszyć liczbę operacji odczytu
+ * @param {Array} collectionsConfig - Tablica z konfiguracją kolekcji do pobrania [{name, options}]
+ * @returns {Promise<Object>} - Obiekt z danymi pogrupowanymi według nazw kolekcji
+ */
+export const batchGetData = async (collectionsConfig = []) => {
+  try {
+    console.log(`Pobieranie danych wsadowych dla ${collectionsConfig.length} kolekcji...`);
+    
+    // Przygotuj wyniki
+    const results = {};
+    const now = new Date().getTime();
+    
+    // Najpierw sprawdź, czy dane są w cache
+    const cachedCollections = [];
+    const collectionsToFetch = [];
+    
+    // Przygotuj listę kolekcji do pobrania
+    for (const config of collectionsConfig) {
+      const { name, options = {} } = config;
+      
+      // Sprawdź, czy dane są w buforze i czy nie są przeterminowane
+      if (dataCache[name] && dataCache[name].data && dataCache[name].timestamp && 
+          (now - dataCache[name].timestamp < CACHE_EXPIRY)) {
+        // Dane są w cache
+        console.log(`Używam zbuforowanych danych dla ${name} (wiek: ${Math.round((now - dataCache[name].timestamp) / 1000)}s)`);
+        results[name] = dataCache[name].data;
+        cachedCollections.push(name);
+      } else {
+        // Dane nie są w cache lub są przeterminowane
+        collectionsToFetch.push({ name, options });
+      }
+    }
+    
+    // Zgłoś, które kolekcje są pobierane z cache
+    console.log(`Kolekcje pobrane z cache: ${cachedCollections.join(', ') || 'brak'}`);
+    
+    // Pobierz dane z bazy dla pozostałych kolekcji - równolegle
+    if (collectionsToFetch.length > 0) {
+      console.log(`Pobieranie danych z bazy dla kolekcji: ${collectionsToFetch.map(c => c.name).join(', ')}`);
+      
+      // Uruchom wszystkie zapytania równolegle dla lepszej wydajności
+      const promises = collectionsToFetch.map(async ({ name, options }) => {
+        try {
+          const result = await getCollectionData(name, options);
+          
+          // Zapisz do cache i zwróć dane
+          dataCache[name] = {
+            data: result.data,
+            timestamp: now
+          };
+          
+          return { name, data: result.data };
+        } catch (error) {
+          console.error(`Błąd podczas pobierania danych dla kolekcji ${name}:`, error);
+          return { name, data: [], error: error.message };
+        }
+      });
+      
+      // Czekaj na wszystkie zapytania
+      const fetchedResults = await Promise.all(promises);
+      
+      // Zapisz wyniki
+      fetchedResults.forEach(({ name, data }) => {
+        results[name] = data;
+      });
+    }
+    
+    return results;
+  } catch (error) {
+    console.error('Błąd podczas batch pobierania danych:', error);
+    return {};
+  }
+};
+
+/**
  * Pobiera dane z bufora lub z bazy danych gdy bufor jest nieaktualny
  * @param {string} cacheKey - Klucz w buforze danych
  * @param {Function} fetchFunction - Funkcja pobierająca dane z bazy
@@ -148,12 +223,15 @@ export const clearCache = (cacheKey = null) => {
 /**
  * Pobiera dane z kolekcji i przekształca je do formatu odpowiedniego dla AI
  * @param {string} collectionName - Nazwa kolekcji do pobrania
- * @param {Object} options - Opcje pobierania (limit, filtry, sortowanie)
+ * @param {Object} options - Opcje pobierania (limit, filtry, sortowanie, lastVisible - ostatni widoczny dokument)
  * @returns {Promise<Array>} - Dane z kolekcji
  */
 const getCollectionData = async (collectionName, options = {}) => {
   try {
     let q = collection(db, collectionName);
+    
+    // Domyślny mniejszy limit stron - zmniejszony z 50 na 30
+    const pageSize = options.limit || 30;
     
     // Dodaj filtry do zapytania
     if (options.filters) {
@@ -162,26 +240,38 @@ const getCollectionData = async (collectionName, options = {}) => {
       });
     }
     
-    // Dodaj sortowanie
+    // Dodaj sortowanie - wymagane dla kursorów
     if (options.orderBy) {
       q = query(q, orderBy(options.orderBy.field, options.orderBy.direction || 'asc'));
+    } else {
+      // Jeśli nie ma sortowania, dodaj domyślne po ID - konieczne dla kursorów
+      q = query(q, orderBy('__name__'));
+    }
+    
+    // Używaj kursorów zamiast offsetu dla paginacji
+    if (options.lastVisible) {
+      q = query(q, startAfter(options.lastVisible));
     }
     
     // Dodaj limit
-    if (options.limit) {
-      q = query(q, limit(options.limit));
-    }
-    
-    // Dodaj paginację
-    if (options.startAfter) {
-      q = query(q, startAfter(options.startAfter));
+    if (pageSize) {
+      q = query(q, limit(pageSize));
     }
     
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    
+    // Zwróć ostatni dokument do użycia jako kursor w kolejnych zapytaniach
+    const lastVisible = querySnapshot.docs.length > 0 
+      ? querySnapshot.docs[querySnapshot.docs.length - 1] 
+      : null;
+      
+    return {
+      data: querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })),
+      lastVisible: lastVisible
+    };
   } catch (error) {
     console.error(`Błąd podczas pobierania danych z kolekcji ${collectionName}:`, error);
     throw error;
@@ -194,7 +284,8 @@ const getCollectionData = async (collectionName, options = {}) => {
  * @returns {Promise<Array>} - Lista pozycji magazynowych
  */
 export const getInventoryItems = async (options = {}) => {
-  return getCollectionData('inventory', options);
+  const result = await getCollectionData('inventory', options);
+  return result.data;
 };
 
 /**
@@ -203,7 +294,8 @@ export const getInventoryItems = async (options = {}) => {
  * @returns {Promise<Array>} - Lista zamówień klientów
  */
 export const getCustomerOrders = async (options = {}) => {
-  return getCollectionData('orders', options);
+  const result = await getCollectionData('orders', options);
+  return result.data;
 };
 
 /**
@@ -212,7 +304,8 @@ export const getCustomerOrders = async (options = {}) => {
  * @returns {Promise<Array>} - Lista zadań produkcyjnych
  */
 export const getProductionTasks = async (options = {}) => {
-  return getCollectionData('productionTasks', options);
+  const result = await getCollectionData('productionTasks', options);
+  return result.data;
 };
 
 /**
@@ -221,7 +314,8 @@ export const getProductionTasks = async (options = {}) => {
  * @returns {Promise<Array>} - Lista dostawców
  */
 export const getSuppliers = async (options = {}) => {
-  return getCollectionData('suppliers', options);
+  const result = await getCollectionData('suppliers', options);
+  return result.data;
 };
 
 /**
@@ -233,18 +327,18 @@ export const getRecipes = async (options = {}) => {
   console.log('Pobieranie wszystkich receptur z pełnymi szczegółami...');
   try {
     // Domyślnie pobieramy wszystkie receptury bez limitów
-    const allRecipes = await getCollectionData('recipes', {
+    const result = await getCollectionData('recipes', {
       // Używamy sortowania po ostatniej aktualizacji żeby mieć najnowsze dane
       orderBy: { field: 'updatedAt', direction: 'desc' }
     });
     
-    console.log(`Pobrano ${allRecipes.length} receptur`);
+    console.log(`Pobrano ${result.data.length} receptur`);
     
     // Pobieramy pełne dane komponentów dla każdej receptury, jeśli są dostępne
     // Możemy tworzyć dodatkowe zapytania do bazy, jeśli mamy tylko referencje do komponentów
     // ale na razie zakładamy, że receptury mają już włączone komponenty
     
-    return allRecipes;
+    return result.data;
   } catch (error) {
     console.error('Błąd podczas pobierania receptur:', error);
     return [];
@@ -257,7 +351,8 @@ export const getRecipes = async (options = {}) => {
  * @returns {Promise<Array>} - Lista zamówień zakupu
  */
 export const getPurchaseOrders = async (options = {}) => {
-  return getCollectionData('purchaseOrders', options);
+  const result = await getCollectionData('purchaseOrders', options);
+  return result.data;
 };
 
 /**
@@ -1623,24 +1718,68 @@ const extractRecipeNameFromQuery = (query) => {
 export const getBatchesWithPOData = async () => {
   try {
     return getDataWithCache('materialBatches', async () => {
-      // Pobierz wszystkie partie magazynowe
-      const batchesQuery = query(
-        collection(db, 'inventoryBatches'),
-        limit(200) // Limit dla wydajności
-      );
+      console.log('Pobieranie danych o partiach materiałów z zamówieniami zakupowymi...');
       
-      const batchesSnapshot = await getDocs(batchesQuery);
-      const batches = batchesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      // Przygotuj wyniki
+      const batches = [];
+      let lastVisible = null;
+      const pageSize = 50; // Zmniejszony rozmiar strony z 200 na 50
+      let hasMoreBatches = true;
       
-      // Filtruj partie, które mają powiązania z zamówieniami zakupowymi
-      const batchesWithPO = batches.filter(batch => 
-        batch.purchaseOrderDetails && batch.purchaseOrderDetails.id
-      );
+      // Pobierz partie magazynowe stronami, używając kursorów
+      while (hasMoreBatches) {
+        // Zbuduj zapytanie z kursorem
+        let batchesQuery = query(
+          collection(db, 'inventoryBatches'),
+          orderBy('createdAt', 'desc'), // Sortuj po dacie utworzenia - kluczowe dla paginacji z kursorami
+          limit(pageSize)
+        );
+        
+        // Dodaj kursor, jeśli to nie pierwsza strona
+        if (lastVisible) {
+          batchesQuery = query(
+            collection(db, 'inventoryBatches'),
+            orderBy('createdAt', 'desc'),
+            startAfter(lastVisible),
+            limit(pageSize)
+          );
+        }
+        
+        const batchesSnapshot = await getDocs(batchesQuery);
+        
+        // Sprawdź, czy mamy więcej stron do pobrania
+        if (batchesSnapshot.docs.length < pageSize) {
+          hasMoreBatches = false;
+        }
+        
+        // Zapisz ostatni widoczny dokument jako kursor
+        if (batchesSnapshot.docs.length > 0) {
+          lastVisible = batchesSnapshot.docs[batchesSnapshot.docs.length - 1];
+          
+          // Przetwórz wyniki
+          const newBatches = batchesSnapshot.docs
+            .map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }))
+            .filter(batch => batch.purchaseOrderDetails && batch.purchaseOrderDetails.id);
+          
+          batches.push(...newBatches);
+          
+          console.log(`Pobrano stronę danych o partiach (${batchesSnapshot.docs.length} dokumentów, ${newBatches.length} z powiązaniami z PO)`);
+        } else {
+          hasMoreBatches = false;
+        }
+        
+        // Dodatkowe sprawdzenie dla bezpieczeństwa - ograniczamy maksymalną liczbę pobranych dokumentów
+        if (batches.length >= 500) {
+          console.log('Osiągnięto maksymalną liczbę pobranych partii (500)');
+          hasMoreBatches = false;
+        }
+      }
       
-      return batchesWithPO;
+      console.log(`Łącznie pobrano ${batches.length} partii z powiązaniami z zamówieniami zakupowymi`);
+      return batches;
     });
   } catch (error) {
     console.error('Błąd podczas pobierania danych o partiach materiałów:', error);
@@ -1739,153 +1878,110 @@ export const prepareBusinessDataForAI = async (query = '') => {
     // Pobierz podsumowanie systemu MRP
     const summaryData = await getMRPSystemSummary();
     
-    // Pobierz dane o stanach magazynowych - bez limitów
-    const inventoryItems = await getInventoryItems({ limit: null });
-    console.log(`Pobrano ${inventoryItems?.length || 0} elementów magazynowych`);
+    // Określ, które kolekcje chcemy pobrać
+    const collectionsToFetch = [
+      { name: 'inventory', options: { limit: null } },
+      { name: 'orders', options: { limit: null } },
+      { name: 'productionTasks', options: { limit: null } },
+      { name: 'suppliers', options: { limit: null } },
+      { name: 'purchaseOrders', options: { limit: null } }
+    ];
     
-    // Pobierz dane o zamówieniach klientów - bez limitów
-    const customerOrders = await getCustomerOrders({ limit: null });
-    console.log(`Pobrano ${customerOrders?.length || 0} zamówień klientów`);
+    // Dodaj aiConversations tylko jeśli zapytanie ich dotyczy
+    if (query && (query.toLowerCase().includes('ai') || query.toLowerCase().includes('asystent') || query.toLowerCase().includes('konwersac'))) {
+      collectionsToFetch.push({ name: 'aiConversations', options: { limit: 100 } });
+    } else {
+      console.log('Pomijam pobieranie konwersacji z asystentem AI - nie są potrzebne dla tego zapytania');
+    }
     
-    // Pobierz dane o zadaniach produkcyjnych - bez limitów
-    const productionTasks = await getProductionTasks({ limit: null });
-    console.log(`Pobrano ${productionTasks?.length || 0} zadań produkcyjnych`);
+    // Dodaj pozostałe kolekcje z mniejszymi limitami
+    const additionalCollections = [
+      'counters', 'inventorySupplierPrices', 'inventoryTransactions', 
+      'itemGroups', 'notifications', 'priceListItems', 'priceLists',
+      'productionHistory', 'recipeVersions', 'settings', 'users',
+      'warehouses', 'workstations', 'inventoryBatches'
+    ];
     
-    // Pobierz dane o dostawcach - bez limitów
-    const suppliers = await getSuppliers({ limit: null });
-    console.log(`Pobrano ${suppliers?.length || 0} dostawców`);
+    additionalCollections.forEach(collectionName => {
+      collectionsToFetch.push({ name: collectionName, options: { limit: 100 } });
+    });
     
-    // Pobierz dane o recepturach - bez limitów i z pełnymi szczegółami
+    // Pobierz receptury oddzielnie, ponieważ wymagają specjalnego sortowania
     const recipes = await getRecipes();
     console.log(`Pobrano ${recipes?.length || 0} receptur z pełnymi szczegółami`);
     
-    // Pobierz dane o zamówieniach zakupu - bez limitów
-    const purchaseOrders = await getPurchaseOrders({ limit: null });
-    console.log(`Pobrano ${purchaseOrders?.length || 0} zamówień zakupowych`);
-    
-    // Pobierz dane o klientach - bez limitów
+    // Pobierz dane o klientach oddzielnie, używając dedykowanej funkcji
     const customers = await getAllCustomers();
     console.log(`Pobrano ${customers?.length || 0} klientów`);
     
-    // Pobierz dane o partiach materiałów i ich powiązaniach z PO oraz MO - bez limitów
+    // Pobierz dane o partiach materiałów oddzielnie
     const materialBatchesData = await getFullBatchesData({ limit: null });
     console.log(`Pobrano ${materialBatchesData?.batches?.length || 0} partii materiałów i ${materialBatchesData?.reservations?.length || 0} rezerwacji`);
     
-    // Pobierz dane o konwersacjach z asystentem AI
-    const aiConversations = await getAIConversations({ limit: 100 });
-    console.log(`Pobrano ${aiConversations?.length || 0} konwersacji z asystentem AI`);
+    // Wykonaj wsadowe pobieranie danych
+    console.log('Wykonuję wsadowe pobieranie danych dla', collectionsToFetch.length, 'kolekcji');
+    const batchData = await batchGetData(collectionsToFetch);
     
-    // Pobierz dane o licznikach systemowych
-    const counters = await getCounters({ limit: 100 });
-    console.log(`Pobrano ${counters?.length || 0} liczników systemowych`);
+    // Loguj wyniki pobierania
+    Object.keys(batchData).forEach(key => {
+      console.log(`Pobrano ${batchData[key]?.length || 0} dokumentów z kolekcji ${key}`);
+    });
     
-    // Pobierz dane o cenach dostawców
-    const inventorySupplierPrices = await getInventorySupplierPrices({ limit: 100 });
-    console.log(`Pobrano ${inventorySupplierPrices?.length || 0} cen dostawców`);
-    
-    // Pobierz dane o transakcjach magazynowych
-    const inventoryTransactions = await getInventoryTransactions({ limit: 100 });
-    console.log(`Pobrano ${inventoryTransactions?.length || 0} transakcji magazynowych`);
-    
-    // Pobierz dane o grupach produktów
-    const itemGroups = await getItemGroups({ limit: 100 });
-    console.log(`Pobrano ${itemGroups?.length || 0} grup produktów`);
-    
-    // Pobierz dane o powiadomieniach
-    const notifications = await getNotifications({ limit: 100 });
-    console.log(`Pobrano ${notifications?.length || 0} powiadomień`);
-    
-    // Pobierz dane o elementach cenników
-    const priceListItems = await getPriceListItems({ limit: 100 });
-    console.log(`Pobrano ${priceListItems?.length || 0} elementów cenników`);
-    
-    // Pobierz dane o cennikach
-    const priceLists = await getPriceLists({ limit: 100 });
-    console.log(`Pobrano ${priceLists?.length || 0} cenników`);
-    
-    // Pobierz dane o historii produkcji
-    const productionHistory = await getProductionHistory({ limit: 100 });
-    console.log(`Pobrano ${productionHistory?.length || 0} historii produkcji`);
-    
-    // Pobierz dane o wersjach receptur
-    const recipeVersions = await getRecipeVersions({ limit: 100 });
-    console.log(`Pobrano ${recipeVersions?.length || 0} wersji receptur`);
-    
-    // Pobierz dane o ustawieniach systemu
-    const settings = await getSettingsData({ limit: 100 });
-    console.log(`Pobrano ${settings?.length || 0} ustawień systemu`);
-    
-    // Pobierz dane o użytkownikach
-    const users = await getUsers({ limit: 100 });
-    console.log(`Pobrano ${users?.length || 0} użytkowników`);
-    
-    // Pobierz dane o magazynach
-    const warehouses = await getWarehouses({ limit: 100 });
-    console.log(`Pobrano ${warehouses?.length || 0} magazynów`);
-    
-    // Pobierz dane o stanowiskach pracy
-    const workstations = await getWorkstations({ limit: 100 });
-    console.log(`Pobrano ${workstations?.length || 0} stanowisk pracy`);
-
-    // Pobierz dane o partiach magazynowych (InventoryBatches)
-    const inventoryBatches = await getInventoryBatches({ limit: 100 });
-    console.log(`Pobrano ${inventoryBatches?.length || 0} partii magazynowych`);
-
     // Przygotuj obiekt z danymi bazowymi
     const businessData = {
       data: {
-        inventory: inventoryItems,
-        orders: customerOrders,
-        productionTasks: productionTasks,
-        suppliers: suppliers,
-        recipes: recipes,
-        purchaseOrders: purchaseOrders,
+        inventory: batchData.inventory || [],
+        orders: batchData.orders || [],
+        productionTasks: batchData.productionTasks || [],
+        suppliers: batchData.suppliers || [],
+        recipes: recipes || [],
+        purchaseOrders: batchData.purchaseOrders || [],
         materialBatches: materialBatchesData?.batches || [],
         batchReservations: materialBatchesData?.reservations || [],
-        customers: customers,
-        aiConversations: aiConversations,
-        counters: counters,
-        inventorySupplierPrices: inventorySupplierPrices,
-        inventoryTransactions: inventoryTransactions,
-        itemGroups: itemGroups,
-        notifications: notifications,
-        priceListItems: priceListItems,
-        priceLists: priceLists,
-        productionHistory: productionHistory,
-        recipeVersions: recipeVersions,
-        settings: settings,
-        users: users,
-        warehouses: warehouses,
-        workstations: workstations,
-        inventoryBatches: inventoryBatches // Dodajemy dane o partiach magazynowych
+        customers: customers || [],
+        aiConversations: batchData.aiConversations || [],
+        counters: batchData.counters || [],
+        inventorySupplierPrices: batchData.inventorySupplierPrices || [],
+        inventoryTransactions: batchData.inventoryTransactions || [],
+        itemGroups: batchData.itemGroups || [],
+        notifications: batchData.notifications || [],
+        priceListItems: batchData.priceListItems || [],
+        priceLists: batchData.priceLists || [],
+        productionHistory: batchData.productionHistory || [],
+        recipeVersions: batchData.recipeVersions || [],
+        settings: batchData.settings || [],
+        users: batchData.users || [],
+        warehouses: batchData.warehouses || [],
+        workstations: batchData.workstations || [],
+        inventoryBatches: batchData.inventoryBatches || []
       },
       summary: summaryData,
       timestamp: new Date().toISOString(),
       dataCompleteness: {
-        inventory: inventoryItems?.length > 0,
-        orders: customerOrders?.length > 0,
-        productionTasks: productionTasks?.length > 0,
-        suppliers: suppliers?.length > 0,
+        inventory: (batchData.inventory?.length || 0) > 0,
+        orders: (batchData.orders?.length || 0) > 0,
+        productionTasks: (batchData.productionTasks?.length || 0) > 0,
+        suppliers: (batchData.suppliers?.length || 0) > 0,
         recipes: recipes?.length > 0,
-        purchaseOrders: purchaseOrders?.length > 0,
+        purchaseOrders: (batchData.purchaseOrders?.length || 0) > 0,
         materialBatches: (materialBatchesData?.batches?.length || 0) > 0,
         batchReservations: (materialBatchesData?.reservations?.length || 0) > 0,
         customers: customers?.length > 0,
-        aiConversations: aiConversations?.length > 0,
-        counters: counters?.length > 0,
-        inventorySupplierPrices: inventorySupplierPrices?.length > 0,
-        inventoryTransactions: inventoryTransactions?.length > 0,
-        itemGroups: itemGroups?.length > 0,
-        notifications: notifications?.length > 0,
-        priceListItems: priceListItems?.length > 0,
-        priceLists: priceLists?.length > 0,
-        productionHistory: productionHistory?.length > 0,
-        recipeVersions: recipeVersions?.length > 0,
-        settings: settings?.length > 0,
-        users: users?.length > 0,
-        warehouses: warehouses?.length > 0,
-        workstations: workstations?.length > 0,
-        inventoryBatches: inventoryBatches?.length > 0 // Dodajemy informację o dostępności danych partii magazynowych
+        aiConversations: (batchData.aiConversations?.length || 0) > 0,
+        counters: (batchData.counters?.length || 0) > 0,
+        inventorySupplierPrices: (batchData.inventorySupplierPrices?.length || 0) > 0,
+        inventoryTransactions: (batchData.inventoryTransactions?.length || 0) > 0,
+        itemGroups: (batchData.itemGroups?.length || 0) > 0,
+        notifications: (batchData.notifications?.length || 0) > 0,
+        priceListItems: (batchData.priceListItems?.length || 0) > 0,
+        priceLists: (batchData.priceLists?.length || 0) > 0,
+        productionHistory: (batchData.productionHistory?.length || 0) > 0,
+        recipeVersions: (batchData.recipeVersions?.length || 0) > 0,
+        settings: (batchData.settings?.length || 0) > 0,
+        users: (batchData.users?.length || 0) > 0,
+        warehouses: (batchData.warehouses?.length || 0) > 0,
+        workstations: (batchData.workstations?.length || 0) > 0,
+        inventoryBatches: (batchData.inventoryBatches?.length || 0) > 0
       },
       // Przekazujemy zapytanie użytkownika, aby móc lepiej dopasować odpowiedź
       query: query
@@ -2025,7 +2121,8 @@ export const analyzePurchaseOrders = (purchaseOrders) => {
  * @returns {Promise<Array>} - Lista konwersacji
  */
 export const getAIConversations = async (options = {}) => {
-  return getCollectionData('aiConversations', options);
+  const result = await getCollectionData('aiConversations', options);
+  return result.data;
 };
 
 /**
@@ -2034,7 +2131,8 @@ export const getAIConversations = async (options = {}) => {
  * @returns {Promise<Array>} - Lista liczników
  */
 export const getCounters = async (options = {}) => {
-  return getCollectionData('counters', options);
+  const result = await getCollectionData('counters', options);
+  return result.data;
 };
 
 /**
@@ -2043,7 +2141,8 @@ export const getCounters = async (options = {}) => {
  * @returns {Promise<Array>} - Lista cen dostawców
  */
 export const getInventorySupplierPrices = async (options = {}) => {
-  return getCollectionData('inventorySupplierPrices', options);
+  const result = await getCollectionData('inventorySupplierPrices', options);
+  return result.data;
 };
 
 /**
@@ -2052,7 +2151,8 @@ export const getInventorySupplierPrices = async (options = {}) => {
  * @returns {Promise<Array>} - Lista transakcji magazynowych
  */
 export const getInventoryTransactions = async (options = {}) => {
-  return getCollectionData('inventoryTransactions', options);
+  const result = await getCollectionData('inventoryTransactions', options);
+  return result.data;
 };
 
 /**
@@ -2061,7 +2161,8 @@ export const getInventoryTransactions = async (options = {}) => {
  * @returns {Promise<Array>} - Lista grup produktów
  */
 export const getItemGroups = async (options = {}) => {
-  return getCollectionData('itemGroups', options);
+  const result = await getCollectionData('itemGroups', options);
+  return result.data;
 };
 
 /**
@@ -2070,7 +2171,8 @@ export const getItemGroups = async (options = {}) => {
  * @returns {Promise<Array>} - Lista powiadomień
  */
 export const getNotifications = async (options = {}) => {
-  return getCollectionData('notifications', options);
+  const result = await getCollectionData('notifications', options);
+  return result.data;
 };
 
 /**
@@ -2079,7 +2181,8 @@ export const getNotifications = async (options = {}) => {
  * @returns {Promise<Array>} - Lista elementów cenników
  */
 export const getPriceListItems = async (options = {}) => {
-  return getCollectionData('priceListItems', options);
+  const result = await getCollectionData('priceListItems', options);
+  return result.data;
 };
 
 /**
@@ -2088,7 +2191,8 @@ export const getPriceListItems = async (options = {}) => {
  * @returns {Promise<Array>} - Lista cenników
  */
 export const getPriceLists = async (options = {}) => {
-  return getCollectionData('priceLists', options);
+  const result = await getCollectionData('priceLists', options);
+  return result.data;
 };
 
 /**
@@ -2097,7 +2201,8 @@ export const getPriceLists = async (options = {}) => {
  * @returns {Promise<Array>} - Lista historii produkcji
  */
 export const getProductionHistory = async (options = {}) => {
-  return getCollectionData('productionHistory', options);
+  const result = await getCollectionData('productionHistory', options);
+  return result.data;
 };
 
 /**
@@ -2106,7 +2211,8 @@ export const getProductionHistory = async (options = {}) => {
  * @returns {Promise<Array>} - Lista wersji receptur
  */
 export const getRecipeVersions = async (options = {}) => {
-  return getCollectionData('recipeVersions', options);
+  const result = await getCollectionData('recipeVersions', options);
+  return result.data;
 };
 
 /**
@@ -2115,7 +2221,8 @@ export const getRecipeVersions = async (options = {}) => {
  * @returns {Promise<Array>} - Lista ustawień
  */
 export const getSettingsData = async (options = {}) => {
-  return getCollectionData('settings', options);
+  const result = await getCollectionData('settings', options);
+  return result.data;
 };
 
 /**
@@ -2124,7 +2231,8 @@ export const getSettingsData = async (options = {}) => {
  * @returns {Promise<Array>} - Lista użytkowników
  */
 export const getUsers = async (options = {}) => {
-  return getCollectionData('users', options);
+  const result = await getCollectionData('users', options);
+  return result.data;
 };
 
 /**
@@ -2133,7 +2241,8 @@ export const getUsers = async (options = {}) => {
  * @returns {Promise<Array>} - Lista magazynów
  */
 export const getWarehouses = async (options = {}) => {
-  return getCollectionData('warehouses', options);
+  const result = await getCollectionData('warehouses', options);
+  return result.data;
 };
 
 /**
@@ -2142,7 +2251,8 @@ export const getWarehouses = async (options = {}) => {
  * @returns {Promise<Array>} - Lista stanowisk pracy
  */
 export const getWorkstations = async (options = {}) => {
-  return getCollectionData('workstations', options);
+  const result = await getCollectionData('workstations', options);
+  return result.data;
 };
 
 /**
@@ -2152,6 +2262,114 @@ export const getWorkstations = async (options = {}) => {
  */
 export const getInventoryBatches = async (options = {}) => {
   return getDataWithCache('inventoryBatches', async () => {
-    return getCollectionData('inventoryBatches', options);
+    const result = await getCollectionData('inventoryBatches', options);
+    return result.data;
   });
+};
+
+/**
+ * Pobiera dane o partiach magazynowych (InventoryBatches) z użyciem paginacji opartej na kursorach
+ * Funkcja ta jest optymalizacją zapytań zawierających duże wartości OFFSET
+ * @param {Object} options - Opcje zapytania (startBatchNumber, batchNumberField, limit)
+ * @returns {Promise<Array>} - Lista partii materiałów
+ */
+export const getInventoryBatchesPaginated = async (options = {}) => {
+  try {
+    console.log('Pobieranie partii magazynowych z paginacją opartą na kursorach...');
+    
+    // Domyślne wartości
+    const batchNumberField = options.batchNumberField || 'batchNumber';
+    const startBatchNumber = options.startBatchNumber || 1;
+    const pageSize = options.limit || 30;
+    
+    // Przygotuj zapytanie
+    const inventoryBatchesQuery = query(
+      collection(db, 'inventoryBatches'),
+      where(batchNumberField, '>=', startBatchNumber),
+      orderBy(batchNumberField, 'asc'),
+      limit(pageSize)
+    );
+    
+    const querySnapshot = await getDocs(inventoryBatchesQuery);
+    
+    // Przygotuj kursor do następnej strony
+    const lastVisible = querySnapshot.docs.length > 0 
+      ? querySnapshot.docs[querySnapshot.docs.length - 1]
+      : null;
+    
+    // Przekształć wyniki
+    const batches = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    console.log(`Pobrano ${batches.length} partii magazynowych zaczynając od numeru ${startBatchNumber}`);
+    
+    return {
+      batches,
+      lastVisible,
+      lastBatchNumber: batches.length > 0 ? batches[batches.length - 1][batchNumberField] : startBatchNumber
+    };
+  } catch (error) {
+    console.error('Błąd podczas pobierania partii magazynowych z paginacją:', error);
+    // Używamy początkowej wartości startBatchNumber z options lub wartości domyślnej 1
+    const defaultStartBatchNumber = options.startBatchNumber || 1;
+    return { batches: [], lastVisible: null, lastBatchNumber: defaultStartBatchNumber };
+  }
+};
+
+/**
+ * Pobierz pojedynczą partię z określonym numerem
+ * Optymalizacja zapytania "COLLECTION /inventoryBatches SELECT batchNumber WHERE batchNumber > ? ORDER BY __name__ ASC OFFSET 300 LIMIT 1"
+ * @param {number} targetBatchNumber - Numer partii do pobrania
+ * @returns {Promise<Object|null>} - Znaleziona partia lub null
+ */
+export const getInventoryBatchByNumber = async (targetBatchNumber) => {
+  try {
+    console.log(`Pobieranie partii magazynowej o numerze ${targetBatchNumber}...`);
+    
+    // Bezpośrednie zapytanie o konkretny numer partii zamiast używania offset
+    const inventoryBatchQuery = query(
+      collection(db, 'inventoryBatches'),
+      where('batchNumber', '==', targetBatchNumber),
+      limit(1)
+    );
+    
+    const querySnapshot = await getDocs(inventoryBatchQuery);
+    
+    // Jeśli partia o danym numerze istnieje, zwróć ją
+    if (!querySnapshot.empty) {
+      const batch = {
+        id: querySnapshot.docs[0].id,
+        ...querySnapshot.docs[0].data()
+      };
+      console.log(`Znaleziono partię o numerze ${targetBatchNumber}`);
+      return batch;
+    }
+    
+    // Jeśli nie znaleziono dokładnego dopasowania, znajdź najbliższą partię z większym numerem
+    const nextBatchQuery = query(
+      collection(db, 'inventoryBatches'),
+      where('batchNumber', '>', targetBatchNumber),
+      orderBy('batchNumber', 'asc'),
+      limit(1)
+    );
+    
+    const nextQuerySnapshot = await getDocs(nextBatchQuery);
+    
+    if (!nextQuerySnapshot.empty) {
+      const batch = {
+        id: nextQuerySnapshot.docs[0].id,
+        ...nextQuerySnapshot.docs[0].data()
+      };
+      console.log(`Znaleziono najbliższą partię o numerze ${batch.batchNumber} (szukano ${targetBatchNumber})`);
+      return batch;
+    }
+    
+    console.log(`Nie znaleziono partii o numerze ${targetBatchNumber} ani większym`);
+    return null;
+  } catch (error) {
+    console.error(`Błąd podczas pobierania partii magazynowej o numerze ${targetBatchNumber}:`, error);
+    return null;
+  }
 };
