@@ -1058,7 +1058,7 @@ import {
           console.error('Błąd podczas konwersji daty ważności:', error);
         }
       }
-
+      
       // Sprawdź czy podano ID magazynu w parametrach
       const warehouseId = inventoryParams.warehouseId || null;
       
@@ -1962,7 +1962,7 @@ import {
           };
           
           console.log(`[DEBUG REZERWACJE] Stan magazynowy ${material.name}: ilość=${inventoryItem.quantity}, zarezerwowano=${inventoryItem.bookedQuantity || 0}`);
-
+          
           // 1. Najpierw pobierz i sprawdź przypisane loty/partie do tego materiału w zadaniu
           let assignedBatches = [];
           

@@ -59,13 +59,15 @@ import { useNotification } from '../../hooks/useNotification';
 import { formatDate, formatQuantity } from '../../utils/formatters';
 import { Timestamp } from 'firebase/firestore';
 import { useAuth } from '../../hooks/useAuth';
+import { auth } from '../../services/firebase/config';
 import LabelDialog from '../../components/inventory/LabelDialog';
 
 const BatchesPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { showError, showSuccess } = useNotification();
-  const { user } = useAuth();
+  const { currentUser } = useAuth();
+  const [localUser, setLocalUser] = useState(null);
   const [item, setItem] = useState(null);
   const [batches, setBatches] = useState([]);
   const [filteredBatches, setFilteredBatches] = useState([]);
@@ -93,6 +95,16 @@ const BatchesPage = () => {
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [selectedCertificateForPreview, setSelectedCertificateForPreview] = useState(null);
   const fileInputRef = React.useRef(null);
+
+  useEffect(() => {
+    // Aktualizuj lokalny stan użytkownika, gdy currentUser się zmieni
+    if (currentUser) {
+      setLocalUser(currentUser);
+    } else if (auth.currentUser) {
+      // Fallback jeśli currentUser z hooka jest niedostępny, ale auth.currentUser jest dostępny
+      setLocalUser(auth.currentUser);
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -333,15 +345,21 @@ const BatchesPage = () => {
         throw new Error('Nie można określić magazynu źródłowego. Spróbuj odświeżyć stronę.');
       }
       
+      // Używamy wielu źródeł danych użytkownika aby zapewnić, że zawsze mamy dostęp do poprawnych danych
+      const effectiveUser = localUser || currentUser || auth.currentUser;
+      
+      const userData = {
+        userId: effectiveUser?.uid || 'unknown',
+        userName: effectiveUser?.displayName || effectiveUser?.email || 'Nieznany użytkownik',
+        notes: `Przeniesienie partii ${selectedBatch.batchNumber || selectedBatch.lotNumber || 'bez numeru'}`
+      };
+      
       await transferBatch(
         selectedBatch.id,
         sourceWarehouseId,
         targetWarehouseId,
         transferQuantity,
-        {
-          userId: user?.uid || 'unknown',
-          notes: `Przeniesienie partii ${selectedBatch.batchNumber || selectedBatch.lotNumber || 'bez numeru'}`
-        }
+        userData
       );
       
       showSuccess('Partia została przeniesiona pomyślnie');
@@ -386,6 +404,9 @@ const BatchesPage = () => {
   };
 
   const openDeleteDialog = (batch) => {
+    // Używamy wielu źródeł danych użytkownika aby zapewnić, że zawsze mamy dostęp do poprawnych danych
+    const effectiveUser = localUser || currentUser || auth.currentUser;
+    
     setSelectedBatchForDelete(batch);
     setDeleteDialogOpen(true);
   };
@@ -447,8 +468,10 @@ const BatchesPage = () => {
     
     try {
       setUploadingCertificate(true);
+      // Używamy wielu źródeł danych użytkownika
+      const effectiveUser = localUser || currentUser || auth.currentUser;
       // Sprawdź czy user istnieje i pobierz uid lub użyj 'unknown'
-      const userId = user?.uid || 'unknown';
+      const userId = effectiveUser?.uid || 'unknown';
       await uploadBatchCertificate(certificateFile, selectedBatchForCertificate.id, userId);
       showSuccess('Certyfikat został pomyślnie dodany do partii');
       
@@ -485,8 +508,10 @@ const BatchesPage = () => {
     
     try {
       setUploadingCertificate(true);
+      // Używamy wielu źródeł danych użytkownika
+      const effectiveUser = localUser || currentUser || auth.currentUser;
       // Sprawdź czy user istnieje i pobierz uid lub użyj 'unknown'
-      const userId = user?.uid || 'unknown';
+      const userId = effectiveUser?.uid || 'unknown';
       await deleteBatchCertificate(batch.id, userId);
       showSuccess('Certyfikat został pomyślnie usunięty');
       
@@ -520,7 +545,16 @@ const BatchesPage = () => {
     try {
       setProcessingDelete(true);
       
-      const result = await deleteBatch(selectedBatchForDelete.id, user?.uid || 'unknown');
+      // Używamy wielu źródeł danych użytkownika aby zapewnić, że zawsze mamy dostęp do poprawnych danych
+      const effectiveUser = localUser || currentUser || auth.currentUser;
+      
+      // Dodaję userName do wywołania funkcji deleteBatch
+      const userData = {
+        userId: effectiveUser?.uid || 'unknown',
+        userName: effectiveUser?.displayName || effectiveUser?.email || 'Nieznany użytkownik'
+      };
+      
+      const result = await deleteBatch(selectedBatchForDelete.id, userData);
       
       if (result.success) {
         showSuccess(result.message || 'Partia została usunięta');
@@ -578,9 +612,9 @@ const BatchesPage = () => {
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Button 
           startIcon={<ArrowBackIcon />} 
-          onClick={() => navigate('/inventory')}
+          onClick={() => navigate(-1)}
         >
-          Powrót do magazynu
+          Powrót
         </Button>
         <Typography variant="h5">
           {item ? `Partie: ${item.name}` : 'Partie (Produkt niedostępny)'}

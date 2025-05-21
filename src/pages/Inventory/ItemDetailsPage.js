@@ -987,21 +987,41 @@ const ItemDetailsPage = () => {
                     <TableCell>Ilość</TableCell>
                     <TableCell>Powód</TableCell>
                     <TableCell>Referencja</TableCell>
+                    <TableCell>Magazyn</TableCell>
                     <TableCell>Notatki</TableCell>
                     <TableCell>Użytkownik</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {transactions.map((transaction) => (
-                    <TableRow key={transaction.id}>
-                      <TableCell>{formatDateTime(transaction.transactionDate)}</TableCell>
-                      <TableCell>{transaction.quantity} {item.unit}</TableCell>
-                      <TableCell>{transaction.reason || '—'}</TableCell>
-                      <TableCell>{transaction.moNumber || transaction.reference || '—'}</TableCell>
-                      <TableCell>{transaction.notes || '—'}</TableCell>
-                      <TableCell>{userNames[transaction.createdBy] || transaction.createdBy || '—'}</TableCell>
-                    </TableRow>
-                  ))}
+                  {transactions.map((transaction) => {
+                    // Pobierz datę transakcji - używamy transactionDate lub createdAt
+                    const transactionDate = transaction.transactionDate || transaction.createdAt || null;
+                    
+                    // Przygotuj nazwę magazynu - pobierz z bazy magazynów jeśli to możliwe
+                    const warehouseName = transaction.warehouseName || 
+                                          (transaction.warehouseId ? 
+                                            batches.find(b => b.warehouseId === transaction.warehouseId)?.warehouseName || 
+                                            transaction.warehouseId : '—');
+                    
+                    // Popraw format notatek, zastępując ID MO numerem MO
+                    let notesText = transaction.notes || '—';
+                    if (notesText.includes('MO:') && transaction.moNumber) {
+                      // Zastąp ID zadania numerem MO
+                      notesText = notesText.replace(/MO: ([a-zA-Z0-9]+)/, `MO: ${transaction.moNumber}`);
+                    }
+                    
+                    return (
+                      <TableRow key={transaction.id}>
+                        <TableCell>{transactionDate ? formatDateTime(transactionDate) : '—'}</TableCell>
+                        <TableCell>{transaction.quantity} {item.unit}</TableCell>
+                        <TableCell>{transaction.reason || '—'}</TableCell>
+                        <TableCell>{transaction.moNumber || transaction.reference || '—'}</TableCell>
+                        <TableCell>{warehouseName}</TableCell>
+                        <TableCell>{notesText}</TableCell>
+                        <TableCell>{userNames[transaction.createdBy] || transaction.createdBy || '—'}</TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>

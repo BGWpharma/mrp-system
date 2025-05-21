@@ -9,13 +9,18 @@ import { db } from './firebase/config';
  */
 export const getUserById = async (userId) => {
   try {
+    console.log('==== getUserById - Diagnostyka ====');
+    console.log('Szukam użytkownika o ID:', userId);
+    
     const userRef = doc(db, 'users', userId);
     const userDoc = await getDoc(userRef);
     
     if (userDoc.exists()) {
+      console.log('Znaleziono użytkownika:', userDoc.data());
       return userDoc.data();
     }
     
+    console.log('Nie znaleziono użytkownika o ID:', userId);
     return null;
   } catch (error) {
     console.error('Błąd podczas pobierania danych użytkownika:', error);

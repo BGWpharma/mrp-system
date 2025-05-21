@@ -1863,13 +1863,13 @@ import {
               });
               console.log(`[DEBUG REZERWACJE] Zerowanie dostępnej rezerwacji dla ${item.name} (${item.bookedQuantity})`);
             }
+            }
           }
-        }
-        
-        return {
-          success: true,
-          message: `Anulowano rezerwację ${Math.min(item.bookedQuantity || 0, quantityToCancel)} ${item.unit} produktu ${item.name}`
-        };
+          
+          return {
+            success: true,
+            message: `Anulowano rezerwację ${Math.min(item.bookedQuantity || 0, quantityToCancel)} ${item.unit} produktu ${item.name}`
+          };
       } else {
         // Aktualizuj pole bookedQuantity w produkcie
         const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
@@ -2170,10 +2170,17 @@ import {
     }
     
     try {
+      // Dodaj szczegółowe informacje diagnostyczne
+      console.log('===== TRANSFERBATCH: DIAGNOSTYKA DANYCH UŻYTKOWNIKA =====');
+      console.log('transferBatch - userData otrzymane:', userData);
+      
       // Zabezpiecz userData
       userData = userData || {};
       const userId = (userData.userId || 'unknown').toString();
       const notes = (userData.notes || '').toString();
+      const userName = userData.userName || "Nieznany użytkownik";
+      
+      console.log('transferBatch - po przetworzeniu:', { userId, userName, notes });
       
       // Pobierz dane partii
       const batchRef = doc(db, INVENTORY_BATCHES_COLLECTION, batchId);
@@ -2300,17 +2307,22 @@ import {
         const targetWarehouseName = warehouseTargetDoc.exists() ? warehouseTargetDoc.data().name : 'Nieznany magazyn';
         
         // Pobierz dane użytkownika
-        let userDisplayName = "Nieznany użytkownik";
-        try {
-          const { getUserById } = await import('./userService');
-          const userData = await getUserById(userId);
-          if (userData) {
-            userDisplayName = userData.displayName || userData.email || userId;
+        let userDisplayName = userName;
+        if (userDisplayName === "Nieznany użytkownik" && userId !== 'unknown') {
+          try {
+            const { getUserById } = await import('./userService');
+            const userDataFromDb = await getUserById(userId);
+            console.log('transferBatch - dane pobrane z bazy:', userDataFromDb);
+            if (userDataFromDb) {
+              userDisplayName = userDataFromDb.displayName || userDataFromDb.email || userId;
+            }
+          } catch (error) {
+            console.error('Błąd podczas pobierania danych użytkownika:', error);
+            // Kontynuuj mimo błędu - mamy przekazaną nazwę użytkownika jako fallback
           }
-        } catch (error) {
-          console.error('Błąd podczas pobierania danych użytkownika:', error);
-          // Kontynuuj mimo błędu - mamy fallback
         }
+        
+        console.log('transferBatch - ostateczna nazwa użytkownika:', userDisplayName);
         
         // Dodaj transakcję informującą o usunięciu partii źródłowej - rozszerzone informacje
         const deleteTransactionData = {
@@ -2490,17 +2502,22 @@ import {
       }
 
       // Pobierz dane użytkownika
-      let userDisplayName = "Nieznany użytkownik";
-      try {
-        const { getUserById } = await import('./userService');
-        const userData = await getUserById(userId);
-        if (userData) {
-          userDisplayName = userData.displayName || userData.email || userId;
+      let userDisplayName = userName;
+      if (userDisplayName === "Nieznany użytkownik" && userId !== 'unknown') {
+        try {
+          const { getUserById } = await import('./userService');
+          const userDataFromDb = await getUserById(userId);
+          console.log('transferBatch - dane pobrane z bazy:', userDataFromDb);
+          if (userDataFromDb) {
+            userDisplayName = userDataFromDb.displayName || userDataFromDb.email || userId;
+          }
+        } catch (error) {
+          console.error('Błąd podczas pobierania danych użytkownika:', error);
+          // Kontynuuj mimo błędu - mamy przekazaną nazwę użytkownika jako fallback
         }
-      } catch (error) {
-        console.error('Błąd podczas pobierania danych użytkownika:', error);
-        // Kontynuuj mimo błędu - mamy fallback
       }
+      
+      console.log('transferBatch - ostateczna nazwa użytkownika:', userDisplayName);
 
       // Dodaj transakcję z rozszerzonymi informacjami
       const transactionData = {
@@ -2523,6 +2540,12 @@ import {
         createdByName: userDisplayName,
         createdAt: serverTimestamp()
       };
+      
+      console.log('transferBatch - transactionData przed zapisem:', {
+        ...transactionData,
+        transactionDate: 'serverTimestamp',
+        createdAt: 'serverTimestamp'
+      });
       
       await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
       
@@ -4588,10 +4611,29 @@ import {
   /**
    * Usuwa partię z systemu, sprawdzając wcześniej, czy nie jest używana w MO/PO
    * @param {string} batchId - ID partii do usunięcia
-   * @param {string} userId - ID użytkownika wykonującego operację
+   * @param {Object|string} userData - Dane użytkownika wykonującego operację (obiekt lub string z userId)
    * @returns {Promise<Object>} - Wynik operacji
    */
-  export const deleteBatch = async (batchId, userId) => {
+  export const deleteBatch = async (batchId, userData) => {
+    console.log('===== DELETEBATCH: DIAGNOSTYKA DANYCH UŻYTKOWNIKA =====');
+    console.log('deleteBatch - przekazane userData:', userData);
+    
+    // Obsługa zarówno obiektu userData jak i string userId
+    let userId = '';
+    let userName = 'Nieznany użytkownik';
+    
+    if (typeof userData === 'string') {
+      userId = userData || 'unknown';
+      console.log('deleteBatch - userData jako string, userId:', userId);
+    } else if (userData && typeof userData === 'object') {
+      userId = (userData.userId || 'unknown').toString();
+      userName = userData.userName || 'Nieznany użytkownik';
+      console.log('deleteBatch - userData jako obiekt, userId:', userId, 'userName:', userName);
+    } else {
+      userId = 'unknown';
+      console.log('deleteBatch - userData nieprawidłowe, używam unknown');
+    }
+    
     try {
       if (!batchId) {
         throw new Error('Nie podano ID partii');
@@ -4679,18 +4721,23 @@ import {
         }
       }
 
-      // Pobierz dane użytkownika
-      let userDisplayName = "Nieznany użytkownik";
-      try {
-        const { getUserById } = await import('./userService');
-        const userData = await getUserById(userId);
-        if (userData) {
-          userDisplayName = userData.displayName || userData.email || userId;
+      // Pobierz dane użytkownika tylko jeśli nie mamy nazwy użytkownika
+      let userDisplayName = userName;
+      if (userDisplayName === "Nieznany użytkownik" && userId !== 'unknown') {
+        try {
+          const { getUserById } = await import('./userService');
+          const userDataFromDb = await getUserById(userId);
+          console.log('deleteBatch - dane pobrane z bazy:', userDataFromDb);
+          if (userDataFromDb) {
+            userDisplayName = userDataFromDb.displayName || userDataFromDb.email || userId;
+          }
+        } catch (error) {
+          console.error('Błąd podczas pobierania danych użytkownika:', error);
+          // Kontynuuj mimo błędu - mamy przekazaną nazwę użytkownika jako fallback
         }
-      } catch (error) {
-        console.error('Błąd podczas pobierania danych użytkownika:', error);
-        // Kontynuuj mimo błędu - mamy fallback
       }
+      
+      console.log('deleteBatch - ostateczna nazwa użytkownika:', userDisplayName);
       
       // Dodaj transakcję informującą o usunięciu partii - rozszerzone informacje
       const transactionData = {
@@ -4713,6 +4760,12 @@ import {
         createdByName: userDisplayName,
         createdAt: serverTimestamp()
       };
+      
+      console.log('deleteBatch - transactionData przed zapisem:', {
+        ...transactionData,
+        transactionDate: 'serverTimestamp',
+        createdAt: 'serverTimestamp'
+      });
       
       await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
 
