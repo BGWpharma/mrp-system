@@ -803,18 +803,19 @@ import {
         // Kontynuuj usuwanie zadania mimo błędu
       }
       
-      // Sprawdź, czy zadanie ma powiązane partie w magazynie
-      const batchesRef = collection(db, 'inventoryBatches');
-      const q = query(batchesRef, where('sourceId', '==', taskId), where('source', '==', 'Produkcja'));
-      const batchesSnapshot = await getDocs(q);
-      
-      // Usuń wszystkie powiązane partie
-      const batchDeletions = batchesSnapshot.docs.map(doc => 
-        deleteDoc(doc.ref)
-      );
-      
-      // Poczekaj na usunięcie wszystkich partii
-      await Promise.all(batchDeletions);
+      // Ta część została usunięta, aby zachować partie produktów w magazynie
+      // Zamiast usuwania partii, tylko zalogujemy, że istnieją
+      try {
+        const batchesRef = collection(db, 'inventoryBatches');
+        const q = query(batchesRef, where('sourceId', '==', taskId), where('source', '==', 'Produkcja'));
+        const batchesSnapshot = await getDocs(q);
+        
+        if (batchesSnapshot.docs.length > 0) {
+          console.log(`Zadanie ${taskId} ma ${batchesSnapshot.docs.length} powiązanych partii produktów w magazynie, które zostały zachowane.`);
+        }
+      } catch (error) {
+        console.error(`Błąd podczas sprawdzania partii produktów: ${error.message}`);
+      }
       
       // Pobierz transakcje związane z tym zadaniem
       const transactionsRef = collection(db, 'inventoryTransactions');
@@ -1057,6 +1058,9 @@ import {
           console.error('Błąd podczas konwersji daty ważności:', error);
         }
       }
+
+      // Sprawdź czy podano ID magazynu w parametrach
+      const warehouseId = inventoryParams.warehouseId || null;
       
       // Zbierz szczegóły dotyczące pochodzenia partii
       const sourceDetails = {
@@ -1097,6 +1101,7 @@ import {
         sourceDetails: sourceDetails,
         notes: sourceNotes,
         unitPrice: 0, // Ustaw cenę jednostkową na 0
+        warehouseId: warehouseId, // Dodaj ID magazynu jeśli zostało przekazane
         createdAt: serverTimestamp(),
         createdBy: userId
       };
@@ -1120,6 +1125,7 @@ import {
         moNumber: taskData.moNumber || null,
         orderNumber: taskData.orderNumber || null,
         batchId: batchRef.id,
+        warehouseId: warehouseId, // Dodaj ID magazynu jeśli zostało przekazane
         createdBy: userId,
         createdAt: serverTimestamp()
       };
@@ -1133,6 +1139,7 @@ import {
         inventoryBatchId: batchRef.id,
         finalQuantity: finalQuantity, // Zapisz końcową ilość w zadaniu
         lotNumber: lotNumber, // Zapisz numer partii do zadania
+        warehouseId: warehouseId, // Zapisz ID magazynu do zadania
         readyForInventory: false, // Oznacz jako już dodane do magazynu
         updatedAt: serverTimestamp(),
         updatedBy: userId
@@ -1916,8 +1923,9 @@ import {
       const actualUsage = task.actualMaterialUsage || {};
       const batchActualUsage = task.batchActualUsage || {};
       
-      console.log("Aktualne zużycie materiałów:", actualUsage);
-      console.log("Aktualne zużycie na poziomie partii:", batchActualUsage);
+      console.log("[DEBUG REZERWACJE] Rozpoczynam potwierdzanie zużycia materiałów dla zadania:", taskId);
+      console.log("[DEBUG REZERWACJE] Aktualne zużycie materiałów:", actualUsage);
+      console.log("[DEBUG REZERWACJE] Aktualne zużycie na poziomie partii:", batchActualUsage);
       
       // Dla każdego materiału, zaktualizuj stan magazynowy
       for (const material of materials) {
@@ -1930,7 +1938,7 @@ import {
           ? parseFloat(actualUsage[materialId]) 
           : parseFloat(material.quantity);
         
-        console.log(`Materiał ${material.name}: planowana ilość = ${material.quantity}, skorygowana ilość = ${consumedQuantity}`);
+        console.log(`[DEBUG REZERWACJE] Materiał ${material.name}: planowana ilość = ${material.quantity}, skorygowana ilość = ${consumedQuantity}`);
         
         // Sprawdź, czy consumedQuantity jest dodatnią liczbą
         if (isNaN(consumedQuantity) || consumedQuantity < 0) {
@@ -1939,7 +1947,7 @@ import {
         
         // Jeśli skorygowana ilość wynosi 0, pomijamy aktualizację partii dla tego materiału
         if (consumedQuantity === 0) {
-          console.log(`Pomijam aktualizację partii dla materiału ${material.name} - zużycie wynosi 0`);
+          console.log(`[DEBUG REZERWACJE] Pomijam aktualizację partii dla materiału ${material.name} - zużycie wynosi 0`);
           continue;
         }
         
@@ -1953,6 +1961,8 @@ import {
             ...inventorySnapshot.data()
           };
           
+          console.log(`[DEBUG REZERWACJE] Stan magazynowy ${material.name}: ilość=${inventoryItem.quantity}, zarezerwowano=${inventoryItem.bookedQuantity || 0}`);
+
           // 1. Najpierw pobierz i sprawdź przypisane loty/partie do tego materiału w zadaniu
           let assignedBatches = [];
           
@@ -2109,18 +2119,25 @@ import {
               // Używamy consumedQuantity zamiast material.quantity
               const bookingQuantity = consumedQuantity;
               
+              console.log(`[DEBUG REZERWACJE] Przygotowanie do anulowania rezerwacji: materiał=${material.name}, ilość=${bookingQuantity}, bookedQuantity=${inventoryItem.bookedQuantity}`);
+              
               // Anuluj rezerwację tylko jeśli jakąś ilość zarezerwowano
               if (bookingQuantity > 0) {
+                console.log(`[DEBUG REZERWACJE] Wywołuję cancelBooking dla materiału ${material.name} z ilością ${bookingQuantity}`);
                 await cancelBooking(inventoryMaterialId, bookingQuantity, taskId, task.createdBy || 'system');
-                console.log(`Anulowano rezerwację ${bookingQuantity} ${inventoryItem.unit} materiału ${material.name} po zatwierdzeniu zużycia`);
+                console.log(`[DEBUG REZERWACJE] Anulowano rezerwację ${bookingQuantity} ${inventoryItem.unit} materiału ${material.name} po zatwierdzeniu zużycia`);
               }
+            } else {
+              console.log(`[DEBUG REZERWACJE] Materiał ${material.name} nie ma zarezerwowanej ilości (bookedQuantity=${inventoryItem.bookedQuantity || 0})`);
             }
           } catch (error) {
-            console.error(`Błąd przy anulowaniu rezerwacji materiału ${material.name}:`, error);
+            console.error(`[DEBUG REZERWACJE] Błąd przy anulowaniu rezerwacji materiału ${material.name}:`, error);
             // Kontynuuj mimo błędu anulowania rezerwacji
           }
         }
       }
+      
+      console.log("[DEBUG REZERWACJE] Zakończono anulowanie rezerwacji, aktualizuję status zadania");
       
       // Oznacz zużycie jako potwierdzone i zapisz informacje o wykorzystanych partiach
       const updates = {
@@ -2134,6 +2151,8 @@ import {
       
       // Zapisz w bazie danych
       await updateDoc(taskRef, updates);
+      
+      console.log("[DEBUG REZERWACJE] Zakończono potwierdzanie zużycia materiałów");
       
       return {
         success: true,

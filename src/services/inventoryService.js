@@ -1786,8 +1786,11 @@ import {
       // UWAGA: Ta funkcja jest wywoływana w confirmMaterialConsumption (po potwierdzeniu zużycia), 
       // a nie automatycznie przy zmianie statusu zadania na 'Zakończone'
       
+      console.log(`[DEBUG REZERWACJE] Rozpoczynam anulowanie rezerwacji: itemId=${itemId}, quantity=${quantity}, taskId=${taskId}`);
+      
       // Pobierz aktualny stan produktu
       const item = await getInventoryItemById(itemId);
+      console.log(`[DEBUG REZERWACJE] Stan produktu ${item.name}: ilość=${item.quantity}, zarezerwowano=${item.bookedQuantity || 0}`);
       
       // Pobierz oryginalne rezerwacje dla tego zadania
       const originalBookingRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
@@ -1801,22 +1804,31 @@ import {
       const originalBookingSnapshot = await getDocs(originalBookingQuery);
       let originalBookedQuantity = 0;
       
+      console.log(`[DEBUG REZERWACJE] Znaleziono ${originalBookingSnapshot.size} rezerwacji dla zadania ${taskId}`);
+      
       originalBookingSnapshot.forEach((bookingDoc) => {
         const bookingData = bookingDoc.data();
         if (bookingData.quantity) {
           originalBookedQuantity += parseFloat(bookingData.quantity);
+          console.log(`[DEBUG REZERWACJE] Rezerwacja ID=${bookingDoc.id}, ilość=${bookingData.quantity}, data=${bookingData.createdAt}`);
         }
       });
       
-      console.log(`Anulowanie rezerwacji: itemId=${itemId}, taskId=${taskId}, zużycie=${quantity}, oryginalna rezerwacja=${originalBookedQuantity}`);
+      console.log(`[DEBUG REZERWACJE] Anulowanie rezerwacji: itemId=${itemId}, taskId=${taskId}, zużycie=${quantity}, oryginalna rezerwacja=${originalBookedQuantity}`);
       
-      // Jeśli rzeczywiste zużycie jest większe lub równe oryginalnej rezerwacji,
-      // powinniśmy anulować całą rezerwację
-      const shouldCancelAllBooking = quantity >= originalBookedQuantity;
-      const quantityToCancel = shouldCancelAllBooking ? item.bookedQuantity || 0 : quantity;
+      // Po potwierdzeniu zużycia materiałów, cała rezerwacja powinna być anulowana
+      // niezależnie od tego, ile faktycznie zużyto (nawet jeśli zużycie < rezerwacja)
+      const shouldCancelAllBooking = true; // Zawsze anuluj całą rezerwację
+      const quantityToCancel = item.bookedQuantity || 0; // Zawsze anuluj całą zarezerwowaną ilość
+      
+      console.log(`[DEBUG REZERWACJE] Anulujemy całą rezerwację niezależnie od zużycia, bookedQuantity=${item.bookedQuantity}`); 
+      
+      console.log(`[DEBUG REZERWACJE] shouldCancelAllBooking=${shouldCancelAllBooking}, quantityToCancel=${quantityToCancel}`);
       
       // Sprawdź, czy jest wystarczająca ilość zarezerwowana
       if (!item.bookedQuantity || item.bookedQuantity < quantityToCancel) {
+        console.log(`[DEBUG REZERWACJE] Niewystarczająca ilość zarezerwowana: bookedQuantity=${item.bookedQuantity}, quantityToCancel=${quantityToCancel}`);
+        
         // Jeśli różnica jest bardzo mała (błąd zaokrąglenia), wyzeruj bookedQuantity
         if (item.bookedQuantity > 0 && (Math.abs(item.bookedQuantity - quantityToCancel) < 0.00001 || shouldCancelAllBooking)) {
           // Aktualizuj pole bookedQuantity w produkcie - całkowite wyzerowanie
@@ -1827,10 +1839,10 @@ import {
             updatedBy: userId
           });
           
-          console.log(`Zerowanie rezerwacji dla ${item.name} z powodu ${shouldCancelAllBooking ? 'zużycia większego niż rezerwacja' : 'minimalnej różnicy zaokrąglenia'}: ${item.bookedQuantity} vs ${quantityToCancel}`);
+          console.log(`[DEBUG REZERWACJE] Zerowanie rezerwacji dla ${item.name} z powodu ${shouldCancelAllBooking ? 'zużycia większego niż rezerwacja' : 'minimalnej różnicy zaokrąglenia'}: ${item.bookedQuantity} vs ${quantityToCancel}`);
         } else {
           // Zamiast rzucać błąd, zwracamy sukces i logujemy informację
-          console.warn(`Anulowanie rezerwacji dla ${item.name}: zarezerwowano tylko ${item.bookedQuantity || 0} ${item.unit}, próbowano anulować ${quantityToCancel} ${item.unit}`);
+          console.warn(`[DEBUG REZERWACJE] Anulowanie rezerwacji dla ${item.name}: zarezerwowano tylko ${item.bookedQuantity || 0} ${item.unit}, próbowano anulować ${quantityToCancel} ${item.unit}`);
           // Jeśli zużycie jest znacząco większe, anulujemy wszystko co jest zarezerwowane
           if (shouldCancelAllBooking && item.bookedQuantity > 0) {
             const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
@@ -1839,7 +1851,7 @@ import {
               updatedAt: serverTimestamp(),
               updatedBy: userId
             });
-            console.log(`Zerowanie rezerwacji dla ${item.name} z powodu zużycia większego niż rezerwacja`);
+            console.log(`[DEBUG REZERWACJE] Zerowanie rezerwacji dla ${item.name} z powodu zużycia większego niż rezerwacja`);
           } else {
             // W przeciwnym razie anuluj tylko dostępną ilość
             if (item.bookedQuantity > 0) {
@@ -1849,14 +1861,15 @@ import {
                 updatedAt: serverTimestamp(),
                 updatedBy: userId
               });
+              console.log(`[DEBUG REZERWACJE] Zerowanie dostępnej rezerwacji dla ${item.name} (${item.bookedQuantity})`);
             }
           }
-          
-          return {
-            success: true,
-            message: `Anulowano rezerwację ${Math.min(item.bookedQuantity || 0, quantityToCancel)} ${item.unit} produktu ${item.name}`
-          };
         }
+        
+        return {
+          success: true,
+          message: `Anulowano rezerwację ${Math.min(item.bookedQuantity || 0, quantityToCancel)} ${item.unit} produktu ${item.name}`
+        };
       } else {
         // Aktualizuj pole bookedQuantity w produkcie
         const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
@@ -1868,13 +1881,14 @@ import {
             updatedAt: serverTimestamp(),
             updatedBy: userId
           });
-          console.log(`Zerowanie całej rezerwacji dla ${item.name} z powodu zużycia większego niż rezerwacja`);
+          console.log(`[DEBUG REZERWACJE] Zerowanie całej rezerwacji dla ${item.name} z powodu zużycia większego niż rezerwacja`);
         } else {
           await updateDoc(itemRef, {
             bookedQuantity: increment(-quantityToCancel),
             updatedAt: serverTimestamp(),
             updatedBy: userId
           });
+          console.log(`[DEBUG REZERWACJE] Zmniejszenie rezerwacji dla ${item.name} o ${quantityToCancel} (z ${item.bookedQuantity} do ${item.bookedQuantity - quantityToCancel})`);
         }
       }
       
@@ -1896,7 +1910,7 @@ import {
           clientId = taskData.clientId || taskData.customer?.id || '';
         }
       } catch (error) {
-        console.warn(`Nie udało się pobrać danych zadania ${taskId}:`, error);
+        console.warn(`[DEBUG REZERWACJE] Nie udało się pobrać danych zadania ${taskId}:`, error);
         // Kontynuuj mimo błędu
       }
       
@@ -1918,7 +1932,8 @@ import {
         clientId
       };
       
-      await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
+      const newTransactionRef = await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
+      console.log(`[DEBUG REZERWACJE] Utworzono transakcję anulowania rezerwacji ID=${newTransactionRef.id}`);
       
       // Znajdź i zaktualizuj status wszystkich rezerwacji dla tego zadania na "completed"
       const reservationRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
@@ -1938,10 +1953,11 @@ import {
           updatedAt: serverTimestamp(),
           completedAt: serverTimestamp()
         });
+        console.log(`[DEBUG REZERWACJE] Oznaczono rezerwację ${bookingDoc.id} jako "completed"`);
       });
       
       await batch.commit();
-      console.log(`Zaktualizowano status wszystkich rezerwacji dla zadania ${taskId} na "completed"`);
+      console.log(`[DEBUG REZERWACJE] Zaktualizowano status wszystkich rezerwacji dla zadania ${taskId} na "completed"`);
       
       // Emituj zdarzenie o zmianie stanu magazynu
       const event = new CustomEvent('inventory-updated', { 
@@ -1949,12 +1965,16 @@ import {
       });
       window.dispatchEvent(event);
       
+      // Pobierz aktualny stan produktu po anulowaniu rezerwacji
+      const updatedItem = await getInventoryItemById(itemId);
+      console.log(`[DEBUG REZERWACJE] Stan produktu po anulowaniu: ${updatedItem.name}, ilość=${updatedItem.quantity}, zarezerwowano=${updatedItem.bookedQuantity || 0}`);
+      
       return {
         success: true,
         message: `Anulowano rezerwację ${quantity} ${item.unit} produktu ${item.name}`
       };
     } catch (error) {
-      console.error('Error cancelling booking:', error);
+      console.error('[DEBUG REZERWACJE] Błąd podczas anulowania rezerwacji:', error);
       throw error;
     }
   };
@@ -2272,7 +2292,27 @@ import {
         // Usuń partię źródłową
         await deleteDoc(batchRef);
         
-        // Dodaj transakcję informującą o usunięciu partii źródłowej
+        // Pobierz nazwy magazynów
+        const warehouseSourceDoc = await getDoc(doc(db, WAREHOUSES_COLLECTION, sourceWarehouseId));
+        const warehouseTargetDoc = await getDoc(doc(db, WAREHOUSES_COLLECTION, targetWarehouseId));
+        
+        const sourceWarehouseName = warehouseSourceDoc.exists() ? warehouseSourceDoc.data().name : 'Nieznany magazyn';
+        const targetWarehouseName = warehouseTargetDoc.exists() ? warehouseTargetDoc.data().name : 'Nieznany magazyn';
+        
+        // Pobierz dane użytkownika
+        let userDisplayName = "Nieznany użytkownik";
+        try {
+          const { getUserById } = await import('./userService');
+          const userData = await getUserById(userId);
+          if (userData) {
+            userDisplayName = userData.displayName || userData.email || userId;
+          }
+        } catch (error) {
+          console.error('Błąd podczas pobierania danych użytkownika:', error);
+          // Kontynuuj mimo błędu - mamy fallback
+        }
+        
+        // Dodaj transakcję informującą o usunięciu partii źródłowej - rozszerzone informacje
         const deleteTransactionData = {
           type: 'DELETE_BATCH_AFTER_TRANSFER',
           itemId,
@@ -2280,9 +2320,16 @@ import {
           batchId,
           batchNumber: batchData.batchNumber || 'Nieznana partia',
           quantity: 0,
-          warehouseId: sourceWarehouseId,
-          notes: `Usunięcie pustej partii po przeniesieniu całości do magazynu ${targetWarehouseId}`,
+          warehouseId: sourceWarehouseId || 'default',
+          warehouseName: sourceWarehouseName,
+          notes: `Usunięcie pustej partii po przeniesieniu całości do magazynu ${targetWarehouseName}`,
+          reason: 'Przeniesienie partii do innego magazynu',
+          reference: `Transfer do magazynu: ${targetWarehouseName}`,
+          source: 'inventory_transfer',
+          previousQuantity: availableQuantity,
+          transactionDate: serverTimestamp(),
           createdBy: userId,
+          createdByName: userDisplayName,
           createdAt: serverTimestamp()
         };
         
@@ -2430,18 +2477,50 @@ import {
         }
       }
       
-      // Dodaj transakcję
+      // Użyjemy już pobrane nazwy magazynów, jeśli są dostępne (przy pełnym transferze).
+      // W przeciwnym razie, pobierzemy ich nazwy teraz.
+      let sourceWarehouseName, targetWarehouseName;
+      
+      if (typeof sourceWarehouseName === 'undefined' || typeof targetWarehouseName === 'undefined') {
+        const warehouseSourceDoc = await getDoc(doc(db, WAREHOUSES_COLLECTION, sourceWarehouseId));
+        const warehouseTargetDoc = await getDoc(doc(db, WAREHOUSES_COLLECTION, targetWarehouseId));
+        
+        sourceWarehouseName = warehouseSourceDoc.exists() ? warehouseSourceDoc.data().name : 'Nieznany magazyn';
+        targetWarehouseName = warehouseTargetDoc.exists() ? warehouseTargetDoc.data().name : 'Nieznany magazyn';
+      }
+
+      // Pobierz dane użytkownika
+      let userDisplayName = "Nieznany użytkownik";
+      try {
+        const { getUserById } = await import('./userService');
+        const userData = await getUserById(userId);
+        if (userData) {
+          userDisplayName = userData.displayName || userData.email || userId;
+        }
+      } catch (error) {
+        console.error('Błąd podczas pobierania danych użytkownika:', error);
+        // Kontynuuj mimo błędu - mamy fallback
+      }
+
+      // Dodaj transakcję z rozszerzonymi informacjami
       const transactionData = {
         type: 'TRANSFER',
         itemId,
         itemName: itemData.name,
         quantity: transferQuantity,
         sourceWarehouseId,
+        sourceWarehouseName,
         targetWarehouseId,
+        targetWarehouseName,
         sourceBatchId: batchId,
         targetBatchId,
         notes,
+        reason: 'Przeniesienie partii do innego magazynu',
+        reference: `Transfer do magazynu: ${targetWarehouseName}`,
+        source: 'inventory_transfer',
+        transactionDate: serverTimestamp(),
         createdBy: userId,
+        createdByName: userDisplayName,
         createdAt: serverTimestamp()
       };
       
@@ -2453,12 +2532,7 @@ import {
       
       // Wyślij powiadomienie o zmianie lokalizacji partii
       try {
-        // Pobierz nazwy magazynów
-        const sourceWarehouseDoc = await getDoc(doc(db, WAREHOUSES_COLLECTION, sourceWarehouseId));
-        const targetWarehouseDoc = await getDoc(doc(db, WAREHOUSES_COLLECTION, targetWarehouseId));
-        
-        const sourceWarehouseName = sourceWarehouseDoc.exists() ? sourceWarehouseDoc.data().name : 'Nieznany';
-        const targetWarehouseName = targetWarehouseDoc.exists() ? targetWarehouseDoc.data().name : 'Nieznany';
+        // Nazwy magazynów zostały już pobrane wcześniej podczas tworzenia transakcji
         
         // Pobierz użytkowników z rolami administratora i magazynu do powiadomienia
         const allUsers = await getAllUsers();
@@ -4605,7 +4679,20 @@ import {
         }
       }
 
-      // Dodaj transakcję informującą o usunięciu partii
+      // Pobierz dane użytkownika
+      let userDisplayName = "Nieznany użytkownik";
+      try {
+        const { getUserById } = await import('./userService');
+        const userData = await getUserById(userId);
+        if (userData) {
+          userDisplayName = userData.displayName || userData.email || userId;
+        }
+      } catch (error) {
+        console.error('Błąd podczas pobierania danych użytkownika:', error);
+        // Kontynuuj mimo błędu - mamy fallback
+      }
+      
+      // Dodaj transakcję informującą o usunięciu partii - rozszerzone informacje
       const transactionData = {
         type: 'DELETE_BATCH',
         itemId: itemId,
@@ -4613,9 +4700,17 @@ import {
         batchId: batchId,
         batchNumber: lotNumber,
         quantity: quantity,
-        warehouseId: batchData.warehouseId,
+        // Sprawdź czy warehouseId istnieje, jeśli nie - ustaw domyślną wartość
+        warehouseId: batchData.warehouseId || 'default',
+        warehouseName: batchData.warehouseName || 'Nieznany magazyn',
         notes: `Usunięcie partii ${lotNumber}`,
+        reason: 'Usunięcie partii',
+        reference: `Partia: ${lotNumber}`,
+        source: 'inventory_management',
+        previousQuantity: batchData.quantity || 0,
+        transactionDate: serverTimestamp(),
         createdBy: userId,
+        createdByName: userDisplayName,
         createdAt: serverTimestamp()
       };
       

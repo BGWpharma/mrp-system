@@ -356,6 +356,9 @@ const ForecastPage = () => {
           materialRequirements[material.id].availableQuantity = parseFloat(material.quantity) || 0;
           // Dodaj informację o cenie i kategorii z magazynu
           materialRequirements[material.id].price = material.price || 0;
+          
+          // Cena zostanie zaktualizowana później po sprawdzeniu domyślnego dostawcy
+          // Tymczasowo ustawiamy na podstawie ceny magazynowej
           materialRequirements[material.id].cost = material.price * materialRequirements[material.id].requiredQuantity;
           
           // Aktualizuj kategorię z danych magazynowych
@@ -363,6 +366,46 @@ const ForecastPage = () => {
             materialRequirements[material.id].category = material.category;
           }
         }
+      }
+      
+      // Pobierz ceny domyślnych dostawców dla każdego materiału i zaktualizuj koszty
+      try {
+        console.log('Pobieranie cen domyślnych dostawców dla materiałów...');
+        const { getBestSupplierPricesForItems } = await import('../../services/inventoryService');
+        
+        // Przygotuj listę materiałów do sprawdzenia
+        const itemsToCheck = Object.values(materialRequirements)
+          .filter(item => item.id)
+          .map(item => ({
+            itemId: item.id,
+            quantity: item.requiredQuantity
+          }));
+        
+        if (itemsToCheck.length > 0) {
+          // Pobierz najlepsze ceny od dostawców, priorytetyzując domyślnych dostawców
+          const bestPrices = await getBestSupplierPricesForItems(itemsToCheck);
+          
+          // Aktualizuj ceny i koszty w materialRequirements na podstawie domyślnych dostawców
+          for (const materialId in materialRequirements) {
+            if (bestPrices[materialId]) {
+              const bestPrice = bestPrices[materialId];
+              
+              // Jeśli mamy cenę od domyślnego dostawcy, użyj jej
+              if (bestPrice.isDefault || bestPrice.price) {
+                materialRequirements[materialId].price = bestPrice.price;
+                materialRequirements[materialId].cost = bestPrice.price * materialRequirements[materialId].requiredQuantity;
+                materialRequirements[materialId].supplier = bestPrice.supplierName || 'Nieznany dostawca';
+                materialRequirements[materialId].supplierId = bestPrice.supplierId;
+                materialRequirements[materialId].isDefaultSupplier = bestPrice.isDefault;
+              }
+            }
+          }
+          
+          console.log('Zaktualizowano ceny na podstawie domyślnych dostawców');
+        }
+      } catch (error) {
+        console.error('Błąd podczas pobierania cen domyślnych dostawców:', error);
+        // W przypadku błędu kontynuujemy z cenami magazynowymi
       }
       
       // Pobierz informacje o zamówieniach komponentów (PO) dla każdego materiału
@@ -594,6 +637,9 @@ const ForecastPage = () => {
           break;
         case 'cost':
           comparison = a.cost - b.cost;
+          break;
+        case 'price':
+          comparison = a.price - b.price;
           break;
         default:
           comparison = a.balance - b.balance;
@@ -997,6 +1043,9 @@ const ForecastPage = () => {
                   <TableCell align="right" width="10%" onClick={() => handleSortChange('balanceWithDeliveries')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
                     Bilans z dostawami {renderSortIcon('balanceWithDeliveries')}
                   </TableCell>
+                  <TableCell align="right" width="10%" onClick={() => handleSortChange('price')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                    Cena {renderSortIcon('price')}
+                  </TableCell>
                   <TableCell align="right" width="10%" onClick={() => handleSortChange('cost')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
                     Szacowany koszt {renderSortIcon('cost')}
                   </TableCell>
@@ -1051,7 +1100,11 @@ const ForecastPage = () => {
                         {formatNumber(item.availableQuantity)} {item.unit}
                       </TableCell>
                       <TableCell align="right">
-                        {formatNumber(item.requiredQuantity)} {item.unit}
+                        {item.requiredQuantity === 0 ? '-' : (
+                          <Tooltip title={`Ilość wymagana: ${formatNumber(item.requiredQuantity)} ${item.unit}`}>
+                            <span>{formatNumber(item.requiredQuantity)} {item.unit}</span>
+                          </Tooltip>
+                        )}
                       </TableCell>
                       <TableCell align="right">
                         <Typography 
@@ -1089,7 +1142,18 @@ const ForecastPage = () => {
                         </Typography>
                       </TableCell>
                       <TableCell align="right">
-                        <Typography fontWeight="medium">{formatCurrency(item.cost)}</Typography>
+                        {item.price === 0 ? '-' : (
+                          <Tooltip title={item.supplier ? `Cena od dostawcy: ${item.supplier}${item.isDefaultSupplier ? ' (domyślny)' : ''}` : 'Cena magazynowa'}>
+                            <span>{formatCurrency(item.price)}</span>
+                          </Tooltip>
+                        )}
+                      </TableCell>
+                      <TableCell align="right">
+                        {item.cost === 0 ? '-' : (
+                          <Tooltip title={item.supplier ? `Koszt na podstawie ceny od dostawcy: ${item.supplier}${item.isDefaultSupplier ? ' (domyślny)' : ''}` : 'Koszt na podstawie ceny magazynowej'}>
+                            <span>{formatCurrency(item.cost)}</span>
+                          </Tooltip>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Chip 

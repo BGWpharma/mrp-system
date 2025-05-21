@@ -72,9 +72,9 @@ const InventoryHistoryPage = () => {
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Button 
           startIcon={<ArrowBackIcon />} 
-          onClick={() => navigate(`/inventory/${id}`)}
+          onClick={() => navigate(-1)}
         >
-          Powrót do szczegółów
+          Powrót
         </Button>
         <Typography variant="h5">
           Historia transakcji: {item.name}

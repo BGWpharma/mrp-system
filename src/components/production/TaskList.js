@@ -58,6 +58,7 @@ import {
   BuildCircle as BuildCircleIcon
 } from '@mui/icons-material';
 import { getAllTasks, updateTaskStatus, deleteTask, addTaskProductToInventory, stopProduction, getTasksWithPagination } from '../../services/productionService';
+import { getAllWarehouses } from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/dateUtils';
@@ -97,8 +98,11 @@ const TaskList = () => {
     expiryDate: null,
     lotNumber: '',
     finalQuantity: '',
+    warehouseId: ''
   });
   const [inventoryError, setInventoryError] = useState(null);
+  const [warehouses, setWarehouses] = useState([]);
+  const [warehousesLoading, setWarehousesLoading] = useState(false);
   
   // Stan dla ukrywania kolumn
   const [columnMenuAnchor, setColumnMenuAnchor] = useState(null);
@@ -149,6 +153,7 @@ const TaskList = () => {
   // Pobierz zadania przy montowaniu komponentu i zmianie paginacji
   useEffect(() => {
     fetchTasks();
+    fetchWarehouses();
   }, [page, limit, debouncedSearchTerm, statusFilter]);
 
   // Filtruj zadania przy zmianie searchTerm, statusFilter lub tasks
@@ -180,6 +185,27 @@ const TaskList = () => {
       fetchWorkstationNames();
     }
   }, [tasks]);
+
+  // Funkcja do pobierania magazynów
+  const fetchWarehouses = async () => {
+    try {
+      setWarehousesLoading(true);
+      const warehousesList = await getAllWarehouses();
+      setWarehouses(warehousesList);
+      
+      // Jeśli jest przynajmniej jeden magazyn, ustaw go jako domyślny
+      if (warehousesList.length > 0) {
+        setInventoryData(prev => ({
+          ...prev,
+          warehouseId: warehousesList[0].id
+        }));
+      }
+    } catch (error) {
+      console.error('Błąd podczas pobierania magazynów:', error);
+    } finally {
+      setWarehousesLoading(false);
+    }
+  };
 
   // Obsługa zmiany filtra statusu
   const handleStatusFilterChange = (event) => {
@@ -277,6 +303,11 @@ const TaskList = () => {
         setInventoryError('Podaj numer partii (LOT)');
         return;
       }
+      
+      if (!inventoryData.warehouseId) {
+        setInventoryError('Wybierz magazyn docelowy');
+        return;
+      }
 
       const quantity = parseFloat(inventoryData.finalQuantity);
       if (isNaN(quantity) || quantity <= 0) {
@@ -288,7 +319,8 @@ const TaskList = () => {
       await addTaskProductToInventory(id, currentUser.uid, {
         expiryDate: inventoryData.expiryDate.toISOString(),
         lotNumber: inventoryData.lotNumber,
-        finalQuantity: quantity
+        finalQuantity: quantity,
+        warehouseId: inventoryData.warehouseId
       });
       
       // Znajdź zadanie w tablicy tasks, aby uzyskać dostęp do jego danych
@@ -358,13 +390,15 @@ const TaskList = () => {
     setInventoryData({
       expiryDate: expiryDate,
       lotNumber: task.lotNumber || `LOT-${task.moNumber || ''}`,
-      finalQuantity: task.quantity.toString()
+      finalQuantity: task.quantity.toString(),
+      warehouseId: task.warehouseId || (warehouses.length > 0 ? warehouses[0].id : '')
     });
     
     console.log('Dane formularza po konwersji:', {
       expiryDate: expiryDate,
       lotNumber: task.lotNumber || `LOT-${task.moNumber || ''}`,
-      finalQuantity: task.quantity.toString()
+      finalQuantity: task.quantity.toString(),
+      warehouseId: task.warehouseId || (warehouses.length > 0 ? warehouses[0].id : '')
     });
     
     setAddToInventoryDialogOpen(true);
@@ -374,7 +408,8 @@ const TaskList = () => {
     setInventoryData({
       expiryDate: null,
       lotNumber: '',
-      finalQuantity: ''
+      finalQuantity: '',
+      warehouseId: warehouses.length > 0 ? warehouses[0].id : ''
     });
     setInventoryError(null);
     setCurrentTaskId(null);
@@ -1222,6 +1257,29 @@ const TaskList = () => {
             margin="dense"
             helperText="Wprowadź unikalny identyfikator partii produkcyjnej"
           />
+          
+          <FormControl fullWidth margin="dense">
+            <InputLabel id="warehouse-select-label">Magazyn docelowy</InputLabel>
+            <Select
+              labelId="warehouse-select-label"
+              id="warehouse-select"
+              value={inventoryData.warehouseId}
+              onChange={(e) => setInventoryData({...inventoryData, warehouseId: e.target.value})}
+              label="Magazyn docelowy"
+            >
+              {warehousesLoading ? (
+                <MenuItem disabled>Ładowanie magazynów...</MenuItem>
+              ) : warehouses.length === 0 ? (
+                <MenuItem disabled>Brak dostępnych magazynów</MenuItem>
+              ) : (
+                warehouses.map((warehouse) => (
+                  <MenuItem key={warehouse.id} value={warehouse.id}>
+                    {warehouse.name}
+                  </MenuItem>
+                ))
+              )}
+            </Select>
+          </FormControl>
           
           <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
             <Box sx={{ my: 2 }}>
