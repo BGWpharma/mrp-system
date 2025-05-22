@@ -110,6 +110,7 @@ const RecipeList = () => {
   
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const mode = theme.palette.mode;
   
   // Obsługa debounce dla wyszukiwania
   useEffect(() => {
@@ -407,10 +408,11 @@ const RecipeList = () => {
               return (
                 <Card key={recipe.id} variant="outlined" sx={{ 
                   mb: 1, 
-                  bgcolor: 'rgb(249, 249, 249)', 
+                  bgcolor: mode === 'dark' ? 'background.paper' : 'rgb(249, 249, 249)', 
                   borderRadius: '4px',
                   boxShadow: 'none',
-                  overflow: 'visible'
+                  overflow: 'visible',
+                  borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'
                 }}>
                   <CardContent sx={{ pb: 0, pt: 1.5, px: 1.5 }}>
                     <Box sx={{ display: 'flex', flexDirection: 'column' }}>
@@ -453,7 +455,7 @@ const RecipeList = () => {
                     justifyContent: 'flex-end', 
                     p: 0.5,
                     mt: 1,
-                    borderTop: '1px solid rgba(0, 0, 0, 0.08)'
+                    borderTop: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'}`
                   }}>
                     <IconButton 
                       size="small" 
@@ -676,11 +678,17 @@ const RecipeList = () => {
             key={group.id} 
             expanded={expandedPanel === group.id} 
             onChange={handlePanelChange(group.id)}
-            sx={{ mb: 2 }}
+            sx={{ 
+              mb: 2,
+              bgcolor: mode === 'dark' ? 'background.paper' : undefined,
+              borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : undefined
+            }}
           >
             <AccordionSummary
               expandIcon={<ExpandMoreIcon />}
-              sx={{ bgcolor: 'action.hover' }}
+              sx={{ 
+                bgcolor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'action.hover'
+              }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 {group.id === 'noCustomer' ? (
@@ -702,7 +710,9 @@ const RecipeList = () => {
                 )}
               </Box>
             </AccordionSummary>
-            <AccordionDetails>
+            <AccordionDetails sx={{ 
+              bgcolor: mode === 'dark' ? 'background.paper' : undefined
+            }}>
               {loadingCustomerRecipes[group.id] ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
                   <CircularProgress />
@@ -733,7 +743,7 @@ const RecipeList = () => {
       mx: 'auto', 
       py: isMobile ? 1 : 3, 
       px: isMobile ? 1 : 0,
-      bgcolor: isMobile ? '#f5f5f5' : 'transparent'
+      bgcolor: isMobile ? (mode === 'dark' ? 'background.paper' : '#f5f5f5') : 'transparent'
     }}>
       {/* Alert o potrzebnym indeksie */}
       {showIndexAlert && (
@@ -794,7 +804,7 @@ const RecipeList = () => {
             size={isMobile ? "small" : "medium"}
             fullWidth={isMobile}
             sx={isMobile ? {
-              bgcolor: '#1976d2',
+              bgcolor: mode === 'dark' ? 'primary.main' : '#1976d2',
               color: 'white',
               fontWeight: 'normal',
               textTransform: 'none',
@@ -827,9 +837,9 @@ const RecipeList = () => {
             minWidth: isMobile ? 'auto' : '200px',
             '& .MuiOutlinedInput-root': isMobile ? {
               borderRadius: '4px',
-              bgcolor: 'white',
+              bgcolor: mode === 'dark' ? 'background.paper' : 'white',
               '& fieldset': {
-                borderColor: 'rgba(0, 0, 0, 0.15)',
+                borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.23)' : 'rgba(0, 0, 0, 0.15)',
               },
             } : {}
           }}
@@ -843,9 +853,9 @@ const RecipeList = () => {
             minWidth: isMobile ? 'auto' : '200px',
             '& .MuiOutlinedInput-root': isMobile ? {
               borderRadius: '4px',
-              bgcolor: 'white',
+              bgcolor: mode === 'dark' ? 'background.paper' : 'white',
               '& fieldset': {
-                borderColor: 'rgba(0, 0, 0, 0.15)',
+                borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.23)' : 'rgba(0, 0, 0, 0.15)',
               },
             } : {}
           }} 
@@ -874,7 +884,16 @@ const RecipeList = () => {
       {/* Informacja o indeksie wyszukiwania */}
       {searchIndexStatus.isLoaded && (
         <Box sx={{ mb: isMobile ? 1 : 2 }}>
-          <Typography variant="body2" color="text.secondary" sx={isMobile ? { fontSize: '0.75rem' } : {}}>
+          <Typography 
+            variant="body2" 
+            color="text.secondary" 
+            sx={isMobile ? { 
+              fontSize: '0.75rem', 
+              bgcolor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
+              p: 1,
+              borderRadius: '4px'
+            } : {}}
+          >
             Indeks wyszukiwania aktywny
             {searchIndexStatus.lastRefreshed && 
               ` (ostatnie odświeżenie: ${formatDate(searchIndexStatus.lastRefreshed)})`}
@@ -895,7 +914,9 @@ const RecipeList = () => {
               fontSize: '0.85rem',
               fontWeight: 'medium',
               minHeight: '40px'
-            }
+            },
+            bgcolor: mode === 'dark' ? 'background.paper' : undefined,
+            borderRadius: '4px'
           } : {}}
         >
           <Tab label="Lista receptur" />
@@ -948,6 +969,11 @@ const RecipeList = () => {
                 showFirstButton={!isMobile}
                 showLastButton={!isMobile}
                 size={isMobile ? "small" : "medium"}
+                sx={mode === 'dark' && isMobile ? {
+                  '& .MuiPaginationItem-root': {
+                    color: 'text.primary'
+                  }
+                } : {}}
               />
               
               {!isMobile && (

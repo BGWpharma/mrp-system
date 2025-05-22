@@ -27,33 +27,33 @@
     -->
   <title>BGW-MRP</title>
   <script>
-    const newVersion = '1.0.38';
+    const newVersion = '1.0.39';
 
     // Funkcja do dodawania parametru wersji do zasobów
     function addVersionToResources() {
       const scripts = document.querySelectorAll('script[src]');
       const links = document.querySelectorAll('link[href]');
-      
+
       scripts.forEach(script => {
         if (script.src && !script.src.includes('?v=')) {
           script.src = script.src + '?v=' + newVersion;
         }
       });
-      
+
       links.forEach(link => {
         if (link.href && !link.href.includes('?v=')) {
           link.href = link.href + '?v=' + newVersion;
         }
       });
     }
-    
+
     // Funkcja sprawdzająca wersję aplikacji
     function checkAppVersion() {
       const currentVersion = localStorage.getItem('appVersion');
-      
+
       if (currentVersion !== newVersion) {
         localStorage.setItem('appVersion', newVersion);
-        
+
         if (currentVersion) {
           // Komunikat dla użytkownika o nowej wersji z opcją potwierdzenia
           if (confirm('Dostępna jest nowa wersja aplikacji. Naciśnij "OK", aby odświeżyć stronę i załadować najnowszą wersję.')) {
@@ -71,19 +71,19 @@
         }
       }
     }
-    
+
     // Uruchamiamy sprawdzanie wersji natychmiast
     checkAppVersion();
-    
+
     // Po załadowaniu strony dodajemy wersję do zasobów
-    window.onload = function() {
+    window.onload = function () {
       addVersionToResources();
     };
-    
+
     // Rejestrujemy zdarzenie do obsługi Service Workera (jeśli jest używany)
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function() {
-        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.getRegistrations().then(function (registrations) {
           for (let registration of registrations) {
             registration.unregister();
           }

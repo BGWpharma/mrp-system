@@ -51,9 +51,7 @@ import {
   AccordionSummary,
   AccordionDetails,
   AlertTitle,
-  InputAdornment,
-  useMediaQuery,
-  useTheme
+  InputAdornment
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -163,9 +161,6 @@ const TaskDetailsPage = () => {
   // Dodaję brakującą zmienną stanu materialTab i materialAwaitingOrders
   const [materialTab, setMaterialTab] = useState(0);
   const [materialAwaitingOrders, setMaterialAwaitingOrders] = useState({});
-
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   const fetchTask = async () => {
     try {
@@ -448,48 +443,25 @@ const TaskDetailsPage = () => {
   };
 
   const getStatusActions = () => {
-    // Przygotuj przyciski akcji w zależności od statusu zadania
-    const actions = [];
-
-    // Przycisk do wydruku szczegółów MO
-    actions.push(
-      <Button
-        key="print-mo"
-        variant="outlined"
-        startIcon={<PrintIcon />}
-        onClick={handlePrintMODetails}
-        sx={{ mr: 1, mb: isMobile ? 1 : 0 }}
-      >
-        Drukuj MO
-      </Button>
-    );
-
-    // Przycisk do wydruku raportu materiałów i LOT-ów
-    actions.push(
-      <Button
-        key="print-materials"
-        variant="outlined"
-        startIcon={<PrintIcon />}
-        onClick={handlePrintMaterialsAndLots}
-        sx={{ mr: 1, mb: isMobile ? 1 : 0 }}
-      >
-        Raport materiałów
-      </Button>
-    );
-
-    // ... pozostałe przyciski akcji ...
-
-    // Zwróć kontener z przyciskami, zastosuj flexbox dla lepszego układu na mobilnych
-    return (
-      <Box sx={{ 
-        display: 'flex', 
-        flexDirection: isMobile ? 'column' : 'row',
-        alignItems: isMobile ? 'stretch' : 'center',
-        gap: 1
-      }}>
-        {actions}
-      </Box>
-    );
+    if (!task) return null;
+    
+    switch (task.status) {
+      case 'Zaplanowane':
+        return (
+          <Button 
+            variant="contained" 
+            color="warning" 
+            startIcon={<PlayArrowIcon />}
+            onClick={() => handleStatusChange('W trakcie')}
+          >
+            Rozpocznij produkcję
+          </Button>
+        );
+      case 'W trakcie':
+        return null; // Usunięty przycisk "Zatrzymaj produkcję"
+      default:
+        return null;
+    }
   };
 
   // Funkcja otwierająca dialog przyjęcia do magazynu
@@ -2339,652 +2311,220 @@ const TaskDetailsPage = () => {
 
   // Renderuj stronę
     return (
-      <Container maxWidth="xl">
+      <Container maxWidth="lg" sx={{ mt: 2, pb: 6 }}>
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', my: 5 }}>
           <CircularProgress />
         </Box>
       ) : task ? (
-        <>
-          <Box sx={{ 
-            display: 'flex', 
-            flexDirection: isMobile ? 'column' : 'row',
-            justifyContent: 'space-between', 
-            alignItems: isMobile ? 'flex-start' : 'center',
-            mb: 3 
-          }}>
-            <Button
-              component={Link}
-              to="/production"
-              startIcon={<ArrowBackIcon />}
-              sx={{ mb: isMobile ? 2 : 0 }}
-            >
-              Powrót do listy zadań
-            </Button>
-            
+        <Grid container spacing={2}>
+          <Grid item xs={12}>
             <Box sx={{ 
               display: 'flex', 
-              flexDirection: isMobile ? 'column' : 'row',
-              gap: 1
+              alignItems: 'center', 
+              mb: 3, 
+              flexDirection: { xs: 'column', sm: 'row' },
+              gap: { xs: 2, sm: 0 }
             }}>
-              <IconButton 
-                color="primary" 
-                component={Link} 
-                to={`/production/tasks/${id}/edit`}
-                title="Edytuj zadanie"
-                sx={{ mr: isMobile ? 0 : 1, mb: isMobile ? 1 : 0 }}
+              <Button
+                component={Link}
+                to="/production/tasks"
+                startIcon={<ArrowBackIcon />}
+                sx={{ 
+                  alignSelf: { xs: 'flex-start', sm: 'center' }, 
+                  mb: { xs: 1, sm: 0 },
+                  mr: { xs: 0, sm: 2 }
+                }}
               >
-                <EditIcon />
-              </IconButton>
-              <IconButton 
-                color="error" 
-                onClick={() => setDeleteDialog(true)}
-                title="Usuń zadanie"
-              >
-                <DeleteIcon />
-              </IconButton>
-            </Box>
-          </Box>
-      
-          <Grid container spacing={3}>
-            <Grid item xs={12}>
-              <Paper sx={{ p: 3 }}>
-                <Box sx={{ 
-                  display: 'flex', 
-                  flexDirection: isMobile ? 'column' : 'row',
-                  justifyContent: 'space-between', 
-                  alignItems: isMobile ? 'flex-start' : 'center', 
-                  mb: 2 
-                }}>
-                  <Typography variant="h5" component="h1" sx={{ mb: isMobile ? 2 : 0 }}>
-                    {task.name}
-                    <Chip
-                      label={task.moNumber || 'MO'}
-                      color="primary"
-                      size="small"
-                      sx={{ ml: 2 }}
-                    />
-                    <Chip
-                      label={task.status}
-                      color={getStatusColor(task.status)}
-                      size="small"
-                      sx={{ ml: 1 }}
-                    />
-                    <Chip 
-                      label={task.priority}
-                      color={task.priority === 'Wysoki' ? 'error' : task.priority === 'Normalny' ? 'primary' : 'default'}
-                      variant="outlined"
-                      size="small"
-                      sx={{ ml: 1 }}
-                    />
-                  </Typography>
-                  <Box sx={{ width: isMobile ? '100%' : 'auto' }}>
-                    {getStatusActions()}
-                  </Box>
-                </Box>
-
-                <Grid container spacing={2}>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Produkt:</Typography>
-                    <Typography variant="body1">{task.productName}</Typography>
-          </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Ilość:</Typography>
-                    <Typography variant="body1">{task.quantity} {task.unit}</Typography>
-        </Grid>
-        
-                  {task.estimatedDuration > 0 && (
-                    <Grid item xs={12} md={6}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Szacowany czas produkcji:</Typography>
-                      <Typography variant="body1">{task.estimatedDuration.toFixed(1)} godz.</Typography>
-                    </Grid>
-                  )}
-
-                  {task.recipe && task.recipe.recipeName && (
-                    <Grid item xs={12} md={6}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Receptura:</Typography>
-                      <Typography variant="body1">
-                        <Link to={`/recipes/${task.recipe.recipeId}`}>{task.recipe.recipeName}</Link>
-              </Typography>
-                    </Grid>
-            )}
-
-                  <Grid item xs={12}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Opis:</Typography>
-                    <Typography variant="body1">{task.description || 'Brak opisu'}</Typography>
-          </Grid>
-                </Grid>
-      </Paper>
-        </Grid>
-        
-            {/* Dodanie komponentu do wyświetlania powiązanych zamówień */}
-            <TaskDetails task={task} />
-
-            {/* Sekcja historii zmian statusu */}
-            {task.statusHistory && task.statusHistory.length > 0 && (
-              <Grid item xs={12}>
-                <Paper sx={{ p: 3 }}>
-                  <Typography variant="h6" component="h2" gutterBottom>
-                    Historia zmian statusu
-        </Typography>
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                          <TableCell>Data i godzina</TableCell>
-                          <TableCell>Poprzedni status</TableCell>
-                          <TableCell>Nowy status</TableCell>
-                          <TableCell>Kto zmienił</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                        {[...task.statusHistory].reverse().map((change, index) => (
-                          <TableRow key={index}>
-                            <TableCell>
-                              {change.changedAt ? new Date(change.changedAt).toLocaleString('pl') : 'Brak daty'}
-                            </TableCell>
-                            <TableCell>{change.oldStatus}</TableCell>
-                            <TableCell>{change.newStatus}</TableCell>
-                            <TableCell>{getUserName(change.changedBy)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-      </Paper>
-              </Grid>
-            )}
-
-            {/* Sekcja materiałów */}
-            <Grid item xs={12}>
-              <Paper sx={{ p: 3 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="h6" component="h2">Materiały</Typography>
-                  <Box>
-                    <Button
-                      variant="outlined"
-                      color="primary"
-                      startIcon={<PackagingIcon />}
-                      onClick={handleOpenPackagingDialog}
-                      sx={{ mt: 2, mb: 2, mr: 2 }}
-                    >
-                      Dodaj opakowania
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      color="primary"
-                      startIcon={<BookmarkAddIcon />}
-                      onClick={() => setReserveDialogOpen(true)}
-                      sx={{ mt: 2, mb: 2 }}
-                    >
-                      Rezerwuj surowce
-                    </Button>
-                  </Box>
-                </Box>
+                Powrót do listy
+              </Button>
+              
+              <Box sx={{ 
+                display: 'flex', 
+                gap: 1, 
+                flexWrap: 'wrap',
+                flexDirection: { xs: 'column', sm: 'row' },
+                width: { xs: '100%', sm: 'auto' } 
+              }}>
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  startIcon={<PrintIcon />}
+                  onClick={handlePrintMaterialsAndLots}
+                  sx={{ 
+                    py: { xs: 1, sm: 'auto' },
+                    width: { xs: '100%', sm: 'auto' }
+                  }}
+                >
+                  Drukuj rozpiskę materiałów
+                </Button>
                 
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                        <TableCell>Nazwa</TableCell>
-                        <TableCell>Ilość</TableCell>
-                        <TableCell>Jednostka</TableCell>
-                        <TableCell>Rzeczywista ilość</TableCell>
-                        <TableCell>Cena jedn.</TableCell>
-                        <TableCell>Koszt</TableCell>
-                        <TableCell>Zarezerwowane partie (LOT)</TableCell>
-                        <TableCell>Wliczaj</TableCell>
-                        <TableCell>Akcje</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {materials.map((material) => {
-                        // Sprawdź czy dla tego materiału są zarezerwowane partie
-                        const materialId = material.inventoryItemId || material.id;
-                        const reservedBatches = task.materialBatches && task.materialBatches[materialId];
-                        
-                        // Oblicz koszt materiału
-                        const quantity = materialQuantities[material.id] || material.quantity || 0;
-                        const unitPrice = material.unitPrice || 0;
-                        const cost = quantity * unitPrice;
-                    
-                    return (
-                      <TableRow key={material.id}>
-                        <TableCell>{material.name}</TableCell>
-                        <TableCell>{material.quantity}</TableCell>
-                        <TableCell>{material.unit}</TableCell>
-                        <TableCell>
-                              {editMode ? (
-                                <TextField
-                                  type="number"
-                                  value={materialQuantities[material.id] || 0}
-                                  onChange={(e) => handleQuantityChange(material.id, e.target.value)}
-                                  error={Boolean(errors[material.id])}
-                                  helperText={errors[material.id]}
-                                  inputProps={{ min: 0, step: 'any' }}
-                                  size="small"
-                                  sx={{ width: '100px' }}
-                                />
-                              ) : (
-                                materialQuantities[material.id] || 0
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {reservedBatches && reservedBatches.length > 0 ? (
-                                unitPrice.toFixed(4) + ' €'
-                              ) : (
-                                '—'
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {reservedBatches && reservedBatches.length > 0 ? (
-                                cost.toFixed(2) + ' €'
-                              ) : (
-                                '—'
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {reservedBatches && reservedBatches.length > 0 ? (
-                                <Box>
-                                  {reservedBatches.map((batch, index) => (
-                                    <Chip
-                                      key={index}
-                              size="small"
-                                      label={`${batch.batchNumber} (${batch.quantity} ${material.unit})`}
-                                      color="info"
-                                      variant="outlined"
-                                      sx={{ mr: 0.5, mb: 0.5, cursor: 'pointer' }}
-                                      onClick={() => navigate(`/inventory/${materialId}/batches`)}
-                                    />
-                                  ))}
-                                </Box>
-                              ) : (
-                                <Typography variant="body2" color="text.secondary">
-                                  Brak zarezerwowanych partii
-                                </Typography>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Checkbox
-                            checked={includeInCosts[material.id] || false}
-                            onChange={(e) => handleIncludeInCostsChange(material.id, e.target.checked)}
-                            color="primary"
-                          />
-                        </TableCell>
-                            <TableCell>
-                              {editMode ? (
-                                <Box sx={{ display: 'flex' }}>
-                                  <IconButton 
-                                    color="primary" 
-                                    onClick={handleSaveChanges}
-                                    title="Zapisz zmiany"
-                                  >
-                                    <SaveIcon />
-                                  </IconButton>
-                                  <IconButton 
-                                    color="error" 
-                                    onClick={() => setEditMode(false)}
-                                    title="Anuluj edycję"
-                                  >
-                                    <CancelIcon />
-                                  </IconButton>
-                                </Box>
-                              ) : (
-                                <IconButton 
-                                  color="primary" 
-                                  onClick={() => {
-                                    setEditMode(true);
-                                    setMaterialQuantities(prev => ({
-                                      ...prev,
-                                      [material.id]: materialQuantities[material.id] || 0
-                                    }));
-                                  }}
-                                  title="Edytuj ilość"
-                                >
-                                  <EditIcon />
-                                </IconButton>
-                              )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  startIcon={<PrintIcon />}
+                  onClick={handlePrintMODetails}
+                  sx={{ 
+                    py: { xs: 1, sm: 'auto' },
+                    width: { xs: '100%', sm: 'auto' }
+                  }}
+                >
+                  Drukuj szczegóły MO
+                </Button>
+              </Box>
+            </Box>
+          </Grid>
           
-          {/* Podsumowanie kosztów materiałów */}
-          {renderMaterialCostsSummary()}
-        </Paper>
-            </Grid>
-            
-            {/* Sekcja historii produkcji */}
+          <Grid item xs={12}>
+            <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3, borderRadius: 2 }}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={8}>
+                  <Typography variant="h5" gutterBottom>
+                    {task.name}
+                  </Typography>
+                  
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+                    <Chip 
+                      label={task.status} 
+                      color={getStatusColor(task.status)} 
+                      sx={{ fontWeight: 'bold' }}
+                    />
+                    
+                    {task.materialsReserved && (
+                      <Chip 
+                        label="Surowce zarezerwowane" 
+                        color="success" 
+                        variant="outlined" 
+                      />
+                    )}
+                    
+                    {task.autoReserveMaterials && (
+                      <Tooltip title="System automatycznie zarezerwuje materiały przy rozpoczęciu produkcji">
+                        <Chip 
+                          label="Auto-rezerwacja" 
+                          color="info" 
+                          variant="outlined" 
+                        />
+                      </Tooltip>
+                    )}
+                    
+                    {task.readyForInventory && (
+                      <Chip 
+                        label="Gotowy do magazynu" 
+                        color="info" 
+                        variant="outlined" 
+                      />
+                    )}
+                    
+                    {task.inventoryUpdated && (
+                      <Chip 
+                        label="Dodany do magazynu" 
+                        color="success" 
+                        variant="outlined" 
+                      />
+                    )}
+                  </Box>
+                  
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'medium' }}>
+                      Produkt: {task.productName}
+                    </Typography>
+                    <Typography variant="body1">
+                      Ilość: {task.quantity} {task.unit || 'szt.'}
+                    </Typography>
+                    {task.moNumber && (
+                      <Typography variant="body1">
+                        Numer MO: {task.moNumber}
+                      </Typography>
+                    )}
+                  </Box>
+                </Grid>
+                
+                <Grid item xs={12} sm={4}>
+                  <Box sx={{ 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    gap: 1,
+                    mt: { xs: 0, sm: 2 }
+                  }}>
+                    {getStatusActions()}
+                    
+                    <Box sx={{ 
+                      display: 'flex', 
+                      gap: 1, 
+                      mt: 1,
+                      flexDirection: { xs: 'column', sm: 'row' }
+                    }}>
+                      <Button
+                        variant="outlined"
+                        color="primary"
+                        component={Link}
+                        to={`/production/tasks/${task.id}/edit`}
+                        startIcon={<EditIcon />}
+                        sx={{ width: { xs: '100%', sm: 'auto' } }}
+                      >
+                        Edytuj
+                      </Button>
+                      
+                      <Button
+                        variant="outlined"
+                        color="error"
+                        onClick={() => setDeleteDialog(true)}
+                        startIcon={<DeleteIcon />}
+                        sx={{ width: { xs: '100%', sm: 'auto' } }}
+                      >
+                        Usuń
+                      </Button>
+                    </Box>
+                  </Box>
+                </Grid>
+              </Grid>
+            </Paper>
+          </Grid>
+          
+          {/* Dodanie komponentu do wyświetlania powiązanych zamówień */}
+          <Grid item xs={12}>
+            <TaskDetails task={task} />
+          </Grid>
+
+          {/* Sekcja historii zmian statusu */}
+          {task.statusHistory && task.statusHistory.length > 0 && (
             <Grid item xs={12}>
               <Paper sx={{ p: 3 }}>
                 <Typography variant="h6" component="h2" gutterBottom>
-                  Historia produkcji
+                  Historia zmian statusu
                 </Typography>
-                
-                {/* Przycisk do dodawania ręcznego wpisu historii produkcji */}
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    startIcon={<AddIcon />}
-                    onClick={() => {
-                      setEditedHistoryItem({
-                        quantity: '',
-                        startTime: new Date(),
-                        endTime: new Date(),
-                      });
-                      setAddHistoryDialogOpen(true);
-                    }}
-                    size="small"
-                  >
-                    Dodaj wpis
-                  </Button>
-                </Box>
-                
-                {productionHistory.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">
-                    Brak historii produkcji dla tego zadania
-                  </Typography>
-                ) : (
-                  <TableContainer>
-                    <Table>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Data rozpoczęcia</TableCell>
-                          <TableCell>Data zakończenia</TableCell>
-                          <TableCell>Czas trwania</TableCell>
-                          <TableCell>Wyprodukowana ilość</TableCell>
-                          <TableCell>Operator</TableCell>
-                          <TableCell>Akcje</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {productionHistory.map((item) => (
-                          <TableRow key={item.id}>
-                            {editingHistoryItem === item.id ? (
-                              // Widok edycji
-                              <>
-                                <TableCell>
-                                  <TextField
-                                    type="datetime-local"
-                                    value={editedHistoryItem.startTime instanceof Date 
-                                      ? editedHistoryItem.startTime.toISOString().slice(0, 16) 
-                                      : ''}
-                                    onChange={(e) => {
-                                      const newDate = e.target.value ? new Date(e.target.value) : new Date();
-                                      setEditedHistoryItem(prev => ({ 
-                                        ...prev, 
-                                        startTime: newDate
-                                      }));
-                                    }}
-                                    size="small"
-                                    fullWidth
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  <TextField
-                                    type="datetime-local"
-                                    value={editedHistoryItem.endTime instanceof Date 
-                                      ? editedHistoryItem.endTime.toISOString().slice(0, 16) 
-                                      : ''}
-                                    onChange={(e) => {
-                                      const newDate = e.target.value ? new Date(e.target.value) : new Date();
-                                      setEditedHistoryItem(prev => ({ 
-                                        ...prev, 
-                                        endTime: newDate
-                                      }));
-                                    }}
-                                    size="small"
-                                    fullWidth
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  {Math.round(
-                                    (editedHistoryItem.endTime.getTime() - editedHistoryItem.startTime.getTime()) / (1000 * 60)
-                                  )} min
-                                </TableCell>
-                                <TableCell>
-                                  <TextField
-                                    type="number"
-                                    value={editedHistoryItem.quantity}
-                                    onChange={(e) => setEditedHistoryItem(prev => ({ 
-                                      ...prev, 
-                                      quantity: e.target.value === '' ? '' : parseFloat(e.target.value) 
-                                    }))}
-                                    inputProps={{ min: 0, step: 'any' }}
-                                    size="small"
-                                    fullWidth
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  {getUserName(item.userId)}
-                                </TableCell>
-                                <TableCell>
-                                  <Box sx={{ display: 'flex' }}>
-                                    <IconButton 
-                                      color="primary" 
-                                      onClick={() => handleSaveHistoryItemEdit(item.id)}
-                                      title="Zapisz zmiany"
-                                    >
-                                      <SaveIcon />
-                                    </IconButton>
-                                    <IconButton 
-                                      color="error" 
-                                      onClick={handleCancelHistoryItemEdit}
-                                      title="Anuluj edycję"
-                                    >
-                                      <CancelIcon />
-                                    </IconButton>
-                                  </Box>
-                                </TableCell>
-                              </>
-                            ) : (
-                              // Widok standardowy
-                              <>
-                                <TableCell>{item.startTime ? formatDateTime(item.startTime) : '-'}</TableCell>
-                                <TableCell>{item.endTime ? formatDateTime(item.endTime) : '-'}</TableCell>
-                                <TableCell>{item.timeSpent ? `${item.timeSpent} min` : '-'}</TableCell>
-                                <TableCell>{item.quantity} {task.unit}</TableCell>
-                                <TableCell>{getUserName(item.userId)}</TableCell>
-                                <TableCell>
-                                  <IconButton 
-                                    color="primary" 
-                                    onClick={() => handleEditHistoryItem(item)}
-                                    title="Edytuj sesję produkcyjną"
-                                  >
-                                    <EditIcon />
-                                  </IconButton>
-                                  <IconButton 
-                                    color="error" 
-                                    onClick={() => handleDeleteHistoryItem(item)}
-                                    title="Usuń sesję produkcyjną"
-                                  >
-                                    <DeleteIcon />
-                                  </IconButton>
-                                </TableCell>
-                              </>
-                            )}
-                          </TableRow>
-                        ))}
-                        
-                        {/* Wiersz podsumowania */}
-                        <TableRow sx={{ '& td': { fontWeight: 'bold', bgcolor: 'rgba(0, 0, 0, 0.04)' } }}>
-                          <TableCell colSpan={2} align="right">Suma:</TableCell>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Data i godzina</TableCell>
+                        <TableCell>Poprzedni status</TableCell>
+                        <TableCell>Nowy status</TableCell>
+                        <TableCell>Kto zmienił</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {[...task.statusHistory].reverse().map((change, index) => (
+                        <TableRow key={index}>
                           <TableCell>
-                            {productionHistory.reduce((sum, item) => sum + (item.timeSpent || 0), 0)} min
+                            {change.changedAt ? new Date(change.changedAt).toLocaleString('pl') : 'Brak daty'}
                           </TableCell>
-                          <TableCell>
-                            {productionHistory.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0)} {task.unit}
-                          </TableCell>
-                          <TableCell colSpan={2}></TableCell>
+                          <TableCell>{change.oldStatus}</TableCell>
+                          <TableCell>{change.newStatus}</TableCell>
+                          <TableCell>{getUserName(change.changedBy)}</TableCell>
                         </TableRow>
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                )}
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               </Paper>
             </Grid>
-          
-            {/* Sekcja planu mieszań (checklista) */}
-            {task?.mixingPlanChecklist && task.mixingPlanChecklist.length > 0 && (
-              <Grid item xs={12}>
-                <Paper sx={{ p: 2, mb: 2 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6">
-                      Plan mieszań
-                </Typography>
-                  </Box>
-                  
-                  {/* Tabela mieszań */}
-                  <TableContainer>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell width="25%">Mieszanie</TableCell>
-                          <TableCell width="35%">Składniki</TableCell>
-                          <TableCell width="40%" align="center">Status</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {/* Grupujemy elementy checklisty według mieszań */}
-                        {task.mixingPlanChecklist
-                          .filter(item => item.type === 'header')
-                          .map(headerItem => {
-                            // Pobierz wszystkie elementy składników dla danego mieszania
-                            const ingredients = task.mixingPlanChecklist
-                              .filter(item => item.parentId === headerItem.id && item.type === 'ingredient');
-                            
-                            // Pobierz checkboxy kontrolne dla danego mieszania
-                            const checkItems = task.mixingPlanChecklist
-                              .filter(item => item.parentId === headerItem.id && item.type === 'check');
-                            
-                            return (
-                              <TableRow key={headerItem.id} sx={{ 
-                                '& td': { 
-                                  borderBottom: '1px solid rgba(224, 224, 224, 1)',
-                                  verticalAlign: 'top',
-                                  pt: 2, pb: 2
-                                }
-                              }}>
-                                {/* Informacje o mieszaniu */}
-                                <TableCell>
-                                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                                    {headerItem.text}
-                                  </Typography>
-                                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                                    {headerItem.details}
-                                  </Typography>
-                                </TableCell>
-                                
-                                {/* Lista składników */}
-                                <TableCell>
-                                  <Table size="small" sx={{ 
-                                    '& td': { 
-                                      border: 'none',
-                                      pt: 0.5,
-                                      pb: 0.5 
-                                    } 
-                                  }}>
-                                    <TableBody>
-                                      {ingredients.map((ingredient) => (
-                                        <TableRow key={ingredient.id}>
-                                          <TableCell sx={{ pl: 0 }}>
-                                            <Typography variant="body2">
-                                              {ingredient.text}
-                                            </Typography>
-                                            <Typography variant="caption" color="text.secondary">
-                                              {ingredient.details}
-                                            </Typography>
-                                          </TableCell>
-                                        </TableRow>
-                                      ))}
-                                    </TableBody>
-                                  </Table>
-                                </TableCell>
-                                
-                                {/* Checkboxy statusu mieszania */}
-                                <TableCell align="center">
-                                  <Grid container spacing={1} alignItems="center">
-                                    {checkItems.map((item) => (
-                                      <Grid item xs={12} key={item.id} sx={{ borderBottom: '1px solid rgba(224, 224, 224, 0.3)', pb: 1 }}>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                          <FormControlLabel
-                                            control={
-                                              <Checkbox
-                                                checked={item.completed || false}
-                                                onChange={async (e) => {
-                                                  try {
-                                                    // Pobierz referencję do dokumentu zadania
-                                                    const taskRef = doc(db, 'productionTasks', task.id);
-                                                    
-                                                    // Zaktualizuj stan checkboxa w bazie danych
-                                                    const updatedChecklist = task.mixingPlanChecklist.map(checkItem => {
-                                                      if (checkItem.id === item.id) {
-                                                        return {
-                                                          ...checkItem,
-                                                          completed: e.target.checked,
-                                                          completedAt: e.target.checked ? new Date().toISOString() : null,
-                                                          completedBy: e.target.checked ? currentUser.uid : null
-                                                        };
-                                                      }
-                                                      return checkItem;
-                                                    });
-                                                    
-                                                    // Zapisz zaktualizowaną checklistę
-                                                    await updateDoc(taskRef, {
-                                                      mixingPlanChecklist: updatedChecklist,
-                                                      updatedAt: serverTimestamp(),
-                                                      updatedBy: currentUser.uid
-                                                    });
-                                                    
-                                                    // Zaktualizuj stan lokalny
-                                                    setTask(prevTask => ({
-                                                      ...prevTask,
-                                                      mixingPlanChecklist: updatedChecklist
-                                                    }));
-                                                    
-                                                    showSuccess('Zaktualizowano stan zadania');
-                                                  } catch (error) {
-                                                    console.error('Błąd podczas aktualizacji stanu checklisty:', error);
-                                                    showError('Nie udało się zaktualizować stanu zadania');
-                                                  }
-                                                }}
-                                              />
-                                            }
-                                            label={item.text}
-                                            sx={{ width: '100%' }}
-                                          />
-                                          {item.completed && (
-                                            <Chip 
-                                              size="small" 
-                                              label={item.completedAt ? new Date(item.completedAt).toLocaleDateString('pl-PL') : '-'} 
-                                              color="success" 
-                                              variant="outlined"
-                                              sx={{ ml: 1 }}
-                                            />
-                                          )}
-                                        </Box>
-                                      </Grid>
-                                    ))}
-                                  </Grid>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </Paper>
-              </Grid>
-            )}
-          </Grid>
-        </>
+          )}
+        </Grid>
       ) : (
         <Typography variant="body1" color="textSecondary">
-          Nie udało się załadować danych zadania. Spróbuj ponownie.
+          Nie znaleziono zadania o podanym ID.
         </Typography>
       )}
       

@@ -656,7 +656,11 @@ const TaskList = () => {
     const remainingQuantity = Math.max(0, task.quantity - totalCompletedQuantity);
     
     return (
-      <Card key={task.id} variant="outlined" sx={{ mb: 1.5, bgcolor: 'rgb(249, 249, 249)' }}>
+      <Card key={task.id} variant="outlined" sx={{ 
+        mb: 1.5, 
+        bgcolor: mode === 'dark' ? 'background.paper' : 'rgb(249, 249, 249)',
+        borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'
+      }}>
         <CardContent sx={{ pb: 1, pt: 1.5, px: 1.5 }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -746,7 +750,9 @@ const TaskList = () => {
           </Box>
         </CardContent>
         
-        <Divider />
+        <Divider sx={{ 
+          borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)' 
+        }} />
         
         <CardActions sx={{ px: 1, py: 0.5, justifyContent: 'flex-end' }}>
           {getStatusActions(task)}
@@ -792,7 +798,10 @@ const TaskList = () => {
   }
 
   return (
-    <Container maxWidth="xl" sx={{ px: isMobile ? 1 : 2 }}>
+    <Container maxWidth="xl" sx={{ 
+      px: isMobile ? 1 : 2,
+      bgcolor: isMobile ? (mode === 'dark' ? 'background.default' : 'transparent') : 'transparent'
+    }}>
       <Box sx={{ mb: isMobile ? 2 : 4 }}>
         <Typography variant="h5" gutterBottom align="center" sx={{ fontSize: isMobile ? '1.25rem' : '1.5rem' }}>
           Zadania Produkcyjne

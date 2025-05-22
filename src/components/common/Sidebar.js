@@ -63,6 +63,7 @@ import { getExpiringBatches, getExpiredBatches } from '../../services/inventoryS
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import BugReportDialog from './BugReportDialog';
+import { useSidebar } from '../../contexts/SidebarContext';
 
 // Styled components
 const StyledListItemButton = styled(ListItemButton)(({ theme, isheader, isactive }) => ({
@@ -120,6 +121,9 @@ const Sidebar = ({ onToggle }) => {
   const { currentUser } = useAuth();
   const isAdmin = currentUser?.role === 'administrator';
   const [bugReportDialogOpen, setBugReportDialogOpen] = useState(false);
+  
+  // Używamy kontekstu sidebar
+  const { isOpen, toggle, isMobile } = useSidebar();
   
   // Wywołujemy callback onToggle przy zmianie stanu sidebara
   useEffect(() => {
@@ -262,9 +266,10 @@ const Sidebar = ({ onToggle }) => {
 
   return (
     <Drawer
-      variant="permanent"
+      variant={isMobile ? "temporary" : "permanent"}
       anchor="left"
-      open={true}
+      open={isOpen}
+      onClose={toggle}
       sx={{
         width: drawerWidth,
         flexShrink: 0,
@@ -279,7 +284,14 @@ const Sidebar = ({ onToggle }) => {
           height: '100%', 
           display: 'flex',
           flexDirection: 'column',
+          zIndex: (theme) => theme.zIndex.drawer + 1,
         },
+        ...(isMobile && {
+          '& .MuiBackdrop-root': {
+            zIndex: (theme) => theme.zIndex.drawer,
+          },
+          zIndex: (theme) => theme.zIndex.drawer + 2
+        })
       }}
     >
       <Box

@@ -23,7 +23,8 @@ import {
   TextField,
   IconButton,
   Alert,
-  Snackbar
+  Snackbar,
+  useTheme
 } from '@mui/material';
 import {
   MenuBook as RecipesIcon,
@@ -60,6 +61,8 @@ import { getAllActiveUsers } from '../../services/userService';
 
 const Dashboard = () => {
   const { currentUser } = useAuth();
+  const theme = useTheme();
+  const isDarkMode = theme.palette.mode === 'dark';
   const [loading, setLoading] = useState(false);
   const [tasksLoading, setTasksLoading] = useState(false);
   const [recipesLoading, setRecipesLoading] = useState(false);
@@ -540,7 +543,15 @@ const Dashboard = () => {
       </Typography>
 
       {/* Sekcja Ogłoszeń */}
-      <Paper sx={{ p: 2, mb: 4, bgcolor: '#f8f9fa', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+      <Paper sx={{ 
+        p: 2, 
+        mb: 4, 
+        bgcolor: isDarkMode ? 'background.paper' : '#f8f9fa', 
+        borderRadius: 2, 
+        border: '1px solid', 
+        borderColor: 'divider',
+        color: isDarkMode ? 'text.primary' : 'inherit'
+      }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
           <AnnouncementIcon sx={{ mr: 1, color: 'primary.main' }} />
           <Typography variant="h6">Ogłoszenia</Typography>
@@ -570,6 +581,22 @@ const Dashboard = () => {
               onChange={(e) => setEditedAnnouncement(e.target.value)}
               onKeyDown={handleKeyDown}
               helperText="Naciśnij Ctrl+Enter, aby zatwierdzić"
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  '& fieldset': {
+                    borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.23)' : 'rgba(0, 0, 0, 0.23)',
+                  },
+                  '&:hover fieldset': {
+                    borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.5)',
+                  },
+                },
+                '& .MuiInputBase-input': {
+                  color: isDarkMode ? 'text.primary' : 'inherit',
+                },
+                '& .MuiFormHelperText-root': {
+                  color: isDarkMode ? 'text.secondary' : 'inherit',
+                }
+              }}
             />
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2, gap: 1 }}>
               <Button 
@@ -591,14 +618,14 @@ const Dashboard = () => {
           </Box>
         ) : announcement ? (
           <>
-            <Typography variant="body1" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>
+            <Typography variant="body1" sx={{ mt: 1, whiteSpace: 'pre-wrap', color: isDarkMode ? 'text.primary' : 'inherit' }}>
               {announcement}
             </Typography>
             {renderLastUpdatedInfo()}
           </>
         ) : (
           <>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1, fontStyle: 'italic' }}>
+            <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic', color: isDarkMode ? 'text.secondary' : 'text.secondary' }}>
               Brak ogłoszeń. Kliknij ikonę edycji, aby dodać ogłoszenie.
             </Typography>
             {renderLastUpdatedInfo()}

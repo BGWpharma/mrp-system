@@ -2,25 +2,25 @@
 
 /* Theme Variables */
 :root {
-  /* Dark Theme (default) */
-  --background-color: #111827;
-  --paper-background: #182136;
-  --text-color: #ffffff;
-  --text-secondary: rgba(255, 255, 255, 0.7);
-  --border-color: rgba(255, 255, 255, 0.08); 
-  --hover-background: rgba(255, 255, 255, 0.05);
-  --shadow-color: rgba(0, 0, 0, 0.2);
+    /* Dark Theme (default) */
+    --background-color: #111827;
+    --paper-background: #182136;
+    --text-color: #ffffff;
+    --text-secondary: rgba(255, 255, 255, 0.7);
+    --border-color: rgba(255, 255, 255, 0.08);
+    --hover-background: rgba(255, 255, 255, 0.05);
+    --shadow-color: rgba(0, 0, 0, 0.2);
 }
 
 [data-theme="light"] {
-  /* Light Theme */
-  --background-color: #f5f5f5;
-  --paper-background: #ffffff;
-  --text-color: rgba(0, 0, 0, 0.87);
-  --text-secondary: rgba(0, 0, 0, 0.6);
-  --border-color: rgba(0, 0, 0, 0.08);
-  --hover-background: rgba(0, 0, 0, 0.04);
-  --shadow-color: rgba(0, 0, 0, 0.1);
+    /* Light Theme */
+    --background-color: #f5f5f5;
+    --paper-background: #ffffff;
+    --text-color: rgba(0, 0, 0, 0.87);
+    --text-secondary: rgba(0, 0, 0, 0.6);
+    --border-color: rgba(0, 0, 0, 0.08);
+    --hover-background: rgba(0, 0, 0, 0.04);
+    --shadow-color: rgba(0, 0, 0, 0.1);
 }
 
 * {
@@ -193,8 +193,44 @@ a {
 /* Responsywność */
 @media (max-width: 600px) {
     .main-content {
-        margin-left: 0;
         padding: 16px;
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+
+    /* Wyśrodkuj treść względem pełnej szerokości ekranu */
+    .sidebar-collapsed .main-content,
+    .sidebar-expanded .main-content {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    /* Overlay dla tła sidebara na mobilnych */
+    .MuiDrawer-root .MuiBackdrop-root {
+        background-color: rgba(0, 0, 0, 0.5);
+        opacity: 1 !important;
+    }
+
+    /* Sidebar w trybie overlay na urządzeniach mobilnych */
+    .MuiDrawer-root.MuiDrawer-temporary .MuiDrawer-paper {
+        box-shadow: 4px 0 8px rgba(0, 0, 0, 0.15);
+        min-width: 250px;
+    }
+
+    /* Upewnij się, że hamburger jest zawsze widoczny i klikalny */
+    .MuiIconButton-root[aria-label="menu"] {
+        position: relative;
+        z-index: 1300;
+    }
+
+    /* Dodatkowe marginesy dla elementów w widoku mobilnym */
+    .MuiCard-root {
+        margin-bottom: 16px;
+    }
+
+    /* Usuń transformację dla kart w widoku mobilnym */
+    .dashboard-card:hover {
+        transform: none;
     }
 }
 

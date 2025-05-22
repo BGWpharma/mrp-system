@@ -22,7 +22,9 @@ import {
   ListItemText,
   Chip,
   Divider,
-  ListItemIcon
+  ListItemIcon,
+  useMediaQuery,
+  useTheme as useMuiTheme
 } from '@mui/material';
 import { 
   Notifications as NotificationsIcon, 
@@ -37,7 +39,8 @@ import {
   People as PeopleIcon,
   AdminPanelSettings as AdminIcon,
   BugReport as BugReportIcon,
-  Cancel as CancelIcon
+  Cancel as CancelIcon,
+  Menu as MenuIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -52,6 +55,23 @@ import { getAllInventoryItems } from '../../services/inventoryService';
 import { getDocs, collection } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 import BugReportDialog from './BugReportDialog';
+import { useSidebar } from '../../contexts/SidebarContext';
+
+// Funkcja zwracająca kolor dla danego typu wyszukiwania
+const getTypeColor = (type) => {
+  switch (type) {
+    case 'purchaseOrder':
+      return '#3f51b5'; // niebieski
+    case 'customerOrder':
+      return '#4caf50'; // zielony
+    case 'productionTask':
+      return '#ff9800'; // pomarańczowy
+    case 'inventoryBatch':
+      return '#e91e63'; // różowy
+    default:
+      return '#9e9e9e'; // szary dla nieznanych typów
+  }
+};
 
 // Styled components
 const SearchIconWrapper = styled('div')(({ theme }) => ({
@@ -91,6 +111,8 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
 const Navbar = () => {
   const { currentUser, logout } = useAuth();
   const { mode, toggleTheme } = useTheme();
+  const muiTheme = useMuiTheme();
+  const isMobile = useMediaQuery(muiTheme.breakpoints.down('sm'));
   const [anchorEl, setAnchorEl] = useState(null);
   const [isTranslateVisible, setIsTranslateVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -101,6 +123,9 @@ const Navbar = () => {
   const navigate = useNavigate();
   const searchTimeout = useRef(null);
   const searchResultsRef = useRef(null);
+  
+  // Używamy kontekstu sidebara
+  const { isOpen, toggle } = useSidebar();
   
   // Dodajemy cache do przechowywania danych
   const dataCache = useRef({
@@ -123,6 +148,12 @@ const Navbar = () => {
 
   const handleClose = () => {
     setAnchorEl(null);
+  };
+
+  // Funkcja do przełączania widoczności sidebara na urządzeniach mobilnych
+  const toggleMobileSidebar = () => {
+    toggle();
+    console.log('Przełączenie sidebara na urządzeniu mobilnym');
   };
 
   // Funkcja do usuwania widgetu tłumaczenia
@@ -497,38 +528,66 @@ const Navbar = () => {
         }}
       >
         <Toolbar sx={{ justifyContent: 'space-between' }}>
-          {/* Logo */}
-          <Box sx={{ display: 'flex', alignItems: 'center', ml: 4 }}>
-            <Link 
-              to="/" 
-              style={{ 
-                textDecoration: 'none', 
-                display: 'flex',
-                alignItems: 'center'
-              }}
-            >
-              <Box
-                component="img"
-                src={mode === 'dark' ? '/BGWPharma_Logo_DarkTheme.png' : '/BGWPharma_Logo_LightTheme.png'}
-                alt="BGW Pharma Logo"
+          {/* Lewa strona paska */}
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            {/* Przycisk hamburger dla urządzeń mobilnych */}
+            {isMobile && (
+              <IconButton
+                edge="start"
+                color="inherit"
+                aria-label="menu"
+                onClick={toggleMobileSidebar}
                 sx={{ 
-                  height: '32px',
-                  maxWidth: '160px',
-                  padding: '3px 0',
-                  objectFit: 'contain',
-                  ml: 2
+                  mr: 1,
+                  zIndex: 1201
                 }}
-              />
-            </Link>
+              >
+                <MenuIcon />
+              </IconButton>
+            )}
+          
+            {/* Logo - widoczne tylko na większych ekranach */}
+            {!isMobile && (
+              <Box sx={{ display: 'flex', alignItems: 'center', ml: 4 }}>
+                <Link 
+                  to="/" 
+                  style={{ 
+                    textDecoration: 'none', 
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  <Box
+                    component="img"
+                    src={mode === 'dark' ? '/BGWPharma_Logo_DarkTheme.png' : '/BGWPharma_Logo_LightTheme.png'}
+                    alt="BGW Pharma Logo"
+                    sx={{ 
+                      height: '32px',
+                      maxWidth: '160px',
+                      padding: '3px 0',
+                      objectFit: 'contain',
+                      ml: 2
+                    }}
+                  />
+                </Link>
+              </Box>
+            )}
           </Box>
           
-          {/* Search bar */}
-          <Box sx={{ position: 'relative', flexGrow: 1, maxWidth: 500, mx: 2 }} ref={searchResultsRef}>
+          {/* Search bar - różne style dla mobilnej i desktopowej wersji */}
+          <Box sx={{ 
+            position: 'relative', 
+            flexGrow: 1, 
+            maxWidth: isMobile ? '100%' : 500, 
+            mx: isMobile ? 1 : 2,
+            ml: isMobile ? 1 : 2,
+            mr: isMobile ? 1 : 2
+          }} ref={searchResultsRef}>
             <SearchIconWrapper>
               <SearchIcon />
             </SearchIconWrapper>
             <StyledInputBase
-              placeholder="Szukaj PO, CO, MO, LOT..."
+              placeholder={isMobile ? "Szukaj..." : "Szukaj PO, CO, MO, LOT..."}
               inputProps={{ 'aria-label': 'search' }}
               value={searchQuery}
               onChange={handleSearchChange}
@@ -538,6 +597,7 @@ const Navbar = () => {
                 width: '100%',
                 '& .MuiInputBase-input': {
                   paddingRight: (searchQuery.length > 0 || isSearching) ? '42px' : '8px',
+                  fontSize: isMobile ? '0.85rem' : '1rem',
                 }
               }}
             />
@@ -646,10 +706,11 @@ const Navbar = () => {
           
           {/* Right side items */}
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            {/* Na urządzeniach mobilnych pokazujemy tylko ikony z najważniejszymi funkcjami */}
             <Tooltip title={mode === 'dark' ? 'Przełącz na jasny motyw' : 'Przełącz na ciemny motyw'}>
               <IconButton 
                 color="inherit" 
-                sx={{ ml: 1 }}
+                sx={{ ml: isMobile ? 0.5 : 1 }}
                 onClick={toggleTheme}
                 aria-label={mode === 'dark' ? 'Przełącz na jasny motyw' : 'Przełącz na ciemny motyw'}
               >
@@ -657,33 +718,39 @@ const Navbar = () => {
               </IconButton>
             </Tooltip>
             
-            <Tooltip title="Przetłumacz na angielski">
-              <IconButton 
-                color="inherit" 
-                sx={{ ml: 1 }}
-                onClick={handleTranslate}
-                aria-label="Przetłumacz na angielski"
-              >
-                <TranslateIcon />
-              </IconButton>
-            </Tooltip>
+            {/* Na urządzeniach mobilnych ukryjemy przycisk tłumaczenia */}
+            {!isMobile && (
+              <Tooltip title="Przetłumacz na angielski">
+                <IconButton 
+                  color="inherit" 
+                  sx={{ ml: 1 }}
+                  onClick={handleTranslate}
+                  aria-label="Przetłumacz na angielski"
+                >
+                  <TranslateIcon />
+                </IconButton>
+              </Tooltip>
+            )}
             
-            <NotificationsMenu />
+            {/* Kompaktowa wersja na urządzeniach mobilnych */}
+            <Box sx={{ ml: isMobile ? 0.5 : 1 }}>
+              <NotificationsMenu />
+            </Box>
             
-            <Box sx={{ position: 'relative', ml: 2 }}>
+            <Box sx={{ position: 'relative', ml: isMobile ? 0.5 : 2 }}>
               <IconButton 
                 onClick={handleMenu} 
                 color="inherit" 
                 sx={{ 
                   border: '2px solid',
                   borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
-                  padding: '4px'
+                  padding: isMobile ? '2px' : '4px'
                 }}
               >
                 <Avatar 
                   src={currentUser?.photoURL || ''} 
                   alt={currentUser?.displayName || 'User'}
-                  sx={{ width: 32, height: 32 }}
+                  sx={{ width: isMobile ? 28 : 32, height: isMobile ? 28 : 32 }}
                 >
                   {!currentUser?.photoURL && <Person />}
                 </Avatar>
@@ -711,66 +778,74 @@ const Navbar = () => {
                   </Box>
                 </Tooltip>
               )}
+              
+              <Menu
+                anchorEl={anchorEl}
+                open={Boolean(anchorEl)}
+                onClose={handleClose}
+                transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+                anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+                PaperProps={{
+                  elevation: 3,
+                  sx: {
+                    mt: 1.5,
+                    backgroundColor: mode === 'dark' ? '#182136' : '#ffffff',
+                    backgroundImage: 'none',
+                    border: '1px solid',
+                    borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
+                    minWidth: 200
+                  }
+                }}
+              >
+                <MenuItem component={Link} to="/profile" onClick={handleClose}>
+                  <ListItemIcon><Person fontSize="small" /></ListItemIcon>
+                  {isAdmin ? 'Profil administratora' : 'Profil'}
+                </MenuItem>
+                
+                {isAdmin && (
+                  <Box component="div">
+                    <Divider />
+                    <Typography variant="caption" color="text.secondary" sx={{ px: 2, py: 1, display: 'block' }}>
+                      Administracja
+                    </Typography>
+                    
+                    <MenuItem component={Link} to="/admin/users" onClick={handleClose}>
+                      <ListItemIcon><PeopleIcon fontSize="small" /></ListItemIcon>
+                      Użytkownicy
+                    </MenuItem>
+                    
+                    <MenuItem component={Link} to="/admin/system" onClick={handleClose}>
+                      <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
+                      Narzędzia systemowe
+                    </MenuItem>
+                    
+                    <MenuItem component={Link} to="/admin/bug-reports" onClick={handleClose}>
+                      <ListItemIcon><BugReportIcon fontSize="small" /></ListItemIcon>
+                      Zgłoszenia błędów
+                    </MenuItem>
+                    <Divider />
+                  </Box>
+                )}
+                
+                <MenuItem component={Link} to="/notifications/history" onClick={handleClose}>
+                  <ListItemIcon><NotificationsIcon fontSize="small" /></ListItemIcon>
+                  Historia powiadomień
+                </MenuItem>
+                
+                {/* Na urządzeniach mobilnych dodajmy opcję tłumaczenia w menu */}
+                {isMobile && (
+                  <MenuItem onClick={() => { handleClose(); handleTranslate(); }}>
+                    <ListItemIcon><TranslateIcon fontSize="small" /></ListItemIcon>
+                    Przetłumacz stronę
+                  </MenuItem>
+                )}
+                
+                <MenuItem onClick={handleLogout}>
+                  <ListItemIcon><ExitToApp fontSize="small" /></ListItemIcon>
+                  Wyloguj
+                </MenuItem>
+              </Menu>
             </Box>
-            
-            <Menu
-              anchorEl={anchorEl}
-              open={Boolean(anchorEl)}
-              onClose={handleClose}
-              transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-              anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-              PaperProps={{
-                elevation: 3,
-                sx: {
-                  mt: 1.5,
-                  backgroundColor: mode === 'dark' ? '#182136' : '#ffffff',
-                  backgroundImage: 'none',
-                  border: '1px solid',
-                  borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
-                  minWidth: 200
-                }
-              }}
-            >
-              <MenuItem component={Link} to="/profile" onClick={handleClose}>
-                <ListItemIcon><Person fontSize="small" /></ListItemIcon>
-                {isAdmin ? 'Profil administratora' : 'Profil'}
-              </MenuItem>
-              
-              {isAdmin && (
-                <Box component="div">
-                  <Divider />
-                  <Typography variant="caption" color="text.secondary" sx={{ px: 2, py: 1, display: 'block' }}>
-                    Administracja
-                  </Typography>
-                  
-                  <MenuItem component={Link} to="/admin/users" onClick={handleClose}>
-                    <ListItemIcon><PeopleIcon fontSize="small" /></ListItemIcon>
-                    Użytkownicy
-                  </MenuItem>
-                  
-                  <MenuItem component={Link} to="/admin/system" onClick={handleClose}>
-                    <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
-                    Narzędzia systemowe
-                  </MenuItem>
-                  
-                  <MenuItem component={Link} to="/admin/bug-reports" onClick={handleClose}>
-                    <ListItemIcon><BugReportIcon fontSize="small" /></ListItemIcon>
-                    Zgłoszenia błędów
-                  </MenuItem>
-                  <Divider />
-                </Box>
-              )}
-              
-              <MenuItem component={Link} to="/notifications/history" onClick={handleClose}>
-                <ListItemIcon><NotificationsIcon fontSize="small" /></ListItemIcon>
-                Historia powiadomień
-              </MenuItem>
-              
-              <MenuItem onClick={handleLogout}>
-                <ListItemIcon><ExitToApp fontSize="small" /></ListItemIcon>
-                Wyloguj
-              </MenuItem>
-            </Menu>
           </Box>
         </Toolbar>
       </AppBar>
