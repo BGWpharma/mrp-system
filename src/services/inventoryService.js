@@ -27,11 +27,9 @@ import {
   } from 'firebase/firestore';
   import { 
     db, 
-    storage, 
-    uploadFileToStorage, 
-    deleteFileFromStorage
+    storage
   } from './firebase/config';
-  import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+  import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
   import { generateLOTNumber } from '../utils/numberGenerators';
   // Dodaję import funkcji powiadomień
   import { createRealtimeInventoryReceiveNotification, createRealtimeBatchLocationChangeNotification } from '../services/notificationService';
@@ -4913,41 +4911,43 @@ export const uploadBatchCertificate = async (file, batchId, userId) => {
       throw new Error('Brak pliku lub ID partii');
     }
 
-    // Funkcja pomocnicza do konwersji pliku na string base64
-    const fileToBase64 = (file) => {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = (error) => reject(error);
-      });
-    };
-
-    // Konwertuj plik na base64
-    const base64Data = await fileToBase64(file);
+    // Sprawdź rozmiar pliku
+    const fileSizeInMB = file.size / (1024 * 1024);
     
-    // Sprawdź rozmiar pliku po konwersji
-    const base64Size = base64Data.length;
-    const fileSizeInMB = base64Size / (1024 * 1024);
-    
-    // Firestore ma limit 1MB na dokument, więc sprawdzamy czy plik nie jest za duży
-    if (fileSizeInMB > 0.9) {
-      throw new Error(`Plik jest zbyt duży (${fileSizeInMB.toFixed(2)} MB). Maksymalny rozmiar to 0.9 MB.`);
+    // Sprawdzenie rozmiaru pliku (można ustawić inny limit dla Storage)
+    if (fileSizeInMB > 5) {
+      throw new Error(`Plik jest zbyt duży (${fileSizeInMB.toFixed(2)} MB). Maksymalny rozmiar to 5 MB.`);
     }
+    
+    // Tworzymy ścieżkę do pliku w Firebase Storage
+    const timestamp = new Date().getTime();
+    const fileExtension = file.name.split('.').pop();
+    const fileName = `${timestamp}_${batchId}.${fileExtension}`;
+    const storagePath = `certificates/${batchId}/${fileName}`;
+    
+    // Tworzymy referencję do pliku w Storage - używamy już zaimportowanego storage
+    const fileRef = storageRef(storage, storagePath);
+    
+    // Przesyłamy plik do Firebase Storage
+    await uploadBytes(fileRef, file);
+    
+    // Pobieramy URL do pobrania pliku
+    const downloadURL = await getDownloadURL(fileRef);
     
     // Aktualizacja dokumentu partii o informacje o certyfikacie
     const batchRef = doc(db, INVENTORY_BATCHES_COLLECTION, batchId);
     await updateDoc(batchRef, {
       certificateFileName: file.name,
       certificateContentType: file.type,
-      certificateBase64: base64Data,
+      certificateStoragePath: storagePath,
+      certificateDownloadURL: downloadURL,
       certificateUploadedAt: serverTimestamp(),
       certificateUploadedBy: userId,
       updatedAt: serverTimestamp(),
       updatedBy: userId
     });
     
-    return "data-url-certificate";
+    return downloadURL;
   } catch (error) {
     console.error('Błąd podczas przesyłania certyfikatu partii:', error);
     throw new Error('Błąd podczas przesyłania certyfikatu: ' + error.message);
@@ -4977,15 +4977,29 @@ export const deleteBatchCertificate = async (batchId, userId) => {
     const batchData = batchDoc.data();
     
     // Sprawdź czy partia ma certyfikat
-    if (!batchData.certificateBase64 && !batchData.certificateFileName) {
+    if (!batchData.certificateStoragePath && !batchData.certificateFileName) {
       throw new Error('Partia nie ma przypisanego certyfikatu');
+    }
+    
+    // Jeśli istnieje ścieżka do pliku w Storage, usuń plik
+    if (batchData.certificateStoragePath) {
+      // Używamy już zaimportowanego storage
+      const fileRef = storageRef(storage, batchData.certificateStoragePath);
+      try {
+        await deleteObject(fileRef);
+      } catch (storageError) {
+        console.warn('Nie można usunąć pliku z Storage:', storageError);
+        // Kontynuujemy mimo błędu usuwania z Storage
+      }
     }
     
     // Aktualizuj dokument partii - usuń informacje o certyfikacie
     await updateDoc(batchRef, {
-      certificateBase64: deleteField(),
       certificateFileName: deleteField(),
       certificateContentType: deleteField(),
+      certificateStoragePath: deleteField(),
+      certificateDownloadURL: deleteField(),
+      certificateBase64: deleteField(), // Usuwamy też stare pole base64, jeśli istnieje
       certificateUploadedAt: deleteField(),
       certificateUploadedBy: deleteField(),
       updatedAt: serverTimestamp(),

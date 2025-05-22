@@ -907,7 +907,7 @@ const BatchesPage = () => {
                           })()}
                         </TableCell>
                         <TableCell>
-                          {batch.certificateBase64 || batch.certificateFileName ? (
+                          {(batch.certificateBase64 || batch.certificateFileName || batch.certificateDownloadURL) ? (
                             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                               <Tooltip title={`Podgląd certyfikatu: ${batch.certificateFileName || 'Dokument'}`}>
                                 <Box 
@@ -1504,6 +1504,49 @@ const BatchesPage = () => {
                       </Typography>
                       <a 
                         href={selectedCertificateForPreview.certificateBase64} 
+                        download={selectedCertificateForPreview.certificateFileName}
+                        style={{ textDecoration: 'none' }}
+                      >
+                        <Button
+                          variant="contained"
+                          color="primary"
+                          startIcon={<InsertDriveFileIcon />}
+                          sx={{ mt: 1 }}
+                        >
+                          Pobierz certyfikat
+                        </Button>
+                      </a>
+                    </Box>
+                  )
+                ) : selectedCertificateForPreview.certificateDownloadURL ? (
+                  selectedCertificateForPreview.certificateContentType && selectedCertificateForPreview.certificateContentType.startsWith('image/') ? (
+                    // Podgląd obrazu z URL
+                    <Box sx={{ textAlign: 'center' }}>
+                      <img 
+                        src={selectedCertificateForPreview.certificateDownloadURL} 
+                        alt="Podgląd certyfikatu" 
+                        style={{ maxWidth: '100%', maxHeight: '500px', objectFit: 'contain' }} 
+                      />
+                    </Box>
+                  ) : selectedCertificateForPreview.certificateContentType === 'application/pdf' ? (
+                    // Podgląd PDF z URL
+                    <Box sx={{ height: '500px', border: '1px solid #e0e0e0' }}>
+                      <iframe 
+                        src={selectedCertificateForPreview.certificateDownloadURL} 
+                        title="Podgląd PDF" 
+                        width="100%" 
+                        height="100%" 
+                        style={{ border: 'none' }}
+                      />
+                    </Box>
+                  ) : (
+                    // Inne typy plików - przycisk do pobrania
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="body2" color="text.secondary" paragraph>
+                        Podgląd dla tego typu dokumentu nie jest dostępny.
+                      </Typography>
+                      <a 
+                        href={selectedCertificateForPreview.certificateDownloadURL} 
                         download={selectedCertificateForPreview.certificateFileName}
                         style={{ textDecoration: 'none' }}
                       >

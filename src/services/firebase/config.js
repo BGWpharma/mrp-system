@@ -10,7 +10,7 @@ const firebaseConfig = {
     apiKey: "AIzaSyCmJ6UvggnH3KRZ7OD6mbGNQDMZcUtqh18",
     authDomain: "bgw-mrp-system.firebaseapp.com",
     projectId: "bgw-mrp-system",
-    storageBucket: "bgw-mrp-system.appspot.com",
+    storageBucket: "bgw-mrp-system.firebasestorage.app",
     messagingSenderId: "562543983508",
     appId: "1:562543983508:web:4c7f8e92b7989a2e446d81",
     measurementId: "G-R30WP0YCY5",

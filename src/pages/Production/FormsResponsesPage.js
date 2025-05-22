@@ -28,7 +28,8 @@ import {
   FormControl,
   InputLabel,
   InputAdornment,
-  Grid
+  Grid,
+  Link
 } from '@mui/material';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -170,9 +171,9 @@ const FormsResponsesPage = () => {
         csvContent += `${formatDateTime(row.date)},${row.email || ''},${row.moNumber || ''},${row.productQuantity || ''},${row.packagingLoss || ''},${row.bulkLoss || ''},${row.rawMaterialLoss || ''}\n`;
       });
     } else if (tabValue === 1) {
-      csvContent += "Data,Email,Imię i nazwisko,Stanowisko,Manufacturing Order,Customer Order,Nazwa produktu,Numer LOT,Temperatura,Wilgotność\n";
+      csvContent += "Data,Email,Imię i nazwisko,Stanowisko,Manufacturing Order,Customer Order,Nazwa produktu,Numer LOT,Temperatura,Wilgotność,Skan dokumentów,Zdjęcie produktu 1,Zdjęcie produktu 2,Zdjęcie produktu 3\n";
       data.forEach(row => {
-        csvContent += `${formatDateTime(row.fillDate)},${row.email || ''},${row.name || ''},${row.position || ''},${row.manufacturingOrder || ''},${row.customerOrder || ''},${row.productName || ''},${row.lotNumber || ''},${row.temperature || ''},${row.humidity || ''}\n`;
+        csvContent += `${formatDateTime(row.fillDate)},${row.email || ''},${row.name || ''},${row.position || ''},${row.manufacturingOrder || ''},${row.customerOrder || ''},${row.productName || ''},${row.lotNumber || ''},${row.temperature || ''},${row.humidity || ''},${row.documentScansUrl || ''},${row.productPhoto1Url || ''},${row.productPhoto2Url || ''},${row.productPhoto3Url || ''}\n`;
       });
     } else {
       csvContent += "Data,Email,Osoba odpowiedzialna,Typ zmiany,Produkt,Numer MO,Ilość produkcji,Pracownicy,Inne czynności\n";
@@ -431,6 +432,10 @@ const FormsResponsesPage = () => {
                 <TableCell>Stan opakowania</TableCell>
                 <TableCell>Zamknięcie opakowania</TableCell>
                 <TableCell>Ilość opakowań na palecie</TableCell>
+                <TableCell>Skany dokumentów</TableCell>
+                <TableCell>Zdjęcie produktu 1</TableCell>
+                <TableCell>Zdjęcie produktu 2</TableCell>
+                <TableCell>Zdjęcie produktu 3</TableCell>
                 <TableCell align="center">Akcje</TableCell>
               </TableRow>
             </TableHead>
@@ -458,6 +463,58 @@ const FormsResponsesPage = () => {
                   <TableCell>{row.packagingPurity}</TableCell>
                   <TableCell>{row.packagingClosure}</TableCell>
                   <TableCell>{row.packagingQuantity}</TableCell>
+                  <TableCell>
+                    {row.documentScansUrl ? (
+                      <Link href={row.documentScansUrl} target="_blank" rel="noopener noreferrer">
+                        {row.documentScansName || 'Pokaż dokument'}
+                      </Link>
+                    ) : '-'}
+                  </TableCell>
+                  <TableCell>
+                    {row.productPhoto1Url ? (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <img 
+                          src={row.productPhoto1Url} 
+                          alt="Zdjęcie 1" 
+                          style={{ maxWidth: '60px', maxHeight: '60px', marginBottom: '4px', cursor: 'pointer' }}
+                          onClick={() => window.open(row.productPhoto1Url, '_blank')}
+                        />
+                        <Link href={row.productPhoto1Url} target="_blank" rel="noopener noreferrer" sx={{ fontSize: '12px' }}>
+                          {row.productPhoto1Name || 'Powiększ'}
+                        </Link>
+                      </Box>
+                    ) : '-'}
+                  </TableCell>
+                  <TableCell>
+                    {row.productPhoto2Url ? (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <img 
+                          src={row.productPhoto2Url} 
+                          alt="Zdjęcie 2" 
+                          style={{ maxWidth: '60px', maxHeight: '60px', marginBottom: '4px', cursor: 'pointer' }}
+                          onClick={() => window.open(row.productPhoto2Url, '_blank')}
+                        />
+                        <Link href={row.productPhoto2Url} target="_blank" rel="noopener noreferrer" sx={{ fontSize: '12px' }}>
+                          {row.productPhoto2Name || 'Powiększ'}
+                        </Link>
+                      </Box>
+                    ) : '-'}
+                  </TableCell>
+                  <TableCell>
+                    {row.productPhoto3Url ? (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <img 
+                          src={row.productPhoto3Url} 
+                          alt="Zdjęcie 3" 
+                          style={{ maxWidth: '60px', maxHeight: '60px', marginBottom: '4px', cursor: 'pointer' }}
+                          onClick={() => window.open(row.productPhoto3Url, '_blank')}
+                        />
+                        <Link href={row.productPhoto3Url} target="_blank" rel="noopener noreferrer" sx={{ fontSize: '12px' }}>
+                          {row.productPhoto3Name || 'Powiększ'}
+                        </Link>
+                      </Box>
+                    ) : '-'}
+                  </TableCell>
                   <TableCell align="center">
                     <Tooltip title="Edytuj odpowiedź">
                       <IconButton 
