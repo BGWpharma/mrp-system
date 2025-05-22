@@ -1191,8 +1191,10 @@ import {
   };
   
   // Pobieranie wszystkich transakcji
-  export const getAllTransactions = async (limit = 50) => {
+  export const getAllTransactions = async (limit = 50, selectFields = null) => {
     const transactionsRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
+    
+    // Utwórz zapytanie z sortowaniem i limitem
     const q = query(
       transactionsRef, 
       orderBy('transactionDate', 'desc'),
@@ -1200,10 +1202,126 @@ import {
     );
     
     const querySnapshot = await getDocs(q);
+    
+    // Jeśli zdefiniowano selectFields, zwróć tylko wybrane pola
+    if (selectFields && Array.isArray(selectFields) && selectFields.length > 0) {
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        const result = { id: doc.id };
+        
+        // Dodaj tylko wybrane pola
+        selectFields.forEach(field => {
+          if (data.hasOwnProperty(field)) {
+            result[field] = data[field];
+          }
+        });
+        
+        return result;
+      });
+    }
+    
+    // W przeciwnym razie zwróć wszystkie pola
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
+  };
+
+  /**
+   * Pobiera transakcje magazynowe z paginacją opartą na kursorach
+   * @param {Object} options - Opcje zapytania
+   * @param {number} options.limit - Liczba dokumentów na stronę
+   * @param {Array} options.selectFields - Pola do wybrania (opcjonalnie)
+   * @param {Object} options.lastVisible - Ostatni widoczny dokument (kursor)
+   * @param {Array} options.filters - Dodatkowe filtry dla zapytania
+   * @param {Object} options.orderBy - Pole i kierunek sortowania
+   * @returns {Object} - Dane transakcji oraz kursor do następnej strony
+   */
+  export const getInventoryTransactionsPaginated = async (options = {}) => {
+    try {
+      // Domyślne wartości
+      const pageSize = options.limit || 50;
+      const selectFields = options.selectFields || null;
+      const lastDoc = options.lastVisible || null;
+      
+      // Utwórz początkowe zapytanie z sortowaniem
+      const orderByField = options.orderBy?.field || 'transactionDate';
+      const orderByDirection = options.orderBy?.direction || 'desc';
+      
+      let transactionsQuery = query(
+        collection(db, INVENTORY_TRANSACTIONS_COLLECTION),
+        orderBy(orderByField, orderByDirection)
+      );
+      
+      // Dodaj filtry do zapytania
+      if (options.filters && Array.isArray(options.filters)) {
+        options.filters.forEach(filter => {
+          if (filter.field && filter.operator && filter.value !== undefined) {
+            transactionsQuery = query(
+              transactionsQuery, 
+              where(filter.field, filter.operator, filter.value)
+            );
+          }
+        });
+      }
+      
+      // Dodaj kursor paginacji jeśli istnieje
+      if (lastDoc) {
+        transactionsQuery = query(
+          transactionsQuery,
+          startAfter(lastDoc)
+        );
+      }
+      
+      // Dodaj limit
+      transactionsQuery = query(
+        transactionsQuery,
+        limit(pageSize)
+      );
+      
+      // Wykonaj zapytanie
+      const querySnapshot = await getDocs(transactionsQuery);
+      
+      // Przygotuj kursor do następnej strony
+      const lastVisible = querySnapshot.docs.length > 0 
+        ? querySnapshot.docs[querySnapshot.docs.length - 1]
+        : null;
+      
+      // Przetwórz wyniki
+      let transactions;
+      
+      // Jeśli zdefiniowano selectFields, zwróć tylko wybrane pola
+      if (selectFields && Array.isArray(selectFields) && selectFields.length > 0) {
+        transactions = querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          const result = { id: doc.id };
+          
+          // Dodaj tylko wybrane pola
+          selectFields.forEach(field => {
+            if (data.hasOwnProperty(field)) {
+              result[field] = data[field];
+            }
+          });
+          
+          return result;
+        });
+      } else {
+        // W przeciwnym razie zwróć wszystkie pola
+        transactions = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+      }
+      
+      return {
+        transactions,
+        lastVisible,
+        hasMore: querySnapshot.docs.length === pageSize
+      };
+    } catch (error) {
+      console.error('Błąd podczas pobierania transakcji z paginacją:', error);
+      return { transactions: [], lastVisible: null, hasMore: false };
+    }
   };
 
   /**

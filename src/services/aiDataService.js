@@ -7,9 +7,17 @@ import {
   orderBy, 
   limit,
   startAfter,
-  Timestamp 
+  Timestamp,
+  getDoc,
+  doc,
+  onSnapshot,
+  setDoc
 } from 'firebase/firestore';
 import { getAllCustomers } from './customerService';
+import { getOrdersStats } from './orderService';
+import { getAllInventoryItems, getExpiredBatches, getExpiringBatches, getInventoryTransactionsPaginated } from './inventoryService';
+import { getAllTasks, getTasksByStatus } from './productionService';
+import { getAllTests } from './qualityService';
 
 // Dodajemy buforowanie danych
 let dataCache = {
@@ -2160,8 +2168,30 @@ export const getInventorySupplierPrices = async (options = {}) => {
  * @returns {Promise<Array>} - Lista transakcji magazynowych
  */
 export const getInventoryTransactions = async (options = {}) => {
-  const result = await getCollectionData('inventoryTransactions', options);
-  return result.data;
+  try {
+    // Jeśli options.usePagination jest true, używamy nowej funkcji z paginacją kursorową
+    if (options.usePagination) {
+      const { selectFields, lastVisible, limit, filters, orderBy } = options;
+      
+      // Pobierz dane z funkcji z paginacją kursorową z inventoryService
+      const result = await getInventoryTransactionsPaginated({
+        selectFields,
+        lastVisible,
+        limit: limit || 30, // Domyślnie mniejszy limit
+        filters,
+        orderBy
+      });
+      
+      return result;
+    } else {
+      // Używamy standardowej funkcji z getCollectionData z podstawową funkcjonalnością
+      const result = await getCollectionData('inventoryTransactions', options);
+      return result.data;
+    }
+  } catch (error) {
+    console.error('Błąd podczas pobierania transakcji magazynowych:', error);
+    return [];
+  }
 };
 
 /**

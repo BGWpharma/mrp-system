@@ -5,7 +5,8 @@ import {
   Assignment as AssignmentIcon,
   Add as AddIcon,
   FactCheck as FactCheckIcon,
-  SwapVert as SwapVertIcon
+  SwapVert as SwapVertIcon,
+  List as ListIcon
 } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
 
@@ -36,7 +37,7 @@ const FormsPage = () => {
                 Formularz do raportowania zakończonych zadań produkcyjnych (MO). Wypełnij po zakończeniu zlecenia produkcyjnego.
               </Typography>
             </CardContent>
-            <CardActions>
+            <CardActions sx={{ display: 'flex', flexDirection: 'column' }}>
               <Button 
                 startIcon={<AddIcon />} 
                 component={RouterLink} 
@@ -44,8 +45,19 @@ const FormsPage = () => {
                 color="primary" 
                 variant="contained"
                 fullWidth
+                sx={{ mb: 1 }}
               >
                 Wypełnij formularz
+              </Button>
+              <Button 
+                startIcon={<ListIcon />} 
+                component={RouterLink} 
+                to="/production/forms/responses"
+                color="secondary" 
+                variant="outlined"
+                fullWidth
+              >
+                Wyświetl odpowiedzi
               </Button>
             </CardActions>
           </Card>
@@ -62,7 +74,7 @@ const FormsPage = () => {
                 Formularz do raportowania kontroli jakości produkcji. Zawiera szczegółowe informacje o przebiegu procesu produkcyjnego i warunkach atmosferycznych.
               </Typography>
             </CardContent>
-            <CardActions>
+            <CardActions sx={{ display: 'flex', flexDirection: 'column' }}>
               <Button 
                 startIcon={<AddIcon />} 
                 component={RouterLink} 
@@ -70,8 +82,19 @@ const FormsPage = () => {
                 color="primary" 
                 variant="contained"
                 fullWidth
+                sx={{ mb: 1 }}
               >
                 Wypełnij formularz
+              </Button>
+              <Button 
+                startIcon={<ListIcon />} 
+                component={RouterLink} 
+                to="/production/forms/responses"
+                color="secondary" 
+                variant="outlined"
+                fullWidth
+              >
+                Wyświetl odpowiedzi
               </Button>
             </CardActions>
           </Card>
@@ -88,7 +111,7 @@ const FormsPage = () => {
                 Formularz do raportowania pracy na zmianie produkcyjnej. Zawiera informacje o pracownikach, wykonanych produktach i innych czynnościach.
               </Typography>
             </CardContent>
-            <CardActions>
+            <CardActions sx={{ display: 'flex', flexDirection: 'column' }}>
               <Button 
                 startIcon={<AddIcon />} 
                 component={RouterLink} 
@@ -96,8 +119,19 @@ const FormsPage = () => {
                 color="primary" 
                 variant="contained"
                 fullWidth
+                sx={{ mb: 1 }}
               >
                 Wypełnij formularz
+              </Button>
+              <Button 
+                startIcon={<ListIcon />} 
+                component={RouterLink} 
+                to="/production/forms/responses"
+                color="secondary" 
+                variant="outlined"
+                fullWidth
+              >
+                Wyświetl odpowiedzi
               </Button>
             </CardActions>
           </Card>

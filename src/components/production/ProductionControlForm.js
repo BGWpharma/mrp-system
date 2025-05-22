@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Container, 
   Typography, 
@@ -19,16 +19,146 @@ import {
   FormLabel,
   Checkbox,
   FormGroup,
-  CircularProgress
+  CircularProgress,
+  Slider,
+  Stack
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { pl } from 'date-fns/locale';
-import { Send as SendIcon } from '@mui/icons-material';
+import { Send as SendIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { getMONumbersForSelect } from '../../services/moService';
+import { formatDateForInput } from '../../utils/dateUtils';
+import { db, storage } from '../../services/firebase/config';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc, getDocs } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { format } from 'date-fns';
+import { query, where } from 'firebase/firestore';
+import { getAllProducts } from '../../services/productService';
+import { getAllOrders } from '../../services/orderService';
+import { useAuth } from '../../hooks/useAuth';
+
+// Funkcja pomocnicza do formatowania daty w prawidłowym formacie dla pola expiryDate
+const formatExpiryDate = (dateValue) => {
+  try {
+    if (!dateValue) return '';
+    
+    let date;
+    
+    // Jeśli to obiekt Date
+    if (dateValue instanceof Date) {
+      date = dateValue;
+    }
+    // Jeśli to timestamp Firestore
+    else if (dateValue.toDate && typeof dateValue.toDate === 'function') {
+      date = dateValue.toDate();
+    }
+    // Jeśli to timestamp z sekundami
+    else if (dateValue.seconds) {
+      date = new Date(dateValue.seconds * 1000);
+    }
+    // Jeśli to string
+    else if (typeof dateValue === 'string') {
+      // Usuń ewentualne spacje
+      const trimmedDate = dateValue.trim();
+      
+      // Sprawdź różne formaty daty
+      if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(trimmedDate)) {
+        // Format MM/DD/YYYY lub M/D/YYYY
+        const [month, day, year] = trimmedDate.split('/');
+        date = new Date(year, month - 1, day);
+      } else if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(trimmedDate)) {
+        // Format ISO YYYY-MM-DD
+        date = new Date(trimmedDate);
+      } else if (/^\d{1,2}\/\d{4}$/.test(trimmedDate)) {
+        // Format MM/YYYY
+        const [month, year] = trimmedDate.split('/');
+        // Ustaw jako pierwszy dzień miesiąca
+        date = new Date(year, month - 1, 1);
+      } else if (/^\d{1,2}\.\d{1,2}\.\d{4}$/.test(trimmedDate)) {
+        // Format DD.MM.YYYY
+        const [day, month, year] = trimmedDate.split('.');
+        date = new Date(year, month - 1, day);
+      } else {
+        // Standardowe parsowanie daty
+        date = new Date(trimmedDate);
+      }
+      
+      // Sprawdź czy data jest poprawna
+      if (isNaN(date.getTime())) {
+        console.error('Invalid date format:', dateValue);
+        return '';
+      }
+    } else {
+      return '';
+    }
+    
+    // Formatuj datę do wyświetlenia w formacie DD.MM.YYYY (format polski)
+    return format(date, 'dd.MM.yyyy');
+  } catch (error) {
+    console.error('Error formatting expiry date:', error, dateValue);
+    return '';
+  }
+};
+
+// Funkcja do pobierania szczegółów zadania produkcyjnego (MO) na podstawie numeru MO
+const getMODetailsById = async (moNumber) => {
+  try {
+    const tasksRef = collection(db, 'productionTasks');
+    const q = query(tasksRef, where('moNumber', '==', moNumber));
+    const querySnapshot = await getDocs(q);
+    
+    if (!querySnapshot.empty) {
+      const taskDoc = querySnapshot.docs[0];
+      const taskData = taskDoc.data();
+      
+      // Pobierz nazwę produktu i przygotuj ją do lepszego dopasowania
+      let productName = taskData.productName || '';
+      
+      // Formatuj datę ważności
+      let expiryDate = null;
+      if (taskData.expiryDate) {
+        try {
+          if (taskData.expiryDate instanceof Date) {
+            expiryDate = taskData.expiryDate;
+          } else if (taskData.expiryDate.toDate && typeof taskData.expiryDate.toDate === 'function') {
+            expiryDate = taskData.expiryDate.toDate();
+          } else if (taskData.expiryDate.seconds) {
+            expiryDate = new Date(taskData.expiryDate.seconds * 1000);
+          } else {
+            expiryDate = new Date(taskData.expiryDate);
+          }
+        } catch (error) {
+          console.error('Błąd podczas formatowania daty ważności:', error);
+        }
+      }
+      
+      return {
+        id: taskDoc.id,
+        moNumber: taskData.moNumber,
+        productName: productName,
+        lotNumber: taskData.lotNumber || `LOT-${taskData.moNumber}`,
+        expiryDate: expiryDate,
+        quantity: taskData.quantity || ''
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Błąd podczas pobierania szczegółów MO:', error);
+    return null;
+  }
+};
 
 const ProductionControlForm = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const isEditMode = searchParams.get('edit') === 'true';
+  const { currentUser } = useAuth();
+
   const staffOptions = [
     "Valentyna Tarasiuk",
     "Seweryn Burandt",
@@ -40,70 +170,10 @@ const ProductionControlForm = () => {
     "Kierownik Magazynu"
   ];
   
-  const productOptions = [
-    "BLC-COLL-GLYC",
-    "BW3Y-Glycine",
-    "BW3Y-MAGN-BISG",
-    "BW3Y-VITAMINC",
-    "BW3Y-GAINER-VANILLA",
-    "BW3Y-PREWORKOUT-CAF-200G",
-    "BW3Y-RICECREAM-1500G-CHOCOLATE",
-    "BW3Y-WPI-900G-CHOCOLATE",
-    "BW3Y-VITD3",
-    "BW3Y-ZMMB",
-    "BW3Y-ZINC",
-    "BW3Y-CREA-MONOHYDRATE",
-    "BW3Y-GAINER-CHOCOLATE",
-    "BW3Y-CREA-MONOHYDRATE-NON-LABELISEE-300G",
-    "BW3Y-O3-CAPS-90",
-    "BW3Y-COLL",
-    "BW3Y-SHAKER-NOIR-LOGO-600ML",
-    "BW3Y-RICECREAM-1500G-VANILLA",
-    "BW3Y-DOSING-CUPS",
-    "BW3Y-WPI-900G-VANILLA",
-    "BW3Y-MULTIVIT",
-    "COR-COLLAGEN-PEACH-180G",
-    "COR-OMEGA3-250DHA-120CAPS",
-    "COR-GLYCINE-300G",
-    "COR-CREATINE-300G",
-    "COR-NWPI-CHOC-1000G",
-    "COR-MULTIVIT 60 caps",
-    "COR-PREWORKOUT-200G",
-    "GRN-VITAMIND3-CAPS",
-    "GRN-VPM-VANILLA-V2",
-    "GRN-COLLAGEN-UNFLAVORED",
-    "GRN-MCI-COFFEE",
-    "GRN-WPI-BLUBERRY",
-    "GRN-GLYCINE-LUBLIN",
-    "GRN-MULTIVITAMINS-CAPS",
-    "GRN-WPI-COFFEE",
-    "GRN-OMEGA3-CAPS",
-    "GRN-ZINC-CAPS",
-    "GRN-VPM-BLUBERRY-V2",
-    "GRN-PROBIOTICS-CAPS",
-    "GRN-MAGNESIUM-CAPS",
-    "GRN-WPC-CHOCOLATE",
-    "GRN-VPM-COFFEE-V2",
-    "GRN-VITAMINC-CAPS",
-    "GRN-COLLAGEN-UNFLAVORED-LUBLIN",
-    "GRN-MCI-CHOCOLATE",
-    "GRN-WPC-VANILLA",
-    "GRN-CREA-UNFLAVORED",
-    "GRN-COLLAGEN-COCOA",
-    "GRN-MCI-VANILLA",
-    "GRN-WPI-CHOCOLATE",
-    "GRN-OMEGA3-CAPS-40/30",
-    "GRN-WPI-VANILLA",
-    "GRN-PREWORKOUT",
-    "GRN-GLYCINE",
-    "GRN-WPC-BLUBERRY",
-    "GRN-BCAA-MANGO",
-    "GRN-VPM-CHOCOLATE-V2",
-    "GRN-SLEEP-CAPS",
-    "GRN-SPIRULINA-TABS",
-    "GRN-MCI-BLUEBERRY",
-    "GRN-WPC-COFFEE"
-  ];
+  const [productOptions, setProductOptions] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+  const [customerOrders, setCustomerOrders] = useState([]);
+  const [loadingCustomerOrders, setLoadingCustomerOrders] = useState(false);
 
   const [formData, setFormData] = useState({
     email: '',
@@ -139,6 +209,35 @@ const ProductionControlForm = () => {
   const [submitted, setSubmitted] = useState(false);
   const [moOptions, setMoOptions] = useState([]);
   const [loadingMO, setLoadingMO] = useState(false);
+  const [editId, setEditId] = useState(null);
+
+  // Ref do timeoutów dla debounce'owania suwaków
+  const sliderTimeoutRef = useRef(null);
+
+  // Pobierz listę produktów przy pierwszym renderowaniu komponentu
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        setLoadingProducts(true);
+        const products = await getAllProducts();
+        setProductOptions(products);
+      } catch (error) {
+        console.error('Błąd podczas pobierania produktów:', error);
+      } finally {
+        setLoadingProducts(false);
+      }
+    };
+
+    fetchProducts();
+
+    // Ustaw email zalogowanego użytkownika
+    if (currentUser && currentUser.email) {
+      setFormData(prev => ({
+        ...prev,
+        email: currentUser.email
+      }));
+    }
+  }, [currentUser]);
 
   // Pobierz numery MO przy pierwszym renderowaniu komponentu
   useEffect(() => {
@@ -157,12 +256,219 @@ const ProductionControlForm = () => {
     fetchMONumbers();
   }, []);
 
-  const handleChange = (e) => {
+  // Pobierz listę zamówień klientów przy pierwszym renderowaniu komponentu
+  useEffect(() => {
+    const fetchCustomerOrders = async () => {
+      try {
+        setLoadingCustomerOrders(true);
+        // Pobierz wszystkie zamówienia klientów bez filtrowania po statusie
+        const orders = await getAllOrders();
+        // Filtruj tylko aby upewnić się, że mają numer zamówienia
+        const filteredOrders = orders.filter(order => 
+          order.orderNumber && 
+          order.type !== 'purchase' // Upewnij się, że to nie są zamówienia zakupu
+        );
+
+        console.log('Pobrane zamówienia klientów:', filteredOrders);
+
+        // Przygotuj opcje dla selecta
+        const options = filteredOrders.map(order => ({
+          value: order.orderNumber,
+          label: `${order.orderNumber} - ${order.customer?.name || 'Brak nazwy klienta'}`
+        }));
+
+        setCustomerOrders(options);
+      } catch (error) {
+        console.error('Błąd podczas pobierania zamówień klientów:', error);
+      } finally {
+        setLoadingCustomerOrders(false);
+      }
+    };
+
+    fetchCustomerOrders();
+  }, []);
+
+  // Sprawdź, czy istnieją dane do edycji w sessionStorage
+  useEffect(() => {
+    if (isEditMode) {
+      const editData = JSON.parse(sessionStorage.getItem('editFormData'));
+      if (editData) {
+        // Konwersja timestampów na daty (jeśli istnieją)
+        const fillDate = editData.fillDate ? 
+          (typeof editData.fillDate === 'string' ? new Date(editData.fillDate) : editData.fillDate) : 
+          new Date();
+        
+        const productionStartDate = editData.productionStartDate ? 
+          (typeof editData.productionStartDate === 'string' ? new Date(editData.productionStartDate) : editData.productionStartDate) : 
+          new Date();
+        
+        const productionEndDate = editData.productionEndDate ? 
+          (typeof editData.productionEndDate === 'string' ? new Date(editData.productionEndDate) : editData.productionEndDate) : 
+          new Date();
+        
+        const readingDate = editData.readingDate ? 
+          (typeof editData.readingDate === 'string' ? new Date(editData.readingDate) : editData.readingDate) : 
+          new Date();
+        
+        // Konwersja wilgotności i temperatury ze stringa na liczbę, jeśli to możliwe
+        let humidity = editData.humidity || '';
+        let temperature = editData.temperature || '';
+        
+        // Próba konwersji wilgotności na liczbę (usuń znak '%' jeśli istnieje)
+        if (typeof humidity === 'string') {
+          const humidityMatch = humidity.match(/(\d+)%?/);
+          if (humidityMatch && humidityMatch[1]) {
+            humidity = parseInt(humidityMatch[1], 10);
+          } else if (humidity === 'PONIŻEJ NORMY 40%!') {
+            humidity = 35; // Wartość poniżej normy
+          } else if (humidity === 'POWYŻEJ NORMY 60%!') {
+            humidity = 65; // Wartość powyżej normy
+          }
+        }
+        
+        // Próba konwersji temperatury na liczbę (usuń znak '°C' jeśli istnieje)
+        if (typeof temperature === 'string') {
+          const temperatureMatch = temperature.match(/(\d+)°?C?/);
+          if (temperatureMatch && temperatureMatch[1]) {
+            temperature = parseInt(temperatureMatch[1], 10);
+          } else if (temperature === 'PONIŻEJ 10°C!') {
+            temperature = 7; // Wartość poniżej normy
+          } else if (temperature === 'POWYŻEJ 25°C!') {
+            temperature = 28; // Wartość powyżej normy
+          }
+        }
+        
+        setFormData({
+          email: editData.email || '',
+          name: editData.name || '',
+          position: editData.position || '',
+          fillDate: fillDate,
+          manufacturingOrder: editData.manufacturingOrder || '',
+          customerOrder: editData.customerOrder || '',
+          productionStartDate: productionStartDate,
+          productionStartTime: editData.productionStartTime || '',
+          productionEndDate: productionEndDate,
+          productionEndTime: editData.productionEndTime || '',
+          readingDate: readingDate,
+          readingTime: editData.readingTime || '',
+          productName: editData.productName || '',
+          lotNumber: editData.lotNumber || '',
+          expiryDate: editData.expiryDate || '',
+          quantity: editData.quantity || '',
+          shiftNumber: editData.shiftNumber || [],
+          rawMaterialPurity: editData.rawMaterialPurity || 'Prawidłowa',
+          packagingPurity: editData.packagingPurity || 'Prawidłowa',
+          packagingClosure: editData.packagingClosure || 'Prawidłowa',
+          packagingQuantity: editData.packagingQuantity || 'Prawidłowa',
+          documentScans: null,
+          productPhoto1: null,
+          productPhoto2: null,
+          productPhoto3: null,
+          humidity: humidity,
+          temperature: temperature
+        });
+        setEditId(editData.id);
+      }
+      // Wyczyść dane z sessionStorage po ich wykorzystaniu
+      sessionStorage.removeItem('editFormData');
+    }
+  }, [isEditMode]);
+
+  const handleChange = async (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
+    
+    // Jeśli zmieniono numer MO, pobierz dodatkowe dane i uzupełnij pola
+    if (name === 'manufacturingOrder' && value) {
+      try {
+        // Pokaż spinner ładowania
+        setLoadingMO(true);
+        
+        // Pobierz szczegóły MO
+        const moDetails = await getMODetailsById(value);
+        
+        if (moDetails) {
+          // Format daty ważności do wyświetlenia - używamy pełnej daty
+          let formattedExpiryDate = '';
+          if (moDetails.expiryDate) {
+            try {
+              formattedExpiryDate = formatExpiryDate(moDetails.expiryDate);
+            } catch (error) {
+              console.error('Błąd formatowania daty ważności:', error);
+            }
+          }
+          
+          // Wyodrębnij nazwę produktu z etykiety opcji MO
+          let extractedProductName = '';
+          // Znajdź opcję MO z listy moOptions, która pasuje do wybranej wartości
+          const selectedMOOption = moOptions.find(option => option.value === value);
+          if (selectedMOOption) {
+            // Etykieta ma format "MO00001 - NAZWA-PRODUKTU (100 szt.)"
+            const labelParts = selectedMOOption.label.split(' - ');
+            if (labelParts.length > 1) {
+              // Z drugiej części wyodrębnij nazwę produktu (przed nawiasem)
+              const productNameWithQuantity = labelParts[1];
+              const productNameParts = productNameWithQuantity.split(' (');
+              extractedProductName = productNameParts[0];
+            }
+          }
+          
+          // Jeśli udało się wyodrębnić nazwę produktu, znajdź najbardziej pasującą opcję
+          let matchedProductName = '';
+          if (extractedProductName) {
+            // Funkcja do znalezienia najbardziej pasującej opcji, ignorując wielkość liter
+            const findBestMatch = (searchText, options) => {
+              // Przygotuj funkcję do normalizacji tekstu
+              const normalize = (text) => text.toLowerCase().trim().replace(/\s+/g, ' ');
+              
+              const normalizedSearch = normalize(searchText);
+              
+              // Najpierw szukaj dokładnego dopasowania (ignorując wielkość liter)
+              const exactMatch = options.find(option => 
+                normalize(option) === normalizedSearch
+              );
+              
+              if (exactMatch) return exactMatch;
+              
+              // Sprawdź COR-MULTIVIT 60 CAPS -> COR-MULTIVIT 60 caps
+              // Specjalne sprawdzenie dla COR-MULTIVIT
+              if (normalizedSearch.includes('cor-multivit') && normalizedSearch.includes('60')) {
+                const multivitMatch = options.find(option => 
+                  normalize(option).includes('cor-multivit') && normalize(option).includes('60')
+                );
+                if (multivitMatch) return multivitMatch;
+              }
+              
+              // Jeśli nie znaleziono dokładnego dopasowania, szukaj częściowego
+              const partialMatch = options.find(option => 
+                normalize(option).includes(normalizedSearch) ||
+                normalizedSearch.includes(normalize(option))
+              );
+              
+              return partialMatch || '';
+            };
+            
+            matchedProductName = findBestMatch(extractedProductName, productOptions);
+            console.log(`Znaleziono dopasowanie dla "${extractedProductName}": "${matchedProductName}"`);
+          }
+          
+          // Aktualizuj formularz o dane z MO
+          setFormData(prev => ({
+            ...prev,
+            productName: matchedProductName || '',
+            lotNumber: moDetails.lotNumber || '',
+            expiryDate: formattedExpiryDate // Używamy pełnej daty
+          }));
+        }
+      } catch (error) {
+        console.error('Błąd podczas pobierania danych MO:', error);
+      } finally {
+        setLoadingMO(false);
+      }
+    }
     
     // Wyczyść błąd walidacji po zmianie wartości
     if (validationErrors[name]) {
@@ -212,6 +518,20 @@ const ProductionControlForm = () => {
       ...prev,
       [name]: value
     }));
+  };
+
+  const handleSliderChange = (event, newValue, name) => {
+    // Używamy debounce aby poprawić wydajność podczas przeciągania
+    if (sliderTimeoutRef.current) {
+      clearTimeout(sliderTimeoutRef.current);
+    }
+    
+    sliderTimeoutRef.current = setTimeout(() => {
+      setFormData(prev => ({
+        ...prev,
+        [name]: newValue
+      }));
+    }, 10); // Opóźnienie 10ms
   };
 
   const validate = () => {
@@ -265,12 +585,74 @@ const ProductionControlForm = () => {
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (validate()) {
-      // W prawdziwej aplikacji, tutaj byłoby wysyłanie danych do backend'u
-      console.log('Formularz kontroli produkcji wysłany z danymi:', formData);
+      try {
+        setSubmitted(false);
+        
+        // Ścieżka do kolekcji odpowiedzi formularza w Firestore
+        const odpowiedziRef = collection(db, 'Forms/KontrolaProdukcji/Odpowiedzi');
+        
+        // Przygotuj dane do zapisania
+        const odpowiedzData = {
+          email: formData.email,
+          name: formData.name,
+          position: formData.position,
+          fillDate: formData.fillDate,
+          manufacturingOrder: formData.manufacturingOrder,
+          customerOrder: formData.customerOrder,
+          productionStartDate: formData.productionStartDate,
+          productionStartTime: formData.productionStartTime,
+          productionEndDate: formData.productionEndDate,
+          productionEndTime: formData.productionEndTime,
+          readingDate: formData.readingDate,
+          readingTime: formData.readingTime,
+          productName: formData.productName,
+          lotNumber: formData.lotNumber,
+          expiryDate: formData.expiryDate,
+          quantity: formData.quantity,
+          shiftNumber: formData.shiftNumber,
+          rawMaterialPurity: formData.rawMaterialPurity,
+          packagingPurity: formData.packagingPurity,
+          packagingClosure: formData.packagingClosure,
+          packagingQuantity: formData.packagingQuantity,
+          // Zapisz temperaturę i wilgotność w formacie z jednostką
+          humidity: typeof formData.humidity === 'number' ? `${formData.humidity}%` : formData.humidity,
+          temperature: typeof formData.temperature === 'number' ? `${formData.temperature}°C` : formData.temperature,
+          createdAt: serverTimestamp()
+        };
+        
+        // Prześlij pliki do Firebase Storage i dodaj URL do dokumentu
+        const uploadFiles = async () => {
+          const fileFields = ['documentScans', 'productPhoto1', 'productPhoto2', 'productPhoto3'];
+          
+          for (const field of fileFields) {
+            if (formData[field]) {
+              const storageRef = ref(storage, `forms/kontrola-produkcji/${formData.manufacturingOrder}/${field}-${Date.now()}-${formData[field].name}`);
+              await uploadBytes(storageRef, formData[field]);
+              const fileUrl = await getDownloadURL(storageRef);
+              odpowiedzData[`${field}Url`] = fileUrl;
+              odpowiedzData[`${field}Name`] = formData[field].name;
+            }
+          }
+        };
+        
+        await uploadFiles();
+        
+        // Zapisz odpowiedź w Firestore
+        if (isEditMode && editId) {
+          // Aktualizacja istniejącego dokumentu
+          const docRef = doc(db, 'Forms/KontrolaProdukcji/Odpowiedzi', editId);
+          await updateDoc(docRef, odpowiedzData);
+          console.log('Formularz kontroli produkcji zaktualizowany z danymi:', odpowiedzData);
+        } else {
+          // Dodanie nowego dokumentu
+          await addDoc(odpowiedziRef, odpowiedzData);
+          console.log('Formularz kontroli produkcji wysłany z danymi:', odpowiedzData);
+        }
+        
       setSubmitted(true);
       
       // Reset formularza po pomyślnym wysłaniu
@@ -303,15 +685,32 @@ const ProductionControlForm = () => {
         humidity: '',
         temperature: ''
       });
+      } catch (error) {
+        console.error('Błąd podczas zapisywania formularza kontroli produkcji:', error);
+        alert(`Wystąpił błąd podczas zapisywania formularza: ${error.message}`);
+      }
     }
   };
+  
+  const handleBack = () => {
+    navigate('/production/forms/responses');
+  };
+
+  // Wyczyść timeout przy odmontowaniu komponentu
+  useEffect(() => {
+    return () => {
+      if (sliderTimeoutRef.current) {
+        clearTimeout(sliderTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
       <Paper sx={{ p: 4 }}>
         <Box sx={{ mb: 3 }}>
           <Typography variant="h5" gutterBottom align="center" fontWeight="bold">
-            RAPORT - KONTROLA PRODUKCJI
+            {isEditMode ? 'EDYCJA - RAPORT KONTROLA PRODUKCJI' : 'RAPORT - KONTROLA PRODUKCJI'}
           </Typography>
           <Typography variant="body2" align="center" color="text.secondary" paragraph>
             W razie awarii i pilnych zgłoszeń prosimy o kontakt: mateusz@bgwpharma.com
@@ -321,7 +720,7 @@ const ProductionControlForm = () => {
 
         {submitted && (
           <Alert severity="success" sx={{ mb: 3 }}>
-            Raport kontroli produkcji został wysłany pomyślnie!
+            {isEditMode ? 'Raport kontroli produkcji został zaktualizowany pomyślnie!' : 'Raport kontroli produkcji został wysłany pomyślnie!'}
           </Alert>
         )}
         
@@ -337,6 +736,9 @@ const ProductionControlForm = () => {
                 onChange={handleChange}
                 error={!!validationErrors.email}
                 helperText={validationErrors.email}
+                InputProps={{
+                  readOnly: true, // Pole tylko do odczytu
+                }}
               />
             </Grid>
             
@@ -432,13 +834,38 @@ const ProductionControlForm = () => {
             </Grid>
             
             <Grid item xs={12}>
-              <TextField
+              <FormControl 
                 fullWidth
-                label="Customer Order"
+                error={!!validationErrors.customerOrder}
+              >
+                <InputLabel>Customer Order</InputLabel>
+                <Select
                 name="customerOrder"
                 value={formData.customerOrder}
                 onChange={handleChange}
-              />
+                  label="Customer Order"
+                  disabled={loadingCustomerOrders}
+                  startAdornment={
+                    loadingCustomerOrders ? 
+                    <CircularProgress size={20} sx={{ mr: 1 }} /> : 
+                    null
+                  }
+                >
+                  <MenuItem value="">
+                    <em>Wybierz zamówienie klienta</em>
+                  </MenuItem>
+                  {customerOrders.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {validationErrors.customerOrder && (
+                  <Typography variant="caption" color="error">
+                    {validationErrors.customerOrder}
+                  </Typography>
+                )}
+              </FormControl>
             </Grid>
             
             <Grid item xs={12} sm={6}>
@@ -565,36 +992,118 @@ const ProductionControlForm = () => {
             </Grid>
             
             <Grid item xs={12}>
-              <FormControl component="fieldset">
+              <FormControl component="fieldset" fullWidth>
                 <FormLabel component="legend">Zmierzona wilgotność powietrza w pomieszczeniu</FormLabel>
-                <RadioGroup
+                <Box sx={{ px: 2, py: 3 }}>
+                  <Stack spacing={2} direction="row" alignItems="center" sx={{ mb: 1 }}>
+                    <Typography variant="body2" color="error">PONIŻEJ NORMY!</Typography>
+                    <Slider
                   name="humidity"
-                  value={formData.humidity}
-                  onChange={handleRadioChange}
-                >
-                  <FormControlLabel value="PONIŻEJ NORMY 40%!" control={<Radio />} label="PONIŻEJ NORMY 40%!" />
-                  {Array.from({ length: 21 }, (_, i) => i + 40).map(value => (
-                    <FormControlLabel key={value} value={`${value}%`} control={<Radio />} label={`${value}%`} />
-                  ))}
-                  <FormControlLabel value="POWYŻEJ NORMY 60%!" control={<Radio />} label="POWYŻEJ NORMY 60%!" />
-                </RadioGroup>
+                      value={typeof formData.humidity === 'number' ? formData.humidity : 45}
+                      onChange={(e, newValue) => handleSliderChange(e, newValue, 'humidity')}
+                      min={20}
+                      max={70}
+                      step={1}
+                      marks={[
+                        { value: 20, label: '20%' },
+                        { value: 30, label: '30%' },
+                        { value: 40, label: '40%' },
+                        { value: 50, label: '50%' },
+                        { value: 60, label: '60%' },
+                        { value: 70, label: '70%' }
+                      ]}
+                      valueLabelDisplay="on"
+                      valueLabelFormat={(value) => `${value}%`}
+                      sx={{
+                        '& .MuiSlider-markLabel': { fontSize: '0.75rem' },
+                        '& .MuiSlider-track': { 
+                          background: (theme) => {
+                            const value = typeof formData.humidity === 'number' ? formData.humidity : 45;
+                            return value < 40 || value > 60 
+                              ? theme.palette.error.main 
+                              : theme.palette.success.main;
+                          }
+                        },
+                        '& .MuiSlider-rail': { opacity: 0.5 },
+                        '& .MuiSlider-thumb': {
+                          height: 24,
+                          width: 24,
+                          '&:hover': {
+                            boxShadow: '0 0 0 8px rgba(25, 118, 210, 0.16)'
+                          }
+                        }
+                      }}
+                    />
+                    <Typography variant="body2" color="error">POWYŻEJ NORMY!</Typography>
+                  </Stack>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 1 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Prawidłowy zakres: 40-60%
+                    </Typography>
+                    <Typography variant="caption" fontWeight="bold">
+                      Wybrana wartość: {typeof formData.humidity === 'number' ? `${formData.humidity}%` : 'Nie wybrano'}
+                    </Typography>
+                  </Box>
+                </Box>
               </FormControl>
             </Grid>
             
             <Grid item xs={12}>
-              <FormControl component="fieldset">
+              <FormControl component="fieldset" fullWidth>
                 <FormLabel component="legend">Zmierzona temperatura powietrza w pomieszczeniu</FormLabel>
-                <RadioGroup
+                <Box sx={{ px: 2, py: 3 }}>
+                  <Stack spacing={2} direction="row" alignItems="center" sx={{ mb: 1 }}>
+                    <Typography variant="body2" color="error">PONIŻEJ NORMY!</Typography>
+                    <Slider
                   name="temperature"
-                  value={formData.temperature}
-                  onChange={handleRadioChange}
-                >
-                  <FormControlLabel value="PONIŻEJ 10°C!" control={<Radio />} label="PONIŻEJ 10°C!" />
-                  {Array.from({ length: 16 }, (_, i) => i + 10).map(value => (
-                    <FormControlLabel key={value} value={`${value}°C`} control={<Radio />} label={`${value}°C`} />
-                  ))}
-                  <FormControlLabel value="POWYŻEJ 25°C!" control={<Radio />} label="POWYŻEJ 25°C!" />
-                </RadioGroup>
+                      value={typeof formData.temperature === 'number' ? formData.temperature : 20}
+                      onChange={(e, newValue) => handleSliderChange(e, newValue, 'temperature')}
+                      min={5}
+                      max={40}
+                      step={1}
+                      marks={[
+                        { value: 5, label: '5°C' },
+                        { value: 10, label: '10°C' },
+                        { value: 15, label: '15°C' },
+                        { value: 20, label: '20°C' },
+                        { value: 25, label: '25°C' },
+                        { value: 30, label: '30°C' },
+                        { value: 35, label: '35°C' },
+                        { value: 40, label: '40°C' }
+                      ]}
+                      valueLabelDisplay="on"
+                      valueLabelFormat={(value) => `${value}°C`}
+                      sx={{
+                        '& .MuiSlider-markLabel': { fontSize: '0.75rem' },
+                        '& .MuiSlider-track': { 
+                          background: (theme) => {
+                            const value = typeof formData.temperature === 'number' ? formData.temperature : 20;
+                            return value < 10 || value > 25 
+                              ? theme.palette.error.main 
+                              : theme.palette.success.main;
+                          }
+                        },
+                        '& .MuiSlider-rail': { opacity: 0.5 },
+                        '& .MuiSlider-thumb': {
+                          height: 24,
+                          width: 24,
+                          '&:hover': {
+                            boxShadow: '0 0 0 8px rgba(25, 118, 210, 0.16)'
+                          }
+                        }
+                      }}
+                    />
+                    <Typography variant="body2" color="error">POWYŻEJ NORMY!</Typography>
+                  </Stack>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 1 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Prawidłowy zakres: 10-25°C
+                    </Typography>
+                    <Typography variant="caption" fontWeight="bold">
+                      Wybrana wartość: {typeof formData.temperature === 'number' ? `${formData.temperature}°C` : 'Nie wybrano'}
+                    </Typography>
+                  </Box>
+                </Box>
               </FormControl>
             </Grid>
             
@@ -741,6 +1250,15 @@ const ProductionControlForm = () => {
             </Grid>
             
             <Grid item xs={12}>
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  startIcon={<ArrowBackIcon />}
+                  onClick={handleBack}
+                >
+                  Powrót
+                </Button>
               <Button
                 type="submit"
                 variant="contained"
@@ -748,10 +1266,10 @@ const ProductionControlForm = () => {
                 fullWidth
                 size="large"
                 startIcon={<SendIcon />}
-                sx={{ mt: 2 }}
               >
-                Wyślij raport
+                  {isEditMode ? 'Aktualizuj raport' : 'Wyślij raport'}
               </Button>
+              </Box>
             </Grid>
           </Grid>
         </Box>

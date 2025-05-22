@@ -39,6 +39,7 @@ import FormsPage from './pages/Production/FormsPage';
 import CompletedMOFormPage from './pages/Production/CompletedMOFormPage';
 import ProductionControlFormPage from './pages/Production/ProductionControlFormPage';
 import ProductionShiftFormPage from './pages/Production/ProductionShiftFormPage';
+import FormsResponsesPage from './pages/Production/FormsResponsesPage';
 
 // Inventory
 import InventoryPage from './pages/Inventory/InventoryPage';
@@ -214,6 +215,7 @@ function App() {
                 <Route path="/production/forms/completed-mo" element={<PrivateLayout><CompletedMOFormPage /></PrivateLayout>} />
                 <Route path="/production/forms/production-control" element={<PrivateLayout><ProductionControlFormPage /></PrivateLayout>} />
                 <Route path="/production/forms/production-shift" element={<PrivateLayout><ProductionShiftFormPage /></PrivateLayout>} />
+                <Route path="/production/forms/responses" element={<PrivateLayout><FormsResponsesPage /></PrivateLayout>} />
                 <Route path="/production/tasks/:id" element={<PrivateLayout><TaskDetailsPage /></PrivateLayout>} />
                 <Route path="/production/tasks/:id/edit" element={<PrivateLayout><EditTaskPage /></PrivateLayout>} />
                 <Route path="/production/consumption/:taskId" element={<PrivateLayout><ConsumptionPage /></PrivateLayout>} />

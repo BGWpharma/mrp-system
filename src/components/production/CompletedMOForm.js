@@ -20,10 +20,21 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { pl } from 'date-fns/locale';
 import { formatDateForInput } from '../../utils/dateUtils';
-import { Send as SendIcon } from '@mui/icons-material';
+import { Send as SendIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { getMONumbersForSelect } from '../../services/moService';
+import { db, storage } from '../../services/firebase/config';
+import { collection, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../../hooks/useAuth';
 
 const CompletedMOForm = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const isEditMode = searchParams.get('edit') === 'true';
+  const { currentUser } = useAuth();
+
   const [formData, setFormData] = useState({
     email: '',
     date: new Date(),
@@ -36,10 +47,39 @@ const CompletedMOForm = () => {
     mixingPlanReport: null
   });
 
+  const [editId, setEditId] = useState(null);
   const [validationErrors, setValidationErrors] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [moOptions, setMoOptions] = useState([]);
   const [loadingMO, setLoadingMO] = useState(false);
+
+  // Sprawdź, czy istnieją dane do edycji w sessionStorage
+  useEffect(() => {
+    if (isEditMode) {
+      const editData = JSON.parse(sessionStorage.getItem('editFormData'));
+      if (editData) {
+        // Konwersja z Timestamp (jeśli istnieje)
+        const date = editData.date ? 
+          (typeof editData.date === 'string' ? new Date(editData.date) : editData.date) : 
+          new Date();
+        
+        setFormData({
+          email: editData.email || '',
+          date: date,
+          time: editData.time || '',
+          moNumber: editData.moNumber || '',
+          productQuantity: editData.productQuantity || '',
+          packagingLoss: editData.packagingLoss || '',
+          bulkLoss: editData.bulkLoss || '',
+          rawMaterialLoss: editData.rawMaterialLoss || '',
+          mixingPlanReport: null // Pliki muszą być wybrane ponownie
+        });
+        setEditId(editData.id);
+      }
+      // Wyczyść dane z sessionStorage po ich wykorzystaniu
+      sessionStorage.removeItem('editFormData');
+    }
+  }, [isEditMode]);
 
   // Pobierz numery MO przy pierwszym renderowaniu komponentu
   useEffect(() => {
@@ -56,7 +96,15 @@ const CompletedMOForm = () => {
     };
 
     fetchMONumbers();
-  }, []);
+    
+    // Ustaw email zalogowanego użytkownika
+    if (currentUser && currentUser.email) {
+      setFormData(prev => ({
+        ...prev,
+        email: currentUser.email
+      }));
+    }
+  }, [currentUser]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -126,27 +174,73 @@ const CompletedMOForm = () => {
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (validate()) {
-      // W prawdziwej aplikacji, tutaj byłoby wysyłanie danych do backend'u
-      console.log('Formularz wysłany z danymi:', formData);
-      setSubmitted(true);
-      
-      // Reset formularza po pomyślnym wysłaniu
-      setFormData({
-        email: '',
-        date: new Date(),
-        time: '',
-        moNumber: '',
-        productQuantity: '',
-        packagingLoss: '',
-        bulkLoss: '',
-        rawMaterialLoss: '',
-        mixingPlanReport: null
-      });
+      try {
+        setSubmitted(false);
+        
+        // Ścieżka do kolekcji odpowiedzi formularza w Firestore
+        const odpowiedziRef = collection(db, 'Forms/SkonczoneMO/Odpowiedzi');
+        
+        // Przygotuj dane do zapisania
+        const odpowiedzData = {
+          email: formData.email,
+          date: formData.date,
+          time: formData.time,
+          moNumber: formData.moNumber,
+          productQuantity: formData.productQuantity,
+          packagingLoss: formData.packagingLoss,
+          bulkLoss: formData.bulkLoss,
+          rawMaterialLoss: formData.rawMaterialLoss,
+          createdAt: serverTimestamp()
+        };
+        
+        // Jeśli dołączono plik, prześlij go do Firebase Storage
+        if (formData.mixingPlanReport) {
+          const storageRef = ref(storage, `forms/skonczone-mo/${formData.moNumber}/${Date.now()}-${formData.mixingPlanReport.name}`);
+          await uploadBytes(storageRef, formData.mixingPlanReport);
+          const fileUrl = await getDownloadURL(storageRef);
+          odpowiedzData.mixingPlanReportUrl = fileUrl;
+          odpowiedzData.mixingPlanReportName = formData.mixingPlanReport.name;
+        }
+        
+        // Zapisz odpowiedź w Firestore
+        if (isEditMode && editId) {
+          // Aktualizacja istniejącego dokumentu
+          const docRef = doc(db, 'Forms/SkonczoneMO/Odpowiedzi', editId);
+          await updateDoc(docRef, odpowiedzData);
+          console.log('Formularz zaktualizowany z danymi:', odpowiedzData);
+        } else {
+          // Dodanie nowego dokumentu
+          await addDoc(odpowiedziRef, odpowiedzData);
+          console.log('Formularz wysłany z danymi:', odpowiedzData);
+        }
+        
+        setSubmitted(true);
+        
+        // Reset formularza po pomyślnym wysłaniu
+        setFormData({
+          email: '',
+          date: new Date(),
+          time: '',
+          moNumber: '',
+          productQuantity: '',
+          packagingLoss: '',
+          bulkLoss: '',
+          rawMaterialLoss: '',
+          mixingPlanReport: null
+        });
+      } catch (error) {
+        console.error('Błąd podczas zapisywania formularza:', error);
+        alert(`Wystąpił błąd podczas zapisywania formularza: ${error.message}`);
+      }
     }
+  };
+
+  const handleBack = () => {
+    navigate('/production/forms/responses');
   };
 
   return (
@@ -154,7 +248,7 @@ const CompletedMOForm = () => {
       <Paper sx={{ p: 4 }}>
         <Box sx={{ mb: 3 }}>
           <Typography variant="h5" gutterBottom align="center" fontWeight="bold">
-            RAPORT - SKOŃCZONE MO
+            {isEditMode ? 'EDYCJA - RAPORT SKOŃCZONE MO' : 'RAPORT - SKOŃCZONE MO'}
           </Typography>
           <Typography variant="body2" align="center" color="text.secondary" paragraph>
             W razie awarii i pilnych zgłoszeń prosimy o kontakt: mateusz@bgwpharma.com
@@ -164,7 +258,7 @@ const CompletedMOForm = () => {
 
         {submitted && (
           <Alert severity="success" sx={{ mb: 3 }}>
-            Raport został wysłany pomyślnie!
+            {isEditMode ? 'Raport został zaktualizowany pomyślnie!' : 'Raport został wysłany pomyślnie!'}
           </Alert>
         )}
         
@@ -180,6 +274,9 @@ const CompletedMOForm = () => {
                 onChange={handleChange}
                 error={!!validationErrors.email}
                 helperText={validationErrors.email}
+                InputProps={{
+                  readOnly: true, // Pole tylko do odczytu
+                }}
               />
             </Grid>
             
@@ -304,20 +401,34 @@ const CompletedMOForm = () => {
                 onChange={handleFileChange}
                 style={{ width: '100%', marginTop: '8px' }}
               />
+              {isEditMode && formData.mixingPlanReportUrl && (
+                <Typography variant="caption" color="primary">
+                  Aktualny plik: {formData.mixingPlanReportName}
+                </Typography>
+              )}
             </Grid>
             
             <Grid item xs={12}>
-              <Button
-                type="submit"
-                variant="contained"
-                color="primary"
-                fullWidth
-                size="large"
-                startIcon={<SendIcon />}
-                sx={{ mt: 2 }}
-              >
-                Wyślij raport
-              </Button>
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  startIcon={<ArrowBackIcon />}
+                  onClick={handleBack}
+                >
+                  Powrót
+                </Button>
+                <Button
+                  type="submit"
+                  variant="contained"
+                  color="primary"
+                  fullWidth
+                  size="large"
+                  startIcon={<SendIcon />}
+                >
+                  {isEditMode ? 'Aktualizuj raport' : 'Wyślij raport'}
+                </Button>
+              </Box>
             </Grid>
           </Grid>
         </Box>
