@@ -345,7 +345,7 @@ function App() {
 function PrivateLayout({ children }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const { mode } = useTheme();
-  const { isOpen } = useSidebar();
+  const { isOpen, isMobile } = useSidebar();
 
   const handleSidebarToggle = (collapsed) => {
     setIsSidebarCollapsed(collapsed);
@@ -353,7 +353,7 @@ function PrivateLayout({ children }) {
 
   return (
     <PrivateRoute>
-      <div className="layout" style={{ 
+      <div className={`layout ${isOpen && isMobile ? 'sidebar-open' : ''}`} style={{ 
         backgroundColor: mode === 'dark' ? '#111827' : '#f5f5f5', 
         color: mode === 'dark' ? 'white' : 'rgba(0, 0, 0, 0.87)'
       }}>

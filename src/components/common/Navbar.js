@@ -539,7 +539,8 @@ const Navbar = () => {
                 onClick={toggleMobileSidebar}
                 sx={{ 
                   mr: 1,
-                  zIndex: 1201
+                  zIndex: 1201,
+                  display: isOpen ? 'none' : 'flex'
                 }}
               >
                 <MenuIcon />

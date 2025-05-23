@@ -1,5 +1,5 @@
 // src/components/common/Sidebar.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   Drawer, 
@@ -124,6 +124,26 @@ const Sidebar = ({ onToggle }) => {
   
   // Używamy kontekstu sidebar
   const { isOpen, toggle, isMobile } = useSidebar();
+  
+  // Referencja do elementu Drawer
+  const drawerRef = useRef(null);
+  
+  // Zarządzanie fokusem dla dostępności
+  useEffect(() => {
+    if (isMobile && isOpen && drawerRef.current) {
+      // Po otwarciu sidebara na urządzeniu mobilnym, ustawienie fokusu na kontener menu
+      const menuElement = drawerRef.current.querySelector('[role="menu"]') || 
+                          drawerRef.current.querySelector('ul') ||
+                          drawerRef.current;
+      
+      if (menuElement) {
+        // Dodajemy małe opóźnienie, aby zapewnić, że sidebar zostanie otwarty przed ustawieniem fokusu
+        setTimeout(() => {
+          menuElement.focus();
+        }, 100);
+      }
+    }
+  }, [isMobile, isOpen]);
   
   // Wywołujemy callback onToggle przy zmianie stanu sidebara
   useEffect(() => {
@@ -270,6 +290,9 @@ const Sidebar = ({ onToggle }) => {
       anchor="left"
       open={isOpen}
       onClose={toggle}
+      keepMounted={false}
+      disableEnforceFocus={true}
+      disableAutoFocus={false}
       sx={{
         width: drawerWidth,
         flexShrink: 0,
@@ -290,9 +313,11 @@ const Sidebar = ({ onToggle }) => {
           '& .MuiBackdrop-root': {
             zIndex: (theme) => theme.zIndex.drawer,
           },
-          zIndex: (theme) => theme.zIndex.drawer + 2
+          zIndex: (theme) => theme.zIndex.drawer + 2,
+          position: 'relative'
         })
       }}
+      ref={drawerRef}
     >
       <Box
         sx={{
@@ -347,7 +372,11 @@ const Sidebar = ({ onToggle }) => {
         '&::-webkit-scrollbar-thumb:hover': {
           backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)',
         }
-      }}>
+      }}
+      role="menu"
+      aria-label="Menu nawigacyjne"
+      tabIndex={-1}
+      >
         {menuItems.map((item) => (
           item.children ? (
             <React.Fragment key={item.text}>
@@ -356,6 +385,9 @@ const Sidebar = ({ onToggle }) => {
                 selected={isMenuActive(item.path)}
                 isheader="true"
                 isactive={isMenuActive(item.path) ? 'true' : 'false'}
+                role="menuitem"
+                aria-haspopup="true"
+                aria-expanded={openSubmenu === item.text}
                 sx={{
                   backgroundColor: isMenuActive(item.path) ? alpha('#3f51b5', 0.15) : 'transparent',
                   color: isMenuActive(item.path) ? 'primary.main' : 'inherit'
@@ -399,7 +431,10 @@ const Sidebar = ({ onToggle }) => {
                   '&::-webkit-scrollbar:horizontal': {
                     display: 'none',
                   }
-                }}>
+                }}
+                role="menu"
+                aria-label={`Podmenu ${item.text}`}
+                >
                   {item.children.map((subItem) => (
                     <StyledListItem
                       component={subItem.path ? Link : 'div'}
@@ -407,6 +442,7 @@ const Sidebar = ({ onToggle }) => {
                       to={subItem.path}
                       onClick={subItem.onClick}
                       selected={subItem.path ? location.pathname === subItem.path : false}
+                      role="menuitem"
                       sx={{ pl: isDrawerOpen ? 4 : 2 }}
                     >
                       <Tooltip title={subItem.text} placement="right" arrow>
@@ -433,6 +469,7 @@ const Sidebar = ({ onToggle }) => {
               component={Link} 
               key={item.text} 
               to={item.path}
+              role="menuitem"
               selected={item.path === '/' ? location.pathname === '/' : isActive(item.path)}
             >
               <Tooltip title={item.text} placement="right" arrow>

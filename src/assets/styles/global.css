@@ -223,6 +223,11 @@ a {
         z-index: 1300;
     }
 
+    /* Style dla przycisku hamburger gdy sidebar jest otwarty */
+    .sidebar-open .MuiIconButton-root[aria-label="menu"] {
+        display: none !important;
+    }
+
     /* Dodatkowe marginesy dla elementów w widoku mobilnym */
     .MuiCard-root {
         margin-bottom: 16px;
@@ -311,3 +316,25 @@ a {
 .theme-transition {
     transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 }
+
+/* Dostosowania dla sidebara i przycisku hamburger na urządzeniach mobilnych */
+.sidebar-open .MuiAppBar-root .MuiIconButton-root[aria-label="menu"] {
+    opacity: 0;
+    pointer-events: none;
+    visibility: hidden;
+}
+
+/* Upewnij się, że drawer jest nad innymi elementami */
+.MuiDrawer-root.MuiDrawer-temporary {
+    z-index: 1300 !important;
+}
+
+/* Usuń transformację dla kart w widoku mobilnym */
+
+/* Poprawki dla dostępności */
+.MuiModal-root[role="presentation"][aria-hidden="true"] {
+    /* Usunięcie atrybutu aria-hidden, aby uniknąć problemów z dostępnością */
+    aria-hidden: initial !important;
+}
+
+/* Upewnij się, że drawer jest nad innymi elementami */
