@@ -1,6 +1,6 @@
 {
   "name": "mrp-system",
-  "version": "0.1.24",
+  "version": "0.1.25",
   "private": true,
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -45,6 +45,7 @@
     "qrcode.react": "^4.2.0",
     "react": "^19.0.0",
     "react-barcode": "^1.6.1",
+    "react-beautiful-dnd": "^13.1.1",
     "react-chartjs-2": "^4.3.1",
     "react-dom": "^19.0.0",
     "react-grid-layout": "^1.5.0",
