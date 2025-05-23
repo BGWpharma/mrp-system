@@ -1435,58 +1435,63 @@ const InventoryList = () => {
 
   return (
     <div>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexDirection: { xs: 'column', sm: 'row' }, gap: { xs: 2, sm: 0 } }}>
         <Typography variant="h5">Stany</Typography>
-        <Box>
-          <Tooltip title="Generuj raport PDF">
-            <Button
-              variant="outlined"
-              color="primary"
-              onClick={generatePdfReport}
-              startIcon={<PdfIcon />}
-              sx={{ mr: 1 }}
-              disabled={loading}
-            >
-              PDF
-            </Button>
-          </Tooltip>
-          <Tooltip title="Generuj raport CSV">
-            <Button
-              variant="outlined"
-              color="primary"
-              onClick={generateCsvReport}
-              startIcon={<CsvIcon />}
-              sx={{ mr: 2 }}
-              disabled={loading}
-            >
-              CSV
-            </Button>
-          </Tooltip>
-          <Tooltip title="Sprawdź daty ważności produktów">
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, width: { xs: '100%', sm: 'auto' } }}>
+          <Box sx={{ display: 'flex', gap: 1, width: '100%' }}>
+            <Tooltip title="Generuj raport PDF">
+              <Button
+                variant="outlined"
+                color="primary"
+                onClick={generatePdfReport}
+                startIcon={<PdfIcon />}
+                sx={{ flex: 1 }}
+                disabled={loading}
+              >
+                PDF
+              </Button>
+            </Tooltip>
+            <Tooltip title="Generuj raport CSV">
+              <Button
+                variant="outlined"
+                color="primary"
+                onClick={generateCsvReport}
+                startIcon={<CsvIcon />}
+                sx={{ flex: 1 }}
+                disabled={loading}
+              >
+                CSV
+              </Button>
+            </Tooltip>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1, width: '100%' }}>
+            <Tooltip title="Sprawdź daty ważności produktów">
+              <Button 
+                variant="outlined" 
+                color="warning" 
+                component={RouterLink} 
+                to="/inventory/expiry-dates"
+                startIcon={
+                  <Badge badgeContent={expiringCount + expiredCount} color="error" max={99}>
+                    <WarningIcon />
+                  </Badge>
+                }
+                sx={{ flex: 1 }}
+              >
+                Daty ważności
+              </Button>
+            </Tooltip>
             <Button 
-              variant="outlined" 
-              color="warning" 
+              variant="contained" 
+              color="primary" 
               component={RouterLink} 
-              to="/inventory/expiry-dates"
-              startIcon={
-                <Badge badgeContent={expiringCount + expiredCount} color="error" max={99}>
-                  <WarningIcon />
-                </Badge>
-              }
-              sx={{ mr: 2 }}
+              to="/inventory/new"
+              startIcon={<AddIcon />}
+              sx={{ flex: 1 }}
             >
-              Daty ważności
+              Nowa pozycja
             </Button>
-          </Tooltip>
-          <Button 
-            variant="contained" 
-            color="primary" 
-            component={RouterLink} 
-            to="/inventory/new"
-            startIcon={<AddIcon />}
-          >
-            Nowa pozycja
-          </Button>
+          </Box>
         </Box>
       </Box>
 

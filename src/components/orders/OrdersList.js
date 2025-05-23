@@ -652,16 +652,17 @@ const OrdersList = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexDirection: { xs: 'column', sm: 'row' }, gap: { xs: 2, sm: 0 } }}>
         <Typography variant="h4" component="h1">
           Zamówienia klientów
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, width: { xs: '100%', sm: 'auto' } }}>
           <Button
             variant="outlined"
             color="primary"
             startIcon={<CustomersIcon />}
             onClick={() => navigate('/customers')}
+            sx={{ width: '100%' }}
           >
             Zarządzaj klientami
           </Button>
@@ -670,6 +671,7 @@ const OrdersList = () => {
             color="primary"
             startIcon={<AddIcon />}
             onClick={handleAddOrder}
+            sx={{ width: '100%' }}
           >
             Nowe zamówienie
           </Button>

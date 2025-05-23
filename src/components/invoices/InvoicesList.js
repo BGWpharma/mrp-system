@@ -262,32 +262,39 @@ const InvoicesList = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', mb: 3 }}>
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<CustomersIcon />}
-            onClick={() => navigate('/customers')}
-          >
-            Zarządzaj klientami
-          </Button>
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<SettingsIcon />}
-            onClick={() => navigate('/invoices/company-settings')}
-          >
-            Dane firmy
-          </Button>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AddIcon />}
-            onClick={handleAddInvoice}
-          >
-            Nowa faktura
-          </Button>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', mb: 3, flexDirection: { xs: 'column', sm: 'row' }, gap: { xs: 2, sm: 0 } }}>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, width: { xs: '100%', sm: 'auto' } }}>
+          <Box sx={{ display: 'flex', gap: 1, width: '100%' }}>
+            <Button
+              variant="outlined"
+              color="primary"
+              startIcon={<CustomersIcon />}
+              onClick={() => navigate('/customers')}
+              sx={{ flex: 1 }}
+            >
+              Zarządzaj klientami
+            </Button>
+            <Button
+              variant="outlined"
+              color="primary"
+              startIcon={<SettingsIcon />}
+              onClick={() => navigate('/invoices/company-settings')}
+              sx={{ flex: 1 }}
+            >
+              Dane firmy
+            </Button>
+          </Box>
+          <Box sx={{ display: 'flex', width: '100%' }}>
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<AddIcon />}
+              onClick={handleAddInvoice}
+              sx={{ flex: 1 }}
+            >
+              Nowa faktura
+            </Button>
+          </Box>
         </Box>
       </Box>
 

@@ -784,17 +784,17 @@ const ForecastPage = () => {
   
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h5" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: { xs: 'column', md: 'row' } }}>
+        <Typography variant="h5" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', mb: { xs: 2, md: 0 } }}>
           <FilterIcon sx={{ mr: 1 }} color="primary" />
           Prognoza zapotrzebowania materiałów
         </Typography>
-        <Box>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, width: { xs: '100%', md: 'auto' }, gap: 1 }}>
           <Button 
             variant="contained"
             startIcon={<RefreshIcon />}
             onClick={handleRefresh}
-            sx={{ mr: 1 }}
+            sx={{ width: { xs: '100%', sm: 'auto' }, mr: { xs: 0, sm: 1 } }}
             disabled={loading || calculatingForecast}
             color="primary"
           >
@@ -807,7 +807,7 @@ const ForecastPage = () => {
               onClick={handleGenerateReport}
               disabled={forecastData.length === 0 || loading || calculatingForecast}
               color="secondary"
-              sx={{ display: 'flex', alignItems: 'center' }}
+              sx={{ display: 'flex', alignItems: 'center', width: { xs: '100%', sm: 'auto' } }}
             >
               Generuj raport CSV
               <Badge 
