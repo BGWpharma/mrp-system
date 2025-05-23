@@ -18,6 +18,98 @@ import { createNotification } from './notificationService';
 const PURCHASE_ORDERS_COLLECTION = 'purchaseOrders';
 const SUPPLIERS_COLLECTION = 'suppliers';
 
+// Dodajemy prosty mechanizm pamięci podręcznej dla zwiększenia wydajności
+const searchCache = {
+  results: new Map(),
+  timestamp: new Map(),
+  maxCacheAge: 60 * 1000, // 60 sekund (1 minuta)
+  
+  // Generuje klucz cache na podstawie parametrów zapytania
+  generateKey(page, limit, sortField, sortOrder, filters) {
+    // Uwzględnij wszystkie filtry w kluczu cache, szczególnie searchTerm
+    return JSON.stringify({ 
+      page, 
+      limit, 
+      sortField, 
+      sortOrder, 
+      filters: {
+        status: filters.status || null,
+        searchTerm: filters.searchTerm || null,
+        dateFrom: filters.dateFrom || null,
+        dateTo: filters.dateTo || null,
+        supplierName: filters.supplierName || null,
+        priceMin: filters.priceMin || null,
+        priceMax: filters.priceMax || null
+      }
+    });
+  },
+  
+  // Sprawdza, czy w cache istnieje aktualny wynik dla danego zapytania
+  has(key) {
+    if (!this.results.has(key)) return false;
+    
+    const timestamp = this.timestamp.get(key) || 0;
+    const now = Date.now();
+    return (now - timestamp) < this.maxCacheAge;
+  },
+  
+  // Pobiera wynik z cache
+  get(key) {
+    return this.results.get(key);
+  },
+  
+  // Zapisuje wynik do cache
+  set(key, result) {
+    this.results.set(key, result);
+    this.timestamp.set(key, Date.now());
+    
+    // Jeśli cache jest zbyt duży, usuń najstarsze wpisy
+    if (this.results.size > 50) {
+      const oldestKey = [...this.timestamp.entries()]
+        .sort((a, b) => a[1] - b[1])
+        [0][0];
+      
+      this.results.delete(oldestKey);
+      this.timestamp.delete(oldestKey);
+    }
+  },
+  
+  // Czyści cache dla konkretnego zamówienia (używane po aktualizacji/usunięciu)
+  invalidateForOrder(orderId) {
+    for (const [key, result] of this.results.entries()) {
+      if (result && result.data && result.data.some(po => po.id === orderId)) {
+        this.results.delete(key);
+        this.timestamp.delete(key);
+      }
+    }
+  },
+  
+  // Czyści cały cache
+  clear() {
+    this.results.clear();
+    this.timestamp.clear();
+    console.log('Cache został wyczyszczony');
+  },
+  
+  // Dodaj funkcję do czyszczenia cache dla zapytań wyszukiwania
+  clearSearchCache() {
+    for (const [key] of this.results.entries()) {
+      try {
+        const parsedKey = JSON.parse(key);
+        if (parsedKey.filters && parsedKey.filters.searchTerm) {
+          this.results.delete(key);
+          this.timestamp.delete(key);
+        }
+      } catch (error) {
+        // Jeśli nie można parsować klucza, usuń go
+        this.results.delete(key);
+        this.timestamp.delete(key);
+      }
+    }
+    console.log('Cache wyszukiwania został wyczyszczony');
+  }
+};
+
 /**
  * Pomocnicza funkcja do bezpiecznej konwersji różnych formatów dat na ISO string
  * Obsługuje Timestamp, Date, string ISO i null
@@ -125,11 +217,25 @@ export const getAllPurchaseOrders = async () => {
  * @param {number} limit - Liczba elementów na stronę
  * @param {string} sortField - Pole, po którym sortujemy
  * @param {string} sortOrder - Kierunek sortowania (asc/desc)
- * @param {Object} filters - Opcjonalne filtry (status, searchTerm)
+ * @param {Object} filters - Opcjonalne filtry (status, searchTerm, dateFrom, dateTo, supplierName, priceMin, priceMax)
+ * @param {boolean} useCache - Czy używać cache (domyślnie true)
  * @returns {Object} - Obiekt zawierający dane i metadane paginacji
  */
-export const getPurchaseOrdersWithPagination = async (page = 1, limit = 10, sortField = 'createdAt', sortOrder = 'desc', filters = {}) => {
+export const getPurchaseOrdersWithPagination = async (page = 1, limit = 10, sortField = 'createdAt', sortOrder = 'desc', filters = {}, useCache = true) => {
   try {
+    // Sprawdź, czy mamy dane w cache - ale nie używaj cache dla wyszukiwania
+    const cacheKey = searchCache.generateKey(page, limit, sortField, sortOrder, filters);
+    
+    // Wyłącz cache dla zapytań wyszukiwania, aby zawsze pobierać świeże dane
+    const shouldUseCache = useCache && (!filters.searchTerm || filters.searchTerm.trim() === '');
+    
+    if (shouldUseCache && searchCache.has(cacheKey)) {
+      console.log('Używam danych z cache dla zapytania:', { page, limit, sortField, sortOrder });
+      return searchCache.get(cacheKey);
+    }
+    
+    console.log('Pobieranie świeżych danych dla zapytania:', { page, limit, sortField, sortOrder, hasSearchTerm: !!(filters.searchTerm && filters.searchTerm.trim()) });
+    
     // Ustaw realne wartości dla page i limit
     const pageNum = Math.max(1, page);
     const itemsPerPage = Math.max(1, limit);
@@ -158,23 +264,232 @@ export const getPurchaseOrdersWithPagination = async (page = 1, limit = 10, sort
         });
       }
       
+      // Filtrowanie po dacie od
+      if (filters.dateFrom && filters.dateFrom.trim() !== '') {
+        const dateFrom = new Date(filters.dateFrom);
+        dateFrom.setHours(0, 0, 0, 0); // Początek dnia
+        
+        allDocs = allDocs.filter(doc => {
+          const data = doc.data();
+          if (!data.orderDate) return false;
+          
+          let orderDate;
+          if (data.orderDate && typeof data.orderDate.toDate === 'function') {
+            orderDate = data.orderDate.toDate();
+          } else if (typeof data.orderDate === 'string') {
+            orderDate = new Date(data.orderDate);
+          } else {
+            return false;
+          }
+          
+          return orderDate >= dateFrom;
+        });
+      }
+      
+      // Filtrowanie po dacie do
+      if (filters.dateTo && filters.dateTo.trim() !== '') {
+        const dateTo = new Date(filters.dateTo);
+        dateTo.setHours(23, 59, 59, 999); // Koniec dnia
+        
+        allDocs = allDocs.filter(doc => {
+          const data = doc.data();
+          if (!data.orderDate) return false;
+          
+          let orderDate;
+          if (data.orderDate && typeof data.orderDate.toDate === 'function') {
+            orderDate = data.orderDate.toDate();
+          } else if (typeof data.orderDate === 'string') {
+            orderDate = new Date(data.orderDate);
+          } else {
+            return false;
+          }
+          
+          return orderDate <= dateTo;
+        });
+      }
+      
+      // Filtrowanie po zakresie cenowym minimalnym
+      if (filters.priceMin && !isNaN(parseFloat(filters.priceMin))) {
+        const priceMin = parseFloat(filters.priceMin);
+        
+        allDocs = allDocs.filter(doc => {
+          const data = doc.data();
+          // Sprawdź różne pola cenowe
+          const totalGross = parseFloat(data.totalGross) || 0;
+          const totalValue = parseFloat(data.totalValue) || 0;
+          
+          return totalGross >= priceMin || totalValue >= priceMin;
+        });
+      }
+      
+      // Filtrowanie po zakresie cenowym maksymalnym
+      if (filters.priceMax && !isNaN(parseFloat(filters.priceMax))) {
+        const priceMax = parseFloat(filters.priceMax);
+        
+        allDocs = allDocs.filter(doc => {
+          const data = doc.data();
+          // Sprawdź różne pola cenowe
+          const totalGross = parseFloat(data.totalGross) || 0;
+          const totalValue = parseFloat(data.totalValue) || 0;
+          
+          return (totalGross > 0 && totalGross <= priceMax) || (totalValue > 0 && totalValue <= priceMax);
+        });
+      }
+      
       // Filtrowanie po tekście wyszukiwania
       if (filters.searchTerm && filters.searchTerm.trim() !== '') {
         const searchTerm = filters.searchTerm.toLowerCase().trim();
-        allDocs = allDocs.filter(doc => {
+        console.log(`Rozpoczynam wyszukiwanie dla terminu: "${searchTerm}"`);
+        
+        // DEBUG: Pokaż przykładowe numery PO z bazy danych (pierwsze 3)
+        console.log('--- DEBUG: Przykładowe numery PO w bazie ---');
+        allDocs.slice(0, 3).forEach(doc => {
           const data = doc.data();
-          // Szukaj w numerze zamówienia
+          console.log(`ID: ${doc.id}, number: "${data.number}"`);
+        });
+        console.log('--- KONIEC DEBUG ---');
+        
+        // Najpierw znajdź zamówienia pasujące bezpośrednio po tekście
+        const directMatchingDocs = allDocs.filter(doc => {
+          const data = doc.data();
+          
+          // Szukaj w numerze zamówienia (zarówno pełnej nazwie jak i części)
           if (data.number && data.number.toLowerCase().includes(searchTerm)) {
+            console.log(`✓ Znaleziono dopasowanie w numerze: ${data.number}`);
             return true;
           }
           
-          // Szukaj w ID dostawcy - później będziemy szukać w nazwie dostawcy
-          if (data.supplierId) {
-            supplierIds.add(data.supplierId);
+          // Szukaj w ID dokumentu (dla numerów PO)
+          if (doc.id.toLowerCase().includes(searchTerm)) {
+            console.log(`✓ Znaleziono dopasowanie w ID dokumentu: ${doc.id}`);
+            return true;
+          }
+          
+          // Dodatkowe wyszukiwanie - sprawdź czy searchTerm jest częścią numeru bez rozróżniania wielkości liter
+          if (data.number) {
+            const numberUpper = data.number.toUpperCase();
+            const searchUpper = searchTerm.toUpperCase();
+            if (numberUpper.includes(searchUpper)) {
+              console.log(`✓ Znaleziono dopasowanie w numerze (case insensitive): ${data.number}`);
+              return true;
+            }
+          }
+          
+          // Sprawdź czy ID dokumentu pasuje (case insensitive)
+          if (doc.id.toUpperCase().includes(searchTerm.toUpperCase())) {
+            console.log(`✓ Znaleziono dopasowanie w ID (case insensitive): ${doc.id}`);
+            return true;
+          }
+          
+          // Szukaj w notatkach
+          if (data.notes && data.notes.toLowerCase().includes(searchTerm)) {
+            console.log(`✓ Znaleziono dopasowanie w notatkach`);
+            return true;
+          }
+          
+          // Szukaj w numerach referencyjnych
+          if (data.referenceNumber && data.referenceNumber.toLowerCase().includes(searchTerm)) {
+            console.log(`✓ Znaleziono dopasowanie w numerze referencyjnym: ${data.referenceNumber}`);
+            return true;
           }
           
           return false;
         });
+        
+        console.log(`Znaleziono ${directMatchingDocs.length} zamówień pasujących bezpośrednio`);
+        
+        // Znajdź dostawców pasujących do wyszukiwania
+        const suppliersSnapshot = await getDocs(collection(db, SUPPLIERS_COLLECTION));
+        const matchingSupplierIds = new Set();
+        
+        suppliersSnapshot.forEach(doc => {
+          const supplierData = doc.data();
+          if (supplierData.name && 
+              supplierData.name.toLowerCase().includes(searchTerm)) {
+            matchingSupplierIds.add(doc.id);
+            console.log(`Znaleziono dostawcę pasującego do zapytania '${searchTerm}': ${supplierData.name}`);
+          }
+        });
+        
+        // Znajdź zamówienia z pasującymi dostawcami
+        const supplierMatchingDocs = allDocs.filter(doc => {
+          const data = doc.data();
+          return data.supplierId && matchingSupplierIds.has(data.supplierId);
+        });
+        
+        console.log(`Znaleziono ${supplierMatchingDocs.length} zamówień z pasującymi dostawcami`);
+        
+        // Połącz wyniki i usuń duplikaty
+        const combinedDocsMap = new Map();
+        
+        // Dodaj zamówienia pasujące bezpośrednio
+        directMatchingDocs.forEach(doc => {
+          combinedDocsMap.set(doc.id, doc);
+        });
+        
+        // Dodaj zamówienia z pasującymi dostawcami
+        supplierMatchingDocs.forEach(doc => {
+          combinedDocsMap.set(doc.id, doc);
+        });
+        
+        // Konwertuj z powrotem na tablicę
+        allDocs = Array.from(combinedDocsMap.values());
+        
+        console.log(`Łącznie znaleziono ${allDocs.length} zamówień dla zapytania '${searchTerm}'`);
+        
+        // Zbierz ID dostawców do późniejszego pobrania
+        allDocs.forEach(doc => {
+          const data = doc.data();
+          if (data.supplierId) {
+            supplierIds.add(data.supplierId);
+          }
+        });
+      }
+      
+      // Pobierz wszystkich dostawców niezależnie od filtrowania tekstowego
+      // aby umożliwić wyszukiwanie przez nazwy dostawców
+      if (supplierIds.size > 0 || (filters.searchTerm && filters.searchTerm.trim() !== '')) {
+        const searchTerm = filters.searchTerm ? filters.searchTerm.toLowerCase().trim() : '';
+        
+        // Pobierz wszystkich dostawców
+        const suppliersSnapshot = await getDocs(collection(db, SUPPLIERS_COLLECTION));
+        const suppliersMapByName = {};
+        
+        suppliersSnapshot.forEach(doc => {
+          const supplierData = doc.data();
+          // Pamiętaj o ID dostawcy dla późniejszego filtrowania
+          // Jeśli szukamy po tekście, dodaj tylko pasujących dostawców
+          if (searchTerm && supplierData.name && 
+              supplierData.name.toLowerCase().includes(searchTerm)) {
+            suppliersMapByName[doc.id] = true;
+            console.log(`Znaleziono dostawcę pasującego do zapytania '${searchTerm}': ${supplierData.name}`);
+          } else if (!searchTerm) {
+            // Jeśli nie szukamy po tekście, dodaj wszystkich dostawców
+            suppliersMapByName[doc.id] = true;
+          }
+        });
+        
+        // Znajdź zamówienia z dopasowanymi dostawcami i dodaj do wyników wyszukiwania
+        if (Object.keys(suppliersMapByName).length > 0 && filters.searchTerm) {
+          const ordersWithMatchingSuppliers = allDocs.filter(doc => {
+            const data = doc.data();
+            return data.supplierId && suppliersMapByName[data.supplierId];
+          });
+          
+          // Połącz wyniki filtrowania po zamówieniach z wynikami filtrowania po dostawcach
+          // usuwając duplikaty
+          const orderIds = new Set(allDocs.map(doc => doc.id));
+          
+          // Dodaj zamówienia z dopasowanymi dostawcami, których jeszcze nie mamy
+          for (const doc of ordersWithMatchingSuppliers) {
+            if (!orderIds.has(doc.id)) {
+              allDocs.push(doc);
+              orderIds.add(doc.id);
+            }
+          }
+          
+          console.log(`Znaleziono ${ordersWithMatchingSuppliers.length} zamówień z pasującymi dostawcami`);
+        }
       }
     }
     
@@ -268,26 +583,25 @@ export const getPurchaseOrdersWithPagination = async (page = 1, limit = 10, sort
       };
     });
     
-    // Dodatkowe filtrowanie po nazwie dostawcy, jeśli jest szukany term
-    if (filters.searchTerm && filters.searchTerm.trim() !== '') {
-      const searchTerm = filters.searchTerm.toLowerCase().trim();
-      // Filtruj zamówienia, gdzie nazwa dostawcy pasuje do wyszukiwanego terminu
-      purchaseOrders = purchaseOrders.filter(po => 
-        po.supplier && po.supplier.name && 
-        po.supplier.name.toLowerCase().includes(searchTerm)
-      );
-    }
-    
-    // Zwróć dane wraz z informacjami o paginacji
-    return {
+    // Cache wynik przed zwróceniem - ale nie cache'uj wyników wyszukiwania
+    const result = {
       data: purchaseOrders,
       pagination: {
-        page: safePageNum,
-        limit: itemsPerPage,
         totalItems: totalCount,
-        totalPages: totalPages
+        totalPages: totalPages,
+        currentPage: safePageNum,
+        itemsPerPage: itemsPerPage
       }
     };
+    
+    if (shouldUseCache) {
+      searchCache.set(cacheKey, result);
+      console.log('Zapisano wyniki do cache');
+    } else {
+      console.log('Wyniki wyszukiwania nie zostały zapisane do cache');
+    }
+    
+    return result;
   } catch (error) {
     console.error('Błąd podczas pobierania zamówień zakupowych z paginacją:', error);
     throw error;
@@ -513,6 +827,10 @@ export const createPurchaseOrder = async (purchaseOrderData, userId) => {
     };
     
     console.log("Nowe PO - wynik:", result);
+    
+    // Wyczyść cache po utworzeniu nowego zamówienia
+    searchCache.clear();
+    
     return result;
   } catch (error) {
     console.error('Błąd podczas tworzenia zamówienia zakupowego:', error);
@@ -583,6 +901,9 @@ export const deletePurchaseOrder = async (id) => {
     
     // Usuń zamówienie z bazy danych
     await deleteDoc(purchaseOrderRef);
+    
+    // Wyczyść cache dotyczące tego zamówienia
+    searchCache.invalidateForOrder(id);
     
     return { id };
   } catch (error) {
@@ -689,6 +1010,9 @@ export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, user
         }
       }
     }
+    
+    // Wyczyść cache dotyczące tego zamówienia
+    searchCache.invalidateForOrder(purchaseOrderId);
     
     return { success: true, status: newStatus };
   } catch (error) {
@@ -1054,6 +1378,9 @@ export const updatePurchaseOrderReceivedQuantity = async (purchaseOrderId, itemI
     // Aktualizuj dokument w bazie danych
     await updateDoc(poRef, updateData);
 
+    // Wyczyść cache dotyczące tego zamówienia
+    searchCache.invalidateForOrder(purchaseOrderId);
+
     // Zwróć zaktualizowane dane
     return {
       id: purchaseOrderId,
@@ -1156,6 +1483,9 @@ export const updatePurchaseOrderItems = async (purchaseOrderId, updatedItems, us
     
     // Aktualizuj dokument
     await updateDoc(purchaseOrderRef, updateFields);
+    
+    // Wyczyść cache dotyczące tego zamówienia
+    searchCache.invalidateForOrder(purchaseOrderId);
     
     // Pobierz zaktualizowane dane zamówienia
     const updatedDocSnap = await getDoc(purchaseOrderRef);
@@ -1342,9 +1672,22 @@ export const updateBatchesForPurchaseOrder = async (purchaseOrderId, userId) => 
     // Aktualizuj ceny partii
     await updateBatchPricesWithAdditionalCosts(purchaseOrderId, poData, userId);
     
+    // Wyczyść cache dotyczące tego zamówienia
+    searchCache.invalidateForOrder(purchaseOrderId);
+    
     return { success: true };
   } catch (error) {
     console.error('Błąd podczas aktualizacji partii dla zamówienia:', error);
     throw error;
   }
+};
+
+// Eksportuj funkcję do czyszczenia cache wyszukiwania
+export const clearSearchCache = () => {
+  searchCache.clearSearchCache();
+};
+
+// Eksportuj funkcję do czyszczenia całego cache
+export const clearAllCache = () => {
+  searchCache.clear();
 }; 

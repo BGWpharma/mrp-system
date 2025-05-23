@@ -7,7 +7,7 @@ import {
   Tooltip, Menu, Checkbox, ListItemText, TableSortLabel, Pagination, TableFooter
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, Description as DescriptionIcon, ViewColumn as ViewColumnIcon } from '@mui/icons-material';
-import { getAllPurchaseOrders, deletePurchaseOrder, updatePurchaseOrderStatus, getPurchaseOrdersWithPagination } from '../../services/purchaseOrderService';
+import { getAllPurchaseOrders, deletePurchaseOrder, updatePurchaseOrderStatus, getPurchaseOrdersWithPagination, clearSearchCache } from '../../services/purchaseOrderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { STATUS_TRANSLATIONS, PURCHASE_ORDER_STATUSES } from '../../config';
@@ -60,6 +60,12 @@ const PurchaseOrderList = () => {
         searchTerm: debouncedSearchTerm || null
       };
       
+      // Jeśli jest wyszukiwanie, wyczyść cache aby pobrać świeże dane
+      if (debouncedSearchTerm && debouncedSearchTerm.trim() !== '') {
+        clearSearchCache();
+        console.log('Wyczyszczono cache wyszukiwania');
+      }
+      
       // OPTYMALIZACJA: Zwiększamy interwały między zapytaniami i zmniejszamy ilość danych
       // Zmniejszamy domyślną liczbę elementów z 10 do 5, jeśli nie jest określona inaczej
       const optimizedLimit = limit || 5;
@@ -104,7 +110,7 @@ const PurchaseOrderList = () => {
     
     const timeoutId = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
-    }, 300); // 300ms opóźnienia
+    }, 1000); // 1000ms opóźnienia (1 sekunda)
     
     setSearchTimeout(timeoutId);
     
