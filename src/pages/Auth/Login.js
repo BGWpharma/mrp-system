@@ -52,11 +52,21 @@ const Login = () => {
       >
         <Paper elevation={3} sx={{ p: 4, width: '100%' }}>
           <Box sx={{ mb: 3, textAlign: 'center' }}>
+            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
+              <img 
+                src="/BGWPharma_Logo_LightTheme.png" 
+                alt="BGW Logo" 
+                style={{ height: '80px', width: 'auto' }}
+              />
+            </Box>
             <Typography component="h1" variant="h5">
-              System MRP
+              System BGW-MRP
             </Typography>
             <Typography variant="subtitle1" color="text.secondary">
               Zaloguj się, aby kontynuować
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              Aplikacja dostępna wyłącznie dla pracowników firmy BGW
             </Typography>
           </Box>
 

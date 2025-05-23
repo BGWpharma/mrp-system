@@ -2364,15 +2364,18 @@ const TaskDetailsPage = () => {
             
             <Box sx={{ 
               display: 'flex', 
-              flexDirection: isMobile ? 'column' : 'row',
-              gap: 1
+              flexDirection: isMobile ? 'row' : 'row',
+              gap: 1,
+              justifyContent: isMobile ? 'flex-start' : 'flex-end',
+              width: isMobile ? '100%' : 'auto',
+              mb: isMobile ? 2 : 0
             }}>
               <IconButton 
                 color="primary" 
                 component={Link} 
                 to={`/production/tasks/${id}/edit`}
                 title="Edytuj zadanie"
-                sx={{ mr: isMobile ? 0 : 1, mb: isMobile ? 1 : 0 }}
+                sx={{ mr: isMobile ? 1 : 1 }}
               >
                 <EditIcon />
               </IconButton>
