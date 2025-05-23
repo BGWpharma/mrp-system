@@ -676,6 +676,13 @@ export const ThemeProvider = ({ children }) => {
       setTheme(savedMode === 'light' ? createLightTheme() : createDarkTheme());
       // Aktualizacja atrybutu data-theme
       document.documentElement.setAttribute('data-theme', savedMode);
+      
+      // Dodaj lub usuń klasę dark-mode z body
+      if (savedMode === 'dark') {
+        document.body.classList.add('dark-mode');
+      } else {
+        document.body.classList.remove('dark-mode');
+      }
     }
   }, []);
 
@@ -694,6 +701,13 @@ export const ThemeProvider = ({ children }) => {
               localStorage.setItem('themeMode', userData.themeMode);
               // Aktualizacja atrybutu data-theme
               document.documentElement.setAttribute('data-theme', userData.themeMode);
+              
+              // Dodaj lub usuń klasę dark-mode z body
+              if (userData.themeMode === 'dark') {
+                document.body.classList.add('dark-mode');
+              } else {
+                document.body.classList.remove('dark-mode');
+              }
             }
           }
         } catch (error) {
@@ -720,6 +734,13 @@ export const ThemeProvider = ({ children }) => {
     document.documentElement.setAttribute('data-theme', newMode);
     document.documentElement.classList.add('theme-transition');
     
+    // Dodaj lub usuń klasę dark-mode z body
+    if (newMode === 'dark') {
+      document.body.classList.add('dark-mode');
+    } else {
+      document.body.classList.remove('dark-mode');
+    }
+
     // Zapisz w profilu użytkownika, jeśli jest zalogowany
     if (auth?.currentUser) {
       try {

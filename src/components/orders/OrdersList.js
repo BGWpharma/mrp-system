@@ -1090,14 +1090,6 @@ const OrdersList = () => {
                                                 {formatCurrency((parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 0))}
                                               </TableCell>
                                               <TableCell>
-                                                {/* DEBUG: sprawdźmy jakie dane mamy */}
-                                                {console.log('DEBUG - item data:', {
-                                                  productionTaskId: item.productionTaskId,
-                                                  productionTaskNumber: item.productionTaskNumber,
-                                                  itemId: item.id,
-                                                  orderProductionTasks: order.productionTasks,
-                                                  fullItem: item
-                                                })}
                                                 {(() => {
                                                   // Sprawdź najpierw bezpośrednie pola w pozycji
                                                   if (item.productionTaskId && item.productionTaskNumber) {

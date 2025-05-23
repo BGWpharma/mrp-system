@@ -66,11 +66,10 @@ import BugReportDialog from './BugReportDialog';
 import { useSidebar } from '../../contexts/SidebarContext';
 
 // Styled components
-const StyledListItemButton = styled(ListItemButton)(({ theme, isheader, isactive }) => ({
+const StyledListItemButton = styled(ListItemButton)(({ theme }) => ({
   borderRadius: theme.shape.borderRadius,
   margin: '2px 4px',
   padding: '6px 8px',
-  backgroundColor: isactive === 'true' ? alpha(theme.palette.primary.main, 0.15) : 'transparent',
   '&.Mui-selected': {
     backgroundColor: alpha(theme.palette.primary.main, 0.15),
     '&:hover': {
@@ -290,9 +289,11 @@ const Sidebar = ({ onToggle }) => {
       anchor="left"
       open={isOpen}
       onClose={toggle}
-      keepMounted={false}
-      disableEnforceFocus={true}
-      disableAutoFocus={false}
+      {...(isMobile && {
+        keepMounted: false,
+        disableEnforceFocus: true,
+        disableAutoFocus: false,
+      })}
       sx={{
         width: drawerWidth,
         flexShrink: 0,
@@ -383,8 +384,6 @@ const Sidebar = ({ onToggle }) => {
               <StyledListItemButton 
                 onClick={() => handleSubmenuClick(item.text)} 
                 selected={isMenuActive(item.path)}
-                isheader="true"
-                isactive={isMenuActive(item.path) ? 'true' : 'false'}
                 role="menuitem"
                 aria-haspopup="true"
                 aria-expanded={openSubmenu === item.text}

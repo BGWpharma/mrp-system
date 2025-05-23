@@ -1,0 +1,144 @@
+/* src/styles/calendar.css */
+/* Style dla komponentu FullCalendar */
+
+/* Style dla tooltipów */
+.mo-tooltip {
+  position: absolute;
+  z-index: 10000;
+  font-family: 'Roboto', 'Helvetica', 'Arial', sans-serif;
+}
+
+/* Dostosowanie stylów kalendarza do trybu ciemnego */
+body.dark-mode .fc-theme-standard .fc-list-day-cushion,
+body.dark-mode .fc .fc-popover-header,
+body.dark-mode .fc-theme-standard .fc-list-day-side-text {
+  background-color: #2d3748;
+  color: #e2e8f0;
+}
+
+body.dark-mode .fc-theme-standard th,
+body.dark-mode .fc-theme-standard td,
+body.dark-mode .fc-theme-standard .fc-scrollgrid {
+  border-color: #4a5568;
+}
+
+body.dark-mode .fc-theme-standard .fc-list-event:hover td {
+  background-color: #3a4556;
+}
+
+body.dark-mode .fc-theme-standard .fc-list-event-dot {
+  border-color: #90caf9;
+}
+
+/* Dodatkowe style dla tooltipów w trybie ciemnym dodawane przez JavaScript */
+body.dark-mode .mo-tooltip-content {
+  background-color: #2d3748 !important;
+  border-color: #4a5568 !important;
+  color: #e2e8f0 !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.dark-mode .mo-tooltip-title {
+  color: #90caf9 !important;
+}
+
+body:not(.dark-mode) .mo-tooltip-content {
+  background-color: white !important;
+  border-color: #ccc !important;
+  color: inherit !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1) !important;
+}
+
+body:not(.dark-mode) .mo-tooltip-title {
+  color: #1976d2 !important;
+}
+
+/* Style dla pełnego kalendarza w trybie ciemnym */
+body.dark-mode .fc {
+  color: #e2e8f0;
+}
+
+body.dark-mode .fc-toolbar {
+  color: #e2e8f0;
+}
+
+body.dark-mode .fc-theme-standard .fc-scrollgrid,
+body.dark-mode .fc-theme-standard td,
+body.dark-mode .fc-theme-standard th {
+  border-color: #4a5568;
+}
+
+body.dark-mode .fc-daygrid-day-number,
+body.dark-mode .fc-col-header-cell-cushion {
+  color: #e2e8f0;
+}
+
+/* Style dla popupów FullCalendar w trybie ciemnym */
+body.dark-mode .fc-popover {
+  background-color: #2d3748;
+  border-color: #4a5568;
+  color: #e2e8f0;
+}
+
+body.dark-mode .fc-popover-title {
+  background-color: #3a4556;
+  color: #e2e8f0;
+}
+
+body.dark-mode .fc-daygrid-day {
+  background-color: #1a202c;
+}
+
+body.dark-mode .fc-daygrid-day-top {
+  color: #e2e8f0;
+}
+
+/* Style dla wyróżnienia dzisiejszego dnia */
+body.dark-mode .fc-day-today {
+  background-color: rgba(66, 153, 225, 0.1) !important;
+  color: #90caf9;
+}
+
+/* Style dla nagłówków w trybie ciemnym */
+body.dark-mode .fc .fc-toolbar-title {
+  color: #e2e8f0;
+}
+
+/* Style dla przycisków w trybie ciemnym */
+body.dark-mode .fc .fc-button {
+  background-color: #2d3748;
+  border-color: #4a5568;
+  color: #e2e8f0;
+}
+
+body.dark-mode .fc .fc-button:hover {
+  background-color: #4a5568;
+}
+
+body.dark-mode .fc .fc-button-primary:not(:disabled).fc-button-active,
+body.dark-mode .fc .fc-button-primary:not(:disabled):active {
+  background-color: #4299e1;
+  border-color: #4299e1;
+  color: #ffffff;
+}
+
+/* Style dla timeline w trybie ciemnym */
+body.dark-mode .fc-timeline-slot-minor {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+body.dark-mode .fc-scrollgrid-section-header th,
+body.dark-mode .fc-timeline-header th {
+  background-color: #2d3748;
+}
+
+body.dark-mode .fc-resource-timeline-divider {
+  background-color: #4a5568;
+}
+
+/* Style dla eventów w timeline w trybie ciemnym */
+body.dark-mode .fc-timeline-event {
+  background-color: #3182ce;
+  border-color: #2b6cb0;
+  color: #ffffff;
+} 

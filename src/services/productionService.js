@@ -104,38 +104,98 @@ import {
       // Jeśli żądana strona jest większa niż liczba stron, ustaw na ostatnią stronę
       const safePageNum = Math.min(pageNum, Math.max(1, totalPages));
       
-      // Przygotuj zapytanie z sortowaniem
-      let q = query(
-        collection(db, PRODUCTION_TASKS_COLLECTION),
-        orderBy(sortField, sortOrder)
-      );
+      // Funkcja do numerycznego sortowania numerów MO
+      const sortByMoNumber = (docs, sortOrder) => {
+        return docs.sort((a, b) => {
+          const dataA = a.data();
+          const dataB = b.data();
+          
+          const moA = dataA.moNumber || '';
+          const moB = dataB.moNumber || '';
+          
+          // Ekstraktuj część numeryczną z numerów MO (np. MO00001 -> 1)
+          const getNumericPart = (moNumber) => {
+            const match = moNumber.match(/MO(\d+)/);
+            return match ? parseInt(match[1], 10) : 0;
+          };
+          
+          const numA = getNumericPart(moA);
+          const numB = getNumericPart(moB);
+          
+          if (sortOrder === 'asc') {
+            return numA - numB;
+          } else {
+            return numB - numA;
+          }
+        });
+      };
+      
+      // Przygotuj zapytanie - jeśli sortowanie jest po moNumber, nie używamy orderBy Firebase
+      let q;
+      const isCustomSort = sortField === 'moNumber';
+      
+      if (!isCustomSort) {
+        q = query(
+          collection(db, PRODUCTION_TASKS_COLLECTION),
+          orderBy(sortField, sortOrder)
+        );
+      } else {
+        // Dla sortowania po moNumber pobierz wszystkie dokumenty bez sortowania
+        q = collection(db, PRODUCTION_TASKS_COLLECTION);
+      }
       
       // Dodaj filtry do głównego zapytania
       if (filters.status) {
-        q = query(
-          collection(db, PRODUCTION_TASKS_COLLECTION),
-          where('status', '==', filters.status),
-          orderBy(sortField, sortOrder)
-        );
+        if (!isCustomSort) {
+          q = query(
+            collection(db, PRODUCTION_TASKS_COLLECTION),
+            where('status', '==', filters.status),
+            orderBy(sortField, sortOrder)
+          );
+        } else {
+          q = query(
+            collection(db, PRODUCTION_TASKS_COLLECTION),
+            where('status', '==', filters.status)
+          );
+        }
       } else if (filters.statuses && Array.isArray(filters.statuses) && filters.statuses.length > 0) {
-        q = query(
-          collection(db, PRODUCTION_TASKS_COLLECTION),
-          where('status', 'in', filters.statuses),
-          orderBy(sortField, sortOrder)
-        );
+        if (!isCustomSort) {
+          q = query(
+            collection(db, PRODUCTION_TASKS_COLLECTION),
+            where('status', 'in', filters.statuses),
+            orderBy(sortField, sortOrder)
+          );
+        } else {
+          q = query(
+            collection(db, PRODUCTION_TASKS_COLLECTION),
+            where('status', 'in', filters.statuses)
+          );
+        }
       }
       
       if (filters.workstationId) {
-        q = query(
-          collection(db, PRODUCTION_TASKS_COLLECTION),
-          where('workstationId', '==', filters.workstationId),
-          orderBy(sortField, sortOrder)
-        );
+        if (!isCustomSort) {
+          q = query(
+            collection(db, PRODUCTION_TASKS_COLLECTION),
+            where('workstationId', '==', filters.workstationId),
+            orderBy(sortField, sortOrder)
+          );
+        } else {
+          q = query(
+            collection(db, PRODUCTION_TASKS_COLLECTION),
+            where('workstationId', '==', filters.workstationId)
+          );
+        }
       }
       
-      // Pobierz wszystkie dokumenty dla sortowania
+      // Pobierz wszystkie dokumenty
       const querySnapshot = await getDocs(q);
-      const allDocs = querySnapshot.docs;
+      let allDocs = querySnapshot.docs;
+      
+      // Zastosuj sortowanie po numerach MO jeśli potrzebne
+      if (isCustomSort) {
+        allDocs = sortByMoNumber(allDocs, sortOrder);
+      }
       
       // Filtruj wyniki na serwerze jeśli podano searchTerm
       let filteredDocs = allDocs;

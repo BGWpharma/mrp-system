@@ -20,7 +20,13 @@ import {
   useTheme,
   IconButton,
   Collapse,
-  TextField
+  TextField,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  Grid
 } from '@mui/material';
 import {
   CalendarMonth as CalendarIcon,
@@ -36,7 +42,9 @@ import {
   ExpandLess as ExpandLessIcon,
   Settings as SettingsIcon,
   Visibility as VisibilityIcon,
-  VisibilityOff as VisibilityOffIcon
+  VisibilityOff as VisibilityOffIcon,
+  Info as InfoIcon,
+  Edit as EditIcon
 } from '@mui/icons-material';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -48,6 +56,7 @@ import plLocale from '@fullcalendar/core/locales/pl';
 import { getTasksByDateRange, updateTask } from '../../services/productionService';
 import { getAllWorkstations } from '../../services/workstationService';
 import { useNotification } from '../../hooks/useNotification';
+import { useAuth } from '../../hooks/useAuth';
 import { formatDate } from '../../utils/formatters';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -55,6 +64,9 @@ import { addDays, addMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
+// Na początku pliku dodać import CSS
+import '../../styles/calendar.css';
 
 // Stałe dla mechanizmu cachowania
 const CACHE_EXPIRY_TIME = 5 * 60 * 1000; // 5 minut w milisekundach
@@ -80,6 +92,7 @@ const ProductionCalendar = () => {
   const calendarRef = useRef(null);
   const navigate = useNavigate();
   const { showError, showSuccess } = useNotification();
+  const { currentUser } = useAuth();
   const [eventResizableFromStart, setEventResizableFromStart] = useState(true);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -93,6 +106,17 @@ const ProductionCalendar = () => {
   
   // Dodaję stan do śledzenia zmodyfikowanych zadań
   const [modifiedTasks, setModifiedTasks] = useState({});
+  
+  // Stany dla menu kontekstowego
+  const [contextMenu, setContextMenu] = useState(null);
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  
+  // Stany dla dialogu edycji dat
+  const [editDateDialog, setEditDateDialog] = useState(false);
+  const [editDateForm, setEditDateForm] = useState({
+    scheduledDate: null,
+    endDate: null
+  });
   
   // Stan do przechowywania cache'u zadań
   const [tasksCache, setTasksCache] = useState({});
@@ -376,11 +400,175 @@ const ProductionCalendar = () => {
     }
   };
 
-  // Obsługa kliknięcia w zdarzenie
+  // Obsługa kliknięcia w zdarzenie - pokazuje menu kontekstowe
   const handleEventClick = (info) => {
-    // Wyczyść wszystkie tooltipów przed przejściem do strony MO
+    info.jsEvent.preventDefault();
+    
+    // Wyczyść wszystkie tooltipów przed pokazaniem menu
     clearAllTooltips();
-    navigate(`/production/tasks/${info.event.id}`);
+    
+    setSelectedEvent(info.event);
+    setContextMenu({
+      mouseX: info.jsEvent.clientX - 2,
+      mouseY: info.jsEvent.clientY - 4,
+    });
+  };
+
+  // Zamknięcie menu kontekstowego
+  const handleCloseContextMenu = () => {
+    setContextMenu(null);
+    setSelectedEvent(null);
+  };
+
+  // Przejście do szczegółów MO
+  const handleViewMODetails = () => {
+    if (selectedEvent) {
+      navigate(`/production/tasks/${selectedEvent.id}`);
+      // Wyczyść selectedEvent po nawigacji
+      setSelectedEvent(null);
+      setContextMenu(null);
+    }
+  };
+
+  // Otworzenie dialogu edycji dat
+  const handleEditDates = () => {
+    if (selectedEvent) {
+      console.log('Otwieranie dialogu edycji dla zadania:', selectedEvent.id, {
+        start: selectedEvent.start,
+        end: selectedEvent.end,
+        task: selectedEvent.extendedProps.task
+      });
+      
+      setEditDateForm({
+        scheduledDate: selectedEvent.start ? new Date(selectedEvent.start) : null,
+        endDate: selectedEvent.end ? new Date(selectedEvent.end) : null
+      });
+      setEditDateDialog(true);
+    }
+    // Zamknij tylko menu kontekstowe, ale zostaw selectedEvent
+    setContextMenu(null);
+  };
+
+  // Zamknięcie dialogu edycji dat
+  const handleCloseEditDateDialog = () => {
+    setEditDateDialog(false);
+    setEditDateForm({
+      scheduledDate: null,
+      endDate: null
+    });
+    // Wyczyść selectedEvent po zamknięciu dialogu
+    setSelectedEvent(null);
+  };
+
+  // Zapisanie zmian dat
+  const handleSaveEditedDates = async () => {
+    console.log('Próba zapisania dat:', {
+      selectedEvent: selectedEvent?.id,
+      scheduledDate: editDateForm.scheduledDate,
+      scheduledDateType: typeof editDateForm.scheduledDate,
+      scheduledDateValid: editDateForm.scheduledDate instanceof Date,
+      endDate: editDateForm.endDate,
+      endDateType: typeof editDateForm.endDate,
+      endDateValid: editDateForm.endDate instanceof Date,
+      currentUser: currentUser?.uid
+    });
+
+    if (!selectedEvent) {
+      showError('Nie wybrano zamówienia produkcyjnego');
+      return;
+    }
+
+    if (!editDateForm.scheduledDate || !(editDateForm.scheduledDate instanceof Date)) {
+      showError('Data rozpoczęcia jest wymagana i musi być prawidłową datą');
+      return;
+    }
+
+    if (editDateForm.endDate && !(editDateForm.endDate instanceof Date)) {
+      showError('Data zakończenia musi być prawidłową datą');
+      return;
+    }
+
+    if (!currentUser?.uid) {
+      showError('Nie jesteś zalogowany');
+      return;
+    }
+
+    try {
+      // Wyczyść wszystkie tooltipów przed operacją - tak jak w handleEventDrop
+      clearAllTooltips();
+      
+      setLoading(true);
+      
+      const taskId = selectedEvent.id;
+      const task = selectedEvent.extendedProps.task;
+      
+      // Oblicz czas trwania w minutach na podstawie różnicy między datami
+      let durationInMinutes = '';
+      if (editDateForm.scheduledDate && editDateForm.endDate) {
+        durationInMinutes = Math.round((editDateForm.endDate - editDateForm.scheduledDate) / (1000 * 60));
+      }
+      
+      // Przygotuj dane do aktualizacji - tak jak w handleEventDrop
+      const updatedData = {
+        scheduledDate: editDateForm.scheduledDate,
+        endDate: editDateForm.endDate || editDateForm.scheduledDate,
+        estimatedDuration: durationInMinutes || task.estimatedDuration
+      };
+
+      console.log('Aktualizacja zadania:', taskId, updatedData);
+
+      // Aktualizuj stan modifiedTasks - to jest kluczowe dla tooltipów, tak jak w handleEventDrop
+      setModifiedTasks(prev => ({
+        ...prev,
+        [taskId]: {
+          id: taskId,
+          // Zachowaj wszystkie inne właściwości z oryginalnego zadania
+          ...task,
+          // Ale upewnij się, że daty i czas trwania są zaktualizowane
+          scheduledDate: editDateForm.scheduledDate,
+          endDate: editDateForm.endDate || editDateForm.scheduledDate,
+          estimatedDuration: durationInMinutes || task.estimatedDuration,
+          lastModified: new Date()
+        }
+      }));
+
+      await updateTask(taskId, updatedData, currentUser.uid);
+      
+      showSuccess('Daty zamówienia produkcyjnego zostały zaktualizowane');
+      handleCloseEditDateDialog();
+      
+      // Odświeżenie widoku - używając dokładnie tego samego podejścia co w handleEventDrop
+      const updatedTasks = await getTasksByDateRange(
+        calendarRef.current.getApi().view.activeStart.toISOString(),
+        calendarRef.current.getApi().view.activeEnd.toISOString()
+      );
+      setTasks(updatedTasks);
+      
+      // KLUCZOWA ZMIANA: Wymuszenie pełnego przeładowania kalendarza - dokładnie jak w handleEventDrop
+      try {
+        if (calendarRef.current) {
+          const api = calendarRef.current.getApi();
+          
+          // Krótka pauza przed refreshem
+          setTimeout(() => {
+            // Wymuś pełne odświeżenie widoku kalendarza
+            api.refetchEvents();
+            api.updateSize();
+            
+            // Dodatkowy krok - możemy też spróbować przeładować cały kalendarz
+            api.destroy();
+            api.render();
+          }, 100);
+        }
+      } catch (error) {
+        console.error('Błąd podczas odświeżania kalendarza:', error);
+      }
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji dat:', error);
+      showError('Wystąpił błąd podczas aktualizacji dat: ' + (error.message || error));
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Funkcja obsługująca kliknięcie w pusty obszar kalendarza - została wyłączona
@@ -2350,8 +2538,8 @@ const ProductionCalendar = () => {
                 
                 // Ustaw treść tooltipa
                 tooltipContent.innerHTML = `
-                  <div style="background-color: white; border: 1px solid #ccc; border-radius: 4px; padding: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 300px; z-index: 10000;">
-                    <div style="font-weight: bold; margin-bottom: 4px; font-size: 14px; color: #1976d2;">${taskData.name || 'Zlecenie produkcyjne'}</div>
+                  <div class="mo-tooltip-content" style="border-radius: 4px; padding: 8px; max-width: 300px; z-index: 10000;">
+                    <div class="mo-tooltip-title" style="font-weight: bold; margin-bottom: 4px; font-size: 14px;">${taskData.name || 'Zlecenie produkcyjne'}</div>
                     <div style="font-size: 12px; margin-bottom: 2px;"><b>MO:</b> ${taskData.moNumber || 'Brak'}</div>
                     ${taskData.productName ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Produkt:</b> ${taskData.productName}</div>` : ''}
                     ${taskData.quantity ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Ilość:</b> ${taskData.quantity} ${taskData.unit || ''}</div>` : ''}
@@ -2759,6 +2947,104 @@ const ProductionCalendar = () => {
           <ListItemText primary="Miesiąc" />
         </MenuItem>
       </Menu>
+
+      {/* Menu kontekstowe dla kafelków MO */}
+      <Menu
+        open={contextMenu !== null}
+        onClose={handleCloseContextMenu}
+        anchorReference="anchorPosition"
+        anchorPosition={
+          contextMenu !== null
+            ? { top: contextMenu.mouseY, left: contextMenu.mouseX }
+            : undefined
+        }
+      >
+        <MenuItem onClick={handleViewMODetails}>
+          <ListItemIcon>
+            <InfoIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Szczegóły MO</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={handleEditDates}>
+          <ListItemIcon>
+            <EditIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Edytuj daty</ListItemText>
+        </MenuItem>
+      </Menu>
+
+      {/* Dialog edycji dat MO */}
+      <Dialog
+        open={editDateDialog}
+        onClose={handleCloseEditDateDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Edytuj daty zamówienia produkcyjnego</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Zmień daty rozpoczęcia i zakończenia zamówienia produkcyjnego.
+          </DialogContentText>
+          
+          <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12}>
+                <DateTimePicker
+                  label="Data i godzina rozpoczęcia"
+                  value={editDateForm.scheduledDate}
+                  onChange={(newValue) => {
+                    console.log('Zmiana daty rozpoczęcia:', newValue);
+                    setEditDateForm(prev => ({
+                      ...prev,
+                      scheduledDate: newValue
+                    }));
+                  }}
+                  slotProps={{
+                    textField: {
+                      fullWidth: true,
+                      required: true,
+                      error: !editDateForm.scheduledDate,
+                      helperText: !editDateForm.scheduledDate ? 'Data rozpoczęcia jest wymagana' : ''
+                    }
+                  }}
+                  format="dd.MM.yyyy HH:mm"
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <DateTimePicker
+                  label="Data i godzina zakończenia"
+                  value={editDateForm.endDate}
+                  onChange={(newValue) => {
+                    console.log('Zmiana daty zakończenia:', newValue);
+                    setEditDateForm(prev => ({
+                      ...prev,
+                      endDate: newValue
+                    }));
+                  }}
+                  slotProps={{
+                    textField: {
+                      fullWidth: true
+                    }
+                  }}
+                  format="dd.MM.yyyy HH:mm"
+                />
+              </Grid>
+            </Grid>
+          </LocalizationProvider>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseEditDateDialog}>
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleSaveEditedDates}
+            variant="contained"
+            color="primary"
+          >
+            Zapisz zmiany
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Paper>
   );
 };

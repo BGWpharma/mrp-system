@@ -55,7 +55,8 @@ import {
   Done as DoneIcon,
   Cancel as CancelIcon,
   ViewColumn as ViewColumnIcon,
-  BuildCircle as BuildCircleIcon
+  BuildCircle as BuildCircleIcon,
+  ArrowDropDown as ArrowDropDownIcon
 } from '@mui/icons-material';
 import { getAllTasks, updateTaskStatus, deleteTask, addTaskProductToInventory, stopProduction, getTasksWithPagination } from '../../services/productionService';
 import { getAllWarehouses } from '../../services/inventoryService';
@@ -124,6 +125,10 @@ const TaskList = () => {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [searchTimeout, setSearchTimeout] = useState(null);
 
+  // Stany do obsługi sortowania
+  const [sortField, setSortField] = useState('scheduledDate');
+  const [sortOrder, setSortOrder] = useState('asc');
+
   // Obsługa debounce dla wyszukiwania
   useEffect(() => {
     if (searchTimeout) {
@@ -154,7 +159,7 @@ const TaskList = () => {
   useEffect(() => {
     fetchTasks();
     fetchWarehouses();
-  }, [page, limit, debouncedSearchTerm, statusFilter]);
+  }, [page, limit, debouncedSearchTerm, statusFilter, sortField, sortOrder]);
 
   // Filtruj zadania przy zmianie searchTerm, statusFilter lub tasks
   useEffect(() => {
@@ -236,8 +241,8 @@ const TaskList = () => {
       const result = await getTasksWithPagination(
         page,
         limit,
-        'scheduledDate',
-        'asc',
+        sortField,
+        sortOrder,
         filters
       );
       
@@ -649,6 +654,19 @@ const TaskList = () => {
     updateColumnPreferences('productionTasks', columnName, !visibleColumns[columnName]);
   };
 
+  // Funkcja obsługi sortowania
+  const handleSort = (field) => {
+    if (sortField === field) {
+      // Jeśli klikamy na tę samą kolumnę, zmień kierunek sortowania
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Jeśli klikamy na nową kolumnę, ustaw ją jako sortowaną z kierunkiem rosnącym
+      setSortField(field);
+      setSortOrder('asc');
+    }
+    setPage(1); // Reset do pierwszej strony przy zmianie sortowania
+  };
+
   // Renderowanie zadania jako karta na urządzeniach mobilnych
   const renderTaskCard = (task) => {
     // Obliczenie pozostałej ilości do produkcji
@@ -910,15 +928,123 @@ const TaskList = () => {
             <Table>
               <TableHead>
                 <TableRow>
-                  {visibleColumns.name && <TableCell>Nazwa zadania</TableCell>}
-                  {visibleColumns.productName && <TableCell>Produkt</TableCell>}
-                  {visibleColumns.quantity && <TableCell>Ilość</TableCell>}
+                  {visibleColumns.name && (
+                    <TableCell
+                      onClick={() => handleSort('moNumber')}
+                      sx={{ cursor: 'pointer', userSelect: 'none' }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        Nazwa zadania
+                        {sortField === 'moNumber' && (
+                          <ArrowDropDownIcon 
+                            sx={{ 
+                              transform: sortOrder === 'asc' ? 'rotate(180deg)' : 'none',
+                              transition: 'transform 0.2s',
+                              ml: 0.5
+                            }} 
+                          />
+                        )}
+                      </Box>
+                    </TableCell>
+                  )}
+                  {visibleColumns.productName && (
+                    <TableCell
+                      onClick={() => handleSort('productName')}
+                      sx={{ cursor: 'pointer', userSelect: 'none' }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        Produkt
+                        {sortField === 'productName' && (
+                          <ArrowDropDownIcon 
+                            sx={{ 
+                              transform: sortOrder === 'asc' ? 'rotate(180deg)' : 'none',
+                              transition: 'transform 0.2s',
+                              ml: 0.5
+                            }} 
+                          />
+                        )}
+                      </Box>
+                    </TableCell>
+                  )}
+                  {visibleColumns.quantity && (
+                    <TableCell
+                      onClick={() => handleSort('quantity')}
+                      sx={{ cursor: 'pointer', userSelect: 'none' }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        Ilość
+                        {sortField === 'quantity' && (
+                          <ArrowDropDownIcon 
+                            sx={{ 
+                              transform: sortOrder === 'asc' ? 'rotate(180deg)' : 'none',
+                              transition: 'transform 0.2s',
+                              ml: 0.5
+                            }} 
+                          />
+                        )}
+                      </Box>
+                    </TableCell>
+                  )}
                   {visibleColumns.remainingQuantity && <TableCell>Pozostało do produkcji</TableCell>}
                   {visibleColumns.workstation && <TableCell>Stanowisko</TableCell>}
-                  {visibleColumns.status && <TableCell>Status</TableCell>}
+                  {visibleColumns.status && (
+                    <TableCell
+                      onClick={() => handleSort('status')}
+                      sx={{ cursor: 'pointer', userSelect: 'none' }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        Status
+                        {sortField === 'status' && (
+                          <ArrowDropDownIcon 
+                            sx={{ 
+                              transform: sortOrder === 'asc' ? 'rotate(180deg)' : 'none',
+                              transition: 'transform 0.2s',
+                              ml: 0.5
+                            }} 
+                          />
+                        )}
+                      </Box>
+                    </TableCell>
+                  )}
                   {visibleColumns.materialsReserved && <TableCell>Surowce zarezerwowane</TableCell>}
-                  {visibleColumns.plannedStart && <TableCell>Planowany start</TableCell>}
-                  {visibleColumns.plannedEnd && <TableCell>Planowane zakończenie</TableCell>}
+                  {visibleColumns.plannedStart && (
+                    <TableCell
+                      onClick={() => handleSort('scheduledDate')}
+                      sx={{ cursor: 'pointer', userSelect: 'none' }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        Planowany start
+                        {sortField === 'scheduledDate' && (
+                          <ArrowDropDownIcon 
+                            sx={{ 
+                              transform: sortOrder === 'asc' ? 'rotate(180deg)' : 'none',
+                              transition: 'transform 0.2s',
+                              ml: 0.5
+                            }} 
+                          />
+                        )}
+                      </Box>
+                    </TableCell>
+                  )}
+                  {visibleColumns.plannedEnd && (
+                    <TableCell
+                      onClick={() => handleSort('endDate')}
+                      sx={{ cursor: 'pointer', userSelect: 'none' }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        Planowane zakończenie
+                        {sortField === 'endDate' && (
+                          <ArrowDropDownIcon 
+                            sx={{ 
+                              transform: sortOrder === 'asc' ? 'rotate(180deg)' : 'none',
+                              transition: 'transform 0.2s',
+                              ml: 0.5
+                            }} 
+                          />
+                        )}
+                      </Box>
+                    </TableCell>
+                  )}
                   {visibleColumns.cost && <TableCell>Koszt jednostkowy</TableCell>}
                   {visibleColumns.totalCost && <TableCell>Koszt całkowity</TableCell>}
                   {visibleColumns.actions && <TableCell>Akcje</TableCell>}
