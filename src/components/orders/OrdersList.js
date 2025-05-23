@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -31,7 +31,8 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
-  Divider
+  Divider,
+  Link
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -1072,6 +1073,7 @@ const OrdersList = () => {
                                             <TableCell align="right">Ilość</TableCell>
                                             <TableCell align="right">Cena</TableCell>
                                             <TableCell align="right">Wartość</TableCell>
+                                            <TableCell>MO</TableCell>
                                           </TableRow>
                                         </TableHead>
                                         <TableBody>
@@ -1086,6 +1088,81 @@ const OrdersList = () => {
                                               </TableCell>
                                               <TableCell align="right">
                                                 {formatCurrency((parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 0))}
+                                              </TableCell>
+                                              <TableCell>
+                                                {/* DEBUG: sprawdźmy jakie dane mamy */}
+                                                {console.log('DEBUG - item data:', {
+                                                  productionTaskId: item.productionTaskId,
+                                                  productionTaskNumber: item.productionTaskNumber,
+                                                  itemId: item.id,
+                                                  orderProductionTasks: order.productionTasks,
+                                                  fullItem: item
+                                                })}
+                                                {(() => {
+                                                  // Sprawdź najpierw bezpośrednie pola w pozycji
+                                                  if (item.productionTaskId && item.productionTaskNumber) {
+                                                    return (
+                                                      <Link
+                                                        component={RouterLink}
+                                                        to={`/production/tasks/${item.productionTaskId}`}
+                                                        sx={{ 
+                                                          textDecoration: 'none',
+                                                          fontWeight: 'medium',
+                                                          '&:hover': {
+                                                            textDecoration: 'underline'
+                                                          }
+                                                        }}
+                                                      >
+                                                        <Chip
+                                                          label={item.productionTaskNumber}
+                                                          color="primary"
+                                                          size="small"
+                                                          variant="outlined"
+                                                          clickable
+                                                        />
+                                                      </Link>
+                                                    );
+                                                  }
+                                                  
+                                                  // Jeśli nie ma bezpośrednich pól, szukaj w order.productionTasks
+                                                  if (order.productionTasks && order.productionTasks.length > 0) {
+                                                    const matchingTask = order.productionTasks.find(task => 
+                                                      task.orderItemId === item.id || 
+                                                      (task.productName === item.name && task.quantity == item.quantity)
+                                                    );
+                                                    
+                                                    if (matchingTask) {
+                                                      return (
+                                                        <Link
+                                                          component={RouterLink}
+                                                          to={`/production/tasks/${matchingTask.id}`}
+                                                          sx={{ 
+                                                            textDecoration: 'none',
+                                                            fontWeight: 'medium',
+                                                            '&:hover': {
+                                                              textDecoration: 'underline'
+                                                            }
+                                                          }}
+                                                        >
+                                                          <Chip
+                                                            label={matchingTask.moNumber}
+                                                            color="primary"
+                                                            size="small"
+                                                            variant="outlined"
+                                                            clickable
+                                                          />
+                                                        </Link>
+                                                      );
+                                                    }
+                                                  }
+                                                  
+                                                  // Jeśli nic nie znaleziono, pokaż myślnik
+                                                  return (
+                                                    <Typography variant="body2" color="text.secondary">
+                                                      -
+                                                    </Typography>
+                                                  );
+                                                })()}
                                               </TableCell>
                                             </TableRow>
                                           ))}

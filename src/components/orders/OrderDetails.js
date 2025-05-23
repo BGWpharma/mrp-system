@@ -645,7 +645,7 @@ const OrderDetails = () => {
             size="small"
             color={statusColor}
             clickable
-            onClick={() => navigate(`/production/${item.productionTaskId}`)}
+            onClick={() => navigate(`/production/tasks/${item.productionTaskId}`)}
             sx={{ cursor: 'pointer' }}
           />
         </Tooltip>
@@ -690,7 +690,7 @@ const OrderDetails = () => {
             size="small"
             color={statusColor}
             clickable
-            onClick={() => navigate(`/production/${task.id}`)}
+            onClick={() => navigate(`/production/tasks/${task.id}`)}
             sx={{ cursor: 'pointer' }}
           />
         </Tooltip>
@@ -1426,7 +1426,21 @@ const OrderDetails = () => {
               <TableBody>
                 {order.productionTasks.map((task) => (
                   <TableRow key={task.id}>
-                    <TableCell>{task.moNumber}</TableCell>
+                    <TableCell>
+                      <Link
+                        component={RouterLink}
+                        to={`/production/tasks/${task.id}`}
+                        sx={{ 
+                          textDecoration: 'none',
+                          fontWeight: 'medium',
+                          '&:hover': {
+                            textDecoration: 'underline'
+                          }
+                        }}
+                      >
+                        {task.moNumber}
+                      </Link>
+                    </TableCell>
                     <TableCell>{task.name}</TableCell>
                     <TableCell>{task.productName}</TableCell>
                     <TableCell>{task.quantity} {task.unit}</TableCell>
