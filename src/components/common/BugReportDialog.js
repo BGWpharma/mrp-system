@@ -28,7 +28,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import { addBugReportWithBase64Screenshot } from '../../services/bugReportService';
+import { addBugReportWithScreenshot } from '../../services/bugReportService';
 import { 
   getCapturedLogs, 
   addLogListener, 
@@ -399,8 +399,8 @@ const BugReportDialog = ({ open, onClose }) => {
         path: window.location.pathname
       };
       
-      // Używamy nowej funkcji, która zapisuje zrzut ekranu jako dane base64
-      await addBugReportWithBase64Screenshot(reportData, screenshot, currentUser.uid);
+      // Używamy funkcji do przesyłania zrzutu ekranu do Firebase Storage
+      await addBugReportWithScreenshot(reportData, screenshot, currentUser.uid);
       
       // Informujemy o sukcesie
       showSuccess('Zgłoszenie błędu zostało wysłane. Dziękujemy!');

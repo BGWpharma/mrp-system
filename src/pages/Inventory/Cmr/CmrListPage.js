@@ -124,7 +124,7 @@ const statusTranslations = {
   [CMR_STATUSES.DRAFT]: { pl: 'Szkic', en: 'Draft' },
   [CMR_STATUSES.ISSUED]: { pl: 'Wystawiony', en: 'Issued' },
   [CMR_STATUSES.IN_TRANSIT]: { pl: 'W transporcie', en: 'In Transit' },
-  [CMR_STATUSES.DELIVERED]: { pl: 'Dostarczony', en: 'Delivered' },
+  [CMR_STATUSES.DELIVERED]: { pl: 'Dostarczone', en: 'Delivered' },
   [CMR_STATUSES.COMPLETED]: { pl: 'Zakończony', en: 'Completed' },
   [CMR_STATUSES.CANCELED]: { pl: 'Anulowany', en: 'Canceled' }
 };
@@ -409,17 +409,23 @@ const CmrListPage = () => {
   
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: { xs: 'column', sm: 'row' } }}>
         <Typography variant="h5">
           Dokumenty CMR
         </Typography>
-        <Box>
+        <Box sx={{ 
+          display: 'flex', 
+          gap: 1, 
+          mt: { xs: 2, sm: 0 },
+          width: { xs: '100%', sm: 'auto' } 
+        }}>
           <Button
             variant="outlined"
             color="primary"
             startIcon={<AssessmentIcon />}
             onClick={handleOpenReportDialog}
-            sx={{ mr: 2 }}
+            sx={{ mr: { sm: 1 }, flex: { xs: 1, sm: 'auto' } }}
+            size="small"
           >
             Generuj raport
           </Button>
@@ -428,6 +434,8 @@ const CmrListPage = () => {
             color="primary"
             startIcon={<AddIcon />}
             onClick={handleCreateCmr}
+            sx={{ flex: { xs: 1, sm: 'auto' } }}
+            size="small"
           >
             Nowy dokument CMR
           </Button>

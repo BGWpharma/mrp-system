@@ -87,35 +87,81 @@ export const addBugReport = async (reportData, screenshotFile, userId) => {
 };
 
 /**
- * Dodaje nowe zgłoszenie błędu do bazy danych wraz ze zrzutem ekranu jako dane base64
- * Ta metoda unika problemów z CORS, zapisując zrzut ekranu bezpośrednio w Firestore
+ * Dodaje nowe zgłoszenie błędu do bazy danych wraz ze zrzutem ekranu zapisanym w Firebase Storage
+ * Ta metoda zapewnia przesyłanie zrzutów ekranu do Firebase Storage zamiast przechowywania jako base64
  * @param {Object} reportData - Dane zgłoszenia
  * @param {File} screenshotFile - Plik zrzutu ekranu
  * @param {string} userId - ID użytkownika zgłaszającego błąd
  * @returns {Promise<string>} - ID utworzonego zgłoszenia
  */
-export const addBugReportWithBase64Screenshot = async (reportData, screenshotFile, userId) => {
+export const addBugReportWithScreenshot = async (reportData, screenshotFile, userId) => {
+  let reportRef = null;
+  
   try {
-    // Konwertuj plik zrzutu ekranu do base64, jeśli istnieje
-    let screenshotBase64 = null;
-    if (screenshotFile) {
-      screenshotBase64 = await convertFileToBase64(screenshotFile);
-    }
-    
-    // Dodaj podstawowe dane zgłoszenia wraz z zakodowanym zrzutem ekranu
-    const reportRef = await addDoc(collection(db, BUG_REPORTS_COLLECTION), {
+    // Dodaj podstawowe dane zgłoszenia bez zrzutu ekranu
+    reportRef = await addDoc(collection(db, BUG_REPORTS_COLLECTION), {
       ...reportData,
       status: 'nowy',
       createdAt: serverTimestamp(),
       createdBy: userId,
       updatedAt: serverTimestamp(),
-      updatedBy: userId,
-      screenshotBase64: screenshotBase64
+      updatedBy: userId
     });
+    
+    console.log('Utworzono dokument zgłoszenia błędu:', reportRef.id);
+
+    // Jeśli jest zrzut ekranu, przesyłamy go do Firebase Storage
+    if (screenshotFile) {
+      try {
+        const storageRef = ref(storage, `bugReports/${reportRef.id}/screenshot`);
+        await uploadBytes(storageRef, screenshotFile);
+        const screenshotUrl = await getDownloadURL(storageRef);
+
+        // Aktualizuj dokument o URL zrzutu ekranu
+        await updateDoc(doc(db, BUG_REPORTS_COLLECTION, reportRef.id), {
+          screenshotUrl
+        });
+        
+        console.log('Dodano zrzut ekranu do zgłoszenia w Firebase Storage');
+      } catch (uploadError) {
+        console.error('Błąd podczas przesyłania zrzutu ekranu:', uploadError);
+        
+        // Jako plan awaryjny, spróbujmy zapisać jako base64 w Firestore
+        try {
+          const screenshotBase64 = await convertFileToBase64(screenshotFile);
+          await updateDoc(doc(db, BUG_REPORTS_COLLECTION, reportRef.id), {
+            screenshotBase64
+          });
+          console.log('Dodano zrzut ekranu jako base64 po nieudanym przesłaniu do Storage');
+        } catch (base64Error) {
+          console.error('Błąd podczas konwersji do base64:', base64Error);
+          
+          // Aktualizuj dokument z informacją o błędzie przesyłania
+          await updateDoc(doc(db, BUG_REPORTS_COLLECTION, reportRef.id), {
+            screenshotError: "Nie udało się przesłać zrzutu ekranu. Zgłoszenie zostało utworzone bez zrzutu."
+          });
+          
+          console.warn('Zgłoszenie zostało zapisane bez zrzutu ekranu');
+        }
+      }
+    }
 
     return reportRef.id;
   } catch (error) {
-    console.error('Błąd podczas dodawania zgłoszenia błędu z base64:', error);
+    console.error('Błąd podczas dodawania zgłoszenia błędu:', error);
+    
+    // Jeśli dokument został już utworzony, ale wystąpił inny błąd, dodajmy informację o tym
+    if (reportRef) {
+      try {
+        await updateDoc(doc(db, BUG_REPORTS_COLLECTION, reportRef.id), {
+          hasError: true,
+          errorMessage: error.message
+        });
+      } catch (updateError) {
+        console.error('Nie można zaktualizować dokumentu z informacją o błędzie:', updateError);
+      }
+    }
+    
     throw error;
   }
 };
@@ -278,4 +324,7 @@ export const deleteBugReport = async (reportId) => {
     console.error('Błąd podczas usuwania zgłoszenia błędu:', error);
     throw error;
   }
-}; 
+};
+
+// Zachowujemy starą nazwę funkcji dla zachowania kompatybilności wstecznej
+export const addBugReportWithBase64Screenshot = addBugReportWithScreenshot; 

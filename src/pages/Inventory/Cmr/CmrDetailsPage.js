@@ -606,7 +606,7 @@ const CmrDetailsPage = () => {
       <GlobalStyles>{globalPrintCss}</GlobalStyles>
       
       {/* Wersja do wyświetlania na ekranie */}
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }} className="no-print">
+      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexDirection: { xs: 'column', sm: 'row' } }} className="no-print">
         <Box>
           <Typography variant="h5">
             Dokument CMR: {cmrData.cmrNumber}
@@ -615,11 +615,19 @@ const CmrDetailsPage = () => {
             Status: {renderStatusChip(cmrData.status)}
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ 
+          display: 'flex', 
+          gap: 1, 
+          flexWrap: 'wrap', 
+          mt: { xs: 2, sm: 0 },
+          width: { xs: '100%', sm: 'auto' } 
+        }}>
           <Button
             variant="outlined"
             startIcon={<ArrowBackIcon />}
             onClick={handleBack}
+            size="small"
+            sx={{ mb: { xs: 1, sm: 0 } }}
           >
             Powrót
           </Button>
@@ -629,6 +637,8 @@ const CmrDetailsPage = () => {
               variant="outlined"
               startIcon={<EditIcon />}
               onClick={handleEdit}
+              size="small"
+              sx={{ mb: { xs: 1, sm: 0 } }}
             >
               Edytuj
             </Button>
@@ -636,22 +646,81 @@ const CmrDetailsPage = () => {
           
           <Button
             variant="outlined"
-            startIcon={<PrintIcon />}
-            onClick={handlePrint}
-          >
-            Drukuj
-          </Button>
-          
-          <Button
-            variant="outlined"
             startIcon={<FileCopyIcon />}
             onClick={handleGenerateOfficialCmr}
             color="primary"
+            size="small"
+            sx={{ mb: { xs: 1, sm: 0 } }}
           >
             Generuj oficjalny CMR
           </Button>
         </Box>
       </Box>
+      
+      {/* Panel zmiany statusu */}
+      {(isEditable || cmrData.status === CMR_STATUSES.IN_TRANSIT || cmrData.status === CMR_STATUSES.DELIVERED) && (
+        <Card sx={{ mb: 3 }} className="no-print">
+          <CardHeader 
+            title="Zmiana statusu" 
+            titleTypographyProps={{ variant: 'h6' }}
+          />
+          <Divider />
+          <CardContent>
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              {cmrData.status === CMR_STATUSES.DRAFT && (
+                <Button 
+                  variant="contained" 
+                  color="primary"
+                  onClick={() => handleStatusChange(CMR_STATUSES.ISSUED)}
+                >
+                  Wystaw dokument
+                </Button>
+              )}
+              
+              {cmrData.status === CMR_STATUSES.ISSUED && (
+                <Button 
+                  variant="contained" 
+                  color="warning"
+                  onClick={() => handleStatusChange(CMR_STATUSES.IN_TRANSIT)}
+                >
+                  Rozpocznij transport
+                </Button>
+              )}
+              
+              {cmrData.status === CMR_STATUSES.IN_TRANSIT && (
+                <Button 
+                  variant="contained" 
+                  color="success"
+                  onClick={() => handleStatusChange(CMR_STATUSES.DELIVERED)}
+                >
+                  Oznacz jako dostarczone
+                </Button>
+              )}
+              
+              {cmrData.status === CMR_STATUSES.DELIVERED && (
+                <Button 
+                  variant="contained" 
+                  color="info"
+                  onClick={() => handleStatusChange(CMR_STATUSES.COMPLETED)}
+                >
+                  Zakończ
+                </Button>
+              )}
+              
+              {(cmrData.status === CMR_STATUSES.DRAFT || 
+                cmrData.status === CMR_STATUSES.ISSUED) && (
+                <Button 
+                  variant="contained" 
+                  color="error"
+                  onClick={() => handleStatusChange(CMR_STATUSES.CANCELED)}
+                >
+                  Anuluj
+                </Button>
+              )}
+            </Box>
+          </CardContent>
+        </Card>
+      )}
       
       {/* Główne informacje - wersja ekranowa */}
       <Grid container spacing={3} className="no-print">
@@ -1242,73 +1311,6 @@ const CmrDetailsPage = () => {
           </Box>
         </Box>
       </Box>
-      
-      {/* Akcje zmiany statusu - tylko na ekranie */}
-        {isEditable && (
-        <Grid item xs={12} className="no-print">
-            <Card>
-              <CardHeader 
-                title="Zmiana statusu" 
-                titleTypographyProps={{ variant: 'h6' }}
-              />
-              <Divider />
-              <CardContent>
-                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                  {cmrData.status === CMR_STATUSES.DRAFT && (
-                    <Button 
-                      variant="contained" 
-                      color="primary"
-                      onClick={() => handleStatusChange(CMR_STATUSES.ISSUED)}
-                    >
-                      Wystaw dokument
-                    </Button>
-                  )}
-                  
-                  {cmrData.status === CMR_STATUSES.ISSUED && (
-                    <Button 
-                      variant="contained" 
-                      color="warning"
-                      onClick={() => handleStatusChange(CMR_STATUSES.IN_TRANSIT)}
-                    >
-                      Rozpocznij transport
-                    </Button>
-                  )}
-                  
-                  {cmrData.status === CMR_STATUSES.IN_TRANSIT && (
-                    <Button 
-                      variant="contained" 
-                      color="success"
-                      onClick={() => handleStatusChange(CMR_STATUSES.DELIVERED)}
-                    >
-                      Oznacz jako dostarczony
-                    </Button>
-                  )}
-                  
-                  {cmrData.status === CMR_STATUSES.DELIVERED && (
-                    <Button 
-                      variant="contained" 
-                      color="info"
-                      onClick={() => handleStatusChange(CMR_STATUSES.COMPLETED)}
-                    >
-                      Zakończ
-                    </Button>
-                  )}
-                  
-                  {(cmrData.status === CMR_STATUSES.DRAFT || 
-                    cmrData.status === CMR_STATUSES.ISSUED) && (
-                    <Button 
-                      variant="contained" 
-                      color="error"
-                      onClick={() => handleStatusChange(CMR_STATUSES.CANCELED)}
-                    >
-                      Anuluj
-                    </Button>
-                  )}
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        )}
     </Container>
   );
 };

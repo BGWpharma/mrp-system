@@ -25,7 +25,7 @@ export const CMR_STATUSES = {
   DRAFT: 'Szkic',
   ISSUED: 'Wystawiony',
   IN_TRANSIT: 'W transporcie',
-  DELIVERED: 'Dostarczony',
+  DELIVERED: 'Dostarczone',
   COMPLETED: 'Zakończony',
   CANCELED: 'Anulowany'
 };
