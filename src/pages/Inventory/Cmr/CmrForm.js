@@ -332,37 +332,21 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
       notes: formData.notes || ''
     };
     
-    // Sprawdź wymagane pola formularza przed wysłaniem
-    if (!dataToSubmit.sender) dataToSubmit.sender = "Test Sender";
-    if (!dataToSubmit.senderAddress) dataToSubmit.senderAddress = "Test Address";
-    if (!dataToSubmit.recipient) dataToSubmit.recipient = "Test Recipient";
-    if (!dataToSubmit.recipientAddress) dataToSubmit.recipientAddress = "Test Recipient Address";
-    if (!dataToSubmit.carrier) dataToSubmit.carrier = "Test Carrier";
-    if (!dataToSubmit.carrierAddress) dataToSubmit.carrierAddress = "Test Carrier Address";
-    if (!dataToSubmit.loadingPlace) dataToSubmit.loadingPlace = "Test Loading Place";
-    if (!dataToSubmit.deliveryPlace) dataToSubmit.deliveryPlace = "Test Delivery Place";
-    
     // Upewnij się, że vehicleInfo jest zdefiniowane
     if (!dataToSubmit.vehicleInfo) dataToSubmit.vehicleInfo = {};
-    if (!dataToSubmit.vehicleInfo.vehicleRegistration) 
-      dataToSubmit.vehicleInfo.vehicleRegistration = "TEST123";
-    
-    // Upewnij się, że każdy przedmiot ma wymagane pola
-    dataToSubmit.items.forEach((item, index) => {
-      if (!item.description) dataToSubmit.items[index].description = `Test Item ${index+1}`;
-      if (!item.quantity) dataToSubmit.items[index].quantity = "1";
-      if (!item.unit) dataToSubmit.items[index].unit = "szt.";
-    });
     
     const isValid = validateForm();
     console.log('Wynik walidacji:', isValid);
     
-    // UWAGA: Pomijamy walidację, aby przetestować wysyłanie formularza
-    console.log('Formularz wysyłany niezależnie od walidacji (dla testów):', dataToSubmit);
-    try {
-      onSubmit(dataToSubmit);
-    } catch (error) {
-      console.error('Błąd podczas próby wywołania onSubmit:', error);
+    if (isValid) {
+      console.log('Formularz jest poprawny, wysyłanie danych:', dataToSubmit);
+      try {
+        onSubmit(dataToSubmit);
+      } catch (error) {
+        console.error('Błąd podczas próby wywołania onSubmit:', error);
+      }
+    } else {
+      console.log('Formularz zawiera błędy, nie można go wysłać');
     }
   };
   
@@ -440,6 +424,10 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
         // Zachowujemy istniejące elementy formularza i nadpisujemy tylko te, które chcemy zaktualizować
         const updatedForm = { ...prev };
         
+        // Zapisz powiązanie z zamówieniem
+        updatedForm.linkedOrderId = orderId;
+        updatedForm.linkedOrderNumber = order.orderNumber;
+        
         // Dane odbiorcy (klient z zamówienia)
         if (importOptions.recipientData) {
           updatedForm.recipient = customerData.name || '';
@@ -495,7 +483,7 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
       });
       
       // Wyświetl podsumowanie pobranych danych
-      const summaryMessage = `Pomyślnie uzupełniono dane z zamówienia ${order.orderNumber}. 
+      const summaryMessage = `Pomyślnie powiązano CMR z zamówieniem ${order.orderNumber}. 
 Zaimportowano: ${importedDataSummary.join(', ')}.
 ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}.` : ''}`;
       
@@ -802,7 +790,7 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                     onClick={handleOpenOrderDialog}
                     sx={{ mt: 1 }}
                   >
-                    Uzupełnij na podstawie CO
+                    Powiąż z CO
                   </Button>
                 </Grid>
               </Grid>

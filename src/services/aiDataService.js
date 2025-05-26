@@ -147,12 +147,12 @@ export const getDataWithCache = async (cacheKey, fetchFunction, options = {}) =>
   // Jeśli nie ma w buforze, pobierz z bazy
   console.log(`Pobieram dane z bazy dla ${cacheKey}`);
   
-  // Wywołaj odpowiednią funkcję z odpowiednimi parametrami
+  // Wywołaj odpowiednią funkcję z odpowiednimi parametrami - bez domyślnych limitów
   let data;
   if (cacheKey === 'productionTasks' && options.filters) {
-    data = await fetchFunction(options.limit || 50, options.filters);
+    data = await fetchFunction(options.limit, options.filters);
   } else {
-    data = await fetchFunction(options.limit || 50);
+    data = await fetchFunction(options.limit);
   }
   
   // Zapisz do bufora tylko jeśli nie ma filtrów
@@ -160,8 +160,8 @@ export const getDataWithCache = async (cacheKey, fetchFunction, options = {}) =>
   if (cacheKey === 'productionTasks' && options.filters) {
     // Jeśli mamy już dane w buforze, nie aktualizujemy ich
     if (!cache.data) {
-      // Pobierz wszystkie dane bez filtrów do bufora
-      const allData = await fetchFunction(options.limit || 100);
+      // Pobierz wszystkie dane bez filtrów do bufora - bez limitów
+      const allData = await fetchFunction(options.limit);
       dataCache[cacheKey] = {
         data: allData,
         timestamp: now
@@ -247,8 +247,8 @@ const getCollectionData = async (collectionName, options = {}) => {
   try {
     let q = collection(db, collectionName);
     
-    // Domyślny mniejszy limit stron - zmniejszony z 50 na 30
-    const pageSize = options.limit || 30;
+    // Brak limitów dla asystenta AI - pobieramy wszystkie dane
+    const pageSize = options.limit;
     
     // Dodaj filtry do zapytania
     if (options.filters) {
@@ -270,8 +270,8 @@ const getCollectionData = async (collectionName, options = {}) => {
       q = query(q, startAfter(options.lastVisible));
     }
     
-    // Dodaj limit
-    if (pageSize) {
+    // Dodaj limit tylko jeśli został określony
+    if (pageSize && pageSize > 0) {
       q = query(q, limit(pageSize));
     }
     
@@ -1658,12 +1658,12 @@ export const enrichBusinessDataWithAnalysis = (businessData) => {
  */
 export const getMRPSystemSummary = async () => {
   try {
-    // Pobierz podstawowe statystyki
-    const inventoryItems = await getDataWithCache('inventory', getInventoryItems, { limit: 1000 });
-    const customerOrders = await getDataWithCache('orders', getCustomerOrders, { limit: 1000 });
-    const productionTasks = await getDataWithCache('productionTasks', getProductionTasks, { limit: 1000 });
-    const suppliers = await getDataWithCache('suppliers', getSuppliers, { limit: 1000 });
-    const purchaseOrders = await getDataWithCache('purchaseOrders', getPurchaseOrders, { limit: 1000 });
+    // Pobierz podstawowe statystyki - bez limitów dla pełnego dostępu do danych
+    const inventoryItems = await getDataWithCache('inventory', getInventoryItems, {});
+    const customerOrders = await getDataWithCache('orders', getCustomerOrders, {});
+    const productionTasks = await getDataWithCache('productionTasks', getProductionTasks, {});
+    const suppliers = await getDataWithCache('suppliers', getSuppliers, {});
+    const purchaseOrders = await getDataWithCache('purchaseOrders', getPurchaseOrders, {});
     
     // Oblicz bieżące statystyki
     const activeOrders = customerOrders.filter(order => 
@@ -1737,64 +1737,23 @@ export const getBatchesWithPOData = async () => {
     return getDataWithCache('materialBatches', async () => {
       console.log('Pobieranie danych o partiach materiałów z zamówieniami zakupowymi...');
       
-      // Przygotuj wyniki
-      const batches = [];
-      let lastVisible = null;
-      const pageSize = 50; // Zmniejszony rozmiar strony z 200 na 50
-      let hasMoreBatches = true;
+      // Pobierz wszystkie partie magazynowe bez limitów
+      const batchesQuery = query(
+        collection(db, 'inventoryBatches'),
+        orderBy('createdAt', 'desc') // Sortuj po dacie utworzenia
+      );
       
-      // Pobierz partie magazynowe stronami, używając kursorów
-      while (hasMoreBatches) {
-        // Zbuduj zapytanie z kursorem
-        let batchesQuery = query(
-          collection(db, 'inventoryBatches'),
-          orderBy('createdAt', 'desc'), // Sortuj po dacie utworzenia - kluczowe dla paginacji z kursorami
-          limit(pageSize)
-        );
-        
-        // Dodaj kursor, jeśli to nie pierwsza strona
-        if (lastVisible) {
-          batchesQuery = query(
-            collection(db, 'inventoryBatches'),
-            orderBy('createdAt', 'desc'),
-            startAfter(lastVisible),
-            limit(pageSize)
-          );
-        }
-        
-        const batchesSnapshot = await getDocs(batchesQuery);
-        
-        // Sprawdź, czy mamy więcej stron do pobrania
-        if (batchesSnapshot.docs.length < pageSize) {
-          hasMoreBatches = false;
-        }
-        
-        // Zapisz ostatni widoczny dokument jako kursor
-        if (batchesSnapshot.docs.length > 0) {
-          lastVisible = batchesSnapshot.docs[batchesSnapshot.docs.length - 1];
-          
-          // Przetwórz wyniki
-          const newBatches = batchesSnapshot.docs
-            .map(doc => ({
-              id: doc.id,
-              ...doc.data()
-            }))
-            .filter(batch => batch.purchaseOrderDetails && batch.purchaseOrderDetails.id);
-          
-          batches.push(...newBatches);
-          
-          console.log(`Pobrano stronę danych o partiach (${batchesSnapshot.docs.length} dokumentów, ${newBatches.length} z powiązaniami z PO)`);
-        } else {
-          hasMoreBatches = false;
-        }
-        
-        // Dodatkowe sprawdzenie dla bezpieczeństwa - ograniczamy maksymalną liczbę pobranych dokumentów
-        if (batches.length >= 500) {
-          console.log('Osiągnięto maksymalną liczbę pobranych partii (500)');
-          hasMoreBatches = false;
-        }
-      }
+      const batchesSnapshot = await getDocs(batchesQuery);
       
+      // Przetwórz wyniki
+      const batches = batchesSnapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+        .filter(batch => batch.purchaseOrderDetails && batch.purchaseOrderDetails.id);
+      
+      console.log(`Pobrano ${batchesSnapshot.docs.length} dokumentów, ${batches.length} z powiązaniami z PO`);
       console.log(`Łącznie pobrano ${batches.length} partii z powiązaniami z zamówieniami zakupowymi`);
       return batches;
     });
@@ -1811,10 +1770,9 @@ export const getBatchesWithPOData = async () => {
 export const getBatchReservationsMap = async () => {
   try {
     return getDataWithCache('batchReservations', async () => {
-      // Pobierz wszystkie zadania produkcyjne
+      // Pobierz wszystkie zadania produkcyjne - bez limitów
       const tasksQuery = query(
-        collection(db, 'productionTasks'),
-        limit(100) // Limit dla wydajności
+        collection(db, 'productionTasks')
       );
       
       const tasksSnapshot = await getDocs(tasksQuery);
@@ -1895,18 +1853,18 @@ export const prepareBusinessDataForAI = async (query = '') => {
     // Pobierz podsumowanie systemu MRP
     const summaryData = await getMRPSystemSummary();
     
-    // Określ, które kolekcje chcemy pobrać
+    // Określ, które kolekcje chcemy pobrać - bez limitów dla pełnego dostępu do danych
     const collectionsToFetch = [
-      { name: 'inventory', options: { limit: null } },
-      { name: 'orders', options: { limit: null } },
-      { name: 'productionTasks', options: { limit: null } },
-      { name: 'suppliers', options: { limit: null } },
-      { name: 'purchaseOrders', options: { limit: null } }
+      { name: 'inventory', options: {} },
+      { name: 'orders', options: {} },
+      { name: 'productionTasks', options: {} },
+      { name: 'suppliers', options: {} },
+      { name: 'purchaseOrders', options: {} }
     ];
     
-    // Dodaj aiConversations tylko jeśli zapytanie ich dotyczy
+    // Dodaj aiConversations tylko jeśli zapytanie ich dotyczy - bez limitów
     if (query && (query.toLowerCase().includes('ai') || query.toLowerCase().includes('asystent') || query.toLowerCase().includes('konwersac'))) {
-      collectionsToFetch.push({ name: 'aiConversations', options: { limit: 100 } });
+      collectionsToFetch.push({ name: 'aiConversations', options: {} });
     } else {
       console.log('Pomijam pobieranie konwersacji z asystentem AI - nie są potrzebne dla tego zapytania');
     }
@@ -1920,7 +1878,7 @@ export const prepareBusinessDataForAI = async (query = '') => {
     ];
     
     additionalCollections.forEach(collectionName => {
-      collectionsToFetch.push({ name: collectionName, options: { limit: 100 } });
+      collectionsToFetch.push({ name: collectionName, options: {} });
     });
     
     // Pobierz receptury oddzielnie, ponieważ wymagają specjalnego sortowania
@@ -1931,8 +1889,8 @@ export const prepareBusinessDataForAI = async (query = '') => {
     const customers = await getAllCustomers();
     console.log(`Pobrano ${customers?.length || 0} klientów`);
     
-    // Pobierz dane o partiach materiałów oddzielnie
-    const materialBatchesData = await getFullBatchesData({ limit: null });
+    // Pobierz dane o partiach materiałów oddzielnie - bez limitów
+    const materialBatchesData = await getFullBatchesData({});
     console.log(`Pobrano ${materialBatchesData?.batches?.length || 0} partii materiałów i ${materialBatchesData?.reservations?.length || 0} rezerwacji`);
     
     // Wykonaj wsadowe pobieranie danych
@@ -2177,7 +2135,7 @@ export const getInventoryTransactions = async (options = {}) => {
       const result = await getInventoryTransactionsPaginated({
         selectFields,
         lastVisible,
-        limit: limit || 30, // Domyślnie mniejszy limit
+        limit: limit, // Bez domyślnego limitu
         filters,
         orderBy
       });
@@ -2319,15 +2277,23 @@ export const getInventoryBatchesPaginated = async (options = {}) => {
     // Domyślne wartości
     const batchNumberField = options.batchNumberField || 'batchNumber';
     const startBatchNumber = options.startBatchNumber || 1;
-    const pageSize = options.limit || 30;
+    const pageSize = options.limit;
     
-    // Przygotuj zapytanie
-    const inventoryBatchesQuery = query(
+    // Przygotuj zapytanie - dodaj limit tylko jeśli został określony
+    let inventoryBatchesQuery = query(
       collection(db, 'inventoryBatches'),
       where(batchNumberField, '>=', startBatchNumber),
-      orderBy(batchNumberField, 'asc'),
-      limit(pageSize)
+      orderBy(batchNumberField, 'asc')
     );
+    
+    if (pageSize && pageSize > 0) {
+      inventoryBatchesQuery = query(
+        collection(db, 'inventoryBatches'),
+        where(batchNumberField, '>=', startBatchNumber),
+        orderBy(batchNumberField, 'asc'),
+        limit(pageSize)
+      );
+    }
     
     const querySnapshot = await getDocs(inventoryBatchesQuery);
     

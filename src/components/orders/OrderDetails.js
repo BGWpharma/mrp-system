@@ -56,7 +56,7 @@ import {
   OpenInNew as OpenInNewIcon,
   Label as LabelIcon
 } from '@mui/icons-material';
-import { getOrderById, ORDER_STATUSES, updateOrder } from '../../services/orderService';
+import { getOrderById, ORDER_STATUSES, updateOrder, migrateCmrHistoryData } from '../../services/orderService';
 import { useNotification } from '../../hooks/useNotification';
 import { formatCurrency } from '../../utils/formatUtils';
 import { formatTimestamp, formatDate } from '../../utils/dateUtils';
@@ -319,6 +319,27 @@ const OrderDetails = () => {
           showError('Błąd podczas odświeżania danych kosztów produkcji: ' + error.message);
         }
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Funkcja do uruchomienia migracji danych CMR (tylko do testowania)
+  const handleMigrateCmrData = async () => {
+    try {
+      setLoading(true);
+      showInfo('Rozpoczęcie migracji danych CMR...');
+      
+      const result = await migrateCmrHistoryData();
+      
+      if (result.success) {
+        showSuccess(`Migracja zakończona pomyślnie. Zmigrowano ${result.migratedCount} zamówień.`);
+        // Odśwież dane zamówienia
+        await refreshOrderData();
+      }
+    } catch (error) {
+      console.error('Błąd podczas migracji:', error);
+      showError('Wystąpił błąd podczas migracji danych CMR: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -775,8 +796,19 @@ const OrderDetails = () => {
               startIcon={<LabelIcon />} 
               variant="outlined"
               onClick={() => setLabelDialogOpen(true)}
+              sx={{ mr: 1 }}
             >
               Drukuj etykietę
+            </Button>
+            {/* Przycisk migracji - tylko do testowania */}
+            <Button 
+              startIcon={<RefreshIcon />} 
+              variant="outlined"
+              color="secondary"
+              onClick={handleMigrateCmrData}
+              size="small"
+            >
+              Migruj CMR
             </Button>
           </Box>
         </Box>
@@ -929,6 +961,7 @@ const OrderDetails = () => {
               <TableRow sx={{ bgcolor: 'primary.main', color: 'primary.contrastText' }}>
                 <TableCell sx={{ color: 'inherit' }}>Produkt</TableCell>
                 <TableCell sx={{ color: 'inherit' }} align="right">Ilość</TableCell>
+                <TableCell sx={{ color: 'inherit' }} align="right">Wysłano</TableCell>
                 <TableCell sx={{ color: 'inherit' }} align="right">Cena</TableCell>
                 <TableCell sx={{ color: 'inherit' }} align="right">Wartość</TableCell>
                 <TableCell sx={{ color: 'inherit' }}>Lista cenowa</TableCell>
@@ -957,6 +990,37 @@ const OrderDetails = () => {
                 <TableRow key={index} sx={{ '&:nth-of-type(odd)': { bgcolor: 'action.hover' } }}>
                   <TableCell>{item.name}</TableCell>
                   <TableCell align="right">{item.quantity} {item.unit}</TableCell>
+                  <TableCell align="right">
+                    {item.shippedQuantity ? (
+                      <Box>
+                        <Typography variant="body2" color="success.main">
+                          {item.shippedQuantity} {item.unit}
+                        </Typography>
+                        {item.cmrHistory && item.cmrHistory.length > 0 ? (
+                          <Box sx={{ mt: 0.5 }}>
+                            {item.cmrHistory.map((cmrEntry, cmrIndex) => (
+                              <Typography 
+                                key={cmrIndex} 
+                                variant="caption" 
+                                color="text.secondary"
+                                sx={{ display: 'block', lineHeight: 1.2 }}
+                              >
+                                CMR: {cmrEntry.cmrNumber} ({cmrEntry.quantity} {cmrEntry.unit})
+                              </Typography>
+                            ))}
+                          </Box>
+                        ) : item.lastCmrNumber ? (
+                          <Typography variant="caption" color="text.secondary">
+                            CMR: {item.lastCmrNumber}
+                          </Typography>
+                        ) : null}
+                      </Box>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">
+                        0 {item.unit}
+                      </Typography>
+                    )}
+                  </TableCell>
                   <TableCell align="right">{formatCurrency(item.price)}</TableCell>
                   <TableCell align="right">{formatCurrency(item.quantity * item.price)}</TableCell>
                   <TableCell>

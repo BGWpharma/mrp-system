@@ -29,6 +29,7 @@ import {
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { getAllStocktakings } from '../../services/inventoryService';
+import { getUsersDisplayNames } from '../../services/userService';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDate } from '../../utils/formatters';
 import { doc, getDoc } from 'firebase/firestore';
@@ -72,32 +73,20 @@ const StocktakingPage = () => {
     }
   };
   
-  // Funkcja pobierająca dane użytkowników
+  // Funkcja pobierająca dane użytkowników - zoptymalizowana wersja
   const fetchUserNames = async (userIds) => {
     if (!userIds || userIds.length === 0) return;
     
-    const uniqueUserIds = [...new Set(userIds)]; // Usuń duplikaty
-    const names = {};
+    const uniqueUserIds = [...new Set(userIds.filter(id => id))]; // Usuń duplikaty i puste wartości
     
-    for (const userId of uniqueUserIds) {
-      if (!userId) continue;
-      
-      try {
-        const userDoc = await getDoc(doc(db, 'users', userId));
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          // Wybierz najlepszą dostępną informację o użytkowniku: displayName, email lub ID
-          names[userId] = userData.displayName || userData.email || userId;
-        } else {
-          names[userId] = userId; // Fallback na ID, jeśli nie znaleziono użytkownika
-        }
-      } catch (error) {
-        console.error("Błąd podczas pobierania danych użytkownika:", error);
-        names[userId] = userId; // Fallback na ID w przypadku błędu
-      }
+    if (uniqueUserIds.length === 0) return;
+    
+    try {
+      const names = await getUsersDisplayNames(uniqueUserIds);
+      setUserNames(names);
+    } catch (error) {
+      console.error("Błąd podczas pobierania danych użytkowników:", error);
     }
-    
-    setUserNames(names);
   };
   
   // Funkcja zwracająca nazwę użytkownika zamiast ID

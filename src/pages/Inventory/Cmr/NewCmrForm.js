@@ -351,6 +351,10 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
         // Zachowujemy istniejące elementy formularza i nadpisujemy tylko te, które chcemy zaktualizować
         const updatedForm = { ...prev };
         
+        // Zapisz powiązanie z zamówieniem
+        updatedForm.linkedOrderId = orderId;
+        updatedForm.linkedOrderNumber = order.orderNumber;
+        
         // Dane odbiorcy (klient z zamówienia)
         if (importOptions.recipientData) {
           updatedForm.recipient = customerData.name || '';
@@ -405,7 +409,7 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
       });
       
       // Wyświetl podsumowanie pobranych danych
-      const summaryMessage = `Pomyślnie uzupełniono dane z zamówienia ${order.orderNumber}. 
+      const summaryMessage = `Pomyślnie powiązano CMR z zamówieniem ${order.orderNumber}. 
 Zaimportowano: ${importedDataSummary.join(', ')}.
 ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}.` : ''}`;
       
@@ -691,7 +695,7 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                     onClick={handleOpenOrderDialog}
                     size="small"
                   >
-                    Uzupełnij na podstawie CO
+                    Powiąż z CO
                   </Button>
                 </Grid>
               </Grid>

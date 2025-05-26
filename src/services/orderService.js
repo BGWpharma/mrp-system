@@ -500,6 +500,86 @@ export const deleteOrder = async (orderId) => {
 };
 
 /**
+ * Aktualizuje ilość wysłaną dla pozycji zamówienia na podstawie CMR
+ */
+export const updateOrderItemShippedQuantity = async (orderId, itemUpdates, userId) => {
+  try {
+    // Pobierz aktualne dane zamówienia
+    const orderRef = doc(db, ORDERS_COLLECTION, orderId);
+    const orderDoc = await getDoc(orderRef);
+    
+    if (!orderDoc.exists()) {
+      throw new Error('Zamówienie nie istnieje');
+    }
+    
+    const orderData = orderDoc.data();
+    const items = orderData.items || [];
+    
+    // Aktualizuj ilości wysłane dla odpowiednich pozycji
+    const updatedItems = items.map(item => {
+      const itemUpdate = itemUpdates.find(update => 
+        update.itemName === item.name || 
+        update.itemId === item.id ||
+        update.itemIndex === items.indexOf(item)
+      );
+      
+      if (itemUpdate) {
+        const currentShipped = parseFloat(item.shippedQuantity) || 0;
+        const additionalShipped = parseFloat(itemUpdate.quantity) || 0;
+        
+        // Inicjalizuj historię CMR jeśli nie istnieje
+        const cmrHistory = item.cmrHistory || [];
+        
+        // Sprawdź, czy CMR już istnieje w historii
+        const existingCmrIndex = cmrHistory.findIndex(entry => entry.cmrNumber === itemUpdate.cmrNumber);
+        
+        let updatedCmrHistory;
+        if (existingCmrIndex !== -1) {
+          // Jeśli CMR już istnieje, zaktualizuj ilość
+          updatedCmrHistory = [...cmrHistory];
+          updatedCmrHistory[existingCmrIndex] = {
+            ...updatedCmrHistory[existingCmrIndex],
+            quantity: (parseFloat(updatedCmrHistory[existingCmrIndex].quantity) || 0) + additionalShipped,
+            shipmentDate: new Date().toISOString() // Zaktualizuj datę ostatniej wysyłki
+          };
+        } else {
+          // Dodaj nowy wpis do historii CMR
+          const newCmrEntry = {
+            cmrNumber: itemUpdate.cmrNumber,
+            quantity: additionalShipped,
+            shipmentDate: new Date().toISOString(),
+            unit: item.unit || 'szt.'
+          };
+          updatedCmrHistory = [...cmrHistory, newCmrEntry];
+        }
+        
+                  return {
+            ...item,
+            shippedQuantity: currentShipped + additionalShipped,
+            lastShipmentDate: new Date().toISOString(),
+            lastCmrNumber: itemUpdate.cmrNumber,
+            cmrHistory: updatedCmrHistory
+          };
+      }
+      
+      return item;
+    });
+    
+    // Zaktualizuj zamówienie
+    await updateDoc(orderRef, {
+      items: updatedItems,
+      updatedBy: userId,
+      updatedAt: serverTimestamp()
+    });
+    
+    return { success: true, updatedItems };
+  } catch (error) {
+    console.error('Błąd podczas aktualizacji ilości wysłanej:', error);
+    throw error;
+  }
+};
+
+/**
  * Aktualizuje status zamówienia
  */
 export const updateOrderStatus = async (orderId, status, userId) => {
@@ -1243,6 +1323,66 @@ export const getLastRecipeUsageInfo = async (recipeId) => {
   } catch (error) {
     console.error('Błąd podczas pobierania informacji o ostatnim użyciu receptury:', error);
     return null;
+  }
+};
+
+/**
+ * Migruje istniejące dane CMR do nowego formatu z historią
+ */
+export const migrateCmrHistoryData = async () => {
+  try {
+    console.log('Rozpoczęcie migracji danych CMR do nowego formatu...');
+    
+    const ordersQuery = query(
+      collection(db, ORDERS_COLLECTION),
+      orderBy('orderDate', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(ordersQuery);
+    let migratedCount = 0;
+    
+    for (const orderDoc of querySnapshot.docs) {
+      const orderData = orderDoc.data();
+      const items = orderData.items || [];
+      let needsUpdate = false;
+      
+      const updatedItems = items.map(item => {
+        // Jeśli pozycja ma lastCmrNumber ale nie ma cmrHistory, migruj dane
+        if (item.lastCmrNumber && !item.cmrHistory) {
+          needsUpdate = true;
+          
+          const cmrEntry = {
+            cmrNumber: item.lastCmrNumber,
+            quantity: item.shippedQuantity || 0,
+            shipmentDate: item.lastShipmentDate || new Date().toISOString(),
+            unit: item.unit || 'szt.'
+          };
+          
+          return {
+            ...item,
+            cmrHistory: [cmrEntry]
+          };
+        }
+        
+        return item;
+      });
+      
+      if (needsUpdate) {
+        await updateDoc(doc(db, ORDERS_COLLECTION, orderDoc.id), {
+          items: updatedItems,
+          updatedAt: serverTimestamp()
+        });
+        
+        migratedCount++;
+        console.log(`Zmigrowano zamówienie ${orderData.orderNumber || orderDoc.id}`);
+      }
+    }
+    
+    console.log(`Migracja zakończona. Zmigrowano ${migratedCount} zamówień.`);
+    return { success: true, migratedCount };
+  } catch (error) {
+    console.error('Błąd podczas migracji danych CMR:', error);
+    throw error;
   }
 };
 

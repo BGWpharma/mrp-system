@@ -1266,9 +1266,8 @@ const InventoryList = () => {
         const availableQuantity = Number(item.quantity) - bookedQuantity;
         
         return [
-          fixPolishChars(item.name || ''),
           fixPolishChars(item.category || ''),
-          fixPolishChars(item.sku || ''),
+          fixPolishChars(item.name || ''), // Przenosimy name do kolumny SKU
           (Number(item.quantity) || 0).toFixed(2) + ' ' + (item.unit || 'pcs.'),
           bookedQuantity.toFixed(2) + ' ' + (item.unit || 'pcs.'),
           availableQuantity.toFixed(2) + ' ' + (item.unit || 'pcs.'),
@@ -1278,7 +1277,6 @@ const InventoryList = () => {
 
       // Nagłówki tabeli
       const tableHeaders = [
-        'Name',
         'Category',
         'SKU',
         'Total Quantity',
@@ -1349,23 +1347,40 @@ const InventoryList = () => {
         const availableQuantity = Number(item.quantity) - bookedQuantity;
         
         return {
-          'Name': item.name || '',
-          'Category': item.category || '',
-          'SKU': item.sku || '',
-          'Total Quantity': (Number(item.quantity) || 0).toFixed(2),
-          'Unit': item.unit || 'pcs.',
-          'Reserved Quantity': bookedQuantity.toFixed(2),
-          'Available Quantity': availableQuantity.toFixed(2),
-          'Location': item.warehouseName || '',
-          'Min Stock Level': item.minStockLevel || '',
-          'Max Stock Level': item.maxStockLevel || '',
-          'Unit Price': item.unitPrice || ''
+          category: item.category || '',
+          sku: item.name || '', // Przenosimy name do kolumny SKU
+          totalQuantity: (Number(item.quantity) || 0).toFixed(2),
+          unit: item.unit || 'pcs.',
+          reservedQuantity: bookedQuantity.toFixed(2),
+          availableQuantity: availableQuantity.toFixed(2),
+          location: item.warehouseName || '',
+          minStockLevel: item.minStockLevel || '',
+          maxStockLevel: item.maxStockLevel || '',
+          unitPrice: item.unitPrice || ''
         };
       });
 
+      // Przygotuj nagłówki dla CSV
+      const headers = [
+        { label: 'Category', key: 'category' },
+        { label: 'SKU', key: 'sku' },
+        { label: 'Total Quantity', key: 'totalQuantity' },
+        { label: 'Unit', key: 'unit' },
+        { label: 'Reserved Quantity', key: 'reservedQuantity' },
+        { label: 'Available Quantity', key: 'availableQuantity' },
+        { label: 'Location', key: 'location' },
+        { label: 'Min Stock Level', key: 'minStockLevel' },
+        { label: 'Max Stock Level', key: 'maxStockLevel' },
+        { label: 'Unit Price', key: 'unitPrice' }
+      ];
+
       // Generuj CSV
-      await exportToCSV(data, `Inventory_Stock_Report_${new Date().toISOString().slice(0, 10)}`);
-      showSuccess('Raport CSV został wygenerowany');
+      const success = exportToCSV(data, headers, `Inventory_Stock_Report_${new Date().toISOString().slice(0, 10)}`);
+      if (success) {
+        showSuccess('Raport CSV został wygenerowany');
+      } else {
+        showError('Błąd podczas generowania raportu CSV');
+      }
     } catch (error) {
       console.error('Błąd podczas generowania raportu CSV:', error);
       showError('Błąd podczas generowania raportu CSV: ' + error.message);

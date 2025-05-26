@@ -114,10 +114,13 @@ const ItemDetailsPage = () => {
       .filter(transaction => transaction.createdBy)
       .map(transaction => transaction.createdBy);
     
-    if (userIds.length === 0) return;
+    // Usuń duplikaty
+    const uniqueUserIds = [...new Set(userIds)];
+    
+    if (uniqueUserIds.length === 0) return;
     
     try {
-      const names = await getUsersDisplayNames(userIds);
+      const names = await getUsersDisplayNames(uniqueUserIds);
       setUserNames(names);
     } catch (error) {
       console.error("Błąd podczas pobierania danych użytkowników:", error);

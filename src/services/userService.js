@@ -2,6 +2,10 @@
 import { doc, getDoc, setDoc, updateDoc, collection, getDocs, query, where, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase/config';
 
+// Cache dla danych użytkowników
+const userCache = new Map();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minut
+
 /**
  * Pobiera dane użytkownika na podstawie jego ID
  * @param {string} userId - ID użytkownika
@@ -9,18 +13,25 @@ import { db } from './firebase/config';
  */
 export const getUserById = async (userId) => {
   try {
-    console.log('==== getUserById - Diagnostyka ====');
-    console.log('Szukam użytkownika o ID:', userId);
-    
+    // Sprawdź cache
+    const cached = userCache.get(userId);
+    if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
+      return cached.data;
+    }
+
     const userRef = doc(db, 'users', userId);
     const userDoc = await getDoc(userRef);
     
     if (userDoc.exists()) {
-      console.log('Znaleziono użytkownika:', userDoc.data());
-      return userDoc.data();
+      const userData = userDoc.data();
+      // Zapisz w cache
+      userCache.set(userId, {
+        data: userData,
+        timestamp: Date.now()
+      });
+      return userData;
     }
     
-    console.log('Nie znaleziono użytkownika o ID:', userId);
     return null;
   } catch (error) {
     console.error('Błąd podczas pobierania danych użytkownika:', error);
@@ -70,23 +81,82 @@ export const updateUserData = async (userId, userData) => {
 };
 
 /**
- * Pobiera nazwy użytkowników na podstawie listy ID
+ * Pobiera nazwy użytkowników na podstawie listy ID - zoptymalizowana wersja
  * @param {Array<string>} userIds - Lista ID użytkowników
  * @returns {Promise<Object>} - Obiekt mapujący ID użytkowników na ich nazwy
  */
 export const getUsersDisplayNames = async (userIds) => {
   try {
+    if (!userIds || userIds.length === 0) {
+      return {};
+    }
+
+    // Usuń duplikaty i puste wartości
+    const uniqueUserIds = [...new Set(userIds.filter(id => id))];
     const userNames = {};
-    
-    for (const userId of userIds) {
-      if (!userId) continue;
-      
-      const userData = await getUserById(userId);
-      
-      if (userData) {
-        // Wybierz najlepszą dostępną informację o użytkowniku
+    const uncachedUserIds = [];
+
+    // Sprawdź cache dla każdego użytkownika
+    for (const userId of uniqueUserIds) {
+      const cached = userCache.get(userId);
+      if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
+        const userData = cached.data;
         userNames[userId] = userData.displayName || userData.email || userId;
       } else {
+        uncachedUserIds.push(userId);
+      }
+    }
+
+    // Jeśli wszystkie dane są w cache, zwróć je
+    if (uncachedUserIds.length === 0) {
+      return userNames;
+    }
+
+    // Pobierz brakujących użytkowników jednym zapytaniem
+    if (uncachedUserIds.length <= 10) {
+      // Dla małej liczby użytkowników użyj zapytania 'in'
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('__name__', 'in', uncachedUserIds));
+      const querySnapshot = await getDocs(q);
+      
+      querySnapshot.docs.forEach(doc => {
+        const userData = doc.data();
+        const userId = doc.id;
+        
+        // Zapisz w cache
+        userCache.set(userId, {
+          data: userData,
+          timestamp: Date.now()
+        });
+        
+        // Dodaj do wyników
+        userNames[userId] = userData.displayName || userData.email || userId;
+      });
+    } else {
+      // Dla większej liczby użytkowników pobierz wszystkich i przefiltruj
+      const usersRef = collection(db, 'users');
+      const querySnapshot = await getDocs(usersRef);
+      
+      querySnapshot.docs.forEach(doc => {
+        const userId = doc.id;
+        if (uncachedUserIds.includes(userId)) {
+          const userData = doc.data();
+          
+          // Zapisz w cache
+          userCache.set(userId, {
+            data: userData,
+            timestamp: Date.now()
+          });
+          
+          // Dodaj do wyników
+          userNames[userId] = userData.displayName || userData.email || userId;
+        }
+      });
+    }
+
+    // Dodaj fallback dla użytkowników, których nie znaleziono
+    for (const userId of uncachedUserIds) {
+      if (!userNames[userId]) {
         userNames[userId] = userId; // Fallback na ID
       }
     }

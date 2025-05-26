@@ -39,7 +39,9 @@ import {
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
   Payments as PaymentsIcon,
-  Error as ErrorIcon
+  Error as ErrorIcon,
+  AttachFile as AttachFileIcon,
+  Close as CloseIcon
 } from '@mui/icons-material';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
@@ -54,7 +56,9 @@ import {
   processAIQuery,
   deleteConversation,
   getOpenAIApiKey,
-  saveOpenAIApiKey
+  saveOpenAIApiKey,
+  uploadAttachment,
+  deleteAttachment
 } from '../../services/aiAssistantService';
 import { checkAndUpdateAIMessageQuota } from '../../services/userService';
 import { getSystemSettings } from '../../services/settingsService';
@@ -85,7 +89,10 @@ const AIAssistantPage = () => {
   const [processingInBackground, setProcessingInBackground] = useState(false);
   const [aiMessageQuota, setAiMessageQuota] = useState({ remaining: 0, limit: 0 });
   const [useGlobalApiKey, setUseGlobalApiKey] = useState(false);
+  const [attachments, setAttachments] = useState([]);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Otwórz dialog z informacjami o przekroczeniu limitu
   const handleOpenQuotaDialog = () => {
@@ -178,6 +185,76 @@ const AIAssistantPage = () => {
     setInput(e.target.value);
   };
 
+  // Obsługa wyboru plików
+  const handleFileSelect = async (event) => {
+    const files = Array.from(event.target.files);
+    
+    if (files.length === 0) return;
+    
+    if (!currentUser?.uid) {
+      showError('Musisz być zalogowany, aby załączyć pliki');
+      return;
+    }
+
+    try {
+      setUploadingAttachments(true);
+      
+      // Sprawdź czy ma już konwersację, jeśli nie - utwórz nową
+      let conversationId = currentConversationId;
+      if (!conversationId) {
+        conversationId = await createConversation(currentUser.uid);
+        setCurrentConversationId(conversationId);
+      }
+
+      const uploadedAttachments = [];
+      
+      for (const file of files) {
+        try {
+          const attachmentInfo = await uploadAttachment(file, currentUser.uid, conversationId);
+          uploadedAttachments.push(attachmentInfo);
+        } catch (error) {
+          console.error('Błąd podczas przesyłania pliku:', file.name, error);
+          showError(`Nie udało się przesłać pliku ${file.name}: ${error.message}`);
+        }
+      }
+      
+      if (uploadedAttachments.length > 0) {
+        setAttachments(prev => [...prev, ...uploadedAttachments]);
+        showSuccess(`Przesłano ${uploadedAttachments.length} plik(ów)`);
+      }
+    } catch (error) {
+      console.error('Błąd podczas przesyłania plików:', error);
+      showError('Wystąpił błąd podczas przesyłania plików');
+    } finally {
+      setUploadingAttachments(false);
+      // Wyczyść input pliku
+      event.target.value = '';
+    }
+  };
+
+  // Usuń załącznik
+  const handleRemoveAttachment = async (attachmentIndex) => {
+    try {
+      const attachment = attachments[attachmentIndex];
+      
+      // Usuń plik z Firebase Storage
+      await deleteAttachment(attachment.storagePath);
+      
+      // Usuń z lokalnej listy
+      setAttachments(prev => prev.filter((_, index) => index !== attachmentIndex));
+      
+      showSuccess('Załącznik został usunięty');
+    } catch (error) {
+      console.error('Błąd podczas usuwania załącznika:', error);
+      showError('Nie udało się usunąć załącznika');
+    }
+  };
+
+  // Otwórz dialog wyboru plików
+  const handleAttachFile = () => {
+    fileInputRef.current?.click();
+  };
+
   const handleSend = async () => {
     if (!input.trim()) return;
     if (!currentUser?.uid) {
@@ -229,7 +306,7 @@ const AIAssistantPage = () => {
         
         // Dodaj wiadomość użytkownika do bazy danych
         console.log('Dodawanie wiadomości użytkownika do bazy danych...');
-        const userMessageId = await addMessageToConversation(conversationId, 'user', currentInput);
+        const userMessageId = await addMessageToConversation(conversationId, 'user', currentInput, attachments);
         console.log('ID wiadomości użytkownika:', userMessageId);
         
         // Przygotuj wiadomość użytkownika do lokalnego wyświetlenia
@@ -259,7 +336,7 @@ const AIAssistantPage = () => {
         
         // Przetwórz zapytanie i uzyskaj odpowiedź asystenta
         console.log('Przetwarzanie zapytania przez AI...');
-        const aiResponse = await processAIQuery(currentInput, messages, currentUser.uid);
+        const aiResponse = await processAIQuery(currentInput, messages, currentUser.uid, attachments);
         console.log('Uzyskano odpowiedź AI:', aiResponse ? 'tak' : 'nie');
         
         if (!aiResponse) {
@@ -344,6 +421,9 @@ const AIAssistantPage = () => {
         const updatedConversations = await getUserConversations(currentUser.uid);
         setConversationHistory(updatedConversations);
         
+        // Wyczyść załączniki po wysłaniu
+        setAttachments([]);
+        
       } catch (error) {
         console.error('Błąd podczas komunikacji z asystentem:', error);
         console.error('Szczegóły błędu:', error.message, error.stack);
@@ -364,6 +444,7 @@ const AIAssistantPage = () => {
   const clearConversation = () => {
     setMessages([]);
     setCurrentConversationId(null);
+    setAttachments([]);
     showSuccess('Konwersacja została wyczyszczona');
   };
 
@@ -376,6 +457,7 @@ const AIAssistantPage = () => {
     
     setCurrentConversationId(conversationId);
     setMessages([]); // Wyczyść wiadomości przed załadowaniem nowych
+    setAttachments([]); // Wyczyść załączniki przy zmianie konwersacji
     
     try {
       // OPTYMALIZACJA: Pobieramy wiadomości tylko wtedy, gdy są potrzebne
@@ -996,6 +1078,10 @@ const AIAssistantPage = () => {
                   lub innych aspektów działania Twojej firmy. Asystent przeanalizuje dane
                   i udzieli odpowiedzi na podstawie aktualnych informacji.
                 </Typography>
+                <Typography variant="body2" sx={{ maxWidth: '600px', mt: 1, fontStyle: 'italic' }}>
+                  💡 Możesz również załączyć pliki (dokumenty, obrazy, pliki tekstowe) do swojego zapytania
+                  używając przycisku załącznika.
+                </Typography>
                 
                 <Alert 
                   severity="success" 
@@ -1091,6 +1177,42 @@ const AIAssistantPage = () => {
                         {message.content}
                       </Typography>
                       
+                      {/* Wyświetlanie załączników w wiadomości */}
+                      {message.attachments && message.attachments.length > 0 && (
+                        <Box sx={{ ml: 4, mt: 1 }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                            Załączniki:
+                          </Typography>
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                            {message.attachments.map((attachment, attachIndex) => (
+                              <Card 
+                                key={attachIndex} 
+                                sx={{ 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  p: 0.5, 
+                                  backgroundColor: 'rgba(0, 0, 0, 0.1)',
+                                  maxWidth: '200px'
+                                }}
+                              >
+                                <AttachFileIcon sx={{ mr: 0.5, fontSize: 14 }} />
+                                <Typography 
+                                  variant="caption" 
+                                  sx={{ 
+                                    overflow: 'hidden', 
+                                    textOverflow: 'ellipsis', 
+                                    whiteSpace: 'nowrap',
+                                    fontSize: '0.7rem'
+                                  }}
+                                >
+                                  {attachment.fileName}
+                                </Typography>
+                              </Card>
+                            ))}
+                          </Box>
+                        </Box>
+                      )}
+                      
                       <Typography 
                         variant="caption" 
                         sx={{ 
@@ -1120,50 +1242,118 @@ const AIAssistantPage = () => {
             <div ref={messagesEndRef} />
           </Box>
           
+          {/* Wyświetlanie załączników */}
+          {attachments.length > 0 && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                Załączniki ({attachments.length}):
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {attachments.map((attachment, index) => (
+                  <Card 
+                    key={index} 
+                    sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      p: 1, 
+                      backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
+                      maxWidth: '300px'
+                    }}
+                  >
+                    <AttachFileIcon sx={{ mr: 1, fontSize: 16 }} />
+                    <Typography 
+                      variant="caption" 
+                      sx={{ 
+                        flexGrow: 1, 
+                        overflow: 'hidden', 
+                        textOverflow: 'ellipsis', 
+                        whiteSpace: 'nowrap' 
+                      }}
+                    >
+                      {attachment.fileName}
+                    </Typography>
+                    <IconButton 
+                      size="small" 
+                      onClick={() => handleRemoveAttachment(index)}
+                      sx={{ ml: 1, p: 0.5 }}
+                    >
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </Card>
+                ))}
+              </Box>
+            </Box>
+          )}
+          
           {/* Obszar wprowadzania tekstu */}
           <Box sx={{ display: 'flex', gap: 1 }}>
-            <TextField
-              fullWidth
-              variant="outlined"
-              placeholder="Zadaj pytanie do asystenta AI..."
-              value={input}
-              onChange={handleInputChange}
-              onKeyPress={handleKeyPress}
-              multiline
-              maxRows={4}
-              disabled={loading}
-              sx={{ 
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 2
-                }
-              }}
-            />
-            <IconButton 
-              color="primary" 
-              onClick={handleSend}
-              disabled={!input.trim() || loading}
-              sx={{ 
-                alignSelf: 'flex-end', 
-                p: 1, 
-                backgroundColor: 'primary.main',
-                color: 'white',
-                '&:hover': {
-                  backgroundColor: 'primary.dark',
-                },
-                '&.Mui-disabled': {
-                  backgroundColor: 'action.disabledBackground',
-                  color: 'action.disabled',
-                }
-              }}
-            >
-              {loading ? <CircularProgress size={24} color="inherit" /> : <SendIcon />}
-            </IconButton>
+            <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
+              <TextField
+                fullWidth
+                variant="outlined"
+                placeholder="Zadaj pytanie do asystenta AI..."
+                value={input}
+                onChange={handleInputChange}
+                onKeyPress={handleKeyPress}
+                multiline
+                maxRows={4}
+                disabled={loading}
+                sx={{ 
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2
+                  }
+                }}
+              />
+            </Box>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <IconButton 
+                color="secondary" 
+                onClick={handleAttachFile}
+                disabled={loading || uploadingAttachments}
+                sx={{ 
+                  alignSelf: 'flex-end', 
+                  p: 1
+                }}
+              >
+                {uploadingAttachments ? <CircularProgress size={24} /> : <AttachFileIcon />}
+              </IconButton>
+              <IconButton 
+                color="primary" 
+                onClick={handleSend}
+                disabled={!input.trim() || loading}
+                sx={{ 
+                  alignSelf: 'flex-end', 
+                  p: 1, 
+                  backgroundColor: 'primary.main',
+                  color: 'white',
+                  '&:hover': {
+                    backgroundColor: 'primary.dark',
+                  },
+                  '&.Mui-disabled': {
+                    backgroundColor: 'action.disabledBackground',
+                    color: 'action.disabled',
+                  }
+                }}
+              >
+                {loading ? <CircularProgress size={24} color="inherit" /> : <SendIcon />}
+              </IconButton>
+            </Box>
           </Box>
         </Paper>
       </Box>
       
       {/* Dodajemy indykator przetwarzania w tle */}
       {renderBackgroundProcessingIndicator()}
+      
+      {/* Ukryty input dla plików */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        style={{ display: 'none' }}
+        multiple
+        accept=".txt,.csv,.json,.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp"
+        onChange={handleFileSelect}
+      />
     </Container>
   );
 };

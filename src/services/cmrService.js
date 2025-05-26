@@ -14,6 +14,7 @@ import {
   Timestamp 
 } from 'firebase/firestore';
 import { format } from 'date-fns';
+import { updateOrderItemShippedQuantity } from './orderService';
 
 // Kolekcje
 const CMR_COLLECTION = 'cmrDocuments';
@@ -134,6 +135,11 @@ export const createCmrDocument = async (cmrData, userId) => {
       await Promise.all(itemPromises);
     }
     
+    // Jeśli CMR jest powiązany z zamówieniem klienta, zaktualizuj ilości wysłane
+    if (cmrData.linkedOrderId && items && items.length > 0) {
+      await updateLinkedOrderShippedQuantities(cmrData.linkedOrderId, items, formattedData.cmrNumber, userId);
+    }
+    
     return {
       id: cmrRef.id,
       ...cmrDataWithoutItems
@@ -185,6 +191,11 @@ export const updateCmrDocument = async (cmrId, cmrData, userId) => {
       );
       
       await Promise.all(itemPromises);
+      
+      // Jeśli CMR jest powiązany z zamówieniem klienta, zaktualizuj ilości wysłane
+      if (cmrData.linkedOrderId) {
+        await updateLinkedOrderShippedQuantities(cmrData.linkedOrderId, items, updateData.cmrNumber || cmrData.cmrNumber, userId);
+      }
     }
     
     return {
@@ -355,3 +366,24 @@ export const generateCmrReport = async (filters = {}) => {
     throw error;
   }
 }; 
+
+// Funkcja pomocnicza do aktualizacji ilości wysłanych w powiązanym zamówieniu
+const updateLinkedOrderShippedQuantities = async (orderId, cmrItems, cmrNumber, userId) => {
+  try {
+    // Mapuj elementy CMR na aktualizacje zamówienia
+    const itemUpdates = cmrItems.map((item, index) => ({
+      itemName: item.description,
+      quantity: parseFloat(item.quantity) || parseFloat(item.numberOfPackages) || 0,
+      itemIndex: index,
+      cmrNumber: cmrNumber
+    })).filter(update => update.quantity > 0);
+    
+    if (itemUpdates.length > 0) {
+      await updateOrderItemShippedQuantity(orderId, itemUpdates, userId);
+      console.log(`Zaktualizowano ilości wysłane w zamówieniu ${orderId} na podstawie CMR ${cmrNumber}`);
+    }
+  } catch (error) {
+    console.error('Błąd podczas aktualizacji ilości wysłanych w zamówieniu:', error);
+    // Nie rzucamy błędu, aby nie przerywać procesu tworzenia CMR
+  }
+};

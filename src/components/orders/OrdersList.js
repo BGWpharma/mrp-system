@@ -1071,6 +1071,7 @@ const OrdersList = () => {
                                           <TableRow>
                                             <TableCell>Produkt</TableCell>
                                             <TableCell align="right">Ilość</TableCell>
+                                            <TableCell align="right">Wysłane</TableCell>
                                             <TableCell align="right">Cena</TableCell>
                                             <TableCell align="right">Wartość</TableCell>
                                             <TableCell>MO</TableCell>
@@ -1082,6 +1083,59 @@ const OrdersList = () => {
                                               <TableCell>{typeof item.name === 'object' ? JSON.stringify(item.name) : (item.name || '-')}</TableCell>
                                               <TableCell align="right">
                                                 {item.quantity} {typeof item.unit === 'object' ? JSON.stringify(item.unit) : (item.unit || '')}
+                                              </TableCell>
+                                              <TableCell align="right">
+                                                {item.shippedQuantity && parseFloat(item.shippedQuantity) > 0 ? (
+                                                  <Box>
+                                                    <Typography variant="body2" color="success.main">
+                                                      {item.shippedQuantity} {typeof item.unit === 'object' ? JSON.stringify(item.unit) : (item.unit || '')}
+                                                    </Typography>
+                                                    {/* Zawsze sprawdź historię CMR najpierw */}
+                                                    {item.cmrHistory && Array.isArray(item.cmrHistory) && item.cmrHistory.length > 0 ? (
+                                                      <Box sx={{ mt: 0.5 }}>
+                                                        {item.cmrHistory.map((cmrEntry, cmrIndex) => (
+                                                          <Typography 
+                                                            key={cmrIndex} 
+                                                            variant="caption" 
+                                                            color="text.secondary"
+                                                            sx={{ display: 'block', lineHeight: 1.2 }}
+                                                          >
+                                                            CMR: {cmrEntry.cmrNumber} ({cmrEntry.quantity} {cmrEntry.unit || item.unit || 'szt.'})
+                                                          </Typography>
+                                                        ))}
+                                                      </Box>
+                                                    ) : item.lastCmrNumber ? (
+                                                      <Typography variant="caption" color="text.secondary">
+                                                        CMR: {item.lastCmrNumber}
+                                                      </Typography>
+                                                    ) : null}
+                                                  </Box>
+                                                ) : (
+                                                  <Box>
+                                                    <Typography variant="body2" color="text.secondary">
+                                                      0 {typeof item.unit === 'object' ? JSON.stringify(item.unit) : (item.unit || '')}
+                                                    </Typography>
+                                                    {/* Pokaż CMR nawet jeśli shippedQuantity jest 0 lub undefined */}
+                                                    {item.cmrHistory && Array.isArray(item.cmrHistory) && item.cmrHistory.length > 0 ? (
+                                                      <Box sx={{ mt: 0.5 }}>
+                                                        {item.cmrHistory.map((cmrEntry, cmrIndex) => (
+                                                          <Typography 
+                                                            key={cmrIndex} 
+                                                            variant="caption" 
+                                                            color="text.secondary"
+                                                            sx={{ display: 'block', lineHeight: 1.2 }}
+                                                          >
+                                                            CMR: {cmrEntry.cmrNumber} ({cmrEntry.quantity} {cmrEntry.unit || item.unit || 'szt.'})
+                                                          </Typography>
+                                                        ))}
+                                                      </Box>
+                                                    ) : item.lastCmrNumber ? (
+                                                      <Typography variant="caption" color="text.secondary">
+                                                        CMR: {item.lastCmrNumber}
+                                                      </Typography>
+                                                    ) : null}
+                                                  </Box>
+                                                )}
                                               </TableCell>
                                               <TableCell align="right">
                                                 {formatCurrency(parseFloat(item.price) || 0)}

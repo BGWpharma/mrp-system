@@ -1,4 +1,4 @@
-import { db } from './firebase/config';
+import { db, storage } from './firebase/config';
 import { 
   collection, 
   addDoc, 
@@ -14,6 +14,7 @@ import {
   deleteDoc,
   setDoc
 } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { 
   prepareBusinessDataForAI, 
   getMRPSystemSummary, 
@@ -1499,23 +1500,139 @@ export const createConversation = async (userId, title = 'Nowa konwersacja') => 
 };
 
 /**
- * Dodaj wiadomość do konwersacji
+ * Przesyła załącznik do Firebase Storage
+ * @param {File} file - Plik do przesłania
+ * @param {string} userId - ID użytkownika
+ * @param {string} conversationId - ID konwersacji
+ * @returns {Promise<Object>} - Informacje o przesłanym pliku
+ */
+export const uploadAttachment = async (file, userId, conversationId) => {
+  try {
+    if (!file || !userId || !conversationId) {
+      throw new Error('Brak wymaganych parametrów');
+    }
+
+    // Sprawdź rozmiar pliku (maksymalnie 10 MB)
+    const fileSizeInMB = file.size / (1024 * 1024);
+    if (fileSizeInMB > 10) {
+      throw new Error(`Plik jest zbyt duży (${fileSizeInMB.toFixed(2)} MB). Maksymalny rozmiar to 10 MB.`);
+    }
+
+    // Sprawdź typ pliku - dozwolone są pliki tekstowe, obrazy i dokumenty
+    const allowedTypes = [
+      'text/plain',
+      'text/csv',
+      'application/json',
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp'
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error(`Nieobsługiwany typ pliku: ${file.type}. Dozwolone są pliki tekstowe, dokumenty i obrazy.`);
+    }
+
+    // Tworzymy ścieżkę do pliku w Firebase Storage
+    const timestamp = new Date().getTime();
+    const fileExtension = file.name.split('.').pop();
+    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const fileName = `${timestamp}_${sanitizedFileName}`;
+    const storagePath = `ai-attachments/${userId}/${conversationId}/${fileName}`;
+
+    // Przesyłamy plik do Firebase Storage
+    const fileRef = ref(storage, storagePath);
+    await uploadBytes(fileRef, file);
+
+    // Pobieramy URL do pobrania pliku
+    const downloadURL = await getDownloadURL(fileRef);
+
+    return {
+      fileName: file.name,
+      storagePath,
+      downloadURL,
+      contentType: file.type,
+      size: file.size,
+      uploadedAt: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error('Błąd podczas przesyłania załącznika:', error);
+    throw error;
+  }
+};
+
+/**
+ * Usuwa załącznik z Firebase Storage
+ * @param {string} storagePath - Ścieżka do pliku w Storage
+ * @returns {Promise<void>}
+ */
+export const deleteAttachment = async (storagePath) => {
+  try {
+    const fileRef = ref(storage, storagePath);
+    await deleteObject(fileRef);
+  } catch (error) {
+    console.error('Błąd podczas usuwania załącznika:', error);
+    throw error;
+  }
+};
+
+/**
+ * Pobiera zawartość pliku tekstowego z URL
+ * @param {string} downloadURL - URL do pobrania pliku
+ * @param {string} contentType - Typ zawartości pliku
+ * @returns {Promise<string>} - Zawartość pliku jako tekst
+ */
+export const getFileContent = async (downloadURL, contentType) => {
+  try {
+    const response = await fetch(downloadURL);
+    if (!response.ok) {
+      throw new Error(`Błąd podczas pobierania pliku: ${response.status}`);
+    }
+
+    // Dla plików tekstowych zwracamy bezpośrednio tekst
+    if (contentType.startsWith('text/') || contentType === 'application/json') {
+      return await response.text();
+    }
+
+    // Dla innych typów plików zwracamy informacje o pliku
+    return `[Załącznik: ${contentType}, rozmiar: ${response.headers.get('content-length') || 'nieznany'}]`;
+  } catch (error) {
+    console.error('Błąd podczas pobierania zawartości pliku:', error);
+    return `[Błąd podczas odczytywania pliku: ${error.message}]`;
+  }
+};
+
+/**
+ * Dodaj wiadomość do konwersacji z możliwością załączenia plików
  * @param {string} conversationId - ID konwersacji
  * @param {string} role - Rola nadawcy ('user' lub 'assistant')
  * @param {string} content - Treść wiadomości
+ * @param {Array} attachments - Lista załączników (opcjonalne)
  * @returns {Promise<string>} - ID dodanej wiadomości
  */
-export const addMessageToConversation = async (conversationId, role, content) => {
+export const addMessageToConversation = async (conversationId, role, content, attachments = []) => {
   try {
     // Dodanie wiadomości
     const messagesRef = collection(db, 'aiConversations', conversationId, 'messages');
     const timestamp = new Date().toISOString();
     
-    const docRef = await addDoc(messagesRef, {
+    const messageData = {
       role,
       content,
       timestamp
-    });
+    };
+
+    // Dodaj załączniki jeśli są dostępne
+    if (attachments && attachments.length > 0) {
+      messageData.attachments = attachments;
+    }
+    
+    const docRef = await addDoc(messagesRef, messageData);
     
     // Aktualizacja licznika wiadomości i daty aktualizacji konwersacji
     const conversationRef = doc(db, 'aiConversations', conversationId);
@@ -1545,9 +1662,10 @@ export const addMessageToConversation = async (conversationId, role, content) =>
  * @param {string} query - Zapytanie użytkownika
  * @param {Array} context - Kontekst konwersacji (poprzednie wiadomości)
  * @param {string} userId - ID użytkownika
+ * @param {Array} attachments - Lista załączników (opcjonalne)
  * @returns {Promise<string>} - Odpowiedź asystenta
  */
-export const processAIQuery = async (query, context = [], userId) => {
+export const processAIQuery = async (query, context = [], userId, attachments = []) => {
   // Limit czasu na pobranie danych (w milisekundach) - zwiększony na 20 sekund
   const DATA_FETCH_TIMEOUT = 20000;
   
@@ -1615,8 +1733,34 @@ export const processAIQuery = async (query, context = [], userId) => {
       return getMockResponse(query, businessData);
     }
     
+    // Przygotowanie treści zapytania z załącznikami
+    let queryWithAttachments = query;
+    
+    if (attachments && attachments.length > 0) {
+      queryWithAttachments += '\n\n--- Załączone pliki ---\n';
+      
+      for (const attachment of attachments) {
+        try {
+          queryWithAttachments += `\nPlik: ${attachment.fileName} (${attachment.contentType})\n`;
+          
+          // Jeśli to plik tekstowy, pobierz jego zawartość
+          if (attachment.contentType.startsWith('text/') || attachment.contentType === 'application/json') {
+            const fileContent = await getFileContent(attachment.downloadURL, attachment.contentType);
+            queryWithAttachments += `Zawartość:\n${fileContent}\n`;
+          } else if (attachment.contentType.startsWith('image/')) {
+            queryWithAttachments += `[Obraz: ${attachment.fileName}]\n`;
+          } else {
+            queryWithAttachments += `[Dokument: ${attachment.fileName}]\n`;
+          }
+        } catch (error) {
+          console.error('Błąd podczas przetwarzania załącznika:', error);
+          queryWithAttachments += `[Błąd podczas odczytywania pliku: ${attachment.fileName}]\n`;
+        }
+      }
+    }
+    
     // Przygotowanie wiadomości do wysłania
-    const allMessages = [...context, { role: 'user', content: query }];
+    const allMessages = [...context, { role: 'user', content: queryWithAttachments }];
     const formattedMessages = formatMessagesForOpenAI(allMessages, businessData);
     
     console.log('Wysyłam zapytanie do API OpenAI z pełnymi danymi z Firebase...');

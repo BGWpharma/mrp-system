@@ -59,6 +59,7 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
+import { getUsersDisplayNames } from '../../services/userService';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 
@@ -105,31 +106,21 @@ const StocktakingDetailsPage = () => {
     filterItems();
   }, [searchTerm, items]);
   
-  // Funkcja pobierająca dane użytkownika
+  // Funkcja pobierająca dane użytkownika - zoptymalizowana wersja
   const fetchUserNames = async (userIds) => {
     if (!userIds || userIds.length === 0) return;
     
-    const names = {};
+    // Usuń duplikaty
+    const uniqueUserIds = [...new Set(userIds.filter(id => id))];
     
-    for (const userId of userIds) {
-      if (!userId) continue;
-      
-      try {
-        const userDoc = await getDoc(doc(db, 'users', userId));
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          // Wybierz najlepszą dostępną informację o użytkowniku: displayName, email lub ID
-          names[userId] = userData.displayName || userData.email || userId;
-        } else {
-          names[userId] = userId; // Fallback na ID, jeśli nie znaleziono użytkownika
-        }
-      } catch (error) {
-        console.error("Błąd podczas pobierania danych użytkownika:", error);
-        names[userId] = userId; // Fallback na ID w przypadku błędu
-      }
+    if (uniqueUserIds.length === 0) return;
+    
+    try {
+      const names = await getUsersDisplayNames(uniqueUserIds);
+      setUserNames(names);
+    } catch (error) {
+      console.error("Błąd podczas pobierania danych użytkowników:", error);
     }
-    
-    setUserNames(names);
   };
   
   // Funkcja zwracająca nazwę użytkownika zamiast ID

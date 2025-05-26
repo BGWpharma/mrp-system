@@ -1309,15 +1309,32 @@ const TaskDetailsPage = () => {
     
     // Jeśli ID jest dłuższe niż 10 znaków, zwróć skróconą wersję
     if (userId.length > 10) {
-      // Pobierz dane użytkownika asynchronicznie
-      getUsersDisplayNames([userId]).then(names => {
-        if (names && names[userId]) {
-          setUserNames(prev => ({
-            ...prev,
-            [userId]: names[userId]
-          }));
-        }
-      });
+      // Pobierz dane użytkownika asynchronicznie tylko raz
+      if (!userNames[userId] && !userNames[`loading_${userId}`]) {
+        // Oznacz jako ładujący, aby uniknąć wielokrotnych wywołań
+        setUserNames(prev => ({
+          ...prev,
+          [`loading_${userId}`]: true
+        }));
+        
+        getUsersDisplayNames([userId]).then(names => {
+          if (names && names[userId]) {
+            setUserNames(prev => {
+              const newState = { ...prev };
+              delete newState[`loading_${userId}`]; // Usuń flagę ładowania
+              newState[userId] = names[userId];
+              return newState;
+            });
+          }
+        }).catch(error => {
+          console.error('Błąd podczas pobierania nazwy użytkownika:', error);
+          setUserNames(prev => {
+            const newState = { ...prev };
+            delete newState[`loading_${userId}`]; // Usuń flagę ładowania
+            return newState;
+          });
+        });
+      }
       
       // Tymczasowo zwróć skróconą wersję ID
       return `${userId.substring(0, 5)}...${userId.substring(userId.length - 4)}`;
