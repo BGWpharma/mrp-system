@@ -27,7 +27,9 @@ import {
   InputLabel,
   IconButton,
   CircularProgress,
-  Tooltip
+  Tooltip,
+  useMediaQuery,
+  useTheme
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -99,6 +101,10 @@ const ItemDetailsPage = () => {
   const [awaitingOrdersLoading, setAwaitingOrdersLoading] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [userNames, setUserNames] = useState({});
+  
+  // Dodajemy wykrywanie urządzeń mobilnych
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   // Funkcja pobierająca dane użytkowników
   const fetchUserNames = async (transactions) => {
@@ -486,24 +492,30 @@ const ItemDetailsPage = () => {
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 2 : 0 }}>
         <Button 
           startIcon={<ArrowBackIcon />} 
           onClick={() => navigate('/inventory')}
           variant="outlined"
+          sx={{ alignSelf: isMobile ? 'stretch' : 'flex-start' }}
         >
           Powrót
         </Button>
-        <Typography variant="h5" fontWeight="bold">
+        <Typography variant="h5" fontWeight="bold" align={isMobile ? "center" : "left"}>
           Szczegóły pozycji magazynowej
         </Typography>
-        <Box>
+        <Box sx={{ 
+          display: 'flex', 
+          flexDirection: isMobile ? 'column' : 'row', 
+          gap: isMobile ? 1 : 0,
+          width: isMobile ? '100%' : 'auto'
+        }}>
           <Tooltip title="Odśwież ilość towaru">
             <Button 
               variant="outlined" 
               onClick={handleRefreshQuantity}
               startIcon={refreshingQuantity ? <CircularProgress size={20} /> : <CachedIcon />}
-              sx={{ mr: 1 }}
+              sx={{ mr: isMobile ? 0 : 1, mb: isMobile ? 1 : 0, width: '100%' }}
               disabled={refreshingQuantity}
             >
               Odśwież ilość
@@ -514,7 +526,7 @@ const ItemDetailsPage = () => {
             component={Link} 
             to={`/inventory/${id}/edit`}
             startIcon={<EditIcon />}
-            sx={{ mr: 1 }}
+            sx={{ mr: isMobile ? 0 : 1, mb: isMobile ? 1 : 0, width: '100%' }}
           >
             Edytuj
           </Button>
@@ -523,7 +535,7 @@ const ItemDetailsPage = () => {
             component={Link} 
             to={`/inventory/${id}/batches`}
             startIcon={<ViewListIcon />}
-            sx={{ mr: 1 }}
+            sx={{ mr: isMobile ? 0 : 1, mb: isMobile ? 1 : 0, width: '100%' }}
           >
             Zarządzaj partiami
           </Button>
@@ -531,6 +543,7 @@ const ItemDetailsPage = () => {
             variant="outlined"
             onClick={handleOpenLabelDialog}
             startIcon={<QrCodeIcon />}
+            sx={{ width: isMobile ? '100%' : 'auto' }}
           >
             Drukuj etykietę
           </Button>
@@ -648,6 +661,7 @@ const ItemDetailsPage = () => {
         {/* Przyciski akcji */}
         <Box sx={{ 
           display: 'flex', 
+          flexDirection: isMobile ? 'column' : 'row',
           p: 2, 
           borderTop: '1px solid',
           borderColor: theme => theme.palette.mode === 'dark' ? 'divider' : '#e0e0e0',
@@ -659,7 +673,12 @@ const ItemDetailsPage = () => {
             startIcon={<ReceiveIcon />}
             component={Link}
             to={`/inventory/${id}/receive`}
-            sx={{ mr: 2, borderRadius: 4, px: 3 }}
+            sx={{ 
+              mr: isMobile ? 0 : 2, 
+              mb: isMobile ? 1 : 0,
+              borderRadius: 4, 
+              px: 3 
+            }}
           >
             Przyjmij
           </Button>
@@ -670,7 +689,10 @@ const ItemDetailsPage = () => {
             component={Link}
             to={`/inventory/${id}/issue`}
             disabled={item.quantity <= 0}
-            sx={{ borderRadius: 4, px: 3 }}
+            sx={{ 
+              borderRadius: 4, 
+              px: 3 
+            }}
           >
             Wydaj
           </Button>

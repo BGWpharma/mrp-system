@@ -29,9 +29,37 @@ import { Send as SendIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-materia
 import { getMONumbersForSelect } from '../../services/moService';
 import { formatDateForInput } from '../../utils/dateUtils';
 import { db } from '../../services/firebase/config';
-import { collection, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, getDocs, query, where } from 'firebase/firestore';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { useStaffOptions, useShiftWorkerOptions, useProductOptionsForPrinting } from '../../hooks/useFormOptions';
+
+// Funkcja do pobierania szczegółów zadania produkcyjnego (MO) na podstawie numeru MO
+const getMODetailsById = async (moNumber) => {
+  try {
+    const tasksRef = collection(db, 'productionTasks');
+    const q = query(tasksRef, where('moNumber', '==', moNumber));
+    const querySnapshot = await getDocs(q);
+    
+    if (!querySnapshot.empty) {
+      const taskDoc = querySnapshot.docs[0];
+      const taskData = taskDoc.data();
+      
+      return {
+        id: taskDoc.id,
+        moNumber: taskData.moNumber,
+        productName: taskData.productName || '',
+        lotNumber: taskData.lotNumber || `LOT-${taskData.moNumber}`,
+        quantity: taskData.quantity || ''
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Błąd podczas pobierania szczegółów MO:', error);
+    return null;
+  }
+};
 
 const ProductionShiftForm = () => {
   const navigate = useNavigate();
@@ -40,84 +68,11 @@ const ProductionShiftForm = () => {
   const isEditMode = searchParams.get('edit') === 'true';
   const { currentUser } = useAuth();
 
-  const staffOptions = [
-    "Valentyna Tarasiuk",
-    "Mariia Pokrovets"
-  ];
-  
-  const shiftWorkerOptions = [
-    "Luis Carlos Tapiero",
-    "Ewa Bojke",
-    "Maria Angelica Bermudez",
-    "Mariia Pokrovets",
-    "Valentyna Tarasiuk",
-    "Daria Shadiuk"
-  ];
-  
-  const productOptions = [
-    "BLC-COLL-GLYC",
-    "BW3Y-Glycine",
-    "BW3Y-MAGN-BISG",
-    "BW3Y-VITAMINC",
-    "BW3Y-GAINER-VANILLA",
-    "BW3Y-PREWORKOUT-CAF-200G",
-    "BW3Y-RICECREAM-1500G-CHOCOLATE",
-    "BW3Y-WPI-900G-CHOCOLATE",
-    "BW3Y-VITD3",
-    "BW3Y-ZMMB",
-    "BW3Y-ZINC",
-    "BW3Y-CREA-MONOHYDRATE",
-    "BW3Y-GAINER-CHOCOLATE",
-    "BW3Y-CREA-MONOHYDRATE-NON-LABELISEE-300G",
-    "BW3Y-O3-CAPS-90",
-    "BW3Y-COLL",
-    "BW3Y-SHAKER-NOIR-LOGO-600ML",
-    "BW3Y-RICECREAM-1500G-VANILLA",
-    "BW3Y-DOSING-CUPS",
-    "BW3Y-WPI-900G-VANILLA",
-    "BW3Y-MULTIVIT",
-    "COR-COLLAGEN-PEACH-180G",
-    "COR-OMEGA3-250DHA-120CAPS",
-    "COR-GLYCINE-300G",
-    "COR-CREATINE-300G",
-    "COR-NWPI-CHOC-1000G",
-    "COR-MULTIVIT 60 caps",
-    "COR-PREWORKOUT-200G",
-    "GRN-VITAMIND3-CAPS",
-    "GRN-VPM-VANILLA-V2",
-    "GRN-COLLAGEN-UNFLAVORED",
-    "GRN-MCI-COFFEE",
-    "GRN-WPI-BLUBERRY",
-    "GRN-GLYCINE-LUBLIN",
-    "GRN-MULTIVITAMINS-CAPS",
-    "GRN-WPI-COFFEE",
-    "GRN-OMEGA3-CAPS",
-    "GRN-ZINC-CAPS",
-    "GRN-VPM-BLUBERRY-V2",
-    "GRN-PROBIOTICS-CAPS",
-    "GRN-MAGNESIUM-CAPS",
-    "GRN-WPC-CHOCOLATE",
-    "GRN-VPM-COFFEE-V2",
-    "GRN-VITAMINC-CAPS",
-    "GRN-COLLAGEN-UNFLAVORED-LUBLIN",
-    "GRN-MCI-CHOCOLATE",
-    "GRN-WPC-VANILLA",
-    "GRN-CREA-UNFLAVORED",
-    "GRN-COLLAGEN-COCOA",
-    "GRN-MCI-VANILLA",
-    "GRN-WPI-CHOCOLATE",
-    "GRN-OMEGA3-CAPS-40/30",
-    "GRN-WPI-VANILLA",
-    "GRN-PREWORKOUT",
-    "GRN-GLYCINE",
-    "GRN-WPC-BLUBERRY",
-    "GRN-BCAA-MANGO",
-    "GRN-VPM-CHOCOLATE-V2",
-    "GRN-SLEEP-CAPS",
-    "GRN-SPIRULINA-TABS",
-    "GRN-MCI-BLUEBERRY",
-    "GRN-WPC-COFFEE"
-  ];
+  // Używamy hooków do pobierania opcji z bazy danych
+  const { options: staffOptions, loading: staffLoading } = useStaffOptions();
+  const { options: shiftWorkerOptions, loading: shiftWorkersLoading } = useShiftWorkerOptions();
+  // Hook dla opcji produktów używany tylko w polach "Rodzaj nadrukowanych doypack/tub"
+  const { options: productOptions, loading: productLoading } = useProductOptionsForPrinting();
 
   const [formData, setFormData] = useState({
     email: '',
@@ -212,7 +167,7 @@ const ProductionShiftForm = () => {
     }
   }, [isEditMode]);
 
-  const handleChange = (e) => {
+  const handleChange = async (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
@@ -225,65 +180,19 @@ const ProductionShiftForm = () => {
         // Pokaż spinner ładowania
         setLoadingMO(true);
         
-        // Wyodrębnij nazwę produktu z etykiety opcji MO
-        let extractedProductName = '';
-        // Znajdź opcję MO z listy moOptions, która pasuje do wybranej wartości
-        const selectedMOOption = moOptions.find(option => option.value === value);
-        if (selectedMOOption) {
-          // Etykieta ma format "MO00001 - NAZWA-PRODUKTU (100 szt.)"
-          const labelParts = selectedMOOption.label.split(' - ');
-          if (labelParts.length > 1) {
-            // Z drugiej części wyodrębnij nazwę produktu (przed nawiasem)
-            const productNameWithQuantity = labelParts[1];
-            const productNameParts = productNameWithQuantity.split(' (');
-            extractedProductName = productNameParts[0];
-          }
-        }
+        // Pobierz szczegóły MO
+        const moDetails = await getMODetailsById(value);
         
-        // Jeśli udało się wyodrębnić nazwę produktu, znajdź najbardziej pasującą opcję
-        let matchedProductName = '';
-        if (extractedProductName) {
-          // Funkcja do znalezienia najbardziej pasującej opcji, ignorując wielkość liter
-          const findBestMatch = (searchText, options) => {
-            // Przygotuj funkcję do normalizacji tekstu
-            const normalize = (text) => text.toLowerCase().trim().replace(/\s+/g, ' ');
-            
-            const normalizedSearch = normalize(searchText);
-            
-            // Najpierw szukaj dokładnego dopasowania (ignorując wielkość liter)
-            const exactMatch = options.find(option => 
-              normalize(option) === normalizedSearch
-            );
-            
-            if (exactMatch) return exactMatch;
-            
-            // Sprawdź COR-MULTIVIT 60 CAPS -> COR-MULTIVIT 60 caps
-            // Specjalne sprawdzenie dla COR-MULTIVIT
-            if (normalizedSearch.includes('cor-multivit') && normalizedSearch.includes('60')) {
-              const multivitMatch = options.find(option => 
-                normalize(option).includes('cor-multivit') && normalize(option).includes('60')
-              );
-              if (multivitMatch) return multivitMatch;
-            }
-            
-            // Jeśli nie znaleziono dokładnego dopasowania, szukaj częściowego
-            const partialMatch = options.find(option => 
-              normalize(option).includes(normalizedSearch) ||
-              normalizedSearch.includes(normalize(option))
-            );
-            
-            return partialMatch || '';
-          };
+        if (moDetails) {
+          // Użyj nazwy produktu bezpośrednio z zadania produkcyjnego
+          const productName = moDetails.productName || '';
           
-          matchedProductName = findBestMatch(extractedProductName, productOptions);
-          console.log(`Znaleziono dopasowanie dla "${extractedProductName}": "${matchedProductName}"`);
+          // Aktualizuj formularz o dane z MO
+          setFormData(prev => ({
+            ...prev,
+            product: productName
+          }));
         }
-        
-        // Aktualizuj formularz o dane z MO
-        setFormData(prev => ({
-          ...prev,
-          product: matchedProductName || ''
-        }));
       } catch (error) {
         console.error('Błąd podczas pobierania danych MO:', error);
       } finally {
@@ -655,24 +564,19 @@ const ProductionShiftForm = () => {
             </Grid>
             
             <Grid item xs={12}>
-              <FormControl fullWidth required error={!!validationErrors.product}>
-                <InputLabel>Produkt</InputLabel>
-                <Select
-                  name="product"
-                  value={formData.product}
-                  onChange={handleChange}
-                  label="Produkt"
-                >
-                  {productOptions.map(option => (
-                    <MenuItem key={option} value={option}>{option}</MenuItem>
-                  ))}
-                </Select>
-                {validationErrors.product && (
-                  <Typography color="error" variant="caption">
-                    {validationErrors.product}
-                  </Typography>
-                )}
-              </FormControl>
+              <TextField
+                required
+                fullWidth
+                label="Produkt"
+                name="product"
+                value={formData.product}
+                onChange={handleChange}
+                error={!!validationErrors.product}
+                helperText={validationErrors.product || "Nazwa produktu jest automatycznie wypełniana na podstawie wybranego MO"}
+                InputProps={{
+                  readOnly: true,
+                }}
+              />
             </Grid>
             
             <Grid item xs={12}>

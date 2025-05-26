@@ -32,13 +32,13 @@ import { getMONumbersForSelect } from '../../services/moService';
 import { formatDateForInput } from '../../utils/dateUtils';
 import { db, storage } from '../../services/firebase/config';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc, getDocs } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref as firebaseStorageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { format } from 'date-fns';
 import { query, where } from 'firebase/firestore';
-import { getAllProducts } from '../../services/productService';
 import { getAllOrders } from '../../services/orderService';
 import { useAuth } from '../../hooks/useAuth';
+import { useStaffOptions, usePositionOptions } from '../../hooks/useFormOptions';
 
 // Funkcja pomocnicza do formatowania daty w prawidłowym formacie dla pola expiryDate
 const formatExpiryDate = (dateValue) => {
@@ -159,19 +159,10 @@ const ProductionControlForm = () => {
   const isEditMode = searchParams.get('edit') === 'true';
   const { currentUser } = useAuth();
 
-  const staffOptions = [
-    "Valentyna Tarasiuk",
-    "Seweryn Burandt",
-    "Łukasz Bojke"
-  ];
+  // Używamy hooków do pobierania opcji z bazy danych
+  const { options: staffOptions, loading: staffLoading } = useStaffOptions();
+  const { options: positionOptions, loading: positionLoading } = usePositionOptions();
   
-  const positionOptions = [
-    "Mistrz produkcji",
-    "Kierownik Magazynu"
-  ];
-  
-  const [productOptions, setProductOptions] = useState([]);
-  const [loadingProducts, setLoadingProducts] = useState(true);
   const [customerOrders, setCustomerOrders] = useState([]);
   const [loadingCustomerOrders, setLoadingCustomerOrders] = useState(false);
 
@@ -214,32 +205,7 @@ const ProductionControlForm = () => {
   // Ref do timeoutów dla debounce'owania suwaków
   const sliderTimeoutRef = useRef(null);
 
-  // Pobierz listę produktów przy pierwszym renderowaniu komponentu
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        setLoadingProducts(true);
-        const products = await getAllProducts();
-        setProductOptions(products);
-      } catch (error) {
-        console.error('Błąd podczas pobierania produktów:', error);
-      } finally {
-        setLoadingProducts(false);
-      }
-    };
-
-    fetchProducts();
-
-    // Ustaw email zalogowanego użytkownika
-    if (currentUser && currentUser.email) {
-      setFormData(prev => ({
-        ...prev,
-        email: currentUser.email
-      }));
-    }
-  }, [currentUser]);
-
-  // Pobierz numery MO przy pierwszym renderowaniu komponentu
+  // Pobierz numery MO i ustaw email użytkownika przy pierwszym renderowaniu komponentu
   useEffect(() => {
     const fetchMONumbers = async () => {
       try {
@@ -254,7 +220,15 @@ const ProductionControlForm = () => {
     };
 
     fetchMONumbers();
-  }, []);
+
+    // Ustaw email zalogowanego użytkownika
+    if (currentUser && currentUser.email) {
+      setFormData(prev => ({
+        ...prev,
+        email: currentUser.email
+      }));
+    }
+  }, [currentUser]);
 
   // Pobierz listę zamówień klientów przy pierwszym renderowaniu komponentu
   useEffect(() => {
@@ -401,64 +375,13 @@ const ProductionControlForm = () => {
             }
           }
           
-          // Wyodrębnij nazwę produktu z etykiety opcji MO
-          let extractedProductName = '';
-          // Znajdź opcję MO z listy moOptions, która pasuje do wybranej wartości
-          const selectedMOOption = moOptions.find(option => option.value === value);
-          if (selectedMOOption) {
-            // Etykieta ma format "MO00001 - NAZWA-PRODUKTU (100 szt.)"
-            const labelParts = selectedMOOption.label.split(' - ');
-            if (labelParts.length > 1) {
-              // Z drugiej części wyodrębnij nazwę produktu (przed nawiasem)
-              const productNameWithQuantity = labelParts[1];
-              const productNameParts = productNameWithQuantity.split(' (');
-              extractedProductName = productNameParts[0];
-            }
-          }
-          
-          // Jeśli udało się wyodrębnić nazwę produktu, znajdź najbardziej pasującą opcję
-          let matchedProductName = '';
-          if (extractedProductName) {
-            // Funkcja do znalezienia najbardziej pasującej opcji, ignorując wielkość liter
-            const findBestMatch = (searchText, options) => {
-              // Przygotuj funkcję do normalizacji tekstu
-              const normalize = (text) => text.toLowerCase().trim().replace(/\s+/g, ' ');
-              
-              const normalizedSearch = normalize(searchText);
-              
-              // Najpierw szukaj dokładnego dopasowania (ignorując wielkość liter)
-              const exactMatch = options.find(option => 
-                normalize(option) === normalizedSearch
-              );
-              
-              if (exactMatch) return exactMatch;
-              
-              // Sprawdź COR-MULTIVIT 60 CAPS -> COR-MULTIVIT 60 caps
-              // Specjalne sprawdzenie dla COR-MULTIVIT
-              if (normalizedSearch.includes('cor-multivit') && normalizedSearch.includes('60')) {
-                const multivitMatch = options.find(option => 
-                  normalize(option).includes('cor-multivit') && normalize(option).includes('60')
-                );
-                if (multivitMatch) return multivitMatch;
-              }
-              
-              // Jeśli nie znaleziono dokładnego dopasowania, szukaj częściowego
-              const partialMatch = options.find(option => 
-                normalize(option).includes(normalizedSearch) ||
-                normalizedSearch.includes(normalize(option))
-              );
-              
-              return partialMatch || '';
-            };
-            
-            matchedProductName = findBestMatch(extractedProductName, productOptions);
-            console.log(`Znaleziono dopasowanie dla "${extractedProductName}": "${matchedProductName}"`);
-          }
+          // Użyj nazwy produktu bezpośrednio z zadania produkcyjnego
+          const productName = moDetails.productName || '';
           
           // Aktualizuj formularz o dane z MO
           setFormData(prev => ({
             ...prev,
-            productName: matchedProductName || '',
+            productName: productName,
             lotNumber: moDetails.lotNumber || '',
             expiryDate: formattedExpiryDate // Używamy pełnej daty
           }));
@@ -630,7 +553,7 @@ const ProductionControlForm = () => {
           
           for (const field of fileFields) {
             if (formData[field]) {
-              const storageRef = ref(storage, `forms/kontrola-produkcji/${formData.manufacturingOrder}/${field}-${Date.now()}-${formData[field].name}`);
+              const storageRef = firebaseStorageRef(storage, `forms/kontrola-produkcji/${formData.manufacturingOrder}/${field}-${Date.now()}-${formData[field].name}`);
               await uploadBytes(storageRef, formData[field]);
               const fileUrl = await getDownloadURL(storageRef);
               odpowiedzData[`${field}Url`] = fileUrl;
@@ -950,19 +873,19 @@ const ProductionControlForm = () => {
             </Grid>
             
             <Grid item xs={12}>
-              <FormControl fullWidth required error={!!validationErrors.productName}>
-                <InputLabel>Nazwa produktu</InputLabel>
-                <Select
-                  name="productName"
-                  value={formData.productName}
-                  onChange={handleChange}
-                  label="Nazwa produktu"
-                >
-                  {productOptions.map(option => (
-                    <MenuItem key={option} value={option}>{option}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <TextField
+                required
+                fullWidth
+                label="Nazwa produktu"
+                name="productName"
+                value={formData.productName}
+                onChange={handleChange}
+                error={!!validationErrors.productName}
+                helperText={validationErrors.productName || "Nazwa produktu jest automatycznie wypełniana na podstawie wybranego MO"}
+                InputProps={{
+                  readOnly: true,
+                }}
+              />
             </Grid>
             
             <Grid item xs={12}>

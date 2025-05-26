@@ -193,3 +193,14 @@ W celu poprawy wydajności dashboardu i ograniczenia zbędnych zapytań do bazy 
 - Dodano zależności do funkcji `useCallback` aby dokładniej śledzić stan
 
 Te optymalizacje znacząco zmniejszą liczbę zapytań do bazy danych podczas ładowania dashboardu oraz zapobiegną typowym problemom związanym z równoległym wykonywaniem tego samego zapytania z różnych części aplikacji.
+
+## Historia zmian
+
+### [Nowe] - Poprawki responsywności w widoku magazynowym
+
+- Dodano responsywny układ przycisków w szczegółach pozycji magazynowej dla widoku mobilnego
+- Przyciski "Odśwież ilość", "Edytuj", "Zarządzaj partiami" i "Drukuj etykietę" dostosowano do ekranów mobilnych
+- Przyciski "Przyjmij" i "Wydaj" są teraz układane w kolumnie na małych ekranach
+- Dodano responsywność do strony zarządzania partiami - przyciski w nagłówku dostosowano do widoku mobilnego
+- Uproszczono tabelę partii w widoku mobilnym pokazując tylko najważniejsze kolumny
+- Zoptymalizowano paginację w widoku partii dla urządzeń mobilnych

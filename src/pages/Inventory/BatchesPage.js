@@ -30,7 +30,9 @@ import {
   Select,
   MenuItem,
   FormHelperText,
-  CircularProgress
+  CircularProgress,
+  useMediaQuery,
+  useTheme
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -95,6 +97,10 @@ const BatchesPage = () => {
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [selectedCertificateForPreview, setSelectedCertificateForPreview] = useState(null);
   const fileInputRef = React.useRef(null);
+
+  // Dodaję wykrywanie urządzeń mobilnych
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   useEffect(() => {
     // Aktualizuj lokalny stan użytkownika, gdy currentUser się zmieni
@@ -609,24 +615,35 @@ const BatchesPage = () => {
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 2 : 0 }}>
         <Button 
           startIcon={<ArrowBackIcon />} 
           onClick={() => navigate(-1)}
+          variant="outlined"
+          sx={{ alignSelf: isMobile ? 'stretch' : 'flex-start' }}
         >
           Powrót
         </Button>
-        <Typography variant="h5">
+        <Typography variant="h5" align={isMobile ? "center" : "left"}>
           {item ? `Partie: ${item.name}` : 'Partie (Produkt niedostępny)'}
         </Typography>
-        <Box>
+        <Box sx={{ 
+          display: 'flex', 
+          flexDirection: isMobile ? 'column' : 'row', 
+          gap: isMobile ? 1 : 0,
+          width: isMobile ? '100%' : 'auto'
+        }}>
           {item && (
             <Button 
               variant="outlined"
               color="secondary" 
               startIcon={<QrCodeIcon />}
               onClick={handleOpenItemLabelDialog}
-              sx={{ mr: 2 }}
+              sx={{ 
+                mr: isMobile ? 0 : 2, 
+                mb: isMobile ? 1 : 0,
+                width: '100%'
+              }}
             >
               Drukuj etykietę
             </Button>
@@ -637,6 +654,7 @@ const BatchesPage = () => {
               color="primary" 
               component={Link}
               to={`/inventory/${id}/receive`}
+              sx={{ width: isMobile ? '100%' : 'auto' }}
             >
               Przyjmij nową partię
             </Button>
@@ -672,13 +690,18 @@ const BatchesPage = () => {
             />
           </Grid>
           <Grid item xs={12} sm={6} md={8}>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: isMobile ? 'flex-start' : 'center',
+              flexDirection: isMobile ? 'column' : 'row',
+              gap: isMobile ? 1 : 0
+            }}>
               {item ? (
-                <Typography variant="body2" sx={{ mr: 2 }}>
+                <Typography variant="body2" sx={{ mr: isMobile ? 0 : 2 }}>
                   <strong>Stan całkowity:</strong> {formatQuantity(item.quantity)} {item.unit}
                 </Typography>
               ) : (
-                <Typography variant="body2" sx={{ mr: 2 }}>
+                <Typography variant="body2" sx={{ mr: isMobile ? 0 : 2 }}>
                   <strong>Stan całkowity:</strong> {formatQuantity(batches.reduce((sum, batch) => sum + parseFloat(batch.quantity || 0), 0))} {batches[0]?.unit || 'szt.'}
                 </Typography>
               )}
@@ -699,20 +722,20 @@ const BatchesPage = () => {
               <TableRow>
                 <TableCell>Numer partii</TableCell>
                 <TableCell>Data ważności</TableCell>
-                <TableCell>Magazyn</TableCell>
+                {!isMobile && <TableCell>Magazyn</TableCell>}
                 <TableCell>Ilość aktualna</TableCell>
-                <TableCell>Cena jedn.</TableCell>
+                {!isMobile && <TableCell>Cena jedn.</TableCell>}
                 <TableCell>Status</TableCell>
-                <TableCell>Pochodzenie</TableCell>
-                <TableCell>Certyfikat</TableCell>
-                <TableCell>Uwagi</TableCell>
+                {!isMobile && <TableCell>Pochodzenie</TableCell>}
+                {!isMobile && <TableCell>Certyfikat</TableCell>}
+                {!isMobile && <TableCell>Uwagi</TableCell>}
                 <TableCell>Akcje</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {filteredBatches.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} align="center">
+                  <TableCell colSpan={isMobile ? 5 : 10} align="center">
                     Brak partii dla tego produktu
                   </TableCell>
                 </TableRow>
@@ -760,41 +783,45 @@ const BatchesPage = () => {
                             }
                           })()}
                         </TableCell>
-                        <TableCell>
-                          {batch.warehouseName || 'Magazyn podstawowy'}
-                        </TableCell>
+                        {!isMobile && (
+                          <TableCell>
+                            {batch.warehouseName || 'Magazyn podstawowy'}
+                          </TableCell>
+                        )}
                         <TableCell>
                           {batch.quantity} {item?.unit || batch.unit || 'szt.'}
                         </TableCell>
-                        <TableCell>
-                          {(() => {
-                            // Jeśli nie ma ceny, wyświetl "-"
-                            if (!batch.unitPrice) return '-';
-                            
-                            // Podstawowy format ceny
-                            let priceDisplay = `${parseFloat(batch.unitPrice).toFixed(4)} EUR`;
-                            
-                            // Jeśli mamy informacje o cenie bazowej i dodatkowym koszcie
-                            if (batch.baseUnitPrice !== undefined && batch.additionalCostPerUnit !== undefined) {
-                              const basePrice = parseFloat(batch.baseUnitPrice).toFixed(4);
-                              const additionalCost = parseFloat(batch.additionalCostPerUnit).toFixed(4);
+                        {!isMobile && (
+                          <TableCell>
+                            {(() => {
+                              // Jeśli nie ma ceny, wyświetl "-"
+                              if (!batch.unitPrice) return '-';
                               
-                              // Wyświetl rozszerzone informacje o cenie
-                              return (
-                                <Tooltip title={`Cena bazowa: ${basePrice} EUR + Koszt dodatkowy: ${additionalCost} EUR`}>
-                                  <Box>
-                                    <Typography variant="body2">{priceDisplay}</Typography>
-                                    <Typography variant="caption" color="text.secondary">
-                                      (baza: {basePrice} + dod. koszt: {additionalCost})
-                                    </Typography>
-                                  </Box>
-                                </Tooltip>
-                              );
-                            }
-                            
-                            return priceDisplay;
-                          })()}
-                        </TableCell>
+                              // Podstawowy format ceny
+                              let priceDisplay = `${parseFloat(batch.unitPrice).toFixed(4)} EUR`;
+                              
+                              // Jeśli mamy informacje o cenie bazowej i dodatkowym koszcie
+                              if (batch.baseUnitPrice !== undefined && batch.additionalCostPerUnit !== undefined) {
+                                const basePrice = parseFloat(batch.baseUnitPrice).toFixed(4);
+                                const additionalCost = parseFloat(batch.additionalCostPerUnit).toFixed(4);
+                                
+                                // Wyświetl rozszerzone informacje o cenie
+                                return (
+                                  <Tooltip title={`Cena bazowa: ${basePrice} EUR + Koszt dodatkowy: ${additionalCost} EUR`}>
+                                    <Box>
+                                      <Typography variant="body2">{priceDisplay}</Typography>
+                                      <Typography variant="caption" color="text.secondary">
+                                        (baza: {basePrice} + dod. koszt: {additionalCost})
+                                      </Typography>
+                                    </Box>
+                                  </Tooltip>
+                                );
+                              }
+                              
+                              return priceDisplay;
+                            })()}
+                          </TableCell>
+                        )}
                         <TableCell>
                           <Chip 
                             label={status.label} 
@@ -803,192 +830,190 @@ const BatchesPage = () => {
                             icon={status.color === 'error' || status.color === 'warning' ? <WarningIcon /> : null}
                           />
                         </TableCell>
-                        <TableCell>
-                          {(() => {
-                            let source = '-';
-                            
-                            // Sprawdź czy partia ma powiązanie z zamówieniem zakupowym (PO)
-                            // Najpierw sprawdź nowy model danych z purchaseOrderDetails
-                            if (batch.purchaseOrderDetails && batch.purchaseOrderDetails.id) {
-                              const po = batch.purchaseOrderDetails;
-                              return (
-                                <Box>
-                                  <Typography variant="body2">
-                                    <strong>Z zamówienia zakupu:</strong>
-                                  </Typography>
-                                  <Typography variant="body2">
-                                    PO: {po.number || '-'}
-                                  </Typography>
-                                  {po.supplier && (
-                                    <Typography variant="body2" color="text.secondary">
-                                      Dostawca: {po.supplier.name || '-'}
-                                    </Typography>
-                                  )}
-                                  {po.orderDate && (
-                                    <Typography variant="body2" color="text.secondary" fontSize="0.8rem">
-                                      Data zamówienia: {typeof po.orderDate === 'string' 
-                                        ? new Date(po.orderDate).toLocaleDateString('pl-PL') 
-                                        : po.orderDate instanceof Date 
-                                          ? po.orderDate.toLocaleDateString('pl-PL')
-                                          : po.orderDate && po.orderDate.toDate
-                                            ? po.orderDate.toDate().toLocaleDateString('pl-PL')
-                                            : '-'}
-                                    </Typography>
-                                  )}
-                                  {po.id && (
-                                    <Button 
-                                      size="small" 
-                                      variant="outlined" 
-                                      color="primary"
-                                      component={Link}
-                                      to={`/purchase-orders/${po.id}`}
-                                      sx={{ mt: 1, fontSize: '0.7rem', py: 0.3 }}
-                                    >
-                                      Szczegóły PO
-                                    </Button>
-                                  )}
-                                </Box>
-                              );
-                            }
-                            
-                            // Stara metoda - sprawdź czy partia pochodzi z zamówienia zakupu (PO)
-                            else if (batch.source === 'purchase' || (batch.sourceDetails && batch.sourceDetails.sourceType === 'purchase')) {
-                              // Fallback dla starszych rekordów bez szczegółów PO
-                              source = 'Z zamówienia zakupu';
-                              if (batch.orderNumber) {
-                                source += ` (PO: ${batch.orderNumber})`;
-                              } else if (batch.sourceDetails && batch.sourceDetails.orderNumber) {
-                                source += ` (PO: ${batch.sourceDetails.orderNumber})`;
-                              }
+                        {!isMobile && (
+                          <TableCell>
+                            {(() => {
+                              let source = '-';
                               
-                              if (batch.sourceDetails && batch.sourceDetails.supplierName) {
-                                source += ` od ${batch.sourceDetails.supplierName}`;
-                              }
-                              
-                              // Jeśli mamy orderId w sourceDetails, dodaj link do PO
-                              if (batch.sourceDetails && batch.sourceDetails.orderId) {
+                              // Sprawdź czy partia ma powiązanie z zamówieniem zakupowym (PO)
+                              // Najpierw sprawdź nowy model danych z purchaseOrderDetails
+                              if (batch.purchaseOrderDetails && batch.purchaseOrderDetails.id) {
+                                const po = batch.purchaseOrderDetails;
                                 return (
                                   <Box>
                                     <Typography variant="body2">
-                                      {source}
+                                      <strong>Z zamówienia zakupu:</strong>
                                     </Typography>
-                                    <Button 
-                                      size="small" 
-                                      variant="outlined" 
-                                      color="primary"
-                                      component={Link}
-                                      to={`/purchase-orders/${batch.sourceDetails.orderId}`}
-                                      sx={{ mt: 1, fontSize: '0.7rem', py: 0.3 }}
-                                    >
-                                      Szczegóły PO
-                                    </Button>
+                                    <Typography variant="body2">
+                                      PO: {po.number || '-'}
+                                    </Typography>
+                                    {po.supplier && (
+                                      <Typography variant="body2" color="text.secondary">
+                                        Dostawca: {po.supplier.name || '-'}
+                                      </Typography>
+                                    )}
+                                    {po.orderDate && (
+                                      <Typography variant="body2" color="text.secondary" fontSize="0.8rem">
+                                        Data zamówienia: {typeof po.orderDate === 'string' 
+                                          ? new Date(po.orderDate).toLocaleDateString('pl-PL') 
+                                          : po.orderDate instanceof Date 
+                                            ? po.orderDate.toLocaleDateString('pl-PL')
+                                            : po.orderDate && po.orderDate.toDate
+                                              ? po.orderDate.toDate().toLocaleDateString('pl-PL')
+                                              : '-'}
+                                      </Typography>
+                                    )}
+                                    {po.id && (
+                                      <Button 
+                                        size="small" 
+                                        variant="outlined" 
+                                        color="primary"
+                                        component={Link}
+                                        to={`/purchase-orders/${po.id}`}
+                                        sx={{ mt: 1, fontSize: '0.7rem', py: 0.3 }}
+                                      >
+                                        Szczegóły PO
+                                      </Button>
+                                    )}
                                   </Box>
                                 );
                               }
                               
+                              // Stara metoda - sprawdź czy partia pochodzi z zamówienia zakupu (PO)
+                              else if (batch.source === 'purchase' || (batch.sourceDetails && batch.sourceDetails.sourceType === 'purchase')) {
+                                // Fallback dla starszych rekordów bez szczegółów PO
+                                source = 'Z zamówienia zakupu';
+                                if (batch.orderNumber) {
+                                  source += ` (PO: ${batch.orderNumber})`;
+                                } else if (batch.sourceDetails && batch.sourceDetails.orderNumber) {
+                                  source += ` (PO: ${batch.sourceDetails.orderNumber})`;
+                                }
+                                
+                                if (batch.sourceDetails && batch.sourceDetails.supplierName) {
+                                  source += ` od ${batch.sourceDetails.supplierName}`;
+                                }
+                                
+                                // Jeśli mamy orderId w sourceDetails, dodaj link do PO
+                                if (batch.sourceDetails && batch.sourceDetails.orderId) {
+                                  return (
+                                    <Box>
+                                      <Typography variant="body2">
+                                        {source}
+                                      </Typography>
+                                      <Button 
+                                        size="small" 
+                                        variant="outlined" 
+                                        color="primary"
+                                        component={Link}
+                                        to={`/purchase-orders/${batch.sourceDetails.orderId}`}
+                                        sx={{ mt: 1, fontSize: '0.7rem', py: 0.3 }}
+                                      >
+                                        Szczegóły PO
+                                      </Button>
+                                    </Box>
+                                  );
+                                }
+                                
+                                return source;
+                              }
+                              
+                              // Produkcja - wyświetlanie informacji o MO i CO
+                              else if (batch.source === 'Produkcja' || batch.source === 'production') {
+                                source = 'Z produkcji';
+                                // Dodaj informacje o MO i CO, jeśli są dostępne
+                                if (batch.moNumber) {
+                                  source += ` (MO: ${batch.moNumber})`;
+                                }
+                                if (batch.orderNumber) {
+                                  source += ` (CO: ${batch.orderNumber})`;
+                                }
+                              } else if (batch.source) {
+                                source = batch.source;
+                              }
+                              
                               return source;
-                            }
-                            
-                            // Produkcja - wyświetlanie informacji o MO i CO
-                            else if (batch.source === 'Produkcja' || batch.source === 'production') {
-                              source = 'Z produkcji';
-                              // Dodaj informacje o MO i CO, jeśli są dostępne
-                              if (batch.moNumber) {
-                                source += ` (MO: ${batch.moNumber})`;
-                              }
-                              if (batch.orderNumber) {
-                                source += ` (CO: ${batch.orderNumber})`;
-                              }
-                            } else if (batch.source) {
-                              source = batch.source;
-                            }
-                            
-                            return source;
-                          })()}
-                        </TableCell>
-                        <TableCell>
-                          {(batch.certificateBase64 || batch.certificateFileName || batch.certificateDownloadURL) ? (
-                            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                              <Tooltip title={`Podgląd certyfikatu: ${batch.certificateFileName || 'Dokument'}`}>
-                                <Box 
-                                  sx={{ 
-                                    display: 'flex', 
-                                    alignItems: 'center',
-                                    cursor: 'pointer',
-                                    '&:hover': {
-                                      textDecoration: 'underline',
-                                      color: 'primary.main'
-                                    }
-                                  }}
-                                  onClick={() => openPreviewDialog(batch)}
-                                >
-                                  <InsertDriveFileIcon color="primary" fontSize="small" sx={{ mr: 1 }} />
-                                  <Typography variant="body2" noWrap sx={{ maxWidth: 120 }}>
-                                    {batch.certificateFileName || 'Dokument'}
-                                  </Typography>
-                                </Box>
-                              </Tooltip>
-                              <Tooltip title="Usuń certyfikat">
+                            })()}
+                          </TableCell>
+                        )}
+                        {!isMobile && (
+                          <TableCell>
+                            {(batch.certificateBase64 || batch.certificateFileName || batch.certificateDownloadURL) ? (
+                              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                                <Tooltip title={`Podgląd certyfikatu: ${batch.certificateFileName || 'Dokument'}`}>
+                                  <Box 
+                                    sx={{ 
+                                      display: 'flex', 
+                                      alignItems: 'center',
+                                      cursor: 'pointer',
+                                      '&:hover': {
+                                        textDecoration: 'underline',
+                                        color: 'primary.main'
+                                      }
+                                    }}
+                                    onClick={() => openPreviewDialog(batch)}
+                                  >
+                                    <InsertDriveFileIcon color="primary" fontSize="small" sx={{ mr: 1 }} />
+                                    <Typography variant="body2" noWrap sx={{ maxWidth: 120 }}>
+                                      {batch.certificateFileName || 'Dokument'}
+                                    </Typography>
+                                  </Box>
+                                </Tooltip>
+                                <Tooltip title="Usuń certyfikat">
+                                  <IconButton 
+                                    size="small" 
+                                    color="error"
+                                    onClick={() => handleDeleteCertificate(batch)}
+                                  >
+                                    <DeleteIcon />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
+                            ) : (
+                              <Tooltip title="Dodaj certyfikat">
                                 <IconButton 
                                   size="small" 
-                                  color="error"
-                                  onClick={() => handleDeleteCertificate(batch)}
+                                  color="primary"
+                                  onClick={() => openCertificateDialog(batch)}
                                 >
-                                  <DeleteIcon />
-                                </IconButton>
-                              </Tooltip>
-                            </Box>
-                          ) : (
-                            <Tooltip title="Dodaj certyfikat">
-                              <IconButton 
-                                size="small" 
-                                color="primary"
-                                onClick={() => openCertificateDialog(batch)}
-                              >
-                                <FileUploadIcon />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                        </TableCell>
-                        <TableCell>{batch.notes || '-'}</TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex' }}>
-                            <Tooltip title="Edytuj partię">
-                              <IconButton 
-                                size="small" 
-                                color="primary"
-                                onClick={() => navigate(`/inventory/batch/${batch.id}`)}
-                              >
-                                <EditIcon />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Drukuj etykietę">
-                              <IconButton 
-                                size="small" 
-                                color="secondary"
-                                onClick={() => handleOpenBatchLabelDialog(batch)}
-                              >
-                                <QrCodeIcon />
-                              </IconButton>
-                            </Tooltip>
-                            {batch.quantity > 0 && (
-                              <Tooltip title="Przenieś do innego magazynu">
-                                <IconButton 
-                                  size="small" 
-                                  color="secondary"
-                                  onClick={() => openTransferDialog(batch)}
-                                >
-                                  <SwapHorizIcon />
+                                  <FileUploadIcon />
                                 </IconButton>
                               </Tooltip>
                             )}
-                            <Tooltip title="Usuń partię">
-                              <IconButton 
-                                size="small" 
-                                color="error"
-                                onClick={() => openDeleteDialog(batch)}
+                          </TableCell>
+                        )}
+                        {!isMobile && (
+                          <TableCell>
+                            {batch.notes || '—'}
+                          </TableCell>
+                        )}
+                        <TableCell>
+                          <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 0.5 : 1 }}>
+                            <Tooltip title="Drukuj etykietę partii">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleOpenBatchLabelDialog(batch)}
                               >
-                                <DeleteIcon />
+                                <QrCodeIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            
+                            <Tooltip title="Edytuj">
+                              <IconButton
+                                size="small"
+                                component={Link}
+                                to={`/inventory/batches/${batch.id}/edit`}
+                              >
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            
+                            <Tooltip title="Usuń">
+                              <IconButton
+                                size="small"
+                                onClick={() => openDeleteDialog(batch)}
+                                color="error"
+                              >
+                                <DeleteIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
                           </Box>
@@ -1001,15 +1026,21 @@ const BatchesPage = () => {
           </Table>
         </TableContainer>
         <TablePagination
-          rowsPerPageOptions={[5, 10, 25]}
+          rowsPerPageOptions={isMobile ? [5, 10] : [5, 10, 25, 50]}
           component="div"
           count={filteredBatches.length}
           rowsPerPage={rowsPerPage}
           page={page}
           onPageChange={handleChangePage}
           onRowsPerPageChange={handleChangeRowsPerPage}
-          labelRowsPerPage="Wierszy na stronę:"
+          labelRowsPerPage={isMobile ? "Wierszy:" : "Wierszy na stronę:"}
           labelDisplayedRows={({ from, to, count }) => `${from}-${to} z ${count}`}
+          sx={isMobile ? {
+            '.MuiTablePagination-selectLabel': { display: 'none' },
+            '.MuiTablePagination-select': { marginRight: '8px' },
+            '.MuiTablePagination-actions': { marginLeft: '8px' },
+            '.MuiTablePagination-displayedRows': { fontSize: '0.8rem' }
+          } : {}}
         />
       </Paper>
 

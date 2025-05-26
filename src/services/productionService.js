@@ -207,7 +207,8 @@ import {
             (data.name && data.name.toLowerCase().includes(searchTermLower)) ||
             (data.description && data.description.toLowerCase().includes(searchTermLower)) ||
             (data.productName && data.productName.toLowerCase().includes(searchTermLower)) ||
-            (data.moNumber && data.moNumber.toLowerCase().includes(searchTermLower))
+            (data.moNumber && data.moNumber.toLowerCase().includes(searchTermLower)) ||
+            (data.clientName && data.clientName.toLowerCase().includes(searchTermLower))
           );
         });
         

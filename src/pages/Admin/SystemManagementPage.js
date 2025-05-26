@@ -25,6 +25,7 @@ import { useNotification } from '../../hooks/useNotification';
 import { migrateAIMessageLimits } from '../../services/migrationService';
 import APIKeySettings from '../../components/common/APIKeySettings';
 import CounterEditor from '../../components/admin/CounterEditor';
+import FormOptionsManager from '../../components/admin/FormOptionsManager';
 
 /**
  * Strona dla administratorów z narzędziami do zarządzania systemem
@@ -74,6 +75,9 @@ const SystemManagementPage = () => {
         
         {/* Edytor liczników systemowych */}
         <CounterEditor />
+        
+        {/* Zarządzanie opcjami formularzy */}
+        <FormOptionsManager />
         
         <Card sx={{ mb: 3 }}>
           <CardContent>

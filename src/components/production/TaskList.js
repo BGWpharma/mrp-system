@@ -137,7 +137,7 @@ const TaskList = () => {
     
     const timeoutId = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
-    }, 300); // 300ms opóźnienia
+    }, 1000); // 1000ms opóźnienia (1 sekunda)
     
     setSearchTimeout(timeoutId);
     
