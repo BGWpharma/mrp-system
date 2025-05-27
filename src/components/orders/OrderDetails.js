@@ -298,9 +298,59 @@ const OrderDetails = () => {
       // Pobierz aktualne dane zadań produkcyjnych
       const refreshedOrderData = await getOrderById(orderId);
       
+      // Importuj funkcję do pobierania szczegółów zadania
+      const { getTaskById } = await import('../../services/productionService');
+      
       if (refreshedOrderData.productionTasks && refreshedOrderData.productionTasks.length > 0) {
+        // Zaktualizuj dane kosztów produkcji w pozycjach zamówienia
+        const updatedOrderData = { ...refreshedOrderData };
+        
+        if (updatedOrderData.items && updatedOrderData.items.length > 0) {
+          for (let i = 0; i < updatedOrderData.items.length; i++) {
+            const item = updatedOrderData.items[i];
+            
+            // Znajdź powiązane zadanie produkcyjne
+            const associatedTask = updatedOrderData.productionTasks.find(task => 
+              task.id === item.productionTaskId
+            );
+            
+            if (associatedTask) {
+              try {
+                // Pobierz szczegółowe dane zadania z bazy danych
+                const taskDetails = await getTaskById(associatedTask.id);
+                
+                // Aktualizuj informacje o zadaniu produkcyjnym w pozycji zamówienia
+                updatedOrderData.items[i] = {
+                  ...item,
+                  productionTaskId: associatedTask.id,
+                  productionTaskNumber: associatedTask.moNumber || taskDetails.moNumber,
+                  productionStatus: associatedTask.status || taskDetails.status,
+                  // Używaj totalMaterialCost jako podstawowy koszt produkcji (tylko materiały wliczane do kosztów)
+                  productionCost: taskDetails.totalMaterialCost || associatedTask.totalMaterialCost || 0,
+                  // Dodaj pełny koszt produkcji (wszystkie materiały niezależnie od flagi "wliczaj")
+                  fullProductionCost: taskDetails.totalFullProductionCost || associatedTask.totalFullProductionCost || 0
+                };
+                
+                console.log(`Zaktualizowano koszty dla pozycji ${item.name}: koszt podstawowy = ${updatedOrderData.items[i].productionCost}€, pełny koszt = ${updatedOrderData.items[i].fullProductionCost}€`);
+              } catch (error) {
+                console.error(`Błąd podczas pobierania szczegółów zadania ${associatedTask.id}:`, error);
+                
+                // W przypadku błędu, użyj podstawowych danych z associatedTask
+                updatedOrderData.items[i] = {
+                  ...item,
+                  productionTaskId: associatedTask.id,
+                  productionTaskNumber: associatedTask.moNumber,
+                  productionStatus: associatedTask.status,
+                  productionCost: associatedTask.totalMaterialCost || 0,
+                  fullProductionCost: associatedTask.totalFullProductionCost || 0
+                };
+              }
+            }
+          }
+        }
+        
         // Zaktualizuj dane zamówienia
-        setOrder(refreshedOrderData);
+        setOrder(updatedOrderData);
         showSuccess('Dane kosztów produkcji zostały odświeżone');
       } else {
         showInfo('Brak zadań produkcyjnych do odświeżenia');
@@ -982,6 +1032,7 @@ const OrderDetails = () => {
                 <TableCell sx={{ color: 'inherit' }} align="right">Profit</TableCell>
                 <TableCell sx={{ color: 'inherit' }} align="right">Suma wartości pozycji</TableCell>
                 <TableCell sx={{ color: 'inherit' }} align="right">Koszt całk./szt.</TableCell>
+                <TableCell sx={{ color: 'inherit' }} align="right">Pełny koszt prod./szt.</TableCell>
                 <TableCell sx={{ color: 'inherit' }}>Akcje</TableCell>
               </TableRow>
             </TableHead>
@@ -1104,6 +1155,26 @@ const OrderDetails = () => {
                       return formatCurrency(unitCost);
                     })()}
                   </TableCell>
+                  <TableCell align="right">
+                    {(() => {
+                      // Sprawdź czy pozycja ma powiązane zadanie produkcyjne i pełny koszt produkcji
+                      if (item.productionTaskId && item.fullProductionCost !== undefined) {
+                        // Oblicz pełny koszt produkcji na jednostkę
+                        const quantity = parseFloat(item.quantity) || 1;
+                        const unitFullProductionCost = parseFloat(item.fullProductionCost) / quantity;
+                        
+                        return (
+                          <Tooltip title="Pełny koszt produkcji na jednostkę (wszystkie materiały)">
+                            <Typography sx={{ fontWeight: 'medium', color: 'primary.main' }}>
+                              {formatCurrency(unitFullProductionCost)}
+                            </Typography>
+                          </Tooltip>
+                        );
+                      } else {
+                        return <Typography variant="body2" color="text.secondary">-</Typography>;
+                      }
+                    })()}
+                  </TableCell>
                   <TableCell>
                     <Tooltip title="Drukuj etykietę">
                       <IconButton 
@@ -1129,7 +1200,7 @@ const OrderDetails = () => {
                 <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                   {formatCurrency(order.items?.reduce((sum, item) => sum + calculateItemTotalValue(item), 0) || 0)}
                 </TableCell>
-                <TableCell colSpan={2} />
+                <TableCell colSpan={3} />
               </TableRow>
               <TableRow>
                 <TableCell colSpan={2} />
@@ -1139,7 +1210,7 @@ const OrderDetails = () => {
                 <TableCell align="right">
                   {formatCurrency(order.shippingCost || 0)}
                 </TableCell>
-                <TableCell colSpan={5} />
+                <TableCell colSpan={6} />
               </TableRow>
               
               {/* Dodatkowe koszty (tylko jeśli istnieją) */}
@@ -1159,7 +1230,7 @@ const OrderDetails = () => {
                             <TableCell align="right">
                               {formatCurrency(parseFloat(cost.value) || 0)}
                             </TableCell>
-                            <TableCell colSpan={5} />
+                            <TableCell colSpan={6} />
                           </TableRow>
                         ))
                       }
@@ -1174,7 +1245,7 @@ const OrderDetails = () => {
                             .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
                           )}
                         </TableCell>
-                        <TableCell colSpan={5} />
+                        <TableCell colSpan={6} />
                       </TableRow>
                     </>
                   )}
@@ -1193,7 +1264,7 @@ const OrderDetails = () => {
                             <TableCell align="right" sx={{ color: 'secondary.main' }}>
                               {formatCurrency(Math.abs(parseFloat(cost.value)) || 0)}
                             </TableCell>
-                            <TableCell colSpan={5} />
+                            <TableCell colSpan={6} />
                           </TableRow>
                         ))
                       }
@@ -1208,7 +1279,7 @@ const OrderDetails = () => {
                             .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
                           ))}
                         </TableCell>
-                        <TableCell colSpan={5} />
+                        <TableCell colSpan={6} />
                       </TableRow>
                     </>
                   )}
@@ -1244,7 +1315,7 @@ const OrderDetails = () => {
                     return formatCurrency(total);
                   })()}
                 </TableCell>
-                <TableCell colSpan={5} />
+                <TableCell colSpan={6} />
               </TableRow>
             </TableBody>
           </Table>

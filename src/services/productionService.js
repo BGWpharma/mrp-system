@@ -418,8 +418,10 @@ import {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         autoReserveMaterials, // Zapisz informację o tym, czy materiały zostały automatycznie zarezerwowane
-        totalMaterialCost: 0, // Inicjalizacja kosztu całkowitego materiałów
-        unitMaterialCost: 0, // Inicjalizacja kosztu jednostkowego materiałów
+        totalMaterialCost: 0, // Inicjalizacja kosztu całkowitego materiałów (tylko wliczane do kosztów)
+        unitMaterialCost: 0, // Inicjalizacja kosztu jednostkowego materiałów (tylko wliczane do kosztów)
+        totalFullProductionCost: 0, // Inicjalizacja pełnego kosztu produkcji (wszystkie materiały niezależnie od flagi "wliczaj")
+        unitFullProductionCost: 0, // Inicjalizacja jednostkowego pełnego kosztu produkcji
         costLastUpdatedAt: serverTimestamp(), // Data inicjalizacji kosztów
         costLastUpdatedBy: userId, // Użytkownik inicjalizujący koszty
         orderItemId: taskData.orderItemId || null, // Dodaj identyfikator pozycji zamówienia, jeśli dostępne
@@ -580,6 +582,14 @@ import {
         taskData.unitMaterialCost = currentTask.unitMaterialCost;
       }
       
+      if (taskData.totalFullProductionCost === undefined && currentTask.totalFullProductionCost !== undefined) {
+        taskData.totalFullProductionCost = currentTask.totalFullProductionCost;
+      }
+      
+      if (taskData.unitFullProductionCost === undefined && currentTask.unitFullProductionCost !== undefined) {
+        taskData.unitFullProductionCost = currentTask.unitFullProductionCost;
+      }
+      
       if (taskData.costLastUpdatedAt === undefined && currentTask.costLastUpdatedAt !== undefined) {
         taskData.costLastUpdatedAt = currentTask.costLastUpdatedAt;
       }
@@ -599,6 +609,14 @@ import {
       
       if (taskData.unitMaterialCost === undefined) {
         taskData.unitMaterialCost = 0;
+      }
+      
+      if (taskData.totalFullProductionCost === undefined) {
+        taskData.totalFullProductionCost = 0;
+      }
+      
+      if (taskData.unitFullProductionCost === undefined) {
+        taskData.unitFullProductionCost = 0;
       }
       
       if (taskData.costLastUpdatedAt === undefined) {
@@ -3211,10 +3229,12 @@ import {
           // Sprawdź czy zadanie ma już pola kosztów
           const hasTotalMaterialCost = taskData.totalMaterialCost !== undefined;
           const hasUnitMaterialCost = taskData.unitMaterialCost !== undefined;
+          const hasTotalFullProductionCost = taskData.totalFullProductionCost !== undefined;
+          const hasUnitFullProductionCost = taskData.unitFullProductionCost !== undefined;
           const hasCostHistory = taskData.costHistory !== undefined;
           
           // Jeśli brakuje któregokolwiek pola, zaktualizuj zadanie
-          if (!hasTotalMaterialCost || !hasUnitMaterialCost || !hasCostHistory) {
+          if (!hasTotalMaterialCost || !hasUnitMaterialCost || !hasTotalFullProductionCost || !hasUnitFullProductionCost || !hasCostHistory) {
             console.log(`Inicjalizacja pól kosztów dla zadania ${taskId} (MO: ${taskData.moNumber || 'brak'})`);
             
             const updateData = {};
@@ -3227,6 +3247,14 @@ import {
               updateData.unitMaterialCost = 0;
             }
             
+            if (!hasTotalFullProductionCost) {
+              updateData.totalFullProductionCost = 0;
+            }
+            
+            if (!hasUnitFullProductionCost) {
+              updateData.unitFullProductionCost = 0;
+            }
+            
             if (!taskData.costLastUpdatedAt) {
               updateData.costLastUpdatedAt = serverTimestamp();
             }
@@ -3235,18 +3263,22 @@ import {
               updateData.costLastUpdatedBy = userId;
             }
             
-            if (!hasCostHistory) {
-              updateData.costHistory = [{
-                timestamp: new Date().toISOString(), // Używamy ISO string zamiast serverTimestamp()
-                userId: userId,
-                userName: 'System',
-                previousTotalCost: 0,
-                newTotalCost: updateData.totalMaterialCost || taskData.totalMaterialCost || 0,
-                previousUnitCost: 0,
-                newUnitCost: updateData.unitMaterialCost || taskData.unitMaterialCost || 0,
-                reason: 'Migracja danych - inicjalizacja pól kosztów'
-              }];
-            }
+                          if (!hasCostHistory) {
+                updateData.costHistory = [{
+                  timestamp: new Date().toISOString(), // Używamy ISO string zamiast serverTimestamp()
+                  userId: userId,
+                  userName: 'System',
+                  previousTotalCost: 0,
+                  newTotalCost: updateData.totalMaterialCost || taskData.totalMaterialCost || 0,
+                  previousUnitCost: 0,
+                  newUnitCost: updateData.unitMaterialCost || taskData.unitMaterialCost || 0,
+                  previousFullProductionCost: 0,
+                  newFullProductionCost: updateData.totalFullProductionCost || taskData.totalFullProductionCost || 0,
+                  previousUnitFullProductionCost: 0,
+                  newUnitFullProductionCost: updateData.unitFullProductionCost || taskData.unitFullProductionCost || 0,
+                  reason: 'Migracja danych - inicjalizacja pól kosztów'
+                }];
+              }
             
             // Wykonaj aktualizację tylko jeśli są jakieś pola do zaktualizowania
             if (Object.keys(updateData).length > 0) {

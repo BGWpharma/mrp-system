@@ -2022,13 +2022,28 @@ const TaskDetailsPage = () => {
         
         // Wywołujemy aktualizację kosztów w bazie, ale dopiero po ukończeniu aktualizacji interfejsu
         if (task && updatedMaterials.length > 0) {
-          // Oblicz całkowity koszt materiałów
+          // Oblicz całkowity koszt materiałów (tylko z flagą "wliczaj")
           const totalMaterialCost = updatedMaterials.reduce((sum, material) => {
             // Sprawdź czy dla tego materiału są zarezerwowane partie
             const materialId = material.inventoryItemId || material.id;
             const reservedBatches = task.materialBatches && task.materialBatches[materialId];
             
-            // Uwzględnij koszt tylko jeśli materiał ma zarezerwowane partie
+            // Uwzględnij koszt tylko jeśli materiał ma zarezerwowane partie i jest wliczany do kosztów
+            if (reservedBatches && reservedBatches.length > 0 && includeInCosts[material.id]) {
+              const quantity = materialQuantities[material.id] || material.quantity || 0;
+              const unitPrice = material.unitPrice || 0;
+              return sum + (quantity * unitPrice);
+            }
+            return sum;
+          }, 0);
+          
+          // Oblicz pełny koszt produkcji (wszystkie materiały niezależnie od flagi "wliczaj")
+          const totalFullProductionCost = updatedMaterials.reduce((sum, material) => {
+            // Sprawdź czy dla tego materiału są zarezerwowane partie
+            const materialId = material.inventoryItemId || material.id;
+            const reservedBatches = task.materialBatches && task.materialBatches[materialId];
+            
+            // Uwzględnij koszt wszystkich materiałów z zarezerwowanymi partiami
             if (reservedBatches && reservedBatches.length > 0) {
               const quantity = materialQuantities[material.id] || material.quantity || 0;
               const unitPrice = material.unitPrice || 0;
@@ -2037,13 +2052,16 @@ const TaskDetailsPage = () => {
             return sum;
           }, 0);
           
-          // Oblicz koszt materiałów na jednostkę
+          // Oblicz koszty na jednostkę
           const unitMaterialCost = task.quantity ? (totalMaterialCost / task.quantity) : 0;
+          const unitFullProductionCost = task.quantity ? (totalFullProductionCost / task.quantity) : 0;
           
           // Sprawdź czy koszty się rzeczywiście zmieniły
           if (
             Math.abs((task.totalMaterialCost || 0) - totalMaterialCost) > 0.01 ||
-            Math.abs((task.unitMaterialCost || 0) - unitMaterialCost) > 0.01
+            Math.abs((task.unitMaterialCost || 0) - unitMaterialCost) > 0.01 ||
+            Math.abs((task.totalFullProductionCost || 0) - totalFullProductionCost) > 0.01 ||
+            Math.abs((task.unitFullProductionCost || 0) - unitFullProductionCost) > 0.01
           ) {
             try {
               // Wykonaj aktualizację w bazie danych
@@ -2051,6 +2069,8 @@ const TaskDetailsPage = () => {
               await updateDoc(taskRef, {
                 totalMaterialCost,
                 unitMaterialCost,
+                totalFullProductionCost,
+                unitFullProductionCost,
                 costLastUpdatedAt: serverTimestamp(),
                 costLastUpdatedBy: currentUser.uid,
                 updatedAt: serverTimestamp(),
@@ -2064,12 +2084,19 @@ const TaskDetailsPage = () => {
                   newTotalCost: totalMaterialCost,
                   previousUnitCost: task.unitMaterialCost || 0,
                   newUnitCost: unitMaterialCost,
+                  previousFullProductionCost: task.totalFullProductionCost || 0,
+                  newFullProductionCost: totalFullProductionCost,
+                  previousUnitFullProductionCost: task.unitFullProductionCost || 0,
+                  newUnitFullProductionCost: unitFullProductionCost,
                   reason: 'Automatyczna aktualizacja kosztów materiałów na podstawie cen partii'
                 })
               });
               
-              console.log(`Zaktualizowano koszty materiałów w zadaniu: ${totalMaterialCost.toFixed(2)} € (${unitMaterialCost.toFixed(2)} €/${task.unit})`);
+              console.log(`Zaktualizowano koszty materiałów w zadaniu: ${totalMaterialCost.toFixed(2)} € (${unitMaterialCost.toFixed(2)} €/${task.unit}) | Pełny koszt: ${totalFullProductionCost.toFixed(2)} € (${unitFullProductionCost.toFixed(2)} €/${task.unit})`);
               showSuccess('Koszty materiałów zostały automatycznie zaktualizowane');
+              
+              // Aktualizuj związane zamówienia klientów
+              await updateRelatedCustomerOrders(task, totalMaterialCost, totalFullProductionCost, unitMaterialCost, unitFullProductionCost);
               
               // Odśwież dane zadania, aby wyświetlić zaktualizowane koszty
               const updatedTask = await getTaskById(id);
@@ -2084,7 +2111,7 @@ const TaskDetailsPage = () => {
     } catch (error) {
       console.error('Błąd podczas aktualizacji cen materiałów:', error);
     }
-  }, [task, materials, materialQuantities, id, currentUser, showSuccess, showError]);
+  }, [task, materials, materialQuantities, id, currentUser, showSuccess, showError, includeInCosts]);
   
   // Aktualizuj ceny materiałów przy każdym załadowaniu zadania lub zmianie zarezerwowanych partii
   useEffect(() => {
@@ -2103,14 +2130,105 @@ const TaskDetailsPage = () => {
         isMounted = false;
       };
     }
-  }, [task?.id, updateMaterialPricesFromBatches, task?.materialBatches ? JSON.stringify(Object.keys(task.materialBatches)) : '']);
+  }, [task?.id, updateMaterialPricesFromBatches, task?.materialBatches ? JSON.stringify(Object.keys(task.materialBatches)) : '', includeInCosts]);
+
+  // Funkcja do aktualizacji związanych zamówień klientów po zmianie kosztów produkcji
+  const updateRelatedCustomerOrders = async (taskData, totalMaterialCost, totalFullProductionCost, unitMaterialCost, unitFullProductionCost) => {
+    try {
+      if (!taskData || !taskData.id) return;
+      
+      console.log(`Szukam zamówień klientów powiązanych z zadaniem ${taskData.moNumber}...`);
+      console.log('Dane zadania przekazane do aktualizacji:', { 
+        id: taskData.id, 
+        moNumber: taskData.moNumber,
+        totalMaterialCost,
+        totalFullProductionCost 
+      });
+      
+      // Importuj funkcje do zarządzania zamówieniami
+      const { getAllOrders, updateOrder } = await import('../../services/orderService');
+      
+      // Pobierz wszystkie zamówienia
+      const allOrders = await getAllOrders();
+      
+      // Znajdź zamówienia, które mają pozycje powiązane z tym zadaniem produkcyjnym
+      const relatedOrders = allOrders.filter(order => 
+        order.items && order.items.some(item => item.productionTaskId === taskData.id)
+      );
+      
+      if (relatedOrders.length === 0) {
+        console.log('Nie znaleziono zamówień powiązanych z tym zadaniem');
+        return;
+      }
+      
+      console.log(`Znaleziono ${relatedOrders.length} zamówień do zaktualizowania`);
+      
+      // Dla każdego powiązanego zamówienia, zaktualizuj koszty produkcji
+      for (const order of relatedOrders) {
+        let orderUpdated = false;
+        const updatedItems = [...order.items];
+        
+        for (let i = 0; i < updatedItems.length; i++) {
+          const item = updatedItems[i];
+          
+          if (item.productionTaskId === taskData.id) {
+            // Zaktualizuj koszty w pozycji
+            updatedItems[i] = {
+              ...item,
+              productionCost: totalMaterialCost,
+              fullProductionCost: totalFullProductionCost,
+              productionUnitCost: unitMaterialCost,
+              fullProductionUnitCost: unitFullProductionCost
+            };
+            orderUpdated = true;
+            
+            console.log(`Zaktualizowano pozycję "${item.name}" w zamówieniu ${order.orderNumber}: koszt produkcji=${totalMaterialCost}€, pełny koszt=${totalFullProductionCost}€`);
+          }
+        }
+        
+        if (orderUpdated) {
+          // Zaktualizuj zamówienie w bazie danych - przekaż tylko niezbędne pola
+          const updateData = {
+            items: updatedItems,
+            // Zachowaj podstawowe pola wymagane przez walidację
+            orderNumber: order.orderNumber,
+            orderDate: order.orderDate, // Wymagane przez walidację
+            status: order.status,
+            totalValue: order.totalValue,
+            // Inne pola które są bezpieczne
+            customer: order.customer,
+            shippingCost: order.shippingCost,
+            additionalCostsItems: order.additionalCostsItems,
+            productionTasks: order.productionTasks,
+            linkedPurchaseOrders: order.linkedPurchaseOrders
+          };
+          
+          console.log(`Aktualizuję zamówienie ${order.orderNumber} z danymi:`, {
+            ...updateData,
+            orderDate: updateData.orderDate ? 'obecna' : 'brak',
+            itemsCount: updateData.items ? updateData.items.length : 0
+          });
+          console.log(`UserID do aktualizacji: ${currentUser?.uid || 'brak'}`);
+          await updateOrder(order.id, updateData, currentUser?.uid || 'system');
+          
+          console.log(`Zaktualizowano zamówienie ${order.orderNumber}`);
+        }
+      }
+      
+      showInfo(`Zaktualizowano koszty produkcji w ${relatedOrders.length} powiązanych zamówieniach`);
+      
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji powiązanych zamówień:', error);
+      showError('Nie udało się zaktualizować powiązanych zamówień: ' + error.message);
+    }
+  };
 
   // Funkcja do ręcznej aktualizacji kosztów materiałów w bazie danych
   const updateMaterialCostsManually = useCallback(async () => {
     if (!task || !materials.length) return;
     
     try {
-      // Oblicz całkowity koszt materiałów
+      // Oblicz całkowity koszt materiałów (tylko z flagą "wliczaj")
       const totalMaterialCost = materials.reduce((sum, material) => {
         // Sprawdź czy dla tego materiału są zarezerwowane partie
         const materialId = material.inventoryItemId || material.id;
@@ -2125,13 +2243,31 @@ const TaskDetailsPage = () => {
         return sum;
       }, 0);
       
-      // Oblicz koszt materiałów na jednostkę
+      // Oblicz pełny koszt produkcji (wszystkie materiały niezależnie od flagi "wliczaj")
+      const totalFullProductionCost = materials.reduce((sum, material) => {
+        // Sprawdź czy dla tego materiału są zarezerwowane partie
+        const materialId = material.inventoryItemId || material.id;
+        const reservedBatches = task.materialBatches && task.materialBatches[materialId];
+        
+        // Uwzględnij koszt wszystkich materiałów z zarezerwowanymi partiami
+        if (reservedBatches && reservedBatches.length > 0) {
+          const quantity = materialQuantities[material.id] || material.quantity || 0;
+          const unitPrice = material.unitPrice || 0;
+          return sum + (quantity * unitPrice);
+        }
+        return sum;
+      }, 0);
+      
+      // Oblicz koszty na jednostkę
       const unitMaterialCost = task.quantity ? (totalMaterialCost / task.quantity) : 0;
+      const unitFullProductionCost = task.quantity ? (totalFullProductionCost / task.quantity) : 0;
       
       // Sprawdź czy koszty się rzeczywiście zmieniły
       if (
         Math.abs((task.totalMaterialCost || 0) - totalMaterialCost) <= 0.01 &&
-        Math.abs((task.unitMaterialCost || 0) - unitMaterialCost) <= 0.01
+        Math.abs((task.unitMaterialCost || 0) - unitMaterialCost) <= 0.01 &&
+        Math.abs((task.totalFullProductionCost || 0) - totalFullProductionCost) <= 0.01 &&
+        Math.abs((task.unitFullProductionCost || 0) - unitFullProductionCost) <= 0.01
       ) {
         showInfo('Koszty materiałów nie zmieniły się znacząco, pomijam aktualizację w bazie danych');
         return;
@@ -2142,6 +2278,8 @@ const TaskDetailsPage = () => {
       await updateDoc(taskRef, {
         totalMaterialCost,
         unitMaterialCost,
+        totalFullProductionCost,
+        unitFullProductionCost,
         costLastUpdatedAt: serverTimestamp(),
         costLastUpdatedBy: currentUser.uid,
         updatedAt: serverTimestamp(),
@@ -2155,12 +2293,19 @@ const TaskDetailsPage = () => {
           newTotalCost: totalMaterialCost,
           previousUnitCost: task.unitMaterialCost || 0,
           newUnitCost: unitMaterialCost,
+          previousFullProductionCost: task.totalFullProductionCost || 0,
+          newFullProductionCost: totalFullProductionCost,
+          previousUnitFullProductionCost: task.unitFullProductionCost || 0,
+          newUnitFullProductionCost: unitFullProductionCost,
           reason: 'Ręczna aktualizacja kosztów materiałów'
         })
       });
       
-      console.log(`Zaktualizowano koszty materiałów w zadaniu: ${totalMaterialCost.toFixed(2)} € (${unitMaterialCost.toFixed(2)} €/${task.unit})`);
+      console.log(`Zaktualizowano koszty materiałów w zadaniu: ${totalMaterialCost.toFixed(2)} € (${unitMaterialCost.toFixed(2)} €/${task.unit}) | Pełny koszt: ${totalFullProductionCost.toFixed(2)} € (${unitFullProductionCost.toFixed(2)} €/${task.unit})`);
       showSuccess('Koszty materiałów zostały zaktualizowane w bazie danych');
+      
+      // Aktualizuj związane zamówienia klientów
+      await updateRelatedCustomerOrders(task, totalMaterialCost, totalFullProductionCost, unitMaterialCost, unitFullProductionCost);
       
       // Odśwież dane zadania, aby wyświetlić zaktualizowane koszty
       const updatedTask = await getTaskById(id);
@@ -2173,7 +2318,7 @@ const TaskDetailsPage = () => {
 
   // Dodaj przycisk do ręcznej aktualizacji kosztów w podsumowaniu kosztów materiałów
   const renderMaterialCostsSummary = () => {
-    // Oblicz całkowity koszt materiałów
+    // Oblicz całkowity koszt materiałów (tylko z flagą "wliczaj")
     const totalMaterialCost = materials.reduce((sum, material) => {
       // Sprawdź czy dla tego materiału są zarezerwowane partie
       const materialId = material.inventoryItemId || material.id;
@@ -2188,13 +2333,31 @@ const TaskDetailsPage = () => {
       return sum;
     }, 0);
     
-    // Oblicz koszt materiałów na jednostkę
+    // Oblicz pełny koszt produkcji (wszystkie materiały niezależnie od flagi "wliczaj")
+    const totalFullProductionCost = materials.reduce((sum, material) => {
+      // Sprawdź czy dla tego materiału są zarezerwowane partie
+      const materialId = material.inventoryItemId || material.id;
+      const reservedBatches = task.materialBatches && task.materialBatches[materialId];
+      
+      // Uwzględnij koszt wszystkich materiałów z zarezerwowanymi partiami
+      if (reservedBatches && reservedBatches.length > 0) {
+        const quantity = materialQuantities[material.id] || material.quantity || 0;
+        const unitPrice = material.unitPrice || 0;
+        return sum + (quantity * unitPrice);
+      }
+      return sum;
+    }, 0);
+    
+    // Oblicz koszty na jednostkę
     const unitMaterialCost = task.quantity ? (totalMaterialCost / task.quantity) : 0;
+    const unitFullProductionCost = task.quantity ? (totalFullProductionCost / task.quantity) : 0;
     
     // Sprawdź czy koszty uległy zmianie
     const costChanged = 
       Math.abs((task.totalMaterialCost || 0) - totalMaterialCost) > 0.01 ||
-      Math.abs((task.unitMaterialCost || 0) - unitMaterialCost) > 0.01;
+      Math.abs((task.unitMaterialCost || 0) - unitMaterialCost) > 0.01 ||
+      Math.abs((task.totalFullProductionCost || 0) - totalFullProductionCost) > 0.01 ||
+      Math.abs((task.unitFullProductionCost || 0) - unitFullProductionCost) > 0.01;
     
     return (
       <Box sx={{ mt: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
@@ -2221,6 +2384,22 @@ const TaskDetailsPage = () => {
               {task.unitMaterialCost !== undefined && costChanged && (
                 <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
                   (W bazie: ~{task.unitMaterialCost.toFixed(4)} €/{task.unit})
+                </Typography>
+              )}
+            </Typography>
+            <Typography variant="body1" sx={{ mt: 1, color: 'primary.main' }}>
+              <strong>Pełny koszt produkcji:</strong> {totalFullProductionCost.toFixed(2)} €
+              {task.totalFullProductionCost !== undefined && costChanged && (
+                <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                  (W bazie: {task.totalFullProductionCost.toFixed(2)} €)
+                </Typography>
+              )}
+            </Typography>
+            <Typography variant="body1" sx={{ color: 'primary.main' }}>
+              <strong>Pełny koszt na jednostkę:</strong> ~{unitFullProductionCost.toFixed(4)} €/{task.unit}
+              {task.unitFullProductionCost !== undefined && costChanged && (
+                <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                  (W bazie: ~{task.unitFullProductionCost.toFixed(4)} €/{task.unit})
                 </Typography>
               )}
             </Typography>

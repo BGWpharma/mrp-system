@@ -453,29 +453,68 @@ export const createPurchaseOrder = async (orderData, userId) => {
  */
 export const updateOrder = async (orderId, orderData, userId) => {
   try {
-    // Walidacja danych zamówienia
-    validateOrderData(orderData);
+    // Walidacja danych zamówienia - sprawdź czy to częściowa aktualizacja
+    const isPartialUpdate = !orderData.customer || !orderData.items;
+    if (!isPartialUpdate) {
+      validateOrderData(orderData);
+    } else {
+      // Dla częściowych aktualizacji, sprawdź tylko podstawowe wymagania
+      if (orderData.items && (!Array.isArray(orderData.items) || orderData.items.length === 0)) {
+        throw new Error('Zamówienie musi zawierać co najmniej jeden produkt');
+      }
+    }
     
     // Używamy wartości totalValue przekazanej w danych - ona już zawiera wszystkie składniki
     // (produkty, koszty dostawy, dodatkowe koszty i rabaty)
     const totalValue = parseFloat(orderData.totalValue) || 0;
     
+    // Funkcja pomocnicza do bezpiecznej konwersji dat
+    const safeConvertToTimestamp = (dateValue) => {
+      if (!dateValue) return null;
+      
+      // Jeśli już jest to Timestamp Firestore, zwróć bez zmian
+      if (dateValue && typeof dateValue.toDate === 'function') {
+        return dateValue;
+      }
+      
+      // Spróbuj przekonwertować na Date
+      let date;
+      if (dateValue instanceof Date) {
+        date = dateValue;
+      } else if (typeof dateValue === 'string' || typeof dateValue === 'number') {
+        date = new Date(dateValue);
+      } else {
+        console.warn('Nieprawidłowy format daty:', dateValue);
+        return null;
+      }
+      
+      // Sprawdź czy data jest prawidłowa
+      if (isNaN(date.getTime())) {
+        console.warn('Nieprawidłowa data:', dateValue);
+        return null;
+      }
+      
+      return Timestamp.fromDate(date);
+    };
+
     const updatedOrder = {
       ...orderData,
       totalValue,
       updatedBy: userId,
       updatedAt: serverTimestamp(),
-      // Konwersja dat na timestampy Firestore
-      orderDate: Timestamp.fromDate(new Date(orderData.orderDate)),
-      expectedDeliveryDate: orderData.expectedDeliveryDate 
-        ? Timestamp.fromDate(new Date(orderData.expectedDeliveryDate)) 
-        : null,
-      deadline: orderData.deadline 
-        ? Timestamp.fromDate(new Date(orderData.deadline)) 
-        : null,
-      deliveryDate: orderData.deliveryDate 
-        ? Timestamp.fromDate(new Date(orderData.deliveryDate)) 
-        : null
+      // Bezpieczna konwersja dat na timestampy Firestore
+      ...(orderData.orderDate !== undefined && {
+        orderDate: safeConvertToTimestamp(orderData.orderDate) || serverTimestamp()
+      }),
+      ...(orderData.expectedDeliveryDate !== undefined && {
+        expectedDeliveryDate: safeConvertToTimestamp(orderData.expectedDeliveryDate)
+      }),
+      ...(orderData.deadline !== undefined && {
+        deadline: safeConvertToTimestamp(orderData.deadline)
+      }),
+      ...(orderData.deliveryDate !== undefined && {
+        deliveryDate: safeConvertToTimestamp(orderData.deliveryDate)
+      })
     };
     
     await updateDoc(doc(db, ORDERS_COLLECTION, orderId), updatedOrder);
