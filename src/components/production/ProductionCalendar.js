@@ -89,6 +89,8 @@ const ProductionCalendar = () => {
   const [ganttDetail, setGanttDetail] = useState('day');
   const [detailMenuAnchor, setDetailMenuAnchor] = useState(null);
   const [ganttGroupBy, setGanttGroupBy] = useState('workstation');
+  // Dodaję nowy stan do kontrolowania skali wykresu Gantta
+  const [scaleLevel, setScaleLevel] = useState(1); // 1 = normalna, 0.7 = kompaktowa, 1.3 = powiększona
   const calendarRef = useRef(null);
   const navigate = useNavigate();
   const { showError, showSuccess } = useNotification();
@@ -180,7 +182,7 @@ const ProductionCalendar = () => {
     }
   };
 
-  const fetchTasks = async (info) => {
+  const fetchTasks = async (info, forceParams = false) => {
     // Jeśli już trwa ładowanie, nie uruchamiaj kolejnego zapytania
     if (loading) return;
     
@@ -196,7 +198,12 @@ const ProductionCalendar = () => {
       // Bezpieczne pobieranie zakresu dat
       let rangeStartDate, rangeEndDate;
       
-      if (customDateRange) {
+      // Jeśli forceParams jest true, użyj parametrów z info nawet w trybie customDateRange
+      if (forceParams && info && info.startStr && info.endStr) {
+        rangeStartDate = info.startStr;
+        rangeEndDate = info.endStr;
+        console.log('Wymuszenie użycia parametrów z info:', rangeStartDate, rangeEndDate);
+      } else if (customDateRange) {
         rangeStartDate = startDate.toISOString();
         rangeEndDate = endDate.toISOString();
       } else if (info) {
@@ -333,9 +340,30 @@ const ProductionCalendar = () => {
 
   // Obsługa zdarzenia FullCalendar datesSet - wywołuje się przy zmianie wyświetlanego zakresu dat
   const handleDatesSet = (dateInfo) => {
+    console.log("datesSet wywołany:", dateInfo.start, dateInfo.end, "isCustomDateRange:", customDateRange);
+    
     // Jeśli nie mamy niestandardowego zakresu, po prostu pobierz zadania dla widocznego zakresu
     if (!customDateRange) {
       fetchTasks(dateInfo);
+    } else {
+      // W trybie customDateRange sprawdź czy nowy zakres różni się od aktualnego
+      // To może się zdarzyć podczas nawigacji strzałkami
+      const newStart = dateInfo.start;
+      const newEnd = dateInfo.end;
+      const currentStart = startDate;
+      const currentEnd = endDate;
+      
+      // Sprawdź czy daty się różnią (z tolerancją na różnice w czasie)
+      const startDiff = Math.abs(newStart.getTime() - currentStart.getTime());
+      const endDiff = Math.abs(newEnd.getTime() - currentEnd.getTime());
+      
+      // Jeśli różnica jest większa niż 1 dzień (86400000 ms), to prawdopodobnie użytkownik nawigował
+      if (startDiff > 86400000 || endDiff > 86400000) {
+        console.log("Wykryto nawigację w trybie customDateRange - aktualizuję zadania");
+        fetchTasks(dateInfo, true); // forceParams = true
+      } else {
+        console.log("Ignoruję automatyczną zmianę zakresu - używam customDateRange");
+      }
     }
     // Nie wykonuj żadnych innych operacji, które mogłyby zmieniać stan komponentu
     // i powodować zapętlenie renderowania
@@ -499,6 +527,9 @@ const ProductionCalendar = () => {
       
       setLoading(true);
       
+      // Zapisz aktualną pozycję suwaka przed operacją
+      const currentScrollLeft = calendarRef.current?.getApi().view.el?.querySelector('.fc-scroller-harness')?.scrollLeft || 0;
+      
       const taskId = selectedEvent.id;
       const task = selectedEvent.extendedProps.task;
       
@@ -544,20 +575,23 @@ const ProductionCalendar = () => {
       );
       setTasks(updatedTasks);
       
-      // KLUCZOWA ZMIANA: Wymuszenie pełnego przeładowania kalendarza - dokładnie jak w handleEventDrop
+      // ZMIENIONE PODEJŚCIE: Delikatne odświeżenie bez resetowania pozycji suwaka
       try {
         if (calendarRef.current) {
           const api = calendarRef.current.getApi();
           
           // Krótka pauza przed refreshem
           setTimeout(() => {
-            // Wymuś pełne odświeżenie widoku kalendarza
+            // Tylko delikatne odświeżenie eventów bez pełnego przeładowania
             api.refetchEvents();
-            api.updateSize();
             
-            // Dodatkowy krok - możemy też spróbować przeładować cały kalendarz
-            api.destroy();
-            api.render();
+            // Przywróć pozycję suwaka po odświeżeniu
+            setTimeout(() => {
+              const scrollContainer = api.view.el?.querySelector('.fc-scroller-harness');
+              if (scrollContainer && currentScrollLeft > 0) {
+                scrollContainer.scrollLeft = currentScrollLeft;
+              }
+            }, 50);
           }, 100);
         }
       } catch (error) {
@@ -812,7 +846,7 @@ const ProductionCalendar = () => {
           if (!uniqueOrders.has(task.orderId)) {
             uniqueOrders.set(task.orderId, {
               id: task.orderId,
-              title: `Zamówienie ${task.orderNumber || task.orderId}`,
+              title: task.orderNumber || task.orderId, // Tylko numer zamówienia bez "Zamówienie"
               // Możemy dodać więcej informacji o zamówieniu, jeśli są dostępne
               customerId: task.customerId,
               customerName: task.customerName
@@ -854,41 +888,67 @@ const ProductionCalendar = () => {
     // Różny sposób wyświetlania dla widoku Gantta i zwykłego kalendarza
     if (view.startsWith('resourceTimeline')) {
       // W widoku Gantta pokazujemy więcej szczegółów w zależności od dostępnej przestrzeni
+      // Używamy mniejszych rozmiarów czcionek dla kompaktowego wyświetlania
+      const baseFontSize = scaleLevel < 0.8 ? '9px' : scaleLevel > 1.2 ? '12px' : '11px';
+      const secondaryFontSize = scaleLevel < 0.8 ? '8px' : scaleLevel > 1.2 ? '11px' : '10px';
+      const statusFontSize = scaleLevel < 0.8 ? '8px' : scaleLevel > 1.2 ? '10px' : '9px';
+      
       return (
         <Box sx={{ 
           overflow: 'hidden', 
           width: '100%', 
           height: '100%',
-          fontSize: isMobile ? '0.65rem' : '0.75rem',
+          fontSize: baseFontSize,
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'center'
+          justifyContent: 'center',
+          padding: '1px 2px'
         }}>
-          <Box sx={{ fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <Box sx={{ 
+            fontWeight: 'bold', 
+            whiteSpace: 'nowrap', 
+            overflow: 'hidden', 
+            textOverflow: 'ellipsis',
+            fontSize: baseFontSize,
+            lineHeight: 1.1
+          }}>
             {eventInfo.event.title}
           </Box>
-          {/* Pokazuj dodatkowe informacje tylko jeśli jest wystarczająco miejsca */}
-          {!isMobile && (
+          {/* Pokazuj dodatkowe informacje tylko jeśli jest wystarczająco miejsca i skala > 0.8 */}
+          {!isMobile && scaleLevel > 0.8 && (
             <>
               {eventInfo.event.extendedProps.orderNumber && (
-                <Box sx={{ fontSize: '0.7rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <Box sx={{ 
+                  fontSize: secondaryFontSize, 
+                  whiteSpace: 'nowrap', 
+                  overflow: 'hidden', 
+                  textOverflow: 'ellipsis',
+                  lineHeight: 1.1
+                }}>
                   Zamówienie: {eventInfo.event.extendedProps.orderNumber}
                 </Box>
               )}
               {eventInfo.event.extendedProps.moNumber && (
-                <Box sx={{ fontSize: '0.7rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <Box sx={{ 
+                  fontSize: secondaryFontSize, 
+                  whiteSpace: 'nowrap', 
+                  overflow: 'hidden', 
+                  textOverflow: 'ellipsis',
+                  lineHeight: 1.1
+                }}>
                   MO: {eventInfo.event.extendedProps.moNumber}
                 </Box>
               )}
             </>
           )}
-          {/* Zawsze pokazuj status, nawet na małych ekranach */}
+          {/* Zawsze pokazuj status, ale z odpowiednim rozmiarem czcionki */}
           <Box sx={{ 
-            fontSize: isMobile ? '0.6rem' : '0.7rem', 
+            fontSize: statusFontSize, 
             whiteSpace: 'nowrap', 
             overflow: 'hidden', 
             textOverflow: 'ellipsis',
-            opacity: 0.8
+            opacity: 0.8,
+            lineHeight: 1.1
           }}>
             {eventInfo.event.extendedProps.status}
           </Box>
@@ -900,14 +960,15 @@ const ProductionCalendar = () => {
         <Box sx={{ 
           overflow: 'hidden', 
           width: '100%', 
-          fontSize: isMobile ? '0.65rem' : '0.7rem'
+          fontSize: isMobile ? '10px' : '11px'
         }}>
           <Box 
             sx={{ 
               fontWeight: 'bold', 
               whiteSpace: 'nowrap', 
               overflow: 'hidden', 
-              textOverflow: 'ellipsis'
+              textOverflow: 'ellipsis',
+              lineHeight: 1.2
             }}
           >
             {eventInfo.event.title}
@@ -915,11 +976,12 @@ const ProductionCalendar = () => {
           {!isMobile && workstationName && (
             <Box 
               sx={{ 
-                fontSize: '0.65rem', 
+                fontSize: '9px', 
                 whiteSpace: 'nowrap', 
                 overflow: 'hidden', 
                 textOverflow: 'ellipsis',
-                mt: 0.5
+                mt: 0.5,
+                lineHeight: 1.1
               }}
             >
               {workstationName}
@@ -930,40 +992,44 @@ const ProductionCalendar = () => {
     } else {
       // Dla pozostałych widoków (dzień/tydzień)
       return (
-        <Box sx={{ overflow: 'hidden', width: '100%', fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
+        <Box sx={{ overflow: 'hidden', width: '100%', fontSize: isMobile ? '11px' : '12px' }}>
           <Box sx={{ 
             fontWeight: 'bold', 
             whiteSpace: 'nowrap', 
             overflow: 'hidden', 
-            textOverflow: 'ellipsis' 
+            textOverflow: 'ellipsis',
+            lineHeight: 1.2
           }}>
             {eventInfo.event.title}
           </Box>
           {workstationName && (
             <Box sx={{ 
-              fontSize: isMobile ? '0.65rem' : '0.75rem', 
+              fontSize: isMobile ? '10px' : '11px', 
               whiteSpace: 'nowrap', 
               overflow: 'hidden', 
-              textOverflow: 'ellipsis' 
+              textOverflow: 'ellipsis',
+              lineHeight: 1.1
             }}>
               {workstationName}
             </Box>
           )}
           {!isMobile && eventInfo.event.extendedProps.moNumber && (
             <Box sx={{ 
-              fontSize: '0.7rem', 
+              fontSize: '10px', 
               whiteSpace: 'nowrap', 
               overflow: 'hidden', 
-              textOverflow: 'ellipsis' 
+              textOverflow: 'ellipsis',
+              lineHeight: 1.1
             }}>
               MO: {eventInfo.event.extendedProps.moNumber}
             </Box>
           )}
           {durationText && (
             <Box sx={{ 
-              fontSize: isMobile ? '0.65rem' : '0.7rem', 
+              fontSize: isMobile ? '9px' : '10px', 
               opacity: 0.8, 
-              whiteSpace: 'nowrap' 
+              whiteSpace: 'nowrap',
+              lineHeight: 1.1
             }}>
               {durationText}
             </Box>
@@ -1074,22 +1140,22 @@ const ProductionCalendar = () => {
         return;
       }
       
-      if (startDate > endDate) {
+      if (startDate.getTime() > endDate.getTime()) {
         showError('Data początkowa nie może być późniejsza niż końcowa');
         setLoading(false);
         return;
       }
       
       // Ustawienie końca dnia dla daty końcowej, aby zawierała cały dzień
-      const endDateWithTime = new Date(endDate.getTime());
-      endDateWithTime.setHours(23, 59, 59, 999);
+      const adjustedEndDate = new Date(endDate.getTime());
+      adjustedEndDate.setHours(23, 59, 59, 999);
       
       // Aktualizuj stany dat dla kolejnych zapytań
-      setEndDate(endDateWithTime);
+      setEndDate(adjustedEndDate);
       
       // Logging
-      console.log("Zastosowanie zakresu dat:", format(startDate, 'dd.MM.yyyy'), "-", format(endDateWithTime, 'dd.MM.yyyy'));
-      console.log("Daty ISO:", startDate.toISOString(), "-", endDateWithTime.toISOString());
+      console.log("Zastosowanie zakresu dat:", format(startDate, 'dd.MM.yyyy'), "-", format(adjustedEndDate, 'dd.MM.yyyy'));
+      console.log("Daty ISO:", startDate.toISOString(), "-", adjustedEndDate.toISOString());
       
       // Najprostsze rozwiązanie - całkowite zniszczenie i odbudowa komponentu
       // bez zależności od wszystkich opcji konfiguracyjnych
@@ -1107,7 +1173,7 @@ const ProductionCalendar = () => {
         setCustomDateRange(true);
         
         // Oblicz długość trwania w dniach (+1, aby uwzględnić dzień końcowy)
-        const durationDays = Math.ceil((endDateWithTime - startDate) / (1000 * 60 * 60 * 24)) + 1;
+        const durationDays = Math.ceil((adjustedEndDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
         console.log("Długość trwania w dniach:", durationDays);
         
         // Wybór odpowiedniego widoku na podstawie wybranej szczegółowości i długości trwania
@@ -1144,7 +1210,7 @@ const ProductionCalendar = () => {
           // 4. KLUCZOWE: Ustaw dokładny zakres dat (visibleRange jest nadrzędny wobec duration)
           calendarApi.setOption('visibleRange', {
             start: startDate,
-            end: endDateWithTime
+            end: adjustedEndDate
           });
           
           // 5. Przejdź do daty początkowej
@@ -1168,10 +1234,10 @@ const ProductionCalendar = () => {
           calendarApi.updateSize();
           
           // 8. Pobierz dane dla dokładnego zakresu
-          console.log("Pobieranie zadań dla wybranego zakresu:", startDate.toISOString(), "-", endDateWithTime.toISOString());
+          console.log("Pobieranie zadań dla wybranego zakresu:", startDate.toISOString(), "-", adjustedEndDate.toISOString());
           fetchTasks({
             startStr: startDate.toISOString(),
-            endStr: endDateWithTime.toISOString()
+            endStr: adjustedEndDate.toISOString()
           });
           
           // Sprawdź końcowy stan po wszystkich zmianach
@@ -1213,6 +1279,9 @@ const ProductionCalendar = () => {
       const { event } = info;
       const taskId = event.id;
       
+      // Zapisz aktualną pozycję suwaka przed operacją
+      const currentScrollLeft = calendarRef.current?.getApi().view.el?.querySelector('.fc-scroller-harness')?.scrollLeft || 0;
+      
       // Oblicz czas trwania w minutach na podstawie różnicy między datami
       const startTime = new Date(event.start);
       const endTime = new Date(event.end);
@@ -1248,27 +1317,30 @@ const ProductionCalendar = () => {
       await updateTask(taskId, updateData, 'system');
       showSuccess('Zadanie zostało zaktualizowane pomyślnie');
       
-      // Odświeżenie widoku - używając nowego podejścia, które aktualizuje cały obiekt task
+      // Delikatne odświeżenie danych bez resetowania pozycji
       const updatedTasks = await getTasksByDateRange(
         calendarRef.current.getApi().view.activeStart.toISOString(),
         calendarRef.current.getApi().view.activeEnd.toISOString()
       );
       setTasks(updatedTasks);
       
-      // KLUCZOWA ZMIANA: Wymuszenie pełnego przeładowania kalendarza
+      // ZMIENIONE PODEJŚCIE: Delikatne odświeżenie bez resetowania pozycji suwaka
       try {
         if (calendarRef.current) {
           const api = calendarRef.current.getApi();
           
           // Krótka pauza przed refreshem
           setTimeout(() => {
-            // Wymuś pełne odświeżenie widoku kalendarza
+            // Tylko delikatne odświeżenie eventów bez pełnego przeładowania
             api.refetchEvents();
-            api.updateSize();
             
-            // Dodatkowy krok - możemy też spróbować przeładować cały kalendarz
-            api.destroy();
-            api.render();
+            // Przywróć pozycję suwaka po odświeżeniu
+            setTimeout(() => {
+              const scrollContainer = api.view.el?.querySelector('.fc-scroller-harness');
+              if (scrollContainer && currentScrollLeft > 0) {
+                scrollContainer.scrollLeft = currentScrollLeft;
+              }
+            }, 50);
           }, 100);
         }
       } catch (error) {
@@ -1293,6 +1365,9 @@ const ProductionCalendar = () => {
       const { event } = info;
       const taskId = event.id;
       const taskData = event.extendedProps.task;
+      
+      // Zapisz aktualną pozycję suwaka przed operacją
+      const currentScrollLeft = calendarRef.current?.getApi().view.el?.querySelector('.fc-scroller-harness')?.scrollLeft || 0;
       
       // Oblicz czas trwania w minutach na podstawie różnicy między datami
       const startTime = new Date(event.start);
@@ -1335,27 +1410,30 @@ const ProductionCalendar = () => {
       await updateTask(taskId, updateData, 'system');
       showSuccess('Czas trwania zadania został zaktualizowany pomyślnie');
       
-      // Odświeżenie widoku - używając nowego podejścia, które aktualizuje cały obiekt task
+      // Delikatne odświeżenie danych bez resetowania pozycji
       const updatedTasks = await getTasksByDateRange(
         calendarRef.current.getApi().view.activeStart.toISOString(),
         calendarRef.current.getApi().view.activeEnd.toISOString()
       );
       setTasks(updatedTasks);
       
-      // KLUCZOWA ZMIANA: Wymuszenie pełnego przeładowania kalendarza
+      // ZMIENIONE PODEJŚCIE: Delikatne odświeżenie bez resetowania pozycji suwaka
       try {
         if (calendarRef.current) {
           const api = calendarRef.current.getApi();
           
           // Krótka pauza przed refreshem
           setTimeout(() => {
-            // Wymuś pełne odświeżenie widoku kalendarza
+            // Tylko delikatne odświeżenie eventów bez pełnego przeładowania
             api.refetchEvents();
-            api.updateSize();
             
-            // Dodatkowy krok - możemy też spróbować przeładować cały kalendarz
-            api.destroy();
-            api.render();
+            // Przywróć pozycję suwaka po odświeżeniu
+            setTimeout(() => {
+              const scrollContainer = api.view.el?.querySelector('.fc-scroller-harness');
+              if (scrollContainer && currentScrollLeft > 0) {
+                scrollContainer.scrollLeft = currentScrollLeft;
+              }
+            }, 50);
           }, 100);
         }
       } catch (error) {
@@ -1400,6 +1478,8 @@ const ProductionCalendar = () => {
         calendarApi.next();
       } else if (action === 'today') {
         calendarApi.today();
+        // Dla "today" resetujemy customDateRange, aby wrócić do normalnego trybu
+        setCustomDateRange(false);
       }
       
       // Aktualizuj daty po nawigacji
@@ -1411,11 +1491,22 @@ const ProductionCalendar = () => {
         setStartDate(viewStart);
         setEndDate(viewEnd);
         
-        // Pobierz zadania dla nowego zakresu
-        fetchTasks({
-          startStr: viewStart.toISOString(),
-          endStr: viewEnd.toISOString()
-        });
+        // Jeśli jesteśmy w trybie customDateRange, tymczasowo go wyłącz dla tej nawigacji
+        if (customDateRange) {
+          console.log('Nawigacja w trybie customDateRange - pobieranie zadań dla nowego zakresu:', viewStart, viewEnd);
+          
+          // Pobierz zadania dla nowego zakresu bezpośrednio, wymuszając użycie nowych parametrów
+          fetchTasks({
+            startStr: viewStart.toISOString(),
+            endStr: viewEnd.toISOString()
+          }, true); // forceParams = true
+        } else {
+          // Normalny tryb - pobierz zadania dla nowego zakresu
+          fetchTasks({
+            startStr: viewStart.toISOString(),
+            endStr: viewEnd.toISOString()
+          });
+        }
         
         setLoading(false);
       }, 100);
@@ -1564,12 +1655,33 @@ const ProductionCalendar = () => {
     }
   };
 
+  // Funkcje do obsługi skali wykresu Gantta
+  const handleScaleChange = (newScale) => {
+    setScaleLevel(newScale);
+    
+    // Jeśli aktualnie jesteśmy w widoku Gantta, odśwież kalendarz
+    if (view.includes('resourceTimeline') && calendarRef.current) {
+      setTimeout(() => {
+        try {
+          const calendarApi = calendarRef.current.getApi();
+          calendarApi.updateSize();
+        } catch (error) {
+          console.error('Błąd podczas aktualizacji rozmiaru kalendarza:', error);
+        }
+      }, 100);
+    }
+  };
+
+  const getScaledSlotWidth = (baseWidth) => {
+    return Math.max(20, Math.floor(baseWidth * scaleLevel));
+  };
+
   // Funkcja dostosowująca widok kalendarza do długiego zakresu dat
-  const adjustViewForDateRange = (startDate, endDate) => {
+  const adjustViewForDateRange = (rangeStartDate, rangeEndDate) => {
     if (!calendarRef.current) return;
     
     try {
-      const diffInDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+      const diffInDays = Math.ceil((rangeEndDate - rangeStartDate) / (1000 * 60 * 60 * 24));
       let viewToUse = view;
       
       // Wybierz odpowiedni widok na podstawie różnicy w dniach
@@ -1593,8 +1705,8 @@ const ProductionCalendar = () => {
             
             // Ustaw dokładny zakres dat dla widoku - to jest kluczowe dla pokazania całego zakresu
             calendarApi.setOption('visibleRange', {
-              start: startDate,
-              end: endDate
+              start: rangeStartDate,
+              end: rangeEndDate
             });
             
             // Dla widoków z dłuższymi zakresami, dostosuj szerokość slotu
@@ -1615,8 +1727,8 @@ const ProductionCalendar = () => {
           try {
             const calendarApi = calendarRef.current.getApi();
             calendarApi.setOption('visibleRange', {
-              start: startDate,
-              end: endDate
+              start: rangeStartDate,
+              end: rangeEndDate
             });
             
             // Wymuś renderowanie kalendarza
@@ -1684,39 +1796,37 @@ const ProductionCalendar = () => {
 
   // Dodajemy nową funkcję do bezpiecznego resetowania i ponownego inicjalizacji kalendarza
   const resetCalendar = () => {
-    if (!calendarRef.current) return;
-    
     try {
-      const calendarApi = calendarRef.current.getApi();
+      // Reset wszystkich stanów do wartości domyślnych
+      setView('dayGridMonth');
+      setGanttView('resourceTimelineWeek');
+      setCustomDateRange(false);
+      setStartDate(startOfMonth(new Date()));
+      setEndDate(endOfMonth(new Date()));
+      setUseWorkstationColors(false);
+      setEditable(true);
+      setGanttDetail('day');
+      setGanttGroupBy('workstation');
+      setScaleLevel(1); // Resetuj skalę do normalnej
       
-      // Resetowanie i ponowne renderowanie
-      calendarApi.removeAllEvents();
-      calendarApi.destroy();
+      // Resetuj także wybrane stanowiska do wszystkich
+      const allSelected = {};
+      workstations.forEach(ws => {
+        allSelected[ws.id] = true;
+      });
+      setSelectedWorkstations(allSelected);
       
-      // Wymuszenie restartu całego komponentu kalendarza
-      setLoading(true);
+      // Jeśli mamy kalendarz, zresetuj widok
+      if (calendarRef.current) {
+        const calendarApi = calendarRef.current.getApi();
+        calendarApi.changeView('dayGridMonth');
+        calendarApi.today();
+      }
       
-      setTimeout(() => {
-        try {
-          // Re-inicjalizacja kalendarza
-          calendarApi.render();
-          calendarApi.changeView(view);
-          calendarApi.gotoDate(startDate);
-          
-          // Odśwież dane
-          fetchTasks({
-            startStr: startDate.toISOString(),
-            endStr: endDate.toISOString()
-          });
-        } catch (error) {
-          console.error("Błąd podczas ponownej inicjalizacji kalendarza:", error);
-        } finally {
-          setLoading(false);
-        }
-      }, 300);
+      showSuccess('Kalendarz został zresetowany do ustawień domyślnych');
     } catch (error) {
-      console.error("Błąd podczas resetowania kalendarza:", error);
-      setLoading(false);
+      console.error('Błąd podczas resetowania kalendarza:', error);
+      showError('Wystąpił błąd podczas resetowania kalendarza');
     }
   };
 
@@ -1813,9 +1923,9 @@ const ProductionCalendar = () => {
         <Box sx={{ 
           display: 'flex', 
           flexWrap: 'wrap', 
-          gap: isMobile ? 0.5 : 1, 
-          mb: isMobile ? 1 : 2, 
-          pb: isMobile ? 1 : 2, 
+          gap: isMobile ? 0.5 : 0.75, 
+          mb: isMobile ? 0.5 : 1, 
+          pb: isMobile ? 0.5 : 1, 
           borderBottom: '1px solid #e0e0e0',
           justifyContent: isMobile ? 'center' : 'space-between'
         }}>
@@ -1824,7 +1934,7 @@ const ProductionCalendar = () => {
             display: 'flex', 
             alignItems: 'center', 
             gap: 0.5,
-            mb: isMobile ? 1 : 0,
+            mb: isMobile ? 0.5 : 0,
             width: isMobile ? '100%' : 'auto',
             justifyContent: isMobile ? 'center' : 'flex-start'
           }}>
@@ -1832,7 +1942,7 @@ const ProductionCalendar = () => {
               variant="outlined" 
               size="small" 
               onClick={() => handleNavigation('prev')}
-              sx={{ minWidth: 30, height: 36, px: isMobile ? 1 : 2 }}
+              sx={{ minWidth: 28, height: 32, px: isMobile ? 0.5 : 1, fontSize: '0.75rem' }}
             >
               &lt;
             </Button>
@@ -1840,7 +1950,7 @@ const ProductionCalendar = () => {
               variant="outlined" 
               size="small" 
               onClick={() => handleNavigation('next')}
-              sx={{ minWidth: 30, height: 36, px: isMobile ? 1 : 2 }}
+              sx={{ minWidth: 28, height: 32, px: isMobile ? 0.5 : 1, fontSize: '0.75rem' }}
             >
               &gt;
             </Button>
@@ -1848,7 +1958,7 @@ const ProductionCalendar = () => {
               variant="contained" 
               size="small" 
               onClick={() => handleNavigation('today')}
-              sx={{ mx: 1, height: 36 }}
+              sx={{ mx: 0.5, height: 32, px: isMobile ? 1 : 1.5, fontSize: '0.75rem' }}
             >
               Dziś
             </Button>
@@ -1857,14 +1967,14 @@ const ProductionCalendar = () => {
               variant="outlined"
               onClick={handleDateRangeMenuClick}
               sx={{ 
-                height: 36, 
-                fontSize: isMobile ? '0.75rem' : '0.875rem',
-                px: isMobile ? 1 : 2
+                height: 32, 
+                fontSize: '0.75rem',
+                px: isMobile ? 0.75 : 1.5
               }}
-              startIcon={<CalendarIcon />}
+              startIcon={<CalendarIcon sx={{ fontSize: '1rem' }} />}
               size="small"
             >
-              {isMobile ? 'Zakres dat' : (customDateRange 
+              {isMobile ? 'Zakres' : (customDateRange 
                 ? `${format(startDate, 'dd.MM.yyyy')} - ${format(endDate, 'dd.MM.yyyy')}`
                 : 'Wybierz zakres dat')}
             </Button>
@@ -1875,15 +1985,16 @@ const ProductionCalendar = () => {
             display: 'flex', 
             alignItems: 'center', 
             gap: 0.5,
-            mb: isMobile ? 1 : 0,
+            mb: isMobile ? 0.5 : 0,
             width: isMobile ? '100%' : 'auto',
             justifyContent: isMobile ? 'center' : 'flex-start'
           }}>
             <Typography 
-              variant="body2" 
+              variant="caption" 
               sx={{ 
-                mr: 1, 
-                display: isMobile ? 'none' : 'block' 
+                mr: 0.5, 
+                display: isMobile ? 'none' : 'block',
+                fontSize: '0.7rem'
               }}
             >
               Widok:
@@ -1894,31 +2005,33 @@ const ProductionCalendar = () => {
               onChange={handleViewChange}
               aria-label="widok kalendarza"
               size="small"
+              sx={{ height: 32 }}
             >
-              <ToggleButton value="timeGridDay" aria-label="dzień">
+              <ToggleButton value="timeGridDay" aria-label="dzień" sx={{ px: isMobile ? 0.5 : 1, minWidth: 32 }}>
                 <Tooltip title="Dzień">
-                  <DayIcon fontSize={isMobile ? 'small' : 'medium'} />
+                  <DayIcon fontSize="small" />
                 </Tooltip>
               </ToggleButton>
-              <ToggleButton value="timeGridWeek" aria-label="tydzień">
+              <ToggleButton value="timeGridWeek" aria-label="tydzień" sx={{ px: isMobile ? 0.5 : 1, minWidth: 32 }}>
                 <Tooltip title="Tydzień">
-                  <WeekIcon fontSize={isMobile ? 'small' : 'medium'} />
+                  <WeekIcon fontSize="small" />
                 </Tooltip>
               </ToggleButton>
-              <ToggleButton value="dayGridMonth" aria-label="miesiąc">
+              <ToggleButton value="dayGridMonth" aria-label="miesiąc" sx={{ px: isMobile ? 0.5 : 1, minWidth: 32 }}>
                 <Tooltip title="Miesiąc">
-                  <MonthIcon fontSize={isMobile ? 'small' : 'medium'} />
+                  <MonthIcon fontSize="small" />
                 </Tooltip>
               </ToggleButton>
               <ToggleButton 
                 value="gantt" 
                 aria-label="gantt"
                 onClick={handleGanttMenuClick}
+                sx={{ px: isMobile ? 0.5 : 1, minWidth: 40 }}
               >
                 <Tooltip title="Wykres Gantta">
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <GanttIcon fontSize={isMobile ? 'small' : 'medium'} />
-                    <ArrowDropDownIcon fontSize={isMobile ? 'small' : 'small'} />
+                    <GanttIcon fontSize="small" />
+                    <ArrowDropDownIcon fontSize="small" />
                   </Box>
                 </Tooltip>
               </ToggleButton>
@@ -1944,7 +2057,8 @@ const ProductionCalendar = () => {
                     size="small"
                   />
                 }
-                label={<Typography variant="body2">Kolory stanowisk</Typography>}
+                label={<Typography variant="caption" sx={{ fontSize: '0.7rem' }}>Kolory stanowisk</Typography>}
+                sx={{ mr: 0.5 }}
               />
             )}
 
@@ -1953,21 +2067,21 @@ const ProductionCalendar = () => {
                 variant="outlined"
                 size="small"
                 onClick={(e) => setUseWorkstationColors(!useWorkstationColors)}
-                sx={{ height: 36, fontSize: '0.75rem' }}
+                sx={{ height: 32, fontSize: '0.7rem', px: 1 }}
               >
-                {useWorkstationColors ? 'Kolor: Stanowiska' : 'Kolor: Status'}
+                {useWorkstationColors ? 'Stanowiska' : 'Status'}
               </Button>
             )}
             
-            {/* Przycisk do pokazywania/ukrywania legendy */}
+            {/* Przycisk do pokazywania/ukrywania legendy - teraz dla wszystkich urządzeń */}
             <Tooltip title={showLegend ? "Ukryj legendę" : "Pokaż legendę"}>
               <IconButton 
                 size="small" 
                 onClick={toggleLegendVisibility}
                 color={showLegend ? "primary" : "default"}
-                sx={{ height: 36 }}
+                sx={{ width: 32, height: 32 }}
               >
-                {showLegend ? <VisibilityIcon /> : <VisibilityOffIcon />}
+                {showLegend ? <VisibilityIcon fontSize="small" /> : <VisibilityOffIcon fontSize="small" />}
               </IconButton>
             </Tooltip>
             
@@ -1976,8 +2090,9 @@ const ProductionCalendar = () => {
                 variant="outlined"
                 onClick={handleDetailMenuClick}
                 sx={{ 
-                  height: 36, 
-                  fontSize: isMobile ? '0.75rem' : '0.875rem'
+                  height: 32, 
+                  fontSize: '0.7rem',
+                  px: isMobile ? 0.75 : 1
                 }}
                 size="small"
               >
@@ -1991,50 +2106,133 @@ const ProductionCalendar = () => {
                 variant="outlined"
                 size="small"
                 sx={{ 
-                  height: 36, 
-                  fontSize: isMobile ? '0.75rem' : '0.875rem'
+                  height: 32, 
+                  fontSize: '0.7rem',
+                  px: isMobile ? 0.75 : 1
                 }}
                 onClick={handleGanttGroupByChange}
-                startIcon={ganttGroupBy === 'workstation' ? <BusinessIcon /> : <WorkIcon />}
+                startIcon={ganttGroupBy === 'workstation' ? <BusinessIcon fontSize="small" /> : <WorkIcon fontSize="small" />}
               >
                 {isMobile ? (ganttGroupBy === 'workstation' ? 'Stanow.' : 'Zamów.') : (ganttGroupBy === 'workstation' ? 'Stanowiska' : 'Zamówienia')}
               </Button>
+            )}
+
+            {/* Kontrolki skali dla widoku Gantta */}
+            {view.includes('resourceTimeline') && (
+              <Box sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 0.25,
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1,
+                p: 0.25,
+                height: 32
+              }}>
+                <Tooltip title="Zmniejsz skalę">
+                  <IconButton
+                    size="small"
+                    onClick={() => handleScaleChange(Math.max(0.5, scaleLevel - 0.1))}
+                    disabled={scaleLevel <= 0.5}
+                    sx={{ 
+                      width: 24, 
+                      height: 24,
+                      fontSize: '0.7rem',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    -
+                  </IconButton>
+                </Tooltip>
+                
+                <Typography 
+                  variant="caption" 
+                  sx={{ 
+                    minWidth: isMobile ? '35px' : '45px', 
+                    textAlign: 'center',
+                    fontSize: '0.65rem'
+                  }}
+                >
+                  {isMobile ? `${Math.round(scaleLevel * 100)}%` : `${Math.round(scaleLevel * 100)}%`}
+                </Typography>
+                
+                <Tooltip title="Zwiększ skalę">
+                  <IconButton
+                    size="small"
+                    onClick={() => handleScaleChange(Math.min(2.0, scaleLevel + 0.1))}
+                    disabled={scaleLevel >= 2.0}
+                    sx={{ 
+                      width: 24, 
+                      height: 24,
+                      fontSize: '0.7rem',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    +
+                  </IconButton>
+                </Tooltip>
+                
+                {scaleLevel !== 1 && (
+                  <Tooltip title="Przywróć normalną skalę">
+                    <IconButton
+                      size="small"
+                      onClick={() => handleScaleChange(1)}
+                      sx={{ 
+                        width: 24, 
+                        height: 24,
+                        fontSize: '0.6rem'
+                      }}
+                    >
+                      ↻
+                    </IconButton>
+                  </Tooltip>
+                )}
+              </Box>
             )}
           </Box>
         </Box>
       </Collapse>
       
-      {/* Legenda statusów z przyciskiem toggle na urządzeniach mobilnych */}
+      {/* Przycisk toggle legendy dla urządzeń mobilnych */}
       {isMobile && showLegend && (
         <Box sx={{ 
           display: 'flex', 
           justifyContent: 'center', 
           alignItems: 'center', 
-          mb: 1 
+          mb: 0.5 
         }}>
           <Button 
             size="small" 
             onClick={toggleLegend}
-            endIcon={legendExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-            sx={{ fontSize: '0.75rem' }}
+            endIcon={legendExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+            sx={{ fontSize: '0.7rem', height: 28, px: 1 }}
           >
             Legenda
           </Button>
         </Box>
       )}
       
-      {/* Legenda statusów */}
-      <Collapse in={((!isMobile && showLegend) || (isMobile && legendExpanded && showLegend))}>
+      {/* Legenda statusów - teraz dostępna dla wszystkich urządzeń */}
+      <Collapse in={showLegend && ((!isMobile) || (isMobile && legendExpanded))}>
         <Box 
           sx={{ 
             display: 'flex', 
             flexWrap: 'wrap', 
-            gap: 1, 
-            mb: isMobile ? 1 : 2,
-            justifyContent: isMobile ? 'center' : 'flex-start'
+            gap: isMobile ? 0.5 : 0.75, 
+            mb: isMobile ? 0.5 : 1,
+            justifyContent: isMobile ? 'center' : 'flex-start',
+            alignItems: 'center'
           }}
         >
-          <Typography variant="body2" sx={{ mr: 1, display: isMobile ? 'none' : 'block' }}>
+          <Typography 
+            variant="caption" 
+            sx={{ 
+              mr: 0.5, 
+              display: isMobile ? 'none' : 'block',
+              fontSize: '0.7rem',
+              fontWeight: 'medium'
+            }}
+          >
             {useWorkstationColors ? 'Legenda stanowisk:' : 'Legenda statusów:'}
           </Typography>
           
@@ -2043,12 +2241,16 @@ const ProductionCalendar = () => {
             workstations.map(workstation => (
               <Chip 
                 key={workstation.id}
-                size={isMobile ? "small" : "medium"} 
+                size="small"
                 label={workstation.name} 
                 sx={{ 
                   bgcolor: workstation.color || getWorkstationColor(workstation.id), 
                   color: getContrastYIQ(workstation.color || getWorkstationColor(workstation.id)), 
-                  fontSize: isMobile ? '0.7rem' : '0.8rem' 
+                  fontSize: '0.65rem',
+                  height: 24,
+                  '& .MuiChip-label': {
+                    px: 1
+                  }
                 }} 
               />
             ))
@@ -2056,29 +2258,59 @@ const ProductionCalendar = () => {
             // Legenda dla statusów
             <>
               <Chip 
-                size={isMobile ? "small" : "medium"} 
+                size="small"
                 label="Zaplanowane" 
-                sx={{ bgcolor: '#3788d8', color: 'white', fontSize: isMobile ? '0.7rem' : '0.8rem' }} 
+                sx={{ 
+                  bgcolor: '#3788d8', 
+                  color: 'white', 
+                  fontSize: '0.65rem',
+                  height: 24,
+                  '& .MuiChip-label': { px: 1 }
+                }} 
               />
               <Chip 
-                size={isMobile ? "small" : "medium"} 
+                size="small"
                 label="W trakcie" 
-                sx={{ bgcolor: '#f39c12', color: 'white', fontSize: isMobile ? '0.7rem' : '0.8rem' }} 
+                sx={{ 
+                  bgcolor: '#f39c12', 
+                  color: 'white', 
+                  fontSize: '0.65rem',
+                  height: 24,
+                  '& .MuiChip-label': { px: 1 }
+                }} 
               />
               <Chip 
-                size={isMobile ? "small" : "medium"} 
+                size="small"
                 label="Zakończone" 
-                sx={{ bgcolor: '#2ecc71', color: 'white', fontSize: isMobile ? '0.7rem' : '0.8rem' }} 
+                sx={{ 
+                  bgcolor: '#2ecc71', 
+                  color: 'white', 
+                  fontSize: '0.65rem',
+                  height: 24,
+                  '& .MuiChip-label': { px: 1 }
+                }} 
               />
               <Chip 
-                size={isMobile ? "small" : "medium"} 
+                size="small"
                 label="Anulowane" 
-                sx={{ bgcolor: '#e74c3c', color: 'white', fontSize: isMobile ? '0.7rem' : '0.8rem' }} 
+                sx={{ 
+                  bgcolor: '#e74c3c', 
+                  color: 'white', 
+                  fontSize: '0.65rem',
+                  height: 24,
+                  '& .MuiChip-label': { px: 1 }
+                }} 
               />
               <Chip 
-                size={isMobile ? "small" : "medium"} 
+                size="small"
                 label="Wstrzymane" 
-                sx={{ bgcolor: '#757575', color: 'white', fontSize: isMobile ? '0.7rem' : '0.8rem' }} 
+                sx={{ 
+                  bgcolor: '#757575', 
+                  color: 'white', 
+                  fontSize: '0.65rem',
+                  height: 24,
+                  '& .MuiChip-label': { px: 1 }
+                }} 
               />
             </>
           )}
@@ -2348,7 +2580,7 @@ const ProductionCalendar = () => {
           weekends={true}
           nowIndicator={true}
           schedulerLicenseKey="GPL-My-Project-Is-Open-Source"
-          resourceAreaWidth={isMobile ? '90px' : (view.startsWith('resourceTimeline') ? '20%' : '15%')}
+          resourceAreaWidth={isMobile ? '70px' : (view.startsWith('resourceTimeline') ? '12%' : '10%')}
           editable={editable}
           eventDurationEditable={editable}
           eventStartEditable={editable}
@@ -2372,7 +2604,7 @@ const ProductionCalendar = () => {
             hour12: false
           }}
           slotEventOverlap={true}
-          resourceAreaHeaderContent={ganttGroupBy === 'workstation' ? 'Stanowisko' : 'Zamówienie'}
+          resourceAreaHeaderContent={ganttGroupBy === 'workstation' ? 'Stanowisko' : 'CO'}
           resourcesInitiallyExpanded={true}
           stickyHeaderDates={true}
           stickyResourceAreaHeaderContent={true}
@@ -2386,7 +2618,7 @@ const ProductionCalendar = () => {
           } : undefined}
           fixedWeekCount={false}
           navLinks={false}
-          slotMinWidth={customDateRange && (endDate - startDate) / (1000 * 60 * 60 * 24) > 31 ? 40 : 60}
+          slotMinWidth={getScaledSlotWidth(customDateRange && (endDate - startDate) / (1000 * 60 * 60 * 24) > 31 ? 40 : 60)}
           resources={memoizedResources}
           eventContent={renderEventContent}
           dayMaxEvents={isMobile ? 2 : true}
@@ -2415,16 +2647,30 @@ const ProductionCalendar = () => {
                 // Pobierz ID zadania
                 const taskId = info.event.id;
                 
+                // KLUCZOWA ZMIANA: Pobierz najświeższe dane wydarzenia z kalendarza
+                let currentEvent = null;
+                if (calendarRef.current) {
+                  try {
+                    const calendarApi = calendarRef.current.getApi();
+                    currentEvent = calendarApi.getEventById(taskId);
+                  } catch (error) {
+                    console.warn('Nie można pobrać aktualnego wydarzenia z kalendarza:', error);
+                  }
+                }
+                
+                // Użyj aktualnego wydarzenia jeśli dostępne, w przeciwnym razie użyj oryginalnego
+                const eventToUse = currentEvent || info.event;
+                
                 // Sprawdź, czy zadanie było zmodyfikowane (najpierw sprawdź w stan komponentu)
                 const modifiedTask = modifiedTasks[taskId];
                 
-                // Podstawowe dane z wydarzenia
+                // Podstawowe dane z wydarzenia - używaj najświeższych danych
                 const eventData = {
                   id: taskId,
-                  title: info.event.title,
-                  start: info.event.start,
-                  end: info.event.end,
-                  extendedProps: info.event.extendedProps
+                  title: eventToUse.title,
+                  start: eventToUse.start,
+                  end: eventToUse.end,
+                  extendedProps: eventToUse.extendedProps
                 };
                 
                 // Pobierz aktualne dane o zadaniu z najlepszego dostępnego źródła
@@ -2435,18 +2681,23 @@ const ProductionCalendar = () => {
                   taskData = {
                     ...modifiedTask,
                     // Ale zawsze aktualizuj daty z aktualnego widoku wydarzenia
-                    scheduledDate: info.event.start || modifiedTask.scheduledDate,
-                    endDate: info.event.end || modifiedTask.endDate
+                    scheduledDate: eventToUse.start || modifiedTask.scheduledDate,
+                    endDate: eventToUse.end || modifiedTask.endDate
                   };
                   
-                  console.log('Używam zmodyfikowanych danych dla zadania:', taskId);
+                  console.log('Używam zmodyfikowanych danych dla zadania:', taskId, {
+                    'eventToUse.start': eventToUse.start,
+                    'eventToUse.end': eventToUse.end,
+                    'modifiedTask.scheduledDate': modifiedTask.scheduledDate,
+                    'modifiedTask.endDate': modifiedTask.endDate
+                  });
                 } else {
                   // W przeciwnym razie użyj danych z wydarzenia i extendedProps
-                  const task = info.event.extendedProps.task || {};
+                  const task = eventToUse.extendedProps.task || {};
                   
                   taskData = {
                     id: taskId,
-                    name: info.event.title || task.name,
+                    name: eventToUse.title || task.name,
                     moNumber: task.moNumber,
                     productName: task.productName,
                     quantity: task.quantity,
@@ -2454,10 +2705,15 @@ const ProductionCalendar = () => {
                     status: task.status,
                     workstationId: task.workstationId,
                     workstationName: task.workstationName || workstations.find(w => w.id === task.workstationId)?.name,
-                    scheduledDate: info.event.start,
-                    endDate: info.event.end,
+                    scheduledDate: eventToUse.start,
+                    endDate: eventToUse.end,
                     estimatedDuration: task.estimatedDuration
                   };
+                  
+                  console.log('Używam danych z wydarzenia dla zadania:', taskId, {
+                    'eventToUse.start': eventToUse.start,
+                    'eventToUse.end': eventToUse.end
+                  });
                 }
                 
                 // Bezpieczne formatowanie dat
@@ -2499,8 +2755,8 @@ const ProductionCalendar = () => {
                 };
                 
                 // Formatujemy daty zawsze używając aktualnych danych
-                const scheduledDate = taskData.scheduledDate || info.event.start;
-                const endDate = taskData.endDate || info.event.end;
+                const scheduledDate = taskData.scheduledDate || eventToUse.start;
+                const endDate = taskData.endDate || eventToUse.end;
                 
                 const scheduledDateFormatted = scheduledDate ? formatDateSafe(scheduledDate) : '';
                 const endDateFormatted = endDate ? formatDateSafe(endDate) : '';
@@ -2523,8 +2779,8 @@ const ProductionCalendar = () => {
                 
                 // Diagnoza - wypisz informacje o datach do konsoli
                 console.log('Tooltip info dla zadania:', taskId, {
-                  'info.event.start': info.event.start,
-                  'info.event.end': info.event.end,
+                  'eventToUse.start': eventToUse.start,
+                  'eventToUse.end': eventToUse.end,
                   'taskData.scheduledDate': taskData.scheduledDate,
                   'taskData.endDate': taskData.endDate,
                   'używane daty': {
@@ -2552,7 +2808,7 @@ const ProductionCalendar = () => {
                 `;
                 
                 // Dodaj unikalne ID
-                tooltipContent.id = 'tooltip-' + info.event.id + '-' + Date.now();
+                tooltipContent.id = 'tooltip-' + eventToUse.id + '-' + Date.now();
                 
                 return tooltipContent;
               };
@@ -2809,7 +3065,7 @@ const ProductionCalendar = () => {
               }
             }
           }}
-          viewClassNames="custom-timeline-view"
+          viewClassNames={`custom-timeline-view ${scaleLevel < 0.8 ? 'scale-compact' : scaleLevel > 1.2 ? 'scale-large' : ''}`}
           dayHeaders={true}
           datesAboveResources={true}
           firstDay={1}
@@ -2835,7 +3091,7 @@ const ProductionCalendar = () => {
                     { hour: '2-digit', minute: '2-digit', hour12: false }
                   ],
               visibleRange: customDateRange ? { start: startDate, end: endDate } : null,
-              slotMinWidth: isMobile ? 50 : 70,
+              slotMinWidth: getScaledSlotWidth(isMobile ? 50 : 70),
               duration: customDateRange 
                 ? { days: Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) } 
                 : { days: 1 }
@@ -2854,7 +3110,7 @@ const ProductionCalendar = () => {
                     { weekday: 'short', day: 'numeric', month: 'short' }
                   ],
               visibleRange: customDateRange ? { start: startDate, end: endDate } : null,
-              slotMinWidth: ganttDetail === 'hour' ? 70 : (isMobile ? 40 : 60)
+              slotMinWidth: getScaledSlotWidth(ganttDetail === 'hour' ? 70 : (isMobile ? 40 : 60))
             },
             resourceTimelineMonth: {
               duration: customDateRange 
@@ -2865,7 +3121,7 @@ const ProductionCalendar = () => {
                 { day: 'numeric', weekday: 'short' }
               ],
               visibleRange: customDateRange ? { start: startDate, end: endDate } : null,
-              slotMinWidth: isMobile ? 30 : 50
+              slotMinWidth: getScaledSlotWidth(isMobile ? 30 : 50)
             }
           }}
           dayHeaderClassNames="custom-day-header"
