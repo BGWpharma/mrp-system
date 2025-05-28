@@ -53,7 +53,8 @@ import {
   AlertTitle,
   InputAdornment,
   useMediaQuery,
-  useTheme
+  useTheme,
+  Switch
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -175,6 +176,18 @@ const TaskDetailsPage = () => {
   const [loadingFormResponses, setLoadingFormResponses] = useState(false);
   const [formTab, setFormTab] = useState(0);
 
+  // Nowe stany dla opcji dodawania do magazynu w dialogu historii produkcji
+  const [addToInventoryOnHistory, setAddToInventoryOnHistory] = useState(true); // domyślnie włączone
+  const [historyInventoryData, setHistoryInventoryData] = useState({
+    expiryDate: null,
+    lotNumber: '',
+    finalQuantity: '',
+    warehouseId: ''
+  });
+  const [historyInventoryError, setHistoryInventoryError] = useState(null);
+  const [warehouses, setWarehouses] = useState([]);
+  const [warehousesLoading, setWarehousesLoading] = useState(false);
+
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -288,6 +301,43 @@ const TaskDetailsPage = () => {
       fetchAwaitingOrdersForMaterials();
     }
   }, [task?.id, task?.materials?.length]);
+
+  // Funkcja do pobierania magazynów
+  const fetchWarehouses = async () => {
+    try {
+      setWarehousesLoading(true);
+      const { getAllWarehouses } = await import('../../services/inventoryService');
+      const warehousesList = await getAllWarehouses();
+      setWarehouses(warehousesList);
+      
+      // Jeśli jest przynajmniej jeden magazyn, ustaw go jako domyślny
+      if (warehousesList.length > 0) {
+        setHistoryInventoryData(prev => ({
+          ...prev,
+          warehouseId: warehousesList[0].id
+        }));
+      }
+    } catch (error) {
+      console.error('Błąd podczas pobierania magazynów:', error);
+    } finally {
+      setWarehousesLoading(false);
+    }
+  };
+
+  // Pobieranie magazynów przy montowaniu komponentu
+  useEffect(() => {
+    fetchWarehouses();
+  }, []);
+
+  // Synchronizacja ilości wyprodukowanej z ilością końcową w formularzu magazynu dla dialogu historii
+  useEffect(() => {
+    if (addToInventoryOnHistory && editedHistoryItem.quantity) {
+      setHistoryInventoryData(prev => ({
+        ...prev,
+        finalQuantity: editedHistoryItem.quantity.toString()
+      }));
+    }
+  }, [editedHistoryItem.quantity, addToInventoryOnHistory]);
 
   const fetchStatusHistory = async (userIds) => {
     const names = await getUsersDisplayNames(userIds);
@@ -1763,6 +1813,7 @@ const TaskDetailsPage = () => {
   const handleAddHistoryItem = async () => {
     try {
       setLoading(true);
+      setHistoryInventoryError(null);
       
       // Walidacja danych
       if (editedHistoryItem.endTime < editedHistoryItem.startTime) {
@@ -1783,6 +1834,30 @@ const TaskDetailsPage = () => {
         showError('Przedział czasowy musi być dłuższy niż 0 minut');
         return;
       }
+
+      // Jeśli użytkownik wybrał opcję dodania do magazynu, waliduj dane magazynowe
+      if (addToInventoryOnHistory) {
+        if (!historyInventoryData.expiryDate) {
+          setHistoryInventoryError('Podaj datę ważności produktu');
+          return;
+        }
+
+        if (!historyInventoryData.lotNumber.trim()) {
+          setHistoryInventoryError('Podaj numer partii (LOT)');
+          return;
+        }
+        
+        if (!historyInventoryData.warehouseId) {
+          setHistoryInventoryError('Wybierz magazyn docelowy');
+          return;
+        }
+
+        const inventoryQuantity = parseFloat(historyInventoryData.finalQuantity);
+        if (isNaN(inventoryQuantity) || inventoryQuantity <= 0) {
+          setHistoryInventoryError('Nieprawidłowa ilość końcowa');
+          return;
+        }
+      }
       
       // Przygotuj dane do zapisania nowej sesji
       const sessionData = {
@@ -1796,14 +1871,39 @@ const TaskDetailsPage = () => {
       // Wywołaj funkcję dodającą nową sesję produkcyjną
       await addProductionSession(task.id, sessionData);
       
-      showSuccess('Sesja produkcyjna została dodana');
+      // Jeśli użytkownik wybrał opcję dodania do magazynu, dodaj produkt do magazynu
+      if (addToInventoryOnHistory) {
+        try {
+          const result = await addTaskProductToInventory(task.id, currentUser.uid, {
+            expiryDate: historyInventoryData.expiryDate.toISOString(),
+            lotNumber: historyInventoryData.lotNumber,
+            finalQuantity: parseFloat(historyInventoryData.finalQuantity),
+            warehouseId: historyInventoryData.warehouseId
+          });
+          
+          showSuccess(`Sesja produkcyjna została dodana i ${result.message}`);
+        } catch (inventoryError) {
+          console.error('Błąd podczas dodawania produktu do magazynu:', inventoryError);
+          showError('Sesja produkcyjna została dodana, ale wystąpił błąd podczas dodawania produktu do magazynu: ' + inventoryError.message);
+        }
+      } else {
+        showSuccess('Sesja produkcyjna została dodana');
+      }
       
       // Odśwież dane historii produkcji i zadania
       await fetchProductionHistory();
       await fetchTask();
       
-      // Zamknij dialog
+      // Zamknij dialog i resetuj formularz
       setAddHistoryDialogOpen(false);
+      setAddToInventoryOnHistory(true); // domyślnie włączone dla następnego użycia
+      setHistoryInventoryData({
+        expiryDate: null,
+        lotNumber: '',
+        finalQuantity: '',
+        warehouseId: warehouses.length > 0 ? warehouses[0].id : ''
+      });
+      setHistoryInventoryError(null);
     } catch (error) {
       console.error('Błąd podczas dodawania sesji produkcyjnej:', error);
       showError('Nie udało się dodać sesji produkcyjnej: ' + error.message);
@@ -2622,6 +2722,23 @@ const TaskDetailsPage = () => {
     });
   };
 
+  // Funkcja pomocnicza do formatowania daty/czasu dla pola datetime-local
+  const toLocalDateTimeString = (date) => {
+    if (!date || !(date instanceof Date)) return '';
+    
+    // Tworzymy nową datę z czasem lokalnym
+    const localDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
+    return localDate.toISOString().slice(0, 16);
+  };
+
+  // Funkcja pomocnicza do parsowania datetime-local z uwzględnieniem strefy czasowej
+  const fromLocalDateTimeString = (dateTimeString) => {
+    if (!dateTimeString) return new Date();
+    
+    // Tworzymy datę bezpośrednio z wartości pola datetime-local
+    return new Date(dateTimeString);
+  };
+
   // Renderuj stronę
     return (
       <Container maxWidth="xl">
@@ -2964,6 +3081,43 @@ const TaskDetailsPage = () => {
                         startTime: new Date(),
                         endTime: new Date(),
                       });
+                      
+                      // Przygotuj dane dla formularza dodawania do magazynu
+                      let expiryDate = null;
+                      
+                      if (task.expiryDate) {
+                        try {
+                          // Sprawdź typ daty i odpowiednio ją skonwertuj
+                          if (task.expiryDate instanceof Date) {
+                            expiryDate = task.expiryDate;
+                          } else if (task.expiryDate.toDate && typeof task.expiryDate.toDate === 'function') {
+                            // Obsługa obiektu Firebase Timestamp
+                            expiryDate = task.expiryDate.toDate();
+                          } else if (task.expiryDate.seconds) {
+                            // Obsługa obiektu timestamp z sekundami
+                            expiryDate = new Date(task.expiryDate.seconds * 1000);
+                          } else if (typeof task.expiryDate === 'string') {
+                            // Obsługa formatu string
+                            expiryDate = new Date(task.expiryDate);
+                          }
+                        } catch (error) {
+                          console.error('Błąd konwersji daty ważności:', error);
+                          // W przypadku błędu konwersji, ustaw datę domyślną
+                          expiryDate = new Date(new Date().setFullYear(new Date().getFullYear() + 1));
+                        }
+                      } else {
+                        // Domyślna data ważności (1 rok od dzisiaj)
+                        expiryDate = new Date(new Date().setFullYear(new Date().getFullYear() + 1));
+                      }
+                      
+                      // Ustaw domyślne dane dla formularza dodawania do magazynu
+                      setHistoryInventoryData({
+                        expiryDate: expiryDate,
+                        lotNumber: task.lotNumber || `LOT-${task.moNumber || ''}`,
+                        finalQuantity: '',
+                        warehouseId: task.warehouseId || (warehouses.length > 0 ? warehouses[0].id : '')
+                      });
+                      
                       setAddHistoryDialogOpen(true);
                     }}
                     size="small"
@@ -2999,34 +3153,36 @@ const TaskDetailsPage = () => {
                                   <TextField
                                     type="datetime-local"
                                     value={editedHistoryItem.startTime instanceof Date 
-                                      ? editedHistoryItem.startTime.toISOString().slice(0, 16) 
+                                      ? toLocalDateTimeString(editedHistoryItem.startTime) 
                                       : ''}
                                     onChange={(e) => {
-                                      const newDate = e.target.value ? new Date(e.target.value) : new Date();
+                                      const newDate = e.target.value ? fromLocalDateTimeString(e.target.value) : new Date();
                                       setEditedHistoryItem(prev => ({ 
                                         ...prev, 
                                         startTime: newDate
                                       }));
                                     }}
-                                    size="small"
+                                    InputLabelProps={{ shrink: true }}
                                     fullWidth
+                                    required
                                   />
                                 </TableCell>
                                 <TableCell>
                                   <TextField
                                     type="datetime-local"
                                     value={editedHistoryItem.endTime instanceof Date 
-                                      ? editedHistoryItem.endTime.toISOString().slice(0, 16) 
+                                      ? toLocalDateTimeString(editedHistoryItem.endTime) 
                                       : ''}
                                     onChange={(e) => {
-                                      const newDate = e.target.value ? new Date(e.target.value) : new Date();
+                                      const newDate = e.target.value ? fromLocalDateTimeString(e.target.value) : new Date();
                                       setEditedHistoryItem(prev => ({ 
                                         ...prev, 
                                         endTime: newDate
                                       }));
                                     }}
-                                    size="small"
+                                    InputLabelProps={{ shrink: true }}
                                     fullWidth
+                                    required
                                   />
                                 </TableCell>
                                 <TableCell>
@@ -3819,7 +3975,7 @@ const TaskDetailsPage = () => {
       <Dialog
         open={addHistoryDialogOpen}
         onClose={() => setAddHistoryDialogOpen(false)}
-        maxWidth="sm"
+        maxWidth="md"
         fullWidth
       >
         <DialogTitle>Dodaj wpis historii produkcji</DialogTitle>
@@ -3827,6 +3983,12 @@ const TaskDetailsPage = () => {
           <DialogContentText sx={{ mb: 2 }}>
             Wprowadź dane nowej sesji produkcyjnej.
           </DialogContentText>
+          
+          {historyInventoryError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {historyInventoryError}
+            </Alert>
+          )}
           
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12}>
@@ -3841,6 +4003,9 @@ const TaskDetailsPage = () => {
                 inputProps={{ min: 0, step: 'any' }}
                 fullWidth
                 required
+                InputProps={{
+                  endAdornment: <Typography variant="body2">{task?.unit || 'szt.'}</Typography>
+                }}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -3848,10 +4013,10 @@ const TaskDetailsPage = () => {
                 label="Data i czas rozpoczęcia"
                 type="datetime-local"
                 value={editedHistoryItem.startTime instanceof Date 
-                  ? editedHistoryItem.startTime.toISOString().slice(0, 16) 
+                  ? toLocalDateTimeString(editedHistoryItem.startTime) 
                   : ''}
                 onChange={(e) => {
-                  const newDate = e.target.value ? new Date(e.target.value) : new Date();
+                  const newDate = e.target.value ? fromLocalDateTimeString(e.target.value) : new Date();
                   setEditedHistoryItem(prev => ({ 
                     ...prev, 
                     startTime: newDate
@@ -3867,10 +4032,10 @@ const TaskDetailsPage = () => {
                 label="Data i czas zakończenia"
                 type="datetime-local"
                 value={editedHistoryItem.endTime instanceof Date 
-                  ? editedHistoryItem.endTime.toISOString().slice(0, 16) 
+                  ? toLocalDateTimeString(editedHistoryItem.endTime) 
                   : ''}
                 onChange={(e) => {
-                  const newDate = e.target.value ? new Date(e.target.value) : new Date();
+                  const newDate = e.target.value ? fromLocalDateTimeString(e.target.value) : new Date();
                   setEditedHistoryItem(prev => ({ 
                     ...prev, 
                     endTime: newDate
@@ -3881,6 +4046,93 @@ const TaskDetailsPage = () => {
                 required
               />
             </Grid>
+            
+            {/* Sekcja dodawania do magazynu */}
+            <Grid item xs={12}>
+              <Divider sx={{ my: 2 }} />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={addToInventoryOnHistory}
+                    onChange={(e) => setAddToInventoryOnHistory(e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label="Dodaj produkt do magazynu po zakończeniu sesji"
+              />
+            </Grid>
+            
+            {addToInventoryOnHistory && (
+              <>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Data ważności"
+                    type="date"
+                    value={historyInventoryData.expiryDate ? 
+                      historyInventoryData.expiryDate.toISOString().split('T')[0] : ''}
+                    onChange={(e) => {
+                      const date = e.target.value ? new Date(e.target.value) : null;
+                      setHistoryInventoryData(prev => ({ ...prev, expiryDate: date }));
+                    }}
+                    InputLabelProps={{ shrink: true }}
+                    fullWidth
+                    required
+                  />
+                </Grid>
+                
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Numer partii (LOT)"
+                    value={historyInventoryData.lotNumber}
+                    onChange={(e) => setHistoryInventoryData(prev => ({ 
+                      ...prev, 
+                      lotNumber: e.target.value 
+                    }))}
+                    fullWidth
+                    required
+                  />
+                </Grid>
+                
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Ilość końcowa"
+                    type="number"
+                    value={historyInventoryData.finalQuantity}
+                    onChange={(e) => setHistoryInventoryData(prev => ({ 
+                      ...prev, 
+                      finalQuantity: e.target.value 
+                    }))}
+                    inputProps={{ min: 0, step: 'any' }}
+                    fullWidth
+                    required
+                    InputProps={{
+                      endAdornment: <Typography variant="body2">{task?.unit || 'szt.'}</Typography>
+                    }}
+                  />
+                </Grid>
+                
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth required>
+                    <InputLabel>Magazyn docelowy</InputLabel>
+                    <Select
+                      value={historyInventoryData.warehouseId}
+                      onChange={(e) => setHistoryInventoryData(prev => ({ 
+                        ...prev, 
+                        warehouseId: e.target.value 
+                      }))}
+                      label="Magazyn docelowy"
+                      disabled={warehousesLoading}
+                    >
+                      {warehouses.map(warehouse => (
+                        <MenuItem key={warehouse.id} value={warehouse.id}>
+                          {warehouse.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </>
+            )}
           </Grid>
         </DialogContent>
         <DialogActions>
@@ -3893,7 +4145,7 @@ const TaskDetailsPage = () => {
             color="primary"
             disabled={loading}
           >
-            {loading ? <CircularProgress size={24} /> : 'Dodaj sesję'}
+            {loading ? <CircularProgress size={24} /> : (addToInventoryOnHistory ? 'Dodaj sesję i do magazynu' : 'Dodaj sesję')}
           </Button>
         </DialogActions>
       </Dialog>

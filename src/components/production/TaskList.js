@@ -38,7 +38,9 @@ import {
   Card,
   CardContent,
   CardActions,
-  Pagination
+  Pagination,
+  FormControlLabel,
+  Switch
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -128,6 +130,26 @@ const TaskList = () => {
   // Stany do obsługi sortowania
   const [sortField, setSortField] = useState('scheduledDate');
   const [sortOrder, setSortOrder] = useState('asc');
+
+  // Nowe stany dla opcji dodawania do magazynu w dialogu zatrzymania produkcji
+  const [addToInventoryOnStop, setAddToInventoryOnStop] = useState(true);
+  const [stopProductionInventoryData, setStopProductionInventoryData] = useState({
+    expiryDate: null,
+    lotNumber: '',
+    finalQuantity: '',
+    warehouseId: ''
+  });
+  const [stopProductionInventoryError, setStopProductionInventoryError] = useState(null);
+
+  // Synchronizacja ilości wyprodukowanej z ilością końcową w formularzu magazynu
+  useEffect(() => {
+    if (addToInventoryOnStop && completedQuantity) {
+      setStopProductionInventoryData(prev => ({
+        ...prev,
+        finalQuantity: completedQuantity
+      }));
+    }
+  }, [completedQuantity, addToInventoryOnStop]);
 
   // Obsługa debounce dla wyszukiwania
   useEffect(() => {
@@ -321,7 +343,7 @@ const TaskList = () => {
       }
 
       // Dodaj parametry do wywołania API
-      await addTaskProductToInventory(id, currentUser.uid, {
+      const result = await addTaskProductToInventory(id, currentUser.uid, {
         expiryDate: inventoryData.expiryDate.toISOString(),
         lotNumber: inventoryData.lotNumber,
         finalQuantity: quantity,
@@ -330,7 +352,7 @@ const TaskList = () => {
       
       // Znajdź zadanie w tablicy tasks, aby uzyskać dostęp do jego danych
       const task = tasks.find(t => t.id === id);
-      let message = 'Produkt został dodany do magazynu jako nowa partia (LOT)';
+      let message = result.message;
       
       // Dodaj informacje o numerze MO i CO, jeśli są dostępne
       if (task) {
@@ -423,6 +445,7 @@ const TaskList = () => {
   const handleStopProduction = async () => {
     try {
       setProductionError(null);
+      setStopProductionInventoryError(null);
       
       if (!completedQuantity) {
         setProductionError('Podaj wyprodukowaną ilość');
@@ -455,6 +478,30 @@ const TaskList = () => {
         return;
       }
 
+      // Jeśli użytkownik wybrał opcję dodania do magazynu, waliduj dane magazynowe
+      if (addToInventoryOnStop) {
+        if (!stopProductionInventoryData.expiryDate) {
+          setStopProductionInventoryError('Podaj datę ważności produktu');
+          return;
+        }
+
+        if (!stopProductionInventoryData.lotNumber.trim()) {
+          setStopProductionInventoryError('Podaj numer partii (LOT)');
+          return;
+        }
+        
+        if (!stopProductionInventoryData.warehouseId) {
+          setStopProductionInventoryError('Wybierz magazyn docelowy');
+          return;
+        }
+
+        const inventoryQuantity = parseFloat(stopProductionInventoryData.finalQuantity);
+        if (isNaN(inventoryQuantity) || inventoryQuantity <= 0) {
+          setStopProductionInventoryError('Nieprawidłowa ilość końcowa');
+          return;
+        }
+      }
+
       // Przekazujemy czas trwania w minutach oraz daty rozpoczęcia i zakończenia
       const result = await stopProduction(
         currentTaskId, 
@@ -467,17 +514,43 @@ const TaskList = () => {
         }
       );
       
+      // Jeśli użytkownik wybrał opcję dodania do magazynu, dodaj produkt do magazynu
+      if (addToInventoryOnStop) {
+        try {
+          const result = await addTaskProductToInventory(currentTaskId, currentUser.uid, {
+            expiryDate: stopProductionInventoryData.expiryDate.toISOString(),
+            lotNumber: stopProductionInventoryData.lotNumber,
+            finalQuantity: parseFloat(stopProductionInventoryData.finalQuantity),
+            warehouseId: stopProductionInventoryData.warehouseId
+          });
+          
+          showSuccess(`Produkcja zatrzymana i ${result.message}`);
+        } catch (inventoryError) {
+          console.error('Błąd podczas dodawania produktu do magazynu:', inventoryError);
+          showError('Produkcja zatrzymana, ale wystąpił błąd podczas dodawania produktu do magazynu: ' + inventoryError.message);
+        }
+      } else {
+        showSuccess(result.isCompleted ? 
+          'Produkcja zakończona. Zadanie zostało ukończone.' : 
+          'Sesja produkcyjna zapisana. Możesz kontynuować produkcję później.'
+        );
+      }
+      
       setStopProductionDialogOpen(false);
-      showSuccess(result.isCompleted ? 
-        'Produkcja zakończona. Zadanie zostało ukończone.' : 
-        'Sesja produkcyjna zapisana. Możesz kontynuować produkcję później.'
-      );
       
       // Resetuj stan formularza
       setCompletedQuantity('');
       setProductionStartTime(new Date());
       setProductionEndTime(new Date());
       setCurrentTaskId(null);
+      setAddToInventoryOnStop(false);
+      setStopProductionInventoryData({
+        expiryDate: null,
+        lotNumber: '',
+        finalQuantity: '',
+        warehouseId: warehouses.length > 0 ? warehouses[0].id : ''
+      });
+      setStopProductionInventoryError(null);
       
       // Odśwież listę zadań
       fetchTasks();
@@ -487,8 +560,45 @@ const TaskList = () => {
     }
   };
 
-  const openStopProductionDialog = (taskId) => {
-    setCurrentTaskId(taskId);
+  const openStopProductionDialog = (task) => {
+    setCurrentTaskId(task.id);
+    
+    // Przygotuj dane dla formularza dodawania do magazynu
+    let expiryDate = null;
+    
+    if (task.expiryDate) {
+      try {
+        // Sprawdź typ daty i odpowiednio ją skonwertuj
+        if (task.expiryDate instanceof Date) {
+          expiryDate = task.expiryDate;
+        } else if (task.expiryDate.toDate && typeof task.expiryDate.toDate === 'function') {
+          // Obsługa obiektu Firebase Timestamp
+          expiryDate = task.expiryDate.toDate();
+        } else if (task.expiryDate.seconds) {
+          // Obsługa obiektu timestamp z sekundami
+          expiryDate = new Date(task.expiryDate.seconds * 1000);
+        } else if (typeof task.expiryDate === 'string') {
+          // Obsługa formatu string
+          expiryDate = new Date(task.expiryDate);
+        }
+      } catch (error) {
+        console.error('Błąd konwersji daty ważności:', error);
+        // W przypadku błędu konwersji, ustaw datę domyślną
+        expiryDate = new Date(new Date().setFullYear(new Date().getFullYear() + 1));
+      }
+    } else {
+      // Domyślna data ważności (1 rok od dzisiaj)
+      expiryDate = new Date(new Date().setFullYear(new Date().getFullYear() + 1));
+    }
+    
+    // Ustaw domyślne dane dla formularza dodawania do magazynu
+    setStopProductionInventoryData({
+      expiryDate: expiryDate,
+      lotNumber: task.lotNumber || `LOT-${task.moNumber || ''}`,
+      finalQuantity: task.quantity.toString(),
+      warehouseId: task.warehouseId || (warehouses.length > 0 ? warehouses[0].id : '')
+    });
+    
     setStopProductionDialogOpen(true);
   };
 
@@ -588,7 +698,7 @@ const TaskList = () => {
           <Tooltip title="Zatrzymaj produkcję">
             <IconButton 
               color="error" 
-              onClick={() => openStopProductionDialog(task.id)}
+              onClick={() => openStopProductionDialog(task)}
               size="small"
             >
               <StopIcon fontSize="small" />
@@ -1344,13 +1454,125 @@ const TaskList = () => {
               )}
             </Box>
           </LocalizationProvider>
+
+          {/* Opcja dodawania produktu do magazynu */}
+          <Box sx={{ mt: 3, mb: 2 }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={addToInventoryOnStop}
+                  onChange={(e) => setAddToInventoryOnStop(e.target.checked)}
+                  color="primary"
+                />
+              }
+              label="Dodaj gotowy produkt do magazynu"
+            />
+          </Box>
+
+          {/* Formularz dodawania do magazynu - widoczny tylko gdy opcja jest zaznaczona */}
+          {addToInventoryOnStop && (
+            <Box sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Dane do dodania do magazynu:
+              </Typography>
+              
+              {stopProductionInventoryError && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {stopProductionInventoryError}
+                </Alert>
+              )}
+              
+              <TextField
+                label="Ilość końcowa"
+                type="number"
+                value={stopProductionInventoryData.finalQuantity}
+                onChange={(e) => setStopProductionInventoryData({
+                  ...stopProductionInventoryData, 
+                  finalQuantity: e.target.value
+                })}
+                fullWidth
+                margin="dense"
+                helperText="Wprowadź faktyczną ilość produktu końcowego"
+              />
+              
+              <TextField
+                label="Numer partii (LOT)"
+                value={stopProductionInventoryData.lotNumber}
+                onChange={(e) => setStopProductionInventoryData({
+                  ...stopProductionInventoryData, 
+                  lotNumber: e.target.value
+                })}
+                fullWidth
+                margin="dense"
+                helperText="Wprowadź unikalny identyfikator partii produkcyjnej"
+              />
+              
+              <FormControl fullWidth margin="dense">
+                <InputLabel id="stop-warehouse-select-label">Magazyn docelowy</InputLabel>
+                <Select
+                  labelId="stop-warehouse-select-label"
+                  id="stop-warehouse-select"
+                  value={stopProductionInventoryData.warehouseId}
+                  onChange={(e) => setStopProductionInventoryData({
+                    ...stopProductionInventoryData, 
+                    warehouseId: e.target.value
+                  })}
+                  label="Magazyn docelowy"
+                >
+                  {warehousesLoading ? (
+                    <MenuItem disabled>Ładowanie magazynów...</MenuItem>
+                  ) : warehouses.length === 0 ? (
+                    <MenuItem disabled>Brak dostępnych magazynów</MenuItem>
+                  ) : (
+                    warehouses.map((warehouse) => (
+                      <MenuItem key={warehouse.id} value={warehouse.id}>
+                        {warehouse.name}
+                      </MenuItem>
+                    ))
+                  )}
+                </Select>
+              </FormControl>
+              
+              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                <Box sx={{ my: 2 }}>
+                  <DateTimePicker
+                    label="Data ważności"
+                    value={stopProductionInventoryData.expiryDate}
+                    onChange={(newValue) => setStopProductionInventoryData({
+                      ...stopProductionInventoryData, 
+                      expiryDate: newValue
+                    })}
+                    views={['year', 'month', 'day']}
+                    format="dd-MM-yyyy"
+                    slotProps={{
+                      textField: {
+                        fullWidth: true,
+                        margin: 'dense',
+                        variant: 'outlined',
+                        helperText: "Data ważności produktu",
+                        error: !stopProductionInventoryData.expiryDate,
+                        InputProps: {
+                          onError: (error) => {
+                            console.error("Błąd w polu daty:", error);
+                          }
+                        }
+                      },
+                      actionBar: {
+                        actions: ['clear', 'today']
+                      }
+                    }}
+                  />
+                </Box>
+              </LocalizationProvider>
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setStopProductionDialogOpen(false)}>
             Anuluj
           </Button>
           <Button onClick={handleStopProduction} variant="contained">
-            Zatwierdź
+            {addToInventoryOnStop ? 'Zatrzymaj i dodaj do magazynu' : 'Zatwierdź'}
           </Button>
         </DialogActions>
       </Dialog>

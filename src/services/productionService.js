@@ -1238,32 +1238,73 @@ import {
         sourceNotes += ` (CO: ${taskData.orderNumber})`;
       }
       
-      // Dodaj partię do magazynu
-      const batchRef = doc(collection(db, 'inventoryBatches'));
-      const batchData = {
-        itemId: inventoryItemId,
-        itemName: taskData.productName,
-        quantity: finalQuantity,
-        initialQuantity: finalQuantity,
-        batchNumber: lotNumber,
-        receivedDate: serverTimestamp(),
-        expiryDate: expiryDate ? Timestamp.fromDate(expiryDate) : null,
-        lotNumber: lotNumber,
-        source: 'Produkcja',
-        sourceId: taskId,
-        // Dodajemy pola przechowujące informacje o pochodzeniu
-        moNumber: taskData.moNumber || null,
-        orderNumber: taskData.orderNumber || null,
-        orderId: taskData.orderId || null,
-        sourceDetails: sourceDetails,
-        notes: sourceNotes,
-        unitPrice: 0, // Ustaw cenę jednostkową na 0
-        warehouseId: warehouseId, // Dodaj ID magazynu jeśli zostało przekazane
-        createdAt: serverTimestamp(),
-        createdBy: userId
-      };
+      // Sprawdź czy istnieje już partia z tym samym numerem LOT w tym magazynie
+      const existingBatchQuery = query(
+        collection(db, 'inventoryBatches'),
+        where('itemId', '==', inventoryItemId),
+        where('lotNumber', '==', lotNumber),
+        where('warehouseId', '==', warehouseId || null)
+      );
       
-      await setDoc(batchRef, batchData);
+      const existingBatchSnapshot = await getDocs(existingBatchQuery);
+      let batchRef;
+      let isNewBatch = true;
+      
+      if (!existingBatchSnapshot.empty) {
+        // Znaleziono istniejącą partię - dodaj do niej ilość
+        const existingBatch = existingBatchSnapshot.docs[0];
+        batchRef = existingBatch.ref;
+        isNewBatch = false;
+        
+        // Aktualizuj istniejącą partię
+        await updateDoc(batchRef, {
+          quantity: increment(finalQuantity),
+          initialQuantity: increment(finalQuantity),
+          updatedAt: serverTimestamp(),
+          updatedBy: userId,
+          // Dodaj informacje o ostatnim dodaniu z produkcji
+          lastProductionUpdate: {
+            taskId: taskId,
+            taskName: taskData.name,
+            addedQuantity: finalQuantity,
+            addedAt: serverTimestamp(),
+            moNumber: taskData.moNumber || null,
+            orderNumber: taskData.orderNumber || null
+          }
+        });
+        
+        console.log(`Dodano ${finalQuantity} do istniejącej partii LOT: ${lotNumber}`);
+      } else {
+        // Nie znaleziono istniejącej partii - utwórz nową
+        batchRef = doc(collection(db, 'inventoryBatches'));
+        const batchData = {
+          itemId: inventoryItemId,
+          itemName: taskData.productName,
+          quantity: finalQuantity,
+          initialQuantity: finalQuantity,
+          batchNumber: lotNumber,
+          receivedDate: serverTimestamp(),
+          expiryDate: expiryDate ? Timestamp.fromDate(expiryDate) : null,
+          lotNumber: lotNumber,
+          source: 'Produkcja',
+          sourceId: taskId,
+          // Dodajemy pola przechowujące informacje o pochodzeniu
+          moNumber: taskData.moNumber || null,
+          orderNumber: taskData.orderNumber || null,
+          orderId: taskData.orderId || null,
+          sourceDetails: sourceDetails,
+          notes: sourceNotes,
+          unitPrice: 0, // Ustaw cenę jednostkową na 0
+          warehouseId: warehouseId, // Dodaj ID magazynu jeśli zostało przekazane
+          createdAt: serverTimestamp(),
+          createdBy: userId
+        };
+        
+        await setDoc(batchRef, batchData);
+        console.log(`Utworzono nową partię LOT: ${lotNumber} z ilością ${finalQuantity}`);
+      }
+      
+      // Zaktualizuj ilość w magazynie
       
       // Zaktualizuj ilość w magazynie
       await recalculateItemQuantity(inventoryItemId);
@@ -1276,9 +1317,9 @@ import {
         type: 'receive',
         quantity: finalQuantity,
         date: serverTimestamp(),
-        reason: 'Z produkcji',
+        reason: isNewBatch ? 'Z produkcji (nowa partia)' : 'Z produkcji (dodano do istniejącej partii)',
         reference: `Zadanie: ${taskData.name} (ID: ${taskId})`,
-        notes: sourceNotes,
+        notes: isNewBatch ? sourceNotes : `${sourceNotes} - Dodano do istniejącej partii LOT: ${lotNumber}`,
         moNumber: taskData.moNumber || null,
         orderNumber: taskData.orderNumber || null,
         batchId: batchRef.id,
@@ -1401,7 +1442,11 @@ import {
         success: true,
         inventoryItemId,
         inventoryBatchId: batchRef.id,
-        lotNumber: lotNumber
+        lotNumber: lotNumber,
+        isNewBatch: isNewBatch,
+        message: isNewBatch 
+          ? `Utworzono nową partię LOT: ${lotNumber}` 
+          : `Dodano do istniejącej partii LOT: ${lotNumber}`
       };
     } catch (error) {
       console.error('Błąd podczas dodawania produktu do magazynu:', error);
