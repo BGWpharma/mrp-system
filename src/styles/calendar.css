@@ -350,3 +350,97 @@ body.dark-mode .fc-timeline-event {
     min-height: 32px !important;
   }
 }
+
+/* Style dla nagłówków godzin w widoku Gantta */
+.fc-timeline-slot.fc-timeline-slot-hour .fc-timeline-slot-frame {
+  min-height: 25px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid #ddd;
+}
+
+.fc-timeline-slot.fc-timeline-slot-hour:nth-child(even) .fc-timeline-slot-frame {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Podświetlenie pełnych godzin */
+.fc-timeline-slot.fc-timeline-slot-hour.fc-timeline-slot-major .fc-timeline-slot-cushion {
+  font-weight: bold;
+}
+
+/* Poprawki dla wielowierszowych nagłówków w widoku godzinowym */
+.fc-timeline-header-row.fc-timeline-header-row-chrono:first-child .fc-timeline-slot-frame {
+  border-bottom: 1px solid #ddd;
+  background-color: #f5f5f5;
+  min-height: 30px;
+}
+
+/* Style dla nagłówków w widoku godzinowym */
+.fc-resource-timeline-view.hour-scale .fc-timeline-slot {
+  min-width: 50px !important;
+}
+
+/* Ostylowanie wierszy nagłówków */
+.fc-timeline-header-row:first-child .fc-timeline-slot-frame {
+  background-color: #f9f9f9;
+}
+
+.fc-timeline-header-row:last-child .fc-timeline-slot-frame {
+  background-color: #f5f5f5;
+}
+
+/* Zwiększenie szerokości slotów dla widoku godzinowego */
+.fc-timeline-view .fc-timeline-slot.fc-timeline-slot-hour {
+  min-width: 50px !important;
+}
+
+/* Oznaczenie godzin nocnych */
+.fc-timeline-slot.fc-timeline-slot-hour.fc-timeline-slot-major[data-time*="00:00"] .fc-timeline-slot-frame,
+.fc-timeline-slot.fc-timeline-slot-hour.fc-timeline-slot-major[data-time*="01:00"] .fc-timeline-slot-frame,
+.fc-timeline-slot.fc-timeline-slot-hour.fc-timeline-slot-major[data-time*="02:00"] .fc-timeline-slot-frame,
+.fc-timeline-slot.fc-timeline-slot-hour.fc-timeline-slot-major[data-time*="03:00"] .fc-timeline-slot-frame,
+.fc-timeline-slot.fc-timeline-slot-hour.fc-timeline-slot-major[data-time*="04:00"] .fc-timeline-slot-frame,
+.fc-timeline-slot.fc-timeline-slot-hour.fc-timeline-slot-major[data-time*="05:00"] .fc-timeline-slot-frame {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Style dla widoku godzinowego z ograniczonym zakresem dat */
+.fc-timeline-view.hour-scale-limited .fc-timeline-slot.fc-timeline-slot-hour {
+  min-width: 30px !important;
+}
+
+.fc-timeline-view.hour-scale-limited .fc-timeline-slot-cushion {
+  font-size: 0.7rem;
+}
+
+/* Ostrzeżenie dla użytkownika o ograniczonym widoku godzinowym */
+.fc-timeline-view.hour-scale-limited .fc-timeline-header::before {
+  content: "Widok godzinowy jest dostępny tylko dla zakresów do 30 dni";
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  padding: 5px;
+  background-color: rgba(255, 152, 0, 0.1);
+  color: #ff6f00;
+  font-size: 0.8rem;
+  text-align: center;
+  font-weight: bold;
+  z-index: 5;
+}
+
+/* Dodatkowe style dla zachowania czytelności w ograniczonym widoku godzinowym */
+.fc-timeline-view.hour-scale-limited .fc-timeline-slot.fc-timeline-slot-hour:nth-child(odd) .fc-timeline-slot-frame {
+  background-color: rgba(0, 0, 0, 0.03);
+}
+
+/* Wyróżnienie co 6 godzin w ograniczonym widoku godzinowym */
+.fc-timeline-view.hour-scale-limited .fc-timeline-slot.fc-timeline-slot-hour[data-time*="00:00"] .fc-timeline-slot-frame,
+.fc-timeline-view.hour-scale-limited .fc-timeline-slot.fc-timeline-slot-hour[data-time*="06:00"] .fc-timeline-slot-frame,
+.fc-timeline-view.hour-scale-limited .fc-timeline-slot.fc-timeline-slot-hour[data-time*="12:00"] .fc-timeline-slot-frame,
+.fc-timeline-view.hour-scale-limited .fc-timeline-slot.fc-timeline-slot-hour[data-time*="18:00"] .fc-timeline-slot-frame {
+  background-color: rgba(33, 150, 243, 0.05);
+  border-left: 1px solid rgba(33, 150, 243, 0.3);
+}

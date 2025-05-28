@@ -79,6 +79,8 @@ import '../../styles/calendar.css';
 
 // Stałe dla mechanizmu cachowania
 const CACHE_EXPIRY_TIME = 5 * 60 * 1000; // 5 minut w milisekundach
+// Maksymalna liczba dni dla widoku godzinowego
+const MAX_DAYS_FOR_HOURLY_VIEW = 30;
 
 const ProductionCalendar = () => {
   const [tasks, setTasks] = useState([]);
@@ -445,10 +447,20 @@ const ProductionCalendar = () => {
       
       // Aktualizuj również poziom szczegółowości na podstawie wybranego widoku
       if (newGanttView === 'resourceTimelineDay') {
+        // Dla widoku dziennego używamy szczegółowości godzinowej
         setGanttDetail('hour');
-      } else if (newGanttView === 'resourceTimelineWeek' || newGanttView === 'resourceTimelineMonth') {
-        setGanttDetail('day');
+      } else if (newGanttView === 'resourceTimelineWeek') {
+        // Pozostaw aktualną szczegółowość, chyba że jest tygodniowa (week)
+        if (ganttDetail === 'week') {
+          setGanttDetail('day');
+        }
+      } else if (newGanttView === 'resourceTimelineMonth') {
+        // Dla widoku miesięcznego, jeśli szczegółowość jest godzinowa, zmień na dzienną
+        if (ganttDetail === 'hour') {
+          setGanttDetail('day');
+        }
       } else if (newGanttView === 'resourceTimelineYear') {
+        // Dla widoku rocznego używamy szczegółowości tygodniowej
         setGanttDetail('week');
       }
       
@@ -1207,6 +1219,20 @@ const ProductionCalendar = () => {
       // Aktualizuj stany dat dla kolejnych zapytań
       setEndDate(adjustedEndDate);
       
+      // Oblicz liczbę dni w wybranym zakresie
+      const diffInDays = Math.ceil((adjustedEndDate - startDate) / (1000 * 60 * 60 * 24));
+      
+      // Sprawdź czy nie trzeba dostosować szczegółowości do długości zakresu dat
+      let currentGanttDetail = ganttDetail;
+      if (ganttDetail === 'hour' && diffInDays > MAX_DAYS_FOR_HOURLY_VIEW) {
+        // Automatycznie zmień szczegółowość na dzienną
+        currentGanttDetail = 'day';
+        setGanttDetail('day');
+        
+        // Pokaż powiadomienie
+        showSuccess(`Automatycznie zmieniono szczegółowość na dzienną, ponieważ wybrany zakres (${diffInDays} dni) przekracza limit ${MAX_DAYS_FOR_HOURLY_VIEW} dni dla widoku godzinowego.`);
+      }
+      
       // Logging
       console.log("Zastosowanie zakresu dat:", format(startDate, 'dd.MM.yyyy'), "-", format(adjustedEndDate, 'dd.MM.yyyy'));
       console.log("Daty ISO:", startDate.toISOString(), "-", adjustedEndDate.toISOString());
@@ -1234,7 +1260,7 @@ const ProductionCalendar = () => {
         let targetView = 'resourceTimelineMonth';
         
         // Respektuj aktualną szczegółowość
-        if (ganttDetail === 'hour') {
+        if (currentGanttDetail === 'hour') {
           // Jeśli wybrano szczegółowość godzinową, dla każdego zakresu dat używamy specjalnego widoku
           // Dla większej liczby dni niż 1, używamy widoku tygodniowego z wymuszonym ustawieniem slotDuration na godziny
           targetView = durationDays > 3 ? 'resourceTimelineWeek' : 'resourceTimelineDay';
@@ -1271,7 +1297,7 @@ const ProductionCalendar = () => {
           calendarApi.gotoDate(startDate);
           
           // 6. Jeśli wybrano widok godzinowy, upewnij się że slotDuration jest ustawione na godziny
-          if (ganttDetail === 'hour') {
+          if (currentGanttDetail === 'hour') {
             calendarApi.setOption('slotDuration', { hours: 1 });
             // Dla widoku godzinowego z wieloma dniami, ustaw slotLabelFormat aby pokazywał też datę
             if (durationDays > 1) {
@@ -1620,6 +1646,51 @@ const ProductionCalendar = () => {
   const handleGanttDetailChange = (detail) => {
     handleDetailMenuClose();
     
+    // Oblicz liczbę dni w aktualnym zakresie dat
+    const diffInDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+    
+    // Sprawdź czy nie przekroczono maksymalnego zakresu dla widoku godzinowego
+    if (detail === 'hour' && diffInDays > MAX_DAYS_FOR_HOURLY_VIEW) {
+      // Wyświetl ostrzeżenie
+      showError(`Widok godzinowy jest dostępny tylko dla zakresów do ${MAX_DAYS_FOR_HOURLY_VIEW} dni. Wybierz mniejszy zakres dat lub inną szczegółowość.`);
+      
+      // Jeśli zakres jest zbyt duży, automatycznie ogranicz go
+      if (customDateRange) {
+        // Oblicz nową datę końcową - MAX_DAYS_FOR_HOURLY_VIEW dni od daty początkowej
+        const newEndDate = new Date(startDate);
+        newEndDate.setDate(newEndDate.getDate() + MAX_DAYS_FOR_HOURLY_VIEW);
+        
+        // Zaktualizuj datę końcową
+        setEndDate(newEndDate);
+        showSuccess(`Automatycznie ograniczono zakres dat do ${MAX_DAYS_FOR_HOURLY_VIEW} dni dla widoku godzinowego.`);
+        
+        // Flaga do wymuszenia aktualizacji po zmianie daty
+        const forceDateUpdate = true;
+        
+        // Ustaw szczegółowość
+        setGanttDetail(detail);
+        
+        // Zaktualizuj widok kalendarza z nowym zakresem dat
+        setTimeout(() => {
+          if (calendarRef.current) {
+            const api = calendarRef.current.getApi();
+            api.setOption('visibleRange', {
+              start: startDate,
+              end: newEndDate
+            });
+            
+            // Pobierz dane dla nowego zakresu
+            fetchTasks({
+              startStr: startDate.toISOString(),
+              endStr: newEndDate.toISOString()
+            });
+          }
+        }, 100);
+        
+        return;
+      }
+    }
+    
     // Najpierw tylko ustawiam szczegółowość
     setGanttDetail(detail);
     
@@ -1634,8 +1705,17 @@ const ProductionCalendar = () => {
           
           // Aktualizuj widok odpowiednio do wybranej szczegółowości
           if (detail === 'hour') {
-            // Dla widoku godzinowego używamy widoku dnia z podziałem na godziny
-            viewToUse = 'resourceTimelineDay';
+            // Dla widoku godzinowego:
+            // - jeśli aktualny widok to dzień, pozostaw go
+            // - jeśli aktualny widok to miesiąc, zmień na tydzień (bo miesiąc z godzinami byłby nieczytelny)
+            // - dla innych przypadków, użyj widoku tygodnia
+            if (ganttView === 'resourceTimelineDay') {
+              viewToUse = 'resourceTimelineDay';
+            } else if (ganttView === 'resourceTimelineMonth') {
+              viewToUse = 'resourceTimelineWeek'; // Zmiana z miesiąca na tydzień
+            } else {
+              viewToUse = 'resourceTimelineWeek';
+            }
           } else if (detail === 'day') {
             // Dla widoku dziennego używamy widoku tygodnia lub miesiąca,
             // w zależności od długości wybranego zakresu dat
@@ -2946,15 +3026,71 @@ const ProductionCalendar = () => {
           slotLabelContent={(args) => {
             if (view.startsWith('resourceTimeline')) {
               const date = args.date;
+              const diffInDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+              const isHourViewAllowed = ganttDetail === 'hour' && diffInDays <= MAX_DAYS_FOR_HOURLY_VIEW;
               
-              // Dla widoku dziennego (godziny)
-              if (view === 'resourceTimelineDay') {
-                // Sprawdź, czy to jest górny wiersz nagłówka (label) czy dolny (godziny)
-                if (args.level === 0 && customDateRange && Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) > 1) {
-                  // Górny wiersz (data) - pokazuj tylko w pierwszej komórce dla każdego dnia
-                  const day = date.getDate();
-                  const month = new Intl.DateTimeFormat('pl', { month: 'short' }).format(date);
-                  
+              // Dla widoku dziennego (godziny) lub szczegółowości godzinowej z dopuszczalnym zakresem dat
+              if (view === 'resourceTimelineDay' || (isHourViewAllowed && args.level === 1)) {
+                // Jeśli mamy poziom 1 (drugi wiersz) w widoku godzinowym lub jesteśmy w widoku dziennym
+                const hour = date.getHours();
+                const minute = date.getMinutes();
+                
+                return (
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
+                      {`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`}
+                    </Typography>
+                  </Box>
+                );
+              }
+              
+              // Dla pierwszego poziomu nagłówków w widoku godzinowym (dzień/data)
+              if (isHourViewAllowed && args.level === 0) {
+                const day = date.getDate();
+                const weekday = new Intl.DateTimeFormat('pl', { weekday: 'short' }).format(date);
+                const month = new Intl.DateTimeFormat('pl', { month: 'short' }).format(date);
+                
+                return (
+                  <Box sx={{ 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center',
+                    fontSize: isMobile ? '0.65rem' : '0.75rem'
+                  }}>
+                    <Typography variant="caption" sx={{ 
+                      color: 'primary.main', 
+                      fontWeight: 'bold',
+                      fontSize: 'inherit'
+                    }}>
+                      {month}
+                    </Typography>
+                    <Typography variant="body2" sx={{ 
+                      fontWeight: 'bold',
+                      fontSize: 'inherit'
+                    }}>
+                      {day}
+                    </Typography>
+                    {!isMobile && (
+                      <Typography variant="caption" sx={{ 
+                        textTransform: 'uppercase',
+                        fontSize: 'inherit'
+                      }}>
+                        {weekday}
+                      </Typography>
+                    )}
+                  </Box>
+                );
+              }
+              
+              // Dla widoku tygodniowego lub miesięcznego (dni)
+              if ((view === 'resourceTimelineWeek' || view === 'resourceTimelineMonth') && (!isHourViewAllowed || ganttDetail !== 'hour')) {
+                // Standardowy widok dla dni (dla miesięcznego lub tygodniowego bez godzin)
+                const day = date.getDate();
+                const weekday = new Intl.DateTimeFormat('pl', { weekday: 'short' }).format(date);
+                const month = new Intl.DateTimeFormat('pl', { month: 'short' }).format(date);
+                
+                // Dla pierwszego dnia miesiąca lub początku widoku, pokaż nazwę miesiąca
+                if (day === 1 || (day <= 3 && args.isLabeled)) {
                   return (
                     <Box sx={{ 
                       display: 'flex', 
@@ -2975,129 +3111,6 @@ const ProductionCalendar = () => {
                       }}>
                         {day}
                       </Typography>
-                    </Box>
-                  );
-                } else {
-                  // Dolny wiersz (godziny) lub jedyny wiersz dla pojedynczego dnia
-                  const hour = date.getHours();
-                  const minute = date.getMinutes();
-                  return (
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
-                        {`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`}
-                      </Typography>
-                    </Box>
-                  );
-                }
-              }
-              
-              // Dla widoku tygodniowego lub miesięcznego (dni)
-              if (view === 'resourceTimelineWeek' || view === 'resourceTimelineMonth') {
-                // Dla widoku tygodniowego z szczegółowością godzinową
-                if (view === 'resourceTimelineWeek' && ganttDetail === 'hour') {
-                  // Sprawdź, czy to jest górny wiersz nagłówka (label) czy dolny (godziny)
-                  if (args.level === 0) {
-                    // Górny wiersz (data)
-                    const day = date.getDate();
-                    const weekday = new Intl.DateTimeFormat('pl', { weekday: 'short' }).format(date);
-                    const month = new Intl.DateTimeFormat('pl', { month: 'short' }).format(date);
-                    
-                    return (
-                      <Box sx={{ 
-                        display: 'flex', 
-                        flexDirection: 'column', 
-                        alignItems: 'center',
-                        fontSize: isMobile ? '0.65rem' : '0.75rem'
-                      }}>
-                        <Typography variant="caption" sx={{ 
-                          color: 'primary.main', 
-                          fontWeight: 'bold',
-                          fontSize: 'inherit'
-                        }}>
-                          {month}
-                        </Typography>
-                        <Typography variant="body2" sx={{ 
-                          fontWeight: 'bold',
-                          fontSize: 'inherit'
-                        }}>
-                          {day}
-                        </Typography>
-                        {!isMobile && (
-                          <Typography variant="caption" sx={{ 
-                            textTransform: 'uppercase',
-                            fontSize: 'inherit'
-                          }}>
-                            {weekday}
-                          </Typography>
-                        )}
-                      </Box>
-                    );
-                  } else {
-                    // Dolny wiersz (godziny)
-                    const hour = date.getHours();
-                    const minute = date.getMinutes();
-                    return (
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
-                          {`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`}
-                        </Typography>
-                      </Box>
-                    );
-                  }
-                } else {
-                  // Standardowy widok dla dni (dla miesięcznego lub tygodniowego bez godzin)
-                  const day = date.getDate();
-                  const weekday = new Intl.DateTimeFormat('pl', { weekday: 'short' }).format(date);
-                  const month = new Intl.DateTimeFormat('pl', { month: 'short' }).format(date);
-                  
-                  // Dla pierwszego dnia miesiąca lub początku widoku, pokaż nazwę miesiąca
-                  if (day === 1 || (day <= 3 && args.isLabeled)) {
-                    return (
-                      <Box sx={{ 
-                        display: 'flex', 
-                        flexDirection: 'column', 
-                        alignItems: 'center',
-                        fontSize: isMobile ? '0.65rem' : '0.75rem'
-                      }}>
-                        <Typography variant="caption" sx={{ 
-                          color: 'primary.main', 
-                          fontWeight: 'bold',
-                          fontSize: 'inherit'
-                        }}>
-                          {month}
-                        </Typography>
-                        <Typography variant="body2" sx={{ 
-                          fontWeight: 'bold',
-                          fontSize: 'inherit'
-                        }}>
-                          {day}
-                        </Typography>
-                        {!isMobile && (
-                          <Typography variant="caption" sx={{ 
-                            textTransform: 'uppercase',
-                            fontSize: 'inherit'
-                          }}>
-                            {weekday}
-                          </Typography>
-                        )}
-                      </Box>
-                    );
-                  }
-                  
-                  // Dla pozostałych dni
-                  return (
-                    <Box sx={{ 
-                      display: 'flex', 
-                      flexDirection: 'column', 
-                      alignItems: 'center',
-                      fontSize: isMobile ? '0.65rem' : '0.75rem'
-                    }}>
-                      <Typography variant="body2" sx={{ 
-                        fontWeight: 'bold',
-                        fontSize: 'inherit'
-                      }}>
-                        {day}
-                      </Typography>
                       {!isMobile && (
                         <Typography variant="caption" sx={{ 
                           textTransform: 'uppercase',
@@ -3109,6 +3122,31 @@ const ProductionCalendar = () => {
                     </Box>
                   );
                 }
+                
+                // Dla pozostałych dni
+                return (
+                  <Box sx={{ 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center',
+                    fontSize: isMobile ? '0.65rem' : '0.75rem'
+                  }}>
+                    <Typography variant="body2" sx={{ 
+                      fontWeight: 'bold',
+                      fontSize: 'inherit'
+                    }}>
+                      {day}
+                    </Typography>
+                    {!isMobile && (
+                      <Typography variant="caption" sx={{ 
+                        textTransform: 'uppercase',
+                        fontSize: 'inherit'
+                      }}>
+                        {weekday}
+                      </Typography>
+                    )}
+                  </Box>
+                );
               }
             }
             return null;
@@ -3129,7 +3167,7 @@ const ProductionCalendar = () => {
               }
             }
           }}
-          viewClassNames={`custom-timeline-view ${scaleLevel < 0.8 ? 'scale-compact' : scaleLevel > 1.2 ? 'scale-large' : ''}`}
+          viewClassNames={`custom-timeline-view ${scaleLevel < 0.8 ? 'scale-compact' : scaleLevel > 1.2 ? 'scale-large' : ''} ${ganttDetail === 'hour' ? 'hour-scale' : ''} ${ganttDetail === 'hour' && Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) > MAX_DAYS_FOR_HOURLY_VIEW ? 'hour-scale-limited' : ''}`}
           dayHeaders={true}
           datesAboveResources={true}
           firstDay={1}
@@ -3146,14 +3184,10 @@ const ProductionCalendar = () => {
             },
             resourceTimelineDay: {
               slotDuration: { hours: 1 },
-              slotLabelFormat: customDateRange && Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) > 1 
-                ? [
-                    { day: 'numeric', month: 'short' }, // Pierwszy poziom - data (dzień, miesiąc)
-                    { hour: '2-digit', minute: '2-digit', hour12: false } // Drugi poziom - godzina
-                  ] 
-                : [
-                    { hour: '2-digit', minute: '2-digit', hour12: false }
-                  ],
+              slotLabelInterval: { hours: 1 },
+              slotLabelFormat: [
+                { hour: '2-digit', minute: '2-digit', hour12: false }
+              ],
               visibleRange: customDateRange ? { start: startDate, end: endDate } : null,
               slotMinWidth: getScaledSlotWidth(isMobile ? 50 : 70),
               duration: customDateRange 
@@ -3164,28 +3198,73 @@ const ProductionCalendar = () => {
               duration: customDateRange 
                 ? { days: Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) } 
                 : { days: 7 },
-              slotDuration: ganttDetail === 'hour' ? { hours: 1 } : { days: 1 },
-              slotLabelFormat: ganttDetail === 'hour' 
-                ? [
-                    { day: 'numeric', month: 'short', weekday: 'short' }, // Pierwszy poziom - data z dniem tygodnia
-                    { hour: '2-digit', minute: '2-digit', hour12: false } // Drugi poziom - godzina
-                  ]
-                : [
-                    { weekday: 'short', day: 'numeric', month: 'short' }
-                  ],
+              slotDuration: (() => {
+                // Sprawdź czy szczegółowość to godziny, a zakres dat nie jest zbyt duży
+                if (ganttDetail === 'hour') {
+                  const diffInDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+                  return diffInDays <= MAX_DAYS_FOR_HOURLY_VIEW ? { hours: 1 } : { days: 1 };
+                }
+                return { days: 1 };
+              })(),
+              slotLabelInterval: (() => {
+                // Synchronizuj z slotDuration
+                if (ganttDetail === 'hour') {
+                  const diffInDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+                  return diffInDays <= MAX_DAYS_FOR_HOURLY_VIEW ? { hours: 1 } : { days: 1 };
+                }
+                return { days: 1 };
+              })(),
+              slotLabelFormat: (() => {
+                // Dostosuj format etykiet w zależności od slotDuration
+                if (ganttDetail === 'hour') {
+                  const diffInDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+                  if (diffInDays <= MAX_DAYS_FOR_HOURLY_VIEW) {
+                    return [
+                      { day: 'numeric', month: 'short', weekday: 'short' }, // Pierwszy poziom - data z dniem tygodnia
+                      { hour: '2-digit', minute: '2-digit', hour12: false } // Drugi poziom - godzina
+                    ];
+                  }
+                }
+                return [{ weekday: 'short', day: 'numeric', month: 'short' }];
+              })(),
               visibleRange: customDateRange ? { start: startDate, end: endDate } : null,
-              slotMinWidth: getScaledSlotWidth(ganttDetail === 'hour' ? 70 : (isMobile ? 40 : 60))
+              slotMinWidth: getScaledSlotWidth(ganttDetail === 'hour' ? 50 : (isMobile ? 40 : 60))
             },
             resourceTimelineMonth: {
               duration: customDateRange 
                 ? { days: Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1 } 
                 : { days: 30 },
-              slotDuration: { days: 1 },
-              slotLabelFormat: [
-                { day: 'numeric', weekday: 'short' }
-              ],
+              slotDuration: (() => {
+                // Sprawdź czy szczegółowość to godziny, a zakres dat nie jest zbyt duży
+                if (ganttDetail === 'hour') {
+                  const diffInDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+                  return diffInDays <= MAX_DAYS_FOR_HOURLY_VIEW ? { hours: 1 } : { days: 1 };
+                }
+                return { days: 1 };
+              })(),
+              slotLabelInterval: (() => {
+                // Synchronizuj z slotDuration
+                if (ganttDetail === 'hour') {
+                  const diffInDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+                  return diffInDays <= MAX_DAYS_FOR_HOURLY_VIEW ? { hours: 1 } : { days: 1 };
+                }
+                return { days: 1 };
+              })(),
+              slotLabelFormat: (() => {
+                // Dostosuj format etykiet w zależności od slotDuration
+                if (ganttDetail === 'hour') {
+                  const diffInDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+                  if (diffInDays <= MAX_DAYS_FOR_HOURLY_VIEW) {
+                    return [
+                      { day: 'numeric', month: 'short', weekday: 'short' }, // Pierwszy poziom - data z dniem tygodnia
+                      { hour: '2-digit', minute: '2-digit', hour12: false } // Drugi poziom - godzina
+                    ];
+                  }
+                }
+                return [{ day: 'numeric', weekday: 'short' }];
+              })(),
               visibleRange: customDateRange ? { start: startDate, end: endDate } : null,
-              slotMinWidth: getScaledSlotWidth(isMobile ? 30 : 50)
+              slotMinWidth: getScaledSlotWidth(ganttDetail === 'hour' ? 50 : (isMobile ? 30 : 50))
             }
           }}
           dayHeaderClassNames="custom-day-header"
