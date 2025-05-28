@@ -769,6 +769,90 @@ const OrdersList = () => {
     setPage(1); // Reset do pierwszej strony
   };
 
+  const handleRefreshMO = async (order) => {
+    try {
+      setLoading(true);
+      showInfo('Odświeżanie danych zadań produkcyjnych...');
+      
+      // Import potrzebnych funkcji
+      const { getOrderById } = await import('../../services/orderService');
+      const { getTaskById } = await import('../../services/productionService');
+      
+      // Pobierz zaktualizowane dane zamówienia
+      const updatedOrderData = await getOrderById(order.id);
+      
+      if (!updatedOrderData) {
+        showError('Nie można znaleźć zamówienia');
+        setLoading(false);
+        return;
+      }
+
+      // Aktualizuj dane zadań produkcyjnych w pozycjach zamówienia
+      if (updatedOrderData.items && updatedOrderData.items.length > 0) {
+        for (let i = 0; i < updatedOrderData.items.length; i++) {
+          const item = updatedOrderData.items[i];
+          
+          // Znajdź powiązane zadanie produkcyjne
+          const associatedTask = updatedOrderData.productionTasks?.find(task => 
+            task.orderItemId === item.id || 
+            (task.productName === item.name && task.quantity == item.quantity)
+          );
+          
+          if (associatedTask) {
+            try {
+              // Pobierz szczegółowe dane zadania z bazy danych
+              const taskDetails = await getTaskById(associatedTask.id);
+              
+              // Aktualizuj informacje o zadaniu produkcyjnym w pozycji zamówienia
+              updatedOrderData.items[i] = {
+                ...item,
+                productionTaskId: associatedTask.id,
+                productionTaskNumber: associatedTask.moNumber || taskDetails.moNumber,
+                productionStatus: associatedTask.status || taskDetails.status,
+                // Używaj totalMaterialCost jako podstawowy koszt produkcji (tylko materiały wliczane do kosztów)
+                productionCost: taskDetails.totalMaterialCost || associatedTask.totalMaterialCost || 0,
+                // Dodaj pełny koszt produkcji (wszystkie materiały niezależnie od flagi "wliczaj")
+                fullProductionCost: taskDetails.totalFullProductionCost || associatedTask.totalFullProductionCost || 0
+              };
+              
+              console.log(`Zaktualizowano dane MO dla pozycji ${item.name}: ${updatedOrderData.items[i].productionTaskNumber}`);
+            } catch (error) {
+              console.error(`Błąd podczas pobierania szczegółów zadania ${associatedTask.id}:`, error);
+              
+              // W przypadku błędu, użyj podstawowych danych z associatedTask
+              updatedOrderData.items[i] = {
+                ...item,
+                productionTaskId: associatedTask.id,
+                productionTaskNumber: associatedTask.moNumber,
+                productionStatus: associatedTask.status,
+                productionCost: associatedTask.totalMaterialCost || 0,
+                fullProductionCost: associatedTask.totalFullProductionCost || 0
+              };
+            }
+          }
+        }
+      }
+      
+      // Aktualizuj dane w stanie aplikacji
+      setOrders(prevOrders => prevOrders.map(o => {
+        if (o.id === order.id) {
+          return {
+            ...o,
+            ...updatedOrderData
+          };
+        }
+        return o;
+      }));
+      
+      setLoading(false);
+      showSuccess('Dane zadań produkcyjnych zostały odświeżone');
+    } catch (error) {
+      console.error('Błąd podczas odświeżania danych MO:', error);
+      setLoading(false);
+      showError('Nie udało się odświeżyć danych zadań produkcyjnych');
+    }
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexDirection: { xs: 'column', sm: 'row' }, gap: { xs: 2, sm: 0 } }}>
@@ -1181,9 +1265,19 @@ const OrdersList = () => {
                                   </Grid>
 
                                   <Grid item xs={12}>
-                                    <Typography variant="subtitle2" gutterBottom>
-                                      Produkty:
-                                    </Typography>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                      <Typography variant="subtitle2">
+                                        Produkty:
+                                      </Typography>
+                                      <Button
+                                        size="small"
+                                        startIcon={<RefreshIcon />}
+                                        onClick={() => handleRefreshMO(order)}
+                                        title="Odśwież dane MO"
+                                      >
+                                        Odśwież MO
+                                      </Button>
+                                    </Box>
                                     <TableContainer component={Paper} variant="outlined">
                                       <Table size="small">
                                         <TableHead>
