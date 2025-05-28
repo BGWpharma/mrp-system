@@ -25,7 +25,8 @@ import {
   Alert,
   Checkbox,
   FormControlLabel,
-  FormGroup
+  FormGroup,
+  Chip
 } from '@mui/material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -35,10 +36,12 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
+import LinkIcon from '@mui/icons-material/Link';
 import { CMR_STATUSES, TRANSPORT_TYPES } from '../../../services/cmrService';
 import { getOrderById, getAllOrders, searchOrdersByNumber } from '../../../services/orderService';
 import { getCustomerById } from '../../../services/customerService';
 import { getCompanyData } from '../../../services/companyService';
+import BatchSelector from '../../../components/cmr/BatchSelector';
 
 /**
  * Komponent formularza CMR rozszerzony o możliwość uzupełniania pól na podstawie zamówienia klienta (CO).
@@ -55,7 +58,8 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
     unit: 'szt.',
     weight: '',
     volume: '',
-    notes: ''
+    notes: '',
+    linkedBatches: []
   };
   
   const emptyFormData = {
@@ -153,6 +157,10 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [snackbarSeverity, setSnackbarSeverity] = useState('info');
   
+  // Stany dla wyboru partii magazynowych
+  const [batchSelectorOpen, setBatchSelectorOpen] = useState(false);
+  const [currentItemIndex, setCurrentItemIndex] = useState(null);
+  
   // Funkcja do wyświetlania komunikatów
   const showMessage = (message, severity = 'info') => {
     setSnackbarMessage(message);
@@ -163,6 +171,43 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
   // Funkcja do zamykania komunikatu
   const handleCloseSnackbar = () => {
     setSnackbarOpen(false);
+  };
+  
+  // Funkcje do obsługi wyboru partii magazynowych
+  const handleOpenBatchSelector = (itemIndex) => {
+    setCurrentItemIndex(itemIndex);
+    setBatchSelectorOpen(true);
+  };
+  
+  const handleCloseBatchSelector = () => {
+    setBatchSelectorOpen(false);
+    setCurrentItemIndex(null);
+  };
+  
+  const handleSelectBatches = (selectedBatches) => {
+    if (currentItemIndex !== null) {
+      setFormData(prev => {
+        const updatedItems = [...prev.items];
+        updatedItems[currentItemIndex] = {
+          ...updatedItems[currentItemIndex],
+          linkedBatches: selectedBatches
+        };
+        return { ...prev, items: updatedItems };
+      });
+      
+      showMessage(`Powiązano ${selectedBatches.length} partii z pozycją ${currentItemIndex + 1}`, 'success');
+    }
+  };
+  
+  const handleRemoveBatch = (itemIndex, batchId) => {
+    setFormData(prev => {
+      const updatedItems = [...prev.items];
+      updatedItems[itemIndex] = {
+        ...updatedItems[itemIndex],
+        linkedBatches: updatedItems[itemIndex].linkedBatches.filter(batch => batch.id !== batchId)
+      };
+      return { ...prev, items: updatedItems };
+    });
   };
   
   // Funkcja do ładowania dostępnych zamówień klienta (CO)
@@ -276,9 +321,6 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
     
     // Walidacja dat
     if (!formData.issueDate) errors.issueDate = 'Data wystawienia jest wymagana';
-    
-    // Walidacja informacji o pojeździe
-    if (!formData.vehicleInfo?.vehicleRegistration) errors['vehicleInfo.vehicleRegistration'] = 'Numer rejestracyjny pojazdu jest wymagany';
     
     // Upewnij się, że pola specjalnych ustaleń i zastrzeżeń są zdefiniowane
     if (formData.specialAgreements === undefined) {
@@ -708,179 +750,39 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
   };
   
   return (
-    <form onSubmit={(e) => e.preventDefault()}>
+    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
       <Grid container spacing={3}>
-        {/* Dane podstawowe */}
-        <Grid item xs={12}>
-          <Card>
-            <CardHeader 
-              title="Informacje podstawowe" 
-              titleTypographyProps={{ variant: 'h6' }}
-            />
-            <Divider />
-            <CardContent>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={3}>
-                  <TextField
-                    label="Numer CMR"
-                    name="cmrNumber"
-                    value={formData.cmrNumber}
-                    onChange={handleChange}
-                    fullWidth
-                    disabled={true}
-                    helperText="Numer zostanie wygenerowany automatycznie"
-                  />
-                </Grid>
-                
-                <Grid item xs={12} sm={3}>
-                  <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
-                    <DatePicker
-                      label="Data wystawienia"
-                      value={formData.issueDate}
-                      onChange={(newDate) => {
-                        setFormData(prev => ({
-                          ...prev,
-                          issueDate: newDate
-                        }));
-                      }}
-                      renderInput={(params) => <TextField {...params} fullWidth />}
-                    />
-                  </LocalizationProvider>
-                </Grid>
-                
-                <Grid item xs={12} sm={3}>
-                  <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
-                    <DatePicker
-                      label="Data dostawy"
-                      value={formData.deliveryDate}
-                      onChange={(newDate) => {
-                        setFormData(prev => ({
-                          ...prev,
-                          deliveryDate: newDate
-                        }));
-                      }}
-                      renderInput={(params) => <TextField {...params} fullWidth />}
-                    />
-                  </LocalizationProvider>
-                </Grid>
-                
-                <Grid item xs={12} sm={3}>
-                  <FormControl fullWidth>
-                    <InputLabel id="transport-type-label">Typ transportu</InputLabel>
-                    <Select
-                      labelId="transport-type-label"
-                      id="transport-type"
-                      name="transportType"
-                      value={formData.transportType}
-                      onChange={handleChange}
-                      label="Typ transportu"
-                    >
-                      {Object.entries(TRANSPORT_TYPES).map(([key, value]) => (
-                        <MenuItem key={key} value={value}>{value}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-                
-                {/* Przycisk do wyboru zamówienia klienta (CO) */}
-                <Grid item xs={12}>
-                  <Button
-                    variant="outlined"
-                    color="primary"
-                    onClick={handleOpenOrderDialog}
-                    sx={{ mt: 1 }}
-                  >
-                    Powiąż z CO
-                  </Button>
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Card>
-        </Grid>
         
         {/* Dialog wyboru zamówienia klienta (CO) */}
         <Dialog open={isOrderDialogOpen} onClose={handleCloseOrderDialog} maxWidth="md" fullWidth>
-          <DialogTitle>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="h6">Wybierz zamówienie klienta (CO)</Typography>
-              <IconButton onClick={handleRefreshOrders} disabled={isLoadingOrder} title="Odśwież listę">
-                <RefreshIcon />
-              </IconButton>
-            </Box>
-          </DialogTitle>
+          <DialogTitle>Wybierz zamówienie klienta (CO)</DialogTitle>
           <DialogContent>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sx={{ mb: 2, mt: 1 }}>
+            <Box sx={{ mb: 2 }}>
                 <TextField
-                  fullWidth
-                  label="Wyszukaj po numerze CO"
-                  variant="outlined"
+                label="Szukaj po numerze zamówienia"
                   value={orderSearchQuery}
                   onChange={(e) => setOrderSearchQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleFindOrderByNumber();
-                    }
-                  }}
+                fullWidth
                   InputProps={{
                     endAdornment: (
-                      <Button 
-                        onClick={handleFindOrderByNumber}
-                        disabled={isLoadingOrder}
-                        variant="contained"
-                        size="small"
-                        sx={{ ml: 1 }}
-                        startIcon={<SearchIcon />}
-                      >
-                        Szukaj
-                      </Button>
+                    <Box>
+                      <IconButton onClick={handleFindOrderByNumber}>
+                        <SearchIcon />
+                      </IconButton>
+                      <IconButton onClick={handleRefreshOrders}>
+                        <RefreshIcon />
+                      </IconButton>
+                    </Box>
                     )
                   }}
                 />
-              </Grid>
-              
-              <Grid item xs={12}>
-                {isLoadingOrder ? (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', my: 3 }}>
-                    <CircularProgress />
                   </Box>
-                ) : (
-                  <Autocomplete
-                    options={availableOrders}
-                    getOptionLabel={(option) => `${option.orderNumber || ''} - ${option.customer?.name || ''}`}
-                    onChange={(e, value) => {
-                      if (value) {
-                        setSelectedOrderId(value.id);
-                      } else {
-                        setSelectedOrderId('');
-                      }
-                    }}
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        label="Wybierz zamówienie"
-                        variant="outlined"
-                        helperText={
-                          availableOrders.length === 0 
-                            ? "Brak zamówień. Użyj wyszukiwarki powyżej, aby znaleźć zamówienie." 
-                            : "Wybierz zamówienie z listy"
-                        }
-                      />
-                    )}
-                  />
-                )}
-              </Grid>
-              
-              {/* Opcje importu danych */}
-              {selectedOrderId && (
-                <Grid item xs={12} sx={{ mt: 2 }}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Wybierz dane do zaimportowania:
-                  </Typography>
+            
+            {/* Opcje importu */}
                   <FormGroup>
-                    <Grid container>
-                      <Grid item xs={12} sm={6}>
+              <Typography variant="h6" sx={{ mb: 1 }}>
+                Wybierz dane do importu:
+              </Typography>
                         <FormControlLabel 
                           control={
                             <Checkbox 
@@ -891,8 +793,6 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                           } 
                           label="Dane odbiorcy" 
                         />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
                         <FormControlLabel 
                           control={
                             <Checkbox 
@@ -903,8 +803,6 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                           } 
                           label="Miejsce dostawy" 
                         />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
                         <FormControlLabel 
                           control={
                             <Checkbox 
@@ -915,8 +813,6 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                           } 
                           label="Data dostawy" 
                         />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
                         <FormControlLabel 
                           control={
                             <Checkbox 
@@ -925,10 +821,8 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                               name="items" 
                             />
                           } 
-                          label="Produkty" 
+                label="Pozycje zamówienia"
                         />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
                         <FormControlLabel 
                           control={
                             <Checkbox 
@@ -937,46 +831,56 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                               name="documents" 
                             />
                           } 
-                          label="Dokumenty" 
+                label="Informacje o dokumentach"
                         />
-                      </Grid>
-                    </Grid>
                   </FormGroup>
-                </Grid>
-              )}
-            </Grid>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseOrderDialog} color="primary">
-              Anuluj
-            </Button>
-            <Button 
-              onClick={() => handleOrderSelect(selectedOrderId)} 
-              color="primary" 
-              variant="contained"
-              disabled={!selectedOrderId || isLoadingOrder}
-            >
-              Uzupełnij dane
-            </Button>
-          </DialogActions>
-        </Dialog>
-        
-        {/* Dialog wyboru pól nadawcy do zaimportowania */}
-        <Dialog open={isSenderDialogOpen} onClose={handleCloseSenderDialog} maxWidth="sm" fullWidth>
-          <DialogTitle>
-            <Typography variant="h6">Wybierz dane do zaimportowania</Typography>
-          </DialogTitle>
-          <DialogContent>
-            {isLoadingSenderData ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', my: 3 }}>
+            
+            {isLoadingOrder ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
                 <CircularProgress />
               </Box>
             ) : (
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="body2" gutterBottom>
-                  Wybierz, które dane nadawcy chcesz uzupełnić danymi firmy:
-                </Typography>
+              <Box sx={{ maxHeight: 300, overflow: 'auto', mt: 2 }}>
+                {availableOrders.map(order => (
+                  <Box 
+                    key={order.id}
+                    sx={{ 
+                      p: 2, 
+                      border: '1px solid #ddd', 
+                      borderRadius: 1, 
+                      mb: 1,
+                      cursor: 'pointer',
+                      '&:hover': { bgcolor: 'grey.100' }
+                    }}
+                    onClick={() => handleOrderSelect(order.id)}
+                  >
+                    <Typography variant="subtitle2">
+                      Zamówienie: {order.orderNumber}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Klient: {order.customerName}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Data: {order.orderDate?.toDate?.()?.toLocaleDateString?.('pl-PL') || 'Brak daty'}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseOrderDialog}>Anuluj</Button>
+          </DialogActions>
+        </Dialog>
+        
+        {/* Dialog wyboru danych nadawcy */}
+        <Dialog open={isSenderDialogOpen} onClose={handleCloseSenderDialog} maxWidth="sm" fullWidth>
+          <DialogTitle>Importuj dane firmy</DialogTitle>
+          <DialogContent>
                 <FormGroup>
+              <Typography variant="h6" sx={{ mb: 1 }}>
+                Wybierz dane do importu:
+              </Typography>
                   <FormControlLabel 
                     control={
                       <Checkbox 
@@ -985,7 +889,7 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                         name="name" 
                       />
                     } 
-                    label="Nazwa nadawcy" 
+                label="Nazwa firmy"
                   />
                   <FormControlLabel 
                     control={
@@ -995,7 +899,7 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                         name="address" 
                       />
                     } 
-                    label="Adres nadawcy" 
+                label="Adres"
                   />
                   <FormControlLabel 
                     control={
@@ -1028,61 +932,144 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                     label="Kraj" 
                   />
                 </FormGroup>
-              </Box>
-            )}
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleCloseSenderDialog} color="primary">
-              Anuluj
-            </Button>
+            <Button onClick={handleCloseSenderDialog}>Anuluj</Button>
             <Button 
               onClick={handleImportSenderData} 
-              color="primary" 
               variant="contained"
               disabled={isLoadingSenderData}
             >
-              Uzupełnij dane
+              {isLoadingSenderData ? <CircularProgress size={20} /> : 'Importuj dane'}
             </Button>
           </DialogActions>
         </Dialog>
         
-        {/* Snackbar do wyświetlania komunikatów */}
-        <Snackbar 
-          open={snackbarOpen} 
-          autoHideDuration={6000} 
-          onClose={handleCloseSnackbar}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        >
-          <Alert onClose={handleCloseSnackbar} severity={snackbarSeverity} sx={{ width: '100%' }}>
-            {snackbarMessage}
-          </Alert>
-        </Snackbar>
+        <form onSubmit={handleSubmit} style={{ width: '100%' }}>
+          <Grid container spacing={3}>
         
-        {/* Strony */}
+            {/* Status i podstawowe informacje */}
         <Grid item xs={12}>
           <Card>
             <CardHeader 
-              title="Strony" 
+                  title="Podstawowe informacje" 
               titleTypographyProps={{ variant: 'h6' }}
             />
             <Divider />
             <CardContent>
               <Grid container spacing={2}>
-                {/* Nadawca */}
-                <Grid item xs={12} sm={6} md={4}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                    <Typography variant="subtitle2" gutterBottom>
-                      Nadawca
-                    </Typography>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        label="Numer CMR"
+                        name="cmrNumber"
+                        value={formData.cmrNumber}
+                        onChange={handleChange}
+                        fullWidth
+                        margin="normal"
+                        error={formErrors.cmrNumber}
+                        helperText={formErrors.cmrNumber}
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} sm={6}>
+                      <FormControl fullWidth margin="normal">
+                        <InputLabel>Status</InputLabel>
+                        <Select
+                          name="status"
+                          value={formData.status}
+                          onChange={handleChange}
+                          label="Status"
+                        >
+                          {Object.entries(CMR_STATUSES).map(([key, value]) => (
+                            <MenuItem key={key} value={value}>{value}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                    
+                    <Grid item xs={12} sm={6}>
+                      <DatePicker
+                        label="Data wystawienia"
+                        value={formData.issueDate}
+                        onChange={(date) => handleDateChange('issueDate', date)}
+                        renderInput={(params) => 
+                          <TextField 
+                            {...params} 
+                            fullWidth 
+                            margin="normal"
+                            error={formErrors.issueDate}
+                            helperText={formErrors.issueDate}
+                          />
+                        }
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} sm={6}>
+                      <DatePicker
+                        label="Data dostawy"
+                        value={formData.deliveryDate}
+                        onChange={(date) => handleDateChange('deliveryDate', date)}
+                        renderInput={(params) => 
+                          <TextField 
+                            {...params} 
+                            fullWidth 
+                            margin="normal"
+                          />
+                        }
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} sm={6}>
+                      <FormControl fullWidth margin="normal">
+                        <InputLabel>Typ transportu</InputLabel>
+                        <Select
+                          name="transportType"
+                          value={formData.transportType}
+                          onChange={handleChange}
+                          label="Typ transportu"
+                        >
+                          {Object.entries(TRANSPORT_TYPES).map(([key, value]) => (
+                            <MenuItem key={key} value={value}>{value}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                    
+                    <Grid item xs={12} sm={6}>
+                      <Box sx={{ display: 'flex', gap: 1 }}>
                     <Button 
                       variant="outlined" 
                       size="small" 
-                      onClick={() => loadCompanyData(true)}
-                      sx={{ ml: 1 }}
+                          onClick={handleOpenOrderDialog}
+                        >
+                          Użyj danych z CO
+                        </Button>
+                        
+                        <Button 
+                          variant="outlined" 
+                          size="small"
+                          onClick={handleOpenSenderDialog}
                     >
-                      Uzupełnij danymi firmy
+                          Użyj danych firmy
                     </Button>
                   </Box>
+                    </Grid>
+                  </Grid>
+                </CardContent>
+              </Card>
+            </Grid>
+            
+            {/* Dane nadawcy */}
+            <Grid item xs={12}>
+              <Card>
+                <CardHeader 
+                  title="Dane nadawcy" 
+                  titleTypographyProps={{ variant: 'h6' }}
+                />
+                <Divider />
+                <CardContent>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12}>
                   <TextField
                     label="Nazwa nadawcy"
                     name="sender"
@@ -1090,9 +1077,12 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                     onChange={handleChange}
                     fullWidth
                     margin="normal"
-                    error={!!formErrors.sender}
+                        error={formErrors.sender}
                     helperText={formErrors.sender}
                   />
+                    </Grid>
+                    
+                    <Grid item xs={12}>
                   <TextField
                     label="Adres nadawcy"
                     name="senderAddress"
@@ -1100,13 +1090,12 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                     onChange={handleChange}
                     fullWidth
                     margin="normal"
-                    error={!!formErrors.senderAddress}
-                    helperText={formErrors.senderAddress}
                   />
-                  <Grid container spacing={2}>
-                    <Grid item xs={6}>
+                    </Grid>
+                    
+                    <Grid item xs={12} sm={4}>
                       <TextField
-                        label="Kod pocztowy"
+                        label="Kod pocztowy nadawcy"
                         name="senderPostalCode"
                         value={formData.senderPostalCode}
                         onChange={handleChange}
@@ -1114,9 +1103,10 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                         margin="normal"
                       />
                     </Grid>
-                    <Grid item xs={6}>
+                    
+                    <Grid item xs={12} sm={4}>
                       <TextField
-                        label="Miasto"
+                        label="Miasto nadawcy"
                         name="senderCity"
                         value={formData.senderCity}
                         onChange={handleChange}
@@ -1124,22 +1114,33 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                         margin="normal"
                       />
                     </Grid>
-                  </Grid>
+                    
+                    <Grid item xs={12} sm={4}>
                   <TextField
-                    label="Kraj"
+                        label="Kraj nadawcy"
                     name="senderCountry"
                     value={formData.senderCountry}
                     onChange={handleChange}
                     fullWidth
                     margin="normal"
                   />
+                    </Grid>
+                  </Grid>
+                </CardContent>
+              </Card>
                 </Grid>
                 
-                {/* Odbiorca */}
-                <Grid item xs={12} sm={6} md={4}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Odbiorca
-                  </Typography>
+            {/* Dane odbiorcy */}
+            <Grid item xs={12}>
+              <Card>
+                <CardHeader 
+                  title="Dane odbiorcy" 
+                  titleTypographyProps={{ variant: 'h6' }}
+                />
+                <Divider />
+                <CardContent>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12}>
                   <TextField
                     label="Nazwa odbiorcy"
                     name="recipient"
@@ -1147,9 +1148,12 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                     onChange={handleChange}
                     fullWidth
                     margin="normal"
-                    error={!!formErrors.recipient}
+                        error={formErrors.recipient}
                     helperText={formErrors.recipient}
                   />
+                    </Grid>
+                    
+                    <Grid item xs={12}>
                   <TextField
                     label="Adres odbiorcy"
                     name="recipientAddress"
@@ -1157,13 +1161,12 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                     onChange={handleChange}
                     fullWidth
                     margin="normal"
-                    error={!!formErrors.recipientAddress}
-                    helperText={formErrors.recipientAddress}
                   />
-                  <Grid container spacing={2}>
-                    <Grid item xs={6}>
+                    </Grid>
+                    
+                    <Grid item xs={12} sm={4}>
                       <TextField
-                        label="Kod pocztowy"
+                        label="Kod pocztowy odbiorcy"
                         name="recipientPostalCode"
                         value={formData.recipientPostalCode}
                         onChange={handleChange}
@@ -1171,9 +1174,10 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                         margin="normal"
                       />
                     </Grid>
-                    <Grid item xs={6}>
+                    
+                    <Grid item xs={12} sm={4}>
                       <TextField
-                        label="Miasto"
+                        label="Miasto odbiorcy"
                         name="recipientCity"
                         value={formData.recipientCity}
                         onChange={handleChange}
@@ -1181,22 +1185,33 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                         margin="normal"
                       />
                     </Grid>
-                  </Grid>
+                    
+                    <Grid item xs={12} sm={4}>
                   <TextField
-                    label="Kraj"
+                        label="Kraj odbiorcy"
                     name="recipientCountry"
                     value={formData.recipientCountry}
                     onChange={handleChange}
                     fullWidth
                     margin="normal"
                   />
+                    </Grid>
+                  </Grid>
+                </CardContent>
+              </Card>
                 </Grid>
                 
-                {/* Przewoźnik */}
-                <Grid item xs={12} sm={6} md={4}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Przewoźnik
-                  </Typography>
+            {/* Dane przewoźnika */}
+            <Grid item xs={12}>
+              <Card>
+                <CardHeader 
+                  title="Dane przewoźnika" 
+                  titleTypographyProps={{ variant: 'h6' }}
+                />
+                <Divider />
+                <CardContent>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12}>
                   <TextField
                     label="Nazwa przewoźnika"
                     name="carrier"
@@ -1204,9 +1219,10 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                     onChange={handleChange}
                     fullWidth
                     margin="normal"
-                    error={!!formErrors.carrier}
-                    helperText={formErrors.carrier}
                   />
+                    </Grid>
+                    
+                    <Grid item xs={12}>
                   <TextField
                     label="Adres przewoźnika"
                     name="carrierAddress"
@@ -1214,13 +1230,12 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                     onChange={handleChange}
                     fullWidth
                     margin="normal"
-                    error={!!formErrors.carrierAddress}
-                    helperText={formErrors.carrierAddress}
                   />
-                  <Grid container spacing={2}>
-                    <Grid item xs={6}>
+                    </Grid>
+                    
+                    <Grid item xs={12} sm={4}>
                       <TextField
-                        label="Kod pocztowy"
+                        label="Kod pocztowy przewoźnika"
                         name="carrierPostalCode"
                         value={formData.carrierPostalCode}
                         onChange={handleChange}
@@ -1228,9 +1243,10 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                         margin="normal"
                       />
                     </Grid>
-                    <Grid item xs={6}>
+                    
+                    <Grid item xs={12} sm={4}>
                       <TextField
-                        label="Miasto"
+                        label="Miasto przewoźnika"
                         name="carrierCity"
                         value={formData.carrierCity}
                         onChange={handleChange}
@@ -1238,9 +1254,10 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                         margin="normal"
                       />
                     </Grid>
-                  </Grid>
+                    
+                    <Grid item xs={12} sm={4}>
                   <TextField
-                    label="Kraj"
+                        label="Kraj przewoźnika"
                     name="carrierCountry"
                     value={formData.carrierCountry}
                     onChange={handleChange}
@@ -1264,9 +1281,6 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
             <CardContent>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Miejsce i data załadunku
-                  </Typography>
                   <TextField
                     label="Miejsce załadunku"
                     name="loadingPlace"
@@ -1275,26 +1289,24 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                     fullWidth
                     margin="normal"
                   />
-                  <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                    </Grid>
+                    
+                    <Grid item xs={12} sm={6}>
                     <DatePicker
                       label="Data załadunku"
                       value={formData.loadingDate}
                       onChange={(date) => handleDateChange('loadingDate', date)}
-                      renderInput={(params) => (
+                        renderInput={(params) => 
                         <TextField
                           {...params}
                           fullWidth
                           margin="normal"
                         />
-                      )}
+                        }
                     />
-                  </LocalizationProvider>
                 </Grid>
                 
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Miejsce przeznaczenia przesyłki
-                  </Typography>
+                    <Grid item xs={12}>
                   <TextField
                     label="Miejsce dostawy"
                     name="deliveryPlace"
@@ -1503,6 +1515,45 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                         rows={2}
                       />
                     </Grid>
+                        
+                        {/* Powiązanie z partiami magazynowymi */}
+                        <Grid item xs={12}>
+                          <Box sx={{ mt: 2 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                              <Typography variant="subtitle2" color="text.secondary">
+                                Powiązane partie magazynowe
+                              </Typography>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<LinkIcon />}
+                                onClick={() => handleOpenBatchSelector(index)}
+                              >
+                                Wybierz partie
+                              </Button>
+                            </Box>
+                            
+                            {/* Wyświetlanie powiązanych partii */}
+                            {item.linkedBatches && item.linkedBatches.length > 0 ? (
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+                                {item.linkedBatches.map((batch) => (
+                                  <Chip
+                                    key={batch.id}
+                                    label={`${batch.batchNumber || batch.lotNumber || 'Bez numeru'} (${batch.quantity} ${batch.unit || 'szt.'})`}
+                                    variant="outlined"
+                                    size="small"
+                                    onDelete={() => handleRemoveBatch(index, batch.id)}
+                                    color="primary"
+                                  />
+                                ))}
+                              </Box>
+                            ) : (
+                              <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                                Brak powiązanych partii
+                              </Typography>
+                            )}
+                          </Box>
+                    </Grid>
                   </Grid>
                 </Box>
               ))}
@@ -1656,6 +1707,29 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
         </Grid>
       </Grid>
     </form>
+        
+        {/* Dialog wyboru partii magazynowych */}
+        <BatchSelector
+          open={batchSelectorOpen}
+          onClose={handleCloseBatchSelector}
+          onSelectBatches={handleSelectBatches}
+          selectedBatches={currentItemIndex !== null ? formData.items[currentItemIndex]?.linkedBatches || [] : []}
+          itemDescription={currentItemIndex !== null ? formData.items[currentItemIndex]?.description || '' : ''}
+        />
+        
+        {/* Snackbar dla komunikatów */}
+        <Snackbar
+          open={snackbarOpen}
+          autoHideDuration={6000}
+          onClose={handleCloseSnackbar}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        >
+          <Alert onClose={handleCloseSnackbar} severity={snackbarSeverity} sx={{ width: '100%' }}>
+            {snackbarMessage}
+          </Alert>
+        </Snackbar>
+      </Grid>
+    </LocalizationProvider>
   );
 };
 

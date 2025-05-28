@@ -525,12 +525,107 @@ const CmrDetailsPage = () => {
   
   const handleStatusChange = async (newStatus) => {
     try {
-      await updateCmrStatus(id, newStatus, currentUser.uid);
-      showSuccess(`Status dokumentu CMR zmieniony na: ${newStatus}`);
+      const result = await updateCmrStatus(id, newStatus, currentUser.uid);
+      
+      // Sprawdź czy zmiana statusu zawiera informacje o rezerwacjach
+      if (newStatus === CMR_STATUSES.IN_TRANSIT && result.reservationResult) {
+        const { reservationResult } = result;
+        
+        let message = `Status dokumentu CMR zmieniony na: ${newStatus}.`;
+        
+        if (reservationResult.success) {
+          message += ` Pomyślnie zarezerwowano wszystkie partie.`;
+          
+          if (reservationResult.reservationResults && reservationResult.reservationResults.length > 0) {
+            const details = reservationResult.reservationResults.map(res => 
+              `• ${res.itemName}: ${res.quantity} ${res.unit} z partii ${res.batchNumber}`
+            ).join('\n');
+            
+            message += `\n\nSzczegóły rezerwacji:\n${details}`;
+          }
+          
+          showSuccess(message);
+        } else {
+          message += ` Wystąpiły problemy z rezerwacją partii.`;
+          
+          if (reservationResult.errors && reservationResult.errors.length > 0) {
+            const errorDetails = reservationResult.errors.map(err => 
+              `• ${err.itemName} (partia ${err.batchNumber}): ${err.error}`
+            ).join('\n');
+            
+            message += `\n\nBłędy:\n${errorDetails}`;
+          }
+          
+          if (reservationResult.reservationResults && reservationResult.reservationResults.length > 0) {
+            const successDetails = reservationResult.reservationResults.map(res => 
+              `• ${res.itemName}: ${res.quantity} ${res.unit} z partii ${res.batchNumber}`
+            ).join('\n');
+            
+            message += `\n\nPomyślne rezerwacje:\n${successDetails}`;
+          }
+          
+          showError(message);
+        }
+        
+        // Dodatkowe informacje o statystykach
+        if (reservationResult.statistics) {
+          const stats = reservationResult.statistics;
+          console.log(`Statystyki rezerwacji: ${stats.successCount} sukces(ów), ${stats.errorCount} błąd(ów) z ${stats.totalAttempted} prób`);
+        }
+      } 
+      // Sprawdź czy zmiana statusu zawiera informacje o dostarczeniu
+      else if (newStatus === CMR_STATUSES.DELIVERED && result.deliveryResult) {
+        const { deliveryResult } = result;
+        
+        let message = `Status dokumentu CMR zmieniony na: ${newStatus}.`;
+        
+        if (deliveryResult.success) {
+          message += ` Pomyślnie przetworzono dostarczenie - anulowano rezerwacje i wydano produkty.`;
+          
+          if (deliveryResult.deliveryResults && deliveryResult.deliveryResults.length > 0) {
+            const details = deliveryResult.deliveryResults.map(res => 
+              `• ${res.itemName}: wydano ${res.quantity} ${res.unit} z partii ${res.batchNumber}`
+            ).join('\n');
+            
+            message += `\n\nSzczegóły wydania:\n${details}`;
+          }
+          
+          showSuccess(message);
+        } else {
+          message += ` Wystąpiły problemy podczas przetwarzania dostarczenia.`;
+          
+          if (deliveryResult.errors && deliveryResult.errors.length > 0) {
+            const errorDetails = deliveryResult.errors.map(err => 
+              `• ${err.itemName} ${err.batchNumber ? `(partia ${err.batchNumber})` : ''}: ${err.error}`
+            ).join('\n');
+            
+            message += `\n\nBłędy:\n${errorDetails}`;
+          }
+          
+          if (deliveryResult.deliveryResults && deliveryResult.deliveryResults.length > 0) {
+            const successDetails = deliveryResult.deliveryResults.map(res => 
+              `• ${res.itemName}: wydano ${res.quantity} ${res.unit} z partii ${res.batchNumber}`
+            ).join('\n');
+            
+            message += `\n\nPomyślne operacje:\n${successDetails}`;
+          }
+          
+          showError(message);
+        }
+        
+        // Dodatkowe informacje o statystykach
+        if (deliveryResult.statistics) {
+          const stats = deliveryResult.statistics;
+          console.log(`Statystyki dostarczenia: ${stats.successCount} sukces(ów), ${stats.errorCount} błąd(ów) z ${stats.totalAttempted} prób`);
+        }
+      } else {
+        showSuccess(`Status dokumentu CMR zmieniony na: ${newStatus}`);
+      }
+      
       fetchCmrDocument();
     } catch (error) {
       console.error('Błąd podczas zmiany statusu dokumentu CMR:', error);
-      showError('Nie udało się zmienić statusu dokumentu CMR');
+      showError('Nie udało się zmienić statusu dokumentu CMR: ' + error.message);
     }
   };
   
@@ -1040,6 +1135,7 @@ const CmrDetailsPage = () => {
                         <TableCell>Waga (kg)</TableCell>
                         <TableCell>Objętość (m³)</TableCell>
                         <TableCell>Uwagi</TableCell>
+                        <TableCell>Powiązane partie</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -1052,6 +1148,23 @@ const CmrDetailsPage = () => {
                           <TableCell>{item.weight}</TableCell>
                           <TableCell>{item.volume}</TableCell>
                           <TableCell>{item.notes}</TableCell>
+                          <TableCell>
+                            {item.linkedBatches && item.linkedBatches.length > 0 ? (
+                              <Box>
+                                {item.linkedBatches.map((batch, batchIndex) => (
+                                  <Typography key={batch.id} variant="body2" sx={{ fontSize: '0.9rem' }}>
+                                    {batch.batchNumber || batch.lotNumber || 'Bez numeru'} 
+                                    ({batch.quantity} {batch.unit || 'szt.'})
+                                    {batchIndex < item.linkedBatches.length - 1 ? '; ' : ''}
+                                  </Typography>
+                                ))}
+                              </Box>
+                            ) : (
+                              <Typography variant="body2" sx={{ fontSize: '0.9rem', fontStyle: 'italic' }}>
+                                Brak powiązanych partii
+                              </Typography>
+                            )}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -1214,6 +1327,7 @@ const CmrDetailsPage = () => {
                   <TableCell>Waga (kg)</TableCell>
                   <TableCell>Objętość (m³)</TableCell>
                   <TableCell>Uwagi</TableCell>
+                  <TableCell>Powiązane partie</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1226,6 +1340,23 @@ const CmrDetailsPage = () => {
                     <TableCell>{item.weight}</TableCell>
                     <TableCell>{item.volume}</TableCell>
                     <TableCell>{item.notes}</TableCell>
+                    <TableCell>
+                      {item.linkedBatches && item.linkedBatches.length > 0 ? (
+                        <Box>
+                          {item.linkedBatches.map((batch, batchIndex) => (
+                            <Typography key={batch.id} variant="body2" sx={{ fontSize: '0.9rem' }}>
+                              {batch.batchNumber || batch.lotNumber || 'Bez numeru'} 
+                              ({batch.quantity} {batch.unit || 'szt.'})
+                              {batchIndex < item.linkedBatches.length - 1 ? '; ' : ''}
+                            </Typography>
+                          ))}
+                        </Box>
+                      ) : (
+                        <Typography variant="body2" sx={{ fontSize: '0.9rem', fontStyle: 'italic' }}>
+                          Brak powiązanych partii
+                        </Typography>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

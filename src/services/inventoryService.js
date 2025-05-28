@@ -1629,24 +1629,47 @@ import {
         Wymagane: ${quantity} ${item.unit}`);
       }
       
-      // Pobierz dane zadania produkcyjnego na początku funkcji
-      const taskRef = doc(db, 'productionTasks', taskId);
-      const taskDoc = await getDoc(taskRef);
-      
+      // Pobierz dane zadania produkcyjnego lub CMR na początku funkcji
       let taskData = {};
       let taskName = '';
       let taskNumber = '';
       let clientName = '';
       let clientId = '';
+      let isCmrReservation = false;
+      let cmrNumber = '';
       
-      if (taskDoc.exists()) {
-        taskData = taskDoc.data();
-        taskName = taskData.name || '';
-        taskNumber = taskData.number || '';
-        clientName = taskData.clientName || '';
-        clientId = taskData.clientId || '';
+      // Sprawdź czy to rezerwacja dla CMR (taskId zaczyna się od 'CMR-')
+      if (taskId && taskId.startsWith('CMR-')) {
+        isCmrReservation = true;
+        
+        // Wyodrębnij numer CMR z taskId (format: CMR-{cmrNumber}-{cmrId})
+        const cmrMatch = taskId.match(/^CMR-(.+)-(.+)$/);
+        if (cmrMatch) {
+          cmrNumber = cmrMatch[1];
+          taskName = `Transport CMR ${cmrNumber}`;
+          taskNumber = cmrNumber;
+          console.log(`Rezerwacja dla CMR: ${cmrNumber}`);
+        } else {
+          console.warn(`Nieprawidłowy format taskId dla CMR: ${taskId}`);
+          taskName = 'Transport CMR';
+        }
       } else {
-        console.warn(`Zadanie produkcyjne o ID ${taskId} nie istnieje`);
+        // Standardowa rezerwacja dla zadania produkcyjnego
+        const taskRef = doc(db, 'productionTasks', taskId);
+        const taskDoc = await getDoc(taskRef);
+        
+        if (taskDoc.exists()) {
+          taskData = taskDoc.data();
+          taskName = taskData.name || '';
+          taskNumber = taskData.number || '';
+          clientName = taskData.clientName || '';
+          clientId = taskData.clientId || '';
+        } else {
+          console.warn(`Zadanie produkcyjne o ID ${taskId} nie istnieje`);
+        }
+        
+        // Zapisz log dla diagnostyki
+        console.log(`Rezerwacja dla zadania: MO=${taskNumber}, nazwa=${taskName}`);
       }
       
       // Zapisz log dla diagnostyki
@@ -1806,8 +1829,9 @@ import {
         }
       }
       
-      // Zapisz informacje o partiach w zadaniu produkcyjnym
-      if (taskDoc.exists()) {
+      // Zapisz informacje o partiach w zadaniu produkcyjnym (tylko dla rzeczywistych zadań produkcyjnych)
+      if (!isCmrReservation && taskData && Object.keys(taskData).length > 0) {
+        const taskRef = doc(db, 'productionTasks', taskId);
         const materialBatches = taskData.materialBatches || {};
         
         console.log(`[DEBUG] Stan materialBatches przed aktualizacją:`, JSON.stringify(materialBatches));
@@ -1838,6 +1862,8 @@ import {
         });
         
         console.log(`[DEBUG] Zaktualizowano zadanie produkcyjne z nowymi partiami`);
+      } else if (isCmrReservation) {
+        console.log(`[DEBUG] Pomijam aktualizację zadania produkcyjnego - to rezerwacja dla CMR`);
       }
       
       // Upewnij się, że wszystkie zarezerwowane partie mają numery
@@ -1858,21 +1884,27 @@ import {
         itemName: item.name,
         quantity,
         type: 'booking',
-        reason: 'Zadanie produkcyjne',
+        reason: isCmrReservation ? 'Transport CMR' : 'Zadanie produkcyjne',
         referenceId: taskId,
         taskId: taskId,
         taskName: taskName,
         taskNumber: taskNumber,
         clientName: clientName,
         clientId: clientId,
-        notes: batchId 
-          ? `Zarezerwowano na zadanie produkcyjne MO: ${taskNumber || taskId} (ręczny wybór partii)`
-          : `Zarezerwowano na zadanie produkcyjne MO: ${taskNumber || taskId} (metoda: ${reservationMethod})`,
+        notes: isCmrReservation 
+          ? (batchId 
+            ? `Zarezerwowano na transport CMR: ${cmrNumber} (ręczny wybór partii)`
+            : `Zarezerwowano na transport CMR: ${cmrNumber} (metoda: ${reservationMethod})`)
+          : (batchId 
+            ? `Zarezerwowano na zadanie produkcyjne MO: ${taskNumber || taskId} (ręczny wybór partii)`
+            : `Zarezerwowano na zadanie produkcyjne MO: ${taskNumber || taskId} (metoda: ${reservationMethod})`),
         batchId: selectedBatchId,
         batchNumber: selectedBatchNumber,
         userName: userName,
         createdAt: serverTimestamp(),
-        createdBy: userId
+        createdBy: userId,
+        // Dodatkowe pole do identyfikacji rezerwacji CMR
+        cmrNumber: isCmrReservation ? cmrNumber : null
       };
       
       console.log('Tworzenie rezerwacji z danymi:', { taskNumber, taskName });
