@@ -381,6 +381,83 @@ import {
     }
   };
   
+  // Pobieranie zadań produkcyjnych na dany okres z filtrowaniem po stronie serwera
+  export const getTasksByDateRangeOptimized = async (startDate, endDate, statuses = ['Zaplanowane', 'W trakcie', 'Wstrzymane']) => {
+    try {
+      const tasksRef = collection(db, PRODUCTION_TASKS_COLLECTION);
+      
+      // Konwersja dat na Timestamp dla Firestore
+      const startTimestamp = Timestamp.fromDate(new Date(startDate));
+      const endTimestamp = Timestamp.fromDate(new Date(endDate));
+      
+      console.log('Pobieranie zadań z serwera dla okresu:', startDate, '-', endDate);
+      
+      // Przygotuj zapytanie z filtrowaniem po stronie serwera
+      let q;
+      
+      if (statuses.length === 1) {
+        // Optymalne zapytanie dla jednego statusu
+        q = query(
+          tasksRef,
+          where('status', '==', statuses[0]),
+          where('scheduledDate', '>=', startTimestamp),
+          where('scheduledDate', '<=', endTimestamp),
+          orderBy('scheduledDate', 'asc')
+        );
+      } else {
+        // Dla wielu statusów - nie można użyć 'in' z range query na innym polu
+        // Będziemy musieli pobrać według dat i przefiltrować statusy po stronie klienta
+        q = query(
+          tasksRef,
+          where('scheduledDate', '>=', startTimestamp),
+          where('scheduledDate', '<=', endTimestamp),
+          orderBy('scheduledDate', 'asc')
+        );
+      }
+      
+      const querySnapshot = await getDocs(q);
+      let tasks = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // Filtruj po statusach po stronie klienta (tylko jeśli mamy więcej niż jeden status)
+      if (statuses.length > 1) {
+        tasks = tasks.filter(task => statuses.includes(task.status));
+      }
+      
+      // Specjalne traktowanie dla zadań "Wstrzymane" - pobierz je zawsze, niezależnie od daty
+      if (statuses.includes('Wstrzymane')) {
+        const pausedTasksQuery = query(
+          tasksRef,
+          where('status', '==', 'Wstrzymane')
+        );
+        
+        const pausedSnapshot = await getDocs(pausedTasksQuery);
+        const pausedTasks = pausedSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        // Dodaj zadania wstrzymane, które nie są już w głównej liście
+        const existingTaskIds = new Set(tasks.map(t => t.id));
+        const additionalPausedTasks = pausedTasks.filter(task => !existingTaskIds.has(task.id));
+        
+        tasks = [...tasks, ...additionalPausedTasks];
+      }
+      
+      console.log(`Pobrano ${tasks.length} zadań z serwera`);
+      
+      return tasks;
+    } catch (error) {
+      console.error('Błąd podczas pobierania zadań z optymalizacją:', error);
+      
+      // Fallback - użyj starszej metody
+      console.log('Fallback do starszej metody pobierania zadań');
+      return await getTasksByDateRange(startDate, endDate);
+    }
+  };
+  
   // Pobieranie zadania po ID
   export const getTaskById = async (taskId) => {
     const docRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
@@ -872,6 +949,7 @@ import {
         // Najpierw wyczyść konkretne rezerwacje dla tego zadania
         await cleanupTaskReservations(taskId);
         console.log(`Usunięto wszystkie rezerwacje związane z zadaniem ${taskId}`);
+        
         
         // Dodatkowo uruchom pełne czyszczenie rezerwacji z usuniętych zadań
         // to zapewni że wszystkie rezerwacje będą usunięte, nawet jeśli pojedyncze anulowanie się nie powiodło
