@@ -296,3 +296,57 @@ body.dark-mode .fc-timeline-event {
   padding: 3px 8px !important;
   font-size: 13px !important;
 }
+
+/* Stałe wysokości wierszy zasobów */
+.fc-resource-timeline .fc-timeline-lane-frame {
+  height: 60px !important;
+  /* Domyślna wysokość wiersza */
+  min-height: 40px !important;
+  /* Minimalna wysokość wiersza */
+}
+
+.fc-timeline-view.scale-compact .fc-resource-timeline .fc-timeline-lane-frame {
+  height: 45px !important;
+  /* Kompaktowa wysokość wiersza */
+  min-height: 40px !important;
+}
+
+.fc-timeline-view.scale-large .fc-resource-timeline .fc-timeline-lane-frame {
+  height: 75px !important;
+  /* Powiększona wysokość wiersza */
+  min-height: 40px !important;
+}
+
+/* Responsywność dla urządzeń mobilnych */
+@media (max-width: 768px) {
+  .fc-resource-timeline .fc-timeline-lane-frame {
+    height: 48px !important;
+    /* 20% mniej niż domyślne 60px */
+    min-height: 32px !important;
+    /* 20% mniej niż domyślne 40px */
+  }
+
+  .fc-timeline-view.scale-compact .fc-resource-timeline .fc-timeline-lane-frame {
+    height: 36px !important;
+    /* 20% mniej niż 45px */
+    min-height: 32px !important;
+  }
+
+  .fc-timeline-view.scale-large .fc-resource-timeline .fc-timeline-lane-frame {
+    height: 60px !important;
+    /* 20% mniej niż 75px */
+    min-height: 32px !important;
+  }
+}
+
+/* Zapewnienie, że wysokość wiersza dopasowuje się do liczby wydarzeń */
+.fc-resource-timeline .fc-timeline-lane-frame.fc-has-events {
+  height: auto !important;
+  min-height: 40px !important;
+}
+
+@media (max-width: 768px) {
+  .fc-resource-timeline .fc-timeline-lane-frame.fc-has-events {
+    min-height: 32px !important;
+  }
+}

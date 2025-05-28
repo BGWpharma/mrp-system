@@ -179,6 +179,26 @@ const ProductionCalendar = () => {
     }
   }, [view, clearAllTooltips]);
   
+  // Nowy efekt do oznaczania wierszy, które mają wydarzenia
+  useEffect(() => {
+    if (calendarRef.current && tasks.length > 0 && view.startsWith('resourceTimeline')) {
+      // Opóźnienie, aby dać czas na renderowanie wydarzeń
+      setTimeout(() => {
+        const resourceLanes = document.querySelectorAll('.fc-timeline-lane-frame');
+        resourceLanes.forEach(lane => {
+          // Usuń klasę jeśli była wcześniej
+          lane.classList.remove('fc-has-events');
+          
+          // Dodaj klasę tylko jeśli wiersz zawiera wydarzenia
+          const events = lane.querySelectorAll('.fc-timeline-event');
+          if (events.length > 0) {
+            lane.classList.add('fc-has-events');
+          }
+        });
+      }, 100);
+    }
+  }, [tasks, view]);
+  
   useEffect(() => {
     fetchWorkstations();
   }, []);
@@ -2652,7 +2672,7 @@ const ProductionCalendar = () => {
           resourcesInitiallyExpanded={true}
           stickyHeaderDates={true}
           stickyResourceAreaHeaderContent={true}
-          expandRows={true}
+          expandRows={false}
           visibleRange={customDateRange ? {
             start: startDate,
             end: endDate
