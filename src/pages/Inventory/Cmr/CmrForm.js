@@ -233,16 +233,60 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
   
   useEffect(() => {
     if (initialData) {
-      // Konwertuj daty z ISO String (jeśli są) na obiekty Date
+      // Funkcja pomocnicza do konwersji dat
+      const convertDate = (dateValue) => {
+        console.log('CmrForm convertDate - wejście:', dateValue, 'typ:', typeof dateValue);
+        
+        if (!dateValue) {
+          console.log('CmrForm convertDate - brak wartości, zwracam null');
+          return null;
+        }
+        
+        // Jeśli to już obiekt Date
+        if (dateValue instanceof Date) {
+          console.log('CmrForm convertDate - już obiekt Date:', dateValue);
+          return dateValue;
+        }
+        
+        // Obsługa timestampu Firestore
+        if (dateValue && typeof dateValue === 'object' && typeof dateValue.toDate === 'function') {
+          const converted = dateValue.toDate();
+          console.log('CmrForm convertDate - skonwertowano Firestore Timestamp:', converted);
+          return converted;
+        }
+        
+        // Obsługa obiektów z sekundami (Firestore Timestamp format)
+        if (dateValue && typeof dateValue === 'object' && dateValue.seconds) {
+          const converted = new Date(dateValue.seconds * 1000);
+          console.log('CmrForm convertDate - skonwertowano obiekt z sekundami:', converted);
+          return converted;
+        }
+        
+        // Obsługa stringów i innych formatów
+        try {
+          const converted = new Date(dateValue);
+          console.log('CmrForm convertDate - skonwertowano string/inne:', converted);
+          return converted;
+        } catch (e) {
+          console.warn('CmrForm convertDate - Nie można skonwertować daty:', dateValue, e);
+          return null;
+        }
+      };
+      
+      console.log('CmrForm - initialData:', initialData);
+      
+      // Konwertuj daty z różnych formatów na obiekty Date
       const processedData = {
         ...initialData,
-        issueDate: initialData.issueDate ? new Date(initialData.issueDate) : new Date(),
-        deliveryDate: initialData.deliveryDate ? new Date(initialData.deliveryDate) : null,
-        loadingDate: initialData.loadingDate ? new Date(initialData.loadingDate) : null,
+        issueDate: convertDate(initialData.issueDate) || new Date(),
+        deliveryDate: convertDate(initialData.deliveryDate),
+        loadingDate: convertDate(initialData.loadingDate),
         items: initialData.items && initialData.items.length > 0 
           ? initialData.items 
           : [{ ...emptyItem }]
       };
+      
+      console.log('CmrForm - processedData po konwersji dat:', processedData);
       
       setFormData(processedData);
     }
@@ -268,6 +312,7 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
   };
   
   const handleDateChange = (name, date) => {
+    console.log('CmrForm handleDateChange - pole:', name, 'nowa wartość:', date, 'typ:', typeof date);
     setFormData(prev => ({ ...prev, [name]: date }));
     // Usuń błąd po edycji pola
     if (formErrors[name]) {
@@ -364,6 +409,11 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     console.log('Próba wysłania formularza CMR:', formData);
+    console.log('CmrForm handleSubmit - daty w formData:', {
+      issueDate: formData.issueDate,
+      deliveryDate: formData.deliveryDate,
+      loadingDate: formData.loadingDate
+    });
     
     // Upewnij się, że wszystkie pola są poprawnie uwzględnione przed wysłaniem formularza
     const dataToSubmit = {
@@ -373,6 +423,12 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
       reservations: formData.reservations || '',
       notes: formData.notes || ''
     };
+    
+    console.log('CmrForm handleSubmit - daty w dataToSubmit:', {
+      issueDate: dataToSubmit.issueDate,
+      deliveryDate: dataToSubmit.deliveryDate,
+      loadingDate: dataToSubmit.loadingDate
+    });
     
     // Upewnij się, że vehicleInfo jest zdefiniowane
     if (!dataToSubmit.vehicleInfo) dataToSubmit.vehicleInfo = {};
@@ -992,15 +1048,17 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                         label="Data wystawienia"
                         value={formData.issueDate}
                         onChange={(date) => handleDateChange('issueDate', date)}
-                        renderInput={(params) => 
-                          <TextField 
-                            {...params} 
-                            fullWidth 
-                            margin="normal"
-                            error={formErrors.issueDate}
-                            helperText={formErrors.issueDate}
-                          />
-                        }
+                        slots={{
+                          textField: TextField
+                        }}
+                        slotProps={{
+                          textField: {
+                            fullWidth: true,
+                            margin: "normal",
+                            error: !!formErrors.issueDate,
+                            helperText: formErrors.issueDate
+                          }
+                        }}
                       />
                     </Grid>
                     
@@ -1009,13 +1067,15 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                         label="Data dostawy"
                         value={formData.deliveryDate}
                         onChange={(date) => handleDateChange('deliveryDate', date)}
-                        renderInput={(params) => 
-                          <TextField 
-                            {...params} 
-                            fullWidth 
-                            margin="normal"
-                          />
-                        }
+                        slots={{
+                          textField: TextField
+                        }}
+                        slotProps={{
+                          textField: {
+                            fullWidth: true,
+                            margin: "normal"
+                          }
+                        }}
                       />
                     </Grid>
                     
@@ -1296,13 +1356,15 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                       label="Data załadunku"
                       value={formData.loadingDate}
                       onChange={(date) => handleDateChange('loadingDate', date)}
-                        renderInput={(params) => 
-                        <TextField
-                          {...params}
-                          fullWidth
-                          margin="normal"
-                        />
+                      slots={{
+                        textField: TextField
+                      }}
+                      slotProps={{
+                        textField: {
+                          fullWidth: true,
+                          margin: "normal"
                         }
+                      }}
                     />
                 </Grid>
                 

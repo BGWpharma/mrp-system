@@ -155,11 +155,39 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
   
   useEffect(() => {
     if (initialData) {
-      // Konwertuj daty z ISO String (jeśli są) na obiekty Date
+      // Funkcja pomocnicza do konwersji dat
+      const convertDate = (dateValue) => {
+        if (!dateValue) return null;
+        
+        // Jeśli to już obiekt Date
+        if (dateValue instanceof Date) {
+          return dateValue;
+        }
+        
+        // Obsługa timestampu Firestore
+        if (dateValue && typeof dateValue === 'object' && typeof dateValue.toDate === 'function') {
+          return dateValue.toDate();
+        }
+        
+        // Obsługa obiektów z sekundami (Firestore Timestamp format)
+        if (dateValue && typeof dateValue === 'object' && dateValue.seconds) {
+          return new Date(dateValue.seconds * 1000);
+        }
+        
+        // Obsługa stringów i innych formatów
+        try {
+          return new Date(dateValue);
+        } catch (e) {
+          console.warn('Nie można skonwertować daty:', dateValue);
+          return null;
+        }
+      };
+      
+      // Konwertuj daty z różnych formatów na obiekty Date
       const processedData = {
         ...initialData,
-        issueDate: initialData.issueDate ? new Date(initialData.issueDate) : new Date(),
-        loadingDate: initialData.loadingDate ? new Date(initialData.loadingDate) : new Date(),
+        issueDate: convertDate(initialData.issueDate) || new Date(),
+        loadingDate: convertDate(initialData.loadingDate) || new Date(),
         items: initialData.items && initialData.items.length > 0 
           ? initialData.items 
           : [{ ...emptyItem }]

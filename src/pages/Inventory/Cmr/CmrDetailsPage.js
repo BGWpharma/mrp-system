@@ -31,6 +31,7 @@ import {
   updateCmrStatus, 
   CMR_STATUSES 
 } from '../../../services/cmrService';
+import { getOrderById } from '../../../services/orderService';
 
 // Ikony
 import EditIcon from '@mui/icons-material/Edit';
@@ -138,6 +139,7 @@ const CmrDetailsPage = () => {
   
   const [loading, setLoading] = useState(true);
   const [cmrData, setCmrData] = useState(null);
+  const [linkedOrder, setLinkedOrder] = useState(null);
   
   useEffect(() => {
     fetchCmrDocument();
@@ -148,6 +150,17 @@ const CmrDetailsPage = () => {
       setLoading(true);
       const data = await getCmrDocumentById(id);
       setCmrData(data);
+      
+      // Pobierz dane powiązanego zamówienia klienta, jeśli istnieje
+      if (data.linkedOrderId) {
+        try {
+          const orderData = await getOrderById(data.linkedOrderId);
+          setLinkedOrder(orderData);
+        } catch (orderError) {
+          console.error('Błąd podczas pobierania powiązanego zamówienia:', orderError);
+          // Nie przerywamy procesu - CMR może istnieć bez powiązanego zamówienia
+        }
+      }
     } catch (error) {
       console.error('Błąd podczas pobierania dokumentu CMR:', error);
       showError('Nie udało się pobrać dokumentu CMR');
@@ -631,9 +644,31 @@ const CmrDetailsPage = () => {
   
   const formatDate = (date) => {
     if (!date) return '-';
+    
     try {
-      return format(date, 'dd MMMM yyyy', { locale: pl });
+      let dateObj = date;
+      
+      // Obsługa timestampu Firestore
+      if (date && typeof date === 'object' && typeof date.toDate === 'function') {
+        dateObj = date.toDate();
+      }
+      // Obsługa stringów
+      else if (typeof date === 'string') {
+        dateObj = new Date(date);
+      }
+      // Obsługa obiektów z sekundami (Firestore Timestamp format)
+      else if (date && typeof date === 'object' && date.seconds) {
+        dateObj = new Date(date.seconds * 1000);
+      }
+      
+      // Sprawdź czy data jest poprawna
+      if (isNaN(dateObj.getTime())) {
+        return String(date);
+      }
+      
+      return format(dateObj, 'dd MMMM yyyy', { locale: pl });
     } catch (e) {
+      console.warn('Błąd formatowania daty:', e, date);
       return String(date);
     }
   };
@@ -861,6 +896,64 @@ const CmrDetailsPage = () => {
                     {cmrData.transportType}
                   </Typography>
                 </Grid>
+                
+                {/* Informacje o powiązanym zamówieniu klienta */}
+                {linkedOrder && (
+                  <>
+                    <Grid item xs={12}>
+                      <Divider sx={{ my: 1 }} />
+                      <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+                        Powiązane zamówienie klienta
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        Numer zamówienia
+                      </Typography>
+                      <Typography 
+                        variant="body1" 
+                        sx={{ 
+                          color: 'primary.main', 
+                          cursor: 'pointer',
+                          textDecoration: 'underline'
+                        }}
+                        onClick={() => navigate(`/orders/${linkedOrder.id}`)}
+                      >
+                        {linkedOrder.orderNumber}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        Klient
+                      </Typography>
+                      <Typography variant="body1">
+                        {linkedOrder.customer?.name || '-'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        Data zamówienia
+                      </Typography>
+                      <Typography variant="body1">
+                        {formatDate(linkedOrder.orderDate)}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        Status zamówienia
+                      </Typography>
+                      <Chip 
+                        label={linkedOrder.status} 
+                        size="small"
+                        color={
+                          linkedOrder.status === 'Dostarczone' ? 'success' :
+                          linkedOrder.status === 'W realizacji' ? 'warning' :
+                          linkedOrder.status === 'Anulowane' ? 'error' : 'default'
+                        }
+                      />
+                    </Grid>
+                  </>
+                )}
               </Grid>
             </CardContent>
           </Card>

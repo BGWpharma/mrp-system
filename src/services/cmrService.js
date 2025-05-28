@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { updateOrderItemShippedQuantity } from './orderService';
+import { createRealtimeStatusChangeNotification } from './notificationService';
 
 // Kolekcje
 const CMR_COLLECTION = 'cmrDocuments';
@@ -55,6 +56,10 @@ export const getAllCmrDocuments = async () => {
         // Sprawdź czy pole jest obiektem Timestamp z metodą toDate
         if (field && typeof field.toDate === 'function') {
           return field.toDate();
+        }
+        // Sprawdź czy pole jest obiektem z polami seconds i nanoseconds (deserializowany Firestore Timestamp)
+        if (field && typeof field === 'object' && typeof field.seconds === 'number') {
+          return new Date(field.seconds * 1000 + (field.nanoseconds || 0) / 1000000);
         }
         // Jeśli jest stringiem lub numerem, spróbuj konwertować na Date
         if (typeof field === 'string' || typeof field === 'number') {
@@ -108,24 +113,43 @@ export const getCmrDocumentById = async (cmrId) => {
     
     // Funkcja pomocnicza do konwersji pól czasowych
     const convertTimestamp = (field) => {
-      if (!field) return null;
+      console.log('getCmrDocumentById convertTimestamp - wejście:', field, 'typ:', typeof field);
+      
+      if (!field) {
+        console.log('getCmrDocumentById convertTimestamp - brak wartości, zwracam null');
+        return null;
+      }
+      
       // Sprawdź czy pole jest obiektem Timestamp z metodą toDate
       if (field && typeof field.toDate === 'function') {
-        return field.toDate();
+        const converted = field.toDate();
+        console.log('getCmrDocumentById convertTimestamp - skonwertowano Firestore Timestamp:', converted);
+        return converted;
       }
+      
+      // Sprawdź czy pole jest obiektem z polami seconds i nanoseconds (deserializowany Firestore Timestamp)
+      if (field && typeof field === 'object' && typeof field.seconds === 'number') {
+        const converted = new Date(field.seconds * 1000 + (field.nanoseconds || 0) / 1000000);
+        console.log('getCmrDocumentById convertTimestamp - skonwertowano obiekt z seconds/nanoseconds:', converted);
+        return converted;
+      }
+      
       // Jeśli jest stringiem lub numerem, spróbuj konwertować na Date
       if (typeof field === 'string' || typeof field === 'number') {
         try {
-          return new Date(field);
+          const converted = new Date(field);
+          console.log('getCmrDocumentById convertTimestamp - skonwertowano string/number:', converted);
+          return converted;
         } catch (e) {
           console.warn('Nie można skonwertować pola na Date:', field);
           return null;
         }
       }
+      console.log('getCmrDocumentById convertTimestamp - nieznany typ, zwracam null');
       return null;
     };
     
-    return {
+    const result = {
       id: cmrId,
       ...cmrData,
       issueDate: convertTimestamp(cmrData.issueDate),
@@ -135,6 +159,14 @@ export const getCmrDocumentById = async (cmrId) => {
       updatedAt: convertTimestamp(cmrData.updatedAt),
       items
     };
+    
+    console.log('getCmrDocumentById - zwracam dane z datami:', {
+      issueDate: result.issueDate,
+      deliveryDate: result.deliveryDate,
+      loadingDate: result.loadingDate
+    });
+    
+    return result;
   } catch (error) {
     console.error('Błąd podczas pobierania szczegółów dokumentu CMR:', error);
     throw error;
@@ -155,7 +187,8 @@ const cleanUndefinedValues = (obj) => {
     const cleaned = {};
     Object.keys(obj).forEach(key => {
       const value = obj[key];
-      if (value !== undefined) {
+      // Zachowaj pola dat nawet gdy są null
+      if (value !== undefined || ['issueDate', 'deliveryDate', 'loadingDate'].includes(key)) {
         cleaned[key] = cleanUndefinedValues(value);
       }
     });
@@ -168,12 +201,45 @@ const cleanUndefinedValues = (obj) => {
 // Utworzenie nowego dokumentu CMR
 export const createCmrDocument = async (cmrData, userId) => {
   try {
+    // Funkcja pomocnicza do konwersji dat na Firestore Timestamp
+    const convertToTimestamp = (dateValue) => {
+      if (!dateValue) return null;
+      
+      // Jeśli to już Firestore Timestamp
+      if (dateValue && typeof dateValue === 'object' && typeof dateValue.toDate === 'function') {
+        return dateValue;
+      }
+      
+      // Jeśli to obiekt Date
+      if (dateValue instanceof Date) {
+        return Timestamp.fromDate(dateValue);
+      }
+      
+      // Jeśli to obiekt z sekundami (Firestore Timestamp format)
+      if (dateValue && typeof dateValue === 'object' && dateValue.seconds) {
+        return Timestamp.fromDate(new Date(dateValue.seconds * 1000));
+      }
+      
+      // Jeśli to string lub liczba
+      try {
+        const date = new Date(dateValue);
+        if (isNaN(date.getTime())) {
+          console.warn('Nieprawidłowa data:', dateValue);
+          return null;
+        }
+        return Timestamp.fromDate(date);
+      } catch (e) {
+        console.warn('Błąd konwersji daty:', dateValue, e);
+        return null;
+      }
+    };
+    
     // Formatowanie dat
     const formattedData = {
       ...cmrData,
-      issueDate: cmrData.issueDate ? Timestamp.fromDate(new Date(cmrData.issueDate)) : null,
-      deliveryDate: cmrData.deliveryDate ? Timestamp.fromDate(new Date(cmrData.deliveryDate)) : null,
-      loadingDate: cmrData.loadingDate ? Timestamp.fromDate(new Date(cmrData.loadingDate)) : null,
+      issueDate: convertToTimestamp(cmrData.issueDate),
+      deliveryDate: convertToTimestamp(cmrData.deliveryDate),
+      loadingDate: convertToTimestamp(cmrData.loadingDate),
       status: cmrData.status || CMR_STATUSES.DRAFT,
       cmrNumber: cmrData.cmrNumber || generateCmrNumber(),
       createdAt: serverTimestamp(),
@@ -226,14 +292,13 @@ export const createCmrDocument = async (cmrData, userId) => {
       await Promise.all(itemPromises);
     }
     
-    // Jeśli CMR jest powiązany z zamówieniem klienta, zaktualizuj ilości wysłane
-    if (cmrData.linkedOrderId && items && items.length > 0) {
-      await updateLinkedOrderShippedQuantities(cmrData.linkedOrderId, items, formattedData.cmrNumber, userId);
-    }
-    
     return {
       id: cmrRef.id,
-      ...cleanedCmrData
+      ...cleanedCmrData,
+      // Konwertuj daty z powrotem na obiekty Date dla wyświetlenia w formularzu
+      issueDate: cleanedCmrData.issueDate && cleanedCmrData.issueDate.toDate ? cleanedCmrData.issueDate.toDate() : cleanedCmrData.issueDate,
+      deliveryDate: cleanedCmrData.deliveryDate && cleanedCmrData.deliveryDate.toDate ? cleanedCmrData.deliveryDate.toDate() : cleanedCmrData.deliveryDate,
+      loadingDate: cleanedCmrData.loadingDate && cleanedCmrData.loadingDate.toDate ? cleanedCmrData.loadingDate.toDate() : cleanedCmrData.loadingDate
     };
   } catch (error) {
     console.error('Błąd podczas tworzenia dokumentu CMR:', error);
@@ -246,23 +311,80 @@ export const updateCmrDocument = async (cmrId, cmrData, userId) => {
   try {
     const cmrRef = doc(db, CMR_COLLECTION, cmrId);
     
+    // Funkcja pomocnicza do konwersji dat na Firestore Timestamp
+    const convertToTimestamp = (dateValue) => {
+      console.log('convertToTimestamp - wejście:', dateValue, 'typ:', typeof dateValue);
+      
+      if (!dateValue) {
+        console.log('convertToTimestamp - brak wartości, zwracam null');
+        return null;
+      }
+      
+      // Jeśli to już Firestore Timestamp
+      if (dateValue && typeof dateValue === 'object' && typeof dateValue.toDate === 'function') {
+        console.log('convertToTimestamp - już Firestore Timestamp');
+        return dateValue;
+      }
+      
+      // Jeśli to obiekt Date
+      if (dateValue instanceof Date) {
+        console.log('convertToTimestamp - obiekt Date, konwertuję na Timestamp');
+        const timestamp = Timestamp.fromDate(dateValue);
+        console.log('convertToTimestamp - wynik:', timestamp);
+        return timestamp;
+      }
+      
+      // Jeśli to obiekt z sekundami (Firestore Timestamp format)
+      if (dateValue && typeof dateValue === 'object' && dateValue.seconds) {
+        console.log('convertToTimestamp - obiekt z sekundami');
+        return Timestamp.fromDate(new Date(dateValue.seconds * 1000));
+      }
+      
+      // Jeśli to string lub liczba
+      try {
+        const date = new Date(dateValue);
+        if (isNaN(date.getTime())) {
+          console.warn('Nieprawidłowa data:', dateValue);
+          return null;
+        }
+        console.log('convertToTimestamp - skonwertowano string/liczbę na Date, następnie na Timestamp');
+        const timestamp = Timestamp.fromDate(date);
+        console.log('convertToTimestamp - wynik:', timestamp);
+        return timestamp;
+      } catch (e) {
+        console.warn('Błąd konwersji daty:', dateValue, e);
+        return null;
+      }
+    };
+    
     // Formatowanie dat
     const formattedData = {
       ...cmrData,
-      issueDate: cmrData.issueDate ? Timestamp.fromDate(new Date(cmrData.issueDate)) : null,
-      deliveryDate: cmrData.deliveryDate ? Timestamp.fromDate(new Date(cmrData.deliveryDate)) : null,
-      loadingDate: cmrData.loadingDate ? Timestamp.fromDate(new Date(cmrData.loadingDate)) : null,
+      issueDate: convertToTimestamp(cmrData.issueDate),
+      deliveryDate: convertToTimestamp(cmrData.deliveryDate),
+      loadingDate: convertToTimestamp(cmrData.loadingDate),
       updatedAt: serverTimestamp(),
       updatedBy: userId
     };
     
+    console.log('updateCmrDocument - formattedData przed usunięciem items:', formattedData);
+    
     // Usuń items z aktualizacji (obsłużymy je oddzielnie)
     const { items, ...updateData } = formattedData;
+    
+    console.log('updateCmrDocument - updateData przed czyszczeniem:', updateData);
     
     // Oczyść undefined wartości przed zapisaniem
     const cleanedUpdateData = cleanUndefinedValues(updateData);
     
+    console.log('updateCmrDocument - cleanedUpdateData po czyszczeniu:', cleanedUpdateData);
+    
     await updateDoc(cmrRef, cleanedUpdateData);
+    
+    console.log('updateCmrDocument - dane zapisane w bazie, zwracam:', {
+      id: cmrId,
+      ...cleanedUpdateData
+    });
     
     // Aktualizacja elementów
     if (items && items.length > 0) {
@@ -306,16 +428,31 @@ export const updateCmrDocument = async (cmrId, cmrData, userId) => {
       });
       
       await Promise.all(itemPromises);
-      
-      // Jeśli CMR jest powiązany z zamówieniem klienta, zaktualizuj ilości wysłane
-      if (cmrData.linkedOrderId) {
-        await updateLinkedOrderShippedQuantities(cmrData.linkedOrderId, items, updateData.cmrNumber || cmrData.cmrNumber, userId);
-      }
     }
     
+    console.log('updateCmrDocument - przed konwersją dat:', {
+      issueDate: cleanedUpdateData.issueDate,
+      deliveryDate: cleanedUpdateData.deliveryDate,
+      loadingDate: cleanedUpdateData.loadingDate
+    });
+    
+    // Konwertuj daty z powrotem na obiekty Date dla wyświetlenia w formularzu
+    const convertedIssueDate = cleanedUpdateData.issueDate && cleanedUpdateData.issueDate.toDate ? cleanedUpdateData.issueDate.toDate() : cleanedUpdateData.issueDate;
+    const convertedDeliveryDate = cleanedUpdateData.deliveryDate && cleanedUpdateData.deliveryDate.toDate ? cleanedUpdateData.deliveryDate.toDate() : cleanedUpdateData.deliveryDate;
+    const convertedLoadingDate = cleanedUpdateData.loadingDate && cleanedUpdateData.loadingDate.toDate ? cleanedUpdateData.loadingDate.toDate() : cleanedUpdateData.loadingDate;
+    
+    console.log('updateCmrDocument - po konwersji dat:', {
+      issueDate: convertedIssueDate,
+      deliveryDate: convertedDeliveryDate,
+      loadingDate: convertedLoadingDate
+    });
+
     return {
       id: cmrId,
-      ...cleanedUpdateData
+      ...cleanedUpdateData,
+      issueDate: convertedIssueDate,
+      deliveryDate: convertedDeliveryDate,
+      loadingDate: convertedLoadingDate
     };
   } catch (error) {
     console.error('Błąd podczas aktualizacji dokumentu CMR:', error);
@@ -349,6 +486,14 @@ export const deleteCmrDocument = async (cmrId) => {
 export const updateCmrStatus = async (cmrId, newStatus, userId) => {
   try {
     const cmrRef = doc(db, CMR_COLLECTION, cmrId);
+    
+    // Pobierz aktualny status CMR przed zmianą
+    const currentCmrDoc = await getDoc(cmrRef);
+    if (!currentCmrDoc.exists()) {
+      throw new Error('Dokument CMR nie istnieje');
+    }
+    const currentStatus = currentCmrDoc.data().status;
+    
     let reservationResult = null;
     let deliveryResult = null;
     
@@ -366,6 +511,35 @@ export const updateCmrStatus = async (cmrId, newStatus, userId) => {
           message: `Błąd rezerwacji partii: ${reservationError.message}`,
           errors: [{ error: reservationError.message }]
         };
+      }
+      
+      // Aktualizuj ilości wysłane w powiązanym zamówieniu klienta
+      try {
+        const cmrData = await getCmrDocumentById(cmrId);
+        if (cmrData.linkedOrderId && cmrData.items && cmrData.items.length > 0) {
+          console.log('Aktualizacja ilości wysłanych w zamówieniu przy zmianie statusu na "W transporcie"...');
+          await updateLinkedOrderShippedQuantities(cmrData.linkedOrderId, cmrData.items, cmrData.cmrNumber, userId);
+          console.log(`Zaktualizowano ilości wysłane w zamówieniu ${cmrData.linkedOrderId} na podstawie CMR ${cmrData.cmrNumber}`);
+        }
+      } catch (orderUpdateError) {
+        console.error('Błąd podczas aktualizacji ilości wysłanych w zamówieniu:', orderUpdateError);
+        // Nie przerywamy procesu zmiany statusu - tylko logujemy błąd
+      }
+    }
+    
+    // Jeśli cofamy ze statusu "W transporcie" na inny status, anuluj ilości wysłane
+    if (currentStatus === CMR_STATUSES.IN_TRANSIT && newStatus !== CMR_STATUSES.IN_TRANSIT && newStatus !== CMR_STATUSES.DELIVERED) {
+      console.log('Cofanie ze statusu "W transporcie" - anulowanie ilości wysłanych...');
+      try {
+        const cmrData = await getCmrDocumentById(cmrId);
+        if (cmrData.linkedOrderId && cmrData.items && cmrData.items.length > 0) {
+          console.log('Anulowanie ilości wysłanych w zamówieniu przy cofnięciu ze statusu "W transporcie"...');
+          await cancelLinkedOrderShippedQuantities(cmrData.linkedOrderId, cmrData.items, cmrData.cmrNumber, userId);
+          console.log(`Anulowano ilości wysłane w zamówieniu ${cmrData.linkedOrderId} na podstawie CMR ${cmrData.cmrNumber}`);
+        }
+      } catch (orderUpdateError) {
+        console.error('Błąd podczas anulowania ilości wysłanych w zamówieniu:', orderUpdateError);
+        // Nie przerywamy procesu zmiany statusu - tylko logujemy błąd
       }
     }
     
@@ -391,6 +565,33 @@ export const updateCmrStatus = async (cmrId, newStatus, userId) => {
       updatedAt: serverTimestamp(),
       updatedBy: userId
     });
+    
+    // Utwórz powiadomienie o zmianie statusu CMR
+    try {
+      const cmrData = await getCmrDocumentById(cmrId);
+      
+      // Określ użytkowników, którzy powinni otrzymać powiadomienie
+      // Dodajemy użytkownika, który zmienił status oraz twórcę CMR
+      const userIds = [userId];
+      if (cmrData.createdBy && cmrData.createdBy !== userId) {
+        userIds.push(cmrData.createdBy);
+      }
+      
+      console.log('Tworzenie powiadomienia o zmianie statusu CMR...');
+      await createRealtimeStatusChangeNotification(
+        userIds,
+        'cmr',
+        cmrId,
+        cmrData.cmrNumber,
+        currentStatus,
+        newStatus,
+        userId
+      );
+      console.log(`Utworzono powiadomienie o zmianie statusu CMR ${cmrData.cmrNumber} z "${currentStatus}" na "${newStatus}"`);
+    } catch (notificationError) {
+      console.error('Błąd podczas tworzenia powiadomienia o zmianie statusu CMR:', notificationError);
+      // Nie przerywamy procesu zmiany statusu - tylko logujemy błąd
+    }
     
     const result = { 
       success: true, 
@@ -834,5 +1035,26 @@ const updateLinkedOrderShippedQuantities = async (orderId, cmrItems, cmrNumber, 
   } catch (error) {
     console.error('Błąd podczas aktualizacji ilości wysłanych w zamówieniu:', error);
     // Nie rzucamy błędu, aby nie przerywać procesu tworzenia CMR
+  }
+};
+
+// Funkcja pomocnicza do anulowania ilości wysłanych w powiązanym zamówieniu
+const cancelLinkedOrderShippedQuantities = async (orderId, cmrItems, cmrNumber, userId) => {
+  try {
+    // Mapuj elementy CMR na aktualizacje zamówienia z ujemnymi wartościami (anulowanie)
+    const itemUpdates = cmrItems.map((item, index) => ({
+      itemName: item.description,
+      quantity: -(parseFloat(item.quantity) || parseFloat(item.numberOfPackages) || 0), // Ujemna wartość dla anulowania
+      itemIndex: index,
+      cmrNumber: cmrNumber
+    })).filter(update => update.quantity < 0); // Filtruj tylko ujemne wartości
+    
+    if (itemUpdates.length > 0) {
+      await updateOrderItemShippedQuantity(orderId, itemUpdates, userId);
+      console.log(`Anulowano ilości wysłane w zamówieniu ${orderId} na podstawie CMR ${cmrNumber}`);
+    }
+  } catch (error) {
+    console.error('Błąd podczas anulowania ilości wysłanych w zamówieniu:', error);
+    // Nie rzucamy błędu, aby nie przerywać procesu zmiany statusu CMR
   }
 };

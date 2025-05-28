@@ -49,8 +49,12 @@ const CmrEditPage = () => {
       const result = await updateCmrDocument(id, dataToSave, currentUser.uid);
       console.log('CmrEditPage - Wynik updateCmrDocument:', result);
       
+      // Odśwież dane CMR z bazy danych po zapisaniu
+      await fetchCmrDocument();
+      
       showSuccess('Dokument CMR został zaktualizowany pomyślnie');
-      navigate(`/inventory/cmr/${id}`);
+      // Zamiast przekierowywać, zostajemy na stronie edycji z odświeżonymi danymi
+      // navigate(`/inventory/cmr/${id}`);
     } catch (error) {
       console.error('CmrEditPage - Błąd podczas aktualizacji dokumentu CMR:', error);
       showError('Nie udało się zaktualizować dokumentu CMR: ' + error.message);

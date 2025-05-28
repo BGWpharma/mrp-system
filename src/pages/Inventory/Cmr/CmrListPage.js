@@ -228,9 +228,31 @@ const CmrListPage = () => {
   
   const formatDate = (date) => {
     if (!date) return '-';
+    
     try {
-      return format(date, 'dd.MM.yyyy', { locale: pl });
+      let dateObj = date;
+      
+      // Obsługa timestampu Firestore
+      if (date && typeof date === 'object' && typeof date.toDate === 'function') {
+        dateObj = date.toDate();
+      }
+      // Obsługa stringów
+      else if (typeof date === 'string') {
+        dateObj = new Date(date);
+      }
+      // Obsługa obiektów z sekundami (Firestore Timestamp format)
+      else if (date && typeof date === 'object' && date.seconds) {
+        dateObj = new Date(date.seconds * 1000);
+      }
+      
+      // Sprawdź czy data jest poprawna
+      if (isNaN(dateObj.getTime())) {
+        return String(date);
+      }
+      
+      return format(dateObj, 'dd.MM.yyyy', { locale: pl });
     } catch (e) {
+      console.warn('Błąd formatowania daty:', e, date);
       return String(date);
     }
   };
