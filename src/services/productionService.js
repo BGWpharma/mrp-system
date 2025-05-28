@@ -458,6 +458,69 @@ import {
     }
   };
   
+  // Pobieranie zadań produkcyjnych na dany okres - ZOPTYMALIZOWANA WERSJA
+  export const getTasksByDateRangeOptimizedNew = async (startDate, endDate, limit = 1000) => {
+    try {
+      const tasksRef = collection(db, PRODUCTION_TASKS_COLLECTION);
+      
+      // Konwersja dat na Timestamp dla Firestore
+      const startTimestamp = Timestamp.fromDate(new Date(startDate));
+      const endTimestamp = Timestamp.fromDate(new Date(endDate));
+      
+      console.log('Pobieranie zadań z optymalizacją serwerową dla okresu:', startDate, '-', endDate);
+      
+      // OPTYMALIZACJA 1: Filtrowanie po stronie serwera
+      const q = query(
+        tasksRef,
+        where('scheduledDate', '>=', startTimestamp),
+        where('scheduledDate', '<=', endTimestamp),
+        orderBy('scheduledDate', 'asc'),
+        limit(limit) // OPTYMALIZACJA 2: Limit wyników
+      );
+      
+      const querySnapshot = await getDocs(q);
+      let tasks = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // OPTYMALIZACJA 3: Dodatkowe zadania "rozciągające się" na zakres
+      // Pobierz zadania które zaczynają się przed startDate ale kończą się w zakresie
+      const extendedTasksQuery = query(
+        tasksRef,
+        where('scheduledDate', '<', startTimestamp),
+        where('endDate', '>=', startTimestamp),
+        orderBy('scheduledDate', 'asc'),
+        limit(100) // Limit dla dodatkowych zadań
+      );
+      
+      try {
+        const extendedSnapshot = await getDocs(extendedTasksQuery);
+        const extendedTasks = extendedSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        // Usuń duplikaty i dodaj rozszerzone zadania
+        const existingTaskIds = new Set(tasks.map(t => t.id));
+        const additionalTasks = extendedTasks.filter(task => !existingTaskIds.has(task.id));
+        
+        tasks = [...tasks, ...additionalTasks];
+      } catch (extendedError) {
+        console.warn('Nie udało się pobrać rozszerzonych zadań:', extendedError);
+      }
+      
+      console.log(`Pobrano ${tasks.length} zadań z optymalizacją serwerową`);
+      return tasks;
+      
+    } catch (error) {
+      console.error('Błąd podczas pobierania zadań z nową optymalizacją:', error);
+      
+      // Fallback do istniejącej metody
+      return await getTasksByDateRange(startDate, endDate);
+    }
+  };
+  
   // Pobieranie zadania po ID
   export const getTaskById = async (taskId) => {
     const docRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);

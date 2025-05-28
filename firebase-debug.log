@@ -1,0 +1,13 @@
+[debug] [2025-05-28T13:16:16.358Z] ----------------------------------------------------------------------
+[debug] [2025-05-28T13:16:16.366Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\Lenovo\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js login --reauth
+[debug] [2025-05-28T13:16:16.366Z] CLI Version:   14.4.0
+[debug] [2025-05-28T13:16:16.367Z] Platform:      win32
+[debug] [2025-05-28T13:16:16.367Z] Node Version:  v22.14.0
+[debug] [2025-05-28T13:16:16.367Z] Time:          Wed May 28 2025 15:16:16 GMT+0200 (czas środkowoeuropejski letni)
+[debug] [2025-05-28T13:16:16.367Z] ----------------------------------------------------------------------
+[debug] 
+[info] 
+[info] Visit this URL on this device to log in:
+[info] https://accounts.google.com/o/oauth2/auth?client_id=563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com&scope=email%20openid%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcloudplatformprojects.readonly%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Ffirebase%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcloud-platform&response_type=code&state=387501630&redirect_uri=http%3A%2F%2Flocalhost%3A9005&login_hint=mateusz%40bgwpharma.com
+[info] 
+[info] Waiting for authentication...

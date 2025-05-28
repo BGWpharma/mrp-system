@@ -44,7 +44,12 @@ import {
   Visibility as VisibilityIcon,
   VisibilityOff as VisibilityOffIcon,
   Info as InfoIcon,
-  Edit as EditIcon
+  Edit as EditIcon,
+  ZoomOut as ZoomOutIcon,
+  ZoomIn as ZoomInIcon,
+  CenterFocusStrong as ZoomNormalIcon,
+  Speed as SpeedIcon,
+  Warning as WarningIcon
 } from '@mui/icons-material';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -53,7 +58,11 @@ import interactionPlugin from '@fullcalendar/interaction';
 import timelinePlugin from '@fullcalendar/timeline';
 import resourceTimelinePlugin from '@fullcalendar/resource-timeline';
 import plLocale from '@fullcalendar/core/locales/pl';
-import { getTasksByDateRange, updateTask } from '../../services/productionService';
+import { 
+  getTasksByDateRange, 
+  updateTask,
+  getTasksByDateRangeOptimizedNew
+} from '../../services/productionService';
 import { getAllWorkstations } from '../../services/workstationService';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
@@ -91,6 +100,14 @@ const ProductionCalendar = () => {
   const [ganttGroupBy, setGanttGroupBy] = useState('workstation');
   // Dodaję nowy stan do kontrolowania skali wykresu Gantta
   const [scaleLevel, setScaleLevel] = useState(1); // 1 = normalna, 0.7 = kompaktowa, 1.3 = powiększona
+  // Stan do przełączania metody optymalizacji
+  const [useOptimizedQueries, setUseOptimizedQueries] = useState(true);
+  // Stany do śledzenia wydajności
+  const [loadingStats, setLoadingStats] = useState({
+    lastLoadTime: 0,
+    tasksCount: 0,
+    queryMethod: 'optymalizowana'
+  });
   const calendarRef = useRef(null);
   const navigate = useNavigate();
   const { showError, showSuccess } = useNotification();
@@ -250,8 +267,25 @@ const ProductionCalendar = () => {
       // Dodajemy timeout, żeby React miał czas na aktualizację stanu
       setTimeout(async () => {
         try {
-          const fetchedTasks = await getTasksByDateRange(rangeStartDate, rangeEndDate);
+          const startTime = performance.now(); // Pomiar czasu rozpoczęcia
+          
+          // OPTYMALIZACJA: Wybór metody pobierania danych
+          const fetchedTasks = useOptimizedQueries 
+            ? await getTasksByDateRangeOptimizedNew(rangeStartDate, rangeEndDate, 1000)
+            : await getTasksByDateRange(rangeStartDate, rangeEndDate);
+          
+          const endTime = performance.now(); // Pomiar czasu zakończenia
+          const loadTime = endTime - startTime;
+          
           console.log('Pobrano zadania:', fetchedTasks);
+          console.log(`Czas ładowania: ${loadTime.toFixed(2)}ms dla ${fetchedTasks.length} zadań`);
+          
+          // Aktualizuj statystyki wydajności
+          setLoadingStats({
+            lastLoadTime: loadTime,
+            tasksCount: fetchedTasks.length,
+            queryMethod: useOptimizedQueries ? 'optymalizowana' : 'standardowa'
+          });
           
           // Zapisz dane w cache z aktualnym timestampem
           setTasksCache(prevCache => ({
@@ -1902,6 +1936,21 @@ const ProductionCalendar = () => {
         >
           <CalendarIcon sx={{ mr: 1, fontSize: isMobile ? '1.2rem' : '1.5rem' }} />
           Kalendarz produkcji
+          
+          {/* Wyświetlanie statystyk wydajności */}
+          {loadingStats.lastLoadTime > 0 && (
+            <Chip
+              label={`${loadingStats.tasksCount} zadań | ${loadingStats.lastLoadTime.toFixed(0)}ms | ${loadingStats.queryMethod}`}
+              size="small"
+              color={loadingStats.queryMethod === 'optymalizowana' ? 'success' : 'default'}
+              sx={{ 
+                ml: 2, 
+                fontSize: '0.7rem',
+                height: 24,
+                display: isMobile ? 'none' : 'flex'
+              }}
+            />
+          )}
         </Typography>
         
         {/* Toggle button for options - only on mobile */}
@@ -2119,76 +2168,71 @@ const ProductionCalendar = () => {
 
             {/* Kontrolki skali dla widoku Gantta */}
             {view.includes('resourceTimeline') && (
-              <Box sx={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 0.25,
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1,
-                p: 0.25,
-                height: 32
-              }}>
-                <Tooltip title="Zmniejsz skalę">
-                  <IconButton
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Tooltip title="Skala kompaktowa">
+                  <Button
+                    variant={scaleLevel === 0.7 ? "contained" : "outlined"}
                     size="small"
-                    onClick={() => handleScaleChange(Math.max(0.5, scaleLevel - 0.1))}
-                    disabled={scaleLevel <= 0.5}
-                    sx={{ 
-                      width: 24, 
-                      height: 24,
-                      fontSize: '0.7rem',
-                      fontWeight: 'bold'
-                    }}
+                    sx={{ minWidth: 32, height: 32, p: 0 }}
+                    onClick={() => handleScaleChange(0.7)}
                   >
-                    -
-                  </IconButton>
+                    <ZoomOutIcon fontSize="small" />
+                  </Button>
                 </Tooltip>
-                
-                <Typography 
-                  variant="caption" 
-                  sx={{ 
-                    minWidth: isMobile ? '35px' : '45px', 
-                    textAlign: 'center',
-                    fontSize: '0.65rem'
-                  }}
-                >
-                  {isMobile ? `${Math.round(scaleLevel * 100)}%` : `${Math.round(scaleLevel * 100)}%`}
-                </Typography>
-                
-                <Tooltip title="Zwiększ skalę">
-                  <IconButton
+                <Tooltip title="Skala normalna">
+                  <Button
+                    variant={scaleLevel === 1 ? "contained" : "outlined"}
                     size="small"
-                    onClick={() => handleScaleChange(Math.min(2.0, scaleLevel + 0.1))}
-                    disabled={scaleLevel >= 2.0}
-                    sx={{ 
-                      width: 24, 
-                      height: 24,
-                      fontSize: '0.7rem',
-                      fontWeight: 'bold'
-                    }}
+                    sx={{ minWidth: 32, height: 32, p: 0 }}
+                    onClick={() => handleScaleChange(1)}
                   >
-                    +
-                  </IconButton>
+                    <ZoomNormalIcon fontSize="small" />
+                  </Button>
                 </Tooltip>
-                
-                {scaleLevel !== 1 && (
-                  <Tooltip title="Przywróć normalną skalę">
-                    <IconButton
-                      size="small"
-                      onClick={() => handleScaleChange(1)}
-                      sx={{ 
-                        width: 24, 
-                        height: 24,
-                        fontSize: '0.6rem'
-                      }}
-                    >
-                      ↻
-                    </IconButton>
-                  </Tooltip>
-                )}
+                <Tooltip title="Skala powiększona">
+                  <Button
+                    variant={scaleLevel === 1.3 ? "contained" : "outlined"}
+                    size="small"
+                    sx={{ minWidth: 32, height: 32, p: 0 }}
+                    onClick={() => handleScaleChange(1.3)}
+                  >
+                    <ZoomInIcon fontSize="small" />
+                  </Button>
+                </Tooltip>
               </Box>
             )}
+            
+            {/* Toggle optymalizacji zapytań */}
+            <Tooltip title={`Optymalizacja zapytań: ${useOptimizedQueries ? 'Włączona' : 'Wyłączona'}`}>
+              <Button
+                variant={useOptimizedQueries ? "contained" : "outlined"}
+                size="small"
+                color={useOptimizedQueries ? "success" : "default"}
+                sx={{ 
+                  height: 32, 
+                  fontSize: '0.7rem',
+                  px: isMobile ? 0.75 : 1,
+                  minWidth: isMobile ? 40 : 80
+                }}
+                onClick={() => {
+                  setUseOptimizedQueries(!useOptimizedQueries);
+                  // Wyczyść cache gdy zmieniamy metodę
+                  setTasksCache({});
+                  // Pobierz dane ponownie
+                  if (calendarRef.current) {
+                    const calendarApi = calendarRef.current.getApi();
+                    const currentView = calendarApi.view;
+                    fetchTasks({
+                      startStr: currentView.activeStart.toISOString(),
+                      endStr: currentView.activeEnd.toISOString()
+                    });
+                  }
+                }}
+                startIcon={useOptimizedQueries ? <SpeedIcon fontSize="small" /> : <WarningIcon fontSize="small" />}
+              >
+                {isMobile ? 'OPT' : (useOptimizedQueries ? 'Szybkie' : 'Standardowe')}
+              </Button>
+            </Tooltip>
           </Box>
         </Box>
       </Collapse>
