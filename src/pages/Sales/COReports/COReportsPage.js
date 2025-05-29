@@ -62,6 +62,19 @@ import { getAllOrders } from '../../../services/orderService';
 import { getAllCustomers } from '../../../services/customerService';
 import { formatCurrency } from '../../../utils/formatUtils';
 import { exportToCSV, exportToPDF, formatDateForExport, formatCurrencyForExport } from '../../../utils/exportUtils';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  Legend,
+  ResponsiveContainer,
+  ReferenceLine,
+  AreaChart,
+  Area
+} from 'recharts';
 
 // Importuj komponenty
 import COReportComponent from '../../../components/sales/co-reports/COReportComponent';
@@ -730,6 +743,122 @@ const COReportsPage = () => {
     const productionCosts = calculateProductionCosts();
     const costStats = calculateProductionCostStats(productionCosts);
     
+    // Stan dla wybranego produktu
+    const [selectedProduct, setSelectedProduct] = useState('');
+    // Stan dla danych historycznych kosztów wybranego produktu
+    const [productCostHistory, setProductCostHistory] = useState([]);
+    // Stan dla informacji o zamówieniach zawierających wybrany produkt
+    const [productOrders, setProductOrders] = useState([]);
+    
+    // Efekt do obliczania danych historycznych dla wybranego produktu
+    useEffect(() => {
+      if (selectedProduct && productionCosts.length > 0) {
+        // Filtruj koszty produkcji dla wybranego produktu
+        const filteredCosts = productionCosts.filter(item => item.itemName === selectedProduct);
+        
+        // Grupuj koszty po datach zamówień
+        const costsByDate = {};
+        filteredCosts.forEach(item => {
+          let orderDate;
+          if (typeof item.orderDate === 'string') {
+            orderDate = new Date(item.orderDate);
+          } else if (item.orderDate?.toDate) {
+            orderDate = item.orderDate.toDate();
+          } else if (item.orderDate instanceof Date) {
+            orderDate = item.orderDate;
+          } else {
+            orderDate = new Date(); // Domyślna data
+          }
+          
+          const dateStr = format(orderDate, 'yyyy-MM-dd');
+          
+          if (!costsByDate[dateStr]) {
+            costsByDate[dateStr] = {
+              date: orderDate,
+              unitCost: 0,
+              totalCost: 0,
+              fullUnitCost: 0,
+              totalFullCost: 0,
+              quantity: 0,
+              count: 0
+            };
+          }
+          
+          costsByDate[dateStr].totalCost += item.totalProductionCost;
+          costsByDate[dateStr].totalFullCost += item.totalFullProductionCost;
+          costsByDate[dateStr].quantity += item.quantity;
+          costsByDate[dateStr].count += 1;
+          costsByDate[dateStr].unitCost = costsByDate[dateStr].totalCost / costsByDate[dateStr].quantity;
+          costsByDate[dateStr].fullUnitCost = costsByDate[dateStr].totalFullCost / costsByDate[dateStr].quantity;
+        });
+        
+        // Konwertuj na tablicę i sortuj według daty
+        const historyData = Object.values(costsByDate).sort((a, b) => a.date - b.date);
+        setProductCostHistory(historyData);
+        
+        // Znajdź zamówienia zawierające wybrany produkt
+        const orders = [];
+        filteredCosts.forEach(item => {
+          const orderExists = orders.some(order => order.orderId === item.orderId);
+          if (!orderExists) {
+            orders.push({
+              orderId: item.orderId,
+              orderNumber: item.orderNumber,
+              orderDate: item.orderDate,
+              customerName: item.customerName,
+              quantity: item.quantity,
+              unitCost: item.productionCost,
+              fullUnitCost: item.fullProductionUnitCost || item.fullProductionCost / item.quantity,
+              totalCost: item.totalProductionCost,
+              totalFullCost: item.totalFullProductionCost
+            });
+          }
+        });
+        
+        setProductOrders(orders);
+      } else {
+        setProductCostHistory([]);
+        setProductOrders([]);
+      }
+    }, [selectedProduct, productionCosts]);
+    
+    // Obliczanie średniej ceny wybranego produktu
+    const calculateProductStats = () => {
+      if (!selectedProduct || productionCosts.length === 0) return null;
+      
+      const filteredCosts = productionCosts.filter(item => item.itemName === selectedProduct);
+      if (filteredCosts.length === 0) return null;
+      
+      const totalQuantity = filteredCosts.reduce((sum, item) => sum + item.quantity, 0);
+      const totalCost = filteredCosts.reduce((sum, item) => sum + item.totalProductionCost, 0);
+      const totalFullCost = filteredCosts.reduce((sum, item) => sum + item.totalFullProductionCost, 0);
+      const avgUnitCost = totalQuantity > 0 ? totalCost / totalQuantity : 0;
+      const avgFullUnitCost = totalQuantity > 0 ? totalFullCost / totalQuantity : 0;
+      const minUnitCost = Math.min(...filteredCosts.map(item => item.productionCost));
+      const maxUnitCost = Math.max(...filteredCosts.map(item => item.productionCost));
+      const minFullUnitCost = Math.min(...filteredCosts.map(item => {
+        return item.fullProductionUnitCost || (item.quantity > 0 ? item.fullProductionCost / item.quantity : 0);
+      }));
+      const maxFullUnitCost = Math.max(...filteredCosts.map(item => {
+        return item.fullProductionUnitCost || (item.quantity > 0 ? item.fullProductionCost / item.quantity : 0);
+      }));
+      
+      return {
+        totalQuantity,
+        totalCost,
+        totalFullCost,
+        avgUnitCost,
+        avgFullUnitCost,
+        minUnitCost,
+        maxUnitCost,
+        minFullUnitCost,
+        maxFullUnitCost,
+        orderCount: filteredCosts.length
+      };
+    };
+    
+    const productStats = calculateProductStats();
+    
     return (
       <>
         {/* Filtry */}
@@ -840,6 +969,24 @@ const COReportsPage = () => {
             </Grid>
             
             <Grid item xs={12} md={4}>
+              <FormControl fullWidth>
+                <InputLabel>Wybierz produkt</InputLabel>
+                <Select
+                  value={selectedProduct}
+                  onChange={(e) => setSelectedProduct(e.target.value)}
+                  label="Wybierz produkt"
+                >
+                  <MenuItem value="">Wszystkie produkty</MenuItem>
+                  {costStats.costsByProduct.map((product, index) => (
+                    <MenuItem key={index} value={product.name}>
+                      {product.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            
+            <Grid item xs={12} md={4}>
               <Button 
                 variant="contained"
                 color="primary"
@@ -872,168 +1019,344 @@ const COReportsPage = () => {
               Koszty produkcji za okres: {formatDateDisplay(startDate)} - {formatDateDisplay(endDate)}
             </Typography>
             
-            {/* Karty ze statystykami kosztów */}
-            <Grid container spacing={3} sx={{ mb: 3 }}>
-              <Grid item xs={12} md={3}>
-                <Card>
-                  <CardContent>
-                    <Typography color="textSecondary" gutterBottom>
-                      Pozycje z kosztami
-                    </Typography>
-                    <Typography variant="h4" component="div">
-                      {costStats.totalItems}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <Card>
-                  <CardContent>
-                    <Typography color="textSecondary" gutterBottom>
-                      Łączny koszt produkcji
-                    </Typography>
-                    <Typography variant="h4" component="div">
-                      {formatCurrency(costStats.totalProductionCost)}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <Card>
-                  <CardContent>
-                    <Typography color="textSecondary" gutterBottom>
-                      Pełny koszt produkcji
-                    </Typography>
-                    <Typography variant="h4" component="div">
-                      {formatCurrency(costStats.totalFullProductionCost)}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <Card>
-                  <CardContent>
-                    <Typography color="textSecondary" gutterBottom>
-                      Udział w wartości zamówień
-                    </Typography>
-                    <Typography variant="h4" component="div">
-                      {costStats.productionCostRatio.toFixed(1)}%
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-            </Grid>
-            
-            {/* Tabela kosztów według produktów */}
-            <Paper sx={{ mb: 3 }}>
-              <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-                <Typography variant="h6" component="h3">
-                  Koszty według produktów
+            {selectedProduct ? (
+              <>
+                {/* Karta ze statystykami dla wybranego produktu */}
+                <Typography variant="h6" component="h3" sx={{ mb: 2 }}>
+                  Statystyki kosztu produkcji dla: {selectedProduct}
                 </Typography>
-              </Box>
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Produkt</TableCell>
-                      <TableCell align="right">Łączna ilość</TableCell>
-                      <TableCell align="right">Koszt produkcji</TableCell>
-                      <TableCell align="right">Pełny koszt</TableCell>
-                      <TableCell align="right">Liczba zamówień</TableCell>
-                      <TableCell align="right">Średni koszt/szt.</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {costStats.costsByProduct.map((product, index) => (
-                      <TableRow key={index}>
-                        <TableCell>{product.name}</TableCell>
-                        <TableCell align="right">{product.totalQuantity}</TableCell>
-                        <TableCell align="right">{formatCurrency(product.totalCost)}</TableCell>
-                        <TableCell align="right">{formatCurrency(product.totalFullCost)}</TableCell>
-                        <TableCell align="right">{product.orderCount}</TableCell>
-                        <TableCell align="right">
-                          {formatCurrency(product.totalQuantity > 0 ? product.totalCost / product.totalQuantity : 0)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Paper>
-            
-            {/* Tabela kosztów według klientów */}
-            <Paper sx={{ mb: 3 }}>
-              <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-                <Typography variant="h6" component="h3">
-                  Koszty według klientów
-                </Typography>
-              </Box>
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Klient</TableCell>
-                      <TableCell align="right">Koszt produkcji</TableCell>
-                      <TableCell align="right">Pełny koszt</TableCell>
-                      <TableCell align="right">Liczba zamówień</TableCell>
-                      <TableCell align="right">Liczba pozycji</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {costStats.costsByCustomer.map((customer, index) => (
-                      <TableRow key={index}>
-                        <TableCell>{customer.name}</TableCell>
-                        <TableCell align="right">{formatCurrency(customer.totalCost)}</TableCell>
-                        <TableCell align="right">{formatCurrency(customer.totalFullCost)}</TableCell>
-                        <TableCell align="right">{customer.orderCount}</TableCell>
-                        <TableCell align="right">{customer.itemCount}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Paper>
-            
-            {/* Szczegółowa tabela kosztów */}
-            <Paper>
-              <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-                <Typography variant="h6" component="h3">
-                  Szczegóły kosztów produkcji
-                </Typography>
-              </Box>
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Nr zamówienia</TableCell>
-                      <TableCell>Data</TableCell>
-                      <TableCell>Klient</TableCell>
-                      <TableCell>Produkt</TableCell>
-                      <TableCell align="right">Ilość</TableCell>
-                      <TableCell align="right">Koszt/szt.</TableCell>
-                      <TableCell align="right">Łączny koszt</TableCell>
-                      <TableCell align="right">Pełny koszt/szt.</TableCell>
-                      <TableCell align="right">Łączny pełny koszt</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {productionCosts.map((cost, index) => (
-                      <TableRow key={index}>
-                        <TableCell>{cost.orderNumber}</TableCell>
-                        <TableCell>{formatDateDisplay(cost.orderDate)}</TableCell>
-                        <TableCell>{cost.customerName}</TableCell>
-                        <TableCell>{cost.itemName}</TableCell>
-                        <TableCell align="right">{cost.quantity} {cost.unit}</TableCell>
-                        <TableCell align="right">{formatCurrency(cost.unitProductionCost)}</TableCell>
-                        <TableCell align="right">{formatCurrency(cost.totalProductionCost)}</TableCell>
-                        <TableCell align="right">{formatCurrency(cost.fullProductionUnitCost)}</TableCell>
-                        <TableCell align="right">{formatCurrency(cost.totalFullProductionCost)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Paper>
+                
+                {productStats && (
+                  <Grid container spacing={3} sx={{ mb: 3 }}>
+                    <Grid item xs={12} md={2}>
+                      <Card>
+                        <CardContent>
+                          <Typography color="textSecondary" gutterBottom>
+                            Łączna ilość
+                          </Typography>
+                          <Typography variant="h5" component="div">
+                            {productStats.totalQuantity}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                    <Grid item xs={12} md={2}>
+                      <Card>
+                        <CardContent>
+                          <Typography color="textSecondary" gutterBottom>
+                            Średni pełny koszt/szt.
+                          </Typography>
+                          <Typography variant="h5" component="div">
+                            {formatCurrency(productStats.avgFullUnitCost)}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                    <Grid item xs={12} md={2}>
+                      <Card>
+                        <CardContent>
+                          <Typography color="textSecondary" gutterBottom>
+                            Min. pełny koszt/szt.
+                          </Typography>
+                          <Typography variant="h5" component="div">
+                            {formatCurrency(productStats.minFullUnitCost)}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                    <Grid item xs={12} md={2}>
+                      <Card>
+                        <CardContent>
+                          <Typography color="textSecondary" gutterBottom>
+                            Max. pełny koszt/szt.
+                          </Typography>
+                          <Typography variant="h5" component="div">
+                            {formatCurrency(productStats.maxFullUnitCost)}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                    <Grid item xs={12} md={2}>
+                      <Card>
+                        <CardContent>
+                          <Typography color="textSecondary" gutterBottom>
+                            Łączny pełny koszt
+                          </Typography>
+                          <Typography variant="h5" component="div">
+                            {formatCurrency(productStats.totalFullCost)}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                    <Grid item xs={12} md={2}>
+                      <Card>
+                        <CardContent>
+                          <Typography color="textSecondary" gutterBottom>
+                            Liczba zamówień
+                          </Typography>
+                          <Typography variant="h5" component="div">
+                            {productStats.orderCount}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  </Grid>
+                )}
+                
+                {/* Wykres kosztu produkcji w czasie */}
+                {productCostHistory.length > 0 && (
+                  <Grid container spacing={3} sx={{ mb: 3 }}>
+                    <Grid item xs={12}>
+                      <Paper sx={{ p: 2 }}>
+                        <Typography variant="h6" component="h3">
+                          Pełny koszt produkcji produktu w czasie
+                        </Typography>
+                        <Box sx={{ height: 400, mt: 2 }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={productCostHistory} margin={{ top: 5, right: 20, left: 20, bottom: 30 }}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis
+                                dataKey="date"
+                                tickFormatter={(date) => formatDateDisplay(date)}
+                                label={{ value: 'Data', position: 'bottom', offset: 0 }}
+                              />
+                              <YAxis
+                                tickFormatter={(value) => value.toFixed(2) + ' €'}
+                                label={{ value: 'Pełny koszt na sztukę (€)', angle: -90, position: 'insideLeft' }}
+                              />
+                              <RechartsTooltip
+                                formatter={(value) => [value.toFixed(2) + ' €', 'Pełny koszt na sztukę']}
+                                labelFormatter={(date) => formatDateDisplay(date)}
+                              />
+                              <Legend verticalAlign="top" height={36} />
+                              <Line
+                                type="monotone"
+                                dataKey="fullUnitCost"
+                                name="Pełny koszt na sztukę"
+                                stroke="#82ca9d"
+                                strokeWidth={2}
+                                dot={{ r: 4 }}
+                                activeDot={{ r: 6 }}
+                              />
+                              {productStats && (
+                                <ReferenceLine
+                                  y={productStats.avgFullUnitCost}
+                                  label="Średnia"
+                                  stroke="#82ca9d"
+                                  strokeDasharray="3 3"
+                                />
+                              )}
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </Box>
+                      </Paper>
+                    </Grid>
+                    
+                    <Grid item xs={12}>
+                      <Paper sx={{ p: 2 }}>
+                        <Typography variant="h6" component="h3">
+                          Szczegółowe dane kosztów w czasie
+                        </Typography>
+                        <Box sx={{ mt: 2, overflowX: 'auto' }}>
+                          <TableContainer>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow>
+                                  <TableCell>Data</TableCell>
+                                  <TableCell align="right">Ilość</TableCell>
+                                  <TableCell align="right">Pełny koszt/szt.</TableCell>
+                                  <TableCell align="right">Łączny pełny koszt</TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {productCostHistory.map((entry, index) => (
+                                  <TableRow key={index}>
+                                    <TableCell>{formatDateDisplay(entry.date)}</TableCell>
+                                    <TableCell align="right">{entry.quantity}</TableCell>
+                                    <TableCell align="right">{formatCurrency(entry.fullUnitCost)}</TableCell>
+                                    <TableCell align="right">{formatCurrency(entry.totalFullCost)}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        </Box>
+                      </Paper>
+                    </Grid>
+                  </Grid>
+                )}
+                
+                {/* Tabela zamówień zawierających wybrany produkt */}
+                <Paper sx={{ mb: 3 }}>
+                  <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+                    <Typography variant="h6" component="h3">
+                      Zamówienia klientów (CO) zawierające produkt
+                    </Typography>
+                  </Box>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Numer zamówienia</TableCell>
+                          <TableCell>Data</TableCell>
+                          <TableCell>Klient</TableCell>
+                          <TableCell align="right">Ilość</TableCell>
+                          <TableCell align="right">Pełny koszt/szt.</TableCell>
+                          <TableCell align="right">Łączny pełny koszt</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {productOrders.map((order, index) => (
+                          <TableRow key={index}>
+                            <TableCell>{order.orderNumber}</TableCell>
+                            <TableCell>{formatDateDisplay(order.orderDate)}</TableCell>
+                            <TableCell>{order.customerName}</TableCell>
+                            <TableCell align="right">{order.quantity}</TableCell>
+                            <TableCell align="right">{formatCurrency(order.fullUnitCost)}</TableCell>
+                            <TableCell align="right">{formatCurrency(order.totalFullCost)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Paper>
+              </>
+            ) : (
+              <>
+                {/* Karty ze statystykami kosztów - widok oryginalny dla wszystkich produktów */}
+                <Grid container spacing={3} sx={{ mb: 3 }}>
+                  <Grid item xs={12} md={3}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary" gutterBottom>
+                          Pozycje z kosztami
+                        </Typography>
+                        <Typography variant="h4" component="div">
+                          {costStats.totalItems}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary" gutterBottom>
+                          Łączny koszt produkcji
+                        </Typography>
+                        <Typography variant="h4" component="div">
+                          {formatCurrency(costStats.totalProductionCost)}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary" gutterBottom>
+                          Pełny koszt produkcji
+                        </Typography>
+                        <Typography variant="h4" component="div">
+                          {formatCurrency(costStats.totalFullProductionCost)}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary" gutterBottom>
+                          Udział w wartości zamówień
+                        </Typography>
+                        <Typography variant="h4" component="div">
+                          {costStats.productionCostRatio.toFixed(1)}%
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                </Grid>
+                
+                {/* Tabela kosztów według produktów */}
+                <Paper sx={{ mb: 3 }}>
+                  <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+                    <Typography variant="h6" component="h3">
+                      Koszty według produktów
+                    </Typography>
+                  </Box>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Produkt</TableCell>
+                          <TableCell align="right">Łączna ilość</TableCell>
+                          <TableCell align="right">Koszt produkcji</TableCell>
+                          <TableCell align="right">Pełny koszt</TableCell>
+                          <TableCell align="right">Liczba zamówień</TableCell>
+                          <TableCell align="right">Średni koszt/szt.</TableCell>
+                          <TableCell align="center">Akcje</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {costStats.costsByProduct.map((product, index) => (
+                          <TableRow key={index}>
+                            <TableCell>{product.name}</TableCell>
+                            <TableCell align="right">{product.totalQuantity}</TableCell>
+                            <TableCell align="right">{formatCurrency(product.totalCost)}</TableCell>
+                            <TableCell align="right">{formatCurrency(product.totalFullCost)}</TableCell>
+                            <TableCell align="right">{product.orderCount}</TableCell>
+                            <TableCell align="right">
+                              {formatCurrency(product.totalQuantity > 0 ? product.totalCost / product.totalQuantity : 0)}
+                            </TableCell>
+                            <TableCell align="center">
+                              <Tooltip title="Pokaż szczegóły produktu">
+                                <IconButton 
+                                  size="small"
+                                  onClick={() => setSelectedProduct(product.name)}
+                                >
+                                  <AssessmentIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Paper>
+                
+                {/* Tabela kosztów według klientów */}
+                <Paper sx={{ mb: 3 }}>
+                  <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+                    <Typography variant="h6" component="h3">
+                      Koszty według klientów
+                    </Typography>
+                  </Box>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Klient</TableCell>
+                          <TableCell align="right">Koszt produkcji</TableCell>
+                          <TableCell align="right">Pełny koszt</TableCell>
+                          <TableCell align="right">Liczba zamówień</TableCell>
+                          <TableCell align="right">Liczba pozycji</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {costStats.costsByCustomer.map((customer, index) => (
+                          <TableRow key={index}>
+                            <TableCell>{customer.name}</TableCell>
+                            <TableCell align="right">{formatCurrency(customer.totalCost)}</TableCell>
+                            <TableCell align="right">{formatCurrency(customer.totalFullCost)}</TableCell>
+                            <TableCell align="right">{customer.orderCount}</TableCell>
+                            <TableCell align="right">{customer.itemCount}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Paper>
+              </>
+            )}
           </>
         )}
       </>
