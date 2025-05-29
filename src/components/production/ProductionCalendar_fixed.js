@@ -39,35 +39,34 @@ import {
   ArrowDropDown as ArrowDropDownIcon,
   FilterList as FilterListIcon,
   Business as BusinessIcon,
-  Work as WorkIcon,
-  ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon,
-  Settings as SettingsIcon,
-  Visibility as VisibilityIcon,
-  VisibilityOff as VisibilityOffIcon,
-  Info as InfoIcon,
-  Edit as EditIcon,
-  ZoomOut as ZoomOutIcon,
+  Search as SearchIcon,
+  ViewTimeline as ViewTimelineIcon,
+  Schedule as ScheduleIcon,
+  CalendarToday as CalendarTodayIcon,
   ZoomIn as ZoomInIcon,
-  CenterFocusStrong as ZoomNormalIcon,
-  Speed as SpeedIcon,
-  Warning as WarningIcon,
-  People as PeopleIcon,
-  FileDownload as FileDownloadIcon
+  ZoomOut as ZoomOutIcon,
+  Refresh as RefreshIcon,
+  Settings as SettingsIcon,
+  MoreVert as MoreVertIcon,
+  FileDownload as FileDownloadIcon,
+  Today as TodayIcon,
+  NavigateBefore as NavigateBeforeIcon,
+  NavigateNext as NavigateNextIcon,
+  Edit as EditIcon,
+  Visibility as VisibilityIcon,
+  Group as GroupIcon,
+  Timeline as TimelineIcon,
+  ViewHeadline as ViewHeadlineIcon,
+  SwapHoriz as SwapHorizIcon
 } from '@mui/icons-material';
-import { format, addDays, addMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth, parseISO, startOfDay, endOfDay, isValid } from 'date-fns';
-import { pl } from 'date-fns/locale';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
-import resourceTimelinePlugin from '@fullcalendar/resource-timeline';
 import interactionPlugin from '@fullcalendar/interaction';
+import timelinePlugin from '@fullcalendar/timeline';
+import resourceTimelinePlugin from '@fullcalendar/resource-timeline';
 import plLocale from '@fullcalendar/core/locales/pl';
-import * as XLSX from 'xlsx-js-style'; // Changed from 'xlsx' to 'xlsx-js-style'
+import * as XLSX from 'xlsx';
 import { 
   getTasksByDateRange, 
   updateTask,
@@ -78,75 +77,57 @@ import { getAllCustomers } from '../../services/customerService';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDate } from '../../utils/formatters';
-// At the beginning of the file, add CSS import
+import { 
+  format, 
+  parseISO, 
+  addDays, 
+  subDays, 
+  startOfMonth, 
+  endOfMonth, 
+  startOfWeek, 
+  endOfWeek, 
+  getWeek, 
+  isValid, 
+  differenceInDays, 
+  isWithinInterval, 
+  isToday, 
+  isSameDay, 
+  addHours, 
+  subHours,
+  addMonths
+} from 'date-fns';
+import { pl } from 'date-fns/locale';
+import * as XLSX from 'xlsx';
+import { 
+  getTasksByDateRange, 
+  updateTask,
+  getTasksByDateRangeOptimizedNew
+} from '../../services/productionService';
+import { getAllWorkstations } from '../../services/workstationService';
+import { getAllCustomers } from '../../services/customerService';
+import { useNotification } from '../../hooks/useNotification';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
+// Na początku pliku dodać import CSS
 import '../../styles/calendar.css';
 
-// Constants for caching mechanism
-const CACHE_EXPIRY_TIME = 5 * 60 * 1000; // 5 minutes in milliseconds
-// Maximum number of days for hourly view
+// Stałe dla mechanizmu cachowania
+const CACHE_EXPIRY_TIME = 5 * 60 * 1000; // 5 minut w milisekundach
+// Maksymalna liczba dni dla widoku godzinowego
 const MAX_DAYS_FOR_HOURLY_VIEW = 30;
 
-// Function to generate Gantt report in XLSX format
+// Funkcja do generowania raportu Gantta w formacie XLSX z imitacją timeline
 const generateGanttReport = (tasks, workstations, customers, startDate, endDate, ganttGroupBy) => {
   try {
-    console.log('Starting Gantt report XLSX generation');
-    console.log('Input parameters:', {
-      tasksCount: tasks?.length || 0,
-      workstationsCount: workstations?.length || 0,
-      customersCount: customers?.length || 0,
-      startDate,
-      endDate,
-      ganttGroupBy
-    });
+    console.log('Rozpoczęcie generowania raportu Gantta XLSX z imitacją timeline');
     
-    // Check if we have tasks
-    if (!tasks || tasks.length === 0) {
-      console.warn('No tasks for export');
-      throw new Error('No tasks available for Gantt report export');
-    }
-    
-    // Function to get status color for Excel (copy from main component)
-    const getStatusColorForExcel = (status) => {
-      switch (status) {
-        case 'Zaplanowane':
-          return '#3788d8'; // blue
-        case 'W trakcie':
-          return '#f39c12'; // orange
-        case 'Zakończone':
-          return '#2ecc71'; // green
-        case 'Anulowane':
-          return '#e74c3c'; // red
-        case 'Wstrzymane':
-          return '#757575'; // gray
-        default:
-          return '#95a5a6'; // gray
-      }
-    };
-
-    // Function to translate status to English
-    const translateStatus = (status) => {
-      switch (status) {
-        case 'Zaplanowane':
-          return 'Scheduled';
-        case 'W trakcie':
-          return 'In Progress';
-        case 'Zakończone':
-          return 'Completed';
-        case 'Anulowane':
-          return 'Cancelled';
-        case 'Wstrzymane':
-          return 'On Hold';
-        default:
-          return status || 'Unknown';
-      }
-    };
-
-    // Prepare task data with full information
+    // Przygotuj dane zadań z pełnymi informacjami
     const reportTasks = tasks.map(task => {
       const workstation = workstations.find(w => w.id === task.workstationId);
       const customer = customers.find(c => c.id === task.customerId);
       
-      // Format dates
+      // Formatuj daty
       const formatDateForReport = (date) => {
         if (!date) return '';
         try {
@@ -159,21 +140,21 @@ const generateGanttReport = (tasks, workstations, customers, startDate, endDate,
           }
           return format(new Date(date), 'dd.MM.yyyy HH:mm', { locale: pl });
         } catch (error) {
-          console.warn('Date formatting error:', error);
+          console.warn('Błąd formatowania daty:', error);
           return '';
         }
       };
 
-      // Calculate duration in hours
+      // Oblicz czas trwania w godzinach
       let durationHours = '';
       if (task.scheduledDate && task.endDate) {
         try {
           const start = task.scheduledDate instanceof Date ? task.scheduledDate : new Date(task.scheduledDate);
           const end = task.endDate instanceof Date ? task.endDate : new Date(task.endDate);
           const durationMs = end.getTime() - start.getTime();
-          durationHours = Math.round((durationMs / (1000 * 60 * 60)) * 100) / 100; // Round to 2 decimal places
+          durationHours = Math.round((durationMs / (1000 * 60 * 60)) * 100) / 100; // Zaokrąglenie do 2 miejsc po przecinku
         } catch (error) {
-          console.warn('Duration calculation error:', error);
+          console.warn('Błąd obliczania czasu trwania:', error);
           durationHours = task.estimatedDuration ? Math.round((task.estimatedDuration / 60) * 100) / 100 : '';
         }
       } else if (task.estimatedDuration) {
@@ -187,59 +168,49 @@ const generateGanttReport = (tasks, workstations, customers, startDate, endDate,
         customerName: customer?.name || task.customerName || '',
         productName: task.productName || '',
         quantity: task.quantity || 0,
-        unit: task.unit || 'pcs.',
-        status: translateStatus(task.status), // Use translated status
-        statusColor: getStatusColorForExcel(task.status), // Add status color
+        unit: task.unit || 'szt.',
+        status: task.status || '',
         workstationName: workstation?.name || '',
+        workstationId: task.workstationId,
         scheduledDate: formatDateForReport(task.scheduledDate),
         endDate: formatDateForReport(task.endDate),
         durationHours: durationHours,
         priority: task.priority || '',
         description: task.description || task.name || '',
-        // Add object with original date for comparisons
-        originalScheduledDate: task.scheduledDate,
-        originalEndDate: task.endDate
+        originalTask: task
       };
     });
 
-    // Sort tasks by start date
+    // Sortuj zadania według daty rozpoczęcia
     reportTasks.sort((a, b) => {
       const dateA = a.scheduledDate ? new Date(a.scheduledDate.split(' ')[0].split('.').reverse().join('-')) : new Date(0);
       const dateB = b.scheduledDate ? new Date(b.scheduledDate.split(' ')[0].split('.').reverse().join('-')) : new Date(0);
       return dateA - dateB;
     });
 
-    // Debug processed tasks
-    console.log('Processed tasks:', {
-      totalTasks: reportTasks.length,
-      tasksWithDates: reportTasks.filter(t => t.originalScheduledDate && t.originalEndDate).length,
-      tasksWithoutDates: reportTasks.filter(t => !t.originalScheduledDate || !t.originalEndDate).length,
-      sampleTask: reportTasks[0] // Show first task as example
-    });
-
-    // Create workbook
+    // Utwórz workbook
     const wb = XLSX.utils.book_new();
 
-    // === SHEET 1: DETAILED SCHEDULE ===
+    // === ARKUSZ 1: SZCZEGÓŁOWY HARMONOGRAM ===
     
-    // Prepare headers for detailed sheet (in English)
+    // Przygotuj nagłówki dla arkusza szczegółowego
     const detailedHeaders = [
-      'MO Number',
-      'Order Number',
-      'Customer',
-      'Product',
-      'Quantity',
-      'Unit',
+      'Numer MO',
+      'Numer zamówienia',
+      'Klient',
+      'Produkt',
+      'Ilość',
+      'Jednostka',
       'Status',
-      'Workstation',
-      'Start Date',
-      'End Date',
-      'Duration (h)',
-      'Priority',
-      'Description'
+      'Stanowisko',
+      'Data rozpoczęcia',
+      'Data zakończenia',
+      'Czas trwania (h)',
+      'Priorytet',
+      'Opis'
     ];
 
-    // Prepare data for detailed sheet
+    // Przygotuj dane dla arkusza szczegółowego
     const detailedData = reportTasks.map(task => [
       task.moNumber,
       task.orderNumber,
@@ -256,60 +227,102 @@ const generateGanttReport = (tasks, workstations, customers, startDate, endDate,
       task.description
     ]);
 
-    // Create detailed sheet
+    // Utwórz arkusz szczegółowy
     const detailedWs = XLSX.utils.aoa_to_sheet([detailedHeaders, ...detailedData]);
 
-    // === SHEET 2: VISUAL GANTT CHART ===
+    // === ARKUSZ 2: WIZUALNY WYKRES GANTTA Z IMITACJĄ TIMELINE ===
     
-    // Generate dates for X axis (columns)
+    // Generuj inteligentną oś czasu
     const ganttStartDate = new Date(startDate);
     const ganttEndDate = new Date(endDate);
     const totalDays = Math.ceil((ganttEndDate - ganttStartDate) / (1000 * 60 * 60 * 24));
     
-    // Limit number of days so Excel doesn't become too large
-    const maxDays = 120; // Maximum 4 months
-    const limitedDays = Math.min(totalDays, maxDays);
+    // Automatyczne dostosowanie skali na podstawie zakresu dat
+    let timeScale = 'day';
+    let maxTimeUnits = 90; // Maksymalna liczba jednostek czasu w arkuszu
     
-    // Generate date columns
-    const dateColumns = [];
-    for (let i = 0; i < limitedDays; i++) {
-      const currentDate = new Date(ganttStartDate);
-      currentDate.setDate(ganttStartDate.getDate() + i);
-      dateColumns.push(format(currentDate, 'dd.MM', { locale: pl }));
+    if (totalDays <= 14) {
+      timeScale = 'hour'; // Widok godzinowy dla krótkich okresów
+      maxTimeUnits = totalDays * 24;
+    } else if (totalDays <= 90) {
+      timeScale = 'day'; // Widok dzienny dla średnich okresów
+      maxTimeUnits = totalDays;
+    } else if (totalDays <= 365) {
+      timeScale = 'week'; // Widok tygodniowy dla długich okresów
+      maxTimeUnits = Math.ceil(totalDays / 7);
+    } else {
+      timeScale = 'month'; // Widok miesięczny dla bardzo długich okresów
+      maxTimeUnits = Math.ceil(totalDays / 30);
     }
 
-    // Prepare headers for Gantt chart (in English)
-    const ganttHeaders = [
-      'Task',
-      'MO',
-      'Customer',
-      'Workstation',
-      'Status',
-      ...dateColumns
-    ];
-
-    // Prepare data for Gantt chart with coloring
-    const ganttData = [];
-    let coloredCellsCount = 0; // Counter for colored cells
+    // Ogranicz liczbę jednostek, aby Excel nie był zbyt duży
+    const limitedUnits = Math.min(maxTimeUnits, 120);
     
-    // Group tasks by selected grouping mode
+    // Generuj kolumny czasowe z lepszymi nagłówkami
+    const timeColumns = [];
+    const timeHeaders = [];
+    
+    for (let i = 0; i < limitedUnits; i++) {
+      const currentTime = new Date(ganttStartDate);
+      let timeLabel = '';
+      let detailedLabel = '';
+      
+      switch (timeScale) {
+        case 'hour':
+          currentTime.setHours(ganttStartDate.getHours() + i);
+          timeLabel = format(currentTime, 'HH:mm', { locale: pl });
+          detailedLabel = format(currentTime, 'dd.MM HH:mm', { locale: pl });
+          break;
+        case 'day':
+          currentTime.setDate(ganttStartDate.getDate() + i);
+          timeLabel = format(currentTime, 'dd.MM', { locale: pl });
+          detailedLabel = format(currentTime, 'EE dd.MM', { locale: pl });
+          break;
+        case 'week':
+          currentTime.setDate(ganttStartDate.getDate() + (i * 7));
+          timeLabel = `T${getWeek(currentTime)}`;
+          detailedLabel = `Tydzień ${getWeek(currentTime)} (${format(currentTime, 'dd.MM', { locale: pl })})`;
+          break;
+        case 'month':
+          currentTime.setMonth(ganttStartDate.getMonth() + i);
+          timeLabel = format(currentTime, 'MM.yyyy', { locale: pl });
+          detailedLabel = format(currentTime, 'MMMM yyyy', { locale: pl });
+          break;
+      }
+      
+      timeColumns.push({ date: new Date(currentTime), label: timeLabel, detailed: detailedLabel });
+      timeHeaders.push(timeLabel);
+    }
+
+    // Przygotuj nagłówki dla wykresu Gantta z dwuwierszowym nagłówkiem
+    const ganttInfoHeaders = ['Zadanie', 'MO', 'Klient', 'Stanowisko', 'Status', 'Czas'];
+    const ganttTimeHeadersRow1 = ['', '', '', '', '', '', ...timeHeaders];
+    const ganttTimeHeadersRow2 = ['Zadanie', 'MO', 'Klient', 'Stanowisko', 'Status', 'Czas (h)', ...timeColumns.map(col => col.detailed)];
+
+    // Przygotuj dane dla wykresu Gantta
+    const ganttData = [];
+    
+    // Grupuj zadania według wybranego trybu grupowania
     let groupedTasks = {};
     
     if (ganttGroupBy === 'workstation') {
-      // Group by workstations
+      // Grupuj według stanowisk
       workstations.forEach(workstation => {
-        groupedTasks[workstation.name] = reportTasks.filter(task => task.workstationName === workstation.name);
+        const wsTask = reportTasks.filter(task => task.workstationName === workstation.name);
+        if (wsTask.length > 0) {
+          groupedTasks[workstation.name] = wsTask;
+        }
       });
-      // Add tasks without assigned workstation
+      // Dodaj zadania bez przypisanego stanowiska
       const noWorkstationTasks = reportTasks.filter(task => !task.workstationName);
       if (noWorkstationTasks.length > 0) {
-        groupedTasks['No workstation'] = noWorkstationTasks;
+        groupedTasks['Bez stanowiska'] = noWorkstationTasks;
       }
     } else {
-      // Group by orders
+      // Grupuj według zamówień
       const orderGroups = {};
       reportTasks.forEach(task => {
-        const orderKey = task.orderNumber || 'No order';
+        const orderKey = task.orderNumber || 'Bez zamówienia';
         if (!orderGroups[orderKey]) {
           orderGroups[orderKey] = [];
         }
@@ -318,335 +331,234 @@ const generateGanttReport = (tasks, workstations, customers, startDate, endDate,
       groupedTasks = orderGroups;
     }
 
-    let currentRowIndex = 1; // Row index for tracking position in sheet (starting from 1 because row 0 is headers)
+    // Funkcja do mapowania statusu na symbol i kolor
+    const getStatusSymbol = (status) => {
+      switch (status?.toLowerCase()) {
+        case 'zaplanowane': return { symbol: '▓', color: '3498DB' }; // Niebieski
+        case 'w trakcie': return { symbol: '█', color: 'F39C12' }; // Pomarańczowy
+        case 'zakończone': return { symbol: '█', color: '27AE60' }; // Zielony
+        case 'wstrzymane': return { symbol: '▒', color: 'E74C3C' }; // Czerwony
+        case 'anulowane': return { symbol: '░', color: '95A5A6' }; // Szary
+        default: return { symbol: '▓', color: '34495E' }; // Ciemny szary
+      }
+    };
 
-    // Add rows for each group and task
-    Object.keys(groupedTasks).forEach(groupName => {
+    // Funkcja do określenia czy zadanie jest aktywne w danym czasie
+    const isTaskActiveAtTime = (task, timeUnit) => {
+      if (!task.scheduledDate || !task.endDate) return false;
+      
+      try {
+        const taskStart = new Date(task.scheduledDate.split(' ')[0].split('.').reverse().join('-'));
+        const taskEnd = new Date(task.endDate.split(' ')[0].split('.').reverse().join('-'));
+        
+        // Dostosuj porównanie w zależności od skali czasu
+        switch (timeScale) {
+          case 'hour':
+            const taskStartHour = new Date(task.scheduledDate.split(' ')[0].split('.').reverse().join('-') + ' ' + (task.scheduledDate.split(' ')[1] || '00:00'));
+            const taskEndHour = new Date(task.endDate.split(' ')[0].split('.').reverse().join('-') + ' ' + (task.endDate.split(' ')[1] || '23:59'));
+            return timeUnit.getTime() >= taskStartHour.getTime() && timeUnit.getTime() <= taskEndHour.getTime();
+          case 'day':
+            return timeUnit >= taskStart && timeUnit <= taskEnd;
+          case 'week':
+            const weekStart = startOfWeek(timeUnit, { locale: pl });
+            const weekEnd = endOfWeek(timeUnit, { locale: pl });
+            return !(taskEnd < weekStart || taskStart > weekEnd);
+          case 'month':
+            const monthStart = startOfMonth(timeUnit);
+            const monthEnd = endOfMonth(timeUnit);
+            return !(taskEnd < monthStart || taskStart > monthEnd);
+          default:
+            return false;
+        }
+      } catch (error) {
+        console.warn('Błąd podczas sprawdzania aktywności zadania:', error);
+        return false;
+      }
+    };
+
+    // Dodaj wiersze dla każdej grupy i zadania
+    Object.keys(groupedTasks).forEach((groupName, groupIndex) => {
       const groupTasks = groupedTasks[groupName];
       
-      // Add group header row if more than one group
+      // Dodaj wiersz nagłówka grupy (jeśli więcej niż jedna grupa)
       if (Object.keys(groupedTasks).length > 1) {
         const groupRow = [
-          `=== ${groupName} ===`,
-          '', '', '', '',
-          ...Array(dateColumns.length).fill('')
+          `◆ ${groupName.toUpperCase()} ◆`,
+          '', '', '', '', '',
+          ...Array(timeColumns.length).fill('')
         ];
         ganttData.push(groupRow);
-        currentRowIndex++;
       }
 
-      // Add rows for tasks in group
-      groupTasks.forEach(task => {
-        console.log(`Processing task: ${task.moNumber}`, {
-          originalScheduledDate: task.originalScheduledDate,
-          originalEndDate: task.originalEndDate,
-          hasValidDates: !!(task.originalScheduledDate && task.originalEndDate)
-        });
-        
+      // Dodaj wiersze dla zadań w grupie
+      groupTasks.forEach((task, taskIndex) => {
+        const statusInfo = getStatusSymbol(task.status);
         const taskRow = [
-          task.productName,
+          task.productName || `Zadanie ${taskIndex + 1}`,
           task.moNumber,
           task.customerName,
           task.workstationName,
-          task.status
+          task.status,
+          task.durationHours || ''
         ];
 
-        // Add columns for each day
-        for (let i = 0; i < limitedDays; i++) {
-          const currentDate = new Date(ganttStartDate);
-          currentDate.setDate(ganttStartDate.getDate() + i);
-          
-          // Check if task is active on this day
+        // Dodaj kolumny timeline dla każdej jednostki czasu
+        timeColumns.forEach((timeCol, colIndex) => {
           let cellValue = '';
-          let shouldColorCell = false;
           
-          if (task.originalScheduledDate && task.originalEndDate) {
-            try {
-              let taskStart, taskEnd;
-              
-              // Convert task dates to Date objects
-              if (task.originalScheduledDate instanceof Date) {
-                taskStart = task.originalScheduledDate;
-              } else if (task.originalScheduledDate.toDate && typeof task.originalScheduledDate.toDate === 'function') {
-                taskStart = task.originalScheduledDate.toDate();
-              } else if (typeof task.originalScheduledDate === 'string') {
-                taskStart = new Date(task.originalScheduledDate);
-              } else {
-                taskStart = new Date(task.originalScheduledDate);
-              }
-
-              if (task.originalEndDate instanceof Date) {
-                taskEnd = task.originalEndDate;
-              } else if (task.originalEndDate.toDate && typeof task.originalEndDate.toDate === 'function') {
-                taskEnd = task.originalEndDate.toDate();
-              } else if (typeof task.originalEndDate === 'string') {
-                taskEnd = new Date(task.originalEndDate);
-              } else {
-                taskEnd = new Date(task.originalEndDate);
-              }
-
-              // Check if dates are valid
-              if (!isNaN(taskStart.getTime()) && !isNaN(taskEnd.getTime())) {
-                // Compare only dates (without time) for better accuracy
-                const currentDateOnly = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
-                const taskStartOnly = new Date(taskStart.getFullYear(), taskStart.getMonth(), taskStart.getDate());
-                const taskEndOnly = new Date(taskEnd.getFullYear(), taskEnd.getMonth(), taskEnd.getDate());
-                
-                // Check if current day is within task date range
-                if (currentDateOnly >= taskStartOnly && currentDateOnly <= taskEndOnly) {
-                  shouldColorCell = true;
-                  // Don't add any symbols - just color the cells
-                  cellValue = ''; // Empty cell with background color
-                }
-              } else {
-                console.warn('Invalid dates for task:', task.moNumber, {
-                  originalScheduledDate: task.originalScheduledDate,
-                  originalEndDate: task.originalEndDate,
-                  taskStart,
-                  taskEnd
-                });
-              }
-            } catch (error) {
-              console.warn('Error processing task dates:', task.moNumber, error);
+          if (isTaskActiveAtTime(task, timeCol.date)) {
+            // Określ pozycję w zadaniu dla różnych symboli
+            const taskStartTime = new Date(task.scheduledDate.split(' ')[0].split('.').reverse().join('-'));
+            const taskEndTime = new Date(task.endDate.split(' ')[0].split('.').reverse().join('-'));
+            
+            const isStart = colIndex === 0 || !isTaskActiveAtTime(task, timeColumns[colIndex - 1]?.date);
+            const isEnd = colIndex === timeColumns.length - 1 || !isTaskActiveAtTime(task, timeColumns[colIndex + 1]?.date);
+            
+            if (isStart && isEnd) {
+              cellValue = '◆'; // Zadanie w jednej jednostce czasu
+            } else if (isStart) {
+              cellValue = '◀█'; // Początek zadania
+            } else if (isEnd) {
+              cellValue = '█▶'; // Koniec zadania
+            } else {
+              cellValue = statusInfo.symbol; // Środek zadania
             }
-          } else {
-            console.warn('No dates for task:', task.moNumber, {
-              originalScheduledDate: task.originalScheduledDate,
-              originalEndDate: task.originalEndDate
-            });
           }
           
-          // Create cell object with appropriate style if it should be colored
-          if (shouldColorCell) {
-            coloredCellsCount++;
-            console.log(`Colored cell for task ${task.moNumber} on day ${format(currentDate, 'dd.MM', { locale: pl })}`);
-            // Cell with style for xlsx-js-style
-            taskRow.push({
-              v: cellValue, // cell value
-              s: { // cell style
-                fill: {
-                  patternType: 'solid',
-                  fgColor: { rgb: task.statusColor.replace('#', '') } // remove # from hex color
-                }
-              }
-            });
-          } else {
-            // Regular cell without style
-            taskRow.push(cellValue);
-          }
-        }
+          taskRow.push(cellValue);
+        });
 
         ganttData.push(taskRow);
-        currentRowIndex++;
       });
 
-      // Add empty row between groups
-      if (Object.keys(groupedTasks).length > 1) {
-        ganttData.push(Array(ganttHeaders.length).fill(''));
-        currentRowIndex++;
+      // Dodaj pusty wiersz między grupami (oprócz ostatniej grupy)
+      if (groupIndex < Object.keys(groupedTasks).length - 1) {
+        ganttData.push(Array(ganttInfoHeaders.length + timeColumns.length).fill(''));
       }
     });
 
-    // Create Gantt sheet
-    const ganttWs = XLSX.utils.aoa_to_sheet([ganttHeaders, ...ganttData]);
-
-    // Debug generation results
-    console.log('Gantt chart generation summary:', {
-      totalDataRows: ganttData.length,
-      coloredCells: coloredCellsCount,
-      dateRange: `${format(ganttStartDate, 'dd.MM.yyyy', { locale: pl })} - ${format(ganttEndDate, 'dd.MM.yyyy', { locale: pl })}`,
-      totalDays: limitedDays
-    });
-
-    // No need to manually apply styles - xlsx-js-style will do it automatically
-
-    // Color Status column in Gantt sheet
-    let ganttRowIndex = 1;
-    Object.keys(groupedTasks).forEach(groupName => {
-      const groupTasks = groupedTasks[groupName];
-      
-      // Skip group header row if exists
-      if (Object.keys(groupedTasks).length > 1) {
-        ganttRowIndex++;
-      }
-
-      groupTasks.forEach(task => {
-        const statusCellAddress = XLSX.utils.encode_cell({ r: ganttRowIndex, c: 4 }); // Status column in Gantt (index 4)
-        
-        if (ganttWs[statusCellAddress]) {
-          ganttWs[statusCellAddress].s = {
-            fill: {
-              patternType: 'solid',
-              fgColor: { rgb: task.statusColor.replace('#', '') }
-            },
-            font: {
-              color: { rgb: task.statusColor === '#757575' || task.statusColor === '#95a5a6' ? '000000' : 'FFFFFF' }
-            }
-          };
-        }
-        ganttRowIndex++;
-      });
-
-      // Skip empty row between groups
-      if (Object.keys(groupedTasks).length > 1) {
-        ganttRowIndex++;
-      }
-    });
-
-    // Add sheets to workbook
-    XLSX.utils.book_append_sheet(wb, detailedWs, 'Detailed schedule');
-    XLSX.utils.book_append_sheet(wb, ganttWs, 'Gantt chart');
-
-    // === FORMAT SHEETS ===
+    // Utwórz arkusz Gantta z dwuwierszowym nagłówkiem
+    const ganttSheetData = [
+      ganttTimeHeadersRow1, // Pierwszy wiersz nagłówka (krótkie nazwy)
+      ganttTimeHeadersRow2, // Drugi wiersz nagłówka (szczegółowe nazwy)
+      ...ganttData
+    ];
     
-    // Set column widths for detailed sheet
+    const ganttWs = XLSX.utils.aoa_to_sheet(ganttSheetData);
+
+    // === ULEPSZONE FORMATOWANIE ARKUSZY ===
+    
+    // Ustaw szerokości kolumn dla arkusza szczegółowego
     const detailedColWidths = [
-      { wch: 12 }, // MO Number
-      { wch: 15 }, // Order Number
-      { wch: 20 }, // Customer
-      { wch: 25 }, // Product
-      { wch: 8 },  // Quantity
-      { wch: 8 },  // Unit
+      { wch: 12 }, // Numer MO
+      { wch: 15 }, // Numer zamówienia
+      { wch: 20 }, // Klient
+      { wch: 25 }, // Produkt
+      { wch: 8 },  // Ilość
+      { wch: 8 },  // Jednostka
       { wch: 12 }, // Status
-      { wch: 15 }, // Workstation
-      { wch: 16 }, // Start Date
-      { wch: 16 }, // End Date
-      { wch: 12 }, // Duration
-      { wch: 10 }, // Priority
-      { wch: 30 }  // Description
+      { wch: 15 }, // Stanowisko
+      { wch: 16 }, // Data rozpoczęcia
+      { wch: 16 }, // Data zakończenia
+      { wch: 12 }, // Czas trwania
+      { wch: 10 }, // Priorytet
+      { wch: 30 }  // Opis
     ];
     detailedWs['!cols'] = detailedColWidths;
 
-    // Add Status column coloring in detailed sheet
-    for (let i = 1; i <= reportTasks.length; i++) {
-      const task = reportTasks[i - 1];
-      const statusCellAddress = XLSX.utils.encode_cell({ r: i, c: 6 }); // Status column (index 6)
-      
-      if (detailedWs[statusCellAddress]) {
-        detailedWs[statusCellAddress].s = {
-          fill: {
-            patternType: 'solid',
-            fgColor: { rgb: task.statusColor.replace('#', '') }
-          },
-          font: {
-            color: { rgb: task.statusColor === '#757575' || task.statusColor === '#95a5a6' ? '000000' : 'FFFFFF' }
-          }
-        };
-      }
-    }
-
-    // Set column widths for Gantt sheet
+    // Ustaw szerokości kolumn dla arkusza Gantta
     const ganttColWidths = [
-      { wch: 25 }, // Task
+      { wch: 25 }, // Zadanie
       { wch: 12 }, // MO
-      { wch: 20 }, // Customer
-      { wch: 15 }, // Workstation
+      { wch: 20 }, // Klient
+      { wch: 15 }, // Stanowisko
       { wch: 12 }, // Status
-      ...dateColumns.map(() => ({ wch: 8 })) // Date columns - increased width from 4 to 8
+      { wch: 8 },  // Czas
+      ...timeColumns.map(() => ({ wch: timeScale === 'hour' ? 6 : 4 })) // Kolumny czasu
     ];
     ganttWs['!cols'] = ganttColWidths;
 
-    // === ADD STATUS LEGEND TO GANTT SHEET ===
-    
-    // Find the last row with data
-    const lastDataRow = ganttData.length + 1; // +1 because row 0 is headers
-    const legendStartRow = lastDataRow + 2; // Leave one empty row before legend
-    
-    // Status definitions with English translations
-    const statusLegend = [
-      { status: 'Scheduled', color: '#3788d8' },
-      { status: 'In Progress', color: '#f39c12' },
-      { status: 'Completed', color: '#2ecc71' },
-      { status: 'Cancelled', color: '#e74c3c' },
-      { status: 'On Hold', color: '#757575' }
-    ];
-    
-    // Add legend header
-    const legendHeaderCell = XLSX.utils.encode_cell({ r: legendStartRow, c: 0 });
-    ganttWs[legendHeaderCell] = { v: 'STATUS LEGEND:', t: 's' };
-    if (!ganttWs[legendHeaderCell].s) ganttWs[legendHeaderCell].s = {};
-    ganttWs[legendHeaderCell].s.font = { bold: true, sz: 12 };
-    
-    // Add each status with its color
-    statusLegend.forEach((legendItem, index) => {
-      const row = legendStartRow + 1 + index;
-      
-      // Status name cell
-      const statusCell = XLSX.utils.encode_cell({ r: row, c: 0 });
-      ganttWs[statusCell] = { v: legendItem.status, t: 's' };
-      
-      // Color cell (next column)
-      const colorCell = XLSX.utils.encode_cell({ r: row, c: 1 });
-      ganttWs[colorCell] = { v: '■■■', t: 's' }; // Use square symbols to show color
-      
-      // Apply styling to color cell
-      if (!ganttWs[colorCell].s) ganttWs[colorCell].s = {};
-      ganttWs[colorCell].s = {
-        fill: {
-          patternType: 'solid',
-          fgColor: { rgb: legendItem.color.replace('#', '') }
-        },
-        font: {
-          color: { rgb: legendItem.color === '#757575' || legendItem.color === '#95a5a6' ? '000000' : 'FFFFFF' },
-          bold: true
-        }
-      };
-    });
-    
-    // Add instruction text
-    const instructionRow = legendStartRow + statusLegend.length + 2;
-    const instructionCell = XLSX.utils.encode_cell({ r: instructionRow, c: 0 });
-    ganttWs[instructionCell] = { v: 'Color coded cells in the timeline represent task periods', t: 's' };
-    if (!ganttWs[instructionCell].s) ganttWs[instructionCell].s = {};
-    ganttWs[instructionCell].s.font = { italic: true, sz: 10 };
+    // Scal komórki w nagłówku timeline
+    const merges = [];
+    // Scal pierwszą komórkę "Zadanie" w dwóch wierszach nagłówka
+    for (let i = 0; i < ganttInfoHeaders.length; i++) {
+      merges.push({
+        s: { r: 0, c: i }, // start row, start col
+        e: { r: 1, c: i }  // end row, end col
+      });
+    }
+    ganttWs['!merges'] = merges;
 
-    // === SHEET 3: SUMMARY ===
+    // Dodaj arkusze do workbook
+    XLSX.utils.book_append_sheet(wb, detailedWs, 'Szczegółowy harmonogram');
+    XLSX.utils.book_append_sheet(wb, ganttWs, 'Wykres Gantta');
+
+    // === ARKUSZ 3: LEGENDA I PODSUMOWANIE ===
     
-    // Prepare summary data
+    // Przygotuj dane podsumowania z legendą
     const summaryData = [
-      ['PRODUCTION SCHEDULE REPORT', ''],
+      ['RAPORT HARMONOGRAMU PRODUKCJI - WYKRES GANTTA', ''],
       ['', ''],
-      ['Report period:', `${format(ganttStartDate, 'dd.MM.yyyy', { locale: pl })} - ${format(ganttEndDate, 'dd.MM.yyyy', { locale: pl })}`],
-      ['Report generation date:', format(new Date(), 'dd.MM.yyyy HH:mm', { locale: pl })],
-      ['Grouping mode:', ganttGroupBy === 'workstation' ? 'By workstations' : 'By orders'],
+      ['INFORMACJE O RAPORCIE:', ''],
+      ['Okres raportu:', `${format(ganttStartDate, 'dd.MM.yyyy', { locale: pl })} - ${format(ganttEndDate, 'dd.MM.yyyy', { locale: pl })}`],
+      ['Data wygenerowania:', format(new Date(), 'dd.MM.yyyy HH:mm', { locale: pl })],
+      ['Skala czasu:', timeScale === 'hour' ? 'Godzinowa' : timeScale === 'day' ? 'Dzienna' : timeScale === 'week' ? 'Tygodniowa' : 'Miesięczna'],
+      ['Tryb grupowania:', ganttGroupBy === 'workstation' ? 'Według stanowisk' : 'Według zamówień'],
+      ['Liczba jednostek czasu:', limitedUnits],
       ['', ''],
-      ['STATISTICS:', ''],
-      ['Total tasks:', reportTasks.length],
-      ['Scheduled tasks:', reportTasks.filter(t => t.status === 'Scheduled').length],
-      ['In progress tasks:', reportTasks.filter(t => t.status === 'In Progress').length],
-      ['Completed tasks:', reportTasks.filter(t => t.status === 'Completed').length],
-      ['Cancelled tasks:', reportTasks.filter(t => t.status === 'Cancelled').length],
-      ['On hold tasks:', reportTasks.filter(t => t.status === 'On Hold').length],
+      ['LEGENDA SYMBOLI:', ''],
+      ['◆', 'Zadanie jednodniowe/krótkie'],
+      ['◀█', 'Początek zadania'],
+      ['█▶', 'Koniec zadania'],
+      ['▓', 'Zadanie zaplanowane'],
+      ['█', 'Zadanie w trakcie/zakończone'],
+      ['▒', 'Zadanie wstrzymane'],
+      ['░', 'Zadanie anulowane'],
       ['', ''],
-      ['WORKSTATIONS:', ''],
+      ['KOLORY STATUSÓW:', ''],
+      ['Niebieski (▓)', 'Zaplanowane'],
+      ['Pomarańczowy (█)', 'W trakcie'],
+      ['Zielony (█)', 'Zakończone'],
+      ['Czerwony (▒)', 'Wstrzymane'],
+      ['Szary (░)', 'Anulowane'],
+      ['', ''],
+      ['STATYSTYKI:', ''],
+      ['Łączna liczba zadań:', reportTasks.length],
+      ['Zadania zaplanowane:', reportTasks.filter(t => t.status === 'Zaplanowane').length],
+      ['Zadania w trakcie:', reportTasks.filter(t => t.status === 'W trakcie').length],
+      ['Zadania zakończone:', reportTasks.filter(t => t.status === 'Zakończone').length],
+      ['Zadania wstrzymane:', reportTasks.filter(t => t.status === 'Wstrzymane').length],
+      ['', ''],
+      ['STANOWISKA:', ''],
       ...workstations.map(ws => [
         ws.name,
-        reportTasks.filter(t => t.workstationName === ws.name).length + ' tasks'
+        reportTasks.filter(t => t.workstationName === ws.name).length + ' zadań'
       ]),
       ['', ''],
-      ['CUSTOMERS:', ''],
-      ...customers.map(customer => [
+      ['KLIENCI:', ''],
+      ...customers.slice(0, 20).map(customer => [
         customer.name,
-        reportTasks.filter(t => t.customerName === customer.name).length + ' tasks'
+        reportTasks.filter(t => t.customerName === customer.name).length + ' zadań'
       ])
     ];
 
     const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
-    summaryWs['!cols'] = [{ wch: 25 }, { wch: 20 }];
-    XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
+    summaryWs['!cols'] = [{ wch: 30 }, { wch: 25 }];
+    XLSX.utils.book_append_sheet(wb, summaryWs, 'Legenda i podsumowanie');
 
-    // Generate file name
-    const fileName = `Production_schedule_${format(ganttStartDate, 'yyyy-MM-dd', { locale: pl })}_${format(ganttEndDate, 'yyyy-MM-dd', { locale: pl })}.xlsx`;
+    // Generuj nazwę pliku z informacją o skali
+    const scaleLabel = timeScale === 'hour' ? 'godz' : timeScale === 'day' ? 'dzien' : timeScale === 'week' ? 'tydz' : 'mies';
+    const fileName = `Harmonogram_Gantt_${scaleLabel}_${format(ganttStartDate, 'yyyy-MM-dd', { locale: pl })}_${format(ganttEndDate, 'yyyy-MM-dd', { locale: pl })}.xlsx`;
 
-    // Save file
+    // Zapisz plik
     XLSX.writeFile(wb, fileName);
     
-    console.log('Gantt XLSX report generated:', fileName);
+    console.log('Raport Gantta XLSX z imitacją timeline został wygenerowany:', fileName);
     return true;
     
   } catch (error) {
-    console.error('Error generating Gantt XLSX report:', error);
-    throw new Error('Failed to generate report: ' + error.message);
+    console.error('Błąd podczas generowania raportu Gantta XLSX:', error);
+    throw new Error('Nie udało się wygenerować raportu: ' + error.message);
   }
 };
 
@@ -1558,7 +1470,7 @@ const ProductionCalendar = () => {
       if (uniqueOrders.size === 0 || tasks.some(task => !task.orderId)) {
         uniqueOrders.set('no-order', {
           id: 'no-order',
-          title: 'No order'
+          title: 'Bez zamówienia'
         });
       }
       
@@ -1580,8 +1492,8 @@ const ProductionCalendar = () => {
     
     const workstationId = eventInfo.event.extendedProps.workstationId;
     const workstationName = workstationId ? 
-      workstations.find(w => w.id === workstationId)?.name || 'Unknown workstation' : 
-      'No assigned workstation';
+      workstations.find(w => w.id === workstationId)?.name || 'Nieznane stanowisko' : 
+      'Brak przypisanego stanowiska';
     
     // Różny sposób wyświetlania dla widoku Gantta i zwykłego kalendarza
     if (view.startsWith('resourceTimeline')) {
@@ -1623,7 +1535,7 @@ const ProductionCalendar = () => {
                   textOverflow: 'ellipsis',
                   lineHeight: 1.1
                 }}>
-                  Order: {eventInfo.event.extendedProps.orderNumber}
+                  Zamówienie: {eventInfo.event.extendedProps.orderNumber}
                 </Box>
               )}
               {eventInfo.event.extendedProps.moNumber && (
@@ -1741,15 +1653,15 @@ const ProductionCalendar = () => {
   const getGanttViewLabel = () => {
     switch (ganttView) {
       case 'resourceTimelineDay':
-        return 'Day';
+        return 'Dzień';
       case 'resourceTimelineWeek':
-        return 'Week';
+        return 'Tydzień';
       case 'resourceTimelineMonth':
-        return 'Month';
+        return 'Miesiąc';
       case 'resourceTimelineYear':
-        return 'Year';
+        return 'Rok';
       default:
-        return 'Month';
+        return 'Miesiąc';
     }
   };
 
@@ -2936,19 +2848,17 @@ const ProductionCalendar = () => {
               </Button>
             )}
             
-            {/* Przycisk do pokazywania/ukrywania legendy - tylko dla widoków Gantta */}
-            {view.includes('resourceTimeline') && (
-              <Tooltip title={showLegend ? "Ukryj legendę" : "Pokaż legendę"}>
-                <IconButton 
-                  size="small" 
-                  onClick={toggleLegendVisibility}
-                  color={showLegend ? "primary" : "default"}
-                  sx={{ width: 32, height: 32 }}
-                >
-                  {showLegend ? <VisibilityIcon fontSize="small" /> : <VisibilityOffIcon fontSize="small" />}
-                </IconButton>
-              </Tooltip>
-            )}
+            {/* Przycisk do pokazywania/ukrywania legendy - teraz dla wszystkich urządzeń */}
+            <Tooltip title={showLegend ? "Ukryj legendę" : "Pokaż legendę"}>
+              <IconButton 
+                size="small" 
+                onClick={toggleLegendVisibility}
+                color={showLegend ? "primary" : "default"}
+                sx={{ width: 32, height: 32 }}
+              >
+                {showLegend ? <VisibilityIcon fontSize="small" /> : <VisibilityOffIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
             
             {view.startsWith('resourceTimeline') && (
               <Button
@@ -3091,7 +3001,7 @@ const ProductionCalendar = () => {
       </Collapse>
       
       {/* Przycisk toggle legendy dla urządzeń mobilnych */}
-      {isMobile && showLegend && view.includes('resourceTimeline') && (
+      {isMobile && showLegend && (
         <Box sx={{ 
           display: 'flex', 
           justifyContent: 'center', 
@@ -3109,8 +3019,8 @@ const ProductionCalendar = () => {
         </Box>
       )}
       
-      {/* Legenda statusów - dostępna tylko dla widoków Gantta */}
-      <Collapse in={showLegend && view.includes('resourceTimeline') && ((!isMobile) || (isMobile && legendExpanded))}>
+      {/* Legenda statusów - teraz dostępna dla wszystkich urządzeń */}
+      <Collapse in={showLegend && ((!isMobile) || (isMobile && legendExpanded))}>
         <Box 
           sx={{ 
             display: 'flex', 
@@ -3342,7 +3252,7 @@ const ProductionCalendar = () => {
               font-size: 12px;
             }
             
-            .fc-day-sat .fc-timeline-slot-label-frame,
+            .fc-day-sat .fc-timeline-slot-label-frame, 
             .fc-day-sun .fc-timeline-slot-label-frame {
               background-color: #f5f5f5;
             }
@@ -3448,7 +3358,7 @@ const ProductionCalendar = () => {
         </style>
         <FullCalendar
           ref={calendarRef}
-          plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, resourceTimelinePlugin]}
+          plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, timelinePlugin, resourceTimelinePlugin]}
           initialView={view}
           headerToolbar={false}
           events={memoizedCalendarEvents}
@@ -3502,7 +3412,7 @@ const ProductionCalendar = () => {
             minute: '2-digit',
             hour12: false
           }}
-          resourceAreaHeaderContent={ganttGroupBy === 'workstation' ? 'Workstation' : 'CO'}
+          resourceAreaHeaderContent={ganttGroupBy === 'workstation' ? 'Stanowisko' : 'CO'}
           resourcesInitiallyExpanded={true}
           stickyHeaderDates={true}
           stickyResourceAreaHeaderContent={true}
@@ -3521,7 +3431,7 @@ const ProductionCalendar = () => {
           eventContent={renderEventContent}
           dayMaxEvents={isMobile ? 2 : true}
           eventDidMount={(info) => {
-            if (info.event.extendedProps.status === 'Completed') {
+            if (info.event.extendedProps.status === 'Zakończone') {
               info.el.style.opacity = '0.7';
             }
             
@@ -3669,13 +3579,13 @@ const ProductionCalendar = () => {
                     // Sprawdź czy data jest poprawna
                     if (isNaN(date.getTime())) {
                       console.warn('Nieprawidłowa data:', dateValue);
-                      return 'Invalid date';
+                      return 'Nieprawidłowa data';
                     }
                     
                     return format(date, 'dd.MM.yyyy HH:mm');
                   } catch (error) {
                     console.error('Błąd podczas formatowania daty:', error, 'Wartość:', dateValue);
-                    return 'Invalid date';
+                    return 'Nieprawidłowa data';
                   }
                 };
                 
@@ -3720,15 +3630,15 @@ const ProductionCalendar = () => {
                 // Ustaw treść tooltipa
                 tooltipContent.innerHTML = `
                   <div class="mo-tooltip-content" style="border-radius: 4px; padding: 8px; max-width: 300px; z-index: 10000;">
-                    <div class="mo-tooltip-title" style="font-weight: bold; margin-bottom: 4px; font-size: 14px;">${taskData.name || 'Production order'}</div>
-                    <div style="font-size: 12px; margin-bottom: 2px;"><b>MO:</b> ${taskData.moNumber || 'None'}</div>
-                    ${taskData.productName ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Product:</b> ${taskData.productName}</div>` : ''}
-                    ${taskData.quantity ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Quantity:</b> ${taskData.quantity} ${taskData.unit || ''}</div>` : ''}
-                    ${taskData.workstationName ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Workstation:</b> ${taskData.workstationName}</div>` : ''}
+                    <div class="mo-tooltip-title" style="font-weight: bold; margin-bottom: 4px; font-size: 14px;">${taskData.name || 'Zlecenie produkcyjne'}</div>
+                    <div style="font-size: 12px; margin-bottom: 2px;"><b>MO:</b> ${taskData.moNumber || 'Brak'}</div>
+                    ${taskData.productName ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Produkt:</b> ${taskData.productName}</div>` : ''}
+                    ${taskData.quantity ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Ilość:</b> ${taskData.quantity} ${taskData.unit || ''}</div>` : ''}
+                    ${taskData.workstationName ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Stanowisko:</b> ${taskData.workstationName}</div>` : ''}
                     ${taskData.status ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Status:</b> ${taskData.status}</div>` : ''}
-                    ${scheduledDateFormatted ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Planned start:</b> ${scheduledDateFormatted}</div>` : ''}
-                    ${endDateFormatted ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Planned end:</b> ${endDateFormatted}</div>` : ''}
-                    ${durationInMinutes ? `<div style="font-size: 12px;"><b>Estimated time:</b> ${durationInMinutes} min</div>` : ''}
+                    ${scheduledDateFormatted ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Planowany start:</b> ${scheduledDateFormatted}</div>` : ''}
+                    ${endDateFormatted ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Planowany koniec:</b> ${endDateFormatted}</div>` : ''}
+                    ${durationInMinutes ? `<div style="font-size: 12px;"><b>Szacowany czas:</b> ${durationInMinutes} min</div>` : ''}
                   </div>
                 `;
                 
@@ -3954,7 +3864,7 @@ const ProductionCalendar = () => {
           firstDay={1}
           customButtons={{
             groupBy: {
-              text: ganttGroupBy === 'workstation' ? 'Workstations' : 'Orders',
+              text: ganttGroupBy === 'workstation' ? 'Stanowiska' : 'Zamówienia',
               click: handleGanttGroupByChange
             }
           }}

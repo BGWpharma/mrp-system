@@ -1,6 +1,6 @@
 {
   "name": "mrp-system",
-  "version": "0.1.29",
+  "version": "0.1.30",
   "private": true,
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -55,7 +55,8 @@
     "react-scripts": "5.0.1",
     "react-to-print": "^3.0.5",
     "recharts": "^2.15.3",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "xlsx": "^0.18.5"
   },
   "scripts": {
     "start": "set PORT=3003 && react-scripts start",
@@ -80,5 +81,8 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "xlsx-js-style": "^1.2.0"
   }
 }

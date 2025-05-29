@@ -38,7 +38,8 @@ import {
   Search as SearchIcon,
   Delete as DeleteIcon,
   Check as CheckIcon,
-  FilterList as FilterListIcon
+  FilterList as FilterListIcon,
+  Announcement as AnnouncementIcon
 } from '@mui/icons-material';
 import { formatDistanceToNow } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -220,6 +221,9 @@ const NotificationsHistoryPage = () => {
         case 'inventory':
           navigate(`/inventory/${notification.entityId}`);
           break;
+        case 'announcement':
+          navigate('/');
+          break;
         default:
           // Dla nieznanych typów nie przekierowujemy
           break;
@@ -289,6 +293,8 @@ const NotificationsHistoryPage = () => {
           return <CmrIcon color="primary" />;
         case 'inventory':
           return <InventoryIcon color="primary" />;
+        case 'announcement':
+          return <AnnouncementIcon color="primary" />;
         default:
           break;
       }

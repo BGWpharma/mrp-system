@@ -33,7 +33,8 @@ import {
   Description as CmrIcon,
   Refresh as RefreshIcon,
   Inventory as InventoryIcon,
-  History as HistoryIcon
+  History as HistoryIcon,
+  Announcement as AnnouncementIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
@@ -273,6 +274,9 @@ const NotificationsMenu = () => {
         case 'inventory':
           navigate(`/inventory/${notification.entityId}`);
           break;
+        case 'announcement':
+          navigate('/');
+          break;
         default:
           // W przypadku nieznanych typów nie robimy nic
           break;
@@ -319,6 +323,8 @@ const NotificationsMenu = () => {
           return <CmrIcon color="primary" />;
         case 'inventory':
           return <InventoryIcon color="primary" />;
+        case 'announcement':
+          return <AnnouncementIcon color="primary" />;
         default:
           break;
       }
