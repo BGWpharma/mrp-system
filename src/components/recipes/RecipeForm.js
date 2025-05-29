@@ -789,7 +789,7 @@ const RecipeForm = ({ recipeId }) => {
         <Button 
           variant="outlined"
           startIcon={<ArrowBackIcon />} 
-          onClick={() => navigate('/recipes')}
+          onClick={() => navigate(recipeId ? `/recipes/${recipeId}` : '/recipes')}
           sx={{ 
             borderRadius: '8px', 
             boxShadow: '0 2px 4px rgba(0,0,0,0.1)'

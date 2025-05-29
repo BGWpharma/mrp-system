@@ -47,13 +47,15 @@ import {
   Info as InfoIcon,
   ArrowDropUp as ArrowDropUpIcon,
   ExpandMore as ExpandMoreIcon,
-  Cached as CachedIcon
+  Cached as CachedIcon,
+  Download as DownloadIcon
 } from '@mui/icons-material';
 import { getAllRecipes, deleteRecipe, getRecipesByCustomer, getRecipesWithPagination } from '../../services/recipeService';
 import { useCustomersCache } from '../../hooks/useCustomersCache';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
 import searchService from '../../services/searchService';
+import { getAllWorkstations } from '../../services/workstationService';
 
 // UWAGA: Do poprawnego działania zapytań filtrowania wg. klienta wymagany jest
 // indeks złożony w Firestore dla kolekcji "recipes":
@@ -107,10 +109,23 @@ const RecipeList = () => {
     isLoaded: false,
     lastRefreshed: null
   });
+
+  // Dodajemy stan dla stanowisk produkcyjnych
+  const [workstations, setWorkstations] = useState([]);
   
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const mode = theme.palette.mode;
+  
+  // Funkcja do pobierania stanowisk produkcyjnych
+  const fetchWorkstations = useCallback(async () => {
+    try {
+      const workstationsData = await getAllWorkstations();
+      setWorkstations(workstationsData);
+    } catch (error) {
+      console.error('Błąd podczas pobierania stanowisk:', error);
+    }
+  }, []);
   
   // Obsługa debounce dla wyszukiwania
   useEffect(() => {
@@ -221,6 +236,11 @@ const RecipeList = () => {
   useEffect(() => {
     fetchRecipes();
   }, [fetchRecipes]);
+  
+  // Pobieranie stanowisk produkcyjnych przy ładowaniu komponentu
+  useEffect(() => {
+    fetchWorkstations();
+  }, [fetchWorkstations]);
   
   // Ustawiamy klientów do wyświetlenia w zakładce "grupowane wg klienta"
   useEffect(() => {
@@ -388,6 +408,112 @@ const RecipeList = () => {
   
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
+  };
+
+  // Funkcja eksportu receptur do CSV
+  const handleExportCSV = async () => {
+    try {
+      // Pobierz wszystkie receptury dla eksportu bezpośrednio z Firestore (pełne dane)
+      let allRecipes = [];
+      
+      // Zawsze używaj bezpośredniego pobierania z Firestore dla eksportu, aby mieć pełne dane
+      try {
+        // Pobierz wszystkie receptury bezpośrednio z getAllRecipes
+        const allRecipesFromFirestore = await getAllRecipes();
+        
+        // Zastosuj filtry jeśli są aktywne
+        allRecipes = allRecipesFromFirestore;
+        
+        // Filtruj po kliencie jeśli wybrano
+        if (selectedCustomerId) {
+          allRecipes = allRecipes.filter(recipe => recipe.customerId === selectedCustomerId);
+        }
+        
+        // Filtruj po wyszukiwanym terminie jeśli jest
+        if (debouncedSearchTerm && debouncedSearchTerm.trim() !== '') {
+          const searchTermLower = debouncedSearchTerm.toLowerCase().trim();
+          allRecipes = allRecipes.filter(recipe => 
+            (recipe.name && recipe.name.toLowerCase().includes(searchTermLower)) ||
+            (recipe.description && recipe.description.toLowerCase().includes(searchTermLower))
+          );
+        }
+      } catch (error) {
+        console.error('Błąd podczas pobierania receptur z Firestore:', error);
+        showError('Nie udało się pobrać receptur do eksportu');
+        return;
+      }
+
+      if (allRecipes.length === 0) {
+        showError('Brak receptur do eksportu');
+        return;
+      }
+
+      // Przygotuj dane dla CSV zgodnie z wymaganymi nagłówkami
+      const csvData = allRecipes.map((recipe, index) => {
+        // Znajdź klienta
+        const customer = customers.find(c => c.id === recipe.customerId);
+        
+        // Znajdź stanowisko produkcyjne
+        const workstation = workstations.find(w => w.id === recipe.defaultWorkstationId);
+        
+        // Sprawdź różne możliwe pola dla czasu produkcji
+        let timePerPiece = 0;
+        if (recipe.productionTimePerUnit) {
+          timePerPiece = parseFloat(recipe.productionTimePerUnit);
+        } else if (recipe.prepTime) {
+          timePerPiece = parseFloat(recipe.prepTime);
+        } else if (recipe.preparationTime) {
+          timePerPiece = parseFloat(recipe.preparationTime);
+        }
+        
+        // Oblicz liczbę komponentów (składników + komponenty)
+        const ingredientsCount = recipe.ingredients ? recipe.ingredients.length : 0;
+        const componentsCount = recipe.components ? recipe.components.length : 0;
+        const totalComponents = ingredientsCount + componentsCount;
+        
+        return {
+          SKU: recipe.name || '',
+          description: recipe.description || '',
+          Client: customer ? customer.name : '',
+          Workstation: workstation ? workstation.name : '',
+          'cost/piece': recipe.processingCostPerUnit ? recipe.processingCostPerUnit.toFixed(2) : '0.00',
+          'time/piece': timePerPiece.toFixed(2),
+          'Amount of Components': totalComponents.toString()
+        };
+      });
+
+      // Utwórz nagłówki CSV
+      const headers = ['SKU', 'description', 'Client', 'Workstation', 'cost/piece', 'time/piece', 'Amount of Components'];
+      
+      // Utwórz zawartość CSV
+      const csvContent = [
+        headers.map(header => `"${header}"`).join(','),
+        ...csvData.map(row => 
+          headers.map(header => `"${row[header] || ''}"`).join(',')
+        )
+      ].join('\n');
+
+      // Utwórz blob i pobierz plik
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      
+      // Nazwa pliku z aktualną datą
+      const currentDate = new Date().toISOString().slice(0, 10);
+      const filename = `receptury_${currentDate}.csv`;
+      
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      showSuccess(`Wyeksportowano ${allRecipes.length} receptur do pliku CSV`);
+    } catch (error) {
+      console.error('Błąd podczas eksportu CSV:', error);
+      showError('Nie udało się wyeksportować receptur do CSV');
+    }
   };
 
   // Renderowanie tabeli receptur
@@ -795,6 +921,20 @@ const RecipeList = () => {
               </Button>
             </Tooltip>
           )}
+
+          {/* Przycisk eksportu CSV */}
+          <Tooltip title="Eksportuj receptury do pliku CSV">
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={handleExportCSV}
+              disabled={loading || (tabValue === 0 ? filteredRecipes.length === 0 : (!expandedPanel || !customerRecipes[expandedPanel] || customerRecipes[expandedPanel].length === 0))}
+              size={isMobile ? "small" : "medium"}
+              color="secondary"
+            >
+              {isMobile ? 'CSV' : 'Eksportuj CSV'}
+            </Button>
+          </Tooltip>
           
           <Button
             variant="contained"

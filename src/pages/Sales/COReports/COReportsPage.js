@@ -740,8 +740,8 @@ const COReportsPage = () => {
 
   // Komponent zakładki "Koszty produkcji"
   const ProductionCostsTab = () => {
-    const productionCosts = calculateProductionCosts();
-    const costStats = calculateProductionCostStats(productionCosts);
+    const productionCosts = React.useMemo(() => calculateProductionCosts(), [filteredOrders]);
+    const costStats = React.useMemo(() => calculateProductionCostStats(productionCosts), [productionCosts]);
     
     // Stan dla wybranego produktu
     const [selectedProduct, setSelectedProduct] = useState('');
@@ -823,7 +823,7 @@ const COReportsPage = () => {
     }, [selectedProduct, productionCosts]);
     
     // Obliczanie średniej ceny wybranego produktu
-    const calculateProductStats = () => {
+    const productStats = React.useMemo(() => {
       if (!selectedProduct || productionCosts.length === 0) return null;
       
       const filteredCosts = productionCosts.filter(item => item.itemName === selectedProduct);
@@ -855,9 +855,7 @@ const COReportsPage = () => {
         maxFullUnitCost,
         orderCount: filteredCosts.length
       };
-    };
-    
-    const productStats = calculateProductStats();
+    }, [selectedProduct, productionCosts]);
     
     return (
       <>

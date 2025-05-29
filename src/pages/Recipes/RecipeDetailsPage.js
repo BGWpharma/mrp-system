@@ -39,7 +39,8 @@ import {
   Print as PrintIcon,
   Compare as CompareIcon,
   Restore as RestoreIcon,
-  Add as AddIcon
+  Add as AddIcon,
+  Download as DownloadIcon
 } from '@mui/icons-material';
 import { getRecipeById, getRecipeVersions, getRecipeVersion, restoreRecipeVersion, deleteRecipe, updateRecipe } from '../../services/recipeService';
 import { useNotification } from '../../hooks/useNotification';
@@ -198,6 +199,91 @@ const RecipeDetailsPage = () => {
     }
   };
 
+  // Funkcja eksportu receptury do CSV (w języku angielskim)
+  const handleExportCSV = () => {
+    try {
+      // Znajdź stanowisko produkcyjne
+      const workstation = workstations.find(w => w.id === recipe.defaultWorkstationId);
+      
+      // Sprawdź różne możliwe pola dla czasu produkcji
+      let timePerPiece = 0;
+      if (recipe.productionTimePerUnit) {
+        timePerPiece = parseFloat(recipe.productionTimePerUnit);
+      } else if (recipe.prepTime) {
+        timePerPiece = parseFloat(recipe.prepTime);
+      } else if (recipe.preparationTime) {
+        timePerPiece = parseFloat(recipe.preparationTime);
+      }
+
+      // Tłumaczenie statusu na język angielski
+      const translateStatus = (status) => {
+        const statusMap = {
+          'Robocza': 'Draft',
+          'Zatwierdzona': 'Approved',
+          'Archiwalna': 'Archived',
+          'W trakcie': 'In Progress',
+          'Wstrzymana': 'On Hold'
+        };
+        return statusMap[status] || status || 'Draft';
+      };
+
+      // Przygotuj dane podstawowe receptury
+      const recipeData = {
+        SKU: recipe.name || '',
+        Description: recipe.description || '',
+        'Time/piece (min)': timePerPiece.toFixed(2),
+        'Cost/piece (EUR)': recipe.processingCostPerUnit ? recipe.processingCostPerUnit.toFixed(2) : '0.00',
+        Workstation: workstation ? workstation.name : '',
+        Status: translateStatus(recipe.status)
+      };
+
+      // Przygotuj dane składników
+      const ingredientsData = recipe.ingredients ? recipe.ingredients.map(ingredient => ({
+        'Ingredient Name': ingredient.name || '',
+        Quantity: ingredient.quantity || '0',
+        Unit: ingredient.unit || '',
+        Notes: ingredient.notes || ''
+      })) : [];
+
+      // Utwórz nagłówki dla podstawowych danych receptury
+      const recipeHeaders = ['SKU', 'Description', 'Time/piece (min)', 'Cost/piece (EUR)', 'Workstation', 'Status'];
+      
+      // Utwórz nagłówki dla składników
+      const ingredientHeaders = ['Ingredient Name', 'Quantity', 'Unit', 'Notes'];
+
+      // Utwórz zawartość CSV - używamy apostrofu przed "===" aby uniknąć interpretacji jako formuła
+      const csvContent = [
+        // Sekcja 1: Informacje o recepturze
+        '"RECIPE INFORMATION"',
+        recipeHeaders.map(header => `"${header}"`).join(','),
+        recipeHeaders.map(header => `"${recipeData[header] || ''}"`).join(','),
+        '',
+        // Sekcja 2: Składniki
+        '"INGREDIENTS"',
+        ingredientHeaders.map(header => `"${header}"`).join(','),
+        ...ingredientsData.map(row => 
+          ingredientHeaders.map(header => `"${row[header] || ''}"`).join(',')
+        )
+      ].join('\n');
+
+      // Utwórz i pobierz plik
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `recipe_${recipe.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      showSuccess('Recipe exported to CSV successfully');
+    } catch (error) {
+      console.error('Error exporting recipe to CSV:', error);
+      showError('Failed to export recipe to CSV');
+    }
+  };
+
   // Funkcja do linkowania składników receptury z magazynem
   const linkIngredientsWithInventory = async (resetLinks = false) => {
     if (!recipe || !recipe.ingredients || recipe.ingredients.length === 0) {
@@ -320,24 +406,31 @@ const RecipeDetailsPage = () => {
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: { xs: 'column', sm: 'row' } }}>
         <Button 
           startIcon={<ArrowBackIcon />} 
           onClick={() => navigate('/recipes')}
+          sx={{ mb: { xs: 2, sm: 0 } }}
         >
           Powrót
         </Button>
-        <Typography variant="h5">
+        <Typography variant="h5" sx={{ mb: { xs: 2, sm: 0 } }}>
           Szczegóły receptury
         </Typography>
-        <Box>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: 'center' }}>
           <Button 
             variant="outlined" 
             startIcon={<PrintIcon />}
-            sx={{ mr: 1 }}
             onClick={() => window.print()}
           >
             Drukuj
+          </Button>
+          <Button 
+            variant="outlined" 
+            startIcon={<DownloadIcon />}
+            onClick={handleExportCSV}
+          >
+            Export CSV
           </Button>
           <Button 
             variant="contained" 
@@ -354,7 +447,6 @@ const RecipeDetailsPage = () => {
             color="secondary"
             onClick={() => linkIngredientsWithInventory(false)}
             disabled={linking}
-            sx={{ ml: 2 }}
           >
             {linking ? 'Powiązywanie...' : 'Powiąż składniki'}
           </Button>
@@ -364,7 +456,6 @@ const RecipeDetailsPage = () => {
             color="warning"
             onClick={() => linkIngredientsWithInventory(true)}
             disabled={linking}
-            sx={{ ml: 2 }}
           >
             Resetuj powiązania
           </Button>
@@ -376,11 +467,11 @@ const RecipeDetailsPage = () => {
           <Typography variant="h4" gutterBottom>
             {recipe.name}
           </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' } }}>
             <Chip 
               label={recipe.status || 'Robocza'} 
               color={recipe.status === 'Zatwierdzona' ? 'success' : 'default'} 
-              sx={{ mr: 2 }}
+              sx={{ mr: { sm: 2 }, mb: { xs: 1, sm: 0 } }}
             />
             <Typography variant="subtitle1" color="text.secondary">
               Wersja: {recipe.version || 1} | Ostatnia aktualizacja: {formatDate(recipe.updatedAt)}
@@ -424,7 +515,7 @@ const RecipeDetailsPage = () => {
             <Grid item xs={12} md={5}>
               <Typography variant="h6" gutterBottom>Składniki</Typography>
               <TableContainer>
-                <Table>
+                <Table size="small">
                   <TableHead>
                     <TableRow>
                       <TableCell>Składnik</TableCell>
@@ -435,7 +526,7 @@ const RecipeDetailsPage = () => {
                   <TableBody>
                     {recipe.ingredients.map((ingredient, index) => (
                       <TableRow key={index}>
-                        <TableCell component="th" scope="row">
+                        <TableCell component="th" scope="row" sx={{ wordBreak: 'break-word' }}>
                           {ingredient.name}
                         </TableCell>
                         <TableCell align="right">{ingredient.quantity}</TableCell>
@@ -459,26 +550,30 @@ const RecipeDetailsPage = () => {
           <Typography variant="h6" gutterBottom>Historia wersji</Typography>
           
           {selectedVersions.length > 0 && (
-            <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Box>
+            <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexDirection: { xs: 'column', sm: 'row' } }}>
+              <Box sx={{ mb: { xs: 2, sm: 0 }, width: { xs: '100%', sm: 'auto' } }}>
                 <Typography variant="body2">
                   Wybrano {selectedVersions.length} {selectedVersions.length === 1 ? 'wersję' : 'wersje'}
                 </Typography>
-                {selectedVersions.map(v => (
-                  <Chip 
-                    key={v.id}
-                    label={`Wersja ${v.version}`}
-                    size="small"
-                    onDelete={() => setSelectedVersions(selectedVersions.filter(sv => sv.id !== v.id))}
-                    sx={{ mr: 1, mt: 1 }}
-                  />
-                ))}
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', mt: 1 }}>
+                  {selectedVersions.map(v => (
+                    <Chip 
+                      key={v.id}
+                      label={`Wersja ${v.version}`}
+                      size="small"
+                      onDelete={() => setSelectedVersions(selectedVersions.filter(sv => sv.id !== v.id))}
+                      sx={{ mr: 1, mb: 1 }}
+                    />
+                  ))}
+                </Box>
               </Box>
               <Button
                 variant="outlined"
                 startIcon={<CompareIcon />}
                 disabled={selectedVersions.length !== 2}
                 onClick={handleCompareVersions}
+                fullWidth={false}
+                sx={{ width: { xs: '100%', sm: 'auto' } }}
               >
                 Porównaj wersje
               </Button>
