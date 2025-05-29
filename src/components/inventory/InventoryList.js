@@ -2364,7 +2364,7 @@ const InventoryList = () => {
                     </Table>
                   </TableContainer>
                 ) : (
-                  <Box sx={{ p: 2, textAlign: 'center', bgcolor: '#f5f5f5', borderRadius: 1, mb: 2 }}>
+                  <Box sx={{ p: 2, textAlign: 'center', bgcolor: 'background.paper', borderRadius: 1, mb: 2, border: 1, borderColor: 'divider' }}>
                     <Typography variant="body2" color="text.secondary">
                       Brak pozycji w grupie. Dodaj pozycje z listy poniżej.
                     </Typography>

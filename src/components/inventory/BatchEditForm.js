@@ -567,7 +567,7 @@ const BatchEditForm = () => {
             
             {batchData.purchaseOrderDetails && (
               <Grid item xs={12}>
-                <Box sx={{ mt: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+                <Box sx={{ mt: 2, p: 2, bgcolor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider' }}>
                   <Typography variant="subtitle2" gutterBottom>
                     Aktualne powiązanie z PO:
                   </Typography>

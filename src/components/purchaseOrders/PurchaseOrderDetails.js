@@ -35,6 +35,7 @@ import {
   updatePurchaseOrderStatus,
   updatePurchaseOrder,
   updateBatchesForPurchaseOrder,
+  updateBatchBasePricesForPurchaseOrder,
   PURCHASE_ORDER_STATUSES,
   translateStatus
 } from '../../services/purchaseOrderService';
@@ -404,6 +405,18 @@ const PurchaseOrderDetails = ({ orderId }) => {
       showError('Nie udało się zaktualizować cen partii: ' + error.message);
     }
   };
+
+  const handleUpdateBasePrices = async () => {
+    try {
+      const result = await updateBatchBasePricesForPurchaseOrder(orderId, currentUser?.uid);
+      showSuccess(`Ceny bazowe partii zostały zaktualizowane na podstawie aktualnych cen pozycji w zamówieniu (zaktualizowano ${result.updated} partii)`);
+      // Odśwież dane partii po aktualizacji
+      await fetchRelatedBatches(orderId);
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji cen bazowych partii:', error);
+      showError('Nie udało się zaktualizować cen bazowych partii: ' + error.message);
+    }
+  };
   
   const getStatusChip = (status) => {
     const statusConfig = {
@@ -740,6 +753,19 @@ const PurchaseOrderDetails = ({ orderId }) => {
                   sx={{ mr: 1 }}
                 >
                   Aktualizuj ceny partii
+                </Button>
+              )}
+              
+              {/* Przycisk do aktualizacji cen bazowych - dostępny zawsze gdy są pozycje w zamówieniu */}
+              {purchaseOrder?.items?.length > 0 && (
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  onClick={handleUpdateBasePrices}
+                  startIcon={<RefreshIcon />}
+                  sx={{ mr: 1 }}
+                >
+                  Aktualizuj ceny bazowe
                 </Button>
               )}
               
@@ -1264,12 +1290,22 @@ const PurchaseOrderDetails = ({ orderId }) => {
                     color="primary"
                     onClick={handleUpdateBatchPrices}
                     startIcon={<RefreshIcon />}
+                    sx={{ mr: 1 }}
                   >
                     Zaktualizuj ceny partii
                   </Button>
+                  
+                  <Button
+                    variant="outlined"
+                    color="primary"
+                    onClick={handleUpdateBasePrices}
+                    startIcon={<RefreshIcon />}
+                  >
+                    Aktualizuj ceny bazowe
+                  </Button>
                 </Box>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, textAlign: 'right' }}>
-                  Kliknij by zaktualizować ceny LOT-ów powiązanych z tym zamówieniem
+                  Zaktualizuj ceny partii (dodatkowe koszty) lub ceny bazowe (aktualne ceny pozycji)
                 </Typography>
               </>
             ) : (

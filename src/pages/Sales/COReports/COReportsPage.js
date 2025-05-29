@@ -20,7 +20,15 @@ import {
   Tooltip,
   Menu,
   ListItemIcon,
-  ListItemText
+  ListItemText,
+  Tabs,
+  Tab,
+  TableContainer,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell
 } from '@mui/material';
 import {
   DateRange as DateRangeIcon,
@@ -32,7 +40,9 @@ import {
   NavigateBefore as PrevIcon,
   NavigateNext as NextIcon,
   TableChart as CsvIcon,
-  KeyboardArrowDown as ArrowDownIcon
+  KeyboardArrowDown as ArrowDownIcon,
+  Assessment as AssessmentIcon,
+  MonetizationOn as MoneyIcon
 } from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -76,6 +86,7 @@ const COReportsPage = () => {
   const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
+  const [selectedTab, setSelectedTab] = useState(0);
   
   // Menu eksportu
   const [exportMenuAnchor, setExportMenuAnchor] = useState(null);
@@ -253,7 +264,28 @@ const COReportsPage = () => {
   
   // Formatowanie wyświetlanych dat
   const formatDateDisplay = (date) => {
-    return format(date, 'dd.MM.yyyy', { locale: pl });
+    try {
+      // Sprawdź czy data jest prawidłowa
+      if (!date) return 'Brak daty';
+      
+      // Jeśli to timestamp z Firebase, konwertuj na Date
+      let dateObj = date;
+      if (typeof date === 'object' && date.toDate) {
+        dateObj = date.toDate();
+      } else if (!(date instanceof Date)) {
+        dateObj = new Date(date);
+      }
+      
+      // Sprawdź czy data jest prawidłowa
+      if (isNaN(dateObj.getTime())) {
+        return 'Nieprawidłowa data';
+      }
+      
+      return format(dateObj, 'dd.MM.yyyy', { locale: pl });
+    } catch (error) {
+      console.error('Błąd formatowania daty:', error, date);
+      return 'Błąd daty';
+    }
   };
   
   // Obsługa menu eksportu
@@ -363,11 +395,119 @@ const COReportsPage = () => {
     return customer ? customer.name : 'Nieznany klient';
   };
   
-  return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-        <Typography variant="h4" component="h1">
-          Raporty zamówień klientów (CO)
+  // Obsługa zmiany zakładki
+  const handleTabChange = (event, newValue) => {
+    setSelectedTab(newValue);
+  };
+
+  // Funkcja do obliczania kosztów produkcji
+  const calculateProductionCosts = () => {
+    const productionCosts = [];
+    
+    try {
+      filteredOrders.forEach(order => {
+        if (order.items && Array.isArray(order.items) && order.items.length > 0) {
+          order.items.forEach(item => {
+            // Sprawdź, czy pozycja ma koszt produkcji
+            if (item.productionCost && parseFloat(item.productionCost) > 0) {
+              try {
+                productionCosts.push({
+                  orderId: order.id,
+                  orderNumber: order.orderNumber || order.id,
+                  orderDate: order.orderDate,
+                  customerName: order.customer?.name || 'Nieznany klient',
+                  itemName: item.name || 'Produkt bez nazwy',
+                  quantity: parseFloat(item.quantity) || 0,
+                  unit: item.unit || 'szt.',
+                  productionTaskId: item.productionTaskId,
+                  productionCost: parseFloat(item.productionCost || 0),
+                  fullProductionCost: parseFloat(item.fullProductionCost || 0),
+                  unitProductionCost: parseFloat(item.productionUnitCost || 0),
+                  fullProductionUnitCost: parseFloat(item.fullProductionUnitCost || 0),
+                  totalItemValue: (parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0),
+                  totalProductionCost: (parseFloat(item.quantity) || 0) * parseFloat(item.productionUnitCost || item.productionCost || 0),
+                  totalFullProductionCost: (parseFloat(item.quantity) || 0) * parseFloat(item.fullProductionUnitCost || item.fullProductionCost || 0)
+                });
+              } catch (itemError) {
+                console.error('Błąd podczas przetwarzania pozycji zamówienia:', itemError, item);
+              }
+            }
+          });
+        }
+      });
+    } catch (error) {
+      console.error('Błąd podczas obliczania kosztów produkcji:', error);
+    }
+    
+    return productionCosts;
+  };
+
+  // Funkcja do obliczania statystyk kosztów produkcji
+  const calculateProductionCostStats = (productionCosts) => {
+    const totalItems = productionCosts.length;
+    const totalProductionCost = productionCosts.reduce((sum, item) => sum + item.totalProductionCost, 0);
+    const totalFullProductionCost = productionCosts.reduce((sum, item) => sum + item.totalFullProductionCost, 0);
+    const totalItemValue = productionCosts.reduce((sum, item) => sum + item.totalItemValue, 0);
+    
+    // Grupowanie po produktach
+    const costsByProduct = {};
+    productionCosts.forEach(item => {
+      if (!costsByProduct[item.itemName]) {
+        costsByProduct[item.itemName] = {
+          name: item.itemName,
+          totalQuantity: 0,
+          totalCost: 0,
+          totalFullCost: 0,
+          orderCount: 0
+        };
+      }
+      
+      costsByProduct[item.itemName].totalQuantity += item.quantity;
+      costsByProduct[item.itemName].totalCost += item.totalProductionCost;
+      costsByProduct[item.itemName].totalFullCost += item.totalFullProductionCost;
+      costsByProduct[item.itemName].orderCount += 1;
+    });
+    
+    // Grupowanie po klientach
+    const costsByCustomer = {};
+    productionCosts.forEach(item => {
+      if (!costsByCustomer[item.customerName]) {
+        costsByCustomer[item.customerName] = {
+          name: item.customerName,
+          totalCost: 0,
+          totalFullCost: 0,
+          orderCount: 0,
+          itemCount: 0
+        };
+      }
+      
+      costsByCustomer[item.customerName].totalCost += item.totalProductionCost;
+      costsByCustomer[item.customerName].totalFullCost += item.totalFullProductionCost;
+      costsByCustomer[item.customerName].orderCount += 1;
+      costsByCustomer[item.customerName].itemCount += 1;
+    });
+    
+    return {
+      totalItems,
+      totalProductionCost,
+      totalFullProductionCost,
+      totalItemValue,
+      avgProductionCost: totalItems > 0 ? totalProductionCost / totalItems : 0,
+      avgFullProductionCost: totalItems > 0 ? totalFullProductionCost / totalItems : 0,
+      productionCostRatio: totalItemValue > 0 ? (totalProductionCost / totalItemValue) * 100 : 0,
+      fullProductionCostRatio: totalItemValue > 0 ? (totalFullProductionCost / totalItemValue) * 100 : 0,
+      costsByProduct: Object.values(costsByProduct),
+      costsByCustomer: Object.values(costsByCustomer)
+    };
+  };
+
+  // Komponent zakładki "Raport zamówień"
+  const OrdersReportTab = () => (
+    <>
+      {/* Nagłówek z przyciskami Export i Odśwież */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h6" component="h2">
+          Raport zamówień
         </Typography>
         
         <Box>
@@ -407,7 +547,7 @@ const COReportsPage = () => {
           </Tooltip>
         </Box>
       </Box>
-      
+
       {/* Filtry */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Grid container spacing={3} alignItems="center">
@@ -516,7 +656,7 @@ const COReportsPage = () => {
           </Grid>
         </Grid>
       </Paper>
-      
+
       <Typography variant="subtitle1" gutterBottom>
         Dane za okres: {formatDateDisplay(startDate)} - {formatDateDisplay(endDate)}
       </Typography>
@@ -582,6 +722,372 @@ const COReportsPage = () => {
         loading={loading} 
         title="Lista zamówień" 
       />
+    </>
+  );
+
+  // Komponent zakładki "Koszty produkcji"
+  const ProductionCostsTab = () => {
+    const productionCosts = calculateProductionCosts();
+    const costStats = calculateProductionCostStats(productionCosts);
+    
+    return (
+      <>
+        {/* Filtry */}
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Grid container spacing={3} alignItems="center">
+            <Grid item xs={12} md={4}>
+              <FormControl fullWidth>
+                <InputLabel>Okres raportu</InputLabel>
+                <Select
+                  value={reportPeriod}
+                  onChange={handlePeriodChange}
+                  label="Okres raportu"
+                >
+                  <MenuItem value={TIME_PERIODS.LAST_7_DAYS}>Ostatnie 7 dni</MenuItem>
+                  <MenuItem value={TIME_PERIODS.LAST_30_DAYS}>Ostatnie 30 dni</MenuItem>
+                  <MenuItem value={TIME_PERIODS.LAST_MONTH}>Poprzedni miesiąc</MenuItem>
+                  <MenuItem value={TIME_PERIODS.THIS_MONTH}>Bieżący miesiąc</MenuItem>
+                  <MenuItem value={TIME_PERIODS.CUSTOM}>Niestandardowy</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            
+            <Grid item xs={12} md={3}>
+              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                <DatePicker
+                  label="Data początkowa"
+                  value={startDate}
+                  onChange={(newDate) => {
+                    setStartDate(newDate);
+                    setReportPeriod(TIME_PERIODS.CUSTOM);
+                  }}
+                  sx={{ width: '100%' }}
+                />
+              </LocalizationProvider>
+            </Grid>
+            
+            <Grid item xs={12} md={3}>
+              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                <DatePicker
+                  label="Data końcowa"
+                  value={endDate}
+                  onChange={(newDate) => {
+                    setEndDate(newDate);
+                    setReportPeriod(TIME_PERIODS.CUSTOM);
+                  }}
+                  sx={{ width: '100%' }}
+                />
+              </LocalizationProvider>
+            </Grid>
+            
+            <Grid item xs={12} md={2}>
+              <Box sx={{ display: 'flex', flexDirection: 'row' }}>
+                <Button 
+                  variant="outlined" 
+                  onClick={() => {
+                    const prevStart = new Date(startDate);
+                    const prevEnd = new Date(endDate);
+                    const diff = endDate - startDate;
+                    prevStart.setTime(prevStart.getTime() - diff);
+                    prevEnd.setTime(prevEnd.getTime() - diff);
+                    setStartDate(prevStart);
+                    setEndDate(prevEnd);
+                    setReportPeriod(TIME_PERIODS.CUSTOM);
+                  }}
+                  sx={{ mr: 1, minWidth: 0, p: 1 }}
+                  size="small"
+                >
+                  <PrevIcon fontSize="small" />
+                </Button>
+                <Button 
+                  variant="outlined" 
+                  onClick={() => {
+                    const nextStart = new Date(startDate);
+                    const nextEnd = new Date(endDate);
+                    const diff = endDate - startDate;
+                    nextStart.setTime(nextStart.getTime() + diff);
+                    nextEnd.setTime(nextEnd.getTime() + diff);
+                    setStartDate(nextStart);
+                    setEndDate(nextEnd);
+                    setReportPeriod(TIME_PERIODS.CUSTOM);
+                  }}
+                  sx={{ minWidth: 0, p: 1 }}
+                  size="small"
+                >
+                  <NextIcon fontSize="small" />
+                </Button>
+              </Box>
+            </Grid>
+          </Grid>
+          
+          <Grid container spacing={3} sx={{ mt: 1 }}>
+            <Grid item xs={12} md={4}>
+              <FormControl fullWidth>
+                <InputLabel>Klient</InputLabel>
+                <Select
+                  value={selectedCustomer}
+                  onChange={(e) => setSelectedCustomer(e.target.value)}
+                  label="Klient"
+                >
+                  <MenuItem value="all">Wszyscy klienci</MenuItem>
+                  {customers.map(customer => (
+                    <MenuItem key={customer.id} value={customer.id}>
+                      {customer.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            
+            <Grid item xs={12} md={4}>
+              <Button 
+                variant="contained"
+                color="primary"
+                startIcon={<RefreshIcon />}
+                onClick={handleRefreshData}
+              >
+                Odśwież dane
+              </Button>
+            </Grid>
+          </Grid>
+        </Paper>
+
+        {productionCosts.length === 0 ? (
+          <Box sx={{ textAlign: 'center', py: 8 }}>
+            <MoneyIcon sx={{ fontSize: '4rem', color: 'text.secondary', mb: 2 }} />
+            <Typography variant="h6" color="text.secondary" gutterBottom>
+              Brak kosztów produkcji
+            </Typography>
+            <Typography variant="body1" color="text.secondary">
+              W wybranym okresie nie ma zamówień z kosztami produkcji.
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              Koszty produkcji są dostępne tylko dla pozycji zamówień powiązanych z zadaniami produkcyjnymi.
+            </Typography>
+          </Box>
+        ) : (
+          <>
+            {/* Nagłówek z datami */}
+            <Typography variant="subtitle1" gutterBottom>
+              Koszty produkcji za okres: {formatDateDisplay(startDate)} - {formatDateDisplay(endDate)}
+            </Typography>
+            
+            {/* Karty ze statystykami kosztów */}
+            <Grid container spacing={3} sx={{ mb: 3 }}>
+              <Grid item xs={12} md={3}>
+                <Card>
+                  <CardContent>
+                    <Typography color="textSecondary" gutterBottom>
+                      Pozycje z kosztami
+                    </Typography>
+                    <Typography variant="h4" component="div">
+                      {costStats.totalItems}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <Card>
+                  <CardContent>
+                    <Typography color="textSecondary" gutterBottom>
+                      Łączny koszt produkcji
+                    </Typography>
+                    <Typography variant="h4" component="div">
+                      {formatCurrency(costStats.totalProductionCost)}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <Card>
+                  <CardContent>
+                    <Typography color="textSecondary" gutterBottom>
+                      Pełny koszt produkcji
+                    </Typography>
+                    <Typography variant="h4" component="div">
+                      {formatCurrency(costStats.totalFullProductionCost)}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <Card>
+                  <CardContent>
+                    <Typography color="textSecondary" gutterBottom>
+                      Udział w wartości zamówień
+                    </Typography>
+                    <Typography variant="h4" component="div">
+                      {costStats.productionCostRatio.toFixed(1)}%
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+            
+            {/* Tabela kosztów według produktów */}
+            <Paper sx={{ mb: 3 }}>
+              <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+                <Typography variant="h6" component="h3">
+                  Koszty według produktów
+                </Typography>
+              </Box>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Produkt</TableCell>
+                      <TableCell align="right">Łączna ilość</TableCell>
+                      <TableCell align="right">Koszt produkcji</TableCell>
+                      <TableCell align="right">Pełny koszt</TableCell>
+                      <TableCell align="right">Liczba zamówień</TableCell>
+                      <TableCell align="right">Średni koszt/szt.</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {costStats.costsByProduct.map((product, index) => (
+                      <TableRow key={index}>
+                        <TableCell>{product.name}</TableCell>
+                        <TableCell align="right">{product.totalQuantity}</TableCell>
+                        <TableCell align="right">{formatCurrency(product.totalCost)}</TableCell>
+                        <TableCell align="right">{formatCurrency(product.totalFullCost)}</TableCell>
+                        <TableCell align="right">{product.orderCount}</TableCell>
+                        <TableCell align="right">
+                          {formatCurrency(product.totalQuantity > 0 ? product.totalCost / product.totalQuantity : 0)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+            
+            {/* Tabela kosztów według klientów */}
+            <Paper sx={{ mb: 3 }}>
+              <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+                <Typography variant="h6" component="h3">
+                  Koszty według klientów
+                </Typography>
+              </Box>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Klient</TableCell>
+                      <TableCell align="right">Koszt produkcji</TableCell>
+                      <TableCell align="right">Pełny koszt</TableCell>
+                      <TableCell align="right">Liczba zamówień</TableCell>
+                      <TableCell align="right">Liczba pozycji</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {costStats.costsByCustomer.map((customer, index) => (
+                      <TableRow key={index}>
+                        <TableCell>{customer.name}</TableCell>
+                        <TableCell align="right">{formatCurrency(customer.totalCost)}</TableCell>
+                        <TableCell align="right">{formatCurrency(customer.totalFullCost)}</TableCell>
+                        <TableCell align="right">{customer.orderCount}</TableCell>
+                        <TableCell align="right">{customer.itemCount}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+            
+            {/* Szczegółowa tabela kosztów */}
+            <Paper>
+              <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+                <Typography variant="h6" component="h3">
+                  Szczegóły kosztów produkcji
+                </Typography>
+              </Box>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Nr zamówienia</TableCell>
+                      <TableCell>Data</TableCell>
+                      <TableCell>Klient</TableCell>
+                      <TableCell>Produkt</TableCell>
+                      <TableCell align="right">Ilość</TableCell>
+                      <TableCell align="right">Koszt/szt.</TableCell>
+                      <TableCell align="right">Łączny koszt</TableCell>
+                      <TableCell align="right">Pełny koszt/szt.</TableCell>
+                      <TableCell align="right">Łączny pełny koszt</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {productionCosts.map((cost, index) => (
+                      <TableRow key={index}>
+                        <TableCell>{cost.orderNumber}</TableCell>
+                        <TableCell>{formatDateDisplay(cost.orderDate)}</TableCell>
+                        <TableCell>{cost.customerName}</TableCell>
+                        <TableCell>{cost.itemName}</TableCell>
+                        <TableCell align="right">{cost.quantity} {cost.unit}</TableCell>
+                        <TableCell align="right">{formatCurrency(cost.unitProductionCost)}</TableCell>
+                        <TableCell align="right">{formatCurrency(cost.totalProductionCost)}</TableCell>
+                        <TableCell align="right">{formatCurrency(cost.fullProductionUnitCost)}</TableCell>
+                        <TableCell align="right">{formatCurrency(cost.totalFullProductionCost)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+          </>
+        )}
+      </>
+    );
+  };
+
+  return (
+    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+        <Typography variant="h4" component="h1">
+          Raporty zamówień klientów (CO)
+        </Typography>
+      </Box>
+      
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+        <Tabs 
+          value={selectedTab} 
+          onChange={handleTabChange} 
+          aria-label="raporty co"
+          sx={{
+            '& .MuiTab-root': {
+              fontWeight: 'bold',
+              py: 2
+            },
+            '& .Mui-selected': {
+              color: 'primary.main',
+              fontWeight: 'bold'
+            },
+            '& .MuiTabs-indicator': {
+              height: 3,
+              borderTopLeftRadius: 3,
+              borderTopRightRadius: 3
+            }
+          }}
+        >
+          <Tab 
+            label="Raport zamówień" 
+            icon={<AssessmentIcon />} 
+            iconPosition="start"
+            sx={{ fontSize: '1rem' }}
+          />
+          <Tab 
+            label="Koszty produkcji"
+            icon={<MoneyIcon />} 
+            iconPosition="start"
+            sx={{ fontSize: '1rem' }}
+          />
+        </Tabs>
+      </Box>
+      
+      <Box sx={{ py: 3 }}>
+        {selectedTab === 0 && <OrdersReportTab />}
+        {selectedTab === 1 && <ProductionCostsTab />}
+      </Box>
     </Container>
   );
 };

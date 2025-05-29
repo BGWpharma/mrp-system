@@ -1001,7 +1001,7 @@ const BatchesPage = () => {
                               <IconButton
                                 size="small"
                                 component={Link}
-                                to={`/inventory/batches/${batch.id}/edit`}
+                                to={`/inventory/batch/${batch.id}`}
                               >
                                 <EditIcon fontSize="small" />
                               </IconButton>
@@ -1085,7 +1085,7 @@ const BatchesPage = () => {
                   
                   {/* Szczegóły PO - najpierw sprawdź nowy format danych */}
                   {selectedBatch.purchaseOrderDetails && selectedBatch.purchaseOrderDetails.id && (
-                    <Box sx={{ mt: 1, p: 1, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+                    <Box sx={{ mt: 1, p: 1, bgcolor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider' }}>
                       <Typography variant="body2" gutterBottom>
                         <strong>Zamówienie zakupu:</strong> {selectedBatch.purchaseOrderDetails.number || '-'}
                       </Typography>
@@ -1123,7 +1123,7 @@ const BatchesPage = () => {
                   
                   {/* Sprawdź starszy format danych */}
                   {!selectedBatch.purchaseOrderDetails && selectedBatch.sourceDetails && selectedBatch.sourceDetails.sourceType === 'purchase' && (
-                    <Box sx={{ mt: 1, p: 1, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+                    <Box sx={{ mt: 1, p: 1, bgcolor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider' }}>
                       <Typography variant="body2" gutterBottom>
                         <strong>Zamówienie zakupu:</strong> {selectedBatch.sourceDetails.orderNumber || '-'}
                       </Typography>
@@ -1278,7 +1278,7 @@ const BatchesPage = () => {
               
               {/* Dodatkowe informacje jeśli partia pochodzi z PO */}
               {selectedBatchForDelete.purchaseOrderDetails && selectedBatchForDelete.purchaseOrderDetails.id && (
-                <Box sx={{ mt: 2, p: 1, bgcolor: '#fff4e5', borderRadius: 1 }}>
+                <Box sx={{ mt: 2, p: 1, bgcolor: 'warning.light', color: 'warning.contrastText', borderRadius: 1, border: 1, borderColor: 'warning.main' }}>
                   <Typography variant="subtitle2" gutterBottom>
                     Ta partia jest powiązana z zamówieniem zakupowym:
                   </Typography>
@@ -1307,7 +1307,7 @@ const BatchesPage = () => {
               {/* Dodatkowe informacje dla starszego formatu danych */}
               {!selectedBatchForDelete.purchaseOrderDetails && selectedBatchForDelete.sourceDetails && 
                 selectedBatchForDelete.sourceDetails.sourceType === 'purchase' && selectedBatchForDelete.sourceDetails.orderId && (
-                <Box sx={{ mt: 2, p: 1, bgcolor: '#fff4e5', borderRadius: 1 }}>
+                <Box sx={{ mt: 2, p: 1, bgcolor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider' }}>
                   <Typography variant="subtitle2" gutterBottom>
                     Ta partia jest powiązana z zamówieniem zakupowym:
                   </Typography>
