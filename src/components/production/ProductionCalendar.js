@@ -26,7 +26,9 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
-  Grid
+  Grid,
+  Checkbox,
+  FormGroup
 } from '@mui/material';
 import {
   CalendarMonth as CalendarIcon,
@@ -49,7 +51,8 @@ import {
   ZoomIn as ZoomInIcon,
   CenterFocusStrong as ZoomNormalIcon,
   Speed as SpeedIcon,
-  Warning as WarningIcon
+  Warning as WarningIcon,
+  People as PeopleIcon
 } from '@mui/icons-material';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -64,6 +67,7 @@ import {
   getTasksByDateRangeOptimizedNew
 } from '../../services/productionService';
 import { getAllWorkstations } from '../../services/workstationService';
+import { getAllCustomers } from '../../services/customerService';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDate } from '../../utils/formatters';
@@ -92,6 +96,10 @@ const ProductionCalendar = () => {
   const [workstations, setWorkstations] = useState([]);
   const [useWorkstationColors, setUseWorkstationColors] = useState(false);
   const [selectedWorkstations, setSelectedWorkstations] = useState({});
+  // NOWE: Stany dla filtrowania po klientach
+  const [customers, setCustomers] = useState([]);
+  const [selectedCustomers, setSelectedCustomers] = useState({});
+  const [customerMenuAnchor, setCustomerMenuAnchor] = useState(null);
   const [customDateRange, setCustomDateRange] = useState(false);
   const [startDate, setStartDate] = useState(startOfMonth(new Date()));
   const [endDate, setEndDate] = useState(endOfMonth(new Date()));
@@ -203,6 +211,7 @@ const ProductionCalendar = () => {
   
   useEffect(() => {
     fetchWorkstations();
+    fetchCustomers();
   }, []);
   
   const fetchWorkstations = async () => {
@@ -218,6 +227,25 @@ const ProductionCalendar = () => {
     } catch (error) {
       console.error('Błąd podczas pobierania stanowisk:', error);
       showError('Błąd podczas pobierania stanowisk: ' + error.message);
+    }
+  };
+
+  const fetchCustomers = async () => {
+    try {
+      const data = await getAllCustomers();
+      setCustomers(data);
+      
+      // Domyślnie zaznacz wszystkich klientów
+      const initialSelectedCustomers = {};
+      data.forEach(customer => {
+        initialSelectedCustomers[customer.id] = true;
+      });
+      // Dodaj też opcję dla zadań bez klienta
+      initialSelectedCustomers['no-customer'] = true;
+      setSelectedCustomers(initialSelectedCustomers);
+    } catch (error) {
+      console.error('Błąd podczas pobierania klientów:', error);
+      showError('Błąd podczas pobierania klientów: ' + error.message);
     }
   };
 
@@ -700,6 +728,32 @@ const ProductionCalendar = () => {
     setSelectedWorkstations(newSelectedWorkstations);
   };
 
+  // NOWE: Funkcje do obsługi filtrów klientów
+  const handleCustomerMenuClick = (event) => {
+    setCustomerMenuAnchor(event.currentTarget);
+  };
+
+  const handleCustomerMenuClose = () => {
+    setCustomerMenuAnchor(null);
+  };
+
+  const handleCustomerFilterChange = (customerId) => {
+    setSelectedCustomers(prev => ({
+      ...prev,
+      [customerId]: !prev[customerId]
+    }));
+  };
+  
+  const handleSelectAllCustomers = (select) => {
+    const newSelectedCustomers = {};
+    customers.forEach(customer => {
+      newSelectedCustomers[customer.id] = select;
+    });
+    // Dodaj też opcję dla zadań bez klienta
+    newSelectedCustomers['no-customer'] = select;
+    setSelectedCustomers(newSelectedCustomers);
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'Zaplanowane':
@@ -739,7 +793,21 @@ const ProductionCalendar = () => {
       return [];
     }
     
-    return tasks.map(task => {
+    // NOWE: Filtrowanie zadań po klientach
+    const filteredTasks = tasks.filter(task => {
+      // Sprawdź czy zadanie ma przypisanego klienta
+      const customerId = task.customer?.id || task.customerId;
+      
+      if (customerId) {
+        // Zadanie ma klienta - sprawdź czy klient jest zaznaczony
+        return selectedCustomers[customerId] === true;
+      } else {
+        // Zadanie nie ma klienta - sprawdź czy opcja "bez klienta" jest zaznaczona
+        return selectedCustomers['no-customer'] === true;
+      }
+    });
+    
+    return filteredTasks.map(task => {
       // Sprawdź czy zadanie ma przypisane stanowisko
       const workstationId = task.workstationId;
       
@@ -1771,21 +1839,43 @@ const ProductionCalendar = () => {
 
   // Funkcja do przełączania grupowania Gantta
   const handleGanttGroupByChange = () => {
+    // Wyczyść wszystkie tooltipów przed zmianą grupowania
+    clearAllTooltips();
+    
     // Przełącz między 'workstation' a 'order'
     const newGroupBy = ganttGroupBy === 'workstation' ? 'order' : 'workstation';
+    
+    // Zapisz aktualną pozycję suwaka przed operacją
+    const currentScrollLeft = calendarRef.current?.getApi().view.el?.querySelector('.fc-scroller-harness')?.scrollLeft || 0;
+    
     setGanttGroupBy(newGroupBy);
     
     // Odśwież widok kalendarza, jeśli jest to widok Gantta
     if (view.includes('resourceTimeline') && calendarRef.current) {
-      // Daj czas na aktualizację stanu
+      // Użyj setTimeout dla lepszego timing'u aktualizacji
       setTimeout(() => {
         try {
           const calendarApi = calendarRef.current.getApi();
+          
+          // Odśwież zasoby i wydarzenia
           calendarApi.refetchResources();
+          calendarApi.refetchEvents();
+          
+          // Wymuś aktualizację rozmiaru dla lepszego layoutu
+          calendarApi.updateSize();
+          
+          // Przywróć pozycję suwaka po aktualizacji
+          setTimeout(() => {
+            const scrollContainer = calendarApi.view.el?.querySelector('.fc-scroller-harness');
+            if (scrollContainer && currentScrollLeft > 0) {
+              scrollContainer.scrollLeft = currentScrollLeft;
+            }
+          }, 100);
+          
         } catch (error) {
-          console.error('Błąd podczas odświeżania zasobów:', error);
+          console.error('Błąd podczas odświeżania zasobów po zmianie grupowania:', error);
         }
-      }, 0);
+      }, 50);
     }
   };
 
@@ -1950,6 +2040,14 @@ const ProductionCalendar = () => {
       });
       setSelectedWorkstations(allSelected);
       
+      // NOWE: Resetuj także wybrane klientów do wszystkich
+      const allSelectedCustomers = {};
+      customers.forEach(customer => {
+        allSelectedCustomers[customer.id] = true;
+      });
+      allSelectedCustomers['no-customer'] = true;
+      setSelectedCustomers(allSelectedCustomers);
+      
       // Jeśli mamy kalendarz, zresetuj widok
       if (calendarRef.current) {
         const calendarApi = calendarRef.current.getApi();
@@ -1987,7 +2085,7 @@ const ProductionCalendar = () => {
   }, [clearAllTooltips]);
 
   // Memoizacja kalendarza - unikamy zbędnych przeliczeń
-  const memoizedCalendarEvents = useMemo(() => getCalendarEvents(), [tasks, ganttGroupBy, useWorkstationColors, workstations, modifiedTasks]);
+  const memoizedCalendarEvents = useMemo(() => getCalendarEvents(), [tasks, ganttGroupBy, useWorkstationColors, workstations, modifiedTasks, selectedCustomers]);
   
   // Memoizacja zasobów dla widoku Gantt
   const memoizedResources = useMemo(() => getResources(), [workstations, selectedWorkstations, ganttGroupBy, tasks]);
@@ -2007,6 +2105,20 @@ const ProductionCalendar = () => {
       });
     }
   }, []);
+
+  // Efekt do dynamicznego ustawiania atrybutu data-group-by dla stylowania CSS
+  useEffect(() => {
+    if (calendarRef.current && view.startsWith('resourceTimeline')) {
+      const calendarEl = calendarRef.current.getApi().el;
+      if (calendarEl) {
+        // Znajdź element resource-timeline
+        const resourceTimelineEl = calendarEl.querySelector('.fc-resource-timeline');
+        if (resourceTimelineEl) {
+          resourceTimelineEl.setAttribute('data-group-by', ganttGroupBy);
+        }
+      }
+    }
+  }, [ganttGroupBy, view]);
 
   return (
     <Paper sx={{ 
@@ -2301,6 +2413,23 @@ const ProductionCalendar = () => {
                 </Tooltip>
               </Box>
             )}
+            
+            {/* NOWE: Przycisk filtrów klientów */}
+            <Tooltip title="Filtruj według klientów">
+              <Button
+                variant="outlined"
+                size="small"
+                sx={{ 
+                  height: 32, 
+                  fontSize: '0.7rem',
+                  px: isMobile ? 0.75 : 1
+                }}
+                onClick={handleCustomerMenuClick}
+                startIcon={<PeopleIcon fontSize="small" />}
+              >
+                {isMobile ? 'Klienci' : 'Filtruj klientów'}
+              </Button>
+            </Tooltip>
             
             {/* Toggle optymalizacji zapytań */}
             <Tooltip title={`Optymalizacja zapytań: ${useOptimizedQueries ? 'Włączona' : 'Wyłączona'}`}>
@@ -2721,7 +2850,7 @@ const ProductionCalendar = () => {
             startTime: '08:00',
             endTime: '16:00',
           }}
-          weekends={true}
+          weekends={false}
           nowIndicator={true}
           schedulerLicenseKey="GPL-My-Project-Is-Open-Source"
           resourceAreaWidth={isMobile ? '70px' : (view.startsWith('resourceTimeline') ? '12%' : '10%')}
@@ -2734,6 +2863,8 @@ const ProductionCalendar = () => {
           eventDrop={handleEventDrop}
           eventResize={handleEventResize}
           eventOverlap={true}
+          slotEventOverlap={true}
+          eventOrderStrict={false}
           snapDuration={ganttDetail === 'hour' ? "00:15:00" : "01:00:00"}
           slotLabelFormat={{
             hour: '2-digit',
@@ -2747,7 +2878,6 @@ const ProductionCalendar = () => {
             minute: '2-digit',
             hour12: false
           }}
-          slotEventOverlap={true}
           resourceAreaHeaderContent={ganttGroupBy === 'workstation' ? 'Stanowisko' : 'CO'}
           resourcesInitiallyExpanded={true}
           stickyHeaderDates={true}
@@ -2771,11 +2901,38 @@ const ProductionCalendar = () => {
               info.el.style.opacity = '0.7';
             }
             
+            // NOWE: Dodaj style dla lepszego wyrównania pionowego w widoku Gantta
+            if (view.startsWith('resourceTimeline')) {
+              // Ustaw event jako blokowy element dla lepszego układania
+              info.el.style.display = 'block';
+              info.el.style.position = 'relative';
+              info.el.style.verticalAlign = 'top';
+              info.el.style.marginBottom = '2px';
+              
+              // Zapewnij, że event nie ma stałej pozycji top
+              info.el.style.top = 'auto';
+              
+              // Dodaj klasę dla identyfikacji
+              info.el.classList.add('gantt-event');
+              
+              // Jeśli to widok kompaktowy, zmniejsz marginesy
+              if (scaleLevel < 0.8) {
+                info.el.style.marginBottom = '1px';
+              } else if (scaleLevel > 1.2) {
+                info.el.style.marginBottom = '3px';
+              }
+            }
+            
             // Dostosuj style dla urządzeń mobilnych
             if (isMobile) {
               // Zmniejsz padding dla lepszego wykorzystania przestrzeni
               if (info.view.type === 'dayGridMonth') {
                 info.el.style.padding = '1px 2px';
+              }
+              
+              // Dla widoku Gantta na mobile
+              if (view.startsWith('resourceTimeline')) {
+                info.el.style.marginBottom = '1px';
               }
             }
             
@@ -3171,6 +3328,12 @@ const ProductionCalendar = () => {
           dayHeaders={true}
           datesAboveResources={true}
           firstDay={1}
+          customButtons={{
+            groupBy: {
+              text: ganttGroupBy === 'workstation' ? 'Stanowiska' : 'Zamówienia',
+              click: handleGanttGroupByChange
+            }
+          }}
           views={{
             timeGridDay: {
               dayHeaderFormat: { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }
@@ -3444,6 +3607,78 @@ const ProductionCalendar = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* NOWE: Menu filtrów klientów */}
+      <Menu
+        anchorEl={customerMenuAnchor}
+        open={Boolean(customerMenuAnchor)}
+        onClose={handleCustomerMenuClose}
+        PaperProps={{
+          style: {
+            maxHeight: 400,
+            width: '300px',
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
+            Filtruj według klientów
+          </Typography>
+          
+          <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+            <Button 
+              size="small" 
+              onClick={() => handleSelectAllCustomers(true)}
+              variant="outlined"
+            >
+              Zaznacz wszystkich
+            </Button>
+            <Button 
+              size="small" 
+              onClick={() => handleSelectAllCustomers(false)}
+              variant="outlined"
+            >
+              Odznacz wszystkich
+            </Button>
+          </Box>
+          
+          <FormGroup>
+            {customers.map(customer => (
+              <FormControlLabel
+                key={customer.id}
+                control={
+                  <Checkbox
+                    checked={selectedCustomers[customer.id] || false}
+                    onChange={() => handleCustomerFilterChange(customer.id)}
+                    size="small"
+                  />
+                }
+                label={
+                  <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
+                    {customer.name}
+                  </Typography>
+                }
+              />
+            ))}
+            
+            {/* Opcja dla zadań bez klienta */}
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={selectedCustomers['no-customer'] || false}
+                  onChange={() => handleCustomerFilterChange('no-customer')}
+                  size="small"
+                />
+              }
+              label={
+                <Typography variant="body2" sx={{ fontSize: '0.85rem', fontStyle: 'italic' }}>
+                  Bez przypisanego klienta
+                </Typography>
+              }
+            />
+          </FormGroup>
+        </Box>
+      </Menu>
     </Paper>
   );
 };

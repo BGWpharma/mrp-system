@@ -156,6 +156,7 @@ body.dark-mode .fc-timeline-event {
   padding: 1px 4px !important;
   line-height: 1.2 !important;
   border-radius: 2px !important;
+  margin-bottom: 2px !important; /* Dodaje odstęp między kafelkami */
 }
 
 .fc-timeline-event .fc-event-title {
@@ -178,6 +179,7 @@ body.dark-mode .fc-timeline-event {
   /* Bardzo kompaktowe */
   font-size: 9px !important;
   padding: 1px 2px !important;
+  margin-bottom: 1px !important;
 }
 
 .fc-timeline-view.scale-compact .fc-timeline-event .fc-event-title {
@@ -199,6 +201,7 @@ body.dark-mode .fc-timeline-event {
   min-height: 26px !important;
   font-size: 12px !important;
   padding: 2px 5px !important;
+  margin-bottom: 3px !important;
 }
 
 .fc-timeline-view.scale-large .fc-timeline-event .fc-event-title {
@@ -210,32 +213,84 @@ body.dark-mode .fc-timeline-event {
   font-size: 11px !important;
 }
 
-/* Responsywne ustawienia wysokości wierszy zasobów */
+/* NOWE: Dynamiczne wysokości wierszy zasobów - usuwamy stałe wysokości */
 .fc-resource-timeline .fc-timeline-lane {
-  min-height: 28px;
+  min-height: 30px; /* Tylko minimalna wysokość */
+  height: auto !important; /* Pozwól na automatyczne dostosowanie */
 }
 
 .fc-timeline-view.scale-compact .fc-resource-timeline .fc-timeline-lane {
-  min-height: 20px !important;
+  min-height: 24px !important;
+  height: auto !important;
 }
 
 .fc-timeline-view.scale-large .fc-resource-timeline .fc-timeline-lane {
-  min-height: 35px !important;
+  min-height: 36px !important;
+  height: auto !important;
 }
 
 /* Optymalizacja obszaru zasobów */
 .fc-resource-area {
   border-right: 2px solid #ddd;
-  max-width: 120px;
-  /* Maksymalna szerokość kolumny zasobów */
+  /* Usunięto max-width: 120px; aby umożliwić pełną synchronizację szerokości */
+  /* Szerokość będzie kontrolowana przez resourceAreaWidth w komponencie */
+  width: 100% !important; /* Zapewnia pełną szerokość dostępnej przestrzeni */
+  box-sizing: border-box !important;
 }
 
+/* NOWE: Zapewnienie identycznej szerokości nagłówka kolumny zasobów */
+.fc-resource-area-header {
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.fc-resource-area-header .fc-datagrid-cell-frame {
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* NOWE: Synchronizacja szerokości wszystkich komórek w kolumnie zasobów */
 .fc-resource-area .fc-datagrid-cell-frame {
   padding: 2px 6px;
   font-size: 12px;
   word-wrap: break-word;
   /* Pozwala na łamanie długich numerów CO */
   overflow-wrap: break-word;
+  /* Dopasuj wysokość do zawartości wiersza */
+  height: auto !important;
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  /* NOWE: Zapewnienie pełnej szerokości */
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* NOWE: Zapewnienie równej szerokości nagłówka i wierszy zasobów */
+.fc-resource-timeline-divider {
+  width: 2px !important; /* Zmniejszono z 3px dla lepszego wyrównania */
+}
+
+/* NOWE: Dodatkowe styles dla zapewnienia spójności szerokości */
+.fc-resource-timeline .fc-datagrid-cell-frame,
+.fc-resource-timeline .fc-datagrid-cell-cushion {
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* NOWE: Wyrównanie szerokości obszaru zasobów z wierszami czasowymi */
+.fc-resource-timeline .fc-resource-area {
+  flex-shrink: 0 !important; /* Zapobiega kurczeniu się kolumny */
+  overflow: hidden !important; /* Zapobiega przepełnieniu */
+}
+
+/* NOWE: Zapewnienie spójnej szerokości we wszystkich skalach */
+.fc-timeline-view.scale-compact .fc-resource-area {
+  width: 100% !important;
+}
+
+.fc-timeline-view.scale-large .fc-resource-area {
+  width: 100% !important;
 }
 
 /* Dodatkowa optymalizacja dla numerów zamówień */
@@ -253,10 +308,40 @@ body.dark-mode .fc-timeline-event {
   font-weight: bold;
 }
 
-/* Dodatkowe optymalizacje dla kompaktowego wyświetlania */
+/* NOWE: Dynamiczne układanie wydarzeń w wierszach */
 .fc-timeline-lane-frame {
   border-bottom: 1px solid #ddd;
-  min-height: inherit;
+  height: auto !important; /* Usuń stałą wysokość */
+  min-height: 30px !important; /* Tylko minimalna wysokość */
+  padding: 3px 0 !important; /* Dodaj padding góra/dół */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+}
+
+/* NOWE: Style dla wielu wydarzeń w jednym wierszu */
+.fc-timeline-lane-frame .fc-timeline-events {
+  display: flex;
+  flex-direction: column;
+  gap: 2px; /* Odstęp między wydarzeniami */
+  padding: 2px 0;
+}
+
+/* NOWE: Zapewnienie właściwego wyrównania z liniami siatki */
+.fc-timeline-lane-frame {
+  position: relative;
+}
+
+.fc-timeline-lane-frame::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  border-top: 1px solid transparent; /* Pomaga w wyrównaniu */
 }
 
 /* Zmniejszenie wysokości nagłówków zasobów */
@@ -269,13 +354,15 @@ body.dark-mode .fc-timeline-event {
 .fc-timeline-event.fc-event-short {
   min-height: 18px !important;
   font-size: 10px !important;
+  margin-bottom: 1px !important;
 }
 
-/* Dodatkowe style dla lepszego wykorzystania przestrzeni */
+/* Dodatkowe styles dla lepszego wykorzystania przestrzeni */
 .fc-timeline-view .fc-datagrid-cell-frame {
-  vertical-align: middle;
+  vertical-align: top; /* Zmienione z middle na top */
   display: flex;
-  align-items: center;
+  align-items: flex-start; /* Zmienione z center na flex-start */
+  height: auto !important;
 }
 
 /* Zmniejszenie marginesów wewnętrznych eventów */
@@ -290,64 +377,62 @@ body.dark-mode .fc-timeline-event {
 .fc-timeline-view.scale-compact .fc-resource-area .fc-datagrid-cell-frame {
   padding: 1px 3px !important;
   font-size: 11px !important;
+  min-height: 24px;
 }
 
 .fc-timeline-view.scale-large .fc-resource-area .fc-datagrid-cell-frame {
   padding: 3px 8px !important;
   font-size: 13px !important;
-}
-
-/* Stałe wysokości wierszy zasobów */
-.fc-resource-timeline .fc-timeline-lane-frame {
-  height: 60px !important;
-  /* Domyślna wysokość wiersza */
-  min-height: 40px !important;
-  /* Minimalna wysokość wiersza */
-}
-
-.fc-timeline-view.scale-compact .fc-resource-timeline .fc-timeline-lane-frame {
-  height: 45px !important;
-  /* Kompaktowa wysokość wiersza */
-  min-height: 40px !important;
-}
-
-.fc-timeline-view.scale-large .fc-resource-timeline .fc-timeline-lane-frame {
-  height: 75px !important;
-  /* Powiększona wysokość wiersza */
-  min-height: 40px !important;
+  min-height: 36px;
 }
 
 /* Responsywność dla urządzeń mobilnych */
 @media (max-width: 768px) {
   .fc-resource-timeline .fc-timeline-lane-frame {
-    height: 48px !important;
-    /* 20% mniej niż domyślne 60px */
-    min-height: 32px !important;
-    /* 20% mniej niż domyślne 40px */
+    min-height: 24px !important;
+    padding: 2px 0 !important;
   }
 
   .fc-timeline-view.scale-compact .fc-resource-timeline .fc-timeline-lane-frame {
-    height: 36px !important;
-    /* 20% mniej niż 45px */
-    min-height: 32px !important;
+    min-height: 20px !important;
+    padding: 1px 0 !important;
   }
 
   .fc-timeline-view.scale-large .fc-resource-timeline .fc-timeline-lane-frame {
-    height: 60px !important;
-    /* 20% mniej niż 75px */
-    min-height: 32px !important;
+    min-height: 28px !important;
+    padding: 2px 0 !important;
+  }
+  
+  .fc-resource-area .fc-datagrid-cell-frame {
+    min-height: 24px;
   }
 }
 
-/* Zapewnienie, że wysokość wiersza dopasowuje się do liczby wydarzeń */
-.fc-resource-timeline .fc-timeline-lane-frame.fc-has-events {
+/* NOWE: Zapewnienie prawidłowego wyrównania wydarzeń z liniami siatki */
+.fc-timeline-lane-frame.fc-has-events {
+  min-height: 30px !important;
   height: auto !important;
-  min-height: 40px !important;
+}
+
+/* NOWE: Style dla układania wydarzeń w kolumnach czasowych */
+.fc-timeline-event {
+  position: relative !important;
+  top: auto !important;
+  vertical-align: top !important;
+}
+
+/* NOWE: Zapobieganie nakładaniu się wydarzeń */
+.fc-timeline-event + .fc-timeline-event {
+  margin-top: 2px !important;
 }
 
 @media (max-width: 768px) {
   .fc-resource-timeline .fc-timeline-lane-frame.fc-has-events {
-    min-height: 32px !important;
+    min-height: 24px !important;
+  }
+  
+  .fc-timeline-event + .fc-timeline-event {
+    margin-top: 1px !important;
   }
 }
 
@@ -376,35 +461,6 @@ body.dark-mode .fc-timeline-event {
   min-height: 30px;
 }
 
-/* Style dla nagłówków w widoku godzinowym */
-.fc-resource-timeline-view.hour-scale .fc-timeline-slot {
-  min-width: 50px !important;
-}
-
-/* Ostylowanie wierszy nagłówków */
-.fc-timeline-header-row:first-child .fc-timeline-slot-frame {
-  background-color: #f9f9f9;
-}
-
-.fc-timeline-header-row:last-child .fc-timeline-slot-frame {
-  background-color: #f5f5f5;
-}
-
-/* Zwiększenie szerokości slotów dla widoku godzinowego */
-.fc-timeline-view .fc-timeline-slot.fc-timeline-slot-hour {
-  min-width: 50px !important;
-}
-
-/* Oznaczenie godzin nocnych */
-.fc-timeline-slot.fc-timeline-slot-hour.fc-timeline-slot-major[data-time*="00:00"] .fc-timeline-slot-frame,
-.fc-timeline-slot.fc-timeline-slot-hour.fc-timeline-slot-major[data-time*="01:00"] .fc-timeline-slot-frame,
-.fc-timeline-slot.fc-timeline-slot-hour.fc-timeline-slot-major[data-time*="02:00"] .fc-timeline-slot-frame,
-.fc-timeline-slot.fc-timeline-slot-hour.fc-timeline-slot-major[data-time*="03:00"] .fc-timeline-slot-frame,
-.fc-timeline-slot.fc-timeline-slot-hour.fc-timeline-slot-major[data-time*="04:00"] .fc-timeline-slot-frame,
-.fc-timeline-slot.fc-timeline-slot-hour.fc-timeline-slot-major[data-time*="05:00"] .fc-timeline-slot-frame {
-  background-color: rgba(0, 0, 0, 0.05);
-}
-
 /* Style dla widoku godzinowego z ograniczonym zakresem dat */
 .fc-timeline-view.hour-scale-limited .fc-timeline-slot.fc-timeline-slot-hour {
   min-width: 30px !important;
@@ -431,7 +487,7 @@ body.dark-mode .fc-timeline-event {
   z-index: 5;
 }
 
-/* Dodatkowe style dla zachowania czytelności w ograniczonym widoku godzinowym */
+/* Dodatkowe styles dla zachowania czytelności w ograniczonym widoku godzinowym */
 .fc-timeline-view.hour-scale-limited .fc-timeline-slot.fc-timeline-slot-hour:nth-child(odd) .fc-timeline-slot-frame {
   background-color: rgba(0, 0, 0, 0.03);
 }
@@ -443,4 +499,132 @@ body.dark-mode .fc-timeline-event {
 .fc-timeline-view.hour-scale-limited .fc-timeline-slot.fc-timeline-slot-hour[data-time*="18:00"] .fc-timeline-slot-frame {
   background-color: rgba(33, 150, 243, 0.05);
   border-left: 1px solid rgba(33, 150, 243, 0.3);
+}
+
+/* NOWE: Dodatkowe styles dla lepszego obsługiwania wielu wydarzeń w jednym wierszu */
+.fc-timeline-lane-frame .fc-timeline-events {
+  position: relative;
+  z-index: 1;
+}
+
+.fc-timeline-event.gantt-event {
+  position: relative !important;
+  float: none !important;
+  clear: both !important;
+  width: auto !important;
+  margin-bottom: 2px !important;
+  transition: all 0.2s ease-in-out;
+}
+
+.fc-timeline-event.gantt-event:hover {
+  transform: translateY(-1px);
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* NOWE: Wyrównanie wydarzeń z liniami siatki */
+.fc-timeline-lane-frame {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent,
+    transparent 29px,
+    rgba(221, 221, 221, 0.3) 29px,
+    rgba(221, 221, 221, 0.3) 30px
+  );
+}
+
+/* NOWE: Lepsze renderowanie dla grupowania według zamówień */
+.fc-resource-timeline[data-group-by="order"] .fc-timeline-lane-frame {
+  min-height: 35px !important;
+  padding: 4px 0 !important;
+}
+
+.fc-resource-timeline[data-group-by="order"] .fc-timeline-event {
+  margin-bottom: 3px !important;
+}
+
+.fc-resource-timeline[data-group-by="workstation"] .fc-timeline-lane-frame {
+  min-height: 30px !important;
+  padding: 3px 0 !important;
+}
+
+/* NOWE: Style dla animacji przełączania między trybami */
+.fc-timeline-view {
+  transition: all 0.3s ease-in-out;
+}
+
+.fc-resource-area .fc-datagrid-cell-frame {
+  transition: all 0.2s ease-in-out;
+}
+
+/* NOWE: Zapobieganie nakładaniu się wydarzeń */
+.fc-timeline-event {
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+/* NOWE: Responsywne dostosowania dla urządzeń mobilnych */
+@media (max-width: 768px) {
+  .fc-timeline-event.gantt-event {
+    margin-bottom: 1px !important;
+    min-height: 18px !important;
+  }
+  
+  .fc-resource-timeline[data-group-by="order"] .fc-timeline-lane-frame,
+  .fc-resource-timeline[data-group-by="workstation"] .fc-timeline-lane-frame {
+    min-height: 24px !important;
+    padding: 2px 0 !important;
+  }
+}
+
+/* NOWE: Style dla poprawy wydajności renderowania */
+.fc-timeline-view .fc-timeline-lane-frame {
+  will-change: height;
+  contain: layout;
+}
+
+.fc-timeline-event {
+  will-change: transform;
+  contain: layout style;
+}
+
+/* NOWE: Zapewnienie konsystentnej wysokości wierszy niezależnie od zawartości */
+.fc-timeline-lane-frame:empty::after {
+  content: '';
+  display: block;
+  height: 1px;
+  visibility: hidden;
+}
+
+/* NOWE: Ukrycie czarnych wskaźników kontynuacji wydarzeń w timeline */
+.fc-timeline-event:not(.fc-event-end)::after,
+.fc-timeline-event:not(.fc-event-start)::before {
+  display: none !important;
+}
+
+/* Alternatywnie, jeśli chcemy zachować wskaźniki ale zmienić ich wygląd */
+.fc-timeline-event::before,
+.fc-timeline-event::after {
+  border-color: transparent !important;
+  opacity: 0 !important;
+}
+
+/* Dodatkowe ukrycie wskaźników dla wszystkich wariantów */
+.fc-timeline-event .fc-event-resizer {
+  opacity: 0;
+}
+
+.fc-timeline-event:hover .fc-event-resizer {
+  opacity: 1;
+}
+
+/* Czyste kafelki bez dodatkowych elementów wizualnych */
+.fc-timeline-event .fc-event-main {
+  position: relative;
+  overflow: hidden;
+}
+
+.fc-timeline-event .fc-event-main::before,
+.fc-timeline-event .fc-event-main::after {
+  display: none !important;
 }

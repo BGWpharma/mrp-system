@@ -8,7 +8,7 @@ const ProductionCalendarPage = () => {
 
   return (
     <Container 
-      maxWidth="lg" 
+      maxWidth="xl" 
       sx={{ 
         mt: isMobile ? 2 : 4, 
         mb: isMobile ? 2 : 4,
