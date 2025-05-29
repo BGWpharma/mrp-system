@@ -1161,10 +1161,13 @@ const OrderDetails = () => {
                       if (item.productionTaskId && item.fullProductionCost !== undefined) {
                         // Oblicz pełny koszt produkcji na jednostkę
                         const quantity = parseFloat(item.quantity) || 1;
-                        const unitFullProductionCost = parseFloat(item.fullProductionCost) / quantity;
+                        const price = parseFloat(item.price) || 0;
+                        
+                        // Uwzględnij również cenę jednostkową w pełnym koszcie prod./szt.
+                        const unitFullProductionCost = (parseFloat(item.fullProductionCost) / quantity) + price;
                         
                         return (
-                          <Tooltip title="Pełny koszt produkcji na jednostkę (wszystkie materiały)">
+                          <Tooltip title="Pełny koszt produkcji na jednostkę (wszystkie materiały + cena jednostkowa)">
                             <Typography sx={{ fontWeight: 'medium', color: 'primary.main' }}>
                               {formatCurrency(unitFullProductionCost)}
                             </Typography>
