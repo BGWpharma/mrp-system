@@ -1526,9 +1526,9 @@ const ProductionCalendar = () => {
           id: workstation.id,
           title: workstation.name,
           businessHours: workstation.businessHours || {
-            daysOfWeek: [1, 2, 3, 4, 5], // Poniedziałek-piątek
-            startTime: '08:00',
-            endTime: '16:00'
+            daysOfWeek: [0, 1, 2, 3, 4, 5, 6], // Wszystkie dni tygodnia
+            startTime: '00:00',
+            endTime: '23:59'
           }
         }));
     } 
@@ -3454,8 +3454,8 @@ const ProductionCalendar = () => {
           headerToolbar={false}
           events={memoizedCalendarEvents}
           eventClick={handleEventClick}
-          dateClick={null}
-          selectable={false}
+          dateClick={handleDateClick}
+          selectable={true}
           datesSet={(dateInfo) => {
             console.log("datesSet wywołany:", dateInfo.start, dateInfo.end, "isCustomDateRange:", customDateRange);
             if (!customDateRange) {
@@ -3471,11 +3471,14 @@ const ProductionCalendar = () => {
           slotMaxTime="23:59:59"
           slotDuration={ganttDetail === 'hour' || view === 'resourceTimelineDay' ? { hours: 1 } : { days: 1 }}
           businessHours={{
-            daysOfWeek: [1, 2, 3, 4, 5],
-            startTime: '08:00',
-            endTime: '16:00',
+            daysOfWeek: [0, 1, 2, 3, 4, 5, 6], // Wszystkie dni tygodnia (0=niedziela, 6=sobota)
+            startTime: '00:00',
+            endTime: '23:59',
           }}
-          weekends={false}
+          weekends={true}
+          selectConstraint={false} // Umożliwia zaznaczanie w weekendy
+          eventConstraint={false} // Umożliwia przenoszenie wydarzeń w weekendy  
+          businessHoursOnly={false} // Wyłącza ograniczenia do godzin roboczych
           nowIndicator={true}
           schedulerLicenseKey="GPL-My-Project-Is-Open-Source"
           resourceAreaWidth={isMobile ? '60px' : (view.startsWith('resourceTimeline') ? '10%' : '8%')}

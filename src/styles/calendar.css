@@ -818,3 +818,60 @@ body.dark-mode .fc-timeline-event {
   min-height: 16px !important;
   padding: 1px 0 !important;
 }
+
+/* ZAPEWNIENIE PEŁNEJ INTERAKTYWNOŚCI WEEKENDÓW */
+
+/* Upewnij się, że weekendy są w pełni interaktywne */
+.fc-day.fc-day-sat,
+.fc-day.fc-day-sun {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+/* Weekendy w widoku timeline */
+.fc-timeline-slot[data-date*="saturday"],
+.fc-timeline-slot[data-date*="sunday"],
+.fc-col-header-cell.fc-day-sat,
+.fc-col-header-cell.fc-day-sun {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+/* Zapewnij interaktywność dla wszystkich elementów weekendów */
+.fc-timeline-view .fc-timeline-slot.fc-day-sat,
+.fc-timeline-view .fc-timeline-slot.fc-day-sun,
+.fc-timeline-view .fc-timeline-slot.fc-day-sat *,
+.fc-timeline-view .fc-timeline-slot.fc-day-sun * {
+  pointer-events: auto !important;
+}
+
+/* Upewnij się, że drop zones działają w weekendy */
+.fc-timeline-view .fc-timeline-lane-frame {
+  pointer-events: auto !important;
+}
+
+/* Style dla wizualnego wyróżnienia weekendów (opcjonalne) */
+.fc-timeline-view .fc-timeline-slot.fc-day-sat,
+.fc-timeline-view .fc-timeline-slot.fc-day-sun {
+  background-color: rgba(240, 240, 240, 0.5) !important;
+}
+
+/* Zapewnij, że wszystkie interakcje działają w weekendy */
+.fc-day-sat .fc-timeline-lane-frame,
+.fc-day-sun .fc-timeline-lane-frame {
+  pointer-events: auto !important;
+  cursor: crosshair !important;
+}
+
+/* Hover efekty dla weekendów */
+.fc-timeline-view .fc-timeline-slot.fc-day-sat:hover,
+.fc-timeline-view .fc-timeline-slot.fc-day-sun:hover {
+  background-color: rgba(200, 200, 200, 0.3) !important;
+}
+
+/* Upewnij się, że eventy w weekendach są interaktywne */
+.fc-day-sat .fc-timeline-event,
+.fc-day-sun .fc-timeline-event {
+  pointer-events: auto !important;
+  cursor: move !important;
+}
