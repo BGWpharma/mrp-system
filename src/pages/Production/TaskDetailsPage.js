@@ -79,7 +79,8 @@ import {
   ExpandMore as ExpandMoreIcon,
   Search as SearchIcon,
   Visibility as VisibilityIcon,
-  Info as InfoIcon
+  Info as InfoIcon,
+  Science as RawMaterialsIcon
 } from '@mui/icons-material';
 import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession, addProductionSession, deleteProductionSession } from '../../services/productionService';
 import { getItemBatches, bookInventoryForTask, cancelBooking, getBatchReservations, getAllInventoryItems, getInventoryItemById, getInventoryBatch } from '../../services/inventoryService';
@@ -187,6 +188,16 @@ const TaskDetailsPage = () => {
   const [historyInventoryError, setHistoryInventoryError] = useState(null);
   const [warehouses, setWarehouses] = useState([]);
   const [warehousesLoading, setWarehousesLoading] = useState(false);
+
+  // Nowe stany dla funkcjonalności dodawania surowców
+  const [rawMaterialsDialogOpen, setRawMaterialsDialogOpen] = useState(false);
+  const [rawMaterialsItems, setRawMaterialsItems] = useState([]);
+  const [loadingRawMaterials, setLoadingRawMaterials] = useState(false);
+  const [searchRawMaterials, setSearchRawMaterials] = useState('');
+
+  // Nowe stany dla funkcjonalności usuwania materiałów
+  const [deleteMaterialDialogOpen, setDeleteMaterialDialogOpen] = useState(false);
+  const [materialToDelete, setMaterialToDelete] = useState(null);
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -1737,6 +1748,136 @@ const TaskDetailsPage = () => {
     }
   };
 
+  // Funkcja do pobierania dostępnych surowców
+  const fetchAvailableRawMaterials = async () => {
+    try {
+      setLoadingRawMaterials(true);
+      
+      // Pobierz wszystkie pozycje magazynowe z odpowiednią strukturą danych zawierającą stany magazynowe
+      const result = await getAllInventoryItems();
+      
+      // Upewniamy się, że mamy dostęp do właściwych danych
+      const allItems = Array.isArray(result) ? result : result.items || [];
+      
+      // Filtrujemy tylko surowce
+      const rawMaterialsItems = allItems.filter(item => 
+        item.category === 'Surowce'
+      );
+      
+      console.log('Pobrane surowce:', rawMaterialsItems);
+      
+      setRawMaterialsItems(rawMaterialsItems.map(item => ({
+        ...item,
+        selected: false,
+        quantity: 0,
+        // Używamy aktualnej ilości dostępnej w magazynie, a nie pierwotnej wartości
+        availableQuantity: item.currentQuantity || item.quantity || 0,
+        unitPrice: item.unitPrice || item.price || 0
+      })));
+    } catch (error) {
+      console.error('Błąd podczas pobierania surowców:', error);
+      showError('Nie udało się pobrać listy surowców: ' + error.message);
+    } finally {
+      setLoadingRawMaterials(false);
+    }
+  };
+  
+  // Obsługa otwierania dialogu surowców
+  const handleOpenRawMaterialsDialog = () => {
+    fetchAvailableRawMaterials();
+    setRawMaterialsDialogOpen(true);
+  };
+  
+  // Obsługa zmiany ilości wybranego surowca
+  const handleRawMaterialsQuantityChange = (id, value) => {
+    setRawMaterialsItems(prev => prev.map(item => {
+      if (item.id === id) {
+        // Ograniczamy wartość do dostępnej ilości
+        const parsedValue = parseFloat(value) || 0;
+        const limitedValue = Math.min(parsedValue, item.availableQuantity);
+        
+        return { 
+          ...item, 
+          quantity: limitedValue, 
+          selected: limitedValue > 0 
+        };
+      }
+      return item;
+    }));
+  };
+  
+  // Obsługa wyboru/odznaczenia surowca
+  const handleRawMaterialsSelection = (id, selected) => {
+    setRawMaterialsItems(prev => prev.map(item => 
+      item.id === id ? { ...item, selected } : item
+    ));
+  };
+  
+  // Dodanie wybranych surowców do materiałów zadania
+  const handleAddRawMaterialsToTask = async () => {
+    try {
+      setLoadingRawMaterials(true);
+      
+      // Filtrujemy wybrane surowce
+      const rawMaterialsToAdd = rawMaterialsItems.filter(item => item.selected && item.quantity > 0);
+      
+      if (rawMaterialsToAdd.length === 0) {
+        showError('Nie wybrano żadnych surowców do dodania');
+        return;
+      }
+      
+      // Pobierz aktualne zadanie
+      const updatedTask = await getTaskById(id);
+      const currentMaterials = updatedTask.materials || [];
+      
+      // Przygotuj nowe materiały do dodania
+      const newMaterials = rawMaterialsToAdd.map(item => ({
+        id: item.id,
+        name: item.name,
+        quantity: item.quantity,
+        unit: item.unit,
+        inventoryItemId: item.id,
+        isRawMaterial: true,
+        category: item.category || 'Surowce',
+        unitPrice: item.unitPrice || 0
+      }));
+      
+      // Połącz istniejące materiały z nowymi surowcami
+      const updatedMaterials = [...currentMaterials];
+      
+      // Sprawdź czy dany surowiec już istnieje i aktualizuj ilość lub dodaj nowy
+      newMaterials.forEach(newMaterial => {
+        const existingIndex = updatedMaterials.findIndex(m => m.id === newMaterial.id);
+        if (existingIndex >= 0) {
+          // Aktualizuj istniejący surowiec
+          updatedMaterials[existingIndex].quantity = 
+            (parseFloat(updatedMaterials[existingIndex].quantity) || 0) + 
+            (parseFloat(newMaterial.quantity) || 0);
+        } else {
+          // Dodaj nowy surowiec
+          updatedMaterials.push(newMaterial);
+        }
+      });
+      
+      // Zaktualizuj zadanie w bazie danych
+      await updateDoc(doc(db, 'productionTasks', id), {
+        materials: updatedMaterials,
+        updatedAt: serverTimestamp()
+      });
+      
+      // Odśwież dane zadania
+      fetchTask();
+      
+      showSuccess('Surowce zostały dodane do zadania produkcyjnego');
+      setRawMaterialsDialogOpen(false);
+    } catch (error) {
+      console.error('Błąd podczas dodawania surowców:', error);
+      showError('Nie udało się dodać surowców do zadania: ' + error.message);
+    } finally {
+      setLoadingRawMaterials(false);
+    }
+  };
+
   // Funkcja obsługująca rozpoczęcie edycji sesji produkcyjnej
   const handleEditHistoryItem = (item) => {
     setEditingHistoryItem(item.id);
@@ -2739,6 +2880,55 @@ const TaskDetailsPage = () => {
     return new Date(dateTimeString);
   };
 
+  // Funkcja do filtrowania surowców na podstawie wyszukiwania
+  const filteredRawMaterialsItems = rawMaterialsItems.filter(item => 
+    item.name.toLowerCase().includes(searchRawMaterials.toLowerCase())
+  );
+
+  // Funkcja do obsługi usuwania materiału
+  const handleDeleteMaterial = (material) => {
+    setMaterialToDelete(material);
+    setDeleteMaterialDialogOpen(true);
+  };
+
+  // Funkcja do potwierdzenia usunięcia materiału
+  const handleConfirmDeleteMaterial = async () => {
+    try {
+      setLoading(true);
+      
+      if (!materialToDelete) {
+        showError('Nie wybrano materiału do usunięcia');
+        return;
+      }
+      
+      // Pobierz aktualne zadanie
+      const updatedTask = await getTaskById(id);
+      const currentMaterials = updatedTask.materials || [];
+      
+      // Usuń materiał z listy
+      const updatedMaterials = currentMaterials.filter(m => m.id !== materialToDelete.id);
+      
+      // Zaktualizuj zadanie w bazie danych
+      await updateDoc(doc(db, 'productionTasks', id), {
+        materials: updatedMaterials,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      });
+      
+      // Odśwież dane zadania
+      fetchTask();
+      
+      showSuccess(`Materiał "${materialToDelete.name}" został usunięty z zadania`);
+      setDeleteMaterialDialogOpen(false);
+      setMaterialToDelete(null);
+    } catch (error) {
+      console.error('Błąd podczas usuwania materiału:', error);
+      showError('Nie udało się usunąć materiału: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Renderuj stronę
     return (
       <Container maxWidth="xl">
@@ -2917,6 +3107,15 @@ const TaskDetailsPage = () => {
                     </Button>
                     <Button
                       variant="outlined"
+                      color="secondary"
+                      startIcon={<RawMaterialsIcon />}
+                      onClick={handleOpenRawMaterialsDialog}
+                      sx={{ mt: 2, mb: 2, mr: 2 }}
+                    >
+                      Dodaj surowce
+                    </Button>
+                    <Button
+                      variant="outlined"
                       color="primary"
                       startIcon={<BookmarkAddIcon />}
                       onClick={() => setReserveDialogOpen(true)}
@@ -3035,19 +3234,28 @@ const TaskDetailsPage = () => {
                                   </IconButton>
                                 </Box>
                               ) : (
-                                <IconButton 
-                                  color="primary" 
-                                  onClick={() => {
-                                    setEditMode(true);
-                                    setMaterialQuantities(prev => ({
-                                      ...prev,
-                                      [material.id]: materialQuantities[material.id] || 0
-                                    }));
-                                  }}
-                                  title="Edytuj ilość"
-                                >
-                                  <EditIcon />
-                                </IconButton>
+                                <Box sx={{ display: 'flex' }}>
+                                  <IconButton 
+                                    color="primary" 
+                                    onClick={() => {
+                                      setEditMode(true);
+                                      setMaterialQuantities(prev => ({
+                                        ...prev,
+                                        [material.id]: materialQuantities[material.id] || 0
+                                      }));
+                                    }}
+                                    title="Edytuj ilość"
+                                  >
+                                    <EditIcon />
+                                  </IconButton>
+                                  <IconButton 
+                                    color="error" 
+                                    onClick={() => handleDeleteMaterial(material)}
+                                    title="Usuń materiał"
+                                  >
+                                    <DeleteIcon />
+                                  </IconButton>
+                                </Box>
                               )}
                         </TableCell>
                       </TableRow>
@@ -4150,6 +4358,135 @@ const TaskDetailsPage = () => {
         </DialogActions>
       </Dialog>
       
+      {/* Dialog wyboru surowców */}
+      <Dialog
+        open={rawMaterialsDialogOpen}
+        onClose={() => setRawMaterialsDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Dodaj surowce do zadania</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Wybierz surowce, które chcesz dodać do zadania produkcyjnego.
+          </DialogContentText>
+          
+          {/* Pasek wyszukiwania surowców */}
+          <TextField
+            fullWidth
+            margin="normal"
+            label="Wyszukaj surowiec"
+            variant="outlined"
+            value={searchRawMaterials}
+            onChange={(e) => setSearchRawMaterials(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ mb: 2 }}
+          />
+          
+          {loadingRawMaterials ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell padding="checkbox">Wybierz</TableCell>
+                    <TableCell>Nazwa</TableCell>
+                    <TableCell>Kategoria</TableCell>
+                    <TableCell>Dostępna ilość</TableCell>
+                    <TableCell>Ilość do dodania</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {filteredRawMaterialsItems.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} align="center">
+                        {rawMaterialsItems.length === 0 
+                          ? "Brak dostępnych surowców"
+                          : "Brak wyników dla podanego wyszukiwania"}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredRawMaterialsItems.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell padding="checkbox">
+                          <Checkbox
+                            checked={item.selected}
+                            onChange={(e) => handleRawMaterialsSelection(item.id, e.target.checked)}
+                          />
+                        </TableCell>
+                        <TableCell>{item.name}</TableCell>
+                        <TableCell>{item.category}</TableCell>
+                        <TableCell>{item.availableQuantity} {item.unit}</TableCell>
+                        <TableCell>
+                          <TextField
+                            type="number"
+                            value={item.quantity || ''}
+                            onChange={(e) => handleRawMaterialsQuantityChange(item.id, e.target.value)}
+                            disabled={!item.selected}
+                            inputProps={{ min: 0, max: item.availableQuantity, step: 'any' }}
+                            size="small"
+                            sx={{ width: '100px' }}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRawMaterialsDialogOpen(false)}>
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleAddRawMaterialsToTask} 
+            variant="contained" 
+            color="secondary"
+            disabled={loadingRawMaterials || rawMaterialsItems.filter(item => item.selected && item.quantity > 0).length === 0}
+          >
+            {loadingRawMaterials ? <CircularProgress size={24} /> : 'Dodaj wybrane surowce'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog usuwania materiału */}
+      <Dialog
+        open={deleteMaterialDialogOpen}
+        onClose={() => setDeleteMaterialDialogOpen(false)}
+      >
+        <DialogTitle>Potwierdź usunięcie materiału</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Czy na pewno chcesz usunąć materiał "{materialToDelete?.name}" z zadania produkcyjnego? Ta operacja jest nieodwracalna.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteMaterialDialogOpen(false)}>
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleConfirmDeleteMaterial} 
+            variant="contained" 
+            color="error"
+            disabled={loading}
+          >
+            {loading ? <CircularProgress size={24} /> : 'Usuń materiał'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog rezerwacji surowców */}
     </Container>
   );
 };
