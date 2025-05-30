@@ -373,4 +373,42 @@ export const calculateProductionCost = async (recipe, options = {}) => {
     console.error('Błąd podczas obliczania kosztu produkcji:', error);
     return { totalCost: 0, materials: 0, labor: 0, overhead: 0 };
   }
+};
+
+/**
+ * Oblicza pełny koszt produkcji na jednostkę z uwzględnieniem logiki listy cenowej
+ * @param {Object} item - Pozycja zamówienia
+ * @param {number} fullProductionCost - Pełny koszt produkcji (wszystkie materiały)
+ * @returns {number} - Pełny koszt produkcji na jednostkę
+ */
+export const calculateFullProductionUnitCost = (item, fullProductionCost) => {
+  if (!item || fullProductionCost === undefined || fullProductionCost === null) {
+    return 0;
+  }
+
+  const quantity = parseFloat(item.quantity) || 1;
+  const price = parseFloat(item.price) || 0;
+  
+  // Jeśli pozycja jest z listy cenowej, nie dodawaj ceny jednostkowej do pełnego kosztu
+  if (item.fromPriceList) {
+    return fullProductionCost / quantity;
+  }
+  
+  // Jeśli pozycja nie jest z listy cenowej, dodaj cenę jednostkową
+  return (fullProductionCost / quantity) + price;
+};
+
+/**
+ * Oblicza podstawowy koszt produkcji na jednostkę
+ * @param {Object} item - Pozycja zamówienia  
+ * @param {number} productionCost - Podstawowy koszt produkcji (materiały wliczane do kosztów)
+ * @returns {number} - Podstawowy koszt produkcji na jednostkę
+ */
+export const calculateProductionUnitCost = (item, productionCost) => {
+  if (!item || productionCost === undefined || productionCost === null) {
+    return 0;
+  }
+
+  const quantity = parseFloat(item.quantity) || 1;
+  return productionCost / quantity;
 }; 

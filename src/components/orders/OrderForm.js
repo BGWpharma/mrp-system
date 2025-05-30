@@ -395,6 +395,7 @@ const OrderForm = ({ orderId }) => {
 
       // Importuj funkcję do pobierania szczegółów zadania
       const { getTaskById } = await import('../../services/productionService');
+      const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/costCalculator');
       
       if (orderDataToUpdate.items && orderDataToUpdate.items.length > 0) {
         for (let i = 0; i < orderDataToUpdate.items.length; i++) {
@@ -410,6 +411,13 @@ const OrderForm = ({ orderId }) => {
               // Pobierz szczegółowe dane zadania z bazy danych
               const taskDetails = await getTaskById(associatedTask.id);
               
+              const fullProductionCost = taskDetails.totalFullProductionCost || associatedTask.totalFullProductionCost || 0;
+              const productionCost = taskDetails.totalMaterialCost || associatedTask.totalMaterialCost || 0;
+              
+              // Oblicz koszty jednostkowe z uwzględnieniem logiki listy cenowej
+              const calculatedFullProductionUnitCost = calculateFullProductionUnitCost(item, fullProductionCost);
+              const calculatedProductionUnitCost = calculateProductionUnitCost(item, productionCost);
+              
               // Aktualizuj informacje o zadaniu produkcyjnym w pozycji zamówienia
               orderDataToUpdate.items[i] = {
                 ...item,
@@ -417,31 +425,38 @@ const OrderForm = ({ orderId }) => {
                 productionTaskNumber: associatedTask.moNumber || taskDetails.moNumber,
                 productionStatus: associatedTask.status || taskDetails.status,
                 // Używaj totalMaterialCost jako podstawowy koszt produkcji (tylko materiały wliczane do kosztów)
-                productionCost: taskDetails.totalMaterialCost || associatedTask.totalMaterialCost || 0,
+                productionCost: productionCost,
                 // Dodaj pełny koszt produkcji (wszystkie materiały niezależnie od flagi "wliczaj")
-                fullProductionCost: taskDetails.totalFullProductionCost || associatedTask.totalFullProductionCost || 0
+                fullProductionCost: fullProductionCost,
+                // Dodaj obliczone koszty jednostkowe
+                productionUnitCost: calculatedProductionUnitCost,
+                fullProductionUnitCost: calculatedFullProductionUnitCost
               };
               
-              console.log(`Zaktualizowano koszty dla pozycji ${item.name}: koszt podstawowy = ${orderDataToUpdate.items[i].productionCost}€, pełny koszt = ${orderDataToUpdate.items[i].fullProductionCost}€`);
+              console.log(`Zaktualizowano koszty dla pozycji ${item.name}: koszt podstawowy = ${orderDataToUpdate.items[i].productionCost}€, pełny koszt = ${orderDataToUpdate.items[i].fullProductionCost}€, pełny koszt/szt = ${calculatedFullProductionUnitCost.toFixed(2)}€ (lista cenowa: ${item.fromPriceList ? 'tak' : 'nie'})`);
             } catch (error) {
               console.error(`Błąd podczas pobierania szczegółów zadania ${associatedTask.id}:`, error);
               
               // W przypadku błędu, użyj podstawowych danych z associatedTask
+              const fullProductionCost = associatedTask.totalFullProductionCost || 0;
+              const productionCost = associatedTask.totalMaterialCost || 0;
+              
               orderDataToUpdate.items[i] = {
                 ...item,
                 productionTaskId: associatedTask.id,
                 productionTaskNumber: associatedTask.moNumber,
                 productionStatus: associatedTask.status,
-                productionCost: associatedTask.totalMaterialCost || 0,
-                fullProductionCost: associatedTask.totalFullProductionCost || 0
+                productionCost: productionCost,
+                fullProductionCost: fullProductionCost,
+                productionUnitCost: productionCost / (parseFloat(item.quantity) || 1),
+                fullProductionUnitCost: fullProductionCost / (parseFloat(item.quantity) || 1)
               };
             }
           }
         }
       }
     } catch (error) {
-      console.error('Błąd podczas odświeżania kosztów produkcji przed zapisaniem:', error);
-      // Nie przerywamy procesu zapisywania z powodu błędu odświeżania kosztów
+      console.error('Błąd podczas odświeżania kosztów produkcji:', error);
     }
   };
 
@@ -1857,82 +1872,74 @@ const OrderForm = ({ orderId }) => {
   
   // Funkcja do odświeżania danych zadań produkcyjnych, w tym kosztów produkcji
   const refreshProductionTasks = async () => {
-    if (!orderId) return;
-
     try {
-      setRefreshingPTs(true);
+      setLoading(true);
+      
+      // Pobierz aktualne dane zamówienia z bazy danych
       const refreshedOrderData = await getOrderById(orderId);
       
+      // Importuj funkcję do pobierania szczegółów zadania
+      const { getTaskById } = await import('../../services/productionService');
+      const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/costCalculator');
+      
+      const updatedItems = [...refreshedOrderData.items];
+      
       if (refreshedOrderData.productionTasks && refreshedOrderData.productionTasks.length > 0) {
-        // Aktualizujemy dane elementów zamówienia z nowymi kosztami produkcji
-        const updatedItems = [...orderData.items];
-        
-        console.log("Odświeżanie zadań produkcyjnych dla zamówienia:", orderId);
-        console.log("Elementy zamówienia:", updatedItems);
-        console.log("Zadania produkcyjne:", refreshedOrderData.productionTasks);
-        
-        // Dla każdego elementu zamówienia sprawdź, czy istnieje powiązane zadanie produkcyjne
         for (let i = 0; i < updatedItems.length; i++) {
           const item = updatedItems[i];
-          console.log(`Sprawdzanie elementu zamówienia ${i}:`, item);
           
-          // Znajdź odpowiednie zadanie produkcyjne dla tego elementu zamówienia
-          // Najpierw szukaj po orderItemId (najdokładniejsze dopasowanie)
-          const matchingTask = refreshedOrderData.productionTasks.find(task => 
-            task.orderItemId && task.orderItemId === item.id
+          // Znajdź powiązane zadanie produkcyjne
+          const taskToUse = refreshedOrderData.productionTasks.find(task => 
+            task.id === item.productionTaskId || 
+            (task.productName === item.name && task.quantity == item.quantity)
           );
           
-          // Jeśli nie znaleziono po orderItemId, spróbuj dopasować po nazwie i ilości
-          const alternativeTask = !matchingTask ? refreshedOrderData.productionTasks.find(task => 
-            task.productName === item.name && 
-            parseFloat(task.quantity) === parseFloat(item.quantity) &&
-            !refreshedOrderData.productionTasks.some(t => t.orderItemId === item.id) // upewnij się, że zadanie nie jest już przypisane
-          ) : null;
-          
-          const taskToUse = matchingTask || alternativeTask;
-          
           if (taskToUse) {
-            console.log(`Znaleziono dopasowane zadanie dla elementu ${item.name}:`, taskToUse);
-            
-            // Pobierz szczegóły zadania produkcyjnego, aby uzyskać koszt
-            const { getTaskById, updateTask } = await import('../../services/productionService');
-            const taskDetails = await getTaskById(taskToUse.id);
-            
-            console.log(`Pobrano szczegóły zadania produkcyjnego ${taskToUse.moNumber}:`, taskDetails);
-            
-            // Zawsze aktualizuj orderItemId w zadaniu produkcyjnym, aby upewnić się, że jest poprawnie przypisane
-            // Nawet jeśli pole taskDetails.orderItemId już istnieje, ale jest różne od item.id
-            const currentOrderItemId = taskDetails.orderItemId;
-            
-            // Jeśli zadanie ma inny orderItemId niż bieżący element zamówienia, aktualizuj go
-            if (currentOrderItemId !== item.id) {
-              console.log(`Aktualizacja zadania ${taskToUse.id} - przypisywanie orderItemId: ${item.id} (było: ${currentOrderItemId || 'brak'})`);
-              await updateTask(taskToUse.id, {
-                orderItemId: item.id,
-                orderId: orderId,
-                orderNumber: refreshedOrderData.orderNumber || null
-              }, currentUser.uid);
+            try {
+              // Pobierz szczegółowe dane zadania z bazy danych
+              const taskDetails = await getTaskById(taskToUse.id);
               
-              // Zaktualizuj orderItemId w zadaniu produkcyjnym w zamówieniu
-              const { updateProductionTaskInOrder } = await import('../../services/orderService');
-              await updateProductionTaskInOrder(orderId, taskToUse.id, {
-                orderItemId: item.id
-              }, currentUser.uid);
+              const fullProductionCost = taskDetails.totalFullProductionCost || taskToUse.totalFullProductionCost || 0;
+              const productionCost = taskDetails.totalMaterialCost || taskToUse.totalMaterialCost || 0;
+              
+              // Oblicz koszty jednostkowe z uwzględnieniem logiki listy cenowej
+              const calculatedFullProductionUnitCost = calculateFullProductionUnitCost(item, fullProductionCost);
+              const calculatedProductionUnitCost = calculateProductionUnitCost(item, productionCost);
+              
+              // Aktualizuj informacje o zadaniu produkcyjnym w elemencie zamówienia
+              updatedItems[i] = {
+                ...item,
+                productionTaskId: taskToUse.id,
+                productionTaskNumber: taskToUse.moNumber || taskDetails.moNumber,
+                productionStatus: taskToUse.status || taskDetails.status,
+                // Używaj totalMaterialCost jako podstawowy koszt produkcji (tylko materiały wliczane do kosztów)
+                productionCost: productionCost,
+                // Dodaj pełny koszt produkcji (wszystkie materiały niezależnie od flagi "wliczaj")
+                fullProductionCost: fullProductionCost,
+                // Dodaj obliczone koszty jednostkowe
+                productionUnitCost: calculatedProductionUnitCost,
+                fullProductionUnitCost: calculatedFullProductionUnitCost
+              };
+              
+              console.log(`Przypisano zadanie produkcyjne ${taskToUse.moNumber} do elementu zamówienia ${item.name} z kosztem ${updatedItems[i].productionCost}€ (pełny koszt: ${updatedItems[i].fullProductionCost}€, pełny koszt/szt: ${calculatedFullProductionUnitCost.toFixed(2)}€, lista cenowa: ${item.fromPriceList ? 'tak' : 'nie'})`);
+            } catch (error) {
+              console.error(`Błąd podczas pobierania szczegółów zadania ${taskToUse.id}:`, error);
+              
+              // W przypadku błędu, użyj podstawowych danych z taskToUse
+              const fullProductionCost = taskToUse.totalFullProductionCost || 0;
+              const productionCost = taskToUse.totalMaterialCost || 0;
+              
+              updatedItems[i] = {
+                ...item,
+                productionTaskId: taskToUse.id,
+                productionTaskNumber: taskToUse.moNumber,
+                productionStatus: taskToUse.status,
+                productionCost: productionCost,
+                fullProductionCost: fullProductionCost,
+                productionUnitCost: productionCost / (parseFloat(item.quantity) || 1),
+                fullProductionUnitCost: fullProductionCost / (parseFloat(item.quantity) || 1)
+              };
             }
-            
-            // Aktualizuj informacje o zadaniu produkcyjnym w elemencie zamówienia
-            updatedItems[i] = {
-              ...item,
-              productionTaskId: taskToUse.id,
-              productionTaskNumber: taskToUse.moNumber || taskDetails.moNumber,
-              productionStatus: taskToUse.status || taskDetails.status,
-              // Używaj totalMaterialCost jako podstawowy koszt produkcji (tylko materiały wliczane do kosztów)
-              productionCost: taskDetails.totalMaterialCost || taskToUse.totalMaterialCost || 0,
-              // Dodaj pełny koszt produkcji (wszystkie materiały niezależnie od flagi "wliczaj")
-              fullProductionCost: taskDetails.totalFullProductionCost || taskToUse.totalFullProductionCost || 0
-            };
-            
-            console.log(`Przypisano zadanie produkcyjne ${taskToUse.moNumber} do elementu zamówienia ${item.name} z kosztem ${updatedItems[i].productionCost}€ (pełny koszt: ${updatedItems[i].fullProductionCost}€)`);
           } else {
             console.log(`Nie znaleziono dopasowanego zadania dla elementu ${item.name}`);
           }
@@ -1960,16 +1967,20 @@ const OrderForm = ({ orderId }) => {
             showError('Nie udało się zapisać kosztów produkcji w bazie danych');
           }
         }
-        
-        showSuccess('Dane kosztów produkcji zostały odświeżone');
       } else {
-        showInfo('Brak zadań produkcyjnych do odświeżenia');
+        setOrderData(prev => ({
+          ...prev,
+          items: updatedItems,
+          productionTasks: refreshedOrderData.productionTasks || []
+        }));
       }
+      
+      showSuccess('Dane zadań produkcyjnych zostały odświeżone');
     } catch (error) {
-      showError('Błąd podczas odświeżania danych kosztów produkcji: ' + error.message);
-      console.error('Error refreshing production costs:', error);
+      console.error('Błąd podczas odświeżania zadań produkcyjnych:', error);
+      showError('Nie udało się odświeżyć danych zadań produkcyjnych');
     } finally {
-      setRefreshingPTs(false);
+      setLoading(false);
     }
   };
 
@@ -2862,15 +2873,26 @@ const OrderForm = ({ orderId }) => {
                       {(() => {
                         // Sprawdź czy pozycja ma powiązane zadanie produkcyjne i pełny koszt produkcji
                         if (item.productionTaskId && item.fullProductionCost !== undefined) {
-                          // Oblicz pełny koszt produkcji na jednostkę
+                          // Użyj zapisanej wartości fullProductionUnitCost, jeśli istnieje
+                          if (item.fullProductionUnitCost !== undefined && item.fullProductionUnitCost !== null) {
+                            return (
+                              <Box sx={{ fontWeight: 'medium', color: 'primary.main' }}>
+                                {formatCurrency(item.fullProductionUnitCost)}
+                              </Box>
+                            );
+                          }
+                          
+                          // Jeśli brak zapisanej wartości, oblicz na podstawie fullProductionCost (fallback)
                           const quantity = parseFloat(item.quantity) || 1;
                           const price = parseFloat(item.price) || 0;
                           
-                          // Uwzględnij również cenę jednostkową w pełnym koszcie prod./szt.
-                          const unitFullProductionCost = (parseFloat(item.fullProductionCost) / quantity) + price;
+                          // Jeśli pozycja jest z listy cenowej, nie dodawaj ceny jednostkowej do pełnego kosztu
+                          const unitFullProductionCost = item.fromPriceList 
+                            ? parseFloat(item.fullProductionCost) / quantity
+                            : (parseFloat(item.fullProductionCost) / quantity) + price;
                           
                           return (
-                            <Box sx={{ fontWeight: 'medium', color: 'primary.main' }}>
+                            <Box sx={{ fontWeight: 'medium', color: 'warning.main' }}>
                               {formatCurrency(unitFullProductionCost)}
                             </Box>
                           );

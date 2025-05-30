@@ -2388,6 +2388,7 @@ const TaskDetailsPage = () => {
       
       // Importuj funkcje do zarządzania zamówieniami
       const { getAllOrders, updateOrder } = await import('../../services/orderService');
+      const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/costCalculator');
       
       // Pobierz wszystkie zamówienia
       const allOrders = await getAllOrders();
@@ -2413,17 +2414,21 @@ const TaskDetailsPage = () => {
           const item = updatedItems[i];
           
           if (item.productionTaskId === taskData.id) {
+            // Oblicz pełny koszt produkcji na jednostkę z uwzględnieniem logiki listy cenowej
+            const calculatedFullProductionUnitCost = calculateFullProductionUnitCost(item, totalFullProductionCost);
+            const calculatedProductionUnitCost = calculateProductionUnitCost(item, totalMaterialCost);
+            
             // Zaktualizuj koszty w pozycji
             updatedItems[i] = {
               ...item,
               productionCost: totalMaterialCost,
               fullProductionCost: totalFullProductionCost,
-              productionUnitCost: unitMaterialCost,
-              fullProductionUnitCost: unitFullProductionCost
+              productionUnitCost: calculatedProductionUnitCost,
+              fullProductionUnitCost: calculatedFullProductionUnitCost
             };
             orderUpdated = true;
             
-            console.log(`Zaktualizowano pozycję "${item.name}" w zamówieniu ${order.orderNumber}: koszt produkcji=${totalMaterialCost}€, pełny koszt=${totalFullProductionCost}€`);
+            console.log(`Zaktualizowano pozycję "${item.name}" w zamówieniu ${order.orderNumber}: koszt produkcji=${totalMaterialCost}€, pełny koszt=${totalFullProductionCost}€, pełny koszt/szt=${calculatedFullProductionUnitCost.toFixed(2)}€ (lista cenowa: ${item.fromPriceList ? 'tak' : 'nie'})`);
           }
         }
         

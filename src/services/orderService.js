@@ -282,7 +282,16 @@ export const getOrderById = async (id) => {
     processedOrder.productsValue = totalProductsValue;
     processedOrder.shippingCost = shippingCost;
     processedOrder.purchaseOrdersValue = poTotalGross;
-    processedOrder.totalValue = totalProductsValue + shippingCost + additionalCostsTotal - discountsTotal;
+    
+    // Tylko oblicz totalValue jeśli nie istnieje w bazie lub jest 0
+    // To pozwala zachować ręcznie zaktualizowane wartości
+    const existingTotalValue = parseFloat(processedOrder.totalValue) || 0;
+    if (existingTotalValue === 0) {
+      processedOrder.totalValue = totalProductsValue + shippingCost + additionalCostsTotal - discountsTotal;
+      console.log(`Obliczono nową wartość totalValue dla zamówienia ${id}: ${processedOrder.totalValue}`);
+    } else {
+      console.log(`Zachowano istniejącą wartość totalValue dla zamówienia ${id}: ${existingTotalValue}`);
+    }
     
     console.log("Przetworzone dane zamówienia:", processedOrder);
     return processedOrder;

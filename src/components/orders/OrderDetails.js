@@ -67,6 +67,7 @@ import { getAllPurchaseOrders } from '../../services/purchaseOrderService';
 import { db } from '../../services/firebase/config';
 import { getDoc, doc } from 'firebase/firestore';
 import { getUsersDisplayNames } from '../../services/userService';
+import { calculateFullProductionUnitCost, calculateProductionUnitCost } from '../../utils/costCalculator';
 
 // Funkcja obliczająca sumę wartości pozycji z uwzględnieniem kosztów produkcji dla pozycji spoza listy cenowej
 const calculateItemTotalValue = (item) => {
@@ -300,6 +301,7 @@ const OrderDetails = () => {
       
       // Importuj funkcję do pobierania szczegółów zadania
       const { getTaskById } = await import('../../services/productionService');
+      const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/costCalculator');
       
       if (refreshedOrderData.productionTasks && refreshedOrderData.productionTasks.length > 0) {
         // Zaktualizuj dane kosztów produkcji w pozycjach zamówienia
@@ -319,6 +321,13 @@ const OrderDetails = () => {
                 // Pobierz szczegółowe dane zadania z bazy danych
                 const taskDetails = await getTaskById(associatedTask.id);
                 
+                const fullProductionCost = taskDetails.totalFullProductionCost || associatedTask.totalFullProductionCost || 0;
+                const productionCost = taskDetails.totalMaterialCost || associatedTask.totalMaterialCost || 0;
+                
+                // Oblicz koszty jednostkowe z uwzględnieniem logiki listy cenowej
+                const calculatedFullProductionUnitCost = calculateFullProductionUnitCost(item, fullProductionCost);
+                const calculatedProductionUnitCost = calculateProductionUnitCost(item, productionCost);
+                
                 // Aktualizuj informacje o zadaniu produkcyjnym w pozycji zamówienia
                 updatedOrderData.items[i] = {
                   ...item,
@@ -326,23 +335,31 @@ const OrderDetails = () => {
                   productionTaskNumber: associatedTask.moNumber || taskDetails.moNumber,
                   productionStatus: associatedTask.status || taskDetails.status,
                   // Używaj totalMaterialCost jako podstawowy koszt produkcji (tylko materiały wliczane do kosztów)
-                  productionCost: taskDetails.totalMaterialCost || associatedTask.totalMaterialCost || 0,
+                  productionCost: productionCost,
                   // Dodaj pełny koszt produkcji (wszystkie materiały niezależnie od flagi "wliczaj")
-                  fullProductionCost: taskDetails.totalFullProductionCost || associatedTask.totalFullProductionCost || 0
+                  fullProductionCost: fullProductionCost,
+                  // Dodaj obliczone koszty jednostkowe
+                  productionUnitCost: calculatedProductionUnitCost,
+                  fullProductionUnitCost: calculatedFullProductionUnitCost
                 };
                 
-                console.log(`Zaktualizowano koszty dla pozycji ${item.name}: koszt podstawowy = ${updatedOrderData.items[i].productionCost}€, pełny koszt = ${updatedOrderData.items[i].fullProductionCost}€`);
+                console.log(`Zaktualizowano koszty dla pozycji ${item.name}: koszt podstawowy = ${updatedOrderData.items[i].productionCost}€, pełny koszt = ${updatedOrderData.items[i].fullProductionCost}€, pełny koszt/szt = ${calculatedFullProductionUnitCost.toFixed(2)}€ (lista cenowa: ${item.fromPriceList ? 'tak' : 'nie'})`);
               } catch (error) {
                 console.error(`Błąd podczas pobierania szczegółów zadania ${associatedTask.id}:`, error);
                 
                 // W przypadku błędu, użyj podstawowych danych z associatedTask
+                const fullProductionCost = associatedTask.totalFullProductionCost || 0;
+                const productionCost = associatedTask.totalMaterialCost || 0;
+                
                 updatedOrderData.items[i] = {
                   ...item,
                   productionTaskId: associatedTask.id,
                   productionTaskNumber: associatedTask.moNumber,
                   productionStatus: associatedTask.status,
-                  productionCost: associatedTask.totalMaterialCost || 0,
-                  fullProductionCost: associatedTask.totalFullProductionCost || 0
+                  productionCost: productionCost,
+                  fullProductionCost: fullProductionCost,
+                  productionUnitCost: productionCost / (parseFloat(item.quantity) || 1),
+                  fullProductionUnitCost: fullProductionCost / (parseFloat(item.quantity) || 1)
                 };
               }
             }
@@ -1159,16 +1176,33 @@ const OrderDetails = () => {
                     {(() => {
                       // Sprawdź czy pozycja ma powiązane zadanie produkcyjne i pełny koszt produkcji
                       if (item.productionTaskId && item.fullProductionCost !== undefined) {
-                        // Oblicz pełny koszt produkcji na jednostkę
+                        // Użyj zapisanej wartości fullProductionUnitCost, jeśli istnieje
+                        if (item.fullProductionUnitCost !== undefined && item.fullProductionUnitCost !== null) {
+                          return (
+                            <Tooltip title={item.fromPriceList 
+                              ? "Pełny koszt produkcji na jednostkę (wszystkie materiały - pozycja z listy cenowej)"
+                              : "Pełny koszt produkcji na jednostkę (wszystkie materiały + cena jednostkowa)"}>
+                              <Typography sx={{ fontWeight: 'medium', color: 'primary.main' }}>
+                                {formatCurrency(item.fullProductionUnitCost)}
+                              </Typography>
+                            </Tooltip>
+                          );
+                        }
+                        
+                        // Jeśli brak zapisanej wartości, oblicz na podstawie fullProductionCost (fallback)
                         const quantity = parseFloat(item.quantity) || 1;
                         const price = parseFloat(item.price) || 0;
                         
-                        // Uwzględnij również cenę jednostkową w pełnym koszcie prod./szt.
-                        const unitFullProductionCost = (parseFloat(item.fullProductionCost) / quantity) + price;
+                        // Jeśli pozycja jest z listy cenowej, nie dodawaj ceny jednostkowej do pełnego kosztu
+                        const unitFullProductionCost = item.fromPriceList 
+                          ? parseFloat(item.fullProductionCost) / quantity
+                          : (parseFloat(item.fullProductionCost) / quantity) + price;
                         
                         return (
-                          <Tooltip title="Pełny koszt produkcji na jednostkę (wszystkie materiały + cena jednostkowa)">
-                            <Typography sx={{ fontWeight: 'medium', color: 'primary.main' }}>
+                          <Tooltip title={`${item.fromPriceList 
+                            ? "Pełny koszt produkcji na jednostkę (wszystkie materiały - pozycja z listy cenowej)"
+                            : "Pełny koszt produkcji na jednostkę (wszystkie materiały + cena jednostkowa)"} - obliczane na bieżąco`}>
+                            <Typography sx={{ fontWeight: 'medium', color: 'warning.main' }}>
                               {formatCurrency(unitFullProductionCost)}
                             </Typography>
                           </Tooltip>
