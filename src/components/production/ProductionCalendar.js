@@ -2461,7 +2461,8 @@ const ProductionCalendar = () => {
   };
 
   const getScaledSlotWidth = (baseWidth) => {
-    return Math.max(20, Math.floor(baseWidth * scaleLevel));
+    // Zmniejszamy bazową szerokość kolumn o 30% dla bardziej kompaktowego widoku
+    return Math.max(15, Math.floor(baseWidth * scaleLevel * 0.7));
   };
 
   // Funkcja dostosowująca widok kalendarza do długiego zakresu dat
@@ -2497,9 +2498,9 @@ const ProductionCalendar = () => {
               end: rangeEndDate
             });
             
-            // Dla widoków z dłuższymi zakresami, dostosuj szerokość slotu
+            // Dla widoków z dłuższymi zakresami, dostosuj szerokość slotu - bardziej kompaktowe wartości
             if (diffInDays > 31) {
-              calendarApi.setOption('slotMinWidth', Math.max(40, Math.min(80, Math.floor(1200 / diffInDays))));
+              calendarApi.setOption('slotMinWidth', Math.max(20, Math.min(50, Math.floor(800 / diffInDays))));
             }
             
             // Wymuś renderowanie kalendarza
@@ -3477,7 +3478,7 @@ const ProductionCalendar = () => {
           weekends={false}
           nowIndicator={true}
           schedulerLicenseKey="GPL-My-Project-Is-Open-Source"
-          resourceAreaWidth={isMobile ? '70px' : (view.startsWith('resourceTimeline') ? '12%' : '10%')}
+          resourceAreaWidth={isMobile ? '60px' : (view.startsWith('resourceTimeline') ? '10%' : '8%')}
           editable={editable}
           eventDurationEditable={editable}
           eventStartEditable={editable}
@@ -3516,7 +3517,7 @@ const ProductionCalendar = () => {
           } : undefined}
           fixedWeekCount={false}
           navLinks={false}
-          slotMinWidth={getScaledSlotWidth(customDateRange && (endDate - startDate) / (1000 * 60 * 60 * 24) > 31 ? 40 : 60)}
+          slotMinWidth={getScaledSlotWidth(customDateRange && (endDate - startDate) / (1000 * 60 * 60 * 24) > 31 ? 25 : 35)}
           resources={memoizedResources}
           eventContent={renderEventContent}
           dayMaxEvents={isMobile ? 2 : true}
@@ -3976,7 +3977,7 @@ const ProductionCalendar = () => {
                 { hour: '2-digit', minute: '2-digit', hour12: false }
               ],
               visibleRange: customDateRange ? { start: startDate, end: endDate } : null,
-              slotMinWidth: getScaledSlotWidth(isMobile ? 50 : 70),
+              slotMinWidth: getScaledSlotWidth(isMobile ? 30 : 45),
               duration: customDateRange 
                 ? { days: Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) } 
                 : { days: 1 }
@@ -4015,7 +4016,7 @@ const ProductionCalendar = () => {
                 return [{ weekday: 'short', day: 'numeric', month: 'short' }];
               })(),
               visibleRange: customDateRange ? { start: startDate, end: endDate } : null,
-              slotMinWidth: getScaledSlotWidth(ganttDetail === 'hour' ? 50 : (isMobile ? 40 : 60))
+              slotMinWidth: getScaledSlotWidth(ganttDetail === 'hour' ? 30 : (isMobile ? 25 : 35))
             },
             resourceTimelineMonth: {
               duration: customDateRange 
@@ -4051,7 +4052,7 @@ const ProductionCalendar = () => {
                 return [{ day: 'numeric', weekday: 'short' }];
               })(),
               visibleRange: customDateRange ? { start: startDate, end: endDate } : null,
-              slotMinWidth: getScaledSlotWidth(ganttDetail === 'hour' ? 50 : (isMobile ? 30 : 50))
+              slotMinWidth: getScaledSlotWidth(ganttDetail === 'hour' ? 30 : (isMobile ? 20 : 30))
             }
           }}
           dayHeaderClassNames="custom-day-header"
