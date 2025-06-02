@@ -164,35 +164,35 @@ const InvoiceDetails = () => {
   };
   
   // Funkcja generująca i pobierająca PDF faktury
-  const handleDownloadPdf = (language = 'pl') => {
+  const handleDownloadPdf = (language = 'en') => {
     try {
-    setPdfGenerating(true);
-    
-      // Dane firmy do faktury - użyj danych pobranych z systemu zamiast twardego kodu
+      setPdfGenerating(true);
       
       // Słownik tłumaczeń dla dokumentu
       const translations = {
         pl: {
-          invoice: 'FAKTURA',
-          seller: 'Sprzedawca:',
-          buyer: 'Nabywca:',
+          invoice: 'Faktura',
+          invoiceNumber: 'Numer faktury',
+          issueDate: 'Data wystawienia',
+          dueDate: 'Termin płatności',
+          seller: 'Sprzedawca',
+          buyer: 'Nabywca',
           vatEu: 'VAT-EU:',
           email: 'Email:',
           phone: 'Tel:',
-          invoiceData: 'Dane faktury:',
-          issueDate: 'Data wystawienia:',
-          dueDate: 'Termin płatności:',
           paymentMethod: 'Metoda płatności:',
           bank: 'Bank:',
           accountNumber: 'Nr konta:',
-          lp: 'Lp.',
-          name: 'Nazwa',
+          lp: 'Opis',
           quantity: 'Ilość',
-          unit: 'J.m.',
-          priceNet: 'Cena netto',
-          vat: 'VAT',
-          valueNet: 'Wartość\nnetto',
-          valueGross: 'Wartość\nbrutto',
+          unitPrice: 'Cena jednostkowa',
+          amount: 'Kwota',
+          totalPartial: 'Suma częściowa',
+          total: 'Suma',
+          currency: 'USD',
+          footerLine1: 'Anysphere, Inc.',
+          footerLine2: 'US EIN 87-4436547',
+          payOnline: 'Zapłać online',
           relatedPurchaseOrders: 'Zaliczki/Przedpłaty:',
           poNumber: 'Nr zaliczki',
           supplier: 'Wpłacający',
@@ -211,26 +211,28 @@ const InvoiceDetails = () => {
           unknownSupplier: 'Nieznany wpłacający'
         },
         en: {
-          invoice: 'INVOICE',
-          seller: 'Seller:',
-          buyer: 'Buyer:',
+          invoice: 'Invoice',
+          invoiceNumber: 'Invoice Number',
+          issueDate: 'Issue Date',
+          dueDate: 'Due Date',
+          seller: 'Seller',
+          buyer: 'Buyer',
           vatEu: 'VAT-EU:',
           email: 'Email:',
           phone: 'Phone:',
-          invoiceData: 'Invoice details:',
-          issueDate: 'Issue date:',
-          dueDate: 'Due date:',
           paymentMethod: 'Payment method:',
           bank: 'Bank:',
           accountNumber: 'Account number:',
-          lp: 'No.',
-          name: 'Name',
+          lp: 'Description',
           quantity: 'Quantity',
-          unit: 'Unit',
-          priceNet: 'Net price',
-          vat: 'VAT',
-          valueNet: 'Net\nvalue',
-          valueGross: 'Gross\nvalue',
+          unitPrice: 'Unit Price',
+          amount: 'Amount',
+          totalPartial: 'Subtotal',
+          total: 'Total',
+          currency: 'USD',
+          footerLine1: 'Anysphere, Inc.',
+          footerLine2: 'US EIN 87-4436547',
+          payOnline: 'Pay online',
           relatedPurchaseOrders: 'Advance Payments:',
           poNumber: 'Payment No.',
           supplier: 'Payer',
@@ -256,204 +258,278 @@ const InvoiceDetails = () => {
       // Tworzenie dokumentu PDF
       const doc = new jsPDF();
       
-      // Dodaj czcionkę Roboto (opcjonalnie)
-      doc.addFont('https://fonts.gstatic.com/s/roboto/v29/KFOmCnqEu92Fr1Me5Q.ttf', 'Roboto', 'normal');
-      doc.addFont('https://fonts.gstatic.com/s/roboto/v29/KFOlCnqEu92Fr1MmWUlvAw.ttf', 'Roboto', 'bold');
-      doc.setFont('Roboto');
-      
-      // Nagłówek dokumentu
-      doc.setFontSize(18);
-      doc.setTextColor(41, 128, 185);
-      doc.text(t.invoice, 14, 20);
-      doc.setFontSize(12);
-      doc.setTextColor(0, 0, 0);
-      doc.text(`${language === 'en' ? 'No.' : 'Nr'} ${invoice.number}`, 14, 26);
-      
-      // Informacje o sprzedawcy
-      doc.setFontSize(10);
-      doc.text(t.seller, 14, 40);
-      
-      // Sprawdź czy jest to faktura do zamówienia zakupowego
-      const isPurchaseInvoice = invoice.invoiceType === 'purchase' || invoice.originalOrderType === 'purchase';
-      
-      // Zależnie od typu faktury, sprzedawcą może być nasza firma lub dostawca
-      const sellerInfo = isPurchaseInvoice ? invoice.customer : companyInfo;
-      
-      const sellerLines = [
-        sellerInfo.name,
-        sellerInfo.address,
-        `${sellerInfo.zipCode || sellerInfo.postalCode || '00-000'} ${sellerInfo.city || ''}`,
-        `NIP: ${sellerInfo.nip || sellerInfo.taxId || ''}`,
-        `REGON: ${sellerInfo.regon || ''}`
-      ].filter(line => line && line.trim() !== '');
-      
-      // Dodaj kontaktowe dane sprzedawcy
-      if (sellerInfo.email) sellerLines.push(`Email: ${sellerInfo.email}`);
-      if (sellerInfo.phone) sellerLines.push(`${t.phone} ${sellerInfo.phone}`);
-      
-      sellerLines.forEach((line, index) => {
-        doc.text(line, 14, 45 + (index * 5));
-      });
-      
-      // Informacje o kupującym
-      doc.text(t.buyer, 120, 40);
-      
-      // W przypadku faktury z zamówienia zakupowego, kupującym jest nasza firma
-      const buyerInfo = isPurchaseInvoice ? companyInfo : invoice.customer;
-      
-      const buyerLines = [
-        buyerInfo.name,
-        invoice.billingAddress || buyerInfo.address || '',
-        buyerInfo.city ? `${buyerInfo.zipCode || buyerInfo.postalCode || '00-000'} ${buyerInfo.city}` : '',
-        buyerInfo.nip ? `NIP: ${buyerInfo.nip || buyerInfo.taxId || ''}` : ''
-      ].filter(line => line && line.trim() !== '');
-      
-      // VAT-EU zawsze wyświetlany jako druga linia po nazwie klienta (jeśli istnieje)
-      if (buyerInfo.vatEu) {
-        buyerLines.splice(1, 0, `${t.vatEu} ${buyerInfo.vatEu}`);
-      }
-      
-      if (buyerInfo.email) buyerLines.push(`${t.email} ${buyerInfo.email}`);
-      if (buyerInfo.phone) buyerLines.push(`${t.phone} ${buyerInfo.phone}`);
-      
-      buyerLines.forEach((line, index) => {
-        doc.text(line, 120, 45 + (index * 5));
-      });
-      
-      // Informacje o płatności (w jednej kolumnie)
-      const paymentInfoY = 85; // Zwiększ, aby mieć miejsce na więcej danych sprzedawcy/nabywcy
-      doc.text(t.invoiceData, 14, paymentInfoY);
-      doc.text(`${t.issueDate} ${formatDate(invoice.issueDate)}`, 14, paymentInfoY + 5);
-      doc.text(`${t.dueDate} ${formatDate(invoice.dueDate)}`, 14, paymentInfoY + 10);
-      doc.text(`${t.paymentMethod} ${invoice.paymentMethod}`, 14, paymentInfoY + 15);
-      doc.text(`${t.bank} ${companyInfo.bankName}`, 14, paymentInfoY + 20);
-      doc.text(`${t.accountNumber} ${companyInfo.bankAccount}`, 14, paymentInfoY + 25);
-      
-      // Nagłówki tabeli
-      const tableColumn = [
-        { header: t.lp, dataKey: 'lp' },
-        { header: t.name, dataKey: 'nazwa' },
-        { header: t.quantity, dataKey: 'ilosc' },
-        { header: t.unit, dataKey: 'jm' },
-        { header: t.priceNet, dataKey: 'cena' },
-        { header: t.vat, dataKey: 'vat' },
-        { header: t.valueNet, dataKey: 'netto' },
-        { header: t.valueGross, dataKey: 'brutto' }
-      ];
-      
-      // Dane do tabeli
-      const tableRows = [];
-      
-      invoice.items.forEach((item, index) => {
-        const quantity = Number(item.quantity) || 0;
-        const price = Number(item.price) || 0;
+      // Dodaj logo BGW Pharma nad tytułem
+      const logoImg = new Image();
+      logoImg.onload = function() {
+        // Logo wyśrodkowane nad tytułem - bardziej rozciągnięte
+        const logoWidth = 140;
+        const logoHeight = 40;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const logoX = (pageWidth - logoWidth) / 2; // wyśrodkowanie
+        doc.addImage(logoImg, 'PNG', logoX, 8, logoWidth, logoHeight);
         
-        // Sprawdź czy stawka VAT to liczba czy string "ZW" lub "NP"
-        let vatRate = 0;
-        if (typeof item.vat === 'number') {
-          vatRate = item.vat;
-        } else if (item.vat !== "ZW" && item.vat !== "NP") {
-          vatRate = parseFloat(item.vat) || 0;
+        generatePdfContent();
+      };
+      logoImg.src = '/BGWPharma_Logo_LightTheme.png';
+      
+      const generatePdfContent = () => {
+        // Funkcja do konwersji polskich znaków
+        const convertPolishChars = (text) => {
+          if (!text) return '';
+          return text
+            .replace(/ą/g, 'a').replace(/ć/g, 'c').replace(/ę/g, 'e')
+            .replace(/ł/g, 'l').replace(/ń/g, 'n').replace(/ó/g, 'o')
+            .replace(/ś/g, 's').replace(/ź/g, 'z').replace(/ż/g, 'z')
+            .replace(/Ą/g, 'A').replace(/Ć/g, 'C').replace(/Ę/g, 'E')
+            .replace(/Ł/g, 'L').replace(/Ń/g, 'N').replace(/Ó/g, 'O')
+            .replace(/Ś/g, 'S').replace(/Ź/g, 'Z').replace(/Ż/g, 'Z');
+        };
+        
+        // Główny tytuł "FAKTURA" - wyśrodkowany (przesunięty niżej dla logo)
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(24);
+        doc.setTextColor(0, 0, 0);
+        const pageWidth = doc.internal.pageSize.getWidth();
+        doc.text(t.invoice, pageWidth / 2, 45, { align: 'center' });
+        
+        // Numer faktury - wyśrodkowany pod tytułem
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(12);
+        doc.text(`${t.invoiceNumber}: ${invoice.number}`, pageWidth / 2, 55, { align: 'center' });
+        
+        // Dane faktury w prawej kolumnie (jak tabela)
+        const rightColX = 120;
+        let currentY = 70;
+        
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.text(`${t.issueDate}`, rightColX, currentY);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${formatDate(invoice.issueDate)}`, rightColX + 50, currentY);
+        
+        currentY += 6;
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${t.dueDate}`, rightColX, currentY);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${formatDate(invoice.dueDate)}`, rightColX + 50, currentY);
+        
+        // Sprawdź czy jest to faktura do zamówienia zakupowego
+        const isPurchaseInvoice = invoice.invoiceType === 'purchase' || invoice.originalOrderType === 'purchase';
+        
+        // Dane sprzedawcy (lewa kolumna) - z obsługą polskich znaków
+        currentY = 75;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.text(t.seller, 14, currentY);
+        
+        // Zależnie od typu faktury, sprzedawcą może być nasza firma lub dostawca
+        const sellerInfo = isPurchaseInvoice ? invoice.customer : companyInfo;
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        currentY += 8;
+        
+        // Nazwa firmy sprzedawcy
+        doc.text(convertPolishChars(sellerInfo.name || companyInfo.name), 14, currentY);
+        currentY += 5;
+        
+        // Adres sprzedawcy
+        if (sellerInfo.address) {
+          doc.text(convertPolishChars(sellerInfo.address), 14, currentY);
+          currentY += 5;
         }
-        // Dla "ZW" i "NP" vatRate pozostaje 0
         
-        const netValue = quantity * price;
-        const vatValue = netValue * (vatRate / 100);
-        const grossValue = netValue + vatValue;
+        // Kod pocztowy i miasto
+        const cityLine = `${sellerInfo.zipCode || sellerInfo.postalCode || ''} ${sellerInfo.city || ''}`.trim();
+        if (cityLine) {
+          doc.text(convertPolishChars(cityLine), 14, currentY);
+          currentY += 5;
+        }
         
-        tableRows.push({
-          lp: (index + 1).toString(),
-          nazwa: item.name,
-          ilosc: quantity.toString(),
-          jm: item.unit,
-          cena: `${price.toFixed(2)}`,
-          vat: typeof item.vat === 'string' ? item.vat : `${vatRate}%`,
-          netto: `${netValue.toFixed(2)}`,
-          brutto: `${grossValue.toFixed(2)}`
-        });
-      });
-      
-      // Dodaj tabelę pozycji faktury - zwiększ startY, aby zostawić więcej miejsca
-      autoTable(doc, {
-        head: [tableColumn.map(col => col.header)],
-        body: tableRows.map(row => [
-          row.lp,
-          row.nazwa,
-          row.ilosc,
-          row.jm,
-          row.cena,
-          row.vat,
-          row.netto,
-          row.brutto
-        ]),
-        startY: 120, // Zwiększono z 100 na 120, aby dodać więcej przestrzeni
-        theme: 'grid',
-        tableWidth: 'auto',
-        styles: { 
-          fontSize: 8, // Zmniejszono z 9 na 8 dla lepszego dopasowania
-          cellPadding: 1.5, // Zmniejszono padding z 2 na 1.5
-          font: 'Roboto',
-          overflow: 'linebreak' // Dodane zawijanie tekstu
-        },
-        columnStyles: {
-          0: { cellWidth: 8, halign: 'center' }, // Zmniejszono szerokość Lp
-          1: { cellWidth: 45 }, // Zmniejszono szerokość nazwy
-          2: { cellWidth: 12, halign: 'right' }, // Zmniejszono szerokość ilości
-          3: { cellWidth: 10, halign: 'center' }, // Zmniejszono szerokość j.m.
-          4: { cellWidth: 20, halign: 'right' }, // Bez zmian
-          5: { cellWidth: 15, halign: 'center' }, // Bez zmian
-          6: { cellWidth: 25, halign: 'right' }, // Bez zmian
-          7: { cellWidth: 25, halign: 'right' } // Bez zmian
-        },
-        headStyles: { 
-          fillColor: [41, 128, 185], 
-          textColor: 255,
-          halign: 'center',
-          valign: 'middle',
-          font: 'Roboto'
-        },
-        didDrawPage: function(data) {
-          // Dodawanie zł po każdej wartości w kolumnach z cenami
-          data.table.body.forEach((row, rowIndex) => {
-            if (rowIndex >= 0) { // Pomijamy nagłówek
-              [4, 6, 7].forEach(colIndex => {
-                if (row.cells[colIndex]) {
-                  const cell = row.cells[colIndex];
-                  if (cell.text) {
-                    cell.text = `${cell.text} ${invoice.currency}`;
-                  }
-                }
-              });
-            }
+        // Kraj
+        if (sellerInfo.country) {
+          doc.text(convertPolishChars(sellerInfo.country), 14, currentY);
+          currentY += 5;
+        }
+        
+        // NIP/VAT ID
+        if (sellerInfo.nip || sellerInfo.taxId) {
+          doc.text(`NIP: ${sellerInfo.nip || sellerInfo.taxId}`, 14, currentY);
+          currentY += 5;
+        }
+        
+        // Email i telefon sprzedawcy
+        if (sellerInfo.email) {
+          doc.text(`${t.email} ${sellerInfo.email}`, 14, currentY);
+          currentY += 5;
+        }
+        
+        if (sellerInfo.phone) {
+          doc.text(`${t.phone} ${sellerInfo.phone}`, 14, currentY);
+          currentY += 5;
+        }
+        
+        // Dane odbiorcy faktury (prawa kolumna) - zaczynamy wyżej
+        let buyerY = 85;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.text(t.buyer, rightColX, buyerY);
+        
+        // W przypadku faktury z zamówienia zakupowego, kupującym jest nasza firma
+        const buyerInfo = isPurchaseInvoice ? companyInfo : invoice.customer;
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        buyerY += 8;
+        
+        // Nazwa firmy odbiorcy
+        doc.text(convertPolishChars(buyerInfo.name || 'Brak nazwy klienta'), rightColX, buyerY);
+        buyerY += 5;
+        
+        // Adres odbiorcy
+        const buyerAddress = invoice.billingAddress || buyerInfo.address || '';
+        if (buyerAddress) {
+          doc.text(convertPolishChars(buyerAddress), rightColX, buyerY);
+          buyerY += 5;
+        }
+        
+        // Kod pocztowy i miasto odbiorcy
+        const buyerCityLine = `${buyerInfo.zipCode || buyerInfo.postalCode || ''} ${buyerInfo.city || ''}`.trim();
+        if (buyerCityLine) {
+          doc.text(convertPolishChars(buyerCityLine), rightColX, buyerY);
+          buyerY += 5;
+        }
+        
+        // Kraj odbiorcy
+        if (buyerInfo.country) {
+          doc.text(convertPolishChars(buyerInfo.country), rightColX, buyerY);
+          buyerY += 5;
+        }
+        
+        // VAT-EU jeśli istnieje
+        if (buyerInfo.vatEu) {
+          doc.text(`${t.vatEu} ${buyerInfo.vatEu}`, rightColX, buyerY);
+          buyerY += 5;
+        }
+        
+        // Email i telefon odbiorcy
+        if (buyerInfo.email) {
+          doc.text(`${t.email} ${buyerInfo.email}`, rightColX, buyerY);
+          buyerY += 5;
+        }
+        
+        if (buyerInfo.phone) {
+          doc.text(`${t.phone} ${buyerInfo.phone}`, rightColX, buyerY);
+          buyerY += 5;
+        }
+        
+        // Tabela pozycji - bezpośrednio po danych klientów
+        const tableStartY = Math.max(currentY, buyerY) + 25;
+        
+        const tableColumns = [
+          { header: t.lp, dataKey: 'description', width: 90 },
+          { header: t.quantity, dataKey: 'quantity', width: 20 },
+          { header: t.unitPrice, dataKey: 'unitPrice', width: 35 },
+          { header: t.amount, dataKey: 'amount', width: 35 }
+        ];
+        
+        // Przygotuj dane do tabeli
+        const tableRows = [];
+        let totalNetto = 0;
+        
+        invoice.items.forEach((item) => {
+          const quantity = Number(item.quantity) || 0;
+          const price = Number(item.price) || 0;
+          const amount = quantity * price;
+          totalNetto += amount;
+          
+          tableRows.push({
+            description: item.name,
+            quantity: quantity.toString(),
+            unitPrice: `${price.toFixed(2)} ${invoice.currency}`,
+            amount: `${amount.toFixed(2)} ${invoice.currency}`
           });
-        }
-      });
-      
-      // Oblicz sumy
-      const totalNetto = calculateTotalNetto(invoice.items);
-      const totalVat = calculateTotalVat(invoice.items, isPurchaseInvoice ? invoice.vatRate : null);
-      
-      // Dla faktur z zamówień zakupowych, dodaj dodatkowe koszty
-      let additionalCostsValue = 0;
-      if (isPurchaseInvoice && invoice.additionalCostsItems && Array.isArray(invoice.additionalCostsItems)) {
-        additionalCostsValue = invoice.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
-      } else if (isPurchaseInvoice) {
-        additionalCostsValue = parseFloat(invoice.additionalCosts) || 0;
-      }
-      
-      // Użyj zapisanej wartości całkowitej z obiektu faktury zamiast przeliczać na nowo
-      const totalBrutto = parseFloat(invoice.total) || 0;
-      
-      // Oblicz wartość zaliczek/przedpłat
-      let advancePaymentsValue = 0;
-      if (invoice.linkedPurchaseOrders && invoice.linkedPurchaseOrders.length > 0) {
-        advancePaymentsValue = invoice.linkedPurchaseOrders.reduce((sum, po) => {
-          let poValue = 0;
-          if (po.finalGrossValue !== undefined) {
-            poValue = parseFloat(po.finalGrossValue);
-          } else if (po.totalGross !== undefined) {
-            poValue = parseFloat(po.totalGross);
-          } else {
+        });
+        
+        // Dodaj tabelę pozycji
+        autoTable(doc, {
+          startY: tableStartY,
+          head: [tableColumns.map(col => col.header)],
+          body: tableRows.map(row => [
+            row.description,
+            row.quantity,
+            row.unitPrice,
+            row.amount
+          ]),
+          theme: 'grid',
+          styles: { 
+            fontSize: 10,
+            cellPadding: 4,
+            halign: 'left'
+          },
+          columnStyles: {
+            0: { cellWidth: 90 },
+            1: { cellWidth: 20, halign: 'center' },
+            2: { cellWidth: 35, halign: 'right' },
+            3: { cellWidth: 35, halign: 'right' }
+          },
+          headStyles: { 
+            fillColor: [240, 240, 240],
+            textColor: [0, 0, 0],
+            fontStyle: 'bold',
+            halign: 'center'
+          }
+        });
+        
+        // Podsumowanie po tabeli
+        let summaryY = doc.lastAutoTable.finalY + 10;
+        
+        // Obsługa powiązanych zamówień zakupowych (jak w oryginalnym kodzie)
+        let advancePaymentsValue = 0;
+        if (invoice.linkedPurchaseOrders && invoice.linkedPurchaseOrders.length > 0) {
+          advancePaymentsValue = invoice.linkedPurchaseOrders.reduce((sum, po) => {
+            let poValue = 0;
+            if (po.finalGrossValue !== undefined) {
+              poValue = parseFloat(po.finalGrossValue);
+            } else if (po.totalGross !== undefined) {
+              poValue = parseFloat(po.totalGross);
+            } else {
+              const productsValue = po.calculatedProductsValue || po.totalValue || 
+                (Array.isArray(po.items) ? po.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0) : 0);
+              
+              let additionalCostsValue = 0;
+              if (po.calculatedAdditionalCosts !== undefined) {
+                additionalCostsValue = parseFloat(po.calculatedAdditionalCosts);
+              } else if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
+                additionalCostsValue = po.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
+              } else if (po.additionalCosts) {
+                additionalCostsValue = parseFloat(po.additionalCosts) || 0;
+              }
+              
+              const vatRate = parseFloat(po.vatRate) || 0;
+              const vatValue = (productsValue * vatRate) / 100;
+              
+              poValue = productsValue + vatValue + additionalCostsValue;
+            }
+            
+            return sum + poValue;
+          }, 0);
+
+          // Dodaj tabelę z powiązanymi zamówieniami zakupowymi
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(10);
+          doc.text(t.relatedPurchaseOrders, 14, summaryY);
+          
+          const headColumns = [
+            { header: t.poNumber, dataKey: 'number' },
+            { header: t.supplier, dataKey: 'supplier' },
+            { header: t.netValue, dataKey: 'net' },
+            { header: t.additionalCosts, dataKey: 'additional' },
+            { header: 'VAT', dataKey: 'vat' },
+            { header: t.grossValue, dataKey: 'gross' }
+          ];
+          
+          const poRows = invoice.linkedPurchaseOrders.map(po => {
             const productsValue = po.calculatedProductsValue || po.totalValue || 
               (Array.isArray(po.items) ? po.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0) : 0);
             
@@ -469,193 +545,189 @@ const InvoiceDetails = () => {
             const vatRate = parseFloat(po.vatRate) || 0;
             const vatValue = (productsValue * vatRate) / 100;
             
-            poValue = productsValue + vatValue + additionalCostsValue;
-          }
+            let totalGross = 0;
+            if (po.finalGrossValue !== undefined) {
+              totalGross = parseFloat(po.finalGrossValue);
+            } else if (po.totalGross !== undefined) {
+              totalGross = parseFloat(po.totalGross);
+            } else {
+              totalGross = productsValue + vatValue + additionalCostsValue;
+            }
+            
+            let vatDisplay;
+            if (typeof po.vatRate === 'string') {
+              vatDisplay = po.vatRate;
+            } else if (po.vatRate === 'ZW' || po.vatRate === 'NP') {
+              vatDisplay = po.vatRate;
+            } else {
+              vatDisplay = `${vatRate}%`;
+            }
+            
+            return {
+              number: po.number || po.id,
+              supplier: po.supplier?.name || t.unknownSupplier,
+              net: `${productsValue.toFixed(2)} ${invoice.currency}`,
+              additional: `${additionalCostsValue.toFixed(2)} ${invoice.currency}`,
+              vat: vatDisplay,
+              gross: `${totalGross.toFixed(2)} ${invoice.currency}`
+            };
+          });
           
-          return sum + poValue;
-      }, 0);
-      }
-      
-      // Jeśli istnieją zaliczki, upewnij się, że są one uwzględnione w rozliczeniu
-      let settledAdvancePayments = 0;
-      if (invoice.settledAdvancePayments && parseFloat(invoice.settledAdvancePayments) > 0) {
-        settledAdvancePayments = parseFloat(invoice.settledAdvancePayments);
-      } else if (advancePaymentsValue > 0) {
-        // Jeśli nie ma określonej wartości rozliczonych zaliczek, użyj pełnej wartości zaliczek
-        settledAdvancePayments = advancePaymentsValue;
-      }
-      
-      // Dodaj tabelę z powiązanymi zamówieniami zakupowymi, jeśli istnieją
-      let currentY = doc.lastAutoTable.finalY + 10;
-      
-      // Dodaję sekcję powiązanych zamówień zakupowych, jeśli istnieją
-      if (invoice.linkedPurchaseOrders && invoice.linkedPurchaseOrders.length > 0) {
-        // Dodaj tytuł sekcji PO
-        doc.text(t.relatedPurchaseOrders, 14, currentY + 5);
+          autoTable(doc, {
+            head: [headColumns.map(col => col.header)],
+            body: poRows.map(row => [
+              row.number,
+              row.supplier,
+              row.net,
+              row.additional,
+              row.vat,
+              row.gross
+            ]),
+            startY: summaryY + 5,
+            theme: 'grid',
+            styles: { 
+              fontSize: 8,
+              cellPadding: 2
+            },
+            columnStyles: {
+              0: { cellWidth: 25 },
+              1: { cellWidth: 35 },
+              2: { cellWidth: 25, halign: 'right' },
+              3: { cellWidth: 25, halign: 'right' },
+              4: { cellWidth: 15, halign: 'center' },
+              5: { cellWidth: 25, halign: 'right' }
+            },
+            headStyles: { 
+              fillColor: [240, 240, 240],
+              textColor: [0, 0, 0],
+              fontStyle: 'bold',
+              halign: 'center'
+            }
+          });
+          
+          summaryY = doc.lastAutoTable.finalY + 10;
+        }
         
-        const headColumns = [
-          { header: t.poNumber, dataKey: 'number' },
-          { header: t.supplier, dataKey: 'supplier' },
-          { header: t.netValue, dataKey: 'net' },
-          { header: t.additionalCosts, dataKey: 'additional' },
-          { header: t.vat, dataKey: 'vat' },
-          { header: t.grossValue, dataKey: 'gross' }
-        ];
+        // Jeśli istnieją zaliczki, upewnij się, że są one uwzględnione w rozliczeniu
+        let settledAdvancePaymentsCalculated = 0;
+        if (invoice.settledAdvancePayments && parseFloat(invoice.settledAdvancePayments) > 0) {
+          settledAdvancePaymentsCalculated = parseFloat(invoice.settledAdvancePayments);
+        } else if (advancePaymentsValue > 0) {
+          settledAdvancePaymentsCalculated = advancePaymentsValue;
+        }
+
+        // Oblicz sumy
+        const totalVat = calculateTotalVat(invoice.items, isPurchaseInvoice ? null : invoice.vatRate);
         
-        const poRows = invoice.linkedPurchaseOrders.map(po => {
-          // Oblicz lub użyj zapisanych wartości
-          const productsValue = po.calculatedProductsValue || po.totalValue || 
-            (Array.isArray(po.items) ? po.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0) : 0);
-          
-          let additionalCostsValue = 0;
-          if (po.calculatedAdditionalCosts !== undefined) {
-            additionalCostsValue = parseFloat(po.calculatedAdditionalCosts);
-          } else if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
-            additionalCostsValue = po.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
-          } else if (po.additionalCosts) {
-            additionalCostsValue = parseFloat(po.additionalCosts) || 0;
-          }
-          
-          const vatRate = parseFloat(po.vatRate) || 0;
-          const vatValue = (productsValue * vatRate) / 100;
-          
-          let totalGross = 0;
-          if (po.finalGrossValue !== undefined) {
-            totalGross = parseFloat(po.finalGrossValue);
-          } else if (po.totalGross !== undefined) {
-            totalGross = parseFloat(po.totalGross);
-          } else {
-            totalGross = productsValue + vatValue + additionalCostsValue;
-          }
-          
-          // Formatowanie wyświetlania stawki VAT
-          let vatDisplay;
-          if (typeof po.vatRate === 'string') {
-            vatDisplay = po.vatRate;
-          } else if (po.vatRate === 'ZW' || po.vatRate === 'NP') {
-            vatDisplay = po.vatRate;
-          } else {
-            vatDisplay = `${vatRate}%`;
-          }
-          
-          return {
-            number: po.number || po.id,
-            supplier: po.supplier?.name || t.unknownSupplier,
-            net: `${productsValue.toFixed(2)}`,
-            additional: `${additionalCostsValue.toFixed(2)}`,
-            vat: vatDisplay,
-            gross: `${totalGross.toFixed(2)}`
-          };
-        });
+        // Dla faktur z zamówień zakupowych, dodaj dodatkowe koszty
+        let additionalCostsValue = 0;
+        if (isPurchaseInvoice && invoice.additionalCostsItems && Array.isArray(invoice.additionalCostsItems)) {
+          additionalCostsValue = invoice.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
+        } else if (isPurchaseInvoice) {
+          additionalCostsValue = parseFloat(invoice.additionalCosts) || 0;
+        }
         
-        // Dodaj tabelę PO
-        autoTable(doc, {
-          head: [headColumns.map(col => col.header)],
-          body: poRows.map(row => [
-            row.number,
-            row.supplier,
-            row.net,
-            row.additional,
-            row.vat,
-            row.gross
-          ]),
-          startY: currentY + 10,
-          theme: 'grid',
-          tableWidth: 'auto',
-          styles: { 
-            fontSize: 7, // Zmniejszono z 8 na 7
-            cellPadding: 1, // Zmniejszono z 2 na 1
-            font: 'Roboto',
-            overflow: 'linebreak' // Dodane zawijanie tekstu
-          },
-          columnStyles: {
-            0: { cellWidth: 25 },
-            1: { cellWidth: 35 },
-            2: { cellWidth: 20, halign: 'right' },
-            3: { cellWidth: 20, halign: 'right' },
-            4: { cellWidth: 15, halign: 'center' },
-            5: { cellWidth: 25, halign: 'right' }
-          },
-          headStyles: { 
-            fillColor: [41, 128, 185], 
-            textColor: 255,
-            halign: 'center',
-            valign: 'middle',
-            font: 'Roboto'
-          },
-          didDrawPage: function(data) {
-            // Dodawanie waluty po każdej wartości w kolumnach z cenami
-            data.table.body.forEach((row, rowIndex) => {
-              if (rowIndex >= 0) { // Pomijamy nagłówek
-                [2, 3, 5].forEach(colIndex => {
-                  if (row.cells[colIndex]) {
-                    const cell = row.cells[colIndex];
-                    if (cell.text) {
-                      cell.text = `${cell.text} ${invoice.currency}`;
-                    }
-                  }
-                });
-              }
-            });
-          }
-        });
+        const totalBrutto = totalNetto + totalVat + additionalCostsValue;
+
+        // Tabela podsumowania (po prawej stronie) - bardziej rozciągnięta
+        const summaryX = 110;
+        const summaryWidth = 70;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
         
-        currentY = doc.lastAutoTable.finalY + 10;
-      }
-      
-      // Dodaj podsumowanie po tabeli PO
-      doc.setFont('Roboto', 'bold');
-      doc.text(t.summary, 140, currentY);
-      doc.setFont('Roboto', 'normal');
-      doc.setFontSize(9); // Zmniejszono rozmiar czcionki
-      doc.text(`${t.totalNet} ${totalNetto.toFixed(2)} ${invoice.currency}`, 140, currentY + 6);
-      doc.text(`${t.totalVat} ${totalVat.toFixed(2)} ${invoice.currency}`, 140, currentY + 12);
-      
-      // Dodaj informację o kosztach wysyłki, jeśli istnieją
-      let extraLines = 0;
-      let summaryY = currentY + 18;
-      
-      // Dodaj informację o rozliczonych zaliczkach, jeśli istnieją
-      if (settledAdvancePayments > 0) {
-        doc.text(`${t.settledAdvancePayments} -${settledAdvancePayments.toFixed(2)} ${invoice.currency}`, 140, summaryY);
+        // Suma częściowa
+        doc.text(`${t.totalPartial}`, summaryX, summaryY);
+        doc.text(`${totalNetto.toFixed(2)} ${invoice.currency}`, summaryX + summaryWidth, summaryY, { align: 'right' });
         summaryY += 6;
-        extraLines += 1;
-      }
+        
+        // VAT
+        if (totalVat > 0) {
+          doc.text('VAT', summaryX, summaryY);
+          doc.text(`${totalVat.toFixed(2)} ${invoice.currency}`, summaryX + summaryWidth, summaryY, { align: 'right' });
+          summaryY += 6;
+        }
+        
+        // Dodatkowe koszty
+        if (additionalCostsValue > 0) {
+          doc.text(t.additionalCosts, summaryX, summaryY);
+          doc.text(`${additionalCostsValue.toFixed(2)} ${invoice.currency}`, summaryX + summaryWidth, summaryY, { align: 'right' });
+          summaryY += 6;
+        }
+        
+        // Koszty wysyłki
+        if (invoice.shippingInfo && invoice.shippingInfo.cost > 0) {
+          doc.text(`${t.shippingCost}`, summaryX, summaryY);
+          doc.text(`${parseFloat(invoice.shippingInfo.cost).toFixed(2)} ${invoice.currency}`, summaryX + summaryWidth, summaryY, { align: 'right' });
+          summaryY += 6;
+        }
+        
+        // Koszty z powiązanych PO
+        if (advancePaymentsValue > 0) {
+          doc.text(`${t.purchaseCosts}`, summaryX, summaryY);
+          doc.text(`${advancePaymentsValue.toFixed(2)} ${invoice.currency}`, summaryX + summaryWidth, summaryY, { align: 'right' });
+          summaryY += 6;
+        }
+        
+        // Rozliczone zaliczki
+        if (settledAdvancePaymentsCalculated > 0) {
+          doc.text(`${t.settledAdvancePayments}`, summaryX, summaryY);
+          doc.text(`-${settledAdvancePaymentsCalculated.toFixed(2)} ${invoice.currency}`, summaryX + summaryWidth, summaryY, { align: 'right' });
+          summaryY += 6;
+        }
+        
+        // Linia
+        doc.setLineWidth(0.5);
+        doc.line(summaryX, summaryY + 2, summaryX + summaryWidth, summaryY + 2);
+        summaryY += 8;
+        
+        // Kwota należna (pogrubiona) - używaj wartości z obiektu faktury lub obliczonej
+        const invoiceTotal = parseFloat(invoice.total) || totalBrutto;
+        const finalAmountCalculated = invoiceTotal - settledAdvancePaymentsCalculated;
+        
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${t.total}`, summaryX, summaryY);
+        doc.text(`${finalAmountCalculated.toFixed(2)} ${invoice.currency}`, summaryX + summaryWidth, summaryY, { align: 'right' });
+        
+        // Informacje o płatności - bez nagłówka
+        if (invoice.paymentMethod) {
+          summaryY += 20;
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(10);
+          doc.text(`${t.paymentMethod} ${invoice.paymentMethod}`, 14, summaryY);
+          
+          if (companyInfo.bankName) {
+            summaryY += 5;
+            doc.text(`${t.bank} ${companyInfo.bankName}`, 14, summaryY);
+          }
+          
+          if (companyInfo.bankAccount) {
+            summaryY += 5;
+            doc.text(`${t.accountNumber} ${companyInfo.bankAccount}`, 14, summaryY);
+          }
+        }
+        
+        // Uwagi, jeśli istnieją
+        if (invoice.notes) {
+          summaryY += 15;
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(10);
+          doc.text(`${t.notes}`, 14, summaryY);
+          doc.setFont('helvetica', 'normal');
+          doc.text(invoice.notes, 14, summaryY + 6);
+        }
+        
+        // Stopka - na dole strony (jak na wzorze)
+        const pageHeight = doc.internal.pageSize.height;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.text(t.footerLine1, pageWidth / 2, pageHeight - 20, { align: 'center' });
+        doc.text(t.footerLine2, pageWidth / 2, pageHeight - 15, { align: 'center' });
+        
+        // Pobierz plik PDF
+        doc.save(`Faktura_${invoice.number}_${language.toUpperCase()}.pdf`);
+        showSuccess(`Faktura została pobrana w formacie PDF (${language.toUpperCase()})`);
+      };
       
-      if (invoice.shippingInfo && invoice.shippingInfo.cost > 0) {
-        doc.text(`${t.shippingCost} ${parseFloat(invoice.shippingInfo.cost).toFixed(2)} ${invoice.currency}`, 140, summaryY);
-        summaryY += 6;
-        extraLines += 1;
-      }
-      
-      // Dodaj informację o kosztach z powiązanych PO, jeśli istnieją
-      if (advancePaymentsValue > 0) {
-        doc.text(`${t.purchaseCosts} ${advancePaymentsValue.toFixed(2)} ${invoice.currency}`, 140, summaryY);
-        summaryY += 6;
-        extraLines += 1;
-      }
-      
-      // Dodaj całkowitą kwotę brutto na końcu
-      doc.setFont('Roboto', 'bold');
-      // Uwzględnij odliczenie zaliczek
-      const finalAmount = totalBrutto - settledAdvancePayments;
-      doc.text(`${t.totalGross} ${finalAmount.toFixed(2)} ${invoice.currency}`, 140, summaryY);
-      doc.setFont('Roboto', 'normal');
-      
-      // Dodaj uwagi, jeśli istnieją
-      if (invoice.notes) {
-        const notesY = summaryY + 15;
-        doc.text(`${t.notes}`, 14, notesY);
-        doc.text(invoice.notes, 14, notesY + 6);
-      }
-      
-      // Dodaj stopkę
-      const pageHeight = doc.internal.pageSize.height;
-      doc.text(t.footer, 105, pageHeight - 15, { align: 'center' });
-      
-      // Pobierz plik PDF
-      doc.save(`Faktura_${invoice.number}_${language.toUpperCase()}.pdf`);
-      showSuccess(`Faktura została pobrana w formacie PDF (${language.toUpperCase()})`);
     } catch (error) {
       console.error('Błąd podczas generowania PDF:', error);
       showError('Nie udało się wygenerować pliku PDF: ' + error.message);
@@ -757,24 +829,14 @@ const InvoiceDetails = () => {
               </Button>
             </>
           )}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           <Button
             variant="outlined"
             startIcon={<DownloadIcon />}
             disabled={invoice.status === 'draft' || pdfGenerating}
-              onClick={() => handleDownloadPdf('pl')}
+            onClick={() => handleDownloadPdf('en')}
           >
-              {pdfGenerating ? 'Generowanie...' : 'Pobierz PDF (PL)'}
+            {pdfGenerating ? 'Generowanie...' : 'Pobierz PDF'}
           </Button>
-            <Button
-              variant="outlined"
-              startIcon={<DownloadIcon />}
-              disabled={invoice.status === 'draft' || pdfGenerating}
-              onClick={() => handleDownloadPdf('en')}
-            >
-              {pdfGenerating ? 'Generowanie...' : 'Pobierz PDF (EN)'}
-            </Button>
-          </Box>
           {invoice.status === 'draft' && (
             <Button
               variant="contained"

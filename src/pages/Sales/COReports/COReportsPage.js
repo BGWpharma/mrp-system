@@ -128,7 +128,7 @@ const COReportsPage = () => {
     statusStats: {}
   });
   
-  // Stan dla wybranego produktu (przeniesiony z ProductionCostsTab)
+  // Stan dla wybranego produktu
   const [selectedProduct, setSelectedProduct] = useState('');
   
   // Pobieranie danych
@@ -785,7 +785,7 @@ const COReportsPage = () => {
     
     // Efekt do obliczania danych historycznych dla wybranego produktu
     useEffect(() => {
-      if (selectedProduct && productionCosts.length > 0) {
+      if (productionCosts.length > 0) {
         // Filtruj koszty produkcji dla wybranego produktu
         const filteredCosts = productionCosts.filter(item => item.itemName === selectedProduct);
         
@@ -892,13 +892,18 @@ const COReportsPage = () => {
     
     // Funkcja do eksportu kosztów produkcji do CSV z filtrem produktu
     const handleExportProductionCostsCSVLocal = () => {
+      console.log('🔍 Export CSV - selectedProduct before close:', selectedProduct);
       handleProductionExportMenuClose();
+      console.log('🔍 Export CSV - selectedProduct after close:', selectedProduct);
       
       let dataToExport = productionCosts;
       
       // Jeśli wybrano konkretny produkt, filtruj dane
       if (selectedProduct) {
         dataToExport = productionCosts.filter(item => item.itemName === selectedProduct);
+        console.log('🔍 Export CSV - filtering for product:', selectedProduct, 'found items:', dataToExport.length);
+      } else {
+        console.log('🔍 Export CSV - no product selected, exporting all data');
       }
       
       if (dataToExport.length === 0) {
@@ -1225,7 +1230,7 @@ const COReportsPage = () => {
               Koszty produkcji za okres: {formatDateDisplay(startDate)} - {formatDateDisplay(endDate)}
             </Typography>
             
-            {selectedProduct ? (
+            {selectedProduct && (
               <>
                 {/* Karta ze statystykami dla wybranego produktu */}
                 <Typography variant="h6" component="h3" sx={{ mb: 2 }}>
@@ -1460,7 +1465,9 @@ const COReportsPage = () => {
                   </TableContainer>
                 </Paper>
               </>
-            ) : (
+            )}
+            
+            {!selectedProduct && (
               <>
                 {/* Karty ze statystykami kosztów - widok oryginalny dla wszystkich produktów */}
                 <Grid container spacing={3} sx={{ mb: 3 }}>
@@ -1549,7 +1556,9 @@ const COReportsPage = () => {
                               <Tooltip title="Pokaż szczegóły produktu">
                                 <IconButton 
                                   size="small"
-                                  onClick={() => setSelectedProduct(product.name)}
+                                  onClick={() => {
+                                    setSelectedProduct(product.name);
+                                  }}
                                 >
                                   <AssessmentIcon fontSize="small" />
                                 </IconButton>
