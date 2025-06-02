@@ -22,11 +22,14 @@ import { useAuth } from './useAuth';
  * Hook do zarządzania kolekcją Firestore
  * 
  * @param {string} collectionName - Nazwa kolekcji
+ * @param {Object} options - Opcje konfiguracyjne
+ * @param {boolean} options.autoLoad - Czy automatycznie ładować dane przy montowaniu (domyślnie true)
  * @returns {Object} Obiekt zawierający dane i funkcje do operacji na kolekcji
  */
-export const useFirestore = (collectionName) => {
+export const useFirestore = (collectionName, options = {}) => {
+  const { autoLoad = true } = options;
   const [documents, setDocuments] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(autoLoad); // Ustaw loading na false jeśli autoLoad wyłączone
   const [error, setError] = useState(null);
   const { currentUser } = useAuth();
   const unsubscribeRef = useRef(null);
@@ -253,10 +256,10 @@ export const useFirestore = (collectionName) => {
     };
   }, []);
   
-  // Załaduj domyślne dane przy montowaniu komponentu
+  // ✅ OPTYMALIZACJA: Opcjonalne auto-ładowanie przy montowaniu komponentu
   useEffect(() => {
-    // Pobierz dane tylko jeśli nie ma aktywnej subskrypcji
-    if (!isSubscribed) {
+    // Pobierz dane tylko jeśli autoLoad jest włączone i nie ma aktywnej subskrypcji
+    if (autoLoad && !isSubscribed) {
       getAll()
         .catch(err => {
           console.error(`Error in initial load of ${collectionName}:`, err);
@@ -264,7 +267,7 @@ export const useFirestore = (collectionName) => {
     }
     
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collectionName]);
+  }, [collectionName, autoLoad]);
   
   return {
     documents,

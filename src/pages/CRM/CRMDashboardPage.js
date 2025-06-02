@@ -75,28 +75,31 @@ const CRMDashboardPage = () => {
       try {
         setLoading(true);
         
-        // Pobierz kontakty
-        const allContacts = await getAllContacts();
+        // ✅ OPTYMALIZACJA: Równoległe pobieranie głównych danych CRM
+        const [allContacts, activeCampaigns, allOpportunities] = await Promise.all([
+          getAllContacts(),
+          getActiveCampaigns(), 
+          getAllOpportunities()
+        ]);
+
         setContacts(allContacts);
+        setCampaigns(activeCampaigns);
+        setOpportunities(allOpportunities);
         
-        // Pobierz ostatnie interakcje zakupowe z wszystkich kontaktów
-        let interactions = [];
-        for (const contact of allContacts.slice(0, 5)) { // Ogranicz do 5 kontaktów dla wydajności
-          const contactInteractions = await getContactInteractions(contact.id);
-          interactions = [...interactions, ...contactInteractions];
-        }
+        // Pobierz ostatnie interakcje zakupowe z pierwszych 5 kontaktów (dla wydajności)
+        const interactionPromises = allContacts.slice(0, 5).map(contact => 
+          getContactInteractions(contact.id).catch(err => {
+            console.error(`Błąd pobierania interakcji dla kontaktu ${contact.id}:`, err);
+            return []; // Zwróć pustą tablicę w przypadku błędu
+          })
+        );
+        
+        const interactionResults = await Promise.all(interactionPromises);
+        let interactions = interactionResults.flat();
         
         // Posortuj interakcje zakupowe po dacie (od najnowszych) i weź 5 najnowszych
         interactions.sort((a, b) => new Date(b.date) - new Date(a.date));
         setRecentInteractions(interactions.slice(0, 5));
-        
-        // Pobierz aktywne kampanie
-        const activeCampaigns = await getActiveCampaigns();
-        setCampaigns(activeCampaigns);
-        
-        // Pobierz możliwości sprzedaży
-        const allOpportunities = await getAllOpportunities();
-        setOpportunities(allOpportunities);
         
         // Oblicz statystyki
         const now = new Date();
@@ -138,6 +141,7 @@ const CRMDashboardPage = () => {
         });
         
         setStatsLoading(false);
+        console.log('✅ Dane CRM zostały załadowane równolegle');
       } catch (error) {
         console.error('Błąd podczas pobierania danych CRM:', error);
         showError('Nie udało się pobrać danych CRM: ' + error.message);

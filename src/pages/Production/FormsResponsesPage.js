@@ -68,9 +68,14 @@ const FormsResponsesPage = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Pobieranie odpowiedzi dla formularza "Skończone MO"
-      const completedMOQuery = query(collection(db, 'Forms/SkonczoneMO/Odpowiedzi'));
-      const completedMOSnapshot = await getDocs(completedMOQuery);
+      // ✅ OPTYMALIZACJA: Równoległe pobieranie wszystkich formularzy
+      const [completedMOSnapshot, controlSnapshot, shiftSnapshot] = await Promise.all([
+        getDocs(query(collection(db, 'Forms/SkonczoneMO/Odpowiedzi'))),
+        getDocs(query(collection(db, 'Forms/KontrolaProdukcji/Odpowiedzi'))),
+        getDocs(query(collection(db, 'Forms/ZmianaProdukcji/Odpowiedzi')))
+      ]);
+
+      // Przetwarzanie odpowiedzi "Skończone MO"
       const completedMOData = completedMOSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
@@ -78,9 +83,7 @@ const FormsResponsesPage = () => {
       }));
       setCompletedMOResponses(completedMOData);
 
-      // Pobieranie odpowiedzi dla formularza "Kontrola Produkcji"
-      const controlQuery = query(collection(db, 'Forms/KontrolaProdukcji/Odpowiedzi'));
-      const controlSnapshot = await getDocs(controlQuery);
+      // Przetwarzanie odpowiedzi "Kontrola Produkcji"
       const controlData = controlSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
@@ -91,9 +94,7 @@ const FormsResponsesPage = () => {
       }));
       setProductionControlResponses(controlData);
 
-      // Pobieranie odpowiedzi dla formularza "Zmiana Produkcji"
-      const shiftQuery = query(collection(db, 'Forms/ZmianaProdukcji/Odpowiedzi'));
-      const shiftSnapshot = await getDocs(shiftQuery);
+      // Przetwarzanie odpowiedzi "Zmiana Produkcji"
       const shiftData = shiftSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
@@ -101,6 +102,8 @@ const FormsResponsesPage = () => {
       }));
       setProductionShiftResponses(shiftData);
       setFilteredShiftResponses(shiftData);
+      
+      console.log('✅ Wszystkie formularze zostały załadowane równolegle');
     } catch (err) {
       console.error('Błąd podczas pobierania danych:', err);
       setError(err.message);

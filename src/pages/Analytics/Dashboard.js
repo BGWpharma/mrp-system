@@ -17,7 +17,10 @@ import {
   Chip,
   Alert,
   Tabs,
-  Tab
+  Tab,
+  Button,
+  IconButton,
+  Tooltip
 } from '@mui/material';
 import { 
   ShoppingCart as OrdersIcon,
@@ -26,7 +29,8 @@ import {
   CheckCircle as CompletedIcon,
   Pending as PendingIcon,
   LocalShipping as ShippingIcon,
-  Euro as EuroIcon
+  Euro as EuroIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 
 import { getKpiData } from '../../services/analyticsService';
@@ -37,6 +41,36 @@ import { formatCurrency } from '../../utils/formatUtils';
 import { formatTimestamp } from '../../utils/dateUtils';
 import Charts from './Charts';
 
+// ✅ OPTYMALIZACJA: Cache dla danych analitycznych
+const analyticsCache = {
+  data: null,
+  timestamp: null,
+  cacheTime: 5 * 60 * 1000, // 5 minut cache
+  
+  get: function(key) {
+    if (!this.data || !this.timestamp) return null;
+    if (Date.now() - this.timestamp > this.cacheTime) {
+      this.clear();
+      return null;
+    }
+    return this.data;
+  },
+  
+  set: function(data) {
+    this.data = data;
+    this.timestamp = Date.now();
+  },
+  
+  clear: function() {
+    this.data = null;
+    this.timestamp = null;
+  },
+  
+  isExpired: function() {
+    return !this.timestamp || Date.now() - this.timestamp > this.cacheTime;
+  }
+};
+
 const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -46,28 +80,55 @@ const Dashboard = () => {
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [activeTab, setActiveTab] = useState(0);
   
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-    setLoading(true);
-        
-        const kpiData = await getKpiData();
-        const tasks = await getTasksByStatus('W trakcie');
-        const orderStats = await getOrdersStats();
-        const poList = await getAllPurchaseOrders();
-        
-        setData(kpiData);
-        setActiveTasks(tasks || []);
-        setRecentOrders(orderStats?.recentOrders || []);
-        setPurchaseOrders(poList || []);
-      setLoading(false);
+  const fetchData = async (forceRefresh = false) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // ✅ OPTYMALIZACJA: Sprawdź cache jeśli nie wymuszamy odświeżenia
+      if (!forceRefresh) {
+        const cachedData = analyticsCache.get();
+        if (cachedData) {
+          console.log('✅ Ładowanie danych analitycznych z cache');
+          setData(cachedData.kpiData || {});
+          setActiveTasks(cachedData.tasks || []);
+          setRecentOrders(cachedData.orderStats?.recentOrders || []);
+          setPurchaseOrders(cachedData.poList || []);
+          setLoading(false);
+          return;
+        }
+      }
+      
+      console.log('🔄 Pobieranie świeżych danych analitycznych...');
+      
+      // Równoległe pobieranie danych
+      const [kpiData, tasks, orderStats, poList] = await Promise.all([
+        getKpiData(),
+        getTasksByStatus('W trakcie'),
+        getOrdersStats(),
+        getAllPurchaseOrders()
+      ]);
+      
+      const fetchedData = { kpiData, tasks, orderStats, poList };
+      
+      // Zapisz do cache
+      analyticsCache.set(fetchedData);
+      
+      setData(kpiData);
+      setActiveTasks(tasks || []);
+      setRecentOrders(orderStats?.recentOrders || []);
+      setPurchaseOrders(poList || []);
+      
+      console.log('✅ Dane analityczne zostały załadowane i zapisane w cache');
     } catch (err) {
-        console.error('Błąd podczas ładowania danych analitycznych:', err);
+      console.error('Błąd podczas ładowania danych analitycznych:', err);
       setError('Wystąpił błąd podczas ładowania danych. Spróbuj odświeżyć stronę.');
+    } finally {
       setLoading(false);
     }
   };
   
+  useEffect(() => {
     fetchData();
   }, []);
   
@@ -105,12 +166,33 @@ const Dashboard = () => {
   
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Typography variant="h4" gutterBottom>
-        Analityka
-      </Typography>
-      <Typography variant="subtitle1" sx={{ mb: 4 }}>
-        Podgląd kluczowych wskaźników działania systemu
-      </Typography>
+      {/* ✅ OPTYMALIZACJA: Nagłówek z przyciskiem odświeżania */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Box>
+          <Typography variant="h4" gutterBottom>
+            Analityka
+          </Typography>
+          <Typography variant="subtitle1" color="text.secondary">
+            Podgląd kluczowych wskaźników działania systemu
+            {analyticsCache.timestamp && (
+              <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+                Ostatnia aktualizacja: {new Date(analyticsCache.timestamp).toLocaleTimeString('pl-PL')}
+              </Typography>
+            )}
+          </Typography>
+        </Box>
+        <Tooltip title={`Odśwież dane${analyticsCache.isExpired() ? ' (cache wygasł)' : ''}`}>
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon />}
+            onClick={() => fetchData(true)}
+            disabled={loading}
+            color={analyticsCache.isExpired() ? 'warning' : 'primary'}
+          >
+            {loading ? 'Odświeżanie...' : 'Odśwież'}
+          </Button>
+        </Tooltip>
+      </Box>
       
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 4 }}>
         <Tabs value={activeTab} onChange={handleTabChange}>

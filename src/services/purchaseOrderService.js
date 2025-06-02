@@ -9,7 +9,8 @@ import {
   query, 
   where,
   orderBy,
-  serverTimestamp 
+  serverTimestamp,
+  limit as firebaseLimit
 } from 'firebase/firestore';
 import { db } from './firebase/config';
 import { createNotification } from './notificationService';
@@ -25,11 +26,11 @@ const searchCache = {
   maxCacheAge: 60 * 1000, // 60 sekund (1 minuta)
   
   // Generuje klucz cache na podstawie parametrów zapytania
-  generateKey(page, limit, sortField, sortOrder, filters) {
+  generateKey(page, itemsPerPage, sortField, sortOrder, filters) {
     // Uwzględnij wszystkie filtry w kluczu cache, szczególnie searchTerm
     return JSON.stringify({ 
       page, 
-      limit, 
+      itemsPerPage, 
       sortField, 
       sortOrder, 
       filters: {
@@ -214,31 +215,31 @@ export const getAllPurchaseOrders = async () => {
 /**
  * Pobiera zamówienia zakupowe z paginacją
  * @param {number} page - Numer strony (numeracja od 1)
- * @param {number} limit - Liczba elementów na stronę
+ * @param {number} itemsPerPage - Liczba elementów na stronę
  * @param {string} sortField - Pole, po którym sortujemy
  * @param {string} sortOrder - Kierunek sortowania (asc/desc)
  * @param {Object} filters - Opcjonalne filtry (status, searchTerm, dateFrom, dateTo, supplierName, priceMin, priceMax)
  * @param {boolean} useCache - Czy używać cache (domyślnie true)
  * @returns {Object} - Obiekt zawierający dane i metadane paginacji
  */
-export const getPurchaseOrdersWithPagination = async (page = 1, limit = 10, sortField = 'createdAt', sortOrder = 'desc', filters = {}, useCache = true) => {
+export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 10, sortField = 'createdAt', sortOrder = 'desc', filters = {}, useCache = true) => {
   try {
     // Sprawdź, czy mamy dane w cache - ale nie używaj cache dla wyszukiwania
-    const cacheKey = searchCache.generateKey(page, limit, sortField, sortOrder, filters);
+    const cacheKey = searchCache.generateKey(page, itemsPerPage, sortField, sortOrder, filters);
     
     // Wyłącz cache dla zapytań wyszukiwania, aby zawsze pobierać świeże dane
     const shouldUseCache = useCache && (!filters.searchTerm || filters.searchTerm.trim() === '');
     
     if (shouldUseCache && searchCache.has(cacheKey)) {
-      console.log('Używam danych z cache dla zapytania:', { page, limit, sortField, sortOrder });
+      console.log('Używam danych z cache dla zapytania:', { page, itemsPerPage, sortField, sortOrder });
       return searchCache.get(cacheKey);
     }
     
-    console.log('Pobieranie świeżych danych dla zapytania:', { page, limit, sortField, sortOrder, hasSearchTerm: !!(filters.searchTerm && filters.searchTerm.trim()) });
+    console.log('Pobieranie świeżych danych dla zapytania:', { page, itemsPerPage, sortField, sortOrder, hasSearchTerm: !!(filters.searchTerm && filters.searchTerm.trim()) });
     
-    // Ustaw realne wartości dla page i limit
+    // Ustaw realne wartości dla page i itemsPerPage
     const pageNum = Math.max(1, page);
-    const itemsPerPage = Math.max(1, limit);
+    const itemsLimit = Math.max(1, itemsPerPage);
     
     // Kolekcjonujemy wszystkie ID dostawców, aby potem pobrać ich dane za jednym razem
     const supplierIds = new Set();
@@ -398,19 +399,48 @@ export const getPurchaseOrdersWithPagination = async (page = 1, limit = 10, sort
         
         console.log(`Znaleziono ${directMatchingDocs.length} zamówień pasujących bezpośrednio`);
         
-        // Znajdź dostawców pasujących do wyszukiwania
-        const suppliersSnapshot = await getDocs(collection(db, SUPPLIERS_COLLECTION));
-        const matchingSupplierIds = new Set();
+        // ✅ OPTYMALIZACJA: Inteligentne wyszukiwanie dostawców z indeksami
+        let matchingSupplierIds = new Set();
         
-        suppliersSnapshot.forEach(doc => {
-          const supplierData = doc.data();
-          if (supplierData.name && 
-              supplierData.name.toLowerCase().includes(searchTerm)) {
-            matchingSupplierIds.add(doc.id);
-            console.log(`Znaleziono dostawcę pasującego do zapytania '${searchTerm}': ${supplierData.name}`);
+        if (searchTerm.length >= 2) { // Minimum 2 znaki dla wyszukiwania
+          try {
+            // Użyj zapytania z zakresem dla wydajniejszego wyszukiwania
+            const suppliersQuery = query(
+              collection(db, SUPPLIERS_COLLECTION),
+              where('name', '>=', searchTerm),
+              where('name', '<=', searchTerm + '\uf8ff'),
+              firebaseLimit(20) // Ogranicz do 20 dostawców
+            );
+            
+            const suppliersSnapshot = await getDocs(suppliersQuery);
+            suppliersSnapshot.forEach(doc => {
+              matchingSupplierIds.add(doc.id);
+              console.log(`✓ Znaleziono dostawcę: ${doc.data().name}`);
+            });
+            
+            // Jeśli nie znaleziono przez zapytanie zakresowe, spróbuj fallback
+            if (matchingSupplierIds.size === 0) {
+              console.log('Brak wyników z zapytania zakresowego, używam fallback...');
+              const allSuppliersQuery = query(collection(db, SUPPLIERS_COLLECTION), firebaseLimit(100));
+              const allSuppliersSnapshot = await getDocs(allSuppliersQuery);
+              
+              allSuppliersSnapshot.forEach(doc => {
+                const supplierData = doc.data();
+                if (supplierData.name && 
+                    supplierData.name.toLowerCase().includes(searchTerm.toLowerCase())) {
+                  matchingSupplierIds.add(doc.id);
+                  console.log(`✓ Znaleziono dostawcę (fallback): ${supplierData.name}`);
+                }
+              });
+            }
+            
+            console.log(`Znaleziono ${matchingSupplierIds.size} dostawców pasujących do '${searchTerm}'`);
+          } catch (error) {
+            console.warn('Błąd podczas wyszukiwania dostawców:', error);
+            // W przypadku błędu, nie dodawaj żadnych dostawców
           }
-        });
-        
+        }
+
         // Znajdź zamówienia z pasującymi dostawcami
         const supplierMatchingDocs = allDocs.filter(doc => {
           const data = doc.data();
@@ -497,14 +527,14 @@ export const getPurchaseOrdersWithPagination = async (page = 1, limit = 10, sort
     const totalCount = allDocs.length;
     
     // Oblicz liczbę stron
-    const totalPages = Math.ceil(totalCount / itemsPerPage);
+    const totalPages = Math.ceil(totalCount / itemsLimit);
     
     // Jeśli żądana strona jest większa niż liczba stron, ustaw na ostatnią stronę
     const safePageNum = Math.min(pageNum, Math.max(1, totalPages));
     
     // Ręczna paginacja
-    const startIndex = (safePageNum - 1) * itemsPerPage;
-    const endIndex = Math.min(startIndex + itemsPerPage, allDocs.length);
+    const startIndex = (safePageNum - 1) * itemsLimit;
+    const endIndex = Math.min(startIndex + itemsLimit, allDocs.length);
     const paginatedDocs = allDocs.slice(startIndex, endIndex);
     
     // Zbierz wszystkie ID dostawców z paginowanych dokumentów
@@ -590,7 +620,7 @@ export const getPurchaseOrdersWithPagination = async (page = 1, limit = 10, sort
         totalItems: totalCount,
         totalPages: totalPages,
         currentPage: safePageNum,
-        itemsPerPage: itemsPerPage
+        itemsPerPage: itemsLimit
       }
     };
     
