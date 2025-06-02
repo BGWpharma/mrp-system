@@ -24,7 +24,10 @@ import {
   IconButton,
   Alert,
   Snackbar,
-  useTheme
+  useTheme,
+  Fade,
+  Grow,
+  Slide
 } from '@mui/material';
 import {
   MenuBook as RecipesIcon,
@@ -59,6 +62,201 @@ import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firest
 import { createRealtimeNotification } from '../../services/notificationService';
 import { getAllActiveUsers } from '../../services/userService';
 
+// Komponent animowanej karty
+const AnimatedCard = ({ children, delay = 0, index = 0, ...props }) => {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsVisible(true);
+    }, delay + (index * 100)); // Opóźnienie dla każdej karty
+
+    return () => clearTimeout(timer);
+  }, [delay, index]);
+
+  return (
+    <Grow
+      in={isVisible}
+      timeout={600}
+      style={{ transformOrigin: '0 0 0' }}
+    >
+      <Card {...props}>
+        {children}
+      </Card>
+    </Grow>
+  );
+};
+
+// Komponent animowanego kontenera
+const AnimatedContainer = ({ children, delay = 0 }) => {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsVisible(true);
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [delay]);
+
+  return (
+    <Fade in={isVisible} timeout={800}>
+      <Box>
+        {children}
+      </Box>
+    </Fade>
+  );
+};
+
+// Komponent animowanej sekcji
+const AnimatedSection = ({ children, direction = 'up', delay = 0 }) => {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsVisible(true);
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [delay]);
+
+  return (
+    <Slide direction={direction} in={isVisible} timeout={600}>
+      <Box>
+        {children}
+      </Box>
+    </Slide>
+  );
+};
+
+// Komponent dla ładowanej sekcji
+const SectionLoading = () => (
+  <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+    <Fade in timeout={500}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <CircularProgress size={24} sx={{ mb: 2 }} />
+        <Typography variant="body2" color="text.secondary">
+          Ładowanie danych...
+        </Typography>
+      </Box>
+    </Fade>
+  </Box>
+);
+
+// Komponent animowanego szkieletu
+const AnimatedSkeleton = ({ width = "100%", height = 40, delay = 0, variant = "text" }) => {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsVisible(true);
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [delay]);
+
+  return (
+    <Fade in={isVisible} timeout={600}>
+      <Skeleton 
+        variant={variant} 
+        width={width} 
+        height={height}
+        sx={{
+          bgcolor: 'rgba(255, 255, 255, 0.1)',
+          '&::after': {
+            background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent)',
+          }
+        }}
+      />
+    </Fade>
+  );
+};
+
+// Komponent animowanego licznika
+const AnimatedCounter = ({ value, loading, delay = 0, suffix = "", variant = "subtitle1", sx = {} }) => {
+  const [displayValue, setDisplayValue] = useState(0);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsVisible(true);
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [delay]);
+
+  useEffect(() => {
+    if (!loading && value !== undefined && isVisible) {
+      const startValue = 0;
+      const endValue = value;
+      const duration = 1000; // 1 sekunda
+      const startTime = Date.now();
+
+      const updateCounter = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // Funkcja easing dla płynniejszego efektu
+        const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+        const currentValue = Math.floor(startValue + (endValue - startValue) * easeOutQuart);
+        
+        setDisplayValue(currentValue);
+
+        if (progress < 1) {
+          requestAnimationFrame(updateCounter);
+        }
+      };
+
+      requestAnimationFrame(updateCounter);
+    }
+  }, [value, loading, isVisible]);
+
+  if (loading) {
+    const height = variant === "h3" ? 60 : 32;
+    return <AnimatedSkeleton width="60%" height={height} delay={delay} />;
+  }
+
+  return (
+    <Fade in={isVisible} timeout={800}>
+      <Typography variant={variant} sx={{ mt: variant === "subtitle1" ? 2 : 1, mb: 1, ...sx }}>
+        {displayValue}{suffix}
+      </Typography>
+    </Fade>
+  );
+};
+
+// Komponent animowanego przycisku
+const AnimatedButton = ({ children, delay = 0, ...props }) => {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsVisible(true);
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [delay]);
+
+  return (
+    <Grow in={isVisible} timeout={600}>
+      <Button 
+        {...props}
+        sx={{
+          ...props.sx,
+          transition: 'all 0.3s ease',
+          '&:hover': {
+            transform: 'translateY(-2px)',
+            boxShadow: '0 6px 20px rgba(0, 0, 0, 0.15)',
+            ...props.sx?.['&:hover']
+          }
+        }}
+      >
+        {children}
+      </Button>
+    </Grow>
+  );
+};
+
 const Dashboard = () => {
   const { currentUser } = useAuth();
   const theme = useTheme();
@@ -83,7 +281,8 @@ const Dashboard = () => {
   const [announcement, setAnnouncement] = useState('');
   const [isEditingAnnouncement, setIsEditingAnnouncement] = useState(false);
   const [editedAnnouncement, setEditedAnnouncement] = useState('');
-  const [announcementLoading, setAnnouncementLoading] = useState(true);
+  const [announcementLoading, setAnnouncementLoading] = useState(false);
+  const [announcementInitialized, setAnnouncementInitialized] = useState(false);
   const [announcementMeta, setAnnouncementMeta] = useState({ 
     updatedBy: '', 
     updatedAt: null,
@@ -184,22 +383,29 @@ const Dashboard = () => {
     }
   }, [analyticsLoading]);
 
-  // Pobieranie ogłoszeń
+  // Pobieranie ogłoszeń - zoptymalizowane aby nie przerywać animacji
   const fetchAnnouncement = useCallback(async () => {
     try {
-      setAnnouncementLoading(true);
+      // Nie ustawiamy loading od razu, dajemy czas na animacje
+      setTimeout(() => setAnnouncementLoading(true), 100);
       
       // Pobieranie z Firebase
       const announcementDoc = await getDoc(doc(db, 'settings', 'dashboard'));
       
       if (announcementDoc.exists()) {
         const data = announcementDoc.data();
-        setAnnouncement(data.announcement || '');
-        setAnnouncementMeta({
-          updatedBy: data.updatedBy || '',
-          updatedAt: data.updatedAt ? data.updatedAt.toDate() : null,
-          updatedByName: data.updatedByName || ''
-        });
+        
+        // Opóźniamy aktualizację stanu aby nie przerywać animacji
+        setTimeout(() => {
+          setAnnouncement(data.announcement || '');
+          setAnnouncementMeta({
+            updatedBy: data.updatedBy || '',
+            updatedAt: data.updatedAt ? data.updatedAt.toDate() : null,
+            updatedByName: data.updatedByName || ''
+          });
+          setAnnouncementLoading(false);
+          setAnnouncementInitialized(true);
+        }, 300); // Opóźnienie pozwala animacjom się zakończyć
       } else {
         // Tworzenie dokumentu jeśli nie istnieje
         await setDoc(doc(db, 'settings', 'dashboard'), {
@@ -208,20 +414,27 @@ const Dashboard = () => {
           updatedBy: currentUser.uid,
           updatedByName: currentUser.displayName || currentUser.email
         });
-        setAnnouncement('');
-        setAnnouncementMeta({
-          updatedBy: currentUser.uid,
-          updatedAt: new Date(),
-          updatedByName: currentUser.displayName || currentUser.email
-        });
+        
+        setTimeout(() => {
+          setAnnouncement('');
+          setAnnouncementMeta({
+            updatedBy: currentUser.uid,
+            updatedAt: new Date(),
+            updatedByName: currentUser.displayName || currentUser.email
+          });
+          setAnnouncementLoading(false);
+          setAnnouncementInitialized(true);
+        }, 300);
       }
     } catch (error) {
       console.error('Błąd podczas pobierania ogłoszenia:', error);
-      // Fallback do localStorage
-      const savedAnnouncement = localStorage.getItem('dashboardAnnouncement') || '';
-      setAnnouncement(savedAnnouncement);
-    } finally {
-      setAnnouncementLoading(false);
+      // Fallback do localStorage z opóźnieniem
+      setTimeout(() => {
+        const savedAnnouncement = localStorage.getItem('dashboardAnnouncement') || '';
+        setAnnouncement(savedAnnouncement);
+        setAnnouncementLoading(false);
+        setAnnouncementInitialized(true);
+      }, 300);
     }
   }, [currentUser.uid, currentUser.displayName, currentUser.email]);
 
@@ -350,7 +563,7 @@ const Dashboard = () => {
     try {
       setLoading(true);
       
-      // Uruchamiamy wszystkie zapytania równolegle
+      // Uruchamiamy wszystkie zapytania równolegle (bez ogłoszeń)
       await Promise.all([
         fetchRecipes(),
         fetchOrderStats(),
@@ -358,10 +571,13 @@ const Dashboard = () => {
         fetchTasks()
       ]);
       
-      // Pobieramy ogłoszenia
-      await fetchAnnouncement();
-      
       console.log('Wszystkie dane zostały pobrane równolegle');
+      
+      // Pobieramy ogłoszenia z opóźnieniem aby nie przerywać animacji odświeżania
+      setTimeout(() => {
+        fetchAnnouncement();
+      }, 500);
+      
     } catch (error) {
       console.error('Błąd podczas odświeżania danych dashboardu:', error);
     } finally {
@@ -378,7 +594,7 @@ const Dashboard = () => {
         if (!isMounted) return;
         setLoading(true);
         
-        // Uruchamiamy wszystkie zapytania równolegle
+        // Uruchamiamy wszystkie zapytania równolegle (bez ogłoszeń)
         const [recipesData, ordersStatsData, analyticsData, tasksData] = await Promise.all([
           getAllRecipes().catch(err => {
             console.error('Błąd podczas pobierania receptur:', err);
@@ -397,9 +613,6 @@ const Dashboard = () => {
             return [];
           })
         ]);
-        
-        // Pobieramy ogłoszenia
-        await fetchAnnouncement();
         
         // Zaktualizuj stan tylko jeśli komponent jest nadal zamontowany
         if (!isMounted) return;
@@ -446,6 +659,14 @@ const Dashboard = () => {
           setTasks(tasksData);
           setDataLoadStatus(prev => ({ ...prev, tasks: true }));
         }
+        
+        // Pobieramy ogłoszenia na końcu, po zakończeniu głównych animacji
+        setTimeout(() => {
+          if (isMounted) {
+            fetchAnnouncement();
+          }
+        }, 1500); // Opóźnienie pozwala wszystkim animacjom się zakończyć
+        
       } catch (error) {
         if (!isMounted) return;
         console.error('Błąd podczas ładowania danych dashboardu:', error);
@@ -466,7 +687,7 @@ const Dashboard = () => {
     return () => {
       isMounted = false;
     };
-  }, []); // Pusta tablica zależności = uruchomienie tylko raz przy montowaniu
+  }, [fetchAnnouncement]); // Dodajemy fetchAnnouncement do zależności
 
   // Mapowanie statusów zamówień na kolory
   const getStatusColor = useMemo(() => (status) => {
@@ -480,13 +701,6 @@ const Dashboard = () => {
       default: return 'default';
     }
   }, []);
-
-  // Komponent dla ładowanej sekcji
-  const SectionLoading = () => (
-    <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-      <CircularProgress size={24} />
-    </Box>
-  );
 
   // Komponent dla karty z przyciskiem odświeżania
   const CardHeader = ({ title, isLoading, onRefresh, section }) => (
@@ -524,114 +738,125 @@ const Dashboard = () => {
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" gutterBottom>
-          Dashboard
+      <AnimatedContainer delay={0}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Typography variant="h4" gutterBottom>
+            Dashboard
+          </Typography>
+          <Button 
+            startIcon={<RefreshIcon />}
+            onClick={refreshAllData}
+            variant="outlined"
+            disabled={loading}
+          >
+            {loading ? 'Odświeżanie...' : 'Odśwież wszystko'}
+            {loading && <CircularProgress size={16} sx={{ ml: 1 }} />}
+          </Button>
+        </Box>
+        <Typography variant="subtitle1" sx={{ mb: 2 }}>
+          Witaj, {currentUser.displayName || currentUser.email}
         </Typography>
-        <Button 
-          startIcon={<RefreshIcon />}
-          onClick={refreshAllData}
-          variant="outlined"
-          disabled={loading}
-        >
-          {loading ? 'Odświeżanie...' : 'Odśwież wszystko'}
-          {loading && <CircularProgress size={16} sx={{ ml: 1 }} />}
-        </Button>
-      </Box>
-      <Typography variant="subtitle1" sx={{ mb: 2 }}>
-        Witaj, {currentUser.displayName || currentUser.email}
-      </Typography>
+      </AnimatedContainer>
 
       {/* Sekcja Ogłoszeń */}
-      <Paper sx={{ 
-        p: 2, 
-        mb: 4, 
-        bgcolor: isDarkMode ? 'background.paper' : '#f8f9fa', 
-        borderRadius: 2, 
-        border: '1px solid', 
-        borderColor: 'divider',
-        color: isDarkMode ? 'text.primary' : 'inherit'
-      }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-          <AnnouncementIcon sx={{ mr: 1, color: 'primary.main' }} />
-          <Typography variant="h6">Ogłoszenia</Typography>
-          {!isEditingAnnouncement && (
-            <IconButton 
-              size="small" 
-              onClick={startEditingAnnouncement}
-              sx={{ ml: 'auto' }}
-              title="Edytuj ogłoszenie"
-            >
-              <EditIcon fontSize="small" />
-            </IconButton>
-          )}
-        </Box>
-        
-        {announcementLoading ? (
-          <Skeleton variant="rectangular" width="100%" height={60} />
-        ) : isEditingAnnouncement ? (
-          <Box sx={{ mt: 2 }}>
-            <TextField
-              fullWidth
-              multiline
-              rows={3}
-              variant="outlined"
-              placeholder="Wpisz treść ogłoszenia dla wszystkich użytkowników..."
-              value={editedAnnouncement}
-              onChange={(e) => setEditedAnnouncement(e.target.value)}
-              onKeyDown={handleKeyDown}
-              helperText="Naciśnij Ctrl+Enter, aby zatwierdzić"
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  '& fieldset': {
-                    borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.23)' : 'rgba(0, 0, 0, 0.23)',
-                  },
-                  '&:hover fieldset': {
-                    borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.5)',
-                  },
-                },
-                '& .MuiInputBase-input': {
-                  color: isDarkMode ? 'text.primary' : 'inherit',
-                },
-                '& .MuiFormHelperText-root': {
-                  color: isDarkMode ? 'text.secondary' : 'inherit',
-                }
-              }}
-            />
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2, gap: 1 }}>
-              <Button 
-                variant="outlined" 
-                startIcon={<CancelIcon />}
-                onClick={cancelEditingAnnouncement}
+      <AnimatedSection direction="down" delay={400}>
+        <Paper sx={{ 
+          p: 2, 
+          mb: 4, 
+          bgcolor: isDarkMode ? 'background.paper' : '#f8f9fa', 
+          borderRadius: 2, 
+          border: '1px solid', 
+          borderColor: 'divider',
+          color: isDarkMode ? 'text.primary' : 'inherit',
+          transition: 'all 0.3s ease'
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+            <AnnouncementIcon sx={{ mr: 1, color: 'primary.main' }} />
+            <Typography variant="h6">Ogłoszenia</Typography>
+            {!isEditingAnnouncement && (
+              <IconButton 
+                size="small" 
+                onClick={startEditingAnnouncement}
+                sx={{ ml: 'auto' }}
+                title="Edytuj ogłoszenie"
               >
-                Anuluj
-              </Button>
-              <Button 
-                variant="contained" 
-                color="primary"
-                startIcon={<SaveIcon />}
-                onClick={saveAnnouncement}
-              >
-                Zapisz
-              </Button>
-            </Box>
+                <EditIcon fontSize="small" />
+              </IconButton>
+            )}
           </Box>
-        ) : announcement ? (
-          <>
-            <Typography variant="body1" sx={{ mt: 1, whiteSpace: 'pre-wrap', color: isDarkMode ? 'text.primary' : 'inherit' }}>
-              {announcement}
-            </Typography>
-            {renderLastUpdatedInfo()}
-          </>
-        ) : (
-          <>
-            <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic', color: isDarkMode ? 'text.secondary' : 'text.secondary' }}>
-              Brak ogłoszeń. Kliknij ikonę edycji, aby dodać ogłoszenie.
-            </Typography>
-            {renderLastUpdatedInfo()}
-          </>
-        )}
-      </Paper>
+          
+          {!announcementInitialized ? (
+            <Fade in timeout={1000}>
+              <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic', color: 'text.secondary', opacity: 0.7 }}>
+                Ładowanie ogłoszeń...
+              </Typography>
+            </Fade>
+          ) : announcementLoading ? (
+            <AnimatedSkeleton variant="rectangular" width="100%" height={60} delay={200} />
+          ) : isEditingAnnouncement ? (
+            <Box sx={{ mt: 2 }}>
+              <TextField
+                fullWidth
+                multiline
+                rows={3}
+                variant="outlined"
+                placeholder="Wpisz treść ogłoszenia dla wszystkich użytkowników..."
+                value={editedAnnouncement}
+                onChange={(e) => setEditedAnnouncement(e.target.value)}
+                onKeyDown={handleKeyDown}
+                helperText="Naciśnij Ctrl+Enter, aby zatwierdzić"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': {
+                      borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.23)' : 'rgba(0, 0, 0, 0.23)',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.5)',
+                    },
+                  },
+                  '& .MuiInputBase-input': {
+                    color: isDarkMode ? 'text.primary' : 'inherit',
+                  },
+                  '& .MuiFormHelperText-root': {
+                    color: isDarkMode ? 'text.secondary' : 'inherit',
+                  }
+                }}
+              />
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2, gap: 1 }}>
+                <Button 
+                  variant="outlined" 
+                  startIcon={<CancelIcon />}
+                  onClick={cancelEditingAnnouncement}
+                >
+                  Anuluj
+                </Button>
+                <Button 
+                  variant="contained" 
+                  color="primary"
+                  startIcon={<SaveIcon />}
+                  onClick={saveAnnouncement}
+                >
+                  Zapisz
+                </Button>
+              </Box>
+            </Box>
+          ) : announcement ? (
+            <>
+              <Typography variant="body1" sx={{ mt: 1, whiteSpace: 'pre-wrap', color: isDarkMode ? 'text.primary' : 'inherit' }}>
+                {announcement}
+              </Typography>
+              {renderLastUpdatedInfo()}
+            </>
+          ) : (
+            <>
+              <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic', color: isDarkMode ? 'text.secondary' : 'text.secondary' }}>
+                Brak ogłoszeń. Kliknij ikonę edycji, aby dodać ogłoszenie.
+              </Typography>
+              {renderLastUpdatedInfo()}
+            </>
+          )}
+        </Paper>
+      </AnimatedSection>
       
       {/* Notyfikacja */}
       <Snackbar 
@@ -653,17 +878,15 @@ const Dashboard = () => {
       <Grid container spacing={3}>
         {/* Główne karty KPI */}
         <Grid item xs={12} md={3}>
-          <Card sx={{ borderRadius: 2, boxShadow: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <AnimatedCard index={0} delay={400} sx={{ borderRadius: 2, boxShadow: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
             <CardContent sx={{ textAlign: 'center', p: 3, flexGrow: 1 }}>
               <RecipesIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
               <Typography variant="h6">Receptury</Typography>
-              {recipesLoading ? (
-                <Skeleton variant="text" width="100%" height={40} />
-              ) : (
-                <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
-                  {recipes?.length || 0}
-                </Typography>
-              )}
+              <AnimatedCounter 
+                value={recipes?.length || 0} 
+                loading={recipesLoading} 
+                delay={600}
+              />
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Typography variant="body2" color="text.secondary">
                   Zarządzaj recepturami i składnikami
@@ -671,25 +894,24 @@ const Dashboard = () => {
               </Box>
             </CardContent>
             <CardActions sx={{ p: 2, pt: 0, justifyContent: 'center' }}>
-              <Button component={Link} to="/recipes" sx={{ flexGrow: 1 }}>
+              <AnimatedButton component={Link} to="/recipes" sx={{ flexGrow: 1 }} delay={800}>
                 Przejdź
-              </Button>
+              </AnimatedButton>
             </CardActions>
-          </Card>
+          </AnimatedCard>
         </Grid>
 
         <Grid item xs={12} md={3}>
-          <Card sx={{ borderRadius: 2, boxShadow: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <AnimatedCard index={1} delay={400} sx={{ borderRadius: 2, boxShadow: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
             <CardContent sx={{ textAlign: 'center', p: 3, flexGrow: 1 }}>
               <ProductionIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
               <Typography variant="h6">Produkcja</Typography>
-              {analyticsLoading ? (
-                <Skeleton variant="text" width="100%" height={40} />
-              ) : (
-                <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
-                  {analyticsData?.production?.tasksInProgress || 0} aktywnych zadań
-                </Typography>
-              )}
+              <AnimatedCounter 
+                value={analyticsData?.production?.tasksInProgress || 0} 
+                loading={analyticsLoading} 
+                delay={700}
+                suffix=" aktywnych zadań"
+              />
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Typography variant="body2" color="text.secondary">
                   Planuj i zarządzaj produkcją
@@ -697,25 +919,24 @@ const Dashboard = () => {
               </Box>
             </CardContent>
             <CardActions sx={{ p: 2, pt: 0, justifyContent: 'center' }}>
-              <Button component={Link} to="/production" sx={{ flexGrow: 1 }}>
+              <AnimatedButton component={Link} to="/production" sx={{ flexGrow: 1 }} delay={900}>
                 Przejdź
-              </Button>
+              </AnimatedButton>
             </CardActions>
-          </Card>
+          </AnimatedCard>
         </Grid>
 
         <Grid item xs={12} md={3}>
-          <Card sx={{ borderRadius: 2, boxShadow: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <AnimatedCard index={2} delay={400} sx={{ borderRadius: 2, boxShadow: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
             <CardContent sx={{ textAlign: 'center', p: 3, flexGrow: 1 }}>
               <InventoryIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
               <Typography variant="h6">Stany Magazynowe</Typography>
-              {analyticsLoading ? (
-                <Skeleton variant="text" width="100%" height={40} />
-              ) : (
-                <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
-                  {analyticsData?.inventory?.totalItems || 0} produktów
-                </Typography>
-              )}
+              <AnimatedCounter 
+                value={analyticsData?.inventory?.totalItems || 0} 
+                loading={analyticsLoading} 
+                delay={800}
+                suffix=" produktów"
+              />
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Typography variant="body2" color="text.secondary">
                   Zarządzaj stanami magazynowymi
@@ -723,25 +944,23 @@ const Dashboard = () => {
               </Box>
             </CardContent>
             <CardActions sx={{ p: 2, pt: 0, justifyContent: 'center' }}>
-              <Button component={Link} to="/inventory" sx={{ flexGrow: 1 }}>
+              <AnimatedButton component={Link} to="/inventory" sx={{ flexGrow: 1 }} delay={1000}>
                 Przejdź
-              </Button>
+              </AnimatedButton>
             </CardActions>
-          </Card>
+          </AnimatedCard>
         </Grid>
 
         <Grid item xs={12} md={3}>
-          <Card sx={{ borderRadius: 2, boxShadow: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <AnimatedCard index={3} delay={400} sx={{ borderRadius: 2, boxShadow: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
             <CardContent sx={{ textAlign: 'center', p: 3, flexGrow: 1 }}>
               <FormsIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
               <Typography variant="h6">Formularze</Typography>
-              {analyticsLoading ? (
-                <Skeleton variant="text" width="100%" height={40} />
-              ) : (
+              <Fade in={!analyticsLoading} timeout={1000}>
                 <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
                   Formularze produkcyjne
                 </Typography>
-              )}
+              </Fade>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Typography variant="body2" color="text.secondary">
                   Zarządzaj formularzami produkcyjnymi
@@ -749,16 +968,16 @@ const Dashboard = () => {
               </Box>
             </CardContent>
             <CardActions sx={{ p: 2, pt: 0, justifyContent: 'center' }}>
-              <Button component={Link} to="/production/forms" sx={{ flexGrow: 1 }}>
+              <AnimatedButton component={Link} to="/production/forms" sx={{ flexGrow: 1 }} delay={1100}>
                 Przejdź
-              </Button>
+              </AnimatedButton>
             </CardActions>
-          </Card>
+          </AnimatedCard>
         </Grid>
         
         {/* Zamówienia */}
         <Grid item xs={12} md={12}>
-          <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
+          <AnimatedCard index={4} delay={600} sx={{ borderRadius: 2, boxShadow: 3 }}>
             <CardContent sx={{ textAlign: 'center', p: 3 }}>
               <OrdersIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
               <Typography variant="h6">Zamówienia klientów</Typography>
@@ -766,65 +985,70 @@ const Dashboard = () => {
               {ordersLoading ? (
                 <SectionLoading />
               ) : (
-                <>
-                  <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
-                    {orderStats?.total || 0} zamówień ({orderStats?.totalValue ? formatCurrency(orderStats.totalValue) : '0,00 EUR'})
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Zarządzaj zamówieniami klientów
+                <Fade in={!ordersLoading} timeout={1200}>
+                  <Box>
+                    <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
+                      {orderStats?.total || 0} zamówień ({orderStats?.totalValue ? formatCurrency(orderStats.totalValue) : '0,00 EUR'})
                     </Typography>
-                  </Box>
-                  
-                  {orderStats?.recentOrders && orderStats.recentOrders.length > 0 && (
-                    <Box sx={{ mt: 3, textAlign: 'left' }}>
-                      <Typography variant="subtitle2" gutterBottom>
-                        Ostatnie zamówienia:
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Typography variant="body2" color="text.secondary">
+                        Zarządzaj zamówieniami klientów
                       </Typography>
-                      <List sx={{ maxHeight: '150px', overflow: 'auto' }}>
-                        {orderStats.recentOrders.slice(0, 3).map((order) => (
-                          <ListItem key={order.id} sx={{ py: 0.5 }}>
-                            <ListItemText
-                              primary={`#${order.orderNumber || (order.id ? order.id.substring(0, 8).toUpperCase() : '')}`}
-                              secondary={`${formatCurrency(order.totalValue || order.calculatedTotalValue || order.value || 0)} - ${formatTimestamp(order.date, false)}`}
-                              primaryTypographyProps={{ variant: 'body2', fontWeight: 'bold' }}
-                              secondaryTypographyProps={{ variant: 'caption' }}
-                            />
-                            <Chip
-                              label={order.status}
-                              color={getStatusColor(order.status)}
-                              size="small"
-                              sx={{ ml: 1 }}
-                            />
-                          </ListItem>
-                        ))}
-                      </List>
                     </Box>
-                  )}
-                </>
+                    
+                    {orderStats?.recentOrders && orderStats.recentOrders.length > 0 && (
+                      <Box sx={{ mt: 3, textAlign: 'left' }}>
+                        <Typography variant="subtitle2" gutterBottom>
+                          Ostatnie zamówienia:
+                        </Typography>
+                        <List sx={{ maxHeight: '150px', overflow: 'auto' }}>
+                          {orderStats.recentOrders.slice(0, 3).map((order, index) => (
+                            <Slide key={order.id} direction="left" in={!ordersLoading} timeout={800 + (index * 200)}>
+                              <ListItem sx={{ py: 0.5 }}>
+                                <ListItemText
+                                  primary={`#${order.orderNumber || (order.id ? order.id.substring(0, 8).toUpperCase() : '')}`}
+                                  secondary={`${formatCurrency(order.totalValue || order.calculatedTotalValue || order.value || 0)} - ${formatTimestamp(order.date, false)}`}
+                                  primaryTypographyProps={{ variant: 'body2', fontWeight: 'bold' }}
+                                  secondaryTypographyProps={{ variant: 'caption' }}
+                                />
+                                <Chip
+                                  label={order.status}
+                                  color={getStatusColor(order.status)}
+                                  size="small"
+                                  sx={{ ml: 1 }}
+                                />
+                              </ListItem>
+                            </Slide>
+                          ))}
+                        </List>
+                      </Box>
+                    )}
+                  </Box>
+                </Fade>
               )}
             </CardContent>
             <CardActions sx={{ p: 2, pt: 0, justifyContent: 'space-between' }}>
-              <Button component={Link} to="/orders" sx={{ flexGrow: 1 }}>
+              <AnimatedButton component={Link} to="/orders" sx={{ flexGrow: 1 }} delay={1200}>
                 Przejdź
-              </Button>
-              <Button 
+              </AnimatedButton>
+              <AnimatedButton 
                 component={Link} 
                 to="/orders/new" 
                 color="primary"
                 variant="contained"
-                sx={{ flexGrow: 1 }}
+                sx={{ flexGrow: 1, ml: 1 }}
                 startIcon={<AddIcon />}
+                delay={1300}
               >
                 Nowe
-              </Button>
+              </AnimatedButton>
             </CardActions>
-          </Card>
+          </AnimatedCard>
         </Grid>
         
         {/* Zadania produkcyjne w trakcie */}
         <Grid item xs={12}>
-          <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
+          <AnimatedCard index={5} delay={800} sx={{ borderRadius: 2, boxShadow: 3 }}>
             <CardContent sx={{ p: 3 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Typography variant="h6">
@@ -843,54 +1067,51 @@ const Dashboard = () => {
               
               <Grid container spacing={3}>
                 <Grid item xs={12} md={4}>
-                  <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'primary.light', borderRadius: 2, color: 'white' }}>
-                    {analyticsLoading ? (
-                      <Skeleton variant="text" width="100%" height={60} />
-                    ) : (
-                      <>
-                        <Typography variant="h3" sx={{ mb: 1 }}>
-                          {analyticsData?.production?.tasksInProgress || 0}
-                        </Typography>
-                        <Typography variant="body1">
-                          W trakcie
-                        </Typography>
-                      </>
-                    )}
-                  </Box>
+                  <Grow in={!analyticsLoading} timeout={1000}>
+                    <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'primary.light', borderRadius: 2, color: 'white' }}>
+                      <AnimatedCounter 
+                        value={analyticsData?.production?.tasksInProgress || 0} 
+                        loading={analyticsLoading} 
+                        delay={1000}
+                        variant="h3"
+                      />
+                      <Typography variant="body1">
+                        W trakcie
+                      </Typography>
+                    </Box>
+                  </Grow>
                 </Grid>
                 
                 <Grid item xs={12} md={4}>
-                  <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'success.light', borderRadius: 2, color: 'white' }}>
-                    {analyticsLoading ? (
-                      <Skeleton variant="text" width="100%" height={60} />
-                    ) : (
-                      <>
-                        <Typography variant="h3" sx={{ mb: 1 }}>
-                          {analyticsData?.production?.completedTasks || 0}
-                        </Typography>
-                        <Typography variant="body1">
-                          Ukończone
-                        </Typography>
-                      </>
-                    )}
-                  </Box>
+                  <Grow in={!analyticsLoading} timeout={1200}>
+                    <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'success.light', borderRadius: 2, color: 'white' }}>
+                      <AnimatedCounter 
+                        value={analyticsData?.production?.completedTasks || 0} 
+                        loading={analyticsLoading} 
+                        delay={1200}
+                        variant="h3"
+                      />
+                      <Typography variant="body1">
+                        Ukończone
+                      </Typography>
+                    </Box>
+                  </Grow>
                 </Grid>
                 
                 <Grid item xs={12} md={4}>
-                  <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'info.light', borderRadius: 2, color: 'white' }}>
-                    {analyticsLoading ? (
-                      <Skeleton variant="text" width="100%" height={60} />
-                    ) : (
-                      <>
-                        <Typography variant="h3" sx={{ mb: 1 }}>
-                          {analyticsData?.sales?.totalOrders || 0}
-                        </Typography>
-                        <Typography variant="body1">
-                          Zamówienia
-                        </Typography>
-                      </>
-                    )}
-                  </Box>
+                  <Grow in={!analyticsLoading} timeout={1400}>
+                    <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'info.light', borderRadius: 2, color: 'white' }}>
+                      <AnimatedCounter 
+                        value={analyticsData?.sales?.totalOrders || 0} 
+                        loading={analyticsLoading} 
+                        delay={1400}
+                        variant="h3"
+                      />
+                      <Typography variant="body1">
+                        Zamówienia
+                      </Typography>
+                    </Box>
+                  </Grow>
                 </Grid>
               </Grid>
               
@@ -899,47 +1120,52 @@ const Dashboard = () => {
                   <Skeleton variant="rectangular" width="100%" height={120} />
                 </Box>
               ) : tasks && tasks.length > 0 ? (
-                <Box sx={{ mt: 3 }}>
-                  <List sx={{ bgcolor: 'background.paper', borderRadius: 2 }}>
-                    {tasks.map((task) => (
-                      <ListItem 
-                        key={task.id} 
-                        button 
-                        component={Link} 
-                        to={`/production/tasks/${task.id}`}
-                        sx={{ 
-                          borderBottom: '1px solid', 
-                          borderColor: 'divider',
-                          '&:last-child': { borderBottom: 'none' }
-                        }}
-                      >
-                        <ListItemText
-                          primary={task.name}
-                          secondary={`${task.productName} - ${task.quantity} ${task.unit}`}
-                        />
-                        <Chip 
-                          label="W trakcie" 
-                          color="warning" 
-                          size="small" 
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                </Box>
+                <Fade in={!tasksLoading} timeout={1000}>
+                  <Box sx={{ mt: 3 }}>
+                    <List sx={{ bgcolor: 'background.paper', borderRadius: 2 }}>
+                      {tasks.map((task, index) => (
+                        <Slide key={task.id} direction="right" in={!tasksLoading} timeout={1000 + (index * 150)}>
+                          <ListItem 
+                            button 
+                            component={Link} 
+                            to={`/production/tasks/${task.id}`}
+                            sx={{ 
+                              borderBottom: '1px solid', 
+                              borderColor: 'divider',
+                              '&:last-child': { borderBottom: 'none' }
+                            }}
+                          >
+                            <ListItemText
+                              primary={task.name}
+                              secondary={`${task.productName} - ${task.quantity} ${task.unit}`}
+                            />
+                            <Chip 
+                              label="W trakcie" 
+                              color="warning" 
+                              size="small" 
+                            />
+                          </ListItem>
+                        </Slide>
+                      ))}
+                    </List>
+                  </Box>
+                </Fade>
               ) : (
-                <Box sx={{ mt: 3, p: 3, textAlign: 'center', bgcolor: 'background.paper', borderRadius: 2 }}>
-                  <Typography variant="body1" color="text.secondary">
-                    Brak aktywnych zadań produkcyjnych
-                  </Typography>
-                </Box>
+                <Fade in={!tasksLoading} timeout={1000}>
+                  <Box sx={{ mt: 3, p: 3, textAlign: 'center', bgcolor: 'background.paper', borderRadius: 2 }}>
+                    <Typography variant="body1" color="text.secondary">
+                      Brak aktywnych zadań produkcyjnych
+                    </Typography>
+                  </Box>
+                </Fade>
               )}
             </CardContent>
-          </Card>
+          </AnimatedCard>
         </Grid>
         
         {/* Karta Analityki */}
         <Grid item xs={12}>
-          <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
+          <AnimatedCard index={6} delay={1000} sx={{ borderRadius: 2, boxShadow: 3 }}>
             <CardContent sx={{ p: 3 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Typography variant="h6">
@@ -957,44 +1183,54 @@ const Dashboard = () => {
               </Box>
               <Divider sx={{ mb: 2 }} />
               
-              <Typography variant="body1" gutterBottom>
-                Sprawdź szczegółową analitykę systemu w nowym, uproszczonym widoku. 
-                Monitoruj kluczowe wskaźniki dla magazynu, produkcji i zamówień.
-              </Typography>
-              
-              <Box sx={{ mt: 2, p: 2, bgcolor: 'background.paper', borderRadius: 2, border: '1px dashed', borderColor: 'divider' }}>
-                <Typography variant="subtitle2" gutterBottom>
-                  Dostępne statystyki:
-                </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} md={4}>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <OrdersIcon sx={{ mr: 1, color: 'primary.main' }} />
-                      <Typography variant="body2">
-                        Zamówienia i sprzedaż
-                      </Typography>
-                    </Box>
-                  </Grid>
-                  <Grid item xs={12} md={4}>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <InventoryIcon sx={{ mr: 1, color: 'primary.main' }} />
-                      <Typography variant="body2">
-                        Stany magazynowe
-                      </Typography>
-                    </Box>
-                  </Grid>
-                  <Grid item xs={12} md={4}>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <ProductionIcon sx={{ mr: 1, color: 'primary.main' }} />
-                      <Typography variant="body2">
-                        Zadania produkcyjne
-                      </Typography>
-                    </Box>
-                  </Grid>
-                </Grid>
-              </Box>
+              <Fade in timeout={1500}>
+                <Box>
+                  <Typography variant="body1" gutterBottom>
+                    Sprawdź szczegółową analitykę systemu w nowym, uproszczonym widoku. 
+                    Monitoruj kluczowe wskaźniki dla magazynu, produkcji i zamówień.
+                  </Typography>
+                  
+                  <Box sx={{ mt: 2, p: 2, bgcolor: 'background.paper', borderRadius: 2, border: '1px dashed', borderColor: 'divider' }}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      Dostępne statystyki:
+                    </Typography>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} md={4}>
+                        <Slide direction="up" in timeout={1600}>
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <OrdersIcon sx={{ mr: 1, color: 'primary.main' }} />
+                            <Typography variant="body2">
+                              Zamówienia i sprzedaż
+                            </Typography>
+                          </Box>
+                        </Slide>
+                      </Grid>
+                      <Grid item xs={12} md={4}>
+                        <Slide direction="up" in timeout={1800}>
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <InventoryIcon sx={{ mr: 1, color: 'primary.main' }} />
+                            <Typography variant="body2">
+                              Stany magazynowe
+                            </Typography>
+                          </Box>
+                        </Slide>
+                      </Grid>
+                      <Grid item xs={12} md={4}>
+                        <Slide direction="up" in timeout={2000}>
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <ProductionIcon sx={{ mr: 1, color: 'primary.main' }} />
+                            <Typography variant="body2">
+                              Zadania produkcyjne
+                            </Typography>
+                          </Box>
+                        </Slide>
+                      </Grid>
+                    </Grid>
+                  </Box>
+                </Box>
+              </Fade>
             </CardContent>
-          </Card>
+          </AnimatedCard>
         </Grid>
       </Grid>
     </Container>

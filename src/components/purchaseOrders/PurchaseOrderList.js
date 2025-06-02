@@ -4,7 +4,7 @@ import {
   Container, Typography, Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Button, TextField, Box, Chip, IconButton, Dialog,
   DialogActions, DialogContent, DialogContentText, DialogTitle, MenuItem, Select, FormControl, InputLabel, 
-  Tooltip, Menu, Checkbox, ListItemText, TableSortLabel, Pagination, TableFooter
+  Tooltip, Menu, Checkbox, ListItemText, TableSortLabel, Pagination, TableFooter, CircularProgress
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, Description as DescriptionIcon, ViewColumn as ViewColumnIcon } from '@mui/icons-material';
 import { getAllPurchaseOrders, deletePurchaseOrder, updatePurchaseOrderStatus, getPurchaseOrdersWithPagination, clearSearchCache } from '../../services/purchaseOrderService';
@@ -260,14 +260,6 @@ const PurchaseOrderList = () => {
     );
   };
   
-  if (loading) {
-    return (
-      <Container>
-        <Typography variant="h6">Ładowanie zamówień zakupu...</Typography>
-      </Container>
-    );
-  }
-  
   return (
     <Container>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -371,7 +363,18 @@ const PurchaseOrderList = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredPOs.length === 0 ? (
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={7} align="center">
+                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 4 }}>
+                      <CircularProgress />
+                      <Typography variant="body1" sx={{ ml: 2 }}>
+                        Ładowanie zamówień zakupu...
+                      </Typography>
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              ) : filteredPOs.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} align="center">
                     <Typography variant="body1">Brak zamówień zakupowych</Typography>

@@ -37,7 +37,10 @@ import {
   Checkbox,
   Pagination,
   InputAdornment,
-  TablePagination
+  TablePagination,
+  Fade,
+  Grow,
+  Skeleton
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -376,9 +379,20 @@ const InventoryList = () => {
   const [isInitialized, setIsInitialized] = useState(false);
   const isFirstRender = useRef(true);
 
-  // Zmodyfikuj funkcję fetchInventoryItems, aby przyjmowała parametry sortowania
+  // Dodaj nowy stan dla animacji ładowania głównej tabeli
+  const [mainTableLoading, setMainTableLoading] = useState(false);
+  const [showContent, setShowContent] = useState(false);
+
+  // Zmodyfikuj funkcję fetchInventoryItems, aby obsługiwała animacje
   const fetchInventoryItems = async (newSortField = null, newSortOrder = null) => {
-    setLoading(true);
+    // Rozpocznij animację ładowania tylko dla głównej tabeli stanów
+    if (currentTab === 0) {
+      setMainTableLoading(true);
+      setShowContent(false);
+    } else {
+      setLoading(true);
+    }
+    
     try {
       // Wyczyść mikrorezerwacje tylko raz podczas inicjalizacji lub gdy użytkownik wymusi odświeżenie
       if (isFirstRender.current) {
@@ -413,11 +427,22 @@ const InventoryList = () => {
         setFilteredItems(result);
       }
       
+      // Dodaj małe opóźnienie dla smooth transition w głównej tabeli
+      if (currentTab === 0) {
+        setTimeout(() => {
+          setShowContent(true);
+        }, 100);
+      }
+      
     } catch (error) {
       console.error('Error fetching inventory items:', error);
       showError('Błąd podczas pobierania pozycji ze stanów');
     } finally {
-      setLoading(false);
+      if (currentTab === 0) {
+        setMainTableLoading(false);
+      } else {
+        setLoading(false);
+      }
     }
   };
 
@@ -1170,7 +1195,7 @@ const InventoryList = () => {
   // Funkcja do generowania raportu PDF ze stanów magazynowych
   const generatePdfReport = async () => {
     try {
-      setLoading(true);
+      setMainTableLoading(true);
       showSuccess('Generowanie raportu PDF...');
 
       // Pobierz wszystkie pozycje magazynowe do raportu (bez paginacji)
@@ -1318,14 +1343,14 @@ const InventoryList = () => {
       console.error('Błąd podczas generowania raportu PDF:', error);
       showError('Błąd podczas generowania raportu PDF: ' + error.message);
     } finally {
-      setLoading(false);
+      setMainTableLoading(false);
     }
   };
 
   // Funkcja do generowania raportu CSV ze stanów magazynowych
   const generateCsvReport = async () => {
     try {
-      setLoading(true);
+      setMainTableLoading(true);
       showSuccess('Generowanie raportu CSV...');
 
       // Pobierz wszystkie pozycje magazynowe do raportu (bez paginacji)
@@ -1385,7 +1410,7 @@ const InventoryList = () => {
       console.error('Błąd podczas generowania raportu CSV:', error);
       showError('Błąd podczas generowania raportu CSV: ' + error.message);
     } finally {
-      setLoading(false);
+      setMainTableLoading(false);
     }
   };
 
@@ -1444,10 +1469,6 @@ const InventoryList = () => {
   }, [warehouseItemsPage, warehouseItemsPageSize]);
   */
 
-  if (loading) {
-    return <div>Ładowanie pozycji ze stanów...</div>;
-  }
-
   return (
     <div>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexDirection: { xs: 'column', sm: 'row' }, gap: { xs: 2, sm: 0 } }}>
@@ -1461,7 +1482,7 @@ const InventoryList = () => {
                 onClick={generatePdfReport}
                 startIcon={<PdfIcon />}
                 sx={{ flex: 1 }}
-                disabled={loading}
+                disabled={mainTableLoading}
               >
                 PDF
               </Button>
@@ -1473,7 +1494,7 @@ const InventoryList = () => {
                 onClick={generateCsvReport}
                 startIcon={<CsvIcon />}
                 sx={{ flex: 1 }}
-                disabled={loading}
+                disabled={mainTableLoading}
               >
                 CSV
               </Button>
@@ -1525,315 +1546,409 @@ const InventoryList = () => {
       {/* Zawartość pierwszej zakładki - Stany */}
       {currentTab === 0 && (
         <>
-          <Box sx={{ display: 'flex', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-            <TextField
-              label="Szukaj SKU"
-              variant="outlined"
-              value={searchTerm}
-              onChange={handleSearchTermChange}
-              size="small"
-              sx={{ flexGrow: 1, minWidth: '200px' }}
-              InputProps={{
-                startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
-              }}
-            />
-            <FormControl sx={{ flexGrow: 1, minWidth: '200px' }}>
-              <InputLabel id="category-select-label">Szukaj kategorii</InputLabel>
-              <Select
-                labelId="category-select-label"
-                value={searchCategory}
-                label="Szukaj kategorii"
-                onChange={handleSearchCategoryChange}
+          <Fade in={true} timeout={300}>
+            <Box sx={{ display: 'flex', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+              <TextField
+                label="Szukaj SKU"
+                variant="outlined"
+                value={searchTerm}
+                onChange={handleSearchTermChange}
                 size="small"
+                sx={{ flexGrow: 1, minWidth: '200px' }}
+                InputProps={{
+                  startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
+                }}
+              />
+              <FormControl sx={{ flexGrow: 1, minWidth: '200px' }}>
+                <InputLabel id="category-select-label">Szukaj kategorii</InputLabel>
+                <Select
+                  labelId="category-select-label"
+                  value={searchCategory}
+                  label="Szukaj kategorii"
+                  onChange={handleSearchCategoryChange}
+                  size="small"
+                >
+                  <MenuItem value="">Wszystkie kategorie</MenuItem>
+                  {Object.values(INVENTORY_CATEGORIES).map((category) => (
+                    <MenuItem key={category} value={category}>{category}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <Button 
+                variant="contained" 
+                onClick={handleSearch}
+                size="medium"
               >
-                <MenuItem value="">Wszystkie kategorie</MenuItem>
-                {Object.values(INVENTORY_CATEGORIES).map((category) => (
-                  <MenuItem key={category} value={category}>{category}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Button 
-              variant="contained" 
-              onClick={handleSearch}
-              size="medium"
-            >
-              Szukaj teraz
-            </Button>
-            <Tooltip title="Konfiguruj widoczne kolumny">
-              <IconButton onClick={handleColumnMenuOpen}>
-                <ViewColumnIcon />
-              </IconButton>
-            </Tooltip>
-          </Box>
-
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-              <CircularProgress />
+                Szukaj teraz
+              </Button>
+              <Tooltip title="Konfiguruj widoczne kolumny">
+                <IconButton onClick={handleColumnMenuOpen}>
+                  <ViewColumnIcon />
+                </IconButton>
+              </Tooltip>
             </Box>
-          ) : filteredItems.length === 0 ? (
-            <Typography variant="body1" align="center">
-              Nie znaleziono pozycji ze stanów
-            </Typography>
-          ) : (
-            <>
+          </Fade>
+
+          {mainTableLoading ? (
+            <Fade in={mainTableLoading} timeout={200}>
               <TableContainer component={Paper} sx={{ mt: 3 }}>
                 <Table>
                   <TableHead>
                     <TableRow>
-                      {visibleColumns.name && (
-                        <TableCell onClick={() => handleTableSort('name')} style={{ cursor: 'pointer' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            SKU
-                            {tableSort.field === 'name' && (
-                              <ArrowDropUpIcon 
-                                sx={{ 
-                                  transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
-                                  transition: 'transform 0.2s'
-                                }} 
-                              />
-                            )}
-                          </Box>
-                        </TableCell>
-                      )}
-                      {visibleColumns.category && (
-                        <TableCell onClick={() => handleTableSort('category')} style={{ cursor: 'pointer' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            Kategoria
-                            {tableSort.field === 'category' && (
-                              <ArrowDropUpIcon 
-                                sx={{ 
-                                  transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
-                                  transition: 'transform 0.2s'
-                                }} 
-                              />
-                            )}
-                          </Box>
-                        </TableCell>
-                      )}
-                      {visibleColumns.totalQuantity && (
-                        <TableCell onClick={() => handleTableSort('totalQuantity')} style={{ cursor: 'pointer' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            Ilość całkowita
-                            {tableSort.field === 'totalQuantity' && (
-                              <ArrowDropUpIcon 
-                                sx={{ 
-                                  transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
-                                  transition: 'transform 0.2s'
-                                }} 
-                              />
-                            )}
-                          </Box>
-                        </TableCell>
-                      )}
-                      {visibleColumns.reservedQuantity && (
-                        <TableCell onClick={() => handleTableSort('reservedQuantity')} style={{ cursor: 'pointer' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            Ilość zarezerwowana
-                            {tableSort.field === 'reservedQuantity' && (
-                              <ArrowDropUpIcon 
-                                sx={{ 
-                                  transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
-                                  transition: 'transform 0.2s'
-                                }} 
-                              />
-                            )}
-                          </Box>
-                        </TableCell>
-                      )}
-                      {visibleColumns.availableQuantity && (
-                        <TableCell onClick={() => handleTableSort('availableQuantity')} style={{ cursor: 'pointer' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            Ilość dostępna
-                            {tableSort.field === 'availableQuantity' && (
-                              <ArrowDropUpIcon 
-                                sx={{ 
-                                  transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
-                                  transition: 'transform 0.2s'
-                                }} 
-                              />
-                            )}
-                          </Box>
-                        </TableCell>
-                      )}
-                      {visibleColumns.status && (
-                        <TableCell onClick={() => handleTableSort('status')} style={{ cursor: 'pointer' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            Status
-                            {tableSort.field === 'status' && (
-                              <ArrowDropUpIcon 
-                                sx={{ 
-                                  transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
-                                  transition: 'transform 0.2s'
-                                }} 
-                              />
-                            )}
-                          </Box>
-                        </TableCell>
-                      )}
-                      {visibleColumns.location && (
-                        <TableCell onClick={() => handleTableSort('location')} style={{ cursor: 'pointer' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            Lokalizacja
-                            {tableSort.field === 'location' && (
-                              <ArrowDropUpIcon 
-                                sx={{ 
-                                  transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
-                                  transition: 'transform 0.2s'
-                                }} 
-                              />
-                            )}
-                          </Box>
-                        </TableCell>
-                      )}
+                      {visibleColumns.name && <TableCell>SKU</TableCell>}
+                      {visibleColumns.category && <TableCell>Kategoria</TableCell>}
+                      {visibleColumns.totalQuantity && <TableCell>Ilość całkowita</TableCell>}
+                      {visibleColumns.reservedQuantity && <TableCell>Ilość zarezerwowana</TableCell>}
+                      {visibleColumns.availableQuantity && <TableCell>Ilość dostępna</TableCell>}
+                      {visibleColumns.status && <TableCell>Status</TableCell>}
+                      {visibleColumns.location && <TableCell>Lokalizacja</TableCell>}
                       {visibleColumns.actions && <TableCell align="right">Akcje</TableCell>}
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {filteredItems.map((item) => {
-                      // Oblicz ilość dostępną (całkowita - zarezerwowana)
-                      const bookedQuantity = item.bookedQuantity || 0;
-                      const availableQuantity = item.quantity - bookedQuantity;
-                      
-                      return (
-                        <TableRow key={item.id}>
-                          {visibleColumns.name && (
-                            <TableCell>
-                              <Typography variant="body1">{item.name}</Typography>
-                              <Typography variant="body2" color="textSecondary">{item.description}</Typography>
-                              {(item.packingGroup || item.boxesPerPallet) && (
-                                <Box sx={{ mt: 0.5 }}>
-                                  {item.packingGroup && (
-                                    <Chip
-                                      size="small"
-                                      label={`PG: ${item.packingGroup}`}
-                                      color="default"
-                                      sx={{ mr: 0.5 }}
-                                    />
-                                  )}
-                                  {item.boxesPerPallet && (
-                                    <Chip
-                                      size="small"
-                                      label={`${item.boxesPerPallet} kartonów/paletę`}
-                                      color="info"
-                                    />
-                                  )}
-                                </Box>
-                              )}
-                            </TableCell>
-                          )}
-                          {visibleColumns.category && <TableCell>{item.category}</TableCell>}
-                          {visibleColumns.totalQuantity && (
-                            <TableCell>
-                              <Typography variant="body1">{item.quantity} {item.unit}</Typography>
-                            </TableCell>
-                          )}
-                          {visibleColumns.reservedQuantity && (
-                            <TableCell>
-                              <Typography 
-                                variant="body1" 
-                                color={bookedQuantity > 0 ? "secondary" : "textSecondary"}
-                                sx={{ cursor: bookedQuantity > 0 ? 'pointer' : 'default' }}
-                                onClick={bookedQuantity > 0 ? () => handleShowReservations(item) : undefined}
-                              >
-                                {bookedQuantity} {item.unit}
-                                {bookedQuantity > 0 && (
-                                  <Tooltip title="Kliknij, aby zobaczyć szczegóły rezerwacji">
-                                    <ReservationIcon fontSize="small" sx={{ ml: 1 }} />
-                                  </Tooltip>
-                                )}
-                              </Typography>
-                            </TableCell>
-                          )}
-                          {visibleColumns.availableQuantity && (
-                            <TableCell>
-                              <Typography 
-                                variant="body1" 
-                                color={availableQuantity < item.minStockLevel ? "error" : "primary"}
-                              >
-                                {availableQuantity} {item.unit}
-                              </Typography>
-                            </TableCell>
-                          )}
-                          {visibleColumns.status && (
-                            <TableCell>
-                              {getStockLevelIndicator(availableQuantity, item.minStockLevel, item.optimalStockLevel)}
-                            </TableCell>
-                          )}
-                          {visibleColumns.location && (
-                            <TableCell>
-                              {item.location || '-'}
-                            </TableCell>
-                          )}
-                          {visibleColumns.actions && (
-                            <TableCell align="right">
-                              <IconButton 
-                                component={RouterLink} 
-                                to={`/inventory/${item.id}`}
-                                color="secondary"
-                                title="Szczegóły"
-                              >
-                                <InfoIcon />
-                              </IconButton>
-                              <IconButton 
-                                component={RouterLink} 
-                                to={`/inventory/${item.id}/receive`}
-                                color="success"
-                                title="Przyjmij"
-                              >
-                                <ReceiveIcon />
-                              </IconButton>
-                              <IconButton 
-                                component={RouterLink} 
-                                to={`/inventory/${item.id}/issue`}
-                                color="warning"
-                                title="Wydaj"
-                              >
-                                <IssueIcon />
-                              </IconButton>
-                              <IconButton
-                                onClick={(e) => handleMenuOpen(e, item)}
-                                color="primary"
-                                title="Więcej akcji"
-                              >
-                                <MoreVertIcon />
-                              </IconButton>
-                            </TableCell>
-                          )}
-                        </TableRow>
-                      );
-                    })}
+                    {Array.from({ length: pageSize }).map((_, index) => (
+                      <TableRow key={index}>
+                        {visibleColumns.name && (
+                          <TableCell>
+                            <Skeleton variant="text" width="80%" height={24} />
+                            <Skeleton variant="text" width="60%" height={16} />
+                          </TableCell>
+                        )}
+                        {visibleColumns.category && <TableCell><Skeleton variant="text" width="70%" /></TableCell>}
+                        {visibleColumns.totalQuantity && <TableCell><Skeleton variant="text" width="50%" /></TableCell>}
+                        {visibleColumns.reservedQuantity && <TableCell><Skeleton variant="text" width="50%" /></TableCell>}
+                        {visibleColumns.availableQuantity && <TableCell><Skeleton variant="text" width="50%" /></TableCell>}
+                        {visibleColumns.status && <TableCell><Skeleton variant="rectangular" width={60} height={24} /></TableCell>}
+                        {visibleColumns.location && <TableCell><Skeleton variant="text" width="60%" /></TableCell>}
+                        {visibleColumns.actions && (
+                          <TableCell align="right">
+                            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                              <Skeleton variant="circular" width={24} height={24} />
+                              <Skeleton variant="circular" width={24} height={24} />
+                              <Skeleton variant="circular" width={24} height={24} />
+                              <Skeleton variant="circular" width={24} height={24} />
+                            </Box>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </TableContainer>
+            </Fade>
+          ) : filteredItems.length === 0 ? (
+            <Fade in={!mainTableLoading} timeout={300}>
+              <Typography variant="body1" align="center">
+                Nie znaleziono pozycji ze stanów
+              </Typography>
+            </Fade>
+          ) : (
+            <Fade in={showContent} timeout={300}>
+              <div>
+                <TableContainer component={Paper} sx={{ mt: 3, transition: 'all 0.2s ease-in-out' }}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        {visibleColumns.name && (
+                          <TableCell onClick={() => handleTableSort('name')} style={{ cursor: 'pointer' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              SKU
+                              {tableSort.field === 'name' && (
+                                <ArrowDropUpIcon 
+                                  sx={{ 
+                                    transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
+                                    transition: 'transform 0.2s'
+                                  }} 
+                                />
+                              )}
+                            </Box>
+                          </TableCell>
+                        )}
+                        {visibleColumns.category && (
+                          <TableCell onClick={() => handleTableSort('category')} style={{ cursor: 'pointer' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              Kategoria
+                              {tableSort.field === 'category' && (
+                                <ArrowDropUpIcon 
+                                  sx={{ 
+                                    transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
+                                    transition: 'transform 0.2s'
+                                  }} 
+                                />
+                              )}
+                            </Box>
+                          </TableCell>
+                        )}
+                        {visibleColumns.totalQuantity && (
+                          <TableCell onClick={() => handleTableSort('totalQuantity')} style={{ cursor: 'pointer' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              Ilość całkowita
+                              {tableSort.field === 'totalQuantity' && (
+                                <ArrowDropUpIcon 
+                                  sx={{ 
+                                    transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
+                                    transition: 'transform 0.2s'
+                                  }} 
+                                />
+                              )}
+                            </Box>
+                          </TableCell>
+                        )}
+                        {visibleColumns.reservedQuantity && (
+                          <TableCell onClick={() => handleTableSort('reservedQuantity')} style={{ cursor: 'pointer' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              Ilość zarezerwowana
+                              {tableSort.field === 'reservedQuantity' && (
+                                <ArrowDropUpIcon 
+                                  sx={{ 
+                                    transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
+                                    transition: 'transform 0.2s'
+                                  }} 
+                                />
+                              )}
+                            </Box>
+                          </TableCell>
+                        )}
+                        {visibleColumns.availableQuantity && (
+                          <TableCell onClick={() => handleTableSort('availableQuantity')} style={{ cursor: 'pointer' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              Ilość dostępna
+                              {tableSort.field === 'availableQuantity' && (
+                                <ArrowDropUpIcon 
+                                  sx={{ 
+                                    transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
+                                    transition: 'transform 0.2s'
+                                  }} 
+                                />
+                              )}
+                            </Box>
+                          </TableCell>
+                        )}
+                        {visibleColumns.status && (
+                          <TableCell onClick={() => handleTableSort('status')} style={{ cursor: 'pointer' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              Status
+                              {tableSort.field === 'status' && (
+                                <ArrowDropUpIcon 
+                                  sx={{ 
+                                    transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
+                                    transition: 'transform 0.2s'
+                                  }} 
+                                />
+                              )}
+                            </Box>
+                          </TableCell>
+                        )}
+                        {visibleColumns.location && (
+                          <TableCell onClick={() => handleTableSort('location')} style={{ cursor: 'pointer' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              Lokalizacja
+                              {tableSort.field === 'location' && (
+                                <ArrowDropUpIcon 
+                                  sx={{ 
+                                    transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
+                                    transition: 'transform 0.2s'
+                                  }} 
+                                />
+                              )}
+                            </Box>
+                          </TableCell>
+                        )}
+                        {visibleColumns.actions && <TableCell align="right">Akcje</TableCell>}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {filteredItems.map((item, index) => {
+                        // Oblicz ilość dostępną (całkowita - zarezerwowana)
+                        const bookedQuantity = item.bookedQuantity || 0;
+                        const availableQuantity = item.quantity - bookedQuantity;
+                        
+                        return (
+                          <Grow
+                            key={item.id}
+                            in={showContent}
+                            timeout={200 + (index * 50)}
+                            style={{ transformOrigin: '0 0 0' }}
+                          >
+                            <TableRow 
+                              sx={{ 
+                                transition: 'all 0.15s ease-in-out',
+                                '&:hover': {
+                                  backgroundColor: 'action.hover',
+                                  transform: 'translateX(2px)'
+                                }
+                              }}
+                            >
+                              {visibleColumns.name && (
+                                <TableCell>
+                                  <Typography variant="body1">{item.name}</Typography>
+                                  <Typography variant="body2" color="textSecondary">{item.description}</Typography>
+                                  {(item.packingGroup || item.boxesPerPallet) && (
+                                    <Box sx={{ mt: 0.5 }}>
+                                      {item.packingGroup && (
+                                        <Chip
+                                          size="small"
+                                          label={`PG: ${item.packingGroup}`}
+                                          color="default"
+                                          sx={{ mr: 0.5 }}
+                                        />
+                                      )}
+                                      {item.boxesPerPallet && (
+                                        <Chip
+                                          size="small"
+                                          label={`${item.boxesPerPallet} kartonów/paletę`}
+                                          color="info"
+                                        />
+                                      )}
+                                    </Box>
+                                  )}
+                                </TableCell>
+                              )}
+                              {visibleColumns.category && <TableCell>{item.category}</TableCell>}
+                              {visibleColumns.totalQuantity && (
+                                <TableCell>
+                                  <Typography variant="body1">{item.quantity} {item.unit}</Typography>
+                                </TableCell>
+                              )}
+                              {visibleColumns.reservedQuantity && (
+                                <TableCell>
+                                  <Typography 
+                                    variant="body1" 
+                                    color={bookedQuantity > 0 ? "secondary" : "textSecondary"}
+                                    sx={{ 
+                                      cursor: bookedQuantity > 0 ? 'pointer' : 'default',
+                                      transition: 'color 0.2s ease-in-out'
+                                    }}
+                                    onClick={bookedQuantity > 0 ? () => handleShowReservations(item) : undefined}
+                                  >
+                                    {bookedQuantity} {item.unit}
+                                    {bookedQuantity > 0 && (
+                                      <Tooltip title="Kliknij, aby zobaczyć szczegóły rezerwacji">
+                                        <ReservationIcon 
+                                          fontSize="small" 
+                                          sx={{ 
+                                            ml: 1,
+                                            transition: 'transform 0.2s ease-in-out',
+                                            '&:hover': { transform: 'scale(1.1)' }
+                                          }} 
+                                        />
+                                      </Tooltip>
+                                    )}
+                                  </Typography>
+                                </TableCell>
+                              )}
+                              {visibleColumns.availableQuantity && (
+                                <TableCell>
+                                  <Typography 
+                                    variant="body1" 
+                                    color={availableQuantity < item.minStockLevel ? "error" : "primary"}
+                                  >
+                                    {availableQuantity} {item.unit}
+                                  </Typography>
+                                </TableCell>
+                              )}
+                              {visibleColumns.status && (
+                                <TableCell>
+                                  {getStockLevelIndicator(availableQuantity, item.minStockLevel, item.optimalStockLevel)}
+                                </TableCell>
+                              )}
+                              {visibleColumns.location && (
+                                <TableCell>
+                                  {item.location || '-'}
+                                </TableCell>
+                              )}
+                              {visibleColumns.actions && (
+                                <TableCell align="right">
+                                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
+                                    <IconButton 
+                                      component={RouterLink} 
+                                      to={`/inventory/${item.id}`}
+                                      color="secondary"
+                                      title="Szczegóły"
+                                      sx={{ 
+                                        transition: 'all 0.15s ease-in-out',
+                                        '&:hover': { transform: 'scale(1.1)' }
+                                      }}
+                                    >
+                                      <InfoIcon />
+                                    </IconButton>
+                                    <IconButton 
+                                      component={RouterLink} 
+                                      to={`/inventory/${item.id}/receive`}
+                                      color="success"
+                                      title="Przyjmij"
+                                      sx={{ 
+                                        transition: 'all 0.15s ease-in-out',
+                                        '&:hover': { transform: 'scale(1.1)' }
+                                      }}
+                                    >
+                                      <ReceiveIcon />
+                                    </IconButton>
+                                    <IconButton 
+                                      component={RouterLink} 
+                                      to={`/inventory/${item.id}/issue`}
+                                      color="warning"
+                                      title="Wydaj"
+                                      sx={{ 
+                                        transition: 'all 0.15s ease-in-out',
+                                        '&:hover': { transform: 'scale(1.1)' }
+                                      }}
+                                    >
+                                      <IssueIcon />
+                                    </IconButton>
+                                    <IconButton
+                                      onClick={(e) => handleMenuOpen(e, item)}
+                                      color="primary"
+                                      title="Więcej akcji"
+                                      sx={{ 
+                                        transition: 'all 0.15s ease-in-out',
+                                        '&:hover': { transform: 'scale(1.1)' }
+                                      }}
+                                    >
+                                      <MoreVertIcon />
+                                    </IconButton>
+                                  </Box>
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          </Grow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
 
-              {/* Dodaj kontrolki paginacji */}
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <Typography variant="body2" sx={{ mr: 2 }}>
-                    Pozycje na stronie:
-                  </Typography>
-                  <Select
-                    value={pageSize}
-                    onChange={handlePageSizeChange}
-                    size="small"
-                  >
-                    <MenuItem value={5}>5</MenuItem>
-                    <MenuItem value={10}>10</MenuItem>
-                    <MenuItem value={20}>20</MenuItem>
-                    <MenuItem value={50}>50</MenuItem>
-                  </Select>
-                </Box>
-                <Pagination 
-                  count={totalPages} 
-                  page={page} 
-                  onChange={handlePageChange} 
-                  color="primary" 
-                />
-                <Typography variant="body2">
-                  Wyświetlanie {filteredItems.length} z {totalItems} pozycji
-                </Typography>
-              </Box>
-            </>
+                {/* Dodaj kontrolki paginacji z animacją */}
+                <Fade in={showContent} timeout={400}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Typography variant="body2" sx={{ mr: 2 }}>
+                        Pozycje na stronie:
+                      </Typography>
+                      <Select
+                        value={pageSize}
+                        onChange={handlePageSizeChange}
+                        size="small"
+                      >
+                        <MenuItem value={5}>5</MenuItem>
+                        <MenuItem value={10}>10</MenuItem>
+                        <MenuItem value={20}>20</MenuItem>
+                        <MenuItem value={50}>50</MenuItem>
+                      </Select>
+                    </Box>
+                    <Pagination 
+                      count={totalPages} 
+                      page={page} 
+                      onChange={handlePageChange} 
+                      color="primary" 
+                    />
+                    <Typography variant="body2">
+                      Wyświetlanie {filteredItems.length} z {totalItems} pozycji
+                    </Typography>
+                  </Box>
+                </Fade>
+              </div>
+            </Fade>
           )}
           
           {/* Menu konfiguracji kolumn */}

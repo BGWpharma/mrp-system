@@ -96,11 +96,229 @@ a {
     transition: all 0.3s ease;
     background-color: var(--paper-background);
     box-shadow: 0 8px 16px var(--shadow-color);
+    transform: translateY(0);
+    opacity: 1;
 }
 
 .dashboard-card:hover {
     transform: translateY(-5px);
     box-shadow: 0 12px 20px var(--shadow-color);
+}
+
+/* Animacje ładowania dla komponentów */
+.dashboard-card-loading {
+    animation: cardFadeIn 0.6s ease-out forwards;
+    opacity: 0;
+    transform: translateY(20px);
+}
+
+.dashboard-content-loading {
+    animation: contentSlideIn 0.8s ease-out forwards;
+    opacity: 0;
+    transform: translateX(-10px);
+}
+
+.dashboard-stat-loading {
+    animation: statCountUp 1.2s ease-out forwards;
+    opacity: 0;
+}
+
+.dashboard-list-item-loading {
+    animation: listItemSlide 0.5s ease-out forwards;
+    opacity: 0;
+    transform: translateX(30px);
+}
+
+/* Keyframes dla animacji */
+@keyframes cardFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes contentSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes statCountUp {
+    from {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes listItemSlide {
+    from {
+        opacity: 0;
+        transform: translateX(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Animacje hover dla większej interaktywności */
+.dashboard-card:hover .MuiSvgIcon-root {
+    transform: scale(1.1);
+    transition: transform 0.3s ease;
+}
+
+.dashboard-card .MuiSvgIcon-root {
+    transition: transform 0.3s ease;
+}
+
+/* Efekt shimmer dla elementów ładujących się */
+.dashboard-shimmer {
+    background: linear-gradient(90deg, 
+        rgba(255, 255, 255, 0.0) 0%, 
+        rgba(255, 255, 255, 0.2) 50%, 
+        rgba(255, 255, 255, 0.0) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+/* Animacje dla liczników */
+.dashboard-counter {
+    animation: counterFadeIn 1s ease-out forwards;
+    opacity: 0;
+}
+
+@keyframes counterFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Staggered animations for grid items */
+.dashboard-grid-item:nth-child(1) {
+    animation-delay: 0.1s;
+}
+
+.dashboard-grid-item:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.dashboard-grid-item:nth-child(3) {
+    animation-delay: 0.3s;
+}
+
+.dashboard-grid-item:nth-child(4) {
+    animation-delay: 0.4s;
+}
+
+.dashboard-grid-item:nth-child(5) {
+    animation-delay: 0.5s;
+}
+
+.dashboard-grid-item:nth-child(6) {
+    animation-delay: 0.6s;
+}
+
+/* Animacje dla przycisków */
+.dashboard-button-loading {
+    position: relative;
+    overflow: hidden;
+}
+
+.dashboard-button-loading::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    animation: buttonShine 1.5s infinite;
+}
+
+@keyframes buttonShine {
+    0% {
+        left: -100%;
+    }
+    100% {
+        left: 100%;
+    }
+}
+
+/* Pulsing animation for loading states */
+.dashboard-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: .5;
+    }
+}
+
+/* Smooth transitions for content changes */
+.dashboard-content-transition {
+    transition: all 0.3s ease-in-out;
+}
+
+/* Enhanced skeleton loading */
+.dashboard-skeleton {
+    background: linear-gradient(90deg, 
+        rgba(255, 255, 255, 0.1) 25%, 
+        rgba(255, 255, 255, 0.2) 50%, 
+        rgba(255, 255, 255, 0.1) 75%);
+    background-size: 200% 100%;
+    animation: skeletonShimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes skeletonShimmer {
+    0% {
+        background-position: -200% 0;
+    }
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+/* Micro-interactions */
+.dashboard-interactive:hover {
+    cursor: pointer;
+    transform: translateY(-2px);
+    transition: transform 0.2s ease;
+}
+
+.dashboard-interactive:active {
+    transform: translateY(0);
+    transition: transform 0.1s ease;
 }
 
 .dashboard-stat-card {

@@ -33,7 +33,11 @@ import {
   Badge,
   Stack,
   ListItemIcon,
-  ListItemText
+  ListItemText,
+  Fade,
+  Slide,
+  Grow,
+  Skeleton
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
@@ -45,7 +49,11 @@ import {
   Search as SearchIcon,
   FilterList as FilterIcon,
   Sort as SortIcon,
-  Category as CategoryIcon
+  Category as CategoryIcon,
+  CheckCircle as CheckCircleIcon,
+  Error as ErrorIcon,
+  Schedule as ScheduleIcon,
+  Check as CheckIcon
 } from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -75,6 +83,11 @@ const ForecastPage = () => {
   const [timeRange, setTimeRange] = useState('30days');
   const [calculatingForecast, setCalculatingForecast] = useState(false);
   
+  // State dla animacji
+  const [dataLoaded, setDataLoaded] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  
   const [categoryFilter, setCategoryFilter] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState('balance');
@@ -90,6 +103,8 @@ const ForecastPage = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
+      setDataLoaded(false);
+      setShowResults(false);
       
       // Pobierz zadania produkcyjne z filtrowaniem po stronie serwera i materiały równocześnie
       const [tasksData, items] = await Promise.all([
@@ -102,14 +117,29 @@ const ForecastPage = () => {
       setTasks(tasksData);
       setInventoryItems(items);
       
+      // Animacja ładowania danych
+      setDataLoaded(true);
+      
       // Oblicz prognozę zapotrzebowania (zadania są już przefiltrowane po stronie serwera)
       await calculateForecast(tasksData, items);
+      
+      // Opóźnienie dla efektu wizualnego
+      setTimeout(() => {
+        setShowResults(true);
+        // Pokaż komunikat sukcesu
+        setShowSuccessMessage(true);
+        setTimeout(() => {
+          setShowSuccessMessage(false);
+        }, 3000); // Ukryj po 3 sekundach
+      }, 300);
       
       setLoading(false);
     } catch (error) {
       console.error('Błąd podczas pobierania danych:', error);
       showError('Nie udało się pobrać danych prognozy');
       setLoading(false);
+      setDataLoaded(false);
+      setShowResults(false);
     }
   };
 
@@ -451,6 +481,20 @@ const ForecastPage = () => {
     return Array.from(categories).sort();
   }, [forecastData]);
   
+  // Funkcja pomocnicza do określenia priorytetu statusu do sortowania
+  const getStatusPriority = (item) => {
+    const balanceWithDeliveries = item.balanceWithFutureDeliveries;
+    const balance = item.balance;
+    
+    if (balanceWithDeliveries < 0) {
+      return 0; // Niedobór - najwyższy priorytet
+    } else if (balance < 0 && balanceWithDeliveries >= 0) {
+      return 1; // Uzupełniany dostawami - średni priorytet  
+    } else {
+      return 2; // Wystarczająca ilość - najniższy priorytet
+    }
+  };
+  
   // Filtrowanie danych
   const filteredData = useCallback(() => {
     if (!forecastData) return [];
@@ -499,6 +543,9 @@ const ForecastPage = () => {
           break;
         case 'price':
           comparison = a.price - b.price;
+          break;
+        case 'status':
+          comparison = getStatusPriority(a) - getStatusPriority(b);
           break;
         default:
           comparison = a.balance - b.balance;
@@ -848,44 +895,154 @@ const ForecastPage = () => {
               </Typography>
               
               {summary && (
-                <Grid container spacing={2} sx={{ mt: 1 }}>
-                  <Grid item xs={12} sm={6} md={2}>
-                    <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'background.darker', borderRadius: 2, boxShadow: 2 }}>
-                      <Typography variant="body2" color="text.secondary">Łączna liczba materiałów</Typography>
-                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{summary.totalItems}</Typography>
-                    </Paper>
+                <Fade in={dataLoaded} timeout={1000}>
+                  <Grid container spacing={2} sx={{ mt: 1 }}>
+                    {loading || !dataLoaded ? (
+                      // Skeleton loading dla kafelków
+                      Array.from({ length: 6 }).map((_, index) => (
+                        <Grid item xs={12} sm={6} md={2} key={index}>
+                          <Paper sx={{ 
+                            p: 2, 
+                            textAlign: 'center', 
+                            borderRadius: 2, 
+                            boxShadow: 2,
+                            height: 100,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'center'
+                          }}>
+                            <Skeleton variant="text" width="80%" height={20} sx={{ mb: 1 }} />
+                            <Skeleton variant="text" width="60%" height={32} />
+                          </Paper>
+                        </Grid>
+                      ))
+                    ) : (
+                      // Rzeczywiste kafelki z animacją
+                      <>
+                        <Grid item xs={12} sm={6} md={2}>
+                          <Grow in={showResults} timeout={500}>
+                            <Paper sx={{ 
+                              p: 2, 
+                              textAlign: 'center', 
+                              bgcolor: 'background.darker', 
+                              borderRadius: 2, 
+                              boxShadow: 2,
+                              height: 100,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'center'
+                            }}>
+                              <Typography variant="body2" color="text.secondary" sx={{ mb: 1, minHeight: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                Łączna liczba materiałów
+                              </Typography>
+                              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{summary.totalItems}</Typography>
+                            </Paper>
+                          </Grow>
+                        </Grid>
+                        <Grid item xs={12} sm={6} md={2}>
+                          <Grow in={showResults} timeout={700}>
+                            <Paper sx={{ 
+                              p: 2, 
+                              textAlign: 'center', 
+                              bgcolor: 'error.lighter', 
+                              borderRadius: 2, 
+                              boxShadow: 2,
+                              height: 100,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'center'
+                            }}>
+                              <Typography variant="body2" color="text.secondary" sx={{ mb: 1, minHeight: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                Materiały wymagające zakupu
+                              </Typography>
+                              <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'error.main' }}>{summary.requiredItems}</Typography>
+                            </Paper>
+                          </Grow>
+                        </Grid>
+                        <Grid item xs={12} sm={6} md={2}>
+                          <Grow in={showResults} timeout={900}>
+                            <Paper sx={{ 
+                              p: 2, 
+                              textAlign: 'center', 
+                              bgcolor: 'warning.lighter', 
+                              borderRadius: 2, 
+                              boxShadow: 2,
+                              height: 100,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'center'
+                            }}>
+                              <Typography variant="body2" color="text.secondary" sx={{ mb: 1, minHeight: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                Materiały z niedoborem po dostawach
+                              </Typography>
+                              <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'warning.dark' }}>{summary.requiredItemsAfterDeliveries}</Typography>
+                            </Paper>
+                          </Grow>
+                        </Grid>
+                        <Grid item xs={12} sm={6} md={2}>
+                          <Grow in={showResults} timeout={1100}>
+                            <Paper sx={{ 
+                              p: 2, 
+                              textAlign: 'center', 
+                              bgcolor: 'error.lighter', 
+                              borderRadius: 2, 
+                              boxShadow: 2,
+                              height: 100,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'center'
+                            }}>
+                              <Typography variant="body2" color="text.secondary" sx={{ mb: 1, minHeight: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                Wartość niedoborów
+                              </Typography>
+                              <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'error.main' }}>{formatCurrency(summary.shortageValue)}</Typography>
+                            </Paper>
+                          </Grow>
+                        </Grid>
+                        <Grid item xs={12} sm={6} md={2}>
+                          <Grow in={showResults} timeout={1300}>
+                            <Paper sx={{ 
+                              p: 2, 
+                              textAlign: 'center', 
+                              bgcolor: 'warning.lighter', 
+                              borderRadius: 2, 
+                              boxShadow: 2,
+                              height: 100,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'center'
+                            }}>
+                              <Typography variant="body2" color="text.secondary" sx={{ mb: 1, minHeight: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                Wartość niedoborów po dostawach
+                              </Typography>
+                              <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'warning.dark' }}>{formatCurrency(summary.shortageValueAfterDeliveries)}</Typography>
+                            </Paper>
+                          </Grow>
+                        </Grid>
+                        <Grid item xs={12} sm={6} md={2}>
+                          <Grow in={showResults} timeout={1500}>
+                            <Paper sx={{ 
+                              p: 2, 
+                              textAlign: 'center', 
+                              bgcolor: 'info.lighter', 
+                              borderRadius: 2, 
+                              boxShadow: 2,
+                              height: 100,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'center'
+                            }}>
+                              <Typography variant="body2" color="text.secondary" sx={{ mb: 1, minHeight: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                Szacowany koszt całkowity
+                              </Typography>
+                              <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'info.main' }}>{formatCurrency(summary.totalCost)}</Typography>
+                            </Paper>
+                          </Grow>
+                        </Grid>
+                      </>
+                    )}
                   </Grid>
-                  <Grid item xs={12} sm={6} md={2}>
-                    <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'error.lighter', borderRadius: 2, boxShadow: 2 }}>
-                      <Typography variant="body2" color="text.secondary">Materiały wymagające zakupu</Typography>
-                      <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'error.main' }}>{summary.requiredItems}</Typography>
-                    </Paper>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={2}>
-                    <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'warning.lighter', borderRadius: 2, boxShadow: 2 }}>
-                      <Typography variant="body2" color="text.secondary">Materiały z niedoborem po dostawach</Typography>
-                      <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'warning.dark' }}>{summary.requiredItemsAfterDeliveries}</Typography>
-                    </Paper>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={2}>
-                    <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'error.lighter', borderRadius: 2, boxShadow: 2 }}>
-                      <Typography variant="body2" color="text.secondary">Wartość niedoborów</Typography>
-                      <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'error.main' }}>{formatCurrency(summary.shortageValue)}</Typography>
-                    </Paper>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={2}>
-                    <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'warning.lighter', borderRadius: 2, boxShadow: 2 }}>
-                      <Typography variant="body2" color="text.secondary">Wartość niedoborów po dostawach</Typography>
-                      <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'warning.dark' }}>{formatCurrency(summary.shortageValueAfterDeliveries)}</Typography>
-                    </Paper>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={2}>
-                    <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'info.lighter', borderRadius: 2, boxShadow: 2 }}>
-                      <Typography variant="body2" color="text.secondary">Szacowany koszt całkowity</Typography>
-                      <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'info.main' }}>{formatCurrency(summary.totalCost)}</Typography>
-                    </Paper>
-                  </Grid>
-                </Grid>
+                </Fade>
               )}
             </Box>
           )}
@@ -895,206 +1052,289 @@ const ForecastPage = () => {
               <CircularProgress />
             </Box>
           ) : calculatingForecast ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 4 }}>
-              <CircularProgress size={24} sx={{ mb: 2 }} />
-              <Typography>Obliczanie prognozy zapotrzebowania...</Typography>
-            </Box>
-          ) : forecastData.length > 0 && (
-            <Paper sx={{ mt: 2, borderRadius: 2, overflow: 'hidden', boxShadow: 3 }}>
-              <TableContainer>
-                <Table size="small">
-                  <TableHead sx={{ bgcolor: 'primary.lighter' }}>
-                    <TableRow>
-                      <TableCell width="25%" onClick={() => handleSortChange('name')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
-                        Materiał {renderSortIcon('name')}
-                      </TableCell>
-                      <TableCell align="right" width="10%" onClick={() => handleSortChange('availableQuantity')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
-                        Dostępna ilość {renderSortIcon('availableQuantity')}
-                      </TableCell>
-                      <TableCell align="right" width="10%" onClick={() => handleSortChange('requiredQuantity')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
-                        Potrzebna ilość {renderSortIcon('requiredQuantity')}
-                      </TableCell>
-                      <TableCell align="right" width="10%" onClick={() => handleSortChange('balance')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
-                        Bilans {renderSortIcon('balance')}
-                      </TableCell>
-                      <TableCell align="right" width="10%">Oczekiwane dostawy</TableCell>
-                      <TableCell align="right" width="10%" onClick={() => handleSortChange('balanceWithDeliveries')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
-                        Bilans z dostawami {renderSortIcon('balanceWithDeliveries')}
-                      </TableCell>
-                      <TableCell align="right" width="10%" onClick={() => handleSortChange('price')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
-                        Cena {renderSortIcon('price')}
-                      </TableCell>
-                      <TableCell align="right" width="10%" onClick={() => handleSortChange('cost')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
-                        Szacowany koszt {renderSortIcon('cost')}
-                      </TableCell>
-                      <TableCell width="10%">Status</TableCell>
-                      <TableCell align="center" width="5%">Akcje</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {filteredData().map((item) => {
-                      const balance = item.balance;
-                      const balanceWithDeliveries = item.balanceWithFutureDeliveries;
-                      let statusColor = 'success';
-                      let statusText = 'Wystarczająca ilość';
-                      let rowBgColor = '';
-                      
-                      // Sprawdzenie statusu uwzględniając przyszłe dostawy
-                      if (balanceWithDeliveries < 0) {
-                        statusColor = 'error';
-                        statusText = 'Niedobór';
-                        rowBgColor = 'error.lighter';
-                      } else if (balance < 0 && balanceWithDeliveries >= 0) {
-                        statusColor = 'warning';
-                        statusText = 'Uzupełniany dostawami';
-                        rowBgColor = 'warning.lighter';
-                      }
-                      
-                      return (
-                        <TableRow 
-                          key={item.id} 
-                          hover 
-                          sx={{ 
-                            bgcolor: rowBgColor,
-                            '&:hover': {
-                              bgcolor: rowBgColor ? `${rowBgColor}!important` : undefined
-                            }
-                          }}
-                        >
-                          <TableCell>
-                            <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
-                              <CategoryIcon sx={{ mr: 1, mt: 0.5, fontSize: 'small', color: 'text.secondary' }} />
-                              <Box>
-                                <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                                  {item.name}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  {item.category || 'Bez kategorii'}
-                                </Typography>
-                              </Box>
-                            </Box>
-                          </TableCell>
-                          <TableCell align="right">
-                            {formatNumber(item.availableQuantity)} {item.unit}
-                          </TableCell>
-                          <TableCell align="right">
-                            {item.requiredQuantity === 0 ? '-' : (
-                              <Tooltip title={`Ilość wymagana: ${formatNumber(item.requiredQuantity)} ${item.unit}`}>
-                                <span>{formatNumber(item.requiredQuantity)} {item.unit}</span>
-                              </Tooltip>
-                            )}
-                          </TableCell>
-                          <TableCell align="right">
-                            <Typography 
-                              color={balance < 0 ? 'error' : 'success'}
-                              fontWeight={balance < 0 ? 'bold' : 'normal'}
-                              sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}
-                            >
-                              {balance < 0 && <WarningIcon fontSize="small" sx={{ mr: 0.5 }} />}
-                              {formatNumber(balance)} {item.unit}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align="right">
-                            {item.futureDeliveriesTotal > 0 ? (
-                              <Tooltip title={
-                                item.futureDeliveries ? item.futureDeliveries.map(delivery => 
-                                  `${delivery.poNumber}: ${formatNumber(delivery.quantity)} ${item.unit} (${delivery.expectedDeliveryDate ? formatDateDisplay(new Date(delivery.expectedDeliveryDate)) : 'brak daty'})`
-                                ).join('\n') : 'Brak szczegółów'
-                              }>
-                                <Typography sx={{ cursor: 'pointer', fontWeight: 'medium', color: 'primary.main' }}>
-                                  {formatNumber(item.futureDeliveriesTotal)} {item.unit}
-                                </Typography>
-                              </Tooltip>
-                            ) : (
-                              <Typography color="text.secondary">0 {item.unit}</Typography>
-                            )}
-                          </TableCell>
-                          <TableCell align="right">
-                            <Typography 
-                              color={balanceWithDeliveries < 0 ? 'error' : 'success'}
-                              fontWeight={balanceWithDeliveries < 0 ? 'bold' : 'normal'}
-                              sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}
-                            >
-                              {balanceWithDeliveries < 0 && <WarningIcon fontSize="small" sx={{ mr: 0.5 }} />}
-                              {formatNumber(balanceWithDeliveries)} {item.unit}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align="right">
-                            {item.price === 0 ? '-' : (
-                              <Tooltip title={item.supplier ? `Cena od dostawcy: ${item.supplier}${item.isDefaultSupplier ? ' (domyślny)' : ''}` : 'Cena magazynowa'}>
-                                <span>{formatCurrency(item.price)}</span>
-                              </Tooltip>
-                            )}
-                          </TableCell>
-                          <TableCell align="right">
-                            {item.cost === 0 ? '-' : (
-                              <Tooltip title={item.supplier ? `Koszt na podstawie ceny od dostawcy: ${item.supplier}${item.isDefaultSupplier ? ' (domyślny)' : ''}` : 'Koszt na podstawie ceny magazynowej'}>
-                                <span>{formatCurrency(item.cost)}</span>
-                              </Tooltip>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Chip 
-                              label={statusText} 
-                              color={statusColor} 
-                              size="small" 
-                              sx={{ minWidth: '120px', fontWeight: 'medium' }}
-                            />
-                          </TableCell>
-                          <TableCell align="center">
-                            <Stack direction="row" spacing={1} justifyContent="center">
-                              <Tooltip title="Pokaż szczegóły">
-                                <IconButton 
-                                  size="small" 
-                                  color="info" 
-                                  onClick={() => handleItemClick(item)}
-                                  sx={{ boxShadow: 1 }}
-                                >
-                                  <InfoIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                              {balance < 0 && (
-                                <Tooltip title="Zamów materiał">
-                                  <IconButton
-                                    size="small"
-                                    color="error"
-                                    onClick={() => navigate('/purchase-orders/new', { 
-                                      state: { materialId: item.id, requiredQuantity: Math.abs(balance) }
-                                    })}
-                                    sx={{ boxShadow: 1 }}
-                                  >
-                                    <ShoppingCartIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              )}
-                            </Stack>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-              {filteredData().length === 0 && (
-                <Box sx={{ p: 2, textAlign: 'center' }}>
-                  <Typography color="text.secondary">Nie znaleziono materiałów pasujących do filtrów</Typography>
-                </Box>
-              )}
-              {(searchTerm || categoryFilter) && filteredData().length > 0 && (
-                <Box sx={{ p: 1, display: 'flex', justifyContent: 'flex-end' }}>
-                  <Button 
-                    size="small" 
-                    onClick={() => {
-                      setSearchTerm('');
-                      setCategoryFilter('');
+            <Fade in={calculatingForecast} timeout={500}>
+              <Box sx={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center', 
+                mt: 4,
+                p: 4
+              }}>
+                <Box sx={{ position: 'relative', mb: 2 }}>
+                  <CircularProgress 
+                    size={60} 
+                    thickness={4}
+                    sx={{ 
+                      color: 'primary.main',
+                      animationDuration: '1.5s'
+                    }} 
+                  />
+                  <Box
+                    sx={{
+                      top: 0,
+                      left: 0,
+                      bottom: 0,
+                      right: 0,
+                      position: 'absolute',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
                     }}
-                    startIcon={<FilterIcon />}
                   >
-                    Wyczyść filtry
-                  </Button>
+                    <Typography variant="caption" component="div" color="primary.main" sx={{ fontWeight: 'bold' }}>
+                      {Math.floor(Math.random() * 100)}%
+                    </Typography>
+                  </Box>
                 </Box>
-              )}
-            </Paper>
+                <Typography variant="h6" sx={{ mb: 1, fontWeight: 'medium' }}>
+                  Obliczanie prognozy zapotrzebowania...
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', maxWidth: 400 }}>
+                  Analizujemy zadania produkcyjne, sprawdzamy stany magazynowe i obliczamy zapotrzebowanie na materiały
+                </Typography>
+              </Box>
+            </Fade>
+          ) : forecastData.length > 0 && (
+            <Slide direction="up" in={showResults} timeout={800}>
+              <Paper sx={{ mt: 2, borderRadius: 2, overflow: 'hidden', boxShadow: 3 }}>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead sx={{ bgcolor: 'primary.lighter' }}>
+                      <TableRow>
+                        <TableCell width="25%" onClick={() => handleSortChange('name')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                          Materiał {renderSortIcon('name')}
+                        </TableCell>
+                        <TableCell align="right" width="10%" onClick={() => handleSortChange('availableQuantity')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                          Dostępna ilość {renderSortIcon('availableQuantity')}
+                        </TableCell>
+                        <TableCell align="right" width="10%" onClick={() => handleSortChange('requiredQuantity')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                          Potrzebna ilość {renderSortIcon('requiredQuantity')}
+                        </TableCell>
+                        <TableCell align="right" width="10%" onClick={() => handleSortChange('balance')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                          Bilans {renderSortIcon('balance')}
+                        </TableCell>
+                        <TableCell align="right" width="10%">Oczekiwane dostawy</TableCell>
+                        <TableCell align="right" width="10%" onClick={() => handleSortChange('balanceWithDeliveries')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                          Bilans z dostawami {renderSortIcon('balanceWithDeliveries')}
+                        </TableCell>
+                        <TableCell align="right" width="10%" onClick={() => handleSortChange('price')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                          Cena {renderSortIcon('price')}
+                        </TableCell>
+                        <TableCell align="right" width="10%" onClick={() => handleSortChange('cost')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                          Szacowany koszt {renderSortIcon('cost')}
+                        </TableCell>
+                        <TableCell width="10%" onClick={() => handleSortChange('status')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                          Status {renderSortIcon('status')}
+                        </TableCell>
+                        <TableCell align="center" width="5%">Akcje</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {!showResults ? (
+                        // Skeleton loading dla wierszy tabeli
+                        Array.from({ length: 5 }).map((_, index) => (
+                          <TableRow key={`skeleton-${index}`}>
+                            <TableCell>
+                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                <Skeleton variant="circular" width={20} height={20} sx={{ mr: 1 }} />
+                                <Box>
+                                  <Skeleton variant="text" width={150} height={20} />
+                                  <Skeleton variant="text" width={100} height={16} />
+                                </Box>
+                              </Box>
+                            </TableCell>
+                            <TableCell><Skeleton variant="text" width={80} /></TableCell>
+                            <TableCell><Skeleton variant="text" width={80} /></TableCell>
+                            <TableCell><Skeleton variant="text" width={80} /></TableCell>
+                            <TableCell><Skeleton variant="text" width={80} /></TableCell>
+                            <TableCell><Skeleton variant="text" width={80} /></TableCell>
+                            <TableCell><Skeleton variant="text" width={60} /></TableCell>
+                            <TableCell><Skeleton variant="text" width={60} /></TableCell>
+                            <TableCell><Skeleton variant="circular" width={24} height={24} /></TableCell>
+                            <TableCell><Skeleton variant="circular" width={32} height={32} /></TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        filteredData().map((item, index) => {
+                          const balance = item.balance;
+                          const balanceWithDeliveries = item.balanceWithFutureDeliveries;
+                          let statusColor = 'success';
+                          let statusText = 'Wystarczająca ilość';
+                          let rowBgColor = '';
+                          
+                          // Sprawdzenie statusu uwzględniając przyszłe dostawy
+                          if (balanceWithDeliveries < 0) {
+                            statusColor = 'error';
+                            statusText = 'Niedobór';
+                            rowBgColor = 'error.lighter';
+                          } else if (balance < 0 && balanceWithDeliveries >= 0) {
+                            statusColor = 'warning';
+                            statusText = 'Uzupełniany dostawami';
+                            rowBgColor = 'warning.lighter';
+                          }
+                          
+                          return (
+                            <Fade 
+                              key={item.id} 
+                              in={showResults} 
+                              timeout={1000} 
+                              style={{ 
+                                transitionDelay: showResults ? `${index * 50}ms` : '0ms' 
+                              }}
+                            >
+                              <TableRow 
+                                hover 
+                                sx={{ 
+                                  bgcolor: rowBgColor,
+                                  '&:hover': {
+                                    bgcolor: rowBgColor ? `${rowBgColor}!important` : undefined
+                                  }
+                                }}
+                              >
+                                <TableCell>
+                                  <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+                                    <CategoryIcon sx={{ mr: 1, mt: 0.5, fontSize: 'small', color: 'text.secondary' }} />
+                                    <Box>
+                                      <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                                        {item.name}
+                                      </Typography>
+                                      <Typography variant="caption" color="text.secondary">
+                                        {item.category || 'Bez kategorii'}
+                                      </Typography>
+                                    </Box>
+                                  </Box>
+                                </TableCell>
+                                <TableCell align="right">
+                                  {formatNumber(item.availableQuantity)} {item.unit}
+                                </TableCell>
+                                <TableCell align="right">
+                                  {item.requiredQuantity === 0 ? '-' : (
+                                    <Tooltip title={`Ilość wymagana: ${formatNumber(item.requiredQuantity)} ${item.unit}`}>
+                                      <span>{formatNumber(item.requiredQuantity)} {item.unit}</span>
+                                    </Tooltip>
+                                  )}
+                                </TableCell>
+                                <TableCell align="right">
+                                  <Typography 
+                                    color={balance < 0 ? 'error' : 'success'}
+                                    fontWeight={balance < 0 ? 'bold' : 'normal'}
+                                    sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}
+                                  >
+                                    {balance < 0 && <WarningIcon fontSize="small" sx={{ mr: 0.5 }} />}
+                                    {formatNumber(balance)} {item.unit}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell align="right">
+                                  {item.futureDeliveriesTotal > 0 ? (
+                                    <Tooltip title={
+                                      item.futureDeliveries ? item.futureDeliveries.map(delivery => 
+                                        `${delivery.poNumber}: ${formatNumber(delivery.quantity)} ${item.unit} (${delivery.expectedDeliveryDate ? formatDateDisplay(new Date(delivery.expectedDeliveryDate)) : 'brak daty'})`
+                                      ).join('\n') : 'Brak szczegółów'
+                                    }>
+                                      <Typography sx={{ cursor: 'pointer', fontWeight: 'medium', color: 'primary.main' }}>
+                                        {formatNumber(item.futureDeliveriesTotal)} {item.unit}
+                                      </Typography>
+                                    </Tooltip>
+                                  ) : (
+                                    <Typography color="text.secondary">0 {item.unit}</Typography>
+                                  )}
+                                </TableCell>
+                                <TableCell align="right">
+                                  <Typography 
+                                    color={balanceWithDeliveries < 0 ? 'error' : 'success'}
+                                    fontWeight={balanceWithDeliveries < 0 ? 'bold' : 'normal'}
+                                    sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}
+                                  >
+                                    {balanceWithDeliveries < 0 && <WarningIcon fontSize="small" sx={{ mr: 0.5 }} />}
+                                    {formatNumber(balanceWithDeliveries)} {item.unit}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell align="right">
+                                  {item.price === 0 ? '-' : (
+                                    <Tooltip title={item.supplier ? `Cena od dostawcy: ${item.supplier}${item.isDefaultSupplier ? ' (domyślny)' : ''}` : 'Cena magazynowa'}>
+                                      <span>{formatCurrency(item.price)}</span>
+                                    </Tooltip>
+                                  )}
+                                </TableCell>
+                                <TableCell align="right">
+                                  {item.cost === 0 ? '-' : (
+                                    <Tooltip title={item.supplier ? `Koszt na podstawie ceny od dostawcy: ${item.supplier}${item.isDefaultSupplier ? ' (domyślny)' : ''}` : 'Koszt na podstawie ceny magazynowej'}>
+                                      <span>{formatCurrency(item.cost)}</span>
+                                    </Tooltip>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <Tooltip title={statusText}>
+                                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                      {statusColor === 'success' && (
+                                        <CheckCircleIcon color="success" fontSize="small" />
+                                      )}
+                                      {statusColor === 'warning' && (
+                                        <ScheduleIcon color="warning" fontSize="small" />
+                                      )}
+                                      {statusColor === 'error' && (
+                                        <ErrorIcon color="error" fontSize="small" />
+                                      )}
+                                    </Box>
+                                  </Tooltip>
+                                </TableCell>
+                                <TableCell align="center">
+                                  <Stack direction="row" spacing={1} justifyContent="center">
+                                    <Tooltip title="Pokaż szczegóły">
+                                      <IconButton 
+                                        size="small" 
+                                        color="info" 
+                                        onClick={() => handleItemClick(item)}
+                                        sx={{ boxShadow: 1 }}
+                                      >
+                                        <InfoIcon fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                    {balance < 0 && (
+                                      <Tooltip title="Zamów materiał">
+                                        <IconButton
+                                          size="small"
+                                          color="error"
+                                          onClick={() => navigate('/purchase-orders/new', { 
+                                            state: { materialId: item.id, requiredQuantity: Math.abs(balance) }
+                                          })}
+                                          sx={{ boxShadow: 1 }}
+                                        >
+                                          <ShoppingCartIcon fontSize="small" />
+                                        </IconButton>
+                                      </Tooltip>
+                                    )}
+                                  </Stack>
+                                </TableCell>
+                              </TableRow>
+                            </Fade>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+                {filteredData().length === 0 && (
+                  <Box sx={{ p: 2, textAlign: 'center' }}>
+                    <Typography color="text.secondary">Nie znaleziono materiałów pasujących do filtrów</Typography>
+                  </Box>
+                )}
+                {(searchTerm || categoryFilter) && filteredData().length > 0 && (
+                  <Box sx={{ p: 1, display: 'flex', justifyContent: 'flex-end' }}>
+                    <Button 
+                      size="small" 
+                      onClick={() => {
+                        setSearchTerm('');
+                        setCategoryFilter('');
+                      }}
+                      startIcon={<FilterIcon />}
+                    >
+                      Wyczyść filtry
+                    </Button>
+                  </Box>
+                )}
+              </Paper>
+            </Slide>
           )}
           
           {forecastData.length > 0 && (
@@ -1185,6 +1425,32 @@ const ForecastPage = () => {
         </>
       )}
       
+      {/* Komunikat sukcesu */}
+      <Fade in={showSuccessMessage} timeout={500}>
+        <Box sx={{ 
+          position: 'fixed', 
+          top: 20, 
+          right: 20, 
+          zIndex: 9999,
+          display: showSuccessMessage ? 'flex' : 'none'
+        }}>
+          <Paper sx={{ 
+            p: 2, 
+            bgcolor: 'success.main', 
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            borderRadius: 2,
+            boxShadow: 3
+          }}>
+            <CheckIcon sx={{ mr: 1 }} />
+            <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+              Prognoza została pomyślnie wygenerowana!
+            </Typography>
+          </Paper>
+        </Box>
+      </Fade>
+      
       {/* Dialog ze szczegółami materiału */}
       <Dialog open={detailsDialogOpen} onClose={handleCloseDetailsDialog} maxWidth="md" fullWidth>
         <DialogTitle>Szczegóły materiału</DialogTitle>
@@ -1270,6 +1536,7 @@ const ForecastPage = () => {
                       <TableHead>
                         <TableRow>
                           <TableCell>Zadanie</TableCell>
+                          <TableCell>Numer MO</TableCell>
                           <TableCell align="right">Ilość produktu</TableCell>
                           <TableCell align="right">Materiału na jedn.</TableCell>
                           <TableCell align="right">Data wykonania</TableCell>
@@ -1296,6 +1563,11 @@ const ForecastPage = () => {
                                   onClick={() => navigate(`/production/tasks/${taskId}`)}
                                 >
                                   {task.name}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>
+                                <Typography variant="body2" color="text.secondary">
+                                  {task.moNumber || task.orderNumber || '-'}
                                 </Typography>
                               </TableCell>
                               <TableCell align="right">{formatNumber(task.quantity || 0)}</TableCell>
