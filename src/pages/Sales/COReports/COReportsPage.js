@@ -28,7 +28,11 @@ import {
   TableHead,
   TableBody,
   TableRow,
-  TableCell
+  TableCell,
+  Popover,
+  MenuList,
+  ClickAwayListener,
+  Grow
 } from '@mui/material';
 import {
   DateRange as DateRangeIcon,
@@ -102,8 +106,12 @@ const COReportsPage = () => {
   const [selectedTab, setSelectedTab] = useState(0);
   
   // Menu eksportu
-  const [exportMenuAnchor, setExportMenuAnchor] = useState(null);
+  const [exportMenuAnchor, setExportMenuAnchor] = useState(false);
   const isExportMenuOpen = Boolean(exportMenuAnchor);
+  
+  // Menu eksportu kosztów produkcji
+  const [productionExportMenuAnchor, setProductionExportMenuAnchor] = useState(false);
+  const isProductionExportMenuOpen = Boolean(productionExportMenuAnchor);
   
   // Filtry
   const [startDate, setStartDate] = useState(subDays(new Date(), 30));
@@ -119,6 +127,9 @@ const COReportsPage = () => {
     customerStats: {},
     statusStats: {}
   });
+  
+  // Stan dla wybranego produktu (przeniesiony z ProductionCostsTab)
+  const [selectedProduct, setSelectedProduct] = useState('');
   
   // Pobieranie danych
   useEffect(() => {
@@ -303,11 +314,20 @@ const COReportsPage = () => {
   
   // Obsługa menu eksportu
   const handleExportMenuOpen = (event) => {
-    setExportMenuAnchor(event.currentTarget);
+    setExportMenuAnchor(true);
   };
   
   const handleExportMenuClose = () => {
-    setExportMenuAnchor(null);
+    setExportMenuAnchor(false);
+  };
+  
+  // Obsługa menu eksportu kosztów produkcji
+  const handleProductionExportMenuOpen = (event) => {
+    setProductionExportMenuAnchor(true);
+  };
+  
+  const handleProductionExportMenuClose = () => {
+    setProductionExportMenuAnchor(false);
   };
   
   // Funkcja do generowania raportu CSV
@@ -433,6 +453,7 @@ const COReportsPage = () => {
                   quantity: parseFloat(item.quantity) || 0,
                   unit: item.unit || 'szt.',
                   productionTaskId: item.productionTaskId,
+                  productionTaskNumber: item.productionTaskNumber || 'N/A',
                   productionCost: parseFloat(item.productionCost || 0),
                   fullProductionCost: parseFloat(item.fullProductionCost || 0),
                   unitProductionCost: parseFloat(item.productionUnitCost || 0),
@@ -524,34 +545,48 @@ const COReportsPage = () => {
         </Typography>
         
         <Box>
-          <Button
-            variant="outlined"
-            color="primary"
-            onClick={handleExportMenuOpen}
-            startIcon={<DownloadIcon />}
-            endIcon={<ArrowDownIcon />}
-            sx={{ mr: 1 }}
-          >
-            Export
-          </Button>
-          <Menu
-            anchorEl={exportMenuAnchor}
-            open={isExportMenuOpen}
-            onClose={handleExportMenuClose}
-          >
-            <MenuItem onClick={handleExportPDF}>
-              <ListItemIcon>
-                <PdfIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Export as PDF</ListItemText>
-            </MenuItem>
-            <MenuItem onClick={handleExportCSV}>
-              <ListItemIcon>
-                <CsvIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Export as CSV</ListItemText>
-            </MenuItem>
-          </Menu>
+          <Box sx={{ position: 'relative', display: 'inline-block' }}>
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={handleExportMenuOpen}
+              startIcon={<DownloadIcon />}
+              endIcon={<ArrowDownIcon />}
+              sx={{ mr: 1 }}
+            >
+              Export
+            </Button>
+            {isExportMenuOpen && (
+              <ClickAwayListener onClickAway={handleExportMenuClose}>
+                <Paper
+                  sx={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    zIndex: 1000,
+                    minWidth: 200,
+                    mt: 0.5
+                  }}
+                  elevation={3}
+                >
+                  <MenuList>
+                    <MenuItem onClick={handleExportPDF}>
+                      <ListItemIcon>
+                        <PdfIcon fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText>Export as PDF</ListItemText>
+                    </MenuItem>
+                    <MenuItem onClick={handleExportCSV}>
+                      <ListItemIcon>
+                        <CsvIcon fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText>Export as CSV</ListItemText>
+                    </MenuItem>
+                  </MenuList>
+                </Paper>
+              </ClickAwayListener>
+            )}
+          </Box>
           
           <Tooltip title="Odśwież dane">
             <IconButton onClick={handleRefreshData} color="primary">
@@ -743,8 +778,6 @@ const COReportsPage = () => {
     const productionCosts = React.useMemo(() => calculateProductionCosts(), [filteredOrders]);
     const costStats = React.useMemo(() => calculateProductionCostStats(productionCosts), [productionCosts]);
     
-    // Stan dla wybranego produktu
-    const [selectedProduct, setSelectedProduct] = useState('');
     // Stan dla danych historycznych kosztów wybranego produktu
     const [productCostHistory, setProductCostHistory] = useState([]);
     // Stan dla informacji o zamówieniach zawierających wybrany produkt
@@ -857,8 +890,194 @@ const COReportsPage = () => {
       };
     }, [selectedProduct, productionCosts]);
     
+    // Funkcja do eksportu kosztów produkcji do CSV z filtrem produktu
+    const handleExportProductionCostsCSVLocal = () => {
+      handleProductionExportMenuClose();
+      
+      let dataToExport = productionCosts;
+      
+      // Jeśli wybrano konkretny produkt, filtruj dane
+      if (selectedProduct) {
+        dataToExport = productionCosts.filter(item => item.itemName === selectedProduct);
+      }
+      
+      if (dataToExport.length === 0) {
+        showError('Brak danych kosztów produkcji do eksportu');
+        return;
+      }
+
+      // Definicja nagłówków dla CSV
+      const headers = [
+        { label: 'CO Number', key: 'orderNumber' },
+        { label: 'Order Date', key: 'orderDate' },
+        { label: 'Customer Name', key: 'customerName' },
+        { label: 'Product Name', key: 'itemName' },
+        { label: 'Quantity', key: 'quantity' },
+        { label: 'Unit', key: 'unit' },
+        { label: 'Production Cost per Unit', key: 'unitProductionCost' },
+        { label: 'Full Production Cost per Unit', key: 'fullProductionUnitCost' },
+        { label: 'Total Production Cost', key: 'totalProductionCost' },
+        { label: 'Total Full Production Cost', key: 'totalFullProductionCost' },
+        { label: 'MO Number', key: 'productionTaskNumber' }
+      ];
+      
+      // Przygotuj dane do eksportu
+      const exportData = dataToExport.map(item => ({
+        ...item,
+        orderDate: formatDateForExport(item.orderDate),
+        unitProductionCost: formatCurrencyForExport(item.unitProductionCost),
+        fullProductionUnitCost: formatCurrencyForExport(item.fullProductionUnitCost),
+        totalProductionCost: formatCurrencyForExport(item.totalProductionCost),
+        totalFullProductionCost: formatCurrencyForExport(item.totalFullProductionCost),
+        productionTaskNumber: item.productionTaskNumber || 'N/A'
+      }));
+      
+      // Wygeneruj plik CSV z nazwą uwzględniającą filtr produktu
+      const productSuffix = selectedProduct ? `_${selectedProduct.replace(/[^a-zA-Z0-9]/g, '_')}` : '';
+      const filename = `production_costs_report${productSuffix}_${formatDateForExport(new Date(), 'yyyyMMdd')}`;
+      const success = exportToCSV(exportData, headers, filename);
+      
+      if (success) {
+        const message = selectedProduct 
+          ? `Production costs CSV report for ${selectedProduct} has been generated successfully.`
+          : 'Production costs CSV report has been generated successfully.';
+        showSuccess(message);
+      } else {
+        showError('Failed to generate production costs CSV report.');
+      }
+    };
+
+    // Funkcja do eksportu kosztów produkcji do PDF z filtrem produktu
+    const handleExportProductionCostsPDFLocal = () => {
+      handleProductionExportMenuClose();
+      
+      let dataToExport = productionCosts;
+      
+      // Jeśli wybrano konkretny produkt, filtruj dane
+      if (selectedProduct) {
+        dataToExport = productionCosts.filter(item => item.itemName === selectedProduct);
+      }
+      
+      if (dataToExport.length === 0) {
+        showError('Brak danych kosztów produkcji do eksportu');
+        return;
+      }
+
+      const filteredCostStats = calculateProductionCostStats(dataToExport);
+
+      // Definicja nagłówków dla PDF
+      const headers = [
+        { label: 'Order Number', key: 'orderNumber' },
+        { label: 'Date', key: 'orderDate' },
+        { label: 'Customer', key: 'customerName' },
+        { label: 'Product', key: 'itemName' },
+        { label: 'Quantity', key: 'quantity' },
+        { label: 'Cost/Unit', key: 'unitProductionCost' },
+        { label: 'Full Cost/Unit', key: 'fullProductionUnitCost' },
+        { label: 'Total Cost', key: 'totalFullProductionCost' },
+        { label: 'MO Number', key: 'productionTaskNumber' }
+      ];
+      
+      // Przygotuj dane do eksportu
+      const exportData = dataToExport.map(item => ({
+        ...item,
+        orderDate: formatDateForExport(item.orderDate),
+        unitProductionCost: formatCurrencyForExport(item.unitProductionCost),
+        fullProductionUnitCost: formatCurrencyForExport(item.fullProductionUnitCost),
+        totalProductionCost: formatCurrencyForExport(item.totalProductionCost),
+        totalFullProductionCost: formatCurrencyForExport(item.totalFullProductionCost),
+        productionTaskNumber: item.productionTaskNumber || 'N/A'
+      }));
+      
+      // Utwórz datę i zakres filtrowania jako podtytuł
+      const dateRange = `${formatDateForExport(startDate)} - ${formatDateForExport(endDate)}`;
+      const customerFilter = selectedCustomer !== 'all' 
+        ? `, Customer: ${getCustomerName(selectedCustomer)}` 
+        : '';
+      const productFilter = selectedProduct ? `, Product: ${selectedProduct}` : '';
+      
+      // Opcje dla eksportu PDF
+      const pdfOptions = {
+        title: 'Production Costs Report',
+        subtitle: `Period: ${dateRange}${customerFilter}${productFilter}`,
+        footerText: `Generated: ${new Date().toLocaleString()} | Items: ${filteredCostStats.totalItems} | Total Cost: ${formatCurrency(filteredCostStats.totalFullProductionCost)}`
+      };
+      
+      // Wygeneruj plik PDF z nazwą uwzględniającą filtr produktu
+      const productSuffix = selectedProduct ? `_${selectedProduct.replace(/[^a-zA-Z0-9]/g, '_')}` : '';
+      const filename = `production_costs_report${productSuffix}_${formatDateForExport(new Date(), 'yyyyMMdd')}`;
+      const success = exportToPDF(exportData, headers, filename, pdfOptions);
+      
+      if (success) {
+        const message = selectedProduct 
+          ? `Production costs PDF report for ${selectedProduct} has been generated successfully.`
+          : 'Production costs PDF report has been generated successfully.';
+        showSuccess(message);
+      } else {
+        showError('Failed to generate production costs PDF report.');
+      }
+    };
+
     return (
       <>
+        {/* Nagłówek z przyciskami Export i Odśwież */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Typography variant="h6" component="h2">
+            Raport kosztów produkcji
+          </Typography>
+          
+          <Box>
+            <Box sx={{ position: 'relative', display: 'inline-block' }}>
+              <Button
+                variant="outlined"
+                color="primary"
+                onClick={handleProductionExportMenuOpen}
+                startIcon={<DownloadIcon />}
+                endIcon={<ArrowDownIcon />}
+                sx={{ mr: 1 }}
+              >
+                Export
+              </Button>
+              {isProductionExportMenuOpen && (
+                <ClickAwayListener onClickAway={handleProductionExportMenuClose}>
+                  <Paper
+                    sx={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      zIndex: 1000,
+                      minWidth: 200,
+                      mt: 0.5
+                    }}
+                    elevation={3}
+                  >
+                    <MenuList>
+                      <MenuItem onClick={handleExportProductionCostsPDFLocal}>
+                        <ListItemIcon>
+                          <PdfIcon fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText>Export as PDF</ListItemText>
+                      </MenuItem>
+                      <MenuItem onClick={handleExportProductionCostsCSVLocal}>
+                        <ListItemIcon>
+                          <CsvIcon fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText>Export as CSV</ListItemText>
+                      </MenuItem>
+                    </MenuList>
+                  </Paper>
+                </ClickAwayListener>
+              )}
+            </Box>
+            
+            <Tooltip title="Odśwież dane">
+              <IconButton onClick={handleRefreshData} color="primary">
+                <RefreshIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        </Box>
+
         {/* Filtry */}
         <Paper sx={{ p: 3, mb: 3 }}>
           <Grid container spacing={3} alignItems="center">
@@ -983,17 +1202,6 @@ const COReportsPage = () => {
                 </Select>
               </FormControl>
             </Grid>
-            
-            <Grid item xs={12} md={4}>
-              <Button 
-                variant="contained"
-                color="primary"
-                startIcon={<RefreshIcon />}
-                onClick={handleRefreshData}
-              >
-                Odśwież dane
-              </Button>
-            </Grid>
           </Grid>
         </Paper>
 
@@ -1026,19 +1234,7 @@ const COReportsPage = () => {
                 
                 {productStats && (
                   <Grid container spacing={3} sx={{ mb: 3 }}>
-                    <Grid item xs={12} md={2}>
-                      <Card>
-                        <CardContent>
-                          <Typography color="textSecondary" gutterBottom>
-                            Łączna ilość
-                          </Typography>
-                          <Typography variant="h5" component="div">
-                            {productStats.totalQuantity}
-                          </Typography>
-                        </CardContent>
-                      </Card>
-                    </Grid>
-                    <Grid item xs={12} md={2}>
+                    <Grid item xs={12} md={3}>
                       <Card>
                         <CardContent>
                           <Typography color="textSecondary" gutterBottom>
@@ -1050,7 +1246,7 @@ const COReportsPage = () => {
                         </CardContent>
                       </Card>
                     </Grid>
-                    <Grid item xs={12} md={2}>
+                    <Grid item xs={12} md={3}>
                       <Card>
                         <CardContent>
                           <Typography color="textSecondary" gutterBottom>
@@ -1062,7 +1258,7 @@ const COReportsPage = () => {
                         </CardContent>
                       </Card>
                     </Grid>
-                    <Grid item xs={12} md={2}>
+                    <Grid item xs={12} md={3}>
                       <Card>
                         <CardContent>
                           <Typography color="textSecondary" gutterBottom>
@@ -1074,19 +1270,7 @@ const COReportsPage = () => {
                         </CardContent>
                       </Card>
                     </Grid>
-                    <Grid item xs={12} md={2}>
-                      <Card>
-                        <CardContent>
-                          <Typography color="textSecondary" gutterBottom>
-                            Łączny pełny koszt
-                          </Typography>
-                          <Typography variant="h5" component="div">
-                            {formatCurrency(productStats.totalFullCost)}
-                          </Typography>
-                        </CardContent>
-                      </Card>
-                    </Grid>
-                    <Grid item xs={12} md={2}>
+                    <Grid item xs={12} md={3}>
                       <Card>
                         <CardContent>
                           <Typography color="textSecondary" gutterBottom>
@@ -1105,43 +1289,100 @@ const COReportsPage = () => {
                 {productCostHistory.length > 0 && (
                   <Grid container spacing={3} sx={{ mb: 3 }}>
                     <Grid item xs={12}>
-                      <Paper sx={{ p: 2 }}>
-                        <Typography variant="h6" component="h3">
-                          Pełny koszt produkcji produktu w czasie
+                      <Paper sx={{ 
+                        p: 3, 
+                        background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+                        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+                        borderRadius: 2
+                      }}>
+                        <Typography variant="h6" component="h3" sx={{ 
+                          mb: 2, 
+                          color: '#2c3e50',
+                          fontWeight: 'bold',
+                          textAlign: 'center'
+                        }}>
+                          📈 Analiza kosztów produkcji w czasie
                         </Typography>
-                        <Box sx={{ height: 400, mt: 2 }}>
+                        <Box sx={{ 
+                          height: 450, 
+                          mt: 2,
+                          background: 'white',
+                          borderRadius: 2,
+                          p: 2,
+                          boxShadow: 'inset 0 2px 8px rgba(0, 0, 0, 0.05)'
+                        }}>
                           <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={productCostHistory} margin={{ top: 5, right: 20, left: 20, bottom: 30 }}>
-                              <CartesianGrid strokeDasharray="3 3" />
+                            <LineChart 
+                              data={productCostHistory} 
+                              margin={{ top: 20, right: 30, left: 20, bottom: 50 }}
+                            >
+                              <defs>
+                                <linearGradient id="costGradient" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#82ca9d" stopOpacity={0.8}/>
+                                  <stop offset="95%" stopColor="#82ca9d" stopOpacity={0.1}/>
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#e8e8e8" />
                               <XAxis
                                 dataKey="date"
                                 tickFormatter={(date) => formatDateDisplay(date)}
-                                label={{ value: 'Data', position: 'bottom', offset: 0 }}
+                                tick={{ fontSize: 12, fill: '#666' }}
+                                axisLine={{ stroke: '#ddd' }}
+                                tickLine={{ stroke: '#ddd' }}
                               />
                               <YAxis
                                 tickFormatter={(value) => value.toFixed(2) + ' €'}
-                                label={{ value: 'Pełny koszt na sztukę (€)', angle: -90, position: 'insideLeft' }}
+                                tick={{ fontSize: 12, fill: '#666' }}
+                                axisLine={{ stroke: '#ddd' }}
+                                tickLine={{ stroke: '#ddd' }}
+                                label={{ 
+                                  value: 'Koszt na sztukę (€)', 
+                                  angle: -90, 
+                                  position: 'insideLeft',
+                                  style: { textAnchor: 'middle', fill: '#666' }
+                                }}
                               />
                               <RechartsTooltip
                                 formatter={(value) => [value.toFixed(2) + ' €', 'Pełny koszt na sztukę']}
                                 labelFormatter={(date) => formatDateDisplay(date)}
+                                contentStyle={{
+                                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                                  border: '1px solid #82ca9d',
+                                  borderRadius: '8px',
+                                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
+                                }}
                               />
-                              <Legend verticalAlign="top" height={36} />
                               <Line
                                 type="monotone"
                                 dataKey="fullUnitCost"
                                 name="Pełny koszt na sztukę"
                                 stroke="#82ca9d"
-                                strokeWidth={2}
-                                dot={{ r: 4 }}
-                                activeDot={{ r: 6 }}
+                                strokeWidth={3}
+                                dot={{ 
+                                  r: 5, 
+                                  fill: '#82ca9d',
+                                  strokeWidth: 2,
+                                  stroke: '#fff'
+                                }}
+                                activeDot={{ 
+                                  r: 8,
+                                  fill: '#82ca9d',
+                                  strokeWidth: 3,
+                                  stroke: '#fff',
+                                  boxShadow: '0 0 10px rgba(130, 202, 157, 0.5)'
+                                }}
                               />
                               {productStats && (
                                 <ReferenceLine
                                   y={productStats.avgFullUnitCost}
-                                  label="Średnia"
-                                  stroke="#82ca9d"
-                                  strokeDasharray="3 3"
+                                  label={{ 
+                                    value: "Średnia", 
+                                    position: "topRight",
+                                    style: { fill: '#666', fontWeight: 'bold' }
+                                  }}
+                                  stroke="#ff7c7c"
+                                  strokeDasharray="5 5"
+                                  strokeWidth={2}
                                 />
                               )}
                             </LineChart>
