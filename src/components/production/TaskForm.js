@@ -1,5 +1,5 @@
 // src/components/production/TaskForm.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -67,6 +67,14 @@ const TaskForm = ({ taskId }) => {
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [selectedPurchaseOrder, setSelectedPurchaseOrder] = useState(null);
   
+  // Cache stany dla optymalizacji
+  const [dataLoaded, setDataLoaded] = useState({
+    recipes: false,
+    workstations: false,
+    inventoryProducts: false,
+    purchaseOrders: false
+  });
+  
   const [taskData, setTaskData] = useState({
     name: '',
     description: '',
@@ -90,34 +98,151 @@ const TaskForm = ({ taskId }) => {
 
   const [recipeYieldError, setRecipeYieldError] = useState(false);
 
+  // Funkcja do cache'owania danych w sessionStorage
+  const getCachedData = useCallback((key) => {
+    try {
+      const cached = sessionStorage.getItem(`taskform_${key}`);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        // Cache ważny przez 5 minut
+        if (Date.now() - timestamp < 5 * 60 * 1000) {
+          return data;
+        }
+      }
+    } catch (error) {
+      console.warn('Błąd odczytu cache:', error);
+    }
+    return null;
+  }, []);
+
+  const setCachedData = useCallback((key, data) => {
+    try {
+      sessionStorage.setItem(`taskform_${key}`, JSON.stringify({
+        data,
+        timestamp: Date.now()
+      }));
+    } catch (error) {
+      console.warn('Błąd zapisu cache:', error);
+    }
+  }, []);
+
+  // Memoizowane opcje dla dropdown'ów
+  const recipeOptions = useMemo(() => 
+    recipes.map((recipe) => (
+      <MenuItem key={recipe.id} value={recipe.id}>
+        {recipe.name}
+      </MenuItem>
+    ))
+  , [recipes]);
+
+  const workstationOptions = useMemo(() => 
+    workstations.map((workstation) => (
+      <MenuItem key={workstation.id} value={workstation.id}>
+        {workstation.name}
+      </MenuItem>
+    ))
+  , [workstations]);
+
+  const unitOptions = useMemo(() => [
+    <MenuItem key="szt" value="szt.">szt.</MenuItem>,
+    <MenuItem key="kg" value="kg">kg</MenuItem>,
+    <MenuItem key="caps" value="caps">caps</MenuItem>
+  ], []);
+
+  const priorityOptions = useMemo(() => [
+    <MenuItem key="niski" value="Niski">Niski</MenuItem>,
+    <MenuItem key="normalny" value="Normalny">Normalny</MenuItem>,
+    <MenuItem key="wysoki" value="Wysoki">Wysoki</MenuItem>,
+    <MenuItem key="krytyczny" value="Krytyczny">Krytyczny</MenuItem>
+  ], []);
+
+  const statusOptions = useMemo(() => [
+    <MenuItem key="zaplanowane" value="Zaplanowane">Zaplanowane</MenuItem>,
+    <MenuItem key="w-trakcie" value="W trakcie">W trakcie</MenuItem>,
+    <MenuItem key="zakonczone" value="Zakończone">Zakończone</MenuItem>,
+    <MenuItem key="anulowane" value="Anulowane">Anulowane</MenuItem>
+  ], []);
+
+  // Cleanup effect - czyści cache gdy komponent jest odmontowywany
   useEffect(() => {
-    const fetchData = async () => {
+    return () => {
+      // Opcjonalnie można wyczyścić cache przy odmontowywaniu
+      // sessionStorage.removeItem('taskform_recipes');
+      // sessionStorage.removeItem('taskform_workstations');
+      // sessionStorage.removeItem('taskform_inventoryProducts');
+    };
+  }, []);
+
+  // Optymalizowane pobieranie danych - tylko niezbędne przy starcie
+  useEffect(() => {
+    const fetchCriticalData = async () => {
       try {
         setLoading(true);
-        await fetchRecipes();
-        await fetchInventoryProducts();
-        await fetchWorkstations(); // Pobierz stanowiska produkcyjne
-        await fetchPurchaseOrders(); // Pobierz zamówienia zakupowe
         
         if (taskId && taskId !== 'new') {
+          // Tryb edycji - najpierw pobierz zadanie, potem resztę w tle
           await fetchTask();
+          // Pobierz podstawowe dane równolegle w tle
+          fetchSupportingDataInBackground();
         } else {
-          setLoading(false);
+          // Tryb nowego zadania - pobierz tylko podstawowe dane
+          await Promise.all([
+            fetchRecipes(),
+            fetchWorkstations()
+          ]);
         }
       } catch (error) {
         showError('Błąd podczas ładowania danych: ' + error.message);
         console.error('Error loading data:', error);
+      } finally {
         setLoading(false);
       }
     };
     
-    fetchData();
+    fetchCriticalData();
   }, [taskId]);
 
-  const fetchRecipes = async () => {
+  // Pobieranie danych wspomagających w tle
+  const fetchSupportingDataInBackground = useCallback(async () => {
     try {
+      // Pobieraj dane które nie są krytyczne dla edycji w tle
+      const promises = [];
+      
+      if (!dataLoaded.recipes) {
+        promises.push(fetchRecipes());
+      }
+      if (!dataLoaded.workstations) {
+        promises.push(fetchWorkstations());
+      }
+      if (!dataLoaded.inventoryProducts) {
+        promises.push(fetchInventoryProducts());
+      }
+      if (!dataLoaded.purchaseOrders) {
+        promises.push(fetchPurchaseOrders());
+      }
+      
+      await Promise.allSettled(promises);
+    } catch (error) {
+      console.warn('Błąd podczas ładowania danych wspomagających:', error);
+    }
+  }, [dataLoaded]);
+
+  const fetchRecipes = async () => {
+    if (dataLoaded.recipes) return;
+    
+    try {
+      // Sprawdź cache
+      const cachedRecipes = getCachedData('recipes');
+      if (cachedRecipes) {
+        setRecipes(cachedRecipes);
+        setDataLoaded(prev => ({ ...prev, recipes: true }));
+        return;
+      }
+
       const recipesData = await getAllRecipes();
       setRecipes(recipesData);
+      setCachedData('recipes', recipesData);
+      setDataLoaded(prev => ({ ...prev, recipes: true }));
     } catch (error) {
       showError('Błąd podczas pobierania receptur: ' + error.message);
       console.error('Error fetching recipes:', error);
@@ -125,11 +250,23 @@ const TaskForm = ({ taskId }) => {
   };
 
   const fetchInventoryProducts = async () => {
+    if (dataLoaded.inventoryProducts) return;
+    
     try {
+      // Sprawdź cache
+      const cachedProducts = getCachedData('inventoryProducts');
+      if (cachedProducts) {
+        setInventoryProducts(cachedProducts);
+        setDataLoaded(prev => ({ ...prev, inventoryProducts: true }));
+        return;
+      }
+
       // Pobierz tylko produkty z kategorii "Gotowe produkty"
       const allItems = await getAllInventoryItems();
       const products = allItems.filter(item => item.category === 'Gotowe produkty');
       setInventoryProducts(products);
+      setCachedData('inventoryProducts', products);
+      setDataLoaded(prev => ({ ...prev, inventoryProducts: true }));
     } catch (error) {
       showError('Błąd podczas pobierania produktów z magazynu: ' + error.message);
       console.error('Error fetching inventory products:', error);
@@ -137,9 +274,21 @@ const TaskForm = ({ taskId }) => {
   };
 
   const fetchWorkstations = async () => {
+    if (dataLoaded.workstations) return;
+    
     try {
+      // Sprawdź cache
+      const cachedWorkstations = getCachedData('workstations');
+      if (cachedWorkstations) {
+        setWorkstations(cachedWorkstations);
+        setDataLoaded(prev => ({ ...prev, workstations: true }));
+        return;
+      }
+
       const workstationsData = await getAllWorkstations();
       setWorkstations(workstationsData);
+      setCachedData('workstations', workstationsData);
+      setDataLoaded(prev => ({ ...prev, workstations: true }));
     } catch (error) {
       showError('Błąd podczas pobierania stanowisk produkcyjnych: ' + error.message);
       console.error('Error fetching workstations:', error);
@@ -147,6 +296,8 @@ const TaskForm = ({ taskId }) => {
   };
 
   const fetchPurchaseOrders = async () => {
+    if (dataLoaded.purchaseOrders) return;
+    
     try {
       const poData = await getAllPurchaseOrders();
       
@@ -159,6 +310,7 @@ const TaskForm = ({ taskId }) => {
       
       console.log('Pobrano zamówienia zakupowe:', filteredPOs);
       setPurchaseOrders(filteredPOs);
+      setDataLoaded(prev => ({ ...prev, purchaseOrders: true }));
     } catch (error) {
       showError('Błąd podczas pobierania zamówień zakupowych: ' + error.message);
       console.error('Error fetching purchase orders:', error);
@@ -190,36 +342,67 @@ const TaskForm = ({ taskId }) => {
       console.log('Pobrane zadanie z przetworzonymi datami:', taskWithParsedDates);
       setTaskData(taskWithParsedDates);
       
+      // Pobierz dodatkowe dane tylko jeśli są potrzebne
+      const additionalDataPromises = [];
+      
       // Jeśli zadanie ma powiązany produkt z magazynu, pobierz go
       if (task.inventoryProductId) {
-        const inventoryItem = await getInventoryItemById(task.inventoryProductId);
-        if (inventoryItem) {
-          setTaskData(prev => ({
-            ...prev,
-            inventoryProductId: inventoryItem.id
-          }));
-        }
+        additionalDataPromises.push(
+          getInventoryItemById(task.inventoryProductId).then(inventoryItem => {
+            if (inventoryItem) {
+              setTaskData(prev => ({
+                ...prev,
+                inventoryProductId: inventoryItem.id
+              }));
+            }
+          }).catch(error => {
+            console.warn('Błąd podczas pobierania produktu z magazynu:', error);
+          })
+        );
       }
       
       // Jeśli zadanie ma przypisaną recepturę, pobierz jej szczegóły
       if (task.recipeId) {
-        try {
-          const recipeData = await getRecipeById(task.recipeId);
-          if (recipeData) {
-            setRecipe(recipeData);
-          }
-        } catch (recipeError) {
-          console.error('Błąd podczas pobierania receptury:', recipeError);
-          showError('Nie udało się pobrać danych receptury');
-        }
+        additionalDataPromises.push(
+          getRecipeById(task.recipeId).then(recipeData => {
+            if (recipeData) {
+              setRecipe(recipeData);
+            }
+          }).catch(recipeError => {
+            console.error('Błąd podczas pobierania receptury:', recipeError);
+            showError('Nie udało się pobrać danych receptury');
+          })
+        );
       }
+      
+      // Wykonaj dodatkowe zapytania równolegle
+      if (additionalDataPromises.length > 0) {
+        await Promise.allSettled(additionalDataPromises);
+      }
+      
     } catch (error) {
       showError('Błąd podczas pobierania zadania: ' + error.message);
       console.error('Error fetching task:', error);
-    } finally {
-      setLoading(false);
     }
   };
+
+  // Lazy loading dla dropdown'ów - ładuj dane dopiero gdy użytkownik otwiera dropdown
+  const handleDropdownOpen = useCallback((dataType) => {
+    switch (dataType) {
+      case 'inventoryProducts':
+        if (!dataLoaded.inventoryProducts) {
+          fetchInventoryProducts();
+        }
+        break;
+      case 'purchaseOrders':
+        if (!dataLoaded.purchaseOrders) {
+          fetchPurchaseOrders();
+        }
+        break;
+      default:
+        break;
+    }
+  }, [dataLoaded]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -285,7 +468,25 @@ const TaskForm = ({ taskId }) => {
     }
 
     try {
-      const selectedRecipe = await getRecipeById(recipeId);
+      // Sprawdź czy receptura jest już załadowana w pamięci
+      const existingRecipe = recipes.find(r => r.id === recipeId);
+      let selectedRecipe;
+      
+      if (existingRecipe) {
+        // Użyj już załadowanej receptury
+        selectedRecipe = existingRecipe;
+      } else {
+        // Sprawdź cache
+        const cachedRecipe = getCachedData(`recipe_${recipeId}`);
+        if (cachedRecipe) {
+          selectedRecipe = cachedRecipe;
+        } else {
+          // Pobierz z serwera jako ostatnia opcja
+          selectedRecipe = await getRecipeById(recipeId);
+          setCachedData(`recipe_${recipeId}`, selectedRecipe);
+        }
+      }
+      
       setRecipe(selectedRecipe);
       
       // Ustaw nazwę produktu z receptury
@@ -536,7 +737,21 @@ const TaskForm = ({ taskId }) => {
   };
 
   if (loading) {
-    return <div>Ładowanie zadania...</div>;
+    return (
+      <Container maxWidth="md">
+        <Paper elevation={3} sx={{ p: 3, mt: 3, mb: 3 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
+            <CircularProgress size={40} sx={{ mb: 2 }} />
+            <Typography variant="h6" color="text.secondary">
+              {taskId && taskId !== 'new' ? 'Ładowanie zadania...' : 'Przygotowywanie formularza...'}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              Może to potrwać chwilę
+            </Typography>
+          </Box>
+        </Paper>
+      </Container>
+    );
   }
 
   return (
@@ -611,11 +826,7 @@ const TaskForm = ({ taskId }) => {
                       <MenuItem value="">
                         <em>Brak</em>
                       </MenuItem>
-                      {recipes.map((recipe) => (
-                        <MenuItem key={recipe.id} value={recipe.id}>
-                          {recipe.name}
-                        </MenuItem>
-                      ))}
+                      {recipeOptions}
                     </Select>
                   </FormControl>
                 </Grid>
@@ -625,6 +836,8 @@ const TaskForm = ({ taskId }) => {
                     options={inventoryProducts}
                     getOptionLabel={(option) => option.name}
                     value={taskData.inventoryProductId ? { id: taskData.inventoryProductId, name: taskData.productName } : null}
+                    onOpen={() => handleDropdownOpen('inventoryProducts')}
+                    loading={!dataLoaded.inventoryProducts}
                     onChange={(event, newValue) => {
                       if (newValue) {
                         setTaskData(prev => ({
@@ -647,6 +860,15 @@ const TaskForm = ({ taskId }) => {
                         label="Produkt z magazynu (opcjonalnie)"
                         variant="outlined"
                         helperText="Wybierz istniejący produkt z magazynu lub pozostaw puste, aby utworzyć nowy"
+                        InputProps={{
+                          ...params.InputProps,
+                          endAdornment: (
+                            <>
+                              {!dataLoaded.inventoryProducts ? <CircularProgress color="inherit" size={20} /> : null}
+                              {params.InputProps.endAdornment}
+                            </>
+                          ),
+                        }}
                       />
                     )}
                   />
@@ -673,9 +895,7 @@ const TaskForm = ({ taskId }) => {
                       onChange={handleChange}
                       label="Jednostka"
                     >
-                      <MenuItem value="szt.">szt.</MenuItem>
-                      <MenuItem value="kg">kg</MenuItem>
-                      <MenuItem value="caps">caps</MenuItem>
+                      {unitOptions}
                     </Select>
                   </FormControl>
                 </Grid>
@@ -765,10 +985,7 @@ const TaskForm = ({ taskId }) => {
                       onChange={handleChange}
                       label="Status"
                     >
-                      <MenuItem value="Zaplanowane">Zaplanowane</MenuItem>
-                      <MenuItem value="W trakcie">W trakcie</MenuItem>
-                      <MenuItem value="Zakończone">Zakończone</MenuItem>
-                      <MenuItem value="Anulowane">Anulowane</MenuItem>
+                      {statusOptions}
                     </Select>
                     <FormHelperText>Status zadania produkcyjnego</FormHelperText>
                   </FormControl>
@@ -782,10 +999,7 @@ const TaskForm = ({ taskId }) => {
                       onChange={handleChange}
                       label="Priorytet"
                     >
-                      <MenuItem value="Niski">Niski</MenuItem>
-                      <MenuItem value="Normalny">Normalny</MenuItem>
-                      <MenuItem value="Wysoki">Wysoki</MenuItem>
-                      <MenuItem value="Krytyczny">Krytyczny</MenuItem>
+                      {priorityOptions}
                     </Select>
                   </FormControl>
                 </Grid>
@@ -801,11 +1015,7 @@ const TaskForm = ({ taskId }) => {
                       <MenuItem value="">
                         <em>Brak</em>
                       </MenuItem>
-                      {workstations.map((workstation) => (
-                        <MenuItem key={workstation.id} value={workstation.id}>
-                          {workstation.name}
-                        </MenuItem>
-                      ))}
+                      {workstationOptions}
                     </Select>
                   </FormControl>
                 </Grid>
@@ -892,6 +1102,8 @@ const TaskForm = ({ taskId }) => {
                       onChange={(event, newValue) => {
                         setSelectedPurchaseOrder(newValue);
                       }}
+                      onOpen={() => handleDropdownOpen('purchaseOrders')}
+                      loading={!dataLoaded.purchaseOrders}
                       options={purchaseOrders}
                       getOptionLabel={(option) => `${option.number} - ${option.supplier?.name || 'Brak dostawcy'}`}
                       renderInput={(params) => (
@@ -900,6 +1112,15 @@ const TaskForm = ({ taskId }) => {
                           label="Wybierz zamówienie zakupowe"
                           variant="outlined"
                           fullWidth
+                          InputProps={{
+                            ...params.InputProps,
+                            endAdornment: (
+                              <>
+                                {!dataLoaded.purchaseOrders ? <CircularProgress color="inherit" size={20} /> : null}
+                                {params.InputProps.endAdornment}
+                              </>
+                            ),
+                          }}
                         />
                       )}
                       sx={{ flexGrow: 1, mr: 1 }}
@@ -910,6 +1131,7 @@ const TaskForm = ({ taskId }) => {
                       onClick={handleAddPurchaseOrderLink}
                       startIcon={<LinkIcon />}
                       sx={{ height: 56 }}
+                      disabled={!dataLoaded.purchaseOrders}
                     >
                       Powiąż
                     </Button>

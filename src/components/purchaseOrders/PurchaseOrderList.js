@@ -4,7 +4,8 @@ import {
   Container, Typography, Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Button, TextField, Box, Chip, IconButton, Dialog,
   DialogActions, DialogContent, DialogContentText, DialogTitle, MenuItem, Select, FormControl, InputLabel, 
-  Tooltip, Menu, Checkbox, ListItemText, TableSortLabel, Pagination, TableFooter, CircularProgress
+  Tooltip, Menu, Checkbox, ListItemText, TableSortLabel, Pagination, TableFooter, CircularProgress,
+  Fade, Skeleton
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, Description as DescriptionIcon, ViewColumn as ViewColumnIcon } from '@mui/icons-material';
 import { getAllPurchaseOrders, deletePurchaseOrder, updatePurchaseOrderStatus, getPurchaseOrdersWithPagination, clearSearchCache } from '../../services/purchaseOrderService';
@@ -89,7 +90,10 @@ const PurchaseOrderList = () => {
       setTotalItems(response.pagination.totalItems);
       setTotalPages(response.pagination.totalPages);
       
-      setLoading(false);
+      // Opóźnienie dla efektu wizualnego podobnie jak w liście stanów magazynowych
+      setTimeout(() => {
+        setLoading(false);
+      }, 300);
     } catch (error) {
       console.error('Błąd podczas pobierania zamówień zakupu:', error);
       showError('Nie udało się pobrać listy zamówień zakupu');
@@ -348,170 +352,204 @@ const PurchaseOrderList = () => {
         </Menu>
       </Paper>
       
-      <Paper>
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                {visibleColumns['number'] && <SortableTableCell id="number" label="Numer zamówienia" />}
-                {visibleColumns['supplier'] && <SortableTableCell id="supplier" label="Dostawca" />}
-                {visibleColumns['orderDate'] && <SortableTableCell id="orderDate" label="Data zamówienia" />}
-                {visibleColumns['expectedDeliveryDate'] && <SortableTableCell id="expectedDeliveryDate" label="Oczekiwana dostawa" />}
-                {visibleColumns['value'] && <SortableTableCell id="value" label="Wartość" />}
-                {visibleColumns['status'] && <SortableTableCell id="status" label="Status" />}
-                <TableCell align="right">Akcje</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loading ? (
+      <Fade in={!loading} timeout={300}>
+        <Paper>
+          <TableContainer>
+            <Table>
+              <TableHead>
                 <TableRow>
-                  <TableCell colSpan={7} align="center">
-                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 4 }}>
-                      <CircularProgress />
-                      <Typography variant="body1" sx={{ ml: 2 }}>
-                        Ładowanie zamówień zakupu...
-                      </Typography>
-                    </Box>
-                  </TableCell>
+                  {visibleColumns['number'] && <SortableTableCell id="number" label="Numer zamówienia" />}
+                  {visibleColumns['supplier'] && <SortableTableCell id="supplier" label="Dostawca" />}
+                  {visibleColumns['orderDate'] && <SortableTableCell id="orderDate" label="Data zamówienia" />}
+                  {visibleColumns['expectedDeliveryDate'] && <SortableTableCell id="expectedDeliveryDate" label="Oczekiwana dostawa" />}
+                  {visibleColumns['value'] && <SortableTableCell id="value" label="Wartość" />}
+                  {visibleColumns['status'] && <SortableTableCell id="status" label="Status" />}
+                  <TableCell align="right">Akcje</TableCell>
                 </TableRow>
-              ) : filteredPOs.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} align="center">
-                    <Typography variant="body1">Brak zamówień zakupowych</Typography>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredPOs.map((po) => (
-                  <TableRow key={po.id}>
-                    {visibleColumns['number'] && (
-                      <TableCell>
-                        <Link 
-                          to={`/purchase-orders/${po.id}`}
-                          style={{ textDecoration: 'none', color: 'inherit' }}
-                        >
-                          <Typography variant="body2" fontWeight="medium">
-                            {po.number || `#${po.id.substring(0, 8).toUpperCase()}`}
-                          </Typography>
-                        </Link>
+              </TableHead>
+              <TableBody>
+                {loading ? (
+                  Array.from({ length: limit }).map((_, index) => (
+                    <TableRow key={index}>
+                      {visibleColumns['number'] && (
+                        <TableCell>
+                          <Skeleton variant="text" width="80%" height={24} />
+                        </TableCell>
+                      )}
+                      {visibleColumns['supplier'] && (
+                        <TableCell>
+                          <Skeleton variant="text" width="70%" height={24} />
+                        </TableCell>
+                      )}
+                      {visibleColumns['orderDate'] && (
+                        <TableCell>
+                          <Skeleton variant="text" width="60%" height={24} />
+                        </TableCell>
+                      )}
+                      {visibleColumns['expectedDeliveryDate'] && (
+                        <TableCell>
+                          <Skeleton variant="text" width="60%" height={24} />
+                        </TableCell>
+                      )}
+                      {visibleColumns['value'] && (
+                        <TableCell>
+                          <Skeleton variant="text" width="50%" height={24} />
+                        </TableCell>
+                      )}
+                      {visibleColumns['status'] && (
+                        <TableCell>
+                          <Skeleton variant="rectangular" width={80} height={24} />
+                        </TableCell>
+                      )}
+                      <TableCell align="right">
+                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                          <Skeleton variant="circular" width={24} height={24} />
+                          <Skeleton variant="circular" width={24} height={24} />
+                          <Skeleton variant="circular" width={24} height={24} />
+                          <Skeleton variant="circular" width={24} height={24} />
+                        </Box>
                       </TableCell>
-                    )}
-                    
-                    {visibleColumns['supplier'] && (
-                      <TableCell>
-                        {po.supplier ? po.supplier.name : '-'}
-                      </TableCell>
-                    )}
-                    
-                    {visibleColumns['orderDate'] && (
-                      <TableCell>
-                        {po.orderDate ? new Date(po.orderDate).toLocaleDateString() : '-'}
-                      </TableCell>
-                    )}
-                    
-                    {visibleColumns['expectedDeliveryDate'] && (
-                      <TableCell>
-                        {po.expectedDeliveryDate ? new Date(po.expectedDeliveryDate).toLocaleDateString() : '-'}
-                      </TableCell>
-                    )}
-                    
-                    {visibleColumns['value'] && (
-                      <TableCell>
-                        {po.totalGross !== undefined ? 
-                          `${Number(po.totalGross).toFixed(2)} ${po.currency || 'PLN'}` : 
-                          '-'}
-                      </TableCell>
-                    )}
-                    
-                    {visibleColumns['status'] && (
-                      <TableCell>
-                        {getStatusChip(po.status)}
-                      </TableCell>
-                    )}
-                    
-                    <TableCell align="right">
-                      <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                        <Tooltip title="Podgląd">
-                          <IconButton 
-                            size="small" 
-                            component={Link}
-                            to={`/purchase-orders/${po.id}`}
-                          >
-                            <ViewIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        
-                        <Tooltip title="Edytuj">
-                          <IconButton 
-                            size="small" 
-                            component={Link}
-                            to={`/purchase-orders/${po.id}/edit`}
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        
-                        <Tooltip title="Zmień status">
-                          <IconButton 
-                            size="small" 
-                            onClick={() => handleStatusClick(po)}
-                          >
-                            <DescriptionIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        
-                        <Tooltip title="Usuń">
-                          <IconButton 
-                            size="small" 
-                            color="error"
-                            onClick={() => handleDeleteClick(po)}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
+                    </TableRow>
+                  ))
+                ) : filteredPOs.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} align="center">
+                      <Typography variant="body1">Brak zamówień zakupowych</Typography>
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-            <TableFooter>
-              <TableRow>
-                <TableCell colSpan={7}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                ) : (
+                  filteredPOs.map((po) => (
+                    <TableRow key={po.id}>
+                      {visibleColumns['number'] && (
+                        <TableCell>
+                          <Link 
+                            to={`/purchase-orders/${po.id}`}
+                            style={{ textDecoration: 'none', color: 'inherit' }}
+                          >
+                            <Typography variant="body2" fontWeight="medium">
+                              {po.number || `#${po.id.substring(0, 8).toUpperCase()}`}
+                            </Typography>
+                          </Link>
+                        </TableCell>
+                      )}
+                      
+                      {visibleColumns['supplier'] && (
+                        <TableCell>
+                          {po.supplier ? po.supplier.name : '-'}
+                        </TableCell>
+                      )}
+                      
+                      {visibleColumns['orderDate'] && (
+                        <TableCell>
+                          {po.orderDate ? new Date(po.orderDate).toLocaleDateString() : '-'}
+                        </TableCell>
+                      )}
+                      
+                      {visibleColumns['expectedDeliveryDate'] && (
+                        <TableCell>
+                          {po.expectedDeliveryDate ? new Date(po.expectedDeliveryDate).toLocaleDateString() : '-'}
+                        </TableCell>
+                      )}
+                      
+                      {visibleColumns['value'] && (
+                        <TableCell>
+                          {po.totalGross !== undefined ? 
+                            `${Number(po.totalGross).toFixed(2)} ${po.currency || 'PLN'}` : 
+                            '-'}
+                        </TableCell>
+                      )}
+                      
+                      {visibleColumns['status'] && (
+                        <TableCell>
+                          {getStatusChip(po.status)}
+                        </TableCell>
+                      )}
+                      
+                      <TableCell align="right">
+                        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                          <Tooltip title="Podgląd">
+                            <IconButton 
+                              size="small" 
+                              component={Link}
+                              to={`/purchase-orders/${po.id}`}
+                            >
+                              <ViewIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          
+                          <Tooltip title="Edytuj">
+                            <IconButton 
+                              size="small" 
+                              component={Link}
+                              to={`/purchase-orders/${po.id}/edit`}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          
+                          <Tooltip title="Zmień status">
+                            <IconButton 
+                              size="small" 
+                              onClick={() => handleStatusClick(po)}
+                            >
+                              <DescriptionIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          
+                          <Tooltip title="Usuń">
+                            <IconButton 
+                              size="small" 
+                              color="error"
+                              onClick={() => handleDeleteClick(po)}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+              <TableFooter>
+                <TableRow>
+                  <TableCell colSpan={7}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Typography variant="body2">
+                          Wierszy na stronę:
+                        </Typography>
+                        <Select
+                          value={limit}
+                          onChange={handleChangeRowsPerPage}
+                          size="small"
+                        >
+                          {[5, 10, 25, 50].map(pageSize => (
+                            <MenuItem key={pageSize} value={pageSize}>
+                              {pageSize}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </Box>
+                      <Pagination 
+                        count={totalPages}
+                        page={page}
+                        onChange={handleChangePage}
+                        color="primary"
+                        showFirstButton
+                        showLastButton
+                      />
                       <Typography variant="body2">
-                        Wierszy na stronę:
+                        Wyświetlanie {filteredPOs.length > 0 ? (page - 1) * limit + 1 : 0}-{Math.min(page * limit, totalItems)} z {totalItems}
                       </Typography>
-                      <Select
-                        value={limit}
-                        onChange={handleChangeRowsPerPage}
-                        size="small"
-                      >
-                        {[5, 10, 25, 50].map(pageSize => (
-                          <MenuItem key={pageSize} value={pageSize}>
-                            {pageSize}
-                          </MenuItem>
-                        ))}
-                      </Select>
                     </Box>
-                    <Pagination 
-                      count={totalPages}
-                      page={page}
-                      onChange={handleChangePage}
-                      color="primary"
-                      showFirstButton
-                      showLastButton
-                    />
-                    <Typography variant="body2">
-                      Wyświetlanie {filteredPOs.length > 0 ? (page - 1) * limit + 1 : 0}-{Math.min(page * limit, totalItems)} z {totalItems}
-                    </Typography>
-                  </Box>
-                </TableCell>
-              </TableRow>
-            </TableFooter>
-          </Table>
-        </TableContainer>
-      </Paper>
+                  </TableCell>
+                </TableRow>
+              </TableFooter>
+            </Table>
+          </TableContainer>
+        </Paper>
+      </Fade>
 
       {/* Dialog potwierdzenia usunięcia */}
       <Dialog

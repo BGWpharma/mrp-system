@@ -76,6 +76,7 @@ import EditReservationDialog from './EditReservationDialog';
 import { doc, getDoc, updateDoc, serverTimestamp, collection, getDocs, addDoc, deleteDoc, query, orderBy, limit, where } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
+import { useInventoryListState } from '../../contexts/InventoryListStateContext';
 import { INVENTORY_CATEGORIES } from '../../utils/constants';
 
 // Definicje stałych
@@ -84,10 +85,6 @@ const INVENTORY_TRANSACTIONS_COLLECTION = 'inventoryTransactions';
 const InventoryList = () => {
   const [inventoryItems, setInventoryItems] = useState([]);
   const [filteredItems, setFilteredItems] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [searchCategory, setSearchCategory] = useState('');
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
-  const [debouncedSearchCategory, setDebouncedSearchCategory] = useState('');
   const [loading, setLoading] = useState(true);
   const [expiringCount, setExpiringCount] = useState(0);
   const [expiredCount, setExpiredCount] = useState(0);
@@ -96,15 +93,13 @@ const InventoryList = () => {
   const [reservationDialogOpen, setReservationDialogOpen] = useState(false);
   const [reservations, setReservations] = useState([]);
   const [filteredReservations, setFilteredReservations] = useState([]);
-  const [reservationFilter, setReservationFilter] = useState('all');
   const [sortOrder, setSortOrder] = useState('desc');
   const [sortField, setSortField] = useState('createdAt');
   const [warehouses, setWarehouses] = useState([]);
-  const [selectedWarehouse, setSelectedWarehouse] = useState('');
   const [warehousesLoading, setWarehousesLoading] = useState(true);
-  const [currentTab, setCurrentTab] = useState(0);
   const [openWarehouseDialog, setOpenWarehouseDialog] = useState(false);
   const [dialogMode, setDialogMode] = useState('add');
+  const [selectedWarehouseForEdit, setSelectedWarehouseForEdit] = useState(null);
   const [warehouseFormData, setWarehouseFormData] = useState({
     name: '',
     address: '',
@@ -125,18 +120,10 @@ const InventoryList = () => {
   const [updatingTasks, setUpdatingTasks] = useState(false);
   const [cleaningReservations, setCleaningReservations] = useState(false);
   const [warehouseItems, setWarehouseItems] = useState([]);
-  const [selectedWarehouseForView, setSelectedWarehouseForView] = useState(null);
   const [warehouseItemsLoading, setWarehouseItemsLoading] = useState(false);
   const [batchesDialogOpen, setBatchesDialogOpen] = useState(false);
-  const [warehouseSearchTerm, setWarehouseSearchTerm] = useState('');
-  const [warehouseItemsPage, setWarehouseItemsPage] = useState(1);
-  const [warehouseItemsPageSize, setWarehouseItemsPageSize] = useState(10);
   const [warehouseItemsTotalCount, setWarehouseItemsTotalCount] = useState(0);
   const [warehouseItemsTotalPages, setWarehouseItemsTotalPages] = useState(1);
-  const [warehouseItemsSort, setWarehouseItemsSort] = useState({
-    field: 'name',
-    order: 'asc'
-  });
   const warehouseSearchTermRef = useRef(null);
   const [groups, setGroups] = useState([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
@@ -155,58 +142,42 @@ const InventoryList = () => {
   const [allReservations, setAllReservations] = useState([]);
   const [filteredAllReservations, setFilteredAllReservations] = useState([]);
   const [loadingAllReservations, setLoadingAllReservations] = useState(false);
-  const [moFilter, setMoFilter] = useState('');
   
   // Zamiast lokalnego stanu, użyjmy kontekstu preferencji kolumn
   const [columnMenuAnchor, setColumnMenuAnchor] = useState(null);
-  // Usuń lokalny stan visibleColumns
-  // const [visibleColumns, setVisibleColumns] = useState({
-  //   name: true,
-  //   category: true,
-  //   totalQuantity: true,
-  //   reservedQuantity: true,
-  //   availableQuantity: true,
-  //   status: true,
-  //   location: true,
-  //   actions: true
-  // });
   
   // Użyj kontekstu preferencji kolumn
   const { getColumnPreferencesForView, updateColumnPreferences } = useColumnPreferences();
   // Pobierz preferencje dla widoku 'inventory'
   const visibleColumns = getColumnPreferencesForView('inventory');
 
-  // Dodaj stany dla paginacji
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  // Użyj kontekstu stanu listy magazynowej
+  const { state: listState, actions: listActions } = useInventoryListState();
+
+  // Zmienne stanu z kontekstu
+  const searchTerm = listState.searchTerm;
+  const searchCategory = listState.searchCategory;
+  const selectedWarehouse = listState.selectedWarehouse;
+  const currentTab = listState.currentTab;
+  const page = listState.page;
+  const pageSize = listState.pageSize;
+  const tableSort = listState.tableSort;
+  const selectedWarehouseForView = listState.selectedWarehouseForView;
+  const warehouseItemsPage = listState.warehouseItemsPage;
+  const warehouseItemsPageSize = listState.warehouseItemsPageSize;
+  const warehouseSearchTerm = listState.warehouseSearchTerm;
+  const warehouseItemsSort = listState.warehouseItemsSort;
+  const reservationFilter = listState.reservationFilter;
+  const moFilter = listState.moFilter;
+
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
   // Dodaj useRef dla timerów debouncing
   const searchTermTimerRef = useRef(null);
   const searchCategoryTimerRef = useRef(null);
-
-  // Dodaj nowe zmienne stanu do sortowania tabeli głównej
-  const [tableSort, setTableSort] = useState({
-    field: 'name',
-    order: 'asc'
-  });
-
-  // Dodaj nową funkcję do sortowania głównej tabeli stanów
-  const handleTableSort = (field) => {
-    const newOrder = tableSort.field === field && tableSort.order === 'asc' ? 'desc' : 'asc';
-    setTableSort({
-      field,
-      order: newOrder
-    });
-    
-    // Zamiast sortować lokalnie, wywołamy fetchInventoryItems z nowymi parametrami sortowania
-    // Najpierw resetujemy paginację
-    setPage(1);
-    
-    // Następnie pobieramy dane z serwera z nowym sortowaniem
-    fetchInventoryItems(field, newOrder);
-  };
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
+  const [debouncedSearchCategory, setDebouncedSearchCategory] = useState(searchCategory);
 
   // Dodaj nowy useEffect do pobrania lokalizacji
   useEffect(() => {
@@ -228,7 +199,7 @@ const InventoryList = () => {
 
   // Dodaj funkcję obsługującą zmianę wybranego stanów
   const handleWarehouseChange = (event) => {
-    setSelectedWarehouse(event.target.value);
+    listActions.setSelectedWarehouse(event.target.value);
   };
 
   // Efekt, który pobiera dane przy pierwszym renderowaniu
@@ -253,7 +224,7 @@ const InventoryList = () => {
   // Efekt, który resetuje stronę po zmianie wyszukiwania z debounce
   useEffect(() => {
     if (page !== 1) {
-      setPage(1);
+      listActions.setPage(1);
     } else {
       fetchInventoryItems();
     }
@@ -308,7 +279,7 @@ const InventoryList = () => {
   // Dodaj funkcję do filtrowania rezerwacji po numerze MO
   const handleMoFilterChange = (e) => {
     const value = e.target.value;
-    setMoFilter(value);
+    listActions.setMoFilter(value);
     
     if (!value) {
       setFilteredAllReservations(allReservations);
@@ -333,7 +304,7 @@ const InventoryList = () => {
       setDebouncedSearchTerm(searchTerm);
       // Po ustawieniu nowego terminu wyszukiwania, wywołujemy fetchInventoryItems z aktualnymi parametrami sortowania
       if (searchTerm !== debouncedSearchTerm) {
-        setPage(1); // Reset paginacji
+        listActions.setPage(1); // Reset paginacji
         fetchInventoryItems(tableSort.field, tableSort.order);
       }
     }, 1000);
@@ -355,7 +326,7 @@ const InventoryList = () => {
       setDebouncedSearchCategory(searchCategory);
       // Po ustawieniu nowej kategorii wyszukiwania, wywołujemy fetchInventoryItems z aktualnymi parametrami sortowania
       if (searchCategory !== debouncedSearchCategory) {
-        setPage(1); // Reset paginacji
+        listActions.setPage(1); // Reset paginacji
         fetchInventoryItems(tableSort.field, tableSort.order);
       }
     }, 1000);
@@ -370,7 +341,7 @@ const InventoryList = () => {
   // Efekt, który ponownie pobiera dane po zmianie wybranego magazynu
   useEffect(() => {
     if (selectedWarehouse !== undefined) {
-      setPage(1); // Resetuj stronę po zmianie magazynu
+      listActions.setPage(1); // Resetuj stronę po zmianie magazynu
       fetchInventoryItems(tableSort.field, tableSort.order);
     }
   }, [selectedWarehouse]);
@@ -382,6 +353,23 @@ const InventoryList = () => {
   // Dodaj nowy stan dla animacji ładowania głównej tabeli
   const [mainTableLoading, setMainTableLoading] = useState(false);
   const [showContent, setShowContent] = useState(false);
+
+  // Dodaj nową funkcję do sortowania głównej tabeli stanów
+  const handleTableSort = (field) => {
+    const newOrder = tableSort.field === field && tableSort.order === 'asc' ? 'desc' : 'asc';
+    const newSort = {
+      field,
+      order: newOrder
+    };
+    listActions.setTableSort(newSort);
+    
+    // Zamiast sortować lokalnie, wywołamy fetchInventoryItems z nowymi parametrami sortowania
+    // Najpierw resetujemy paginację
+    listActions.setPage(1);
+    
+    // Następnie pobieramy dane z serwera z nowym sortowaniem
+    fetchInventoryItems(field, newOrder);
+  };
 
   // Zmodyfikuj funkcję fetchInventoryItems, aby obsługiwała animacje
   const fetchInventoryItems = async (newSortField = null, newSortOrder = null) => {
@@ -448,13 +436,13 @@ const InventoryList = () => {
 
   // Obsługa zmiany strony
   const handlePageChange = (event, newPage) => {
-    setPage(newPage);
+    listActions.setPage(newPage);
   };
 
   // Obsługa zmiany rozmiaru strony
   const handlePageSizeChange = (event) => {
-    setPageSize(parseInt(event.target.value, 10));
-    setPage(1); // Resetuj stronę po zmianie rozmiaru strony
+    listActions.setPageSize(parseInt(event.target.value, 10));
+    listActions.setPage(1); // Resetuj stronę po zmianie rozmiaru strony
   };
 
   // Modyfikujemy efekt, który ponownie pobiera dane po zmianie strony lub rozmiaru strony
@@ -609,10 +597,7 @@ const InventoryList = () => {
 
   // Funkcja do filtrowania rezerwacji
   const handleFilterChange = (event) => {
-    const filterValue = event.target.value;
-    setReservationFilter(filterValue);
-    
-    filterAndSortReservations(filterValue, sortField, sortOrder);
+    listActions.setReservationFilter(event.target.value);
   };
 
   // Funkcja do sortowania rezerwacji
@@ -677,7 +662,7 @@ const InventoryList = () => {
     setSelectedItem(null);
     setReservations([]);
     setFilteredReservations([]);
-    setReservationFilter('all');
+    listActions.setReservationFilter('all');
     setSortField('createdAt');
     setSortOrder('desc');
   };
@@ -712,7 +697,7 @@ const InventoryList = () => {
 
   // Obsługa przełączania zakładek
   const handleTabChange = (event, newValue) => {
-    setCurrentTab(newValue);
+    listActions.setCurrentTab(newValue);
     if (newValue === 2) {
       // Jeśli wybrano zakładkę "Grupy", pobierz je
       fetchGroups();
@@ -722,7 +707,7 @@ const InventoryList = () => {
   // Zarządzanie lokalizacjami - nowe funkcje
   const handleOpenWarehouseDialog = (mode, warehouse = null) => {
     setDialogMode(mode);
-    setSelectedWarehouse(warehouse);
+    setSelectedWarehouseForEdit(warehouse);
     
     if (mode === 'edit' && warehouse) {
       setWarehouseFormData({
@@ -743,7 +728,7 @@ const InventoryList = () => {
 
   const handleCloseWarehouseDialog = () => {
     setOpenWarehouseDialog(false);
-    setSelectedWarehouse(null);
+    setSelectedWarehouseForEdit(null);
   };
 
   const handleWarehouseFormChange = (e) => {
@@ -764,7 +749,7 @@ const InventoryList = () => {
         await createWarehouse(warehouseFormData, currentUser.uid);
         showSuccess('Lokalizacja została utworzona');
       } else {
-        await updateWarehouse(selectedWarehouse.id, warehouseFormData, currentUser.uid);
+        await updateWarehouse(selectedWarehouseForEdit.id, warehouseFormData, currentUser.uid);
         showSuccess('Lokalizacja została zaktualizowana');
       }
       
@@ -1007,16 +992,13 @@ const InventoryList = () => {
 
   // Funkcja do obsługi kliknięcia w magazyn
   const handleWarehouseClick = async (warehouse) => {
-    setSelectedWarehouseForView(warehouse);
-    setWarehouseItemsPage(1); // Reset strony
-    setWarehouseSearchTerm(''); // Reset wyszukiwania
+    listActions.setSelectedWarehouseForView(warehouse);
     await fetchWarehouseItems(warehouse.id);
   };
 
   // Funkcja do powrotu do listy magazynów
   const handleBackToWarehouses = () => {
-    setSelectedWarehouseForView(null);
-    setWarehouseItems([]);
+    listActions.setSelectedWarehouseForView(null);
   };
 
   // Funkcja do pokazywania dialogu z partiami dla przedmiotu w lokalizacji
@@ -1175,17 +1157,17 @@ const InventoryList = () => {
 
   // Modyfikuj funkcję handleSearchTermChange
   const handleSearchTermChange = (e) => {
-    setSearchTerm(e.target.value);
+    listActions.setSearchTerm(e.target.value);
   };
 
   // Dodaj funkcję handleSearchCategoryChange
   const handleSearchCategoryChange = (e) => {
-    setSearchCategory(e.target.value);
+    listActions.setSearchCategory(e.target.value);
   };
 
   // Modyfikuj funkcję handleSearch, aby uwzględniała aktualne parametry sortowania
   const handleSearch = () => {
-    setPage(1); // Zresetuj paginację
+    listActions.setPage(1); // Zresetuj paginację
     setDebouncedSearchTerm(searchTerm);
     setDebouncedSearchCategory(searchCategory);
     // Wywołaj fetchInventoryItems z aktualnymi parametrami sortowania
@@ -1416,48 +1398,36 @@ const InventoryList = () => {
 
   // Funkcje do obsługi wyszukiwania w lokalizacji
   const handleWarehouseSearchTermChange = (e) => {
-    setWarehouseSearchTerm(e.target.value);
-    
-    // Implementacja debounce
-    if (warehouseSearchTermRef.current) {
-      clearTimeout(warehouseSearchTermRef.current);
-    }
-    
-    warehouseSearchTermRef.current = setTimeout(() => {
-      setWarehouseItemsPage(1); // Reset paginacji
-      fetchWarehouseItems(selectedWarehouseForView.id);
-    }, 500);
+    listActions.setWarehouseSearchTerm(e.target.value);
   };
   
   const clearWarehouseSearch = () => {
-    setWarehouseSearchTerm('');
-    setWarehouseItemsPage(1); // Reset paginacji
-    fetchWarehouseItems(selectedWarehouseForView.id);
+    listActions.setWarehouseSearchTerm('');
+    warehouseSearchTermRef.current.value = '';
   };
   
   // Funkcje do obsługi paginacji w lokalizacji
   const handleWarehousePageChange = (event, newPage) => {
-    setWarehouseItemsPage(newPage + 1); // Konwersja z indeksu 0-based na 1-based
-    fetchWarehouseItems(selectedWarehouseForView.id); // Pobierz dane dla nowej strony
+    listActions.setWarehouseItemsPage(newPage);
   };
   
   const handleWarehousePageSizeChange = (event) => {
-    setWarehouseItemsPageSize(parseInt(event.target.value, 10));
-    setWarehouseItemsPage(1); // Reset strony
-    fetchWarehouseItems(selectedWarehouseForView.id); // Pobierz dane z nowym rozmiarem strony
+    listActions.setWarehouseItemsPageSize(parseInt(event.target.value, 10));
   };
   
   // Funkcja do sortowania w widoku lokalizacji
   const handleWarehouseTableSort = (field) => {
     const newOrder = warehouseItemsSort.field === field && warehouseItemsSort.order === 'asc' ? 'desc' : 'asc';
-    setWarehouseItemsSort({
+    const newSort = {
       field,
       order: newOrder
-    });
+    };
+    listActions.setWarehouseItemsSort(newSort);
     
-    // Reset paginacji i pobierz dane z nowym sortowaniem
-    setWarehouseItemsPage(1);
-    fetchWarehouseItems(selectedWarehouseForView.id, field, newOrder);
+    // Następnie pobieramy dane z serwera z nowym sortowaniem
+    if (selectedWarehouseForView) {
+      fetchWarehouseItems(selectedWarehouseForView.id, field, newOrder);
+    }
   };
   
   /* Usuwam zbędny efekt, ponieważ fetchWarehouseItems jest już wywoływane w funkcjach obsługujących zmianę strony
