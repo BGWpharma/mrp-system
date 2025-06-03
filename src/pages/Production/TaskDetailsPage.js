@@ -199,6 +199,22 @@ const TaskDetailsPage = () => {
   const [deleteMaterialDialogOpen, setDeleteMaterialDialogOpen] = useState(false);
   const [materialToDelete, setMaterialToDelete] = useState(null);
 
+  // Nowe stany dla funkcjonalności konsumpcji materiałów
+  const [consumeMaterialsDialogOpen, setConsumeMaterialsDialogOpen] = useState(false);
+  const [consumedMaterials, setConsumedMaterials] = useState([]);
+  const [selectedBatchesToConsume, setSelectedBatchesToConsume] = useState({});
+  const [consumeQuantities, setConsumeQuantities] = useState({});
+  const [consumeErrors, setConsumeErrors] = useState({});
+
+  // Nowe stany dla korekty i usunięcia konsumpcji
+  const [editConsumptionDialogOpen, setEditConsumptionDialogOpen] = useState(false);
+  const [deleteConsumptionDialogOpen, setDeleteConsumptionDialogOpen] = useState(false);
+  const [selectedConsumption, setSelectedConsumption] = useState(null);
+  const [editedQuantity, setEditedQuantity] = useState(0);
+  const [consumedBatchPrices, setConsumedBatchPrices] = useState({});
+  const [consumedIncludeInCosts, setConsumedIncludeInCosts] = useState({});
+  const [restoreReservation, setRestoreReservation] = useState(true); // Domyślnie włączone
+
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -312,6 +328,13 @@ const TaskDetailsPage = () => {
       fetchAwaitingOrdersForMaterials();
     }
   }, [task?.id, task?.materials?.length]);
+
+  // Dodaję efekt pobierający ceny skonsumowanych partii
+  useEffect(() => {
+    if (task?.consumedMaterials && task.consumedMaterials.length > 0) {
+      fetchConsumedBatchPrices();
+    }
+  }, [task?.consumedMaterials]);
 
   // Funkcja do pobierania magazynów
   const fetchWarehouses = async () => {
@@ -906,10 +929,13 @@ const TaskDetailsPage = () => {
       const materialId = material.inventoryItemId || material.id;
       if (!materialId) continue;
       
-      // Użyj rzeczywistej ilości z materialQuantities jeśli jest dostępna
-      const requiredQuantity = materialQuantities[materialId] !== undefined 
-        ? materialQuantities[materialId] 
-        : material.quantity;
+      // Użyj funkcji uwzględniającej konsumpcję
+      const requiredQuantity = getRequiredQuantityForReservation(material, materialId);
+      
+      // Jeśli wymagana ilość jest 0 lub mniejsza, pomiń walidację dla tego materiału
+      if (requiredQuantity <= 0) {
+        continue;
+      }
       
       const materialBatches = selectedBatches[materialId] || [];
       const totalSelectedQuantity = materialBatches.reduce((sum, batch) => sum + batch.quantity, 0);
@@ -927,27 +953,58 @@ const TaskDetailsPage = () => {
   
   // Podobnie zmodyfikujemy funkcję validateManualBatchSelectionForMaterial
   const validateManualBatchSelectionForMaterial = (materialId) => {
-    if (!task || !task.materials) return { valid: false, error: "Brak materiałów do walidacji" };
-    
-    const material = task.materials.find(m => (m.inventoryItemId || m.id) === materialId);
-    if (!material) return { valid: false, error: "Nie znaleziono materiału" };
-    
-    // Użyj rzeczywistej ilości z materialQuantities jeśli jest dostępna
-    const requiredQuantity = materialQuantities[materialId] !== undefined 
-      ? materialQuantities[materialId] 
-      : material.quantity;
-    
     const materialBatches = selectedBatches[materialId] || [];
+    const material = task.materials.find(m => (m.inventoryItemId || m.id) === materialId);
+    
+    if (!material) {
+      return { valid: false, error: 'Nie znaleziono materiału' };
+    }
+    
+    // Użyj funkcji uwzględniającej konsumpcję
+    const requiredQuantity = getRequiredQuantityForReservation(material, materialId);
+    
+    // Jeśli wymagana ilość jest 0 lub mniejsza, uznaj walidację za poprawną
+    if (requiredQuantity <= 0) {
+      return { valid: true };
+    }
+    
     const totalSelectedQuantity = materialBatches.reduce((sum, batch) => sum + batch.quantity, 0);
+    
+    if (totalSelectedQuantity === 0) {
+      return { valid: false, error: `Nie wybrano żadnych partii dla materiału ${material.name}` };
+    }
     
     if (totalSelectedQuantity < requiredQuantity) {
       return {
         valid: false,
-        error: `Niewystarczająca ilość partii wybrana dla materiału ${material.name}. Wybrano: ${totalSelectedQuantity}, wymagane: ${requiredQuantity}`
+        error: `Wybrana ilość (${totalSelectedQuantity}) jest mniejsza niż wymagana (${requiredQuantity}) dla materiału ${material.name}` 
       };
     }
     
     return { valid: true };
+  };
+
+  // Funkcja pomocnicza do obliczania skonsumowanej ilości materiału
+  const getConsumedQuantityForMaterial = (materialId) => {
+    if (!task.consumedMaterials || task.consumedMaterials.length === 0) {
+      return 0;
+    }
+
+    return task.consumedMaterials
+      .filter(consumed => consumed.materialId === materialId)
+      .reduce((total, consumed) => total + Number(consumed.quantity || 0), 0);
+  };
+
+  // Funkcja pomocnicza do obliczania wymaganej ilości do rezerwacji (po uwzględnieniu konsumpcji)
+  const getRequiredQuantityForReservation = (material, materialId) => {
+    const baseQuantity = materialQuantities[materialId] !== undefined 
+      ? materialQuantities[materialId] 
+      : material.quantity;
+    
+    const consumedQuantity = getConsumedQuantityForMaterial(materialId);
+    const remainingQuantity = Math.max(0, baseQuantity - consumedQuantity);
+
+    return remainingQuantity;
   };
 
   // Zmodyfikowana funkcja do rezerwacji materiałów z obsługą ręcznego wyboru partii
@@ -995,10 +1052,14 @@ const TaskDetailsPage = () => {
           // Najpierw anuluj istniejące rezerwacje dla tego materiału
           await cancelExistingReservations(materialId);
           
-          // Użyj rzeczywistej ilości z materialQuantities jeśli jest dostępna
-          const requiredQuantity = materialQuantities[materialId] !== undefined 
-            ? materialQuantities[materialId] 
-            : material.quantity;
+          // Oblicz wymaganą ilość do rezerwacji uwzględniając skonsumowane materiały
+          const requiredQuantity = getRequiredQuantityForReservation(material, materialId);
+          
+          // Jeśli pozostała ilość do rezerwacji jest równa 0 lub mniejsza, pomiń ten materiał
+          if (requiredQuantity <= 0) {
+            console.log(`Materiał ${material.name} został już w pełni skonsumowany, pomijam rezerwację`);
+            continue;
+          }
             
           // Pobierz wybrane partie
           const selectedMaterialBatches = selectedBatches[materialId] || [];
@@ -1035,10 +1096,14 @@ const TaskDetailsPage = () => {
           // Najpierw anuluj istniejące rezerwacje dla tego materiału
           await cancelExistingReservations(materialId);
               
-          // Użyj rzeczywistej ilości z materialQuantities jeśli jest dostępna
-          const requiredQuantity = materialQuantities[materialId] !== undefined 
-            ? materialQuantities[materialId] 
-            : material.quantity;
+          // Oblicz wymaganą ilość do rezerwacji uwzględniając skonsumowane materiały
+          const requiredQuantity = getRequiredQuantityForReservation(material, materialId);
+          
+          // Jeśli pozostała ilość do rezerwacji jest równa 0 lub mniejsza, pomiń ten materiał
+          if (requiredQuantity <= 0) {
+            console.log(`Materiał ${material.name} został już w pełni skonsumowany, pomijam rezerwację`);
+            continue;
+          }
           
           // Utwórz rezerwację automatyczną
           await bookInventoryForTask(
@@ -1092,11 +1157,12 @@ const TaskDetailsPage = () => {
           const materialId = material.inventoryItemId || material.id;
           if (!materialId) return null;
           
-          // Użyj rzeczywistej ilości z materialQuantities jeśli jest dostępna
-          // W przeciwnym razie użyj oryginalnej ilości z material.quantity
-          const requiredQuantity = materialQuantities[materialId] !== undefined 
+          // Oblicz wymaganą ilość do rezerwacji uwzględniając skonsumowane materiały
+          const baseQuantity = materialQuantities[materialId] !== undefined 
             ? materialQuantities[materialId] 
             : material.quantity;
+          const consumedQuantity = getConsumedQuantityForMaterial(materialId);
+          const requiredQuantity = getRequiredQuantityForReservation(material, materialId);
           
           let materialBatches = batches[materialId] || [];
           const selectedMaterialBatches = selectedBatches[materialId] || [];
@@ -1137,14 +1203,29 @@ const TaskDetailsPage = () => {
             >
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                  <Box>
                   <Typography>{material.name}</Typography>
+                    {consumedQuantity > 0 && (
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        Skonsumowano: {consumedQuantity.toFixed(3)} {material.unit} z {baseQuantity.toFixed(3)} {material.unit}
+                      </Typography>
+                    )}
+                  </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
                     <Chip
                       label={`${totalSelectedQuantity.toFixed(3)} / ${parseFloat(requiredQuantity).toFixed(3)} ${material.unit}`}
-                      color={isComplete ? "success" : "warning"}
+                      color={isComplete ? "success" : requiredQuantity > 0 ? "warning" : "default"}
                       size="small"
                       sx={{ mr: 1 }}
                     />
+                    {requiredQuantity <= 0 && (
+                      <Chip
+                        label="W pełni skonsumowany"
+                        color="success"
+                        size="small"
+                        sx={{ mr: 1 }}
+                      />
+                    )}
                     {isAlreadyReserved && (
                       <Chip
                         label="Zarezerwowany"
@@ -2261,7 +2342,7 @@ const TaskDetailsPage = () => {
       if (hasChanges) {
       setMaterials(updatedMaterials);
         
-        // Wywołujemy aktualizację kosztów w bazie, ale dopiero po ukończeniu aktualizacji interfejsu
+        // Tylko logowanie - NIE zapisujemy automatycznie do bazy danych
         if (task && updatedMaterials.length > 0) {
           // Oblicz całkowity koszt materiałów (tylko z flagą "wliczaj")
           const totalMaterialCost = updatedMaterials.reduce((sum, material) => {
@@ -2297,62 +2378,16 @@ const TaskDetailsPage = () => {
           const unitMaterialCost = task.quantity ? (totalMaterialCost / task.quantity) : 0;
           const unitFullProductionCost = task.quantity ? (totalFullProductionCost / task.quantity) : 0;
           
-          // Sprawdź czy koszty się rzeczywiście zmieniły
-          if (
-            Math.abs((task.totalMaterialCost || 0) - totalMaterialCost) > 0.01 ||
-            Math.abs((task.unitMaterialCost || 0) - unitMaterialCost) > 0.01 ||
-            Math.abs((task.totalFullProductionCost || 0) - totalFullProductionCost) > 0.01 ||
-            Math.abs((task.unitFullProductionCost || 0) - unitFullProductionCost) > 0.01
-          ) {
-            try {
-              // Wykonaj aktualizację w bazie danych
-              const taskRef = doc(db, 'productionTasks', id);
-              await updateDoc(taskRef, {
-                totalMaterialCost,
-                unitMaterialCost,
-                totalFullProductionCost,
-                unitFullProductionCost,
-                costLastUpdatedAt: serverTimestamp(),
-                costLastUpdatedBy: currentUser.uid,
-                updatedAt: serverTimestamp(),
-                updatedBy: currentUser.uid,
-                // Dodaj wpis do historii kosztów
-                costHistory: arrayUnion({
-                  timestamp: new Date().toISOString(),
-                  userId: currentUser.uid,
-                  userName: currentUser.displayName || currentUser.email || 'System',
-                  previousTotalCost: task.totalMaterialCost || 0,
-                  newTotalCost: totalMaterialCost,
-                  previousUnitCost: task.unitMaterialCost || 0,
-                  newUnitCost: unitMaterialCost,
-                  previousFullProductionCost: task.totalFullProductionCost || 0,
-                  newFullProductionCost: totalFullProductionCost,
-                  previousUnitFullProductionCost: task.unitFullProductionCost || 0,
-                  newUnitFullProductionCost: unitFullProductionCost,
-                  reason: 'Automatyczna aktualizacja kosztów materiałów na podstawie cen partii'
-                })
-              });
-              
-              console.log(`Zaktualizowano koszty materiałów w zadaniu: ${totalMaterialCost.toFixed(2)} € (${unitMaterialCost.toFixed(2)} €/${task.unit}) | Pełny koszt: ${totalFullProductionCost.toFixed(2)} € (${unitFullProductionCost.toFixed(2)} €/${task.unit})`);
-              showSuccess('Koszty materiałów zostały automatycznie zaktualizowane');
-              
-              // Aktualizuj związane zamówienia klientów
-              await updateRelatedCustomerOrders(task, totalMaterialCost, totalFullProductionCost, unitMaterialCost, unitFullProductionCost);
-              
-              // Odśwież dane zadania, aby wyświetlić zaktualizowane koszty
-              const updatedTask = await getTaskById(id);
-              setTask(updatedTask);
-            } catch (error) {
-              console.error('Błąd podczas aktualizacji kosztów materiałów:', error);
-              showError('Nie udało się zaktualizować kosztów materiałów: ' + error.message);
-            }
-          }
+          console.log(`Zaktualizowano ceny materiałów - obliczony koszt: ${totalMaterialCost.toFixed(2)} € (${unitMaterialCost.toFixed(2)} €/${task.unit}) | Pełny koszt: ${totalFullProductionCost.toFixed(2)} € (${unitFullProductionCost.toFixed(2)} €/${task.unit}) - tylko aktualizacja interfejsu`);
+          
+          // USUNIĘTO: Automatyczne zapisywanie do bazy danych
+          // Użytkownik może ręcznie zaktualizować koszty przyciskiem "Aktualizuj ręcznie"
         }
       }
     } catch (error) {
       console.error('Błąd podczas aktualizacji cen materiałów:', error);
     }
-  }, [task, materials, materialQuantities, id, currentUser, showSuccess, showError, includeInCosts]);
+  }, [task, materials, materialQuantities, id, currentUser, showSuccess, showError, includeInCosts, consumedBatchPrices]);
   
   // Aktualizuj ceny materiałów przy każdym załadowaniu zadania lub zmianie zarezerwowanych partii
   useEffect(() => {
@@ -2371,7 +2406,7 @@ const TaskDetailsPage = () => {
         isMounted = false;
       };
     }
-  }, [task?.id, updateMaterialPricesFromBatches, task?.materialBatches ? JSON.stringify(Object.keys(task.materialBatches)) : '', includeInCosts]);
+  }, [task?.id, task?.materialBatches ? Object.keys(task.materialBatches).length : 0, updateMaterialPricesFromBatches]); // Uproszczone zależności
 
   // Funkcja do aktualizacji związanych zamówień klientów po zmianie kosztów produkcji
   const updateRelatedCustomerOrders = async (taskData, totalMaterialCost, totalFullProductionCost, unitMaterialCost, unitFullProductionCost) => {
@@ -2470,38 +2505,39 @@ const TaskDetailsPage = () => {
   };
 
   // Funkcja do ręcznej aktualizacji kosztów materiałów w bazie danych
-  const updateMaterialCostsManually = useCallback(async () => {
+  const updateMaterialCostsManually = async () => {
     if (!task || !materials.length) return;
     
     try {
-      // Oblicz całkowity koszt materiałów (tylko z flagą "wliczaj")
-      const totalMaterialCost = materials.reduce((sum, material) => {
-        // Sprawdź czy dla tego materiału są zarezerwowane partie
-        const materialId = material.inventoryItemId || material.id;
-        const reservedBatches = task.materialBatches && task.materialBatches[materialId];
-        
-        // Uwzględnij koszt tylko jeśli materiał ma zarezerwowane partie i jest wliczany do kosztów
-        if (reservedBatches && reservedBatches.length > 0 && includeInCosts[material.id]) {
-          const quantity = materialQuantities[material.id] || material.quantity || 0;
-          const unitPrice = material.unitPrice || 0;
-          return sum + (quantity * unitPrice);
-        }
-        return sum;
-      }, 0);
+      // Oblicz koszty używając nowych funkcji
+      const consumedCosts = calculateConsumedMaterialsCost();
+      const reservedCosts = calculateReservedMaterialsCost();
+      
+      // Całkowity koszt materiałów = skonsumowane + zarezerwowane (ale nieskonsumowane)
+      const totalMaterialCost = consumedCosts.totalCost + reservedCosts.totalCost;
       
       // Oblicz pełny koszt produkcji (wszystkie materiały niezależnie od flagi "wliczaj")
       const totalFullProductionCost = materials.reduce((sum, material) => {
-        // Sprawdź czy dla tego materiału są zarezerwowane partie
         const materialId = material.inventoryItemId || material.id;
-        const reservedBatches = task.materialBatches && task.materialBatches[materialId];
         
-        // Uwzględnij koszt wszystkich materiałów z zarezerwowanymi partiami
+        // Koszty skonsumowanych materiałów dla tego materiału
+        const consumedForMaterial = consumedCosts.details[materialId];
+        let materialCost = consumedForMaterial ? consumedForMaterial.totalCost : 0;
+        
+        // Dodaj koszt zarezerwowanych (ale nieskonsumowanych) materiałów
+        const reservedBatches = task.materialBatches && task.materialBatches[materialId];
         if (reservedBatches && reservedBatches.length > 0) {
-          const quantity = materialQuantities[material.id] || material.quantity || 0;
+          const consumedQuantity = getConsumedQuantityForMaterial(materialId);
+          const requiredQuantity = materialQuantities[material.id] || material.quantity || 0;
+          const remainingQuantity = Math.max(0, requiredQuantity - consumedQuantity);
+          
+          if (remainingQuantity > 0) {
           const unitPrice = material.unitPrice || 0;
-          return sum + (quantity * unitPrice);
+            materialCost += remainingQuantity * unitPrice;
         }
-        return sum;
+        }
+        
+        return sum + materialCost;
       }, 0);
       
       // Oblicz koszty na jednostkę
@@ -2543,11 +2579,12 @@ const TaskDetailsPage = () => {
           newFullProductionCost: totalFullProductionCost,
           previousUnitFullProductionCost: task.unitFullProductionCost || 0,
           newUnitFullProductionCost: unitFullProductionCost,
-          reason: 'Ręczna aktualizacja kosztów materiałów'
+          reason: 'Ręczna aktualizacja kosztów materiałów (uwzględnia skonsumowane materiały)'
         })
       });
       
       console.log(`Zaktualizowano koszty materiałów w zadaniu: ${totalMaterialCost.toFixed(2)} € (${unitMaterialCost.toFixed(2)} €/${task.unit}) | Pełny koszt: ${totalFullProductionCost.toFixed(2)} € (${unitFullProductionCost.toFixed(2)} €/${task.unit})`);
+      console.log(`Podział kosztów - Skonsumowane: ${consumedCosts.totalCost.toFixed(2)} €, Zarezerwowane: ${reservedCosts.totalCost.toFixed(2)} €`);
       showSuccess('Koszty materiałów zostały zaktualizowane w bazie danych');
       
       // Aktualizuj związane zamówienia klientów
@@ -2560,38 +2597,123 @@ const TaskDetailsPage = () => {
       console.error('Błąd podczas aktualizacji kosztów materiałów:', error);
       showError('Nie udało się zaktualizować kosztów materiałów: ' + error.message);
     }
-  }, [id, task, materials, materialQuantities, currentUser, showSuccess, showError, showInfo, includeInCosts]);
+  };
 
-  // Dodaj przycisk do ręcznej aktualizacji kosztów w podsumowaniu kosztów materiałów
-  const renderMaterialCostsSummary = () => {
-    // Oblicz całkowity koszt materiałów (tylko z flagą "wliczaj")
-    const totalMaterialCost = materials.reduce((sum, material) => {
-      // Sprawdź czy dla tego materiału są zarezerwowane partie
+  // Funkcja do obliczania kosztów skonsumowanych materiałów
+  const calculateConsumedMaterialsCost = () => {
+    if (!task?.consumedMaterials || task.consumedMaterials.length === 0) {
+      return { totalCost: 0, details: [] };
+    }
+
+    const consumedCostDetails = {};
+    let totalConsumedCost = 0;
+
+    // Grupuj skonsumowane materiały według materialId
+    task.consumedMaterials.forEach((consumed, index) => {
+      const materialId = consumed.materialId;
+      const material = materials.find(m => (m.inventoryItemId || m.id) === materialId);
+      
+      if (!material) return;
+
+      if (!consumedCostDetails[materialId]) {
+        consumedCostDetails[materialId] = {
+          material,
+          totalQuantity: 0,
+          totalCost: 0,
+          batches: []
+        };
+      }
+
+      // Pobierz cenę partii ze skonsumowanych danych lub z aktualnej ceny materiału
+      const batchPrice = consumedBatchPrices[consumed.batchId] || material.unitPrice || 0;
+      const quantity = Number(consumed.quantity) || 0;
+      const cost = quantity * batchPrice;
+
+      consumedCostDetails[materialId].totalQuantity += quantity;
+      consumedCostDetails[materialId].totalCost += cost;
+      consumedCostDetails[materialId].batches.push({
+        batchId: consumed.batchId,
+        quantity,
+        unitPrice: batchPrice,
+        cost
+      });
+
+      // Sprawdź czy ta konkretna konsumpcja ma być wliczona do kosztów
+      const shouldIncludeInCosts = consumed.includeInCosts !== undefined 
+        ? consumed.includeInCosts 
+        : (includeInCosts[material.id] !== false); // fallback do ustawienia materiału
+
+      if (shouldIncludeInCosts) {
+        totalConsumedCost += cost;
+      }
+    });
+
+    return { totalCost: totalConsumedCost, details: consumedCostDetails };
+  };
+
+  // Funkcja do obliczania kosztów zarezerwowanych (ale nieskonsumowanych) materiałów
+  const calculateReservedMaterialsCost = () => {
+    if (!materials || materials.length === 0) {
+      return { totalCost: 0, details: [] };
+    }
+
+    let totalReservedCost = 0;
+
+    materials.forEach(material => {
       const materialId = material.inventoryItemId || material.id;
       const reservedBatches = task.materialBatches && task.materialBatches[materialId];
       
-      // Uwzględnij koszt tylko jeśli materiał ma zarezerwowane partie i jest włączony do kosztów
-      if (reservedBatches && reservedBatches.length > 0 && includeInCosts[material.id]) {
-        const quantity = materialQuantities[material.id] || material.quantity || 0;
+      // Sprawdź czy materiał ma zarezerwowane partie
+      if (reservedBatches && reservedBatches.length > 0) {
+        // Oblicz ile zostało do skonsumowania
+        const consumedQuantity = getConsumedQuantityForMaterial(materialId);
+        const requiredQuantity = materialQuantities[material.id] || material.quantity || 0;
+        const remainingQuantity = Math.max(0, requiredQuantity - consumedQuantity);
+        
+        // Jeśli zostało coś do skonsumowania i materiał jest wliczany do kosztów
+        if (remainingQuantity > 0 && includeInCosts[material.id] !== false) {
         const unitPrice = material.unitPrice || 0;
-        return sum + (quantity * unitPrice);
+          const cost = remainingQuantity * unitPrice;
+          totalReservedCost += cost;
+        }
       }
-      return sum;
-    }, 0);
+    });
+
+    return { totalCost: totalReservedCost };
+  };
+
+  const renderMaterialCostsSummary = () => {
+    // Oblicz koszty skonsumowanych materiałów
+    const consumedCosts = calculateConsumedMaterialsCost();
+    
+    // Oblicz koszty zarezerwowanych (ale nieskonsumowanych) materiałów
+    const reservedCosts = calculateReservedMaterialsCost();
+    
+    // Całkowity koszt materiałów = skonsumowane + zarezerwowane (ale nieskonsumowane)
+    const totalMaterialCost = consumedCosts.totalCost + reservedCosts.totalCost;
     
     // Oblicz pełny koszt produkcji (wszystkie materiały niezależnie od flagi "wliczaj")
     const totalFullProductionCost = materials.reduce((sum, material) => {
-      // Sprawdź czy dla tego materiału są zarezerwowane partie
       const materialId = material.inventoryItemId || material.id;
-      const reservedBatches = task.materialBatches && task.materialBatches[materialId];
       
-      // Uwzględnij koszt wszystkich materiałów z zarezerwowanymi partiami
+      // Koszty skonsumowanych materiałów dla tego materiału
+      const consumedForMaterial = consumedCosts.details[materialId];
+      let materialCost = consumedForMaterial ? consumedForMaterial.totalCost : 0;
+      
+      // Dodaj koszt zarezerwowanych (ale nieskonsumowanych) materiałów
+      const reservedBatches = task.materialBatches && task.materialBatches[materialId];
       if (reservedBatches && reservedBatches.length > 0) {
-        const quantity = materialQuantities[material.id] || material.quantity || 0;
+        const consumedQuantity = getConsumedQuantityForMaterial(materialId);
+        const requiredQuantity = materialQuantities[material.id] || material.quantity || 0;
+        const remainingQuantity = Math.max(0, requiredQuantity - consumedQuantity);
+        
+        if (remainingQuantity > 0) {
         const unitPrice = material.unitPrice || 0;
-        return sum + (quantity * unitPrice);
+          materialCost += remainingQuantity * unitPrice;
       }
-      return sum;
+      }
+      
+      return sum + materialCost;
     }, 0);
     
     // Oblicz koszty na jednostkę
@@ -2612,8 +2734,14 @@ const TaskDetailsPage = () => {
             <Typography variant="h6">Podsumowanie kosztów materiałów</Typography>
             {costChanged && (
               <Alert severity="info" sx={{ mt: 1 }}>
-                Koszty materiałów są aktualizowane automatycznie. Możesz również zaktualizować je ręcznie.
+                Obliczone koszty różnią się od zapisanych w bazie danych. Użyj przycisku "Aktualizuj ręcznie" aby zapisać nowe koszty.
               </Alert>
+            )}
+            {consumedCosts.totalCost > 0 && (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Skonsumowane: {consumedCosts.totalCost.toFixed(2)} € | 
+                Zarezerwowane: {reservedCosts.totalCost.toFixed(2)} €
+              </Typography>
             )}
           </Grid>
           <Grid item xs={12} md={6} sx={{ textAlign: 'right' }}>
@@ -2879,10 +3007,11 @@ const TaskDetailsPage = () => {
 
   // Funkcja pomocnicza do parsowania datetime-local z uwzględnieniem strefy czasowej
   const fromLocalDateTimeString = (dateTimeString) => {
-    if (!dateTimeString) return new Date();
+    const [datePart, timePart] = dateTimeString.split(' ');
+    const [day, month, year] = datePart.split('.');
+    const [hours, minutes] = timePart.split(':');
     
-    // Tworzymy datę bezpośrednio z wartości pola datetime-local
-    return new Date(dateTimeString);
+    return new Date(year, month - 1, day, hours, minutes);
   };
 
   // Funkcja do filtrowania surowców na podstawie wyszukiwania
@@ -2933,6 +3062,881 @@ const TaskDetailsPage = () => {
       setLoading(false);
     }
   };
+
+  // Funkcje obsługi konsumpcji materiałów
+  const handleOpenConsumeMaterialsDialog = () => {
+    // Przygotuj listę zarezerwowanych materiałów
+    const reservedMaterials = materials.filter(material => {
+      const materialId = material.inventoryItemId || material.id;
+      const reservedBatches = task.materialBatches && task.materialBatches[materialId];
+      return reservedBatches && reservedBatches.length > 0;
+    });
+
+    setConsumedMaterials(reservedMaterials);
+    
+    // Inicjalizuj ilości konsumpcji dla każdego materiału i partii
+    const initialQuantities = {};
+    const initialSelections = {};
+    
+    reservedMaterials.forEach(material => {
+      const materialId = material.inventoryItemId || material.id;
+      const reservedBatches = task.materialBatches[materialId] || [];
+      
+      // Inicjalizuj wybory partii (domyślnie wszystkie odznaczone)
+      initialSelections[materialId] = {};
+      
+      reservedBatches.forEach(batch => {
+        const batchKey = `${materialId}_${batch.batchId}`;
+        initialQuantities[batchKey] = ''; // Domyślnie puste pole
+        initialSelections[materialId][batch.batchId] = false; // Domyślnie odznaczone
+      });
+    });
+    
+    setConsumeQuantities(initialQuantities);
+    setSelectedBatchesToConsume(initialSelections);
+    setConsumeErrors({});
+    setConsumeMaterialsDialogOpen(true);
+  };
+
+  const handleConsumeQuantityChange = (materialId, batchId, value) => {
+    const batchKey = `${materialId}_${batchId}`;
+    const numericValue = parseFloat(value);
+    
+    setConsumeQuantities(prev => ({
+      ...prev,
+      [batchKey]: isNaN(numericValue) ? 0 : numericValue
+    }));
+    
+    // Wyczyść błędy dla tej partii
+    setConsumeErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[batchKey];
+      return newErrors;
+    });
+  };
+
+  const handleBatchToConsumeSelection = (materialId, batchId, selected) => {
+    setSelectedBatchesToConsume(prev => ({
+      ...prev,
+      [materialId]: {
+        ...prev[materialId],
+        [batchId]: selected
+      }
+    }));
+  };
+
+  const validateConsumeQuantities = () => {
+    const errors = {};
+    let isValid = true;
+
+    Object.entries(selectedBatchesToConsume).forEach(([materialId, batches]) => {
+      Object.entries(batches).forEach(([batchId, isSelected]) => {
+        if (isSelected) {
+          const batchKey = `${materialId}_${batchId}`;
+          const quantity = consumeQuantities[batchKey];
+          
+          if (quantity === '' || quantity === null || quantity === undefined) {
+            errors[batchKey] = 'Podaj ilość do konsumpcji';
+            isValid = false;
+          } else {
+            const numericQuantity = Number(quantity);
+            
+            if (isNaN(numericQuantity)) {
+              errors[batchKey] = 'Wartość musi być liczbą';
+              isValid = false;
+            } else if (numericQuantity <= 0) {
+              errors[batchKey] = 'Wartość musi być większa od zera';
+              isValid = false;
+            } else {
+              // Sprawdź czy ilość nie przekracza zarezerwowanej ilości
+              const reservedBatches = task.materialBatches[materialId] || [];
+              const batch = reservedBatches.find(b => b.batchId === batchId);
+              
+              if (batch && numericQuantity > batch.quantity) {
+                errors[batchKey] = `Nie można skonsumować więcej niż zarezerwowano (${batch.quantity})`;
+                isValid = false;
+              }
+            }
+          }
+        }
+      });
+    });
+
+    setConsumeErrors(errors);
+    return isValid;
+  };
+
+  const handleConfirmConsumeMaterials = async () => {
+    try {
+      if (!validateConsumeQuantities()) {
+        return;
+      }
+
+      setLoading(true);
+
+      // Przygotuj dane do aktualizacji stanów magazynowych
+      const consumptionData = {};
+      
+      Object.entries(selectedBatchesToConsume).forEach(([materialId, batches]) => {
+        Object.entries(batches).forEach(([batchId, isSelected]) => {
+          if (isSelected) {
+            const batchKey = `${materialId}_${batchId}`;
+            const quantity = consumeQuantities[batchKey] || 0;
+            
+            if (quantity > 0) {
+              if (!consumptionData[materialId]) {
+                consumptionData[materialId] = [];
+              }
+              
+              consumptionData[materialId].push({
+                batchId,
+                quantity,
+                timestamp: new Date().toISOString(),
+                userId: currentUser.uid
+              });
+            }
+          }
+        });
+      });
+
+      // Zaktualizuj stany magazynowe - zmniejsz ilości w wybranych partiach
+      const { updateBatch } = await import('../../services/inventoryService');
+      
+      for (const [materialId, batches] of Object.entries(consumptionData)) {
+        for (const batchData of batches) {
+          try {
+            // Pobierz aktualne dane partii
+            const { getInventoryBatch } = await import('../../services/inventoryService');
+            const currentBatch = await getInventoryBatch(batchData.batchId);
+            
+            if (currentBatch) {
+              // Upewnij się, że wartości są liczbami
+              const currentQuantity = Number(currentBatch.quantity) || 0;
+              const consumeQuantity = Number(batchData.quantity) || 0;
+              const newQuantity = Math.max(0, currentQuantity - consumeQuantity);
+              
+              console.log('Konsumpcja materiału:', {
+                currentQuantity,
+                consumeQuantity,
+                newQuantity,
+                batchId: batchData.batchId
+              });
+              
+              await updateBatch(batchData.batchId, {
+                quantity: newQuantity
+              }, currentUser.uid);
+            }
+          } catch (error) {
+            console.error(`Błąd podczas aktualizacji partii ${batchData.batchId}:`, error);
+            showError(`Nie udało się zaktualizować partii ${batchData.batchId}: ${error.message}`);
+          }
+        }
+      }
+
+      // Aktualizuj rezerwacje - zmniejsz ilość zarezerwowaną o ilość skonsumowaną
+      try {
+        const { updateReservation } = await import('../../services/inventoryService');
+        
+        // Pobierz aktualne rezerwacje dla tego zadania
+        const transactionsRef = collection(db, 'inventoryTransactions');
+        
+        for (const [materialId, batches] of Object.entries(consumptionData)) {
+          for (const batchData of batches) {
+            // Znajdź rezerwację dla tego materiału, partii i zadania
+            // Najpierw spróbuj z active/pending statusem
+            let reservationQuery = query(
+              transactionsRef,
+              where('type', '==', 'booking'),
+              where('referenceId', '==', id),
+              where('itemId', '==', materialId),
+              where('batchId', '==', batchData.batchId),
+              where('status', 'in', ['active', 'pending'])
+            );
+            
+            let reservationSnapshot = await getDocs(reservationQuery);
+            
+            // Jeśli nie znaleziono rezerwacji z statusem, spróbuj bez filtra statusu
+            if (reservationSnapshot.empty) {
+              reservationQuery = query(
+                transactionsRef,
+                where('type', '==', 'booking'),
+                where('referenceId', '==', id),
+                where('itemId', '==', materialId),
+                where('batchId', '==', batchData.batchId)
+              );
+              
+              reservationSnapshot = await getDocs(reservationQuery);
+            }
+            
+            if (!reservationSnapshot.empty) {
+              // Weź pierwszą rezerwację (powinna być tylko jedna)
+              const reservationDoc = reservationSnapshot.docs[0];
+              const reservation = reservationDoc.data();
+              const currentReservedQuantity = Number(reservation.quantity) || 0;
+              const consumeQuantity = Number(batchData.quantity) || 0;
+              const newReservedQuantity = Math.max(0, currentReservedQuantity - consumeQuantity);
+              
+              console.log('Aktualizacja rezerwacji:', {
+                reservationId: reservationDoc.id,
+                materialId,
+                batchId: batchData.batchId,
+                currentReservedQuantity,
+                consumeQuantity,
+                newReservedQuantity
+              });
+              
+              if (newReservedQuantity > 0) {
+                // Aktualizuj rezerwację z nową ilością
+                await updateReservation(
+                  reservationDoc.id,
+                  materialId,
+                  newReservedQuantity,
+                  batchData.batchId,
+                  currentUser.uid
+                );
+              } else {
+                // Jeśli ilość rezerwacji spadła do 0, usuń rezerwację
+                const { deleteReservation } = await import('../../services/inventoryService');
+                await deleteReservation(reservationDoc.id, currentUser.uid);
+              }
+            } else {
+              console.log(`Nie znaleziono rezerwacji dla materiału ${materialId}, partii ${batchData.batchId}`);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Błąd podczas aktualizacji rezerwacji:', error);
+        showError('Nie udało się zaktualizować rezerwacji: ' + error.message);
+      }
+
+      // Zaktualizuj dane w task.materialBatches - zmniejsz ilości zarezerwowanych partii
+      const updatedMaterialBatches = { ...task.materialBatches };
+      
+      for (const [materialId, batches] of Object.entries(consumptionData)) {
+        if (updatedMaterialBatches[materialId]) {
+          for (const batchData of batches) {
+            const batchIndex = updatedMaterialBatches[materialId].findIndex(
+              batch => batch.batchId === batchData.batchId
+            );
+            
+            if (batchIndex >= 0) {
+              const currentReservedQuantity = Number(updatedMaterialBatches[materialId][batchIndex].quantity) || 0;
+              const consumeQuantity = Number(batchData.quantity) || 0;
+              const newReservedQuantity = Math.max(0, currentReservedQuantity - consumeQuantity);
+              
+              if (newReservedQuantity > 0) {
+                // Zaktualizuj ilość zarezerwowaną
+                updatedMaterialBatches[materialId][batchIndex].quantity = newReservedQuantity;
+              } else {
+                // Usuń partię z listy zarezerwowanych jeśli ilość spadła do 0
+                updatedMaterialBatches[materialId].splice(batchIndex, 1);
+              }
+            }
+          }
+          
+          // Jeśli dla materiału nie zostały żadne zarezerwowane partie, usuń cały klucz
+          if (updatedMaterialBatches[materialId].length === 0) {
+            delete updatedMaterialBatches[materialId];
+          }
+        }
+      }
+
+      // Zaktualizuj zadanie - dodaj informacje o skonsumowanych materiałach i zaktualizuj rezerwacje
+      const currentConsumedMaterials = task.consumedMaterials || [];
+      const newConsumedMaterials = [
+        ...currentConsumedMaterials,
+        ...Object.entries(consumptionData).flatMap(([materialId, batches]) => 
+          batches.map(batch => {
+            // Znajdź materiał aby ustawić domyślne includeInCosts
+            const material = materials.find(m => (m.inventoryItemId || m.id) === materialId);
+            const defaultIncludeInCosts = material ? (includeInCosts[material.id] !== false) : true;
+            
+            // Znajdź numer partii z task.materialBatches
+            let batchNumber = batch.batchId; // fallback to ID
+            if (task.materialBatches && task.materialBatches[materialId]) {
+              const batchInfo = task.materialBatches[materialId].find(b => b.batchId === batch.batchId);
+              console.log('Szukanie numeru partii dla konsumpcji:', {
+                materialId,
+                batchId: batch.batchId,
+                materialBatches: task.materialBatches[materialId],
+                foundBatchInfo: batchInfo
+              });
+              if (batchInfo && batchInfo.batchNumber) {
+                batchNumber = batchInfo.batchNumber;
+                console.log(`Znaleziono numer partii: ${batch.batchId} -> ${batchNumber}`);
+              } else {
+                console.log(`Nie znaleziono numeru partii dla ${batch.batchId}, używam ID jako fallback`);
+              }
+            } else {
+              console.log(`Brak zarezerwowanych partii dla materiału ${materialId}`);
+            }
+            
+            console.log('Zapisywanie konsumpcji z numerem partii:', {
+              materialId,
+              batchId: batch.batchId,
+              finalBatchNumber: batchNumber,
+              quantity: batch.quantity
+            });
+            
+            return {
+              materialId,
+              batchId: batch.batchId,
+              batchNumber: batchNumber, // Zapisz numer partii
+              quantity: batch.quantity,
+              timestamp: batch.timestamp,
+              userId: batch.userId,
+              userName: currentUser.displayName || currentUser.email,
+              includeInCosts: defaultIncludeInCosts
+            };
+          })
+        )
+      ];
+
+      await updateDoc(doc(db, 'productionTasks', id), {
+        consumedMaterials: newConsumedMaterials,
+        materialBatches: updatedMaterialBatches,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      });
+
+      showSuccess('Materiały zostały skonsumowane i rezerwacje zostały zaktualizowane');
+      setConsumeMaterialsDialogOpen(false);
+      
+      // Odśwież dane zadania
+      fetchTask();
+      
+    } catch (error) {
+      console.error('Błąd podczas konsumpcji materiałów:', error);
+      showError('Nie udało się skonsumować materiałów: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Funkcje obsługi korekty konsumpcji
+  const handleEditConsumption = (consumption) => {
+    setSelectedConsumption(consumption);
+    setEditedQuantity(consumption.quantity);
+    setEditConsumptionDialogOpen(true);
+  };
+
+  const handleConfirmEditConsumption = async () => {
+    try {
+      setLoading(true);
+
+      if (!selectedConsumption) {
+        showError('Nie wybrano konsumpcji do edycji');
+        return;
+      }
+
+      if (!editedQuantity || editedQuantity <= 0) {
+        showError('Podaj prawidłową ilość');
+        return;
+      }
+
+      // Oblicz różnicę w ilości
+      const quantityDifference = editedQuantity - selectedConsumption.quantity;
+
+      // Aktualizuj stan magazynowy
+      const { updateBatch } = await import('../../services/inventoryService');
+      const { getInventoryBatch } = await import('../../services/inventoryService');
+      
+      const currentBatch = await getInventoryBatch(selectedConsumption.batchId);
+      if (currentBatch) {
+        // Upewnij się, że wartości są liczbami
+        const currentQuantity = Number(currentBatch.quantity) || 0;
+        const editedQty = Number(editedQuantity) || 0;
+        const selectedQty = Number(selectedConsumption.quantity) || 0;
+        const quantityDiff = editedQty - selectedQty;
+        
+        // Jeśli zwiększamy ilość konsumpcji (quantityDiff > 0), zmniejszamy stan magazynowy
+        // Jeśli zmniejszamy ilość konsumpcji (quantityDiff < 0), zwiększamy stan magazynowy
+        const newQuantity = Math.max(0, currentQuantity - quantityDiff);
+        
+        console.log('Edycja konsumpcji:', {
+          currentQuantity,
+          editedQty,
+          selectedQty,
+          quantityDiff,
+          newQuantity,
+          batchId: selectedConsumption.batchId
+        });
+        
+        await updateBatch(selectedConsumption.batchId, {
+          quantity: newQuantity
+        }, currentUser.uid);
+      }
+
+      // Aktualizuj rezerwacje - skoryguj ilość zarezerwowaną
+      try {
+        const { updateReservation } = await import('../../services/inventoryService');
+        const transactionsRef = collection(db, 'inventoryTransactions');
+        
+        // Znajdź rezerwację dla tego materiału, partii i zadania
+        let reservationQuery = query(
+          transactionsRef,
+          where('type', '==', 'booking'),
+          where('referenceId', '==', id),
+          where('itemId', '==', selectedConsumption.materialId),
+          where('batchId', '==', selectedConsumption.batchId),
+          where('status', 'in', ['active', 'pending'])
+        );
+        
+        let reservationSnapshot = await getDocs(reservationQuery);
+        
+        // Jeśli nie znaleziono rezerwacji z statusem, spróbuj bez filtra statusu
+        if (reservationSnapshot.empty) {
+          reservationQuery = query(
+            transactionsRef,
+            where('type', '==', 'booking'),
+            where('referenceId', '==', id),
+            where('itemId', '==', selectedConsumption.materialId),
+            where('batchId', '==', selectedConsumption.batchId)
+          );
+          
+          reservationSnapshot = await getDocs(reservationQuery);
+        }
+        
+        if (!reservationSnapshot.empty) {
+          const reservationDoc = reservationSnapshot.docs[0];
+          const reservation = reservationDoc.data();
+          const currentReservedQuantity = Number(reservation.quantity) || 0;
+          const quantityDiff = editedQuantity - selectedConsumption.quantity;
+          
+          // Skoryguj rezerwację: jeśli zwiększamy konsumpcję, zmniejszamy rezerwację
+          const newReservedQuantity = Math.max(0, currentReservedQuantity - quantityDiff);
+          
+          console.log('Korekta rezerwacji przy edycji:', {
+            reservationId: reservationDoc.id,
+            materialId: selectedConsumption.materialId,
+            batchId: selectedConsumption.batchId,
+            currentReservedQuantity,
+            quantityDiff,
+            newReservedQuantity
+          });
+          
+          if (newReservedQuantity > 0) {
+            await updateReservation(
+              reservationDoc.id,
+              selectedConsumption.materialId,
+              newReservedQuantity,
+              selectedConsumption.batchId,
+              currentUser.uid
+            );
+          } else {
+            const { deleteReservation } = await import('../../services/inventoryService');
+            await deleteReservation(reservationDoc.id, currentUser.uid);
+          }
+        }
+        
+        // Zaktualizuj task.materialBatches
+        const updatedMaterialBatches = { ...task.materialBatches };
+        const materialId = selectedConsumption.materialId;
+        
+        if (updatedMaterialBatches[materialId]) {
+          const batchIndex = updatedMaterialBatches[materialId].findIndex(
+            batch => batch.batchId === selectedConsumption.batchId
+          );
+          
+          if (batchIndex >= 0) {
+            const currentReservedQuantity = Number(updatedMaterialBatches[materialId][batchIndex].quantity) || 0;
+            const quantityDiff = editedQuantity - selectedConsumption.quantity;
+            const newReservedQuantity = Math.max(0, currentReservedQuantity - quantityDiff);
+            
+            if (newReservedQuantity > 0) {
+              updatedMaterialBatches[materialId][batchIndex].quantity = newReservedQuantity;
+            } else {
+              updatedMaterialBatches[materialId].splice(batchIndex, 1);
+            }
+            
+            // Jeśli dla materiału nie zostały żadne zarezerwowane partie
+            if (updatedMaterialBatches[materialId].length === 0) {
+              delete updatedMaterialBatches[materialId];
+            }
+            
+            // Zaktualizuj task.materialBatches w bazie danych
+            await updateDoc(doc(db, 'productionTasks', id), {
+              materialBatches: updatedMaterialBatches,
+              updatedAt: serverTimestamp()
+            });
+          }
+        }
+        
+      } catch (error) {
+        console.error('Błąd podczas aktualizacji rezerwacji przy edycji:', error);
+        showError('Nie udało się zaktualizować rezerwacji: ' + error.message);
+      }
+
+      // Aktualizuj listę skonsumowanych materiałów w zadaniu
+      const updatedConsumedMaterials = task.consumedMaterials.map((consumed, index) => {
+        if (index === task.consumedMaterials.indexOf(selectedConsumption)) {
+          return {
+            ...consumed,
+            quantity: editedQuantity,
+            editedAt: new Date().toISOString(),
+            editedBy: currentUser.uid,
+            editedByName: currentUser.displayName || currentUser.email
+          };
+        }
+        return consumed;
+      });
+
+      // Zaktualizuj zadanie w bazie danych
+      await updateDoc(doc(db, 'productionTasks', id), {
+        consumedMaterials: updatedConsumedMaterials,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      });
+
+      // Odśwież dane zadania
+      await fetchTask();
+
+      showSuccess('Konsumpcja materiału została zaktualizowana wraz z rezerwacjami');
+      setEditConsumptionDialogOpen(false);
+      setSelectedConsumption(null);
+      setEditedQuantity(0);
+
+    } catch (error) {
+      console.error('Błąd podczas edycji konsumpcji:', error);
+      showError('Nie udało się zaktualizować konsumpcji: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Funkcje obsługi usunięcia konsumpcji
+  const handleDeleteConsumption = (consumption) => {
+    setSelectedConsumption(consumption);
+    setDeleteConsumptionDialogOpen(true);
+  };
+
+  const handleConfirmDeleteConsumption = async () => {
+    try {
+      setLoading(true);
+
+      if (!selectedConsumption) {
+        showError('Nie wybrano konsumpcji do usunięcia');
+        return;
+      }
+
+      // Przywróć stan magazynowy
+      const { updateBatch } = await import('../../services/inventoryService');
+      const { getInventoryBatch } = await import('../../services/inventoryService');
+      
+      const currentBatch = await getInventoryBatch(selectedConsumption.batchId);
+      if (currentBatch) {
+        // Upewnij się, że wartości są liczbami
+        const currentQuantity = Number(currentBatch.quantity) || 0;
+        const consumedQuantity = Number(selectedConsumption.quantity) || 0;
+        const newQuantity = currentQuantity + consumedQuantity;
+        
+        console.log('Przywracanie ilości:', {
+          currentQuantity,
+          consumedQuantity,
+          newQuantity,
+          batchId: selectedConsumption.batchId
+        });
+        
+        await updateBatch(selectedConsumption.batchId, {
+          quantity: newQuantity
+        }, currentUser.uid);
+      }
+
+      // Przywróć rezerwację tylko jeśli użytkownik tego chce
+      if (restoreReservation) {
+        try {
+          const { updateReservation, bookInventoryForTask } = await import('../../services/inventoryService');
+          const transactionsRef = collection(db, 'inventoryTransactions');
+          
+          // Znajdź rezerwację dla tego materiału, partii i zadania
+          let reservationQuery = query(
+            transactionsRef,
+            where('type', '==', 'booking'),
+            where('referenceId', '==', id),
+            where('itemId', '==', selectedConsumption.materialId),
+            where('batchId', '==', selectedConsumption.batchId),
+            where('status', 'in', ['active', 'pending'])
+          );
+          
+          let reservationSnapshot = await getDocs(reservationQuery);
+          
+          // Jeśli nie znaleziono rezerwacji z statusem, spróbuj bez filtra statusu
+          if (reservationSnapshot.empty) {
+            reservationQuery = query(
+              transactionsRef,
+              where('type', '==', 'booking'),
+              where('referenceId', '==', id),
+              where('itemId', '==', selectedConsumption.materialId),
+              where('batchId', '==', selectedConsumption.batchId)
+            );
+            
+            reservationSnapshot = await getDocs(reservationQuery);
+          }
+          
+          if (!reservationSnapshot.empty) {
+            // Jeśli rezerwacja istnieje, zwiększ jej ilość
+            const reservationDoc = reservationSnapshot.docs[0];
+            const reservation = reservationDoc.data();
+            const currentReservedQuantity = Number(reservation.quantity) || 0;
+            const consumedQuantity = Number(selectedConsumption.quantity) || 0;
+            const newReservedQuantity = currentReservedQuantity + consumedQuantity;
+            
+            console.log('Przywracanie rezerwacji:', {
+              reservationId: reservationDoc.id,
+              materialId: selectedConsumption.materialId,
+              batchId: selectedConsumption.batchId,
+              currentReservedQuantity,
+              consumedQuantity,
+              newReservedQuantity
+            });
+            
+            await updateReservation(
+              reservationDoc.id,
+              selectedConsumption.materialId,
+              newReservedQuantity,
+              selectedConsumption.batchId,
+              currentUser.uid
+            );
+          } else {
+            // Jeśli rezerwacja nie istnieje, utwórz nową
+            console.log('Tworzenie nowej rezerwacji po usunięciu konsumpcji:', {
+              materialId: selectedConsumption.materialId,
+              batchId: selectedConsumption.batchId,
+              quantity: selectedConsumption.quantity
+            });
+            
+            await bookInventoryForTask(
+              selectedConsumption.materialId,
+              selectedConsumption.quantity,
+              id,
+              currentUser.uid,
+              'manual',
+              selectedConsumption.batchId
+            );
+          }
+          
+          // Zaktualizuj task.materialBatches - przywróć ilość zarezerwowaną
+          const updatedMaterialBatches = { ...task.materialBatches };
+          const materialId = selectedConsumption.materialId;
+          
+          if (!updatedMaterialBatches[materialId]) {
+            updatedMaterialBatches[materialId] = [];
+          }
+          
+          const batchIndex = updatedMaterialBatches[materialId].findIndex(
+            batch => batch.batchId === selectedConsumption.batchId
+          );
+          
+          if (batchIndex >= 0) {
+            // Jeśli partia istnieje, zwiększ jej ilość
+            const currentReservedQuantity = Number(updatedMaterialBatches[materialId][batchIndex].quantity) || 0;
+            const consumedQuantity = Number(selectedConsumption.quantity) || 0;
+            updatedMaterialBatches[materialId][batchIndex].quantity = currentReservedQuantity + consumedQuantity;
+          } else {
+            // Jeśli partia nie istnieje, dodaj ją
+            const { getInventoryBatch } = await import('../../services/inventoryService');
+            const batchInfo = await getInventoryBatch(selectedConsumption.batchId);
+            
+            updatedMaterialBatches[materialId].push({
+              batchId: selectedConsumption.batchId,
+              quantity: selectedConsumption.quantity,
+              batchNumber: batchInfo?.lotNumber || batchInfo?.batchNumber || 'Bez numeru'
+            });
+          }
+          
+          // Zaktualizuj task.materialBatches w bazie danych
+          await updateDoc(doc(db, 'productionTasks', id), {
+            materialBatches: updatedMaterialBatches,
+            updatedAt: serverTimestamp()
+          });
+          
+        } catch (error) {
+          console.error('Błąd podczas przywracania rezerwacji:', error);
+          showError('Nie udało się przywrócić rezerwacji: ' + error.message);
+        }
+      }
+
+      // Usuń konsumpcję z listy
+      const updatedConsumedMaterials = task.consumedMaterials.filter((consumed, index) => 
+        index !== task.consumedMaterials.indexOf(selectedConsumption)
+      );
+
+      // Zaktualizuj zadanie w bazie danych
+      await updateDoc(doc(db, 'productionTasks', id), {
+        consumedMaterials: updatedConsumedMaterials,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      });
+
+      // Odśwież dane zadania
+      await fetchTask();
+
+      const successMessage = restoreReservation 
+        ? 'Konsumpcja materiału została usunięta i rezerwacja przywrócona'
+        : 'Konsumpcja materiału została usunięta';
+      showSuccess(successMessage);
+      setDeleteConsumptionDialogOpen(false);
+      setSelectedConsumption(null);
+      setRestoreReservation(true); // Reset do domyślnej wartości
+
+    } catch (error) {
+      console.error('Błąd podczas usuwania konsumpcji:', error);
+      showError('Nie udało się usunąć konsumpcji: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Funkcja do pobierania cen skonsumowanych partii
+  const fetchConsumedBatchPrices = async () => {
+    if (!task?.consumedMaterials || task.consumedMaterials.length === 0) {
+      return;
+    }
+
+    try {
+      const { getInventoryBatch } = await import('../../services/inventoryService');
+      const batchPrices = {};
+      let needsTaskUpdate = false;
+      const updatedConsumedMaterials = [...task.consumedMaterials];
+
+      for (let i = 0; i < task.consumedMaterials.length; i++) {
+        const consumed = task.consumedMaterials[i];
+        try {
+          const batch = await getInventoryBatch(consumed.batchId);
+          if (batch) {
+            if (batch.unitPrice) {
+              batchPrices[consumed.batchId] = batch.unitPrice;
+            }
+            
+            // Jeśli konsumpcja nie ma zapisanego numeru partii, zaktualizuj go
+            if (!consumed.batchNumber && (batch.lotNumber || batch.batchNumber)) {
+              const newBatchNumber = batch.lotNumber || batch.batchNumber;
+              console.log(`Aktualizuję numer partii dla konsumpcji ${i}: ${consumed.batchId} -> ${newBatchNumber}`);
+              updatedConsumedMaterials[i] = {
+                ...consumed,
+                batchNumber: newBatchNumber
+              };
+              needsTaskUpdate = true;
+            } else if (consumed.batchNumber === consumed.batchId && (batch.lotNumber || batch.batchNumber)) {
+              // Sprawdź czy zapisany batchNumber to w rzeczywistości ID - wtedy też zaktualizuj
+              const newBatchNumber = batch.lotNumber || batch.batchNumber;
+              if (newBatchNumber !== consumed.batchNumber) {
+                console.log(`Naprawiam błędny numer partii (ID jako numer): ${consumed.batchNumber} -> ${newBatchNumber}`);
+                updatedConsumedMaterials[i] = {
+                  ...consumed,
+                  batchNumber: newBatchNumber
+                };
+                needsTaskUpdate = true;
+              }
+            } else {
+              console.log(`Konsumpcja ${i} ma już poprawny numer partii:`, {
+                batchId: consumed.batchId,
+                savedBatchNumber: consumed.batchNumber,
+                batchFromDB: {
+                  lotNumber: batch.lotNumber,
+                  batchNumber: batch.batchNumber
+                }
+              });
+            }
+          }
+        } catch (error) {
+          console.error(`Błąd podczas pobierania danych partii ${consumed.batchId}:`, error);
+        }
+      }
+
+      setConsumedBatchPrices(batchPrices);
+      
+      // Jeśli trzeba zaktualizować dane zadania z numerami partii
+      if (needsTaskUpdate) {
+        try {
+          await updateDoc(doc(db, 'productionTasks', id), {
+            consumedMaterials: updatedConsumedMaterials,
+            updatedAt: serverTimestamp()
+          });
+          
+          // Zaktualizuj lokalny stan
+          setTask(prevTask => ({
+            ...prevTask,
+            consumedMaterials: updatedConsumedMaterials
+          }));
+          
+          console.log('Zaktualizowano numery partii w danych zadania');
+        } catch (error) {
+          console.error('Błąd podczas aktualizacji numerów partii:', error);
+        }
+      }
+    } catch (error) {
+      console.error('Błąd podczas pobierania cen skonsumowanych partii:', error);
+    }
+  };
+
+  // Funkcja do obsługi zmian checkboxów "wliczaj do kosztów" dla skonsumowanych materiałów
+  const handleConsumedIncludeInCostsChange = async (consumptionIndex, checked) => {
+    try {
+      setConsumedIncludeInCosts(prev => ({
+        ...prev,
+        [consumptionIndex]: checked
+      }));
+
+      // Zaktualizuj dane w zadaniu - dodaj informacje o wliczaniu do kosztów dla każdej konsumpcji
+      const updatedConsumedMaterials = [...task.consumedMaterials];
+      updatedConsumedMaterials[consumptionIndex] = {
+        ...updatedConsumedMaterials[consumptionIndex],
+        includeInCosts: checked
+      };
+
+      await updateDoc(doc(db, 'productionTasks', id), {
+        consumedMaterials: updatedConsumedMaterials,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      });
+
+      // Odśwież dane zadania aby przeliczył koszty
+      await fetchTask();
+
+      showSuccess(`Zmieniono ustawienie wliczania do kosztów dla skonsumowanego materiału`);
+    } catch (error) {
+      console.error('Błąd podczas zmiany ustawienia wliczania do kosztów:', error);
+      showError('Nie udało się zmienić ustawienia: ' + error.message);
+    }
+  };
+
+  // Inicjalizacja stanu checkboxów dla skonsumowanych materiałów
+  useEffect(() => {
+    if (task?.consumedMaterials && materials.length > 0) {
+      const consumedSettings = {};
+      let hasChanges = false;
+      
+      task.consumedMaterials.forEach((consumed, index) => {
+        // Sprawdź czy konsumpcja ma już ustawienie includeInCosts
+        if (consumed.includeInCosts !== undefined) {
+          consumedSettings[index] = consumed.includeInCosts;
+        } else {
+          // Jeśli nie ma, ustaw na podstawie ustawienia materiału
+          const material = materials.find(m => 
+            (m.inventoryItemId || m.id) === consumed.materialId
+          );
+          if (material) {
+            const materialId = material.inventoryItemId || material.id;
+            // Użyj ustawienia z includeInCosts lub domyślnie true
+            consumedSettings[index] = includeInCosts[materialId] !== false;
+          } else {
+            consumedSettings[index] = true; // domyślnie true
+          }
+        }
+        
+        // Sprawdź czy to ustawienie się zmieniło
+        if (consumedIncludeInCosts[index] !== consumedSettings[index]) {
+          hasChanges = true;
+        }
+      });
+      
+      // Aktualizuj stan tylko jeśli są zmiany
+      if (hasChanges || Object.keys(consumedIncludeInCosts).length === 0) {
+        setConsumedIncludeInCosts(consumedSettings);
+      }
+    }
+  }, [task?.consumedMaterials?.length, materials.length, includeInCosts]); // Kontrolowane zależności
 
   // Renderuj stronę
     return (
@@ -3095,6 +4099,131 @@ const TaskDetailsPage = () => {
               </Grid>
             )}
 
+            {/* Sekcja skonsumowanych materiałów */}
+            {task.consumedMaterials && task.consumedMaterials.length > 0 && (
+              <Grid item xs={12}>
+                <Paper sx={{ p: 3 }}>
+                  <Typography variant="h6" component="h2" gutterBottom>
+                    Skonsumowane materiały
+                  </Typography>
+                  
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Materiał</TableCell>
+                          <TableCell>Partia (LOT)</TableCell>
+                          <TableCell>Skonsumowana ilość</TableCell>
+                          <TableCell>Cena jedn.</TableCell>
+                          <TableCell>Wliczaj</TableCell>
+                          <TableCell>Data konsumpcji</TableCell>
+                          <TableCell>Użytkownik</TableCell>
+                          <TableCell>Akcje</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {task.consumedMaterials.map((consumed, index) => {
+                          // Znajdź materiał po ID
+                          const material = materials.find(m => 
+                            (m.inventoryItemId || m.id) === consumed.materialId
+                          );
+                          
+                          console.log('Debugowanie wyświetlania konsumpcji:', {
+                            index,
+                            consumed,
+                            materialBatches: task.materialBatches ? task.materialBatches[consumed.materialId] : null,
+                            savedBatchNumber: consumed.batchNumber
+                          });
+                          
+                          // Znajdź partię w zarezerwowanych partiach z ceną
+                          let batchNumber = consumed.batchNumber || consumed.batchId; // Najpierw sprawdź zapisany numer
+                          let batch = null;
+                          
+                          // Jeśli nie ma zapisanego numeru, spróbuj znaleźć w zarezerwowanych partiach
+                          if (!consumed.batchNumber && task.materialBatches && task.materialBatches[consumed.materialId]) {
+                            batch = task.materialBatches[consumed.materialId].find(b => 
+                              b.batchId === consumed.batchId
+                            );
+                            if (batch && batch.batchNumber) {
+                              batchNumber = batch.batchNumber;
+                            }
+                          }
+                          
+                          // Jeśli nadal nie mamy numeru partii, spróbuj pobrać z bazy danych
+                          if (batchNumber === consumed.batchId && !consumed.batchNumber) {
+                            console.log(`Brak numeru partii dla konsumpcji ${index}, używam ID jako fallback: ${consumed.batchId}`);
+                          }
+                          
+                          // Pobierz cenę z consumedBatchPrices (aktualna cena z bazy) lub z zarezerwowanych partii
+                          const batchPrice = consumedBatchPrices[consumed.batchId] || 
+                                            (batch && batch.unitPrice) || 0;
+                          
+                          const materialId = material?.inventoryItemId || material?.id;
+                          
+                          return (
+                            <TableRow key={index}>
+                              <TableCell>
+                                {material ? material.name : 'Nieznany materiał'}
+                              </TableCell>
+                              <TableCell>
+                                <Chip
+                                  size="small"
+                                  label={`${batchNumber} (${consumed.quantity} ${material ? material.unit : ''})`}
+                                  color="info"
+                                  variant="outlined"
+                                  sx={{ cursor: 'pointer' }}
+                                  onClick={() => navigate(`/inventory/${materialId}/batches`)}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                {consumed.quantity} {material ? material.unit : ''}
+                              </TableCell>
+                              <TableCell>
+                                {batchPrice > 0 ? `${Number(batchPrice).toFixed(4)} €` : '—'}
+                              </TableCell>
+                              <TableCell>
+                                <Checkbox
+                                  checked={consumedIncludeInCosts[index] || false}
+                                  onChange={(e) => handleConsumedIncludeInCostsChange(index, e.target.checked)}
+                                  color="primary"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                {new Date(consumed.timestamp).toLocaleString('pl')}
+                              </TableCell>
+                              <TableCell>
+                                {consumed.userName || 'Nieznany użytkownik'}
+                              </TableCell>
+                              <TableCell>
+                                <Box sx={{ display: 'flex', gap: 1 }}>
+                                  <IconButton
+                                    size="small"
+                                    color="primary"
+                                    onClick={() => handleEditConsumption(consumed)}
+                                    title="Edytuj konsumpcję"
+                                  >
+                                    <EditIcon />
+                                  </IconButton>
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => handleDeleteConsumption(consumed)}
+                                    title="Usuń konsumpcję"
+                                  >
+                                    <DeleteIcon />
+                                  </IconButton>
+                                </Box>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+      </Paper>
+              </Grid>
+            )}
+
             {/* Sekcja materiałów */}
             <Grid item xs={12}>
               <Paper sx={{ p: 3 }}>
@@ -3124,9 +4253,23 @@ const TaskDetailsPage = () => {
                       color="primary"
                       startIcon={<BookmarkAddIcon />}
                       onClick={() => setReserveDialogOpen(true)}
-                      sx={{ mt: 2, mb: 2 }}
+                      sx={{ mt: 2, mb: 2, mr: 2 }}
                     >
                       Rezerwuj surowce
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="warning"
+                      startIcon={<InventoryIcon />}
+                      onClick={handleOpenConsumeMaterialsDialog}
+                      sx={{ mt: 2, mb: 2 }}
+                      disabled={!materials.some(material => {
+                        const materialId = material.inventoryItemId || material.id;
+                        const reservedBatches = task.materialBatches && task.materialBatches[materialId];
+                        return reservedBatches && reservedBatches.length > 0;
+                      })}
+                    >
+                      Konsumuj materiały
                     </Button>
                   </Box>
                 </Box>
@@ -3139,6 +4282,7 @@ const TaskDetailsPage = () => {
                         <TableCell>Ilość</TableCell>
                         <TableCell>Jednostka</TableCell>
                         <TableCell>Rzeczywista ilość</TableCell>
+                        <TableCell>Ilość skonsumowana</TableCell>
                         <TableCell>Cena jedn.</TableCell>
                         <TableCell>Koszt</TableCell>
                         <TableCell>Zarezerwowane partie (LOT)</TableCell>
@@ -3177,6 +4321,14 @@ const TaskDetailsPage = () => {
                               ) : (
                                 materialQuantities[material.id] || 0
                               )}
+                            </TableCell>
+                            <TableCell>
+                              {(() => {
+                                const consumedQuantity = getConsumedQuantityForMaterial(materialId);
+                                return consumedQuantity > 0 
+                                  ? `${consumedQuantity} ${material.unit}` 
+                                  : '—';
+                              })()}
                             </TableCell>
                             <TableCell>
                               {reservedBatches && reservedBatches.length > 0 ? (
@@ -4174,10 +5326,10 @@ const TaskDetailsPage = () => {
             Anuluj
           </Button>
           <Button 
-            onClick={() => handleReserveMaterials()} 
+            onClick={handleReserveMaterials} 
             variant="contained" 
             color="primary"
-            disabled={loading || reservingMaterials || (reservationMethod === 'manual' && !validateManualBatchSelection().valid)}
+            disabled={reservingMaterials}
           >
             {reservingMaterials ? <CircularProgress size={24} /> : 'Rezerwuj materiały'}
           </Button>
@@ -4491,7 +5643,233 @@ const TaskDetailsPage = () => {
         </DialogActions>
       </Dialog>
 
+      {/* Dialog konsumpcji materiałów */}
+      <Dialog
+        open={consumeMaterialsDialogOpen}
+        onClose={() => setConsumeMaterialsDialogOpen(false)}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>Konsumuj materiały</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Wybierz partie materiałów i ilości, które chcesz skonsumować. Konsumpcja zmniejszy dostępną ilość w magazynie.
+          </DialogContentText>
+          
+          {consumedMaterials.length === 0 ? (
+            <Alert severity="info">
+              Brak zarezerwowanych materiałów do konsumpcji.
+            </Alert>
+          ) : (
+            consumedMaterials.map((material) => {
+              const materialId = material.inventoryItemId || material.id;
+              const reservedBatches = task.materialBatches[materialId] || [];
+              
+              return (
+                <Box key={materialId} sx={{ mb: 3 }}>
+                  <Typography variant="h6" gutterBottom>
+                    {material.name} ({material.unit})
+                  </Typography>
+                  
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell padding="checkbox">Konsumuj</TableCell>
+                          <TableCell>Numer partii</TableCell>
+                          <TableCell>Zarezerwowana ilość</TableCell>
+                          <TableCell>Ilość do konsumpcji</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {reservedBatches.map((batch) => {
+                          const batchKey = `${materialId}_${batch.batchId}`;
+                          const isSelected = selectedBatchesToConsume[materialId]?.[batch.batchId] || false;
+                          
+                          return (
+                            <TableRow key={batch.batchId}>
+                              <TableCell padding="checkbox">
+                                <Checkbox
+                                  checked={isSelected}
+                                  onChange={(e) => handleBatchToConsumeSelection(materialId, batch.batchId, e.target.checked)}
+                                />
+                              </TableCell>
+                              <TableCell>{batch.batchNumber}</TableCell>
+                              <TableCell>{batch.quantity} {material.unit}</TableCell>
+                              <TableCell>
+                                <TextField
+                                  type="number"
+                                  value={consumeQuantities[batchKey] || 0}
+                                  onChange={(e) => handleConsumeQuantityChange(materialId, batch.batchId, e.target.value)}
+                                  disabled={!isSelected}
+                                  error={Boolean(consumeErrors[batchKey])}
+                                  helperText={consumeErrors[batchKey]}
+                                  inputProps={{ min: 0, max: batch.quantity, step: 'any' }}
+                                  size="small"
+                                  sx={{ width: '120px' }}
+                                  InputProps={{
+                                    endAdornment: <Typography variant="caption">{material.unit}</Typography>
+                                  }}
+                                />
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              );
+            })
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConsumeMaterialsDialogOpen(false)}>
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleConfirmConsumeMaterials} 
+            variant="contained" 
+            color="warning"
+            disabled={loading || consumedMaterials.length === 0}
+          >
+            {loading ? <CircularProgress size={24} /> : 'Konsumuj materiały'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Dialog rezerwacji surowców */}
+      <Dialog
+        open={reserveDialogOpen}
+        onClose={() => setReserveDialogOpen(false)}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>Rezerwacja surowców</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Wybierz partie materiałów, które chcesz zarezerwować dla tego zadania produkcyjnego.
+          </DialogContentText>
+          
+          <FormControl component="fieldset" sx={{ mb: 2 }}>
+            <FormLabel component="legend">Metoda rezerwacji</FormLabel>
+            <RadioGroup 
+              row 
+              value={reservationMethod} 
+              onChange={handleReservationMethodChange}
+            >
+              <FormControlLabel 
+                value="automatic" 
+                control={<Radio />} 
+                label="Automatyczna (FIFO)" 
+              />
+              <FormControlLabel 
+                value="manual" 
+                control={<Radio />} 
+                label="Ręczna (wybór partii)" 
+              />
+            </RadioGroup>
+          </FormControl>
+          
+          {reservationMethod === 'manual' && renderManualBatchSelection()}
+          
+          {reservationMethod === 'automatic' && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              System automatycznie zarezerwuje najstarsze dostępne partie materiałów (FIFO).
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReserveDialogOpen(false)}>
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleReserveMaterials} 
+            variant="contained" 
+            color="primary"
+            disabled={reservingMaterials}
+          >
+            {reservingMaterials ? <CircularProgress size={24} /> : 'Rezerwuj materiały'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog korekty konsumpcji */}
+      <Dialog
+        open={editConsumptionDialogOpen}
+        onClose={() => setEditConsumptionDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Edytuj konsumpcję</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Wprowadź nową ilość konsumpcji dla wybranej partii:
+          </DialogContentText>
+          <TextField
+            label="Nowa ilość"
+            type="number"
+            value={editedQuantity}
+            onChange={(e) => setEditedQuantity(e.target.value)}
+            fullWidth
+            InputProps={{
+              endAdornment: <Typography variant="body2">{task?.unit || 'szt.'}</Typography>
+            }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditConsumptionDialogOpen(false)}>
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleConfirmEditConsumption} 
+            variant="contained" 
+            color="primary"
+            disabled={loading}
+          >
+            {loading ? <CircularProgress size={24} /> : 'Zapisz zmiany'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog usuwania konsumpcji */}
+      <Dialog
+        open={deleteConsumptionDialogOpen}
+        onClose={() => setDeleteConsumptionDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Potwierdź usunięcie konsumpcji</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Czy na pewno chcesz usunąć wybraną konsumpcję? Ta operacja jest nieodwracalna.
+          </DialogContentText>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={restoreReservation}
+                onChange={(e) => setRestoreReservation(e.target.checked)}
+                color="primary"
+              />
+            }
+            label="Przywróć rezerwację materiału po usunięciu konsumpcji"
+            sx={{ mt: 2, display: 'block' }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConsumptionDialogOpen(false)}>
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleConfirmDeleteConsumption} 
+            variant="contained" 
+            color="error"
+            disabled={loading}
+          >
+            {loading ? <CircularProgress size={24} /> : 'Usuń konsumpcję'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };
