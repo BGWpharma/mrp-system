@@ -50,7 +50,6 @@ import {
   PlayArrow as StartIcon,
   Stop as StopIcon,
   CheckCircle as CompleteIcon,
-  Inventory as InventoryIcon,
   Check as CheckIcon,
   Info as InfoIcon,
   Visibility as ViewIcon,
@@ -679,6 +678,33 @@ const TaskList = () => {
   };
 
   const getStatusActions = (task) => {
+    // Oblicz czy wszystkie produkty zostały już wyprodukowane
+    const totalCompletedQuantity = task.totalCompletedQuantity || 0;
+    const remainingQuantity = Math.max(0, task.quantity - totalCompletedQuantity);
+    const isFullyProduced = remainingQuantity === 0;
+    
+    // Jeśli produkcja została ukończona (wszystkie produkty wyprodukowane), pokaż konsumpcję poprocesową
+    if (isFullyProduced) {
+      // Określ kolor na podstawie statusu zatwierdzenia konsumpcji
+      const isConsumptionConfirmed = task.materialConsumptionConfirmed === true;
+      const actionColor = isConsumptionConfirmed ? "success" : "secondary";
+      const tooltipTitle = isConsumptionConfirmed ? "Konsumpcja zatwierdzona" : "Konsumpcja poprocesowa";
+      
+      return (
+        <Tooltip title={tooltipTitle}>
+          <IconButton 
+            color={actionColor}
+            component={Link}
+            to={`/production/consumption/${task.id}`}
+            size="small"
+          >
+            <BuildCircleIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      );
+    }
+    
+    // W przeciwnym razie używaj normalnej logiki statusu
     switch (task.status) {
       case 'Zaplanowane':
       case 'Wstrzymane':
@@ -719,32 +745,8 @@ const TaskList = () => {
           </Tooltip>
         );
       case 'Zakończone':
-        // Jeśli zadanie jest zakończone i nie zostało jeszcze dodane do magazynu
-        if (!task.inventoryUpdated) {
-          return (
-            <Tooltip title="Dodaj produkt do magazynu">
-              <IconButton 
-                color="primary" 
-                onClick={() => openAddToInventoryDialog(task)}
-                size="small"
-              >
-                <InventoryIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          );
-        }
-        return (
-          <Tooltip title="Korekta poprocesowa">
-            <IconButton 
-              color="secondary" 
-              component={Link}
-              to={`/production/consumption/${task.id}`}
-              size="small"
-            >
-              <BuildCircleIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        );
+        // Zadanie zakończone ale nie wszystko wyprodukowane - normalne akcje dla zakończonych zadań
+        return null;
       default:
         return null;
     }

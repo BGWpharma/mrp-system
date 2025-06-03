@@ -80,7 +80,8 @@ import {
   Search as SearchIcon,
   Visibility as VisibilityIcon,
   Info as InfoIcon,
-  Science as RawMaterialsIcon
+  Science as RawMaterialsIcon,
+  BuildCircle as BuildCircleIcon
 } from '@mui/icons-material';
 import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession, addProductionSession, deleteProductionSession } from '../../services/productionService';
 import { getItemBatches, bookInventoryForTask, cancelBooking, getBatchReservations, getAllInventoryItems, getInventoryItemById, getInventoryBatch } from '../../services/inventoryService';
@@ -3007,11 +3008,27 @@ const TaskDetailsPage = () => {
 
   // Funkcja pomocnicza do parsowania datetime-local z uwzględnieniem strefy czasowej
   const fromLocalDateTimeString = (dateTimeString) => {
-    const [datePart, timePart] = dateTimeString.split(' ');
-    const [day, month, year] = datePart.split('.');
-    const [hours, minutes] = timePart.split(':');
+    // Sprawdź czy wartość nie jest undefined lub null
+    if (!dateTimeString) {
+      return new Date();
+    }
     
-    return new Date(year, month - 1, day, hours, minutes);
+    // Obsługa formatu ISO z datetime-local (YYYY-MM-DDTHH:MM)
+    if (dateTimeString.includes('T')) {
+      return new Date(dateTimeString);
+    }
+    
+    // Obsługa starszego formatu z kropkami i spacją (DD.MM.YYYY HH:MM)
+    if (dateTimeString.includes(' ')) {
+      const [datePart, timePart] = dateTimeString.split(' ');
+      const [day, month, year] = datePart.split('.');
+      const [hours, minutes] = timePart.split(':');
+      
+      return new Date(year, month - 1, day, hours, minutes);
+    }
+    
+    // Fallback - spróbuj parsować jako standardową datę
+    return new Date(dateTimeString);
   };
 
   // Funkcja do filtrowania surowców na podstawie wyszukiwania
@@ -3347,12 +3364,14 @@ const TaskDetailsPage = () => {
         ...currentConsumedMaterials,
         ...Object.entries(consumptionData).flatMap(([materialId, batches]) => 
           batches.map(batch => {
-            // Znajdź materiał aby ustawić domyślne includeInCosts
+            // Znajdź materiał aby ustawić domyślne includeInCosts i pobrać cenę
             const material = materials.find(m => (m.inventoryItemId || m.id) === materialId);
             const defaultIncludeInCosts = material ? (includeInCosts[material.id] !== false) : true;
             
             // Znajdź numer partii z task.materialBatches
             let batchNumber = batch.batchId; // fallback to ID
+            let unitPrice = 0; // Domyślna cena
+            
             if (task.materialBatches && task.materialBatches[materialId]) {
               const batchInfo = task.materialBatches[materialId].find(b => b.batchId === batch.batchId);
               console.log('Szukanie numeru partii dla konsumpcji:', {
@@ -3367,15 +3386,30 @@ const TaskDetailsPage = () => {
               } else {
                 console.log(`Nie znaleziono numeru partii dla ${batch.batchId}, używam ID jako fallback`);
               }
+              
+              // Pobierz cenę jednostkową partii
+              if (batchInfo && batchInfo.unitPrice) {
+                unitPrice = batchInfo.unitPrice;
+                console.log(`Znaleziono cenę partii: ${batch.batchId} -> ${unitPrice} €`);
+              } else {
+                console.log(`Nie znaleziono ceny partii ${batch.batchId}, używam ceny materiału`);
+              }
             } else {
               console.log(`Brak zarezerwowanych partii dla materiału ${materialId}`);
             }
             
-            console.log('Zapisywanie konsumpcji z numerem partii:', {
+            // Jeśli nie znaleziono ceny w partii, użyj ceny materiału
+            if (unitPrice === 0 && material && material.unitPrice) {
+              unitPrice = material.unitPrice;
+              console.log(`Używam ceny materiału: ${materialId} -> ${unitPrice} €`);
+            }
+            
+            console.log('Zapisywanie konsumpcji z numerem partii i ceną:', {
               materialId,
               batchId: batch.batchId,
               finalBatchNumber: batchNumber,
-              quantity: batch.quantity
+              quantity: batch.quantity,
+              unitPrice: unitPrice
             });
             
             return {
@@ -3383,6 +3417,7 @@ const TaskDetailsPage = () => {
               batchId: batch.batchId,
               batchNumber: batchNumber, // Zapisz numer partii
               quantity: batch.quantity,
+              unitPrice: unitPrice, // Zapisz cenę jednostkową
               timestamp: batch.timestamp,
               userId: batch.userId,
               userName: currentUser.displayName || currentUser.email,
@@ -4103,9 +4138,40 @@ const TaskDetailsPage = () => {
             {task.consumedMaterials && task.consumedMaterials.length > 0 && (
               <Grid item xs={12}>
                 <Paper sx={{ p: 3 }}>
-                  <Typography variant="h6" component="h2" gutterBottom>
-                    Skonsumowane materiały
-                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                    <Typography variant="h6" component="h2">
+                      Skonsumowane materiały
+                    </Typography>
+                    
+                    {/* Przycisk do przejścia do zarządzania zużyciem materiałów */}
+                    {(() => {
+                      // Sprawdź warunek taki sam jak dla konsumpcji poprocesowej
+                      const totalCompletedQuantity = task.totalCompletedQuantity || 0;
+                      const remainingQuantity = Math.max(0, task.quantity - totalCompletedQuantity);
+                      const isFullyProduced = remainingQuantity === 0;
+                      
+                      if (isFullyProduced) {
+                        // Określ kolor i tekst na podstawie statusu zatwierdzenia konsumpcji
+                        const isConsumptionConfirmed = task.materialConsumptionConfirmed === true;
+                        const buttonColor = isConsumptionConfirmed ? "success" : "info";
+                        const buttonText = isConsumptionConfirmed ? "Zatwierdzona konsumpcja" : "Zarządzaj zużyciem";
+                        
+                        return (
+                          <Button
+                            variant="outlined"
+                            color={buttonColor}
+                            startIcon={<BuildCircleIcon />}
+                            component={Link}
+                            to={`/production/consumption/${task.id}`}
+                            size="small"
+                          >
+                            {buttonText}
+                          </Button>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </Box>
                   
                   <TableContainer>
                     <Table size="small">

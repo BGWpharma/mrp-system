@@ -2846,8 +2846,21 @@ import {
     // Sprawdź czy zadanie zostało ukończone
     const isCompleted = totalCompletedQuantity >= task.quantity;
     
+    // Określ właściwy status na podstawie ukończenia i materiałów
+    let finalStatus = 'Wstrzymane';
+    if (isCompleted) {
+      // Sprawdź czy zadanie ma materiały i czy nie ma potwierdzonego zużycia
+      if (!task.materialConsumptionConfirmed && task.materials && task.materials.length > 0) {
+        finalStatus = 'Potwierdzenie zużycia';
+        console.log(`Zadanie ${taskId} wymaga potwierdzenia zużycia, ustawiono status na "Potwierdzenie zużycia"`);
+      } else {
+        finalStatus = 'Zakończone';
+        console.log(`Zadanie ${taskId} zakończone bez potrzeby potwierdzenia zużycia`);
+      }
+    }
+    
     const updates = {
-      status: isCompleted ? 'Zakończone' : 'Wstrzymane',
+      status: finalStatus,
       productionSessions,
       totalCompletedQuantity,
       lastSessionEndDate: serverTimestamp(),
@@ -2855,7 +2868,7 @@ import {
       updatedBy: userId
     };
 
-    // Jeśli zadanie jest zakończone, dodaj dodatkowe pola
+    // Jeśli zadanie jest ukończone (niezależnie od statusu), dodaj dodatkowe pola
     if (isCompleted) {
       updates.completionDate = serverTimestamp();
       updates.readyForInventory = true; // Oznaczamy jako gotowe do dodania do magazynu, ale nie dodajemy automatycznie
@@ -2863,14 +2876,15 @@ import {
       // USUNIĘTO: automatyczne anulowanie rezerwacji po zakończeniu zadania
       // Rezerwacje będą anulowane dopiero po potwierdzeniu zużycia materiałów
       // Materiały pozostają zarezerwowane, dopóki użytkownik nie potwierdzi ich zużycia
-      console.log(`Zadanie ${taskId} zostało zakończone. Rezerwacje materiałów pozostają aktywne do momentu potwierdzenia zużycia.`);
+      console.log(`Zadanie ${taskId} zostało ukończone. Rezerwacje materiałów pozostają aktywne do momentu potwierdzenia zużycia.`);
     }
     
     await updateDoc(taskRef, updates);
     
     return {
       isCompleted,
-      totalCompletedQuantity
+      totalCompletedQuantity,
+      finalStatus
     };
   };
 
