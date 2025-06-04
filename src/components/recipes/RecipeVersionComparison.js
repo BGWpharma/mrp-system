@@ -131,11 +131,11 @@ const RecipeVersionComparison = ({ currentVersion, previousVersion }) => {
       }
     });
 
-    // Porównanie mikroelementów
+    // Porównanie składników odżywczych
     const oldMicronutrients = previousVersion.data.micronutrients || [];
     const newMicronutrients = currentVersion.data.micronutrients || [];
 
-    // Znajdź usunięte mikroelementy
+    // Znajdź usunięte składniki odżywcze
     oldMicronutrients.forEach(oldMicro => {
       const stillExists = newMicronutrients.some(
         newMicro => newMicro.code === oldMicro.code && 
@@ -153,12 +153,12 @@ const RecipeVersionComparison = ({ currentVersion, previousVersion }) => {
       }
     });
 
-    // Znajdź dodane lub zmienione mikroelementy
+    // Znajdź dodane lub zmienione składniki odżywcze
     newMicronutrients.forEach(newMicro => {
       const oldMicro = oldMicronutrients.find(old => old.code === newMicro.code);
       
       if (!oldMicro) {
-        // Dodany mikroelement
+        // Dodany składnik odżywczy
         micronutrientDiffs.push({
           type: 'added',
           name: `${newMicro.code} (${newMicro.name})`,
@@ -169,7 +169,7 @@ const RecipeVersionComparison = ({ currentVersion, previousVersion }) => {
         oldMicro.quantity !== newMicro.quantity || 
         oldMicro.unit !== newMicro.unit
       ) {
-        // Zmieniony mikroelement
+        // Zmieniony składnik odżywczy
         micronutrientDiffs.push({
           type: 'modified',
           name: `${newMicro.code} (${newMicro.name})`,
@@ -349,13 +349,13 @@ const RecipeVersionComparison = ({ currentVersion, previousVersion }) => {
       {differences.micronutrients.length > 0 && (
         <>
           <Typography variant="subtitle1" sx={{ mt: 3, mb: 1 }}>
-            Zmiany w mikroelementach
+            Zmiany w składnikach odżywczych
           </Typography>
           <TableContainer>
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell>Mikroelement</TableCell>
+                  <TableCell>Składnik odżywczy</TableCell>
                   <TableCell>Zmiana</TableCell>
                   <TableCell>Wersja {previousVersion.version}</TableCell>
                   <TableCell>Wersja {currentVersion.version}</TableCell>

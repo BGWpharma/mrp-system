@@ -375,19 +375,63 @@ export const MINERALS = [
   { code: 'F', name: 'Fluor', unit: 'mg' }
 ];
 
-// Łączna lista wszystkich mikroelementów
+// Makroelementy - składniki odżywcze
+export const MACRONUTRIENTS = [
+  { code: 'PROTEIN', name: 'Białko', unit: 'g' },
+  { code: 'CARBS', name: 'Węglowodany', unit: 'g' },
+  { code: 'FAT', name: 'Tłuszcze', unit: 'g' },
+  { code: 'FIBER', name: 'Błonnik', unit: 'g' },
+  { code: 'SUGAR', name: 'Cukry', unit: 'g' },
+  { code: 'SATURATED_FAT', name: 'Tłuszcze nasycone', unit: 'g' },
+  { code: 'TRANS_FAT', name: 'Tłuszcze trans', unit: 'g' },
+  { code: 'CHOLESTEROL', name: 'Cholesterol', unit: 'mg' }
+];
+
+// Energia i kalorie
+export const ENERGY_VALUES = [
+  { code: 'KCAL', name: 'Energia (kcal)', unit: 'kcal' },
+  { code: 'KJ', name: 'Energia (kJ)', unit: 'kJ' }
+];
+
+// Łączna lista wszystkich mikroelementów i składników odżywczych
 export const MICRONUTRIENTS = [
   ...VITAMINS.map(vitamin => ({ ...vitamin, category: 'Witaminy' })),
   ...MINERALS.map(mineral => ({ ...mineral, category: 'Minerały' }))
 ];
 
-// Kategorie mikroelementów
+// Łączna lista wszystkich składników odżywczych (makro + mikro + energia)
+export const ALL_NUTRITIONAL_COMPONENTS = [
+  ...MACRONUTRIENTS.map(macro => ({ ...macro, category: 'Makroelementy' })),
+  ...ENERGY_VALUES.map(energy => ({ ...energy, category: 'Energia' })),
+  ...VITAMINS.map(vitamin => ({ ...vitamin, category: 'Witaminy' })),
+  ...MINERALS.map(mineral => ({ ...mineral, category: 'Minerały' }))
+];
+
+// Kategorie składników odżywczych
+export const NUTRITIONAL_CATEGORIES = {
+  MACRONUTRIENTS: 'Makroelementy',
+  ENERGY: 'Energia',
+  VITAMINS: 'Witaminy',
+  MINERALS: 'Minerały'
+};
+
+// Kategorie mikroelementów (zachowuję dla kompatybilności)
 export const MICRONUTRIENT_CATEGORIES = {
   VITAMINS: 'Witaminy',
   MINERALS: 'Minerały'
 };
 
-// Domyślna struktura mikroelementu w recepturze
+// Domyślna struktura składnika odżywczego w recepturze
+export const DEFAULT_NUTRITIONAL_COMPONENT = {
+  code: '',
+  name: '',
+  quantity: '',
+  unit: '',
+  category: '',
+  notes: ''
+};
+
+// Domyślna struktura mikroelementu w recepturze (zachowuję dla kompatybilności)
 export const DEFAULT_MICRONUTRIENT = {
   code: '',
   name: '',

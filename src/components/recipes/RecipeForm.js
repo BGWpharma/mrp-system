@@ -57,7 +57,7 @@ import { db } from '../../services/firebase/config';
 import { getAllCustomers } from '../../services/customerService';
 import { getAllWorkstations } from '../../services/workstationService';
 import { UNIT_GROUPS, UNIT_CONVERSION_FACTORS } from '../../utils/constants';
-import { MICRONUTRIENTS, MICRONUTRIENT_CATEGORIES, DEFAULT_MICRONUTRIENT } from '../../utils/constants';
+import { ALL_NUTRITIONAL_COMPONENTS, NUTRITIONAL_CATEGORIES, DEFAULT_NUTRITIONAL_COMPONENT } from '../../utils/constants';
 
 const RecipeForm = ({ recipeId }) => {
   const { currentUser } = useAuth();
@@ -776,13 +776,13 @@ const RecipeForm = ({ recipeId }) => {
     }
   };
 
-  // Funkcje obsługujące mikroelementy
+  // Funkcje obsługujące składniki odżywcze
   const handleMicronutrientChange = (index, field, value) => {
     const newMicronutrients = [...recipeData.micronutrients];
     
     if (field === 'code') {
-      // Znajdź mikroelement na podstawie kodu
-      const selectedMicronutrient = MICRONUTRIENTS.find(m => m.code === value);
+      // Znajdź składnik odżywczy na podstawie kodu
+      const selectedMicronutrient = ALL_NUTRITIONAL_COMPONENTS.find(m => m.code === value);
       if (selectedMicronutrient) {
         newMicronutrients[index] = {
           ...newMicronutrients[index],
@@ -808,7 +808,7 @@ const RecipeForm = ({ recipeId }) => {
   const addMicronutrient = () => {
     setRecipeData(prev => ({
       ...prev,
-      micronutrients: [...prev.micronutrients, { ...DEFAULT_MICRONUTRIENT }]
+      micronutrients: [...prev.micronutrients, { ...DEFAULT_NUTRITIONAL_COMPONENT }]
     }));
   };
 
@@ -1372,7 +1372,7 @@ const RecipeForm = ({ recipeId }) => {
         </Box>
       </Paper>
 
-      {/* Sekcja mikroelementów */}
+      {/* Sekcja składników odżywczych */}
       <Paper 
         elevation={3} 
         sx={{ 
@@ -1398,7 +1398,7 @@ const RecipeForm = ({ recipeId }) => {
         >
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <ScienceIcon color="primary" sx={{ mr: 1 }} />
-            <Typography variant="h6" fontWeight="500">Mikroelementy</Typography>
+            <Typography variant="h6" fontWeight="500">Składniki odżywcze</Typography>
           </Box>
           
           <Box sx={{ display: 'flex', gap: 1 }}>
@@ -1409,7 +1409,7 @@ const RecipeForm = ({ recipeId }) => {
               startIcon={<AddIcon />}
               sx={{ borderRadius: '20px' }}
             >
-              Dodaj mikroelement
+              Dodaj składnik odżywczy
             </Button>
           </Box>
         </Box>
@@ -1442,9 +1442,9 @@ const RecipeForm = ({ recipeId }) => {
                             <MenuItem value="">
                               <em>Wybierz...</em>
                             </MenuItem>
-                            {MICRONUTRIENTS.map((micro) => (
+                            {ALL_NUTRITIONAL_COMPONENTS.map((micro) => (
                               <MenuItem key={micro.code} value={micro.code}>
-                                {micro.code}
+                                {micro.code} - {micro.name}
                               </MenuItem>
                             ))}
                           </Select>
@@ -1493,7 +1493,13 @@ const RecipeForm = ({ recipeId }) => {
                       <TableCell>
                         <Chip 
                           size="small" 
-                          color={micronutrient.category === 'Witaminy' ? 'success' : 'info'} 
+                          color={
+                            micronutrient.category === 'Witaminy' ? 'success' :
+                            micronutrient.category === 'Minerały' ? 'info' :
+                            micronutrient.category === 'Makroelementy' ? 'primary' :
+                            micronutrient.category === 'Energia' ? 'warning' :
+                            'default'
+                          } 
                           label={micronutrient.category} 
                           sx={{ borderRadius: '16px' }}
                         />
@@ -1534,10 +1540,10 @@ const RecipeForm = ({ recipeId }) => {
             >
               <ScienceIcon sx={{ fontSize: 40, color: 'text.secondary', mb: 1 }} />
               <Typography variant="body1" color="text.secondary" gutterBottom>
-                Brak mikroelementów. 
+                Brak składników odżywczych. 
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Dodaj witaminy, minerały i inne składniki odżywcze używając przycisku powyżej.
+                Dodaj białko, węglowodany, tłuszcze, kalorie, witaminy, minerały i inne składniki odżywcze używając przycisku powyżej.
               </Typography>
             </Paper>
           )}

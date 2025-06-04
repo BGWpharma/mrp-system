@@ -83,21 +83,44 @@ const ConsumptionPage = () => {
       
       // Przetwórz dane konsumpcji z sesji produkcyjnych
       if (taskData?.consumedMaterials?.length > 0) {
-        // Dodaj nazwy materiałów do danych konsumpcji
-        const enrichedConsumptions = taskData.consumedMaterials.map(consumption => {
-          // Znajdź materiał w liście materiałów zadania
-          const material = taskData.materials?.find(m => 
-            (m.inventoryItemId || m.id) === consumption.materialId
-          );
-          
-          return {
-            ...consumption,
-            materialName: material?.name || 'Nieznany materiał',
-            materialUnit: material?.unit || 'szt.',
-            // Użyj ceny z konsumpcji jeśli jest dostępna, w przeciwnym razie ceny materiału
-            unitPrice: consumption.unitPrice !== undefined ? consumption.unitPrice : (material?.unitPrice || 0)
-          };
-        });
+        // Pobierz rzeczywiste ceny z partii magazynowych
+        const enrichedConsumptions = await Promise.all(
+          taskData.consumedMaterials.map(async (consumption) => {
+            // Znajdź materiał w liście materiałów zadania
+            const material = taskData.materials?.find(m => 
+              (m.inventoryItemId || m.id) === consumption.materialId
+            );
+            
+            let unitPrice = consumption.unitPrice || 0;
+            
+            // Pobierz rzeczywistą cenę z partii magazynowej
+            if (consumption.batchId) {
+              try {
+                const { getInventoryBatch } = await import('../../services/inventoryService');
+                const batchData = await getInventoryBatch(consumption.batchId);
+                
+                if (batchData && batchData.unitPrice !== undefined) {
+                  unitPrice = batchData.unitPrice;
+                  console.log(`Pobrano rzeczywistą cenę z partii ${consumption.batchId}: ${unitPrice} €`);
+                } else {
+                  console.warn(`Nie znaleziono ceny w partii ${consumption.batchId}, używam ceny z konsumpcji: ${unitPrice} €`);
+                }
+              } catch (error) {
+                console.error(`Błąd podczas pobierania ceny z partii ${consumption.batchId}:`, error);
+                // Użyj ceny z materiału jako fallback tylko w przypadku błędu
+                unitPrice = consumption.unitPrice || material?.unitPrice || 0;
+              }
+            }
+            
+            return {
+              ...consumption,
+              materialName: material?.name || 'Nieznany materiał',
+              materialUnit: material?.unit || 'szt.',
+              // Użyj rzeczywistej ceny z partii
+              unitPrice: unitPrice
+            };
+          })
+        );
         
         setConsumptionData(enrichedConsumptions);
       } else {
@@ -162,6 +185,22 @@ const ConsumptionPage = () => {
       if (!selectedConsumption) {
         showError('Nie wybrano konsumpcji do edycji');
         return;
+      }
+
+      // Pobierz rzeczywistą cenę z partii magazynowej
+      let actualUnitPrice = selectedConsumption.unitPrice;
+      if (selectedConsumption.batchId) {
+        try {
+          const { getInventoryBatch } = await import('../../services/inventoryService');
+          const batchData = await getInventoryBatch(selectedConsumption.batchId);
+          
+          if (batchData && batchData.unitPrice !== undefined) {
+            actualUnitPrice = batchData.unitPrice;
+            console.log(`Używam rzeczywistej ceny z partii ${selectedConsumption.batchId}: ${actualUnitPrice} €`);
+          }
+        } catch (error) {
+          console.error(`Błąd podczas pobierania ceny z partii ${selectedConsumption.batchId}:`, error);
+        }
       }
 
       // Oblicz różnicę w ilości
@@ -317,8 +356,8 @@ const ConsumptionPage = () => {
         editedBy: currentUser.uid,
         editedByName: currentUser.displayName || currentUser.email,
         originalQuantity: selectedConsumption.originalQuantity || selectedConsumption.quantity,
-        // Zachowaj oryginalną cenę jednostkową
-        unitPrice: selectedConsumption.unitPrice
+        // Użyj rzeczywistej ceny z partii magazynowej
+        unitPrice: actualUnitPrice
       };
       
       // Zaktualizuj zadanie w bazie danych
