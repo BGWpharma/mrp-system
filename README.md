@@ -26,6 +26,25 @@ MVP systemu zawiera cztery kluczowe moduły:
    - Rejestrowanie wyników testów
    - Zarządzanie zgodnością jakościową
 
+### System Zarządzania Zasobami Przedsiębiorstwa (MRP)
+
+#### Zamówienia Zakupu
+- Tworzenie i edycja zamówień zakupu
+- Wielowalutowe rozliczenia z automatycznym przeliczaniem kursów
+- Zarządzanie dostawcami i ich cenami
+- **NOWE: Załączniki do zamówień zakupu**
+  - Możliwość załączania plików (faktury, certyfikaty, dokumenty)
+  - Obsługa drag & drop
+  - Przechowywanie w Firebase Storage
+  - Obsługiwane formaty: PDF, obrazy (JPEG, PNG, GIF, WebP), dokumenty Word/Excel, pliki tekstowe
+  - Maksymalny rozmiar pliku: 10 MB
+  - Automatyczne generowanie miniatur i metadanych
+- Statusy realizacji zamówień
+- Integracja z systemem magazynowym
+- Automatyczne aktualizacje cen partii magazynowych
+
+#### Zarządzanie Magazynem
+
 ## Technologie
 
 - **Frontend**: React, Material-UI

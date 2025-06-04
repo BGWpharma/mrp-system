@@ -70,13 +70,14 @@ import {
   getSupplierPriceForItem
 } from '../../services/supplierService';
 import { getExchangeRate, getExchangeRates } from '../../services/exchangeRateService';
+import PurchaseOrderFileUpload from './PurchaseOrderFileUpload';
 
 const PurchaseOrderForm = ({ orderId }) => {
   const { poId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
-  const { showSuccess, showError, showInfo } = useNotification();
+  const { showSuccess, showError } = useNotification();
   
   // Używamy orderId z props, a jeśli nie istnieje, to poId z useParams()
   const currentOrderId = orderId || poId;
@@ -107,6 +108,7 @@ const PurchaseOrderForm = ({ orderId }) => {
     status: PURCHASE_ORDER_STATUSES.DRAFT,
     invoiceLink: '',
     invoiceLinks: [], // Nowe pole dla wielu linków do faktur
+    attachments: [], // Nowe pole dla załączników
     expandedItems: {},
     expandedCostItems: {} // Nowe pole dla rozwiniętych dodatkowych kosztów
   });
@@ -159,6 +161,7 @@ const PurchaseOrderForm = ({ orderId }) => {
             expectedDeliveryDate: formattedDeliveryDate,
             supplier: matchedSupplier,
             additionalCostsItems: additionalCostsItems,
+            attachments: poDetails.attachments || [], // Dodanie obsługi załączników
           });
         }
       } catch (error) {
@@ -524,7 +527,7 @@ const PurchaseOrderForm = ({ orderId }) => {
             }
           } else {
             // Jeśli nie mamy daty faktury, poproś użytkownika o jej wprowadzenie
-            showInfo(`Aby przeliczać wartości z waluty ${newCurrency} na ${poData.currency}, wprowadź datę faktury.`);
+            showError(`Aby przeliczać wartości z waluty ${newCurrency} na ${poData.currency}, wprowadź datę faktury.`);
             
             // Ustaw kurs na 0 jeśli nie ma daty faktury
             updatedItems[index] = {
@@ -819,7 +822,7 @@ const PurchaseOrderForm = ({ orderId }) => {
     
     if (itemWithWrongMinQuantity) {
       // Zamiast blokować zapis, tylko pokazujemy informację
-      showInfo('Niektóre pozycje nie spełniają minimalnych ilości zamówienia. Możesz użyć przycisku "Uzupełnij minimalne ilości" lub kontynuować z obecnymi ilościami.');
+      showError('Niektóre pozycje nie spełniają minimalnych ilości zamówienia. Możesz użyć przycisku "Uzupełnij minimalne ilości" lub kontynuować z obecnymi ilościami.');
     }
     
     return true;
@@ -890,7 +893,7 @@ const PurchaseOrderForm = ({ orderId }) => {
   // Funkcja do znajdowania najlepszych cen dostawców
   const findBestSuppliers = async () => {
     if (!poData.items || poData.items.length === 0) {
-      showInfo('Brak pozycji w zamówieniu');
+      showError('Brak pozycji w zamówieniu');
       return;
     }
     
@@ -906,7 +909,7 @@ const PurchaseOrderForm = ({ orderId }) => {
         }));
       
       if (itemsToCheck.length === 0) {
-        showInfo('Brak pozycji magazynowych do sprawdzenia');
+        showError('Brak pozycji magazynowych do sprawdzenia');
         setLoadingSupplierSuggestions(false);
         return;
       }
@@ -986,9 +989,9 @@ const PurchaseOrderForm = ({ orderId }) => {
       if (hasDefaultPrices) {
         showSuccess('Zastosowano domyślne ceny dostawców');
       } else if (anyPriceFound) {
-        showInfo('Nie znaleziono domyślnych cen dostawców. Zastosowano najlepsze dostępne ceny.');
+        showError('Nie znaleziono domyślnych cen dostawców. Zastosowano najlepsze dostępne ceny.');
       } else {
-        showInfo('Nie znaleziono żadnych cen dostawców dla wybranych produktów.');
+        showError('Nie znaleziono żadnych cen dostawców dla wybranych produktów.');
       }
     } catch (error) {
       console.error('Błąd podczas używania domyślnych cen dostawców:', error);
@@ -1001,7 +1004,7 @@ const PurchaseOrderForm = ({ orderId }) => {
   // Funkcja do znajdowania i używania domyślnych cen dostawców
   const useDefaultSupplierPrices = async () => {
     if (!poData.items || poData.items.length === 0) {
-      showInfo('Brak pozycji w zamówieniu');
+      showError('Brak pozycji w zamówieniu');
       return;
     }
     
@@ -1017,7 +1020,7 @@ const PurchaseOrderForm = ({ orderId }) => {
         }));
       
       if (itemsToCheck.length === 0) {
-        showInfo('Brak pozycji magazynowych do sprawdzenia');
+        showError('Brak pozycji magazynowych do sprawdzenia');
         setLoadingSupplierSuggestions(false);
         return;
       }
@@ -1097,9 +1100,9 @@ const PurchaseOrderForm = ({ orderId }) => {
       if (hasDefaultPrices) {
         showSuccess('Zastosowano domyślne ceny dostawców');
       } else if (anyPriceFound) {
-        showInfo('Nie znaleziono domyślnych cen dostawców. Zastosowano najlepsze dostępne ceny.');
+        showError('Nie znaleziono domyślnych cen dostawców. Zastosowano najlepsze dostępne ceny.');
       } else {
-        showInfo('Nie znaleziono żadnych cen dostawców dla wybranych produktów.');
+        showError('Nie znaleziono żadnych cen dostawców dla wybranych produktów.');
       }
     } catch (error) {
       console.error('Błąd podczas używania domyślnych cen dostawców:', error);
@@ -1112,7 +1115,7 @@ const PurchaseOrderForm = ({ orderId }) => {
   // Funkcja do aktualizacji zamówienia z najlepszymi cenami
   const applyBestSupplierPrices = () => {
     if (!supplierSuggestions || Object.keys(supplierSuggestions).length === 0) {
-      showInfo('Brak sugestii dostawców do zastosowania');
+      showError('Brak sugestii dostawców do zastosowania');
       return;
     }
     
@@ -1141,7 +1144,7 @@ const PurchaseOrderForm = ({ orderId }) => {
   // Funkcja do uzupełniania minimalnych ilości zamówienia
   const fillMinimumOrderQuantities = () => {
     if (!poData.items || poData.items.length === 0) {
-      showInfo('Brak pozycji w zamówieniu');
+      showError('Brak pozycji w zamówieniu');
       return;
     }
     
@@ -1198,7 +1201,7 @@ const PurchaseOrderForm = ({ orderId }) => {
         }));
         showSuccess('Uzupełniono minimalne ilości zamówienia');
       } else {
-        showInfo('Wszystkie pozycje już spełniają minimalne ilości zamówienia');
+        showError('Wszystkie pozycje już spełniają minimalne ilości zamówienia');
       }
     } catch (error) {
       console.error('Błąd podczas uzupełniania minimalnych ilości:', error);
@@ -1492,7 +1495,7 @@ const PurchaseOrderForm = ({ orderId }) => {
               }
             } else {
               // Jeśli nie mamy daty faktury, poproś użytkownika o jej wprowadzenie
-              showInfo(`Aby przeliczać wartości z waluty ${newCurrency} na ${poData.currency}, wprowadź datę faktury.`);
+              showError(`Aby przeliczać wartości z waluty ${newCurrency} na ${poData.currency}, wprowadź datę faktury.`);
               
               // Ustaw kurs na 0 jeśli nie ma daty faktury
               updatedCosts[costIndex] = {
@@ -1603,7 +1606,7 @@ const PurchaseOrderForm = ({ orderId }) => {
               }
           } else {
               // Jeśli nie mamy daty faktury, poproś użytkownika o jej wprowadzenie
-              showInfo(`Aby przeliczać wartości z waluty ${currentCost.currency} na ${poData.currency}, wprowadź datę faktury.`);
+              showError(`Aby przeliczać wartości z waluty ${currentCost.currency} na ${poData.currency}, wprowadź datę faktury.`);
             }
             
             setPoData(prev => ({ ...prev, additionalCostsItems: updatedCosts }));
@@ -1853,7 +1856,7 @@ const PurchaseOrderForm = ({ orderId }) => {
           }));
           
           if (supplier) {
-            showInfo(`Znaleziono dostawcę ${supplier.name} z najlepszą ceną dla ${inventoryItem.name}.`);
+            showError(`Znaleziono dostawcę ${supplier.name} z najlepszą ceną dla ${inventoryItem.name}.`);
           }
         }
       }
@@ -1916,25 +1919,20 @@ const PurchaseOrderForm = ({ orderId }) => {
   
   // Funkcja usuwająca link do faktury
   const handleRemoveInvoiceLink = (id) => {
-    const updatedInvoiceLinks = (poData.invoiceLinks || []).filter(link => link.id !== id);
-    
-    // Aktualizacja starego pola invoiceLink
-    let updatedInvoiceLink = poData.invoiceLink;
-    if (updatedInvoiceLinks.length > 0 && poData.invoiceLinks.findIndex(link => link.id === id) === 0) {
-      // Jeśli usunięto pierwszy link, zaktualizuj stare pole do nowego pierwszego linku
-      updatedInvoiceLink = updatedInvoiceLinks[0].url;
-    } else if (updatedInvoiceLinks.length === 0) {
-      // Jeśli usunięto wszystkie linki, wyczyść stare pole
-      updatedInvoiceLink = '';
-    }
-    
     setPoData(prev => ({
       ...prev,
-      invoiceLinks: updatedInvoiceLinks,
-      invoiceLink: updatedInvoiceLink
+      invoiceLinks: prev.invoiceLinks.filter(link => link.id !== id)
     }));
   };
-  
+
+  // Obsługa załączników
+  const handleAttachmentsChange = (newAttachments) => {
+    setPoData(prev => ({
+      ...prev,
+      attachments: newAttachments
+    }));
+  };
+
   // Funkcja do ponownego przeliczenia wszystkich wartości walutowych
   const recalculateAllCurrencyValues = async () => {
     try {
@@ -2024,7 +2022,7 @@ const PurchaseOrderForm = ({ orderId }) => {
         
         showSuccess('Przeliczono wszystkie wartości walutowe z większą precyzją');
       } else {
-        showInfo('Nie znaleziono pozycji do przeliczenia');
+        showError('Nie znaleziono pozycji do przeliczenia');
       }
     } catch (error) {
       console.error('Błąd podczas przeliczania wszystkich wartości:', error);
@@ -2259,6 +2257,19 @@ const PurchaseOrderForm = ({ orderId }) => {
                 type="hidden"
                 name="invoiceLink"
                 value={poData.invoiceLink || ''}
+              />
+            </Grid>
+            
+            {/* Załączniki */}
+            <Grid item xs={12}>
+              <Typography variant="subtitle1" gutterBottom>
+                Załączniki
+              </Typography>
+              <PurchaseOrderFileUpload
+                orderId={currentOrderId || 'temp'}
+                attachments={poData.attachments || []}
+                onAttachmentsChange={handleAttachmentsChange}
+                disabled={saving}
               />
             </Grid>
             

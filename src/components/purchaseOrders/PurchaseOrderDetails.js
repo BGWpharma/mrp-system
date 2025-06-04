@@ -5,7 +5,7 @@ import {
   Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   FormControl, InputLabel, Select, MenuItem, TextField, CircularProgress, IconButton,
-  List, ListItem, ListItemText, ListItemIcon, Collapse
+  List, ListItem, ListItemText, ListItemIcon, Collapse, Tooltip
 } from '@mui/material';
 import { 
   Edit as EditIcon, 
@@ -25,7 +25,11 @@ import {
   ExpandLess as ExpandLessIcon,
   Label as LabelIcon,
   Add as AddIcon,
-  ShoppingCart as ShoppingCartIcon
+  ShoppingCart as ShoppingCartIcon,
+  AttachFile as AttachFileIcon,
+  Download as DownloadIcon,
+  Image as ImageIcon,
+  PictureAsPdf as PdfIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -1311,6 +1315,99 @@ const PurchaseOrderDetails = ({ orderId }) => {
             ) : (
               <Typography variant="body2">
                 Brak dodatkowych kosztów
+              </Typography>
+            )}
+          </Paper>
+          
+          {/* Sekcja załączników */}
+          <Paper sx={{ mb: 3, p: 3, borderRadius: 2 }}>
+            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+              <AttachFileIcon sx={{ mr: 1 }} />
+              Załączniki
+            </Typography>
+            
+            {purchaseOrder.attachments && purchaseOrder.attachments.length > 0 ? (
+              <Box>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  Załączonych plików: {purchaseOrder.attachments.length}
+                </Typography>
+                
+                <List sx={{ py: 0 }}>
+                  {purchaseOrder.attachments.map((attachment) => {
+                    // Funkcja do uzyskania ikony pliku
+                    const getFileIcon = (contentType) => {
+                      if (contentType.startsWith('image/')) {
+                        return <ImageIcon sx={{ color: 'primary.main' }} />;
+                      } else if (contentType === 'application/pdf') {
+                        return <PdfIcon sx={{ color: 'error.main' }} />;
+                      } else {
+                        return <DescriptionIcon sx={{ color: 'action.active' }} />;
+                      }
+                    };
+
+                    // Funkcja do formatowania rozmiaru pliku
+                    const formatFileSize = (bytes) => {
+                      if (bytes === 0) return '0 Bytes';
+                      const k = 1024;
+                      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                      const i = Math.floor(Math.log(bytes) / Math.log(k));
+                      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+                    };
+
+                    return (
+                      <ListItem
+                        key={attachment.id}
+                        button
+                        onClick={() => window.open(attachment.downloadURL, '_blank')}
+                        sx={{
+                          border: '1px solid #e0e0e0',
+                          borderRadius: 1,
+                          mb: 1,
+                          backgroundColor: 'background.paper',
+                          cursor: 'pointer',
+                          '&:hover': { 
+                            bgcolor: 'action.hover',
+                            borderColor: 'primary.main'
+                          }
+                        }}
+                      >
+                        <Box sx={{ mr: 1.5 }}>
+                          {getFileIcon(attachment.contentType)}
+                        </Box>
+                        <ListItemText
+                          primary={
+                            <Typography variant="body2" fontWeight="medium">
+                              {attachment.fileName}
+                            </Typography>
+                          }
+                          secondary={
+                            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mt: 0.5 }}>
+                              <Typography variant="caption" color="text.secondary">
+                                {formatFileSize(attachment.size)}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {new Date(attachment.uploadedAt).toLocaleDateString('pl-PL')}
+                              </Typography>
+                              <Typography variant="caption" color="primary.main" sx={{ fontStyle: 'italic' }}>
+                                Kliknij aby otworzyć
+                              </Typography>
+                            </Box>
+                          }
+                        />
+                        <Box>
+                          <DownloadIcon 
+                            fontSize="small" 
+                            sx={{ color: 'primary.main' }}
+                          />
+                        </Box>
+                      </ListItem>
+                    );
+                  })}
+                </List>
+              </Box>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                Brak załączników do tego zamówienia
               </Typography>
             )}
           </Paper>
