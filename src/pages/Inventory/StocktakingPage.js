@@ -18,19 +18,26 @@ import {
   TextField,
   InputAdornment,
   CircularProgress,
-  Alert
+  Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions
 } from '@mui/material';
 import {
   Add as AddIcon,
   Search as SearchIcon,
   Visibility as ViewIcon,
-  Edit as EditIcon
+  Edit as EditIcon,
+  Delete as DeleteIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { getAllStocktakings } from '../../services/inventoryService';
+import { getAllStocktakings, deleteStocktaking } from '../../services/inventoryService';
 import { getUsersDisplayNames } from '../../services/userService';
 import { useAuth } from '../../hooks/useAuth';
+import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
@@ -41,7 +48,10 @@ const StocktakingPage = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [stocktakingToDelete, setStocktakingToDelete] = useState(null);
   const { currentUser } = useAuth();
+  const { showSuccess, showError } = useNotification();
   const [userNames, setUserNames] = useState({});
 
   useEffect(() => {
@@ -130,6 +140,33 @@ const StocktakingPage = () => {
     return <Chip label={status} color={color} size="small" />;
   };
 
+  const handleDeleteStocktaking = (stocktaking) => {
+    setStocktakingToDelete(stocktaking);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteStocktaking = async () => {
+    if (!stocktakingToDelete) return;
+    
+    try {
+      await deleteStocktaking(stocktakingToDelete.id);
+      showSuccess('Inwentaryzacja została usunięta');
+      setDeleteDialogOpen(false);
+      setStocktakingToDelete(null);
+      
+      // Odśwież listę inwentaryzacji
+      fetchStocktakings();
+    } catch (error) {
+      console.error('Błąd podczas usuwania inwentaryzacji:', error);
+      showError(`Błąd podczas usuwania: ${error.message}`);
+    }
+  };
+
+  const cancelDeleteStocktaking = () => {
+    setDeleteDialogOpen(false);
+    setStocktakingToDelete(null);
+  };
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -211,14 +248,23 @@ const StocktakingPage = () => {
                       <ViewIcon />
                     </IconButton>
                     {stocktaking.status !== 'Zakończona' && (
-                      <IconButton
-                        component={Link}
-                        to={`/inventory/stocktaking/${stocktaking.id}/edit`}
-                        color="secondary"
-                        size="small"
-                      >
-                        <EditIcon />
-                      </IconButton>
+                      <>
+                        <IconButton
+                          component={Link}
+                          to={`/inventory/stocktaking/${stocktaking.id}/edit`}
+                          color="secondary"
+                          size="small"
+                        >
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton
+                          onClick={() => handleDeleteStocktaking(stocktaking)}
+                          color="error"
+                          size="small"
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </>
                     )}
                   </TableCell>
                 </TableRow>
@@ -227,6 +273,23 @@ const StocktakingPage = () => {
           </Table>
         </TableContainer>
       )}
+      
+      {/* Dialog potwierdzenia usunięcia */}
+      <Dialog open={deleteDialogOpen} onClose={cancelDeleteStocktaking}>
+        <DialogTitle>Potwierdź usunięcie inwentaryzacji</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Czy na pewno chcesz usunąć inwentaryzację "{stocktakingToDelete?.name}"? 
+            Ta operacja jest nieodwracalna i usunie również wszystkie powiązane elementy inwentaryzacji.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={cancelDeleteStocktaking}>Anuluj</Button>
+          <Button onClick={confirmDeleteStocktaking} color="error">
+            Usuń
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

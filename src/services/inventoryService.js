@@ -3054,6 +3054,42 @@ import {
     }
   };
   
+  // Usuwanie całej inwentaryzacji
+  export const deleteStocktaking = async (stocktakingId) => {
+    try {
+      // Pobierz informacje o inwentaryzacji
+      const stocktaking = await getStocktakingById(stocktakingId);
+      
+      // Sprawdź, czy inwentaryzacja nie jest już zakończona
+      if (stocktaking.status === 'Zakończona') {
+        throw new Error('Nie można usunąć zakończonej inwentaryzacji');
+      }
+      
+      // Pobierz wszystkie elementy inwentaryzacji
+      const items = await getStocktakingItems(stocktakingId);
+      
+      // Usuń wszystkie elementy inwentaryzacji
+      const itemDeletions = items.map(item => 
+        deleteDoc(doc(db, INVENTORY_STOCKTAKING_ITEMS_COLLECTION, item.id))
+      );
+      
+      // Poczekaj na usunięcie wszystkich elementów
+      await Promise.all(itemDeletions);
+      
+      // Na końcu usuń samą inwentaryzację
+      const stocktakingRef = doc(db, INVENTORY_STOCKTAKING_COLLECTION, stocktakingId);
+      await deleteDoc(stocktakingRef);
+      
+      return { 
+        success: true,
+        message: 'Inwentaryzacja została usunięta' 
+      };
+    } catch (error) {
+      console.error('Błąd podczas usuwania inwentaryzacji:', error);
+      throw error;
+    }
+  };
+  
   // Zakończenie inwentaryzacji i aktualizacja stanów magazynowych
   export const completeStocktaking = async (stocktakingId, adjustInventory = true, userId) => {
     try {
