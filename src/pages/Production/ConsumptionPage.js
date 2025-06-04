@@ -26,7 +26,9 @@ import {
   Tooltip,
   Card,
   CardContent,
-  Divider
+  Divider,
+  FormControlLabel,
+  Checkbox
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -46,7 +48,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 
 const ConsumptionPage = () => {
@@ -65,6 +67,7 @@ const ConsumptionPage = () => {
   const [editedQuantity, setEditedQuantity] = useState('');
   const [editError, setEditError] = useState('');
   const [confirmLoading, setConfirmLoading] = useState(false);
+  const [restoreReservation, setRestoreReservation] = useState(true);
   
   // Pobieranie danych zadania
   useEffect(() => {
@@ -155,6 +158,144 @@ const ConsumptionPage = () => {
       }
       
       setLoading(true);
+
+      if (!selectedConsumption) {
+        showError('Nie wybrano konsumpcji do edycji');
+        return;
+      }
+
+      // Oblicz różnicę w ilości
+      const quantityDifference = quantity - selectedConsumption.quantity;
+
+      // Aktualizuj stan magazynowy
+      const { updateBatch } = await import('../../services/inventoryService');
+      const { getInventoryBatch } = await import('../../services/inventoryService');
+      
+      const currentBatch = await getInventoryBatch(selectedConsumption.batchId);
+      if (currentBatch) {
+        // Upewnij się, że wartości są liczbami
+        const currentQuantity = Number(currentBatch.quantity) || 0;
+        const editedQty = Number(quantity) || 0;
+        const selectedQty = Number(selectedConsumption.quantity) || 0;
+        const quantityDiff = editedQty - selectedQty;
+        
+        // Jeśli zwiększamy ilość konsumpcji (quantityDiff > 0), zmniejszamy stan magazynowy
+        // Jeśli zmniejszamy ilość konsumpcji (quantityDiff < 0), zwiększamy stan magazynowy
+        const newQuantity = Math.max(0, currentQuantity - quantityDiff);
+        
+        console.log('Edycja konsumpcji:', {
+          currentQuantity,
+          editedQty,
+          selectedQty,
+          quantityDiff,
+          newQuantity,
+          batchId: selectedConsumption.batchId
+        });
+        
+        await updateBatch(selectedConsumption.batchId, {
+          quantity: newQuantity
+        }, currentUser.uid);
+      }
+
+      // Aktualizuj rezerwacje - skoryguj ilość zarezerwowaną
+      try {
+        const { updateReservation } = await import('../../services/inventoryService');
+        const transactionsRef = collection(db, 'inventoryTransactions');
+        
+        // Znajdź rezerwację dla tego materiału, partii i zadania
+        let reservationQuery = query(
+          transactionsRef,
+          where('type', '==', 'booking'),
+          where('referenceId', '==', taskId),
+          where('itemId', '==', selectedConsumption.materialId),
+          where('batchId', '==', selectedConsumption.batchId),
+          where('status', 'in', ['active', 'pending'])
+        );
+        
+        let reservationSnapshot = await getDocs(reservationQuery);
+        
+        // Jeśli nie znaleziono rezerwacji z statusem, spróbuj bez filtra statusu
+        if (reservationSnapshot.empty) {
+          reservationQuery = query(
+            transactionsRef,
+            where('type', '==', 'booking'),
+            where('referenceId', '==', taskId),
+            where('itemId', '==', selectedConsumption.materialId),
+            where('batchId', '==', selectedConsumption.batchId)
+          );
+          
+          reservationSnapshot = await getDocs(reservationQuery);
+        }
+        
+        if (!reservationSnapshot.empty) {
+          const reservationDoc = reservationSnapshot.docs[0];
+          const reservation = reservationDoc.data();
+          const currentReservedQuantity = Number(reservation.quantity) || 0;
+          const quantityDiff = quantity - selectedConsumption.quantity;
+          
+          // Skoryguj rezerwację: jeśli zwiększamy konsumpcję, zmniejszamy rezerwację
+          const newReservedQuantity = Math.max(0, currentReservedQuantity - quantityDiff);
+          
+          console.log('Korekta rezerwacji przy edycji:', {
+            reservationId: reservationDoc.id,
+            materialId: selectedConsumption.materialId,
+            batchId: selectedConsumption.batchId,
+            currentReservedQuantity,
+            quantityDiff,
+            newReservedQuantity
+          });
+          
+          if (newReservedQuantity > 0) {
+            await updateReservation(
+              reservationDoc.id,
+              selectedConsumption.materialId,
+              newReservedQuantity,
+              selectedConsumption.batchId,
+              currentUser.uid
+            );
+          } else {
+            const { deleteReservation } = await import('../../services/inventoryService');
+            await deleteReservation(reservationDoc.id, currentUser.uid);
+          }
+        }
+        
+        // Zaktualizuj task.materialBatches
+        const updatedMaterialBatches = { ...task.materialBatches };
+        const materialId = selectedConsumption.materialId;
+        
+        if (updatedMaterialBatches[materialId]) {
+          const batchIndex = updatedMaterialBatches[materialId].findIndex(
+            batch => batch.batchId === selectedConsumption.batchId
+          );
+          
+          if (batchIndex >= 0) {
+            const currentReservedQuantity = Number(updatedMaterialBatches[materialId][batchIndex].quantity) || 0;
+            const quantityDiff = quantity - selectedConsumption.quantity;
+            const newReservedQuantity = Math.max(0, currentReservedQuantity - quantityDiff);
+            
+            if (newReservedQuantity > 0) {
+              updatedMaterialBatches[materialId][batchIndex].quantity = newReservedQuantity;
+            } else {
+              updatedMaterialBatches[materialId].splice(batchIndex, 1);
+            }
+            
+            // Jeśli dla materiału nie zostały żadne zarezerwowane partie
+            if (updatedMaterialBatches[materialId].length === 0) {
+              delete updatedMaterialBatches[materialId];
+            }
+            
+            // Zaktualizuj task.materialBatches w bazie danych
+            await updateDoc(doc(db, 'productionTasks', taskId), {
+              materialBatches: updatedMaterialBatches,
+              updatedAt: serverTimestamp()
+            });
+          }
+        }
+        
+      } catch (error) {
+        console.error('Błąd podczas aktualizacji rezerwacji przy edycji:', error);
+        showError('Nie udało się zaktualizować rezerwacji: ' + error.message);
+      }
       
       // Znajdź indeks edytowanej konsumpcji
       const consumptionIndex = task.consumedMaterials.findIndex(c => 
@@ -187,7 +328,7 @@ const ConsumptionPage = () => {
         updatedBy: currentUser.uid
       });
       
-      showSuccess('Konsumpcja materiału została zaktualizowana');
+      showSuccess('Konsumpcja materiału została zaktualizowana wraz z rezerwacjami');
       setEditDialogOpen(false);
       setSelectedConsumption(null);
       
@@ -205,6 +346,148 @@ const ConsumptionPage = () => {
   const handleConfirmDelete = async () => {
     try {
       setLoading(true);
+
+      if (!selectedConsumption) {
+        showError('Nie wybrano konsumpcji do usunięcia');
+        return;
+      }
+
+      // Przywróć stan magazynowy
+      const { updateBatch } = await import('../../services/inventoryService');
+      const { getInventoryBatch } = await import('../../services/inventoryService');
+      
+      const currentBatch = await getInventoryBatch(selectedConsumption.batchId);
+      if (currentBatch) {
+        // Upewnij się, że wartości są liczbami
+        const currentQuantity = Number(currentBatch.quantity) || 0;
+        const consumedQuantity = Number(selectedConsumption.quantity) || 0;
+        const newQuantity = currentQuantity + consumedQuantity;
+        
+        console.log('Przywracanie ilości:', {
+          currentQuantity,
+          consumedQuantity,
+          newQuantity,
+          batchId: selectedConsumption.batchId
+        });
+        
+        await updateBatch(selectedConsumption.batchId, {
+          quantity: newQuantity
+        }, currentUser.uid);
+      }
+
+      // Przywróć rezerwację tylko jeśli użytkownik tego chce
+      if (restoreReservation) {
+        try {
+          const { updateReservation, bookInventoryForTask } = await import('../../services/inventoryService');
+          const transactionsRef = collection(db, 'inventoryTransactions');
+          
+          // Znajdź rezerwację dla tego materiału, partii i zadania
+          let reservationQuery = query(
+            transactionsRef,
+            where('type', '==', 'booking'),
+            where('referenceId', '==', taskId),
+            where('itemId', '==', selectedConsumption.materialId),
+            where('batchId', '==', selectedConsumption.batchId),
+            where('status', 'in', ['active', 'pending'])
+          );
+          
+          let reservationSnapshot = await getDocs(reservationQuery);
+          
+          // Jeśli nie znaleziono rezerwacji z statusem, spróbuj bez filtra statusu
+          if (reservationSnapshot.empty) {
+            reservationQuery = query(
+              transactionsRef,
+              where('type', '==', 'booking'),
+              where('referenceId', '==', taskId),
+              where('itemId', '==', selectedConsumption.materialId),
+              where('batchId', '==', selectedConsumption.batchId)
+            );
+            
+            reservationSnapshot = await getDocs(reservationQuery);
+          }
+          
+          if (!reservationSnapshot.empty) {
+            // Jeśli rezerwacja istnieje, zwiększ jej ilość
+            const reservationDoc = reservationSnapshot.docs[0];
+            const reservation = reservationDoc.data();
+            const currentReservedQuantity = Number(reservation.quantity) || 0;
+            const consumedQuantity = Number(selectedConsumption.quantity) || 0;
+            const newReservedQuantity = currentReservedQuantity + consumedQuantity;
+            
+            console.log('Przywracanie rezerwacji:', {
+              reservationId: reservationDoc.id,
+              materialId: selectedConsumption.materialId,
+              batchId: selectedConsumption.batchId,
+              currentReservedQuantity,
+              consumedQuantity,
+              newReservedQuantity
+            });
+            
+            await updateReservation(
+              reservationDoc.id,
+              selectedConsumption.materialId,
+              newReservedQuantity,
+              selectedConsumption.batchId,
+              currentUser.uid
+            );
+          } else {
+            // Jeśli rezerwacja nie istnieje, utwórz nową
+            console.log('Tworzenie nowej rezerwacji po usunięciu konsumpcji:', {
+              materialId: selectedConsumption.materialId,
+              batchId: selectedConsumption.batchId,
+              quantity: selectedConsumption.quantity
+            });
+            
+            await bookInventoryForTask(
+              selectedConsumption.materialId,
+              selectedConsumption.quantity,
+              taskId,
+              currentUser.uid,
+              'manual',
+              selectedConsumption.batchId
+            );
+          }
+          
+          // Zaktualizuj task.materialBatches - przywróć ilość zarezerwowaną
+          const updatedMaterialBatches = { ...task.materialBatches };
+          const materialId = selectedConsumption.materialId;
+          
+          if (!updatedMaterialBatches[materialId]) {
+            updatedMaterialBatches[materialId] = [];
+          }
+          
+          const batchIndex = updatedMaterialBatches[materialId].findIndex(
+            batch => batch.batchId === selectedConsumption.batchId
+          );
+          
+          if (batchIndex >= 0) {
+            // Jeśli partia istnieje, zwiększ jej ilość
+            const currentReservedQuantity = Number(updatedMaterialBatches[materialId][batchIndex].quantity) || 0;
+            const consumedQuantity = Number(selectedConsumption.quantity) || 0;
+            updatedMaterialBatches[materialId][batchIndex].quantity = currentReservedQuantity + consumedQuantity;
+          } else {
+            // Jeśli partia nie istnieje, dodaj ją
+            const { getInventoryBatch } = await import('../../services/inventoryService');
+            const batchInfo = await getInventoryBatch(selectedConsumption.batchId);
+            
+            updatedMaterialBatches[materialId].push({
+              batchId: selectedConsumption.batchId,
+              quantity: selectedConsumption.quantity,
+              batchNumber: batchInfo?.lotNumber || batchInfo?.batchNumber || 'Bez numeru'
+            });
+          }
+          
+          // Zaktualizuj task.materialBatches w bazie danych
+          await updateDoc(doc(db, 'productionTasks', taskId), {
+            materialBatches: updatedMaterialBatches,
+            updatedAt: serverTimestamp()
+          });
+          
+        } catch (error) {
+          console.error('Błąd podczas przywracania rezerwacji:', error);
+          showError('Nie udało się przywrócić rezerwacji: ' + error.message);
+        }
+      }
       
       // Usuń konsumpcję z listy
       const updatedConsumedMaterials = task.consumedMaterials.filter(c => 
@@ -220,9 +503,13 @@ const ConsumptionPage = () => {
         updatedBy: currentUser.uid
       });
       
-      showSuccess('Konsumpcja materiału została usunięta');
+      const successMessage = restoreReservation 
+        ? 'Konsumpcja materiału została usunięta i rezerwacja przywrócona'
+        : 'Konsumpcja materiału została usunięta';
+      showSuccess(successMessage);
       setDeleteDialogOpen(false);
       setSelectedConsumption(null);
+      setRestoreReservation(true); // Reset do domyślnej wartości
       
       // Odśwież dane
       await fetchTaskData();
@@ -497,7 +784,7 @@ const ConsumptionPage = () => {
                       )}
                     </TableCell>
                     <TableCell align="right">
-                      {consumption.unitPrice?.toFixed(2) || '0.00'} €
+                      {consumption.unitPrice?.toFixed(4) || '0.00'} €
                     </TableCell>
                     <TableCell align="right">
                       <Typography 
@@ -617,6 +904,22 @@ const ConsumptionPage = () => {
             <br/>
             Data: {formatDate(selectedConsumption?.timestamp)}
           </DialogContentText>
+          
+          <Box sx={{ mt: 2 }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={restoreReservation}
+                  onChange={(e) => setRestoreReservation(e.target.checked)}
+                  color="primary"
+                />
+              }
+              label="Przywróć rezerwację materiału w MO"
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 4 }}>
+              Zaznacz, aby przywrócić rezerwację materiału dla tego zadania po usunięciu konsumpcji
+            </Typography>
+          </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDeleteDialogOpen(false)}>

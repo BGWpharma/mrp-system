@@ -219,6 +219,14 @@ const TaskDetailsPage = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
+  // Stan dla głównej zakładki
+  const [mainTab, setMainTab] = useState(0);
+
+  // Funkcja do zmiany głównej zakładki
+  const handleMainTabChange = (event, newValue) => {
+    setMainTab(newValue);
+  };
+
   const fetchTask = async () => {
     try {
       setLoading(true);
@@ -3982,12 +3990,13 @@ const TaskDetailsPage = () => {
         </Box>
       ) : task ? (
         <>
-          <Box sx={{ 
-            display: 'flex', 
+          {/* Pasek nawigacyjny i przyciski akcji (Edytuj, Usuń) - pozostaje na górze */}
+          <Box sx={{
+            display: 'flex',
             flexDirection: isMobile ? 'column' : 'row',
-            justifyContent: 'space-between', 
+            justifyContent: 'space-between',
             alignItems: isMobile ? 'flex-start' : 'center',
-            mb: 3 
+            mb: 3
           }}>
             <Button
               component={Link}
@@ -3997,26 +4006,26 @@ const TaskDetailsPage = () => {
             >
               Powrót do listy zadań
             </Button>
-            
-            <Box sx={{ 
-              display: 'flex', 
+
+            <Box sx={{
+              display: 'flex',
               flexDirection: isMobile ? 'row' : 'row',
               gap: 1,
               justifyContent: isMobile ? 'flex-start' : 'flex-end',
               width: isMobile ? '100%' : 'auto',
               mb: isMobile ? 2 : 0
             }}>
-              <IconButton 
-                color="primary" 
-                component={Link} 
+              <IconButton
+                color="primary"
+                component={Link}
                 to={`/production/tasks/${id}/edit`}
                 title="Edytuj zadanie"
                 sx={{ mr: isMobile ? 1 : 1 }}
               >
                 <EditIcon />
               </IconButton>
-              <IconButton 
-                color="error" 
+              <IconButton
+                color="error"
                 onClick={() => setDeleteDialog(true)}
                 title="Usuń zadanie"
               >
@@ -4024,1514 +4033,488 @@ const TaskDetailsPage = () => {
               </IconButton>
             </Box>
           </Box>
-      
-          <Grid container spacing={3}>
-            <Grid item xs={12}>
-              <Paper sx={{ p: 3 }}>
-                <Box sx={{ 
-                  display: 'flex', 
-                  flexDirection: isMobile ? 'column' : 'row',
-                  justifyContent: 'space-between', 
-                  alignItems: isMobile ? 'flex-start' : 'center', 
-                  mb: 2 
-                }}>
-                  <Typography variant="h5" component="h1" sx={{ mb: isMobile ? 2 : 0 }}>
-                    {task.name}
-                    <Chip
-                      label={task.moNumber || 'MO'}
-                      color="primary"
-                      size="small"
-                      sx={{ ml: 2 }}
-                    />
-                    <Chip
-                      label={task.status}
-                      color={getStatusColor(task.status)}
-                      size="small"
-                      sx={{ ml: 1 }}
-                    />
-                    <Chip 
-                      label={task.priority}
-                      color={task.priority === 'Wysoki' ? 'error' : task.priority === 'Normalny' ? 'primary' : 'default'}
-                      variant="outlined"
-                      size="small"
-                      sx={{ ml: 1 }}
-                    />
-                  </Typography>
-                  <Box sx={{ width: isMobile ? '100%' : 'auto' }}>
-                    {getStatusActions()}
-                  </Box>
-                </Box>
 
-                <Grid container spacing={2}>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Produkt:</Typography>
-                    <Typography variant="body1">{task.productName}</Typography>
-          </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Ilość:</Typography>
-                    <Typography variant="body1">{task.quantity} {task.unit}</Typography>
-        </Grid>
-        
-                  {task.estimatedDuration > 0 && (
-                    <Grid item xs={12} md={6}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Szacowany czas produkcji:</Typography>
-                      <Typography variant="body1">{task.estimatedDuration.toFixed(1)} godz.</Typography>
-                    </Grid>
-                  )}
+          {/* Główne zakładki */}
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+            <Tabs value={mainTab} onChange={handleMainTabChange} aria-label="Główne zakładki szczegółów zadania" variant="scrollable" scrollButtons="auto">
+              <Tab label="Dane podstawowe" />
+              <Tab label="Materiały i Koszty" />
+              <Tab label="Produkcja i Plan" />
+              <Tab label="Formularze" />
+              <Tab label="Historia zmian" />
+            </Tabs>
+          </Box>
 
-                  {task.recipe && task.recipe.recipeName && (
-                    <Grid item xs={12} md={6}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Receptura:</Typography>
-                      <Typography variant="body1">
-                        <Link to={`/recipes/${task.recipe.recipeId}`}>{task.recipe.recipeName}</Link>
-              </Typography>
-                    </Grid>
-            )}
-
-                  <Grid item xs={12}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Opis:</Typography>
-                    <Typography variant="body1">{task.description || 'Brak opisu'}</Typography>
-          </Grid>
-                </Grid>
-      </Paper>
-        </Grid>
-        
-            {/* Dodanie komponentu do wyświetlania powiązanych zamówień */}
-            <TaskDetails task={task} />
-
-            {/* Sekcja historii zmian statusu */}
-            {task.statusHistory && task.statusHistory.length > 0 && (
+          {/* Zawartość zakładek */}
+          {mainTab === 0 && ( // Zakładka "Dane podstawowe"
+            <Grid container spacing={3}>
               <Grid item xs={12}>
                 <Paper sx={{ p: 3 }}>
-                  <Typography variant="h6" component="h2" gutterBottom>
-                    Historia zmian statusu
-        </Typography>
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                          <TableCell>Data i godzina</TableCell>
-                          <TableCell>Poprzedni status</TableCell>
-                          <TableCell>Nowy status</TableCell>
-                          <TableCell>Kto zmienił</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                        {[...task.statusHistory].reverse().map((change, index) => (
-                          <TableRow key={index}>
-                            <TableCell>
-                              {change.changedAt ? new Date(change.changedAt).toLocaleString('pl') : 'Brak daty'}
-                            </TableCell>
-                            <TableCell>{change.oldStatus}</TableCell>
-                            <TableCell>{change.newStatus}</TableCell>
-                            <TableCell>{getUserName(change.changedBy)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-      </Paper>
-              </Grid>
-            )}
-
-            {/* Sekcja skonsumowanych materiałów */}
-            {task.consumedMaterials && task.consumedMaterials.length > 0 && (
-              <Grid item xs={12}>
-                <Paper sx={{ p: 3 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6" component="h2">
-                      Skonsumowane materiały
+                  <Box sx={{
+                    display: 'flex',
+                    flexDirection: isMobile ? 'column' : 'row',
+                    justifyContent: 'space-between',
+                    alignItems: isMobile ? 'flex-start' : 'center',
+                    mb: 2
+                  }}>
+                    <Typography variant="h5" component="h1" sx={{ mb: isMobile ? 2 : 0 }}>
+                      {task.name}
+                      <Chip label={task.moNumber || 'MO'} color="primary" size="small" sx={{ ml: 2 }} />
+                      <Chip label={task.status} color={getStatusColor(task.status)} size="small" sx={{ ml: 1 }} />
+                      <Chip label={task.priority} color={task.priority === 'Wysoki' ? 'error' : task.priority === 'Normalny' ? 'primary' : 'default'} variant="outlined" size="small" sx={{ ml: 1 }} />
                     </Typography>
-                    
-                    {/* Przycisk do przejścia do zarządzania zużyciem materiałów */}
-                    {(() => {
-                      // Sprawdź warunek taki sam jak dla konsumpcji poprocesowej
-                      const totalCompletedQuantity = task.totalCompletedQuantity || 0;
-                      const remainingQuantity = Math.max(0, task.quantity - totalCompletedQuantity);
-                      const isFullyProduced = remainingQuantity === 0;
-                      
-                      if (isFullyProduced) {
-                        // Określ kolor i tekst na podstawie statusu zatwierdzenia konsumpcji
-                        const isConsumptionConfirmed = task.materialConsumptionConfirmed === true;
-                        const buttonColor = isConsumptionConfirmed ? "success" : "info";
-                        const buttonText = isConsumptionConfirmed ? "Zatwierdzona konsumpcja" : "Zarządzaj zużyciem";
-                        
-                        return (
-                          <Button
-                            variant="outlined"
-                            color={buttonColor}
-                            startIcon={<BuildCircleIcon />}
-                            component={Link}
-                            to={`/production/consumption/${task.id}`}
-                            size="small"
-                          >
-                            {buttonText}
-                          </Button>
-                        );
-                      }
-                      return null;
-                    })()}
+                    <Box sx={{ width: isMobile ? '100%' : 'auto' }}>
+                      {getStatusActions()}
+                    </Box>
                   </Box>
-                  
-                  <TableContainer>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Materiał</TableCell>
-                          <TableCell>Partia (LOT)</TableCell>
-                          <TableCell>Skonsumowana ilość</TableCell>
-                          <TableCell>Cena jedn.</TableCell>
-                          <TableCell>Wliczaj</TableCell>
-                          <TableCell>Data konsumpcji</TableCell>
-                          <TableCell>Użytkownik</TableCell>
-                          <TableCell>Akcje</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {task.consumedMaterials.map((consumed, index) => {
-                          // Znajdź materiał po ID
-                          const material = materials.find(m => 
-                            (m.inventoryItemId || m.id) === consumed.materialId
-                          );
-                          
-                          console.log('Debugowanie wyświetlania konsumpcji:', {
-                            index,
-                            consumed,
-                            materialBatches: task.materialBatches ? task.materialBatches[consumed.materialId] : null,
-                            savedBatchNumber: consumed.batchNumber
-                          });
-                          
-                          // Znajdź partię w zarezerwowanych partiach z ceną
-                          let batchNumber = consumed.batchNumber || consumed.batchId; // Najpierw sprawdź zapisany numer
-                          let batch = null;
-                          
-                          // Jeśli nie ma zapisanego numeru, spróbuj znaleźć w zarezerwowanych partiach
-                          if (!consumed.batchNumber && task.materialBatches && task.materialBatches[consumed.materialId]) {
-                            batch = task.materialBatches[consumed.materialId].find(b => 
-                              b.batchId === consumed.batchId
-                            );
-                            if (batch && batch.batchNumber) {
-                              batchNumber = batch.batchNumber;
-                            }
-                          }
-                          
-                          // Jeśli nadal nie mamy numeru partii, spróbuj pobrać z bazy danych
-                          if (batchNumber === consumed.batchId && !consumed.batchNumber) {
-                            console.log(`Brak numeru partii dla konsumpcji ${index}, używam ID jako fallback: ${consumed.batchId}`);
-                          }
-                          
-                          // Pobierz cenę z consumedBatchPrices (aktualna cena z bazy) lub z zarezerwowanych partii
-                          const batchPrice = consumedBatchPrices[consumed.batchId] || 
-                                            (batch && batch.unitPrice) || 0;
-                          
-                          const materialId = material?.inventoryItemId || material?.id;
-                          
-                          return (
-                            <TableRow key={index}>
-                              <TableCell>
-                                {material ? material.name : 'Nieznany materiał'}
-                              </TableCell>
-                              <TableCell>
-                                <Chip
-                                  size="small"
-                                  label={`${batchNumber} (${consumed.quantity} ${material ? material.unit : ''})`}
-                                  color="info"
-                                  variant="outlined"
-                                  sx={{ cursor: 'pointer' }}
-                                  onClick={() => navigate(`/inventory/${materialId}/batches`)}
-                                />
-                              </TableCell>
-                              <TableCell>
-                                {consumed.quantity} {material ? material.unit : ''}
-                              </TableCell>
-                              <TableCell>
-                                {batchPrice > 0 ? `${Number(batchPrice).toFixed(4)} €` : '—'}
-                              </TableCell>
-                              <TableCell>
-                                <Checkbox
-                                  checked={consumedIncludeInCosts[index] || false}
-                                  onChange={(e) => handleConsumedIncludeInCostsChange(index, e.target.checked)}
-                                  color="primary"
-                                />
-                              </TableCell>
-                              <TableCell>
-                                {new Date(consumed.timestamp).toLocaleString('pl')}
-                              </TableCell>
-                              <TableCell>
-                                {consumed.userName || 'Nieznany użytkownik'}
-                              </TableCell>
-                              <TableCell>
-                                <Box sx={{ display: 'flex', gap: 1 }}>
-                                  <IconButton
-                                    size="small"
-                                    color="primary"
-                                    onClick={() => handleEditConsumption(consumed)}
-                                    title="Edytuj konsumpcję"
-                                  >
-                                    <EditIcon />
-                                  </IconButton>
-                                  <IconButton
-                                    size="small"
-                                    color="error"
-                                    onClick={() => handleDeleteConsumption(consumed)}
-                                    title="Usuń konsumpcję"
-                                  >
-                                    <DeleteIcon />
-                                  </IconButton>
-                                </Box>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-      </Paper>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={6}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Produkt:</Typography><Typography variant="body1">{task.productName}</Typography></Grid>
+                    <Grid item xs={12} md={6}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Ilość:</Typography><Typography variant="body1">{task.quantity} {task.unit}</Typography></Grid>
+                    {task.estimatedDuration > 0 && (<Grid item xs={12} md={6}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Szacowany czas produkcji:</Typography><Typography variant="body1">{task.estimatedDuration.toFixed(1)} godz.</Typography></Grid>)}
+                    {task.recipe && task.recipe.recipeName && (<Grid item xs={12} md={6}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Receptura:</Typography><Typography variant="body1"><Link to={`/recipes/${task.recipe.recipeId}`}>{task.recipe.recipeName}</Link></Typography></Grid>)}
+                    <Grid item xs={12}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Opis:</Typography><Typography variant="body1">{task.description || 'Brak opisu'}</Typography></Grid>
+                  </Grid>
+                </Paper>
               </Grid>
-            )}
-
-            {/* Sekcja materiałów */}
-            <Grid item xs={12}>
-              <Paper sx={{ p: 3 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="h6" component="h2">Materiały</Typography>
-                  <Box>
-                    <Button
-                      variant="outlined"
-                      color="primary"
-                      startIcon={<PackagingIcon />}
-                      onClick={handleOpenPackagingDialog}
-                      sx={{ mt: 2, mb: 2, mr: 2 }}
-                    >
-                      Dodaj opakowania
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      color="secondary"
-                      startIcon={<RawMaterialsIcon />}
-                      onClick={handleOpenRawMaterialsDialog}
-                      sx={{ mt: 2, mb: 2, mr: 2 }}
-                    >
-                      Dodaj surowce
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      color="primary"
-                      startIcon={<BookmarkAddIcon />}
-                      onClick={() => setReserveDialogOpen(true)}
-                      sx={{ mt: 2, mb: 2, mr: 2 }}
-                    >
-                      Rezerwuj surowce
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      color="warning"
-                      startIcon={<InventoryIcon />}
-                      onClick={handleOpenConsumeMaterialsDialog}
-                      sx={{ mt: 2, mb: 2 }}
-                      disabled={!materials.some(material => {
-                        const materialId = material.inventoryItemId || material.id;
-                        const reservedBatches = task.materialBatches && task.materialBatches[materialId];
-                        return reservedBatches && reservedBatches.length > 0;
-                      })}
-                    >
-                      Konsumuj materiały
-                    </Button>
-                  </Box>
-                </Box>
-                
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                        <TableCell>Nazwa</TableCell>
-                        <TableCell>Ilość</TableCell>
-                        <TableCell>Jednostka</TableCell>
-                        <TableCell>Rzeczywista ilość</TableCell>
-                        <TableCell>Ilość skonsumowana</TableCell>
-                        <TableCell>Cena jedn.</TableCell>
-                        <TableCell>Koszt</TableCell>
-                        <TableCell>Zarezerwowane partie (LOT)</TableCell>
-                        <TableCell>Wliczaj</TableCell>
-                        <TableCell>Akcje</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {materials.map((material) => {
-                        // Sprawdź czy dla tego materiału są zarezerwowane partie
-                        const materialId = material.inventoryItemId || material.id;
-                        const reservedBatches = task.materialBatches && task.materialBatches[materialId];
-                        
-                        // Oblicz koszt materiału
-                        const quantity = materialQuantities[material.id] || material.quantity || 0;
-                        const unitPrice = material.unitPrice || 0;
-                        const cost = quantity * unitPrice;
-                    
-                    return (
-                      <TableRow key={material.id}>
-                        <TableCell>{material.name}</TableCell>
-                        <TableCell>{material.quantity}</TableCell>
-                        <TableCell>{material.unit}</TableCell>
-                        <TableCell>
-                              {editMode ? (
-                                <TextField
-                                  type="number"
-                                  value={materialQuantities[material.id] || 0}
-                                  onChange={(e) => handleQuantityChange(material.id, e.target.value)}
-                                  error={Boolean(errors[material.id])}
-                                  helperText={errors[material.id]}
-                                  inputProps={{ min: 0, step: 'any' }}
-                                  size="small"
-                                  sx={{ width: '100px' }}
-                                />
-                              ) : (
-                                materialQuantities[material.id] || 0
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {(() => {
-                                const consumedQuantity = getConsumedQuantityForMaterial(materialId);
-                                return consumedQuantity > 0 
-                                  ? `${consumedQuantity} ${material.unit}` 
-                                  : '—';
-                              })()}
-                            </TableCell>
-                            <TableCell>
-                              {reservedBatches && reservedBatches.length > 0 ? (
-                                unitPrice.toFixed(4) + ' €'
-                              ) : (
-                                '—'
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {reservedBatches && reservedBatches.length > 0 ? (
-                                cost.toFixed(2) + ' €'
-                              ) : (
-                                '—'
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {reservedBatches && reservedBatches.length > 0 ? (
-                                <Box>
-                                  {reservedBatches.map((batch, index) => (
-                                    <Chip
-                                      key={index}
-                              size="small"
-                                      label={`${batch.batchNumber} (${batch.quantity} ${material.unit})`}
-                                      color="info"
-                                      variant="outlined"
-                                      sx={{ mr: 0.5, mb: 0.5, cursor: 'pointer' }}
-                                      onClick={() => navigate(`/inventory/${materialId}/batches`)}
-                                    />
-                                  ))}
-                                </Box>
-                              ) : (
-                                <Typography variant="body2" color="text.secondary">
-                                  Brak zarezerwowanych partii
-                                </Typography>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Checkbox
-                            checked={includeInCosts[material.id] || false}
-                            onChange={(e) => handleIncludeInCostsChange(material.id, e.target.checked)}
-                            color="primary"
-                          />
-                        </TableCell>
-                            <TableCell>
-                              {editMode ? (
-                                <Box sx={{ display: 'flex' }}>
-                                  <IconButton 
-                                    color="primary" 
-                                    onClick={handleSaveChanges}
-                                    title="Zapisz zmiany"
-                                  >
-                                    <SaveIcon />
-                                  </IconButton>
-                                  <IconButton 
-                                    color="error" 
-                                    onClick={() => setEditMode(false)}
-                                    title="Anuluj edycję"
-                                  >
-                                    <CancelIcon />
-                                  </IconButton>
-                                </Box>
-                              ) : (
-                                <Box sx={{ display: 'flex' }}>
-                                  <IconButton 
-                                    color="primary" 
-                                    onClick={() => {
-                                      setEditMode(true);
-                                      setMaterialQuantities(prev => ({
-                                        ...prev,
-                                        [material.id]: materialQuantities[material.id] || 0
-                                      }));
-                                    }}
-                                    title="Edytuj ilość"
-                                  >
-                                    <EditIcon />
-                                  </IconButton>
-                                  <IconButton 
-                                    color="error" 
-                                    onClick={() => handleDeleteMaterial(material)}
-                                    title="Usuń materiał"
-                                  >
-                                    <DeleteIcon />
-                                  </IconButton>
-                                </Box>
-                              )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          
-          {/* Podsumowanie kosztów materiałów */}
-          {renderMaterialCostsSummary()}
-        </Paper>
-            </Grid>
-            
-            {/* Sekcja historii produkcji */}
-            <Grid item xs={12}>
-              <Paper sx={{ p: 3 }}>
-                <Typography variant="h6" component="h2" gutterBottom>
-                  Historia produkcji
-                </Typography>
-                
-                {/* Przycisk do dodawania ręcznego wpisu historii produkcji */}
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    startIcon={<AddIcon />}
-                    onClick={() => {
-                      setEditedHistoryItem({
-                        quantity: '',
-                        startTime: new Date(),
-                        endTime: new Date(),
-                      });
-                      
-                      // Przygotuj dane dla formularza dodawania do magazynu
-                      let expiryDate = null;
-                      
-                      if (task.expiryDate) {
-                        try {
-                          // Sprawdź typ daty i odpowiednio ją skonwertuj
-                          if (task.expiryDate instanceof Date) {
-                            expiryDate = task.expiryDate;
-                          } else if (task.expiryDate.toDate && typeof task.expiryDate.toDate === 'function') {
-                            // Obsługa obiektu Firebase Timestamp
-                            expiryDate = task.expiryDate.toDate();
-                          } else if (task.expiryDate.seconds) {
-                            // Obsługa obiektu timestamp z sekundami
-                            expiryDate = new Date(task.expiryDate.seconds * 1000);
-                          } else if (typeof task.expiryDate === 'string') {
-                            // Obsługa formatu string
-                            expiryDate = new Date(task.expiryDate);
-                          }
-                        } catch (error) {
-                          console.error('Błąd konwersji daty ważności:', error);
-                          // W przypadku błędu konwersji, ustaw datę domyślną
-                          expiryDate = new Date(new Date().setFullYear(new Date().getFullYear() + 1));
-                        }
-                      } else {
-                        // Domyślna data ważności (1 rok od dzisiaj)
-                        expiryDate = new Date(new Date().setFullYear(new Date().getFullYear() + 1));
-                      }
-                      
-                      // Ustaw domyślne dane dla formularza dodawania do magazynu
-                      setHistoryInventoryData({
-                        expiryDate: expiryDate,
-                        lotNumber: task.lotNumber || `LOT-${task.moNumber || ''}`,
-                        finalQuantity: '',
-                        warehouseId: task.warehouseId || (warehouses.length > 0 ? warehouses[0].id : '')
-                      });
-                      
-                      setAddHistoryDialogOpen(true);
-                    }}
-                    size="small"
-                  >
-                    Dodaj wpis
-                  </Button>
-                </Box>
-                
-                {productionHistory.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">
-                    Brak historii produkcji dla tego zadania
-                  </Typography>
-                ) : (
-                  <TableContainer>
-                    <Table>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Data rozpoczęcia</TableCell>
-                          <TableCell>Data zakończenia</TableCell>
-                          <TableCell>Czas trwania</TableCell>
-                          <TableCell>Wyprodukowana ilość</TableCell>
-                          <TableCell>Operator</TableCell>
-                          <TableCell>Akcje</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {productionHistory.map((item) => (
-                          <TableRow key={item.id}>
-                            {editingHistoryItem === item.id ? (
-                              // Widok edycji
-                              <>
-                                <TableCell>
-                                  <TextField
-                                    type="datetime-local"
-                                    value={editedHistoryItem.startTime instanceof Date 
-                                      ? toLocalDateTimeString(editedHistoryItem.startTime) 
-                                      : ''}
-                                    onChange={(e) => {
-                                      const newDate = e.target.value ? fromLocalDateTimeString(e.target.value) : new Date();
-                                      setEditedHistoryItem(prev => ({ 
-                                        ...prev, 
-                                        startTime: newDate
-                                      }));
-                                    }}
-                                    InputLabelProps={{ shrink: true }}
-                                    fullWidth
-                                    required
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  <TextField
-                                    type="datetime-local"
-                                    value={editedHistoryItem.endTime instanceof Date 
-                                      ? toLocalDateTimeString(editedHistoryItem.endTime) 
-                                      : ''}
-                                    onChange={(e) => {
-                                      const newDate = e.target.value ? fromLocalDateTimeString(e.target.value) : new Date();
-                                      setEditedHistoryItem(prev => ({ 
-                                        ...prev, 
-                                        endTime: newDate
-                                      }));
-                                    }}
-                                    InputLabelProps={{ shrink: true }}
-                                    fullWidth
-                                    required
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  {Math.round(
-                                    (editedHistoryItem.endTime.getTime() - editedHistoryItem.startTime.getTime()) / (1000 * 60)
-                                  )} min
-                                </TableCell>
-                                <TableCell>
-                                  <TextField
-                                    type="number"
-                                    value={editedHistoryItem.quantity}
-                                    onChange={(e) => setEditedHistoryItem(prev => ({ 
-                                      ...prev, 
-                                      quantity: e.target.value === '' ? '' : parseFloat(e.target.value) 
-                                    }))}
-                                    inputProps={{ min: 0, step: 'any' }}
-                                    size="small"
-                                    fullWidth
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  {getUserName(item.userId)}
-                                </TableCell>
-                                <TableCell>
-                                  <Box sx={{ display: 'flex' }}>
-                                    <IconButton 
-                                      color="primary" 
-                                      onClick={() => handleSaveHistoryItemEdit(item.id)}
-                                      title="Zapisz zmiany"
-                                    >
-                                      <SaveIcon />
-                                    </IconButton>
-                                    <IconButton 
-                                      color="error" 
-                                      onClick={handleCancelHistoryItemEdit}
-                                      title="Anuluj edycję"
-                                    >
-                                      <CancelIcon />
-                                    </IconButton>
-                                  </Box>
-                                </TableCell>
-                              </>
-                            ) : (
-                              // Widok standardowy
-                              <>
-                                <TableCell>{item.startTime ? formatDateTime(item.startTime) : '-'}</TableCell>
-                                <TableCell>{item.endTime ? formatDateTime(item.endTime) : '-'}</TableCell>
-                                <TableCell>{item.timeSpent ? `${item.timeSpent} min` : '-'}</TableCell>
-                                <TableCell>{item.quantity} {task.unit}</TableCell>
-                                <TableCell>{getUserName(item.userId)}</TableCell>
-                                <TableCell>
-                                  <IconButton 
-                                    color="primary" 
-                                    onClick={() => handleEditHistoryItem(item)}
-                                    title="Edytuj sesję produkcyjną"
-                                  >
-                                    <EditIcon />
-                                  </IconButton>
-                                  <IconButton 
-                                    color="error" 
-                                    onClick={() => handleDeleteHistoryItem(item)}
-                                    title="Usuń sesję produkcyjną"
-                                  >
-                                    <DeleteIcon />
-                                  </IconButton>
-                                </TableCell>
-                              </>
-                            )}
-                          </TableRow>
-                        ))}
-                        
-                        {/* Wiersz podsumowania */}
-                        <TableRow sx={{ '& td': { fontWeight: 'bold', bgcolor: 'rgba(0, 0, 0, 0.04)' } }}>
-                          <TableCell colSpan={2} align="right">Suma:</TableCell>
-                          <TableCell>
-                            {productionHistory.reduce((sum, item) => sum + (item.timeSpent || 0), 0)} min
-                          </TableCell>
-                          <TableCell>
-                            {productionHistory.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0)} {task.unit}
-                          </TableCell>
-                          <TableCell colSpan={2}></TableCell>
-                        </TableRow>
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                )}
-              </Paper>
-            </Grid>
-          
-            {/* Sekcja planu mieszań (checklista) */}
-            {task?.mixingPlanChecklist && task.mixingPlanChecklist.length > 0 && (
               <Grid item xs={12}>
-                <Paper sx={{ p: 2, mb: 2 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6">
-                      Plan mieszań
-                </Typography>
-                  </Box>
-                  
-                  {/* Tabela mieszań */}
-                  <TableContainer>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell width="25%">Mieszanie</TableCell>
-                          <TableCell width="35%">Składniki</TableCell>
-                          <TableCell width="40%" align="center">Status</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {/* Grupujemy elementy checklisty według mieszań */}
-                        {task.mixingPlanChecklist
-                          .filter(item => item.type === 'header')
-                          .map(headerItem => {
-                            // Pobierz wszystkie elementy składników dla danego mieszania
-                            const ingredients = task.mixingPlanChecklist
-                              .filter(item => item.parentId === headerItem.id && item.type === 'ingredient');
-                            
-                            // Pobierz checkboxy kontrolne dla danego mieszania
-                            const checkItems = task.mixingPlanChecklist
-                              .filter(item => item.parentId === headerItem.id && item.type === 'check');
-                            
+                <TaskDetails task={task} />
+              </Grid>
+            </Grid>
+          )}
+
+          {mainTab === 1 && ( // Zakładka "Materiały i Koszty"
+            <Grid container spacing={3}>
+              {/* Sekcja skonsumowanych materiałów */}
+              {task.consumedMaterials && task.consumedMaterials.length > 0 && (
+                <Grid item xs={12}>
+                  <Paper sx={{ p: 3 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                      <Typography variant="h6" component="h2">Skonsumowane materiały</Typography>
+                      {(() => {
+                        const totalCompletedQuantity = task.totalCompletedQuantity || 0;
+                        const remainingQuantity = Math.max(0, task.quantity - totalCompletedQuantity);
+                        const isFullyProduced = remainingQuantity === 0;
+                        if (isFullyProduced) {
+                          const isConsumptionConfirmed = task.materialConsumptionConfirmed === true;
+                          const buttonColor = isConsumptionConfirmed ? "success" : "info";
+                          const buttonText = isConsumptionConfirmed ? "Zatwierdzona konsumpcja" : "Zarządzaj zużyciem";
+                          return (<Button variant="outlined" color={buttonColor} startIcon={<BuildCircleIcon />} component={Link} to={`/production/consumption/${task.id}`} size="small">{buttonText}</Button>);
+                        } return null;
+                      })()}
+                    </Box>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead><TableRow><TableCell>Materiał</TableCell><TableCell>Partia (LOT)</TableCell><TableCell>Skonsumowana ilość</TableCell><TableCell>Cena jedn.</TableCell><TableCell>Wliczaj</TableCell><TableCell>Data konsumpcji</TableCell><TableCell>Użytkownik</TableCell><TableCell>Akcje</TableCell></TableRow></TableHead>
+                        <TableBody>
+                          {task.consumedMaterials.map((consumed, index) => {
+                            const material = materials.find(m => (m.inventoryItemId || m.id) === consumed.materialId);
+                            let batchNumber = consumed.batchNumber || consumed.batchId;
+                            let batch = null;
+                            if (!consumed.batchNumber && task.materialBatches && task.materialBatches[consumed.materialId]) {
+                              batch = task.materialBatches[consumed.materialId].find(b => b.batchId === consumed.batchId);
+                              if (batch && batch.batchNumber) { batchNumber = batch.batchNumber; }
+                            }
+                            const batchPrice = consumedBatchPrices[consumed.batchId] || (batch && batch.unitPrice) || 0;
+                            const materialId = material?.inventoryItemId || material?.id;
                             return (
-                              <TableRow key={headerItem.id} sx={{ 
-                                '& td': { 
-                                  borderBottom: '1px solid rgba(224, 224, 224, 1)',
-                                  verticalAlign: 'top',
-                                  pt: 2, pb: 2
-                                }
-                              }}>
-                                {/* Informacje o mieszaniu */}
-                                <TableCell>
-                                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                                    {headerItem.text}
-                                  </Typography>
-                                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                                    {headerItem.details}
-                                  </Typography>
-                                </TableCell>
-                                
-                                {/* Lista składników */}
-                                <TableCell>
-                                  <Table size="small" sx={{ 
-                                    '& td': { 
-                                      border: 'none',
-                                      pt: 0.5,
-                                      pb: 0.5 
-                                    } 
-                                  }}>
-                                    <TableBody>
-                                      {ingredients.map((ingredient) => (
-                                        <TableRow key={ingredient.id}>
-                                          <TableCell sx={{ pl: 0 }}>
-                                            <Typography variant="body2">
-                                              {ingredient.text}
-                                            </Typography>
-                                            <Typography variant="caption" color="text.secondary">
-                                              {ingredient.details}
-                                            </Typography>
-                                          </TableCell>
-                                        </TableRow>
-                                      ))}
-                                    </TableBody>
-                                  </Table>
-                                </TableCell>
-                                
-                                {/* Checkboxy statusu mieszania */}
-                                <TableCell align="center">
-                                  <Grid container spacing={1} alignItems="center">
-                                    {checkItems.map((item) => (
-                                      <Grid item xs={12} key={item.id} sx={{ borderBottom: '1px solid rgba(224, 224, 224, 0.3)', pb: 1 }}>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                          <FormControlLabel
-                                            control={
-                                              <Checkbox
-                                                checked={item.completed || false}
-                                                onChange={async (e) => {
-                                                  try {
-                                                    // Pobierz referencję do dokumentu zadania
-                                                    const taskRef = doc(db, 'productionTasks', task.id);
-                                                    
-                                                    // Zaktualizuj stan checkboxa w bazie danych
-                                                    const updatedChecklist = task.mixingPlanChecklist.map(checkItem => {
-                                                      if (checkItem.id === item.id) {
-                                                        return {
-                                                          ...checkItem,
-                                                          completed: e.target.checked,
-                                                          completedAt: e.target.checked ? new Date().toISOString() : null,
-                                                          completedBy: e.target.checked ? currentUser.uid : null
-                                                        };
-                                                      }
-                                                      return checkItem;
-                                                    });
-                                                    
-                                                    // Zapisz zaktualizowaną checklistę
-                                                    await updateDoc(taskRef, {
-                                                      mixingPlanChecklist: updatedChecklist,
-                                                      updatedAt: serverTimestamp(),
-                                                      updatedBy: currentUser.uid
-                                                    });
-                                                    
-                                                    // Zaktualizuj stan lokalny
-                                                    setTask(prevTask => ({
-                                                      ...prevTask,
-                                                      mixingPlanChecklist: updatedChecklist
-                                                    }));
-                                                    
-                                                    showSuccess('Zaktualizowano stan zadania');
-                                                  } catch (error) {
-                                                    console.error('Błąd podczas aktualizacji stanu checklisty:', error);
-                                                    showError('Nie udało się zaktualizować stanu zadania');
-                                                  }
-                                                }}
-                                              />
-                                            }
-                                            label={item.text}
-                                            sx={{ width: '100%' }}
-                                          />
-                                          {item.completed && (
-                                            <Chip 
-                                              size="small" 
-                                              label={item.completedAt ? new Date(item.completedAt).toLocaleDateString('pl-PL') : '-'} 
-                                              color="success" 
-                                              variant="outlined"
-                                              sx={{ ml: 1 }}
-                                            />
-                                          )}
-                                        </Box>
-                                      </Grid>
-                                    ))}
-                                  </Grid>
-                                </TableCell>
+                              <TableRow key={index}>
+                                <TableCell>{material ? material.name : 'Nieznany materiał'}</TableCell>
+                                <TableCell><Chip size="small" label={`${batchNumber} (${consumed.quantity} ${material ? material.unit : ''})`} color="info" variant="outlined" sx={{ cursor: 'pointer' }} onClick={() => navigate(`/inventory/${materialId}/batches`)} /></TableCell>
+                                <TableCell>{consumed.quantity} {material ? material.unit : ''}</TableCell>
+                                <TableCell>{batchPrice > 0 ? `${Number(batchPrice).toFixed(4)} €` : '—'}</TableCell>
+                                <TableCell><Checkbox checked={consumedIncludeInCosts[index] || false} onChange={(e) => handleConsumedIncludeInCostsChange(index, e.target.checked)} color="primary" /></TableCell>
+                                <TableCell>{new Date(consumed.timestamp).toLocaleString('pl')}</TableCell>
+                                <TableCell>{consumed.userName || 'Nieznany użytkownik'}</TableCell>
+                                <TableCell><Box sx={{ display: 'flex', gap: 1 }}><IconButton size="small" color="primary" onClick={() => handleEditConsumption(consumed)} title="Edytuj konsumpcję"><EditIcon /></IconButton><IconButton size="small" color="error" onClick={() => handleDeleteConsumption(consumed)} title="Usuń konsumpcję"><DeleteIcon /></IconButton></Box></TableCell>
                               </TableRow>
                             );
                           })}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Paper>
+                </Grid>
+              )}
+              {/* Sekcja materiałów */}
+              <Grid item xs={12}>
+                <Paper sx={{ p: 3 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                    <Typography variant="h6" component="h2">Materiały</Typography>
+                    <Box>
+                      <Button variant="outlined" color="primary" startIcon={<PackagingIcon />} onClick={handleOpenPackagingDialog} sx={{ mt: 2, mb: 2, mr: 2 }}>Dodaj opakowania</Button>
+                      <Button variant="outlined" color="secondary" startIcon={<RawMaterialsIcon />} onClick={handleOpenRawMaterialsDialog} sx={{ mt: 2, mb: 2, mr: 2 }}>Dodaj surowce</Button>
+                      <Button variant="outlined" color="primary" startIcon={<BookmarkAddIcon />} onClick={() => setReserveDialogOpen(true)} sx={{ mt: 2, mb: 2, mr: 2 }}>Rezerwuj surowce</Button>
+                      <Button variant="outlined" color="warning" startIcon={<InventoryIcon />} onClick={handleOpenConsumeMaterialsDialog} sx={{ mt: 2, mb: 2 }} disabled={!materials.some(material => { const materialId = material.inventoryItemId || material.id; const reservedBatches = task.materialBatches && task.materialBatches[materialId]; return reservedBatches && reservedBatches.length > 0; })}>Konsumuj materiały</Button>
+                    </Box>
+                  </Box>
+                  <TableContainer>
+                    <Table>
+                      <TableHead><TableRow><TableCell>Nazwa</TableCell><TableCell>Ilość</TableCell><TableCell>Jednostka</TableCell><TableCell>Rzeczywista ilość</TableCell><TableCell>Ilość skonsumowana</TableCell><TableCell>Cena jedn.</TableCell><TableCell>Koszt</TableCell><TableCell>Zarezerwowane partie (LOT)</TableCell><TableCell>Wliczaj</TableCell><TableCell>Akcje</TableCell></TableRow></TableHead>
+                      <TableBody>
+                        {materials.map((material) => {
+                          const materialId = material.inventoryItemId || material.id;
+                          const reservedBatches = task.materialBatches && task.materialBatches[materialId];
+                          const quantity = materialQuantities[material.id] || material.quantity || 0;
+                          const unitPrice = material.unitPrice || 0;
+                          const cost = quantity * unitPrice;
+                          return (
+                            <TableRow key={material.id}>
+                              <TableCell>{material.name}</TableCell><TableCell>{material.quantity}</TableCell><TableCell>{material.unit}</TableCell>
+                              <TableCell>{editMode ? (<TextField type="number" value={materialQuantities[material.id] || 0} onChange={(e) => handleQuantityChange(material.id, e.target.value)} error={Boolean(errors[material.id])} helperText={errors[material.id]} inputProps={{ min: 0, step: 'any' }} size="small" sx={{ width: '100px' }} />) : (materialQuantities[material.id] || 0)}</TableCell>
+                              <TableCell>{(() => { const consumedQuantity = getConsumedQuantityForMaterial(materialId); return consumedQuantity > 0 ? `${consumedQuantity} ${material.unit}` : '—'; })()}</TableCell>
+                              <TableCell>{reservedBatches && reservedBatches.length > 0 ? (unitPrice.toFixed(4) + ' €') : ('—')}</TableCell>
+                              <TableCell>{reservedBatches && reservedBatches.length > 0 ? (cost.toFixed(2) + ' €') : ('—')}</TableCell>
+                              <TableCell>{reservedBatches && reservedBatches.length > 0 ? (<Box>{reservedBatches.map((batch, index) => (<Chip key={index} size="small" label={`${batch.batchNumber} (${batch.quantity} ${material.unit})`} color="info" variant="outlined" sx={{ mr: 0.5, mb: 0.5, cursor: 'pointer' }} onClick={() => navigate(`/inventory/${materialId}/batches`)} />))}</Box>) : (<Typography variant="body2" color="text.secondary">Brak zarezerwowanych partii</Typography>)}</TableCell>
+                              <TableCell><Checkbox checked={includeInCosts[material.id] || false} onChange={(e) => handleIncludeInCostsChange(material.id, e.target.checked)} color="primary" /></TableCell>
+                              <TableCell>{editMode ? (<Box sx={{ display: 'flex' }}><IconButton color="primary" onClick={handleSaveChanges} title="Zapisz zmiany"><SaveIcon /></IconButton><IconButton color="error" onClick={() => setEditMode(false)} title="Anuluj edycję"><CancelIcon /></IconButton></Box>) : (<Box sx={{ display: 'flex' }}><IconButton color="primary" onClick={() => { setEditMode(true); setMaterialQuantities(prev => ({ ...prev, [material.id]: materialQuantities[material.id] || 0 })); }} title="Edytuj ilość"><EditIcon /></IconButton><IconButton color="error" onClick={() => handleDeleteMaterial(material)} title="Usuń materiał"><DeleteIcon /></IconButton></Box>)}</TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </TableContainer>
+                  {renderMaterialCostsSummary()}
                 </Paper>
               </Grid>
-            )}
+            </Grid>
+          )}
 
-            {/* Sekcja formularzy produkcyjnych */}
-            <Grid item xs={12}>
-              <Paper sx={{ p: 3 }}>
-                <Typography variant="h6" component="h2" gutterBottom>
-                  Formularze produkcyjne
-                </Typography>
-                
-                {loadingFormResponses ? (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-                    <CircularProgress />
+          {mainTab === 2 && ( // Zakładka "Produkcja i Plan"
+            <Grid container spacing={3}>
+              {/* Sekcja historii produkcji */}
+              <Grid item xs={12}>
+                <Paper sx={{ p: 3 }}>
+                  <Typography variant="h6" component="h2" gutterBottom>Historia produkcji</Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+                    <Button variant="contained" color="primary" startIcon={<AddIcon />} onClick={() => { setEditedHistoryItem({ quantity: '', startTime: new Date(), endTime: new Date(), }); let expiryDate = null; if (task.expiryDate) { try { if (task.expiryDate instanceof Date) { expiryDate = task.expiryDate; } else if (task.expiryDate.toDate && typeof task.expiryDate.toDate === 'function') { expiryDate = task.expiryDate.toDate(); } else if (task.expiryDate.seconds) { expiryDate = new Date(task.expiryDate.seconds * 1000); } else if (typeof task.expiryDate === 'string') { expiryDate = new Date(task.expiryDate); } } catch (error) { console.error('Błąd konwersji daty ważności:', error); expiryDate = new Date(new Date().setFullYear(new Date().getFullYear() + 1)); } } else { expiryDate = new Date(new Date().setFullYear(new Date().getFullYear() + 1)); } setHistoryInventoryData({ expiryDate: expiryDate, lotNumber: task.lotNumber || `LOT-${task.moNumber || ''}`, finalQuantity: '', warehouseId: task.warehouseId || (warehouses.length > 0 ? warehouses[0].id : '') }); setAddHistoryDialogOpen(true); }} size="small">Dodaj wpis</Button>
                   </Box>
-                ) : (
-                  <Box sx={{ width: '100%' }}>
-                    <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-                      <Tabs 
-                        value={formTab || 0} 
-                        onChange={(e, newValue) => setFormTab(newValue)}
-                        aria-label="Zakładki formularzy"
-                      >
-                        <Tab label={`Raporty zakończonych MO (${formResponses.completedMO.length})`} />
-                        <Tab label={`Raporty kontroli produkcji (${formResponses.productionControl.length})`} />
-                        <Tab label={`Raporty zmian produkcyjnych (${formResponses.productionShift.length})`} />
-                      </Tabs>
-                    </Box>
-                    
-                    {/* Raporty zakończonych MO */}
-                    {formTab === 0 && (
-                      <>
-                        {formResponses.completedMO.length === 0 ? (
-                          <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
-                            Brak raportów zakończonych MO dla tego zadania.
-                          </Typography>
-                        ) : (
-                          <TableContainer>
-                            <Table size="small">
-                              <TableHead>
-                                <TableRow>
-                                  <TableCell>Data</TableCell>
-                                  <TableCell>Godzina</TableCell>
-                                  <TableCell>Email</TableCell>
-                                  <TableCell>Numer MO</TableCell>
-                                  <TableCell>Ilość produktu</TableCell>
-                                  <TableCell>Straty opakowania</TableCell>
-                                  <TableCell>Straty wieczka</TableCell>
-                                  <TableCell>Straty surowca</TableCell>
-                                  <TableCell>Raport mieszań</TableCell>
-                                  <TableCell>Akcje</TableCell>
-                                </TableRow>
-                              </TableHead>
-                              <TableBody>
-                                {formResponses.completedMO.map((form) => (
-                                  <TableRow key={form.id}>
-                                    <TableCell>
-                                      {form.date ? format(new Date(form.date), 'dd.MM.yyyy') : '-'}
-                                    </TableCell>
-                                    <TableCell>
-                                      {form.time || (form.date ? format(new Date(form.date), 'HH:mm') : '-')}
-                                    </TableCell>
-                                    <TableCell>{form.email || '-'}</TableCell>
-                                    <TableCell>{form.moNumber || '-'}</TableCell>
-                                    <TableCell>{form.productQuantity || '-'}</TableCell>
-                                    <TableCell>{form.packagingLoss || '-'}</TableCell>
-                                    <TableCell>{form.bulkLoss || '-'}</TableCell>
-                                    <TableCell>{form.rawMaterialLoss || '-'}</TableCell>
-                                    <TableCell>
-                                      {form.mixingPlanReportUrl ? (
-                                        <IconButton 
-                                          size="small" 
-                                          color="primary" 
-                                          component="a" 
-                                          href={form.mixingPlanReportUrl} 
-                                          target="_blank"
-                                          title="Otwórz raport"
-                                        >
-                                          <VisibilityIcon fontSize="small" />
-                                        </IconButton>
-                                      ) : '-'}
-                                    </TableCell>
-                                    <TableCell>
-                                      <IconButton 
-                                        size="small" 
-                                        color="primary" 
-                                        component={Link} 
-                                        to={`/production/forms/completed-mo?edit=true`}
-                                        onClick={() => sessionStorage.setItem('editFormData', JSON.stringify(form))}
-                                        title="Edytuj raport"
-                                      >
-                                        <EditIcon fontSize="small" />
-                                      </IconButton>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </TableContainer>
-                        )}
-                      </>
-                    )}
-                    
-                    {/* Raporty kontroli produkcji */}
-                    {formTab === 1 && (
-                      <>
-                        {formResponses.productionControl.length === 0 ? (
-                          <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
-                            Brak raportów kontroli produkcji dla tego zadania.
-                          </Typography>
-                        ) : (
-                          <TableContainer>
-                            <Table size="small">
-                              <TableHead>
-                                <TableRow>
-                                  <TableCell>Data wypełnienia</TableCell>
-                                  <TableCell>Email</TableCell>
-                                  <TableCell>Imię i nazwisko</TableCell>
-                                  <TableCell>Stanowisko</TableCell>
-                                  <TableCell>Produkt</TableCell>
-                                  <TableCell>Nr LOT</TableCell>
-                                  <TableCell>Data produkcji</TableCell>
-                                  <TableCell>Godzina rozpoczęcia</TableCell>
-                                  <TableCell>Data zakończenia</TableCell>
-                                  <TableCell>Godzina zakończenia</TableCell>
-                                  <TableCell>Data ważności</TableCell>
-                                  <TableCell>Ilość</TableCell>
-                                  <TableCell>Numer zmiany</TableCell>
-                                  <TableCell>Temperatura</TableCell>
-                                  <TableCell>Wilgotność</TableCell>
-                                  <TableCell>Stan surowca</TableCell>
-                                  <TableCell>Stan opakowania</TableCell>
-                                  <TableCell>Zamknięcie opakowania</TableCell>
-                                  <TableCell>Ilość opakowań</TableCell>
-                                  <TableCell>Zamówienie klienta</TableCell>
-                                  <TableCell>Skany dokumentów</TableCell>
-                                  <TableCell>Zdjęcie produktu 1</TableCell>
-                                  <TableCell>Zdjęcie produktu 2</TableCell>
-                                  <TableCell>Zdjęcie produktu 3</TableCell>
-                                  <TableCell>Akcje</TableCell>
-                                </TableRow>
-                              </TableHead>
-                              <TableBody>
-                                {formResponses.productionControl.map((form) => (
-                                  <TableRow key={form.id}>
-                                    <TableCell>
-                                      {form.fillDate ? format(new Date(form.fillDate), 'dd.MM.yyyy HH:mm') : '-'}
-                                    </TableCell>
-                                    <TableCell>{form.email || '-'}</TableCell>
-                                    <TableCell>{form.name || '-'}</TableCell>
-                                    <TableCell>{form.position || '-'}</TableCell>
-                                    <TableCell>{form.productName || '-'}</TableCell>
-                                    <TableCell>{form.lotNumber || '-'}</TableCell>
-                                    <TableCell>
-                                      {form.productionStartDate ? format(new Date(form.productionStartDate), 'dd.MM.yyyy') : '-'}
-                                    </TableCell>
-                                    <TableCell>{form.productionStartTime || '-'}</TableCell>
-                                    <TableCell>
-                                      {form.productionEndDate ? format(new Date(form.productionEndDate), 'dd.MM.yyyy') : '-'}
-                                    </TableCell>
-                                    <TableCell>{form.productionEndTime || '-'}</TableCell>
-                                    <TableCell>{form.expiryDate || '-'}</TableCell>
-                                    <TableCell>{form.quantity || '-'}</TableCell>
-                                    <TableCell>{Array.isArray(form.shiftNumber) ? form.shiftNumber.join(', ') : form.shiftNumber || '-'}</TableCell>
-                                    <TableCell>{form.temperature || '-'}</TableCell>
-                                    <TableCell>{form.humidity || '-'}</TableCell>
-                                    <TableCell>{form.rawMaterialPurity || '-'}</TableCell>
-                                    <TableCell>{form.packagingPurity || '-'}</TableCell>
-                                    <TableCell>{form.packagingClosure || '-'}</TableCell>
-                                    <TableCell>{form.packagingQuantity || '-'}</TableCell>
-                                    <TableCell>{form.customerOrder || '-'}</TableCell>
-                                    <TableCell>
-                                      {form.documentScanUrl ? (
-                                        <IconButton 
-                                          size="small" 
-                                          color="primary" 
-                                          component="a" 
-                                          href={form.documentScanUrl} 
-                                          target="_blank"
-                                          title="Otwórz skan dokumentu"
-                                        >
-                                          <VisibilityIcon fontSize="small" />
-                                        </IconButton>
-                                      ) : '-'}
-                                    </TableCell>
-                                    <TableCell>
-                                      {form.productPhoto1Url ? (
-                                        <IconButton 
-                                          size="small" 
-                                          color="primary" 
-                                          component="a" 
-                                          href={form.productPhoto1Url} 
-                                          target="_blank"
-                                          title="Otwórz zdjęcie produktu 1"
-                                        >
-                                          <VisibilityIcon fontSize="small" />
-                                        </IconButton>
-                                      ) : '-'}
-                                    </TableCell>
-                                    <TableCell>
-                                      {form.productPhoto2Url ? (
-                                        <IconButton 
-                                          size="small" 
-                                          color="primary" 
-                                          component="a" 
-                                          href={form.productPhoto2Url} 
-                                          target="_blank"
-                                          title="Otwórz zdjęcie produktu 2"
-                                        >
-                                          <VisibilityIcon fontSize="small" />
-                                        </IconButton>
-                                      ) : '-'}
-                                    </TableCell>
-                                    <TableCell>
-                                      {form.productPhoto3Url ? (
-                                        <IconButton 
-                                          size="small" 
-                                          color="primary" 
-                                          component="a" 
-                                          href={form.productPhoto3Url} 
-                                          target="_blank"
-                                          title="Otwórz zdjęcie produktu 3"
-                                        >
-                                          <VisibilityIcon fontSize="small" />
-                                        </IconButton>
-                                      ) : '-'}
-                                    </TableCell>
-                                    <TableCell>
-                                      <IconButton 
-                                        size="small" 
-                                        color="primary" 
-                                        component={Link} 
-                                        to={`/production/forms/production-control?edit=true`}
-                                        onClick={() => sessionStorage.setItem('editFormData', JSON.stringify(form))}
-                                        title="Edytuj raport"
-                                      >
-                                        <EditIcon fontSize="small" />
-                                      </IconButton>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </TableContainer>
-                        )}
-                      </>
-                    )}
-                    
-                    {/* Raporty zmian produkcyjnych */}
-                    {formTab === 2 && (
-                      <>
-                        {formResponses.productionShift.length === 0 ? (
-                          <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
-                            Brak raportów zmian produkcyjnych dla tego zadania.
-                          </Typography>
-                        ) : (
-                          <TableContainer>
-                            <Table size="small">
-                              <TableHead>
-                                <TableRow>
-                                  <TableCell>Data wypełnienia</TableCell>
-                                  <TableCell>Email</TableCell>
-                                  <TableCell>Osoba odpowiedzialna</TableCell>
-                                  <TableCell>Typ zmiany</TableCell>
-                                  <TableCell>Ilość produkcji</TableCell>
-                                  <TableCell>Pracownicy</TableCell>
-                                  <TableCell>Nadruk 1</TableCell>
-                                  <TableCell>Ilość nadruku 1</TableCell>
-                                  <TableCell>Straty nadruku 1</TableCell>
-                                  <TableCell>Nadruk 2</TableCell>
-                                  <TableCell>Ilość nadruku 2</TableCell>
-                                  <TableCell>Straty nadruku 2</TableCell>
-                                  <TableCell>Nadruk 3</TableCell>
-                                  <TableCell>Ilość nadruku 3</TableCell>
-                                  <TableCell>Straty nadruku 3</TableCell>
-                                  <TableCell>Problemy maszyn</TableCell>
-                                  <TableCell>Inne aktywności</TableCell>
-                                  <TableCell>Akcje</TableCell>
-                                </TableRow>
-                              </TableHead>
-                              <TableBody>
-                                {formResponses.productionShift.map((form) => (
-                                  <TableRow key={form.id}>
-                                    <TableCell>
-                                      {form.fillDate ? format(new Date(form.fillDate), 'dd.MM.yyyy') : '-'}
-                                    </TableCell>
-                                    <TableCell>{form.email || '-'}</TableCell>
-                                    <TableCell>{form.responsiblePerson || '-'}</TableCell>
-                                    <TableCell>{form.shiftType || '-'}</TableCell>
-                                    <TableCell>{form.productionQuantity || '-'}</TableCell>
-                                    <TableCell>
-                                      {form.shiftWorkers && form.shiftWorkers.length > 0 ? 
-                                        form.shiftWorkers.join(', ') : '-'}
-                                    </TableCell>
-                                    <TableCell>{form.firstProduct !== 'BRAK' ? form.firstProduct : '-'}</TableCell>
-                                    <TableCell>{form.firstProductQuantity || '-'}</TableCell>
-                                    <TableCell>{form.firstProductLoss || '-'}</TableCell>
-                                    <TableCell>{form.secondProduct !== 'BRAK' ? form.secondProduct : '-'}</TableCell>
-                                    <TableCell>{form.secondProductQuantity || '-'}</TableCell>
-                                    <TableCell>{form.secondProductLoss || '-'}</TableCell>
-                                    <TableCell>{form.thirdProduct !== 'BRAK' ? form.thirdProduct : '-'}</TableCell>
-                                    <TableCell>{form.thirdProductQuantity || '-'}</TableCell>
-                                    <TableCell>{form.thirdProductLoss || '-'}</TableCell>
-                                    <TableCell>
-                                      {form.machineIssues || '-'}
-                                    </TableCell>
-                                    <TableCell>
-                                      {form.otherActivities || '-'}
-                                    </TableCell>
-                                    <TableCell>
-                                      <IconButton 
-                                        size="small" 
-                                        color="primary" 
-                                        component={Link} 
-                                        to={`/production/forms/production-shift?edit=true`}
-                                        onClick={() => sessionStorage.setItem('editFormData', JSON.stringify(form))}
-                                        title="Edytuj raport"
-                                      >
-                                        <EditIcon fontSize="small" />
-                                      </IconButton>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </TableContainer>
-                        )}
-                      </>
-                    )}
-                  </Box>
-                )}
-              </Paper>
-            </Grid>
-          
-            {/* Dialog potwierdzenia */}
-            <Dialog
-              open={deleteHistoryDialogOpen}
-              onClose={() => setDeleteHistoryDialogOpen(false)}
-            >
-              <DialogTitle>Potwierdź usunięcie</DialogTitle>
-              <DialogContent>
-                <DialogContentText>
-                  Czy na pewno chcesz usunąć wybrany wpis z historii produkcji? Ta operacja jest nieodwracalna.
-                </DialogContentText>
-              </DialogContent>
-              <DialogActions>
-                <Button onClick={() => setDeleteHistoryDialogOpen(false)}>
-                  Anuluj
-                </Button>
-                <Button 
-                  onClick={handleConfirmDeleteHistoryItem} 
-                  variant="contained" 
-                  color="error"
-                  disabled={loading}
-                >
-                  {loading ? <CircularProgress size={24} /> : 'Usuń wpis'}
-                </Button>
-              </DialogActions>
-            </Dialog>
-          </Grid>
-        </>
-      ) : (
-        <Typography variant="body1" color="textSecondary">
-          Nie udało się załadować danych zadania. Spróbuj ponownie.
-        </Typography>
-      )}
-      
-      {/* Dialog usuwania zadania */}
-      <Dialog
-        open={deleteDialog}
-        onClose={() => setDeleteDialog(false)}
-      >
-        <DialogTitle>Potwierdź usunięcie</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Czy na pewno chcesz usunąć to zadanie produkcyjne (MO: {task?.moNumber})? Ta operacja jest nieodwracalna.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialog(false)}>
-            Anuluj
-          </Button>
-          <Button 
-            onClick={handleDelete} 
-            variant="contained" 
-            color="error"
-          >
-            Usuń zadanie
-          </Button>
-        </DialogActions>
-      </Dialog>
-      
-      {/* Dialog wyboru opakowań */}
-      <Dialog
-        open={packagingDialogOpen}
-        onClose={() => setPackagingDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>Dodaj opakowania do zadania</DialogTitle>
-        <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
-            Wybierz opakowania, które chcesz dodać do zadania produkcyjnego.
-          </DialogContentText>
-          
-          {/* Pasek wyszukiwania opakowań */}
-          <TextField
-            fullWidth
-            margin="normal"
-            label="Wyszukaj opakowanie"
-            variant="outlined"
-            value={searchPackaging}
-            onChange={(e) => setSearchPackaging(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ mb: 2 }}
-          />
-          
-          {loadingPackaging ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-              <CircularProgress />
-            </Box>
-          ) : (
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell padding="checkbox">Wybierz</TableCell>
-                    <TableCell>Nazwa</TableCell>
-                    <TableCell>Kategoria</TableCell>
-                    <TableCell>Dostępna ilość</TableCell>
-                    <TableCell>Ilość do dodania</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filteredPackagingItems.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} align="center">
-                        {packagingItems.length === 0 
-                          ? "Brak dostępnych opakowań"
-                          : "Brak wyników dla podanego wyszukiwania"}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredPackagingItems.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell padding="checkbox">
-                          <Checkbox
-                            checked={item.selected}
-                            onChange={(e) => handlePackagingSelection(item.id, e.target.checked)}
-                          />
-                        </TableCell>
-                        <TableCell>{item.name}</TableCell>
-                        <TableCell>{item.category}</TableCell>
-                        <TableCell>{item.availableQuantity} {item.unit}</TableCell>
-                        <TableCell>
-                          <TextField
-                            type="number"
-                            value={item.quantity || ''}
-                            onChange={(e) => handlePackagingQuantityChange(item.id, e.target.value)}
-                            disabled={!item.selected}
-                            inputProps={{ min: 0, max: item.availableQuantity, step: 'any' }}
-                            size="small"
-                            sx={{ width: '100px' }}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))
+                  {productionHistory.length === 0 ? (<Typography variant="body2" color="text.secondary">Brak historii produkcji dla tego zadania</Typography>) : (
+                    <TableContainer>
+                      <Table><TableHead><TableRow><TableCell>Data rozpoczęcia</TableCell><TableCell>Data zakończenia</TableCell><TableCell>Czas trwania</TableCell><TableCell>Wyprodukowana ilość</TableCell><TableCell>Operator</TableCell><TableCell>Akcje</TableCell></TableRow></TableHead>
+                        <TableBody>
+                          {productionHistory.map((item) => (
+                            <TableRow key={item.id}>
+                              {editingHistoryItem === item.id ? (
+                                <><TableCell><TextField type="datetime-local" value={editedHistoryItem.startTime instanceof Date ? toLocalDateTimeString(editedHistoryItem.startTime) : ''} onChange={(e) => { const newDate = e.target.value ? fromLocalDateTimeString(e.target.value) : new Date(); setEditedHistoryItem(prev => ({ ...prev, startTime: newDate })); }} InputLabelProps={{ shrink: true }} fullWidth required /></TableCell><TableCell><TextField type="datetime-local" value={editedHistoryItem.endTime instanceof Date ? toLocalDateTimeString(editedHistoryItem.endTime) : ''} onChange={(e) => { const newDate = e.target.value ? fromLocalDateTimeString(e.target.value) : new Date(); setEditedHistoryItem(prev => ({ ...prev, endTime: newDate })); }} InputLabelProps={{ shrink: true }} fullWidth required /></TableCell><TableCell>{Math.round((editedHistoryItem.endTime.getTime() - editedHistoryItem.startTime.getTime()) / (1000 * 60))} min</TableCell><TableCell><TextField type="number" value={editedHistoryItem.quantity} onChange={(e) => setEditedHistoryItem(prev => ({ ...prev, quantity: e.target.value === '' ? '' : parseFloat(e.target.value) }))} inputProps={{ min: 0, step: 'any' }} size="small" fullWidth /></TableCell><TableCell>{getUserName(item.userId)}</TableCell><TableCell><Box sx={{ display: 'flex' }}><IconButton color="primary" onClick={() => handleSaveHistoryItemEdit(item.id)} title="Zapisz zmiany"><SaveIcon /></IconButton><IconButton color="error" onClick={handleCancelHistoryItemEdit} title="Anuluj edycję"><CancelIcon /></IconButton></Box></TableCell></>
+                              ) : (
+                                <><TableCell>{item.startTime ? formatDateTime(item.startTime) : '-'}</TableCell><TableCell>{item.endTime ? formatDateTime(item.endTime) : '-'}</TableCell><TableCell>{item.timeSpent ? `${item.timeSpent} min` : '-'}</TableCell><TableCell>{item.quantity} {task.unit}</TableCell><TableCell>{getUserName(item.userId)}</TableCell><TableCell><IconButton color="primary" onClick={() => handleEditHistoryItem(item)} title="Edytuj sesję produkcyjną"><EditIcon /></IconButton><IconButton color="error" onClick={() => handleDeleteHistoryItem(item)} title="Usuń sesję produkcyjną"><DeleteIcon /></IconButton></TableCell></>
+                              )}
+                            </TableRow>
+                          ))}
+                          <TableRow sx={{ '& td': { fontWeight: 'bold', bgcolor: 'rgba(0, 0, 0, 0.04)' } }}><TableCell colSpan={2} align="right">Suma:</TableCell><TableCell>{productionHistory.reduce((sum, item) => sum + (item.timeSpent || 0), 0)} min</TableCell><TableCell>{productionHistory.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0)} {task.unit}</TableCell><TableCell colSpan={2}></TableCell></TableRow>
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
                   )}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                </Paper>
+              </Grid>
+              {/* Sekcja planu mieszań (checklista) */}
+              {task?.mixingPlanChecklist && task.mixingPlanChecklist.length > 0 && (
+                <Grid item xs={12}>
+                  <Paper sx={{ p: 2, mb: 2 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}><Typography variant="h6">Plan mieszań</Typography></Box>
+                    <TableContainer>
+                      <Table size="small"><TableHead><TableRow><TableCell width="25%">Mieszanie</TableCell><TableCell width="35%">Składniki</TableCell><TableCell width="40%" align="center">Status</TableCell></TableRow></TableHead>
+                        <TableBody>
+                          {task.mixingPlanChecklist.filter(item => item.type === 'header').map(headerItem => {
+                            const ingredients = task.mixingPlanChecklist.filter(item => item.parentId === headerItem.id && item.type === 'ingredient');
+                            const checkItems = task.mixingPlanChecklist.filter(item => item.parentId === headerItem.id && item.type === 'check');
+                            return (
+                              <TableRow key={headerItem.id} sx={{ '& td': { borderBottom: '1px solid rgba(224, 224, 224, 1)', verticalAlign: 'top', pt: 2, pb: 2 } }}>
+                                <TableCell><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>{headerItem.text}</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>{headerItem.details}</Typography></TableCell>
+                                <TableCell><Table size="small" sx={{ '& td': { border: 'none', pt: 0.5, pb: 0.5 } }}><TableBody>{ingredients.map((ingredient) => (<TableRow key={ingredient.id}><TableCell sx={{ pl: 0 }}><Typography variant="body2">{ingredient.text}</Typography><Typography variant="caption" color="text.secondary">{ingredient.details}</Typography></TableCell></TableRow>))}</TableBody></Table></TableCell>
+                                <TableCell align="center"><Grid container spacing={1} alignItems="center">{checkItems.map((item) => (<Grid item xs={12} key={item.id} sx={{ borderBottom: '1px solid rgba(224, 224, 224, 0.3)', pb: 1 }}><Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}><FormControlLabel control={<Checkbox checked={item.completed || false} onChange={async (e) => { try { const taskRef = doc(db, 'productionTasks', task.id); const updatedChecklist = task.mixingPlanChecklist.map(checkItem => { if (checkItem.id === item.id) { return { ...checkItem, completed: e.target.checked, completedAt: e.target.checked ? new Date().toISOString() : null, completedBy: e.target.checked ? currentUser.uid : null }; } return checkItem; }); await updateDoc(taskRef, { mixingPlanChecklist: updatedChecklist, updatedAt: serverTimestamp(), updatedBy: currentUser.uid }); setTask(prevTask => ({ ...prevTask, mixingPlanChecklist: updatedChecklist })); showSuccess('Zaktualizowano stan zadania'); } catch (error) { console.error('Błąd podczas aktualizacji stanu checklisty:', error); showError('Nie udało się zaktualizować stanu zadania'); } }} />} label={item.text} sx={{ width: '100%' }} />{item.completed && (<Chip size="small" label={item.completedAt ? new Date(item.completedAt).toLocaleDateString('pl-PL') : '-'} color="success" variant="outlined" sx={{ ml: 1 }} />)}</Box></Grid>))}</Grid></TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Paper>
+                </Grid>
+              )}
+            </Grid>
           )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPackagingDialogOpen(false)}>
-            Anuluj
-          </Button>
-          <Button 
-            onClick={handleAddPackagingToTask} 
-            variant="contained" 
-            color="primary"
-            disabled={loadingPackaging || packagingItems.filter(item => item.selected && item.quantity > 0).length === 0}
+
+          {mainTab === 3 && ( // Zakładka "Formularze"
+            <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <Paper sx={{ p: 3 }}>
+                  <Typography variant="h6" component="h2" gutterBottom>Formularze produkcyjne</Typography>
+                  {loadingFormResponses ? (<Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}><CircularProgress /></Box>) : (
+                    <Box sx={{ width: '100%' }}>
+                      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+                        <Tabs value={formTab || 0} onChange={(e, newValue) => setFormTab(newValue)} aria-label="Zakładki formularzy">
+                          <Tab label={`Raporty zakończonych MO (${formResponses.completedMO.length})`} />
+                          <Tab label={`Raporty kontroli produkcji (${formResponses.productionControl.length})`} />
+                          <Tab label={`Raporty zmian produkcyjnych (${formResponses.productionShift.length})`} />
+                        </Tabs>
+                      </Box>
+                      {formTab === 0 && (<>{formResponses.completedMO.length === 0 ? (<Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>Brak raportów zakończonych MO dla tego zadania.</Typography>) : (<TableContainer><Table size="small"><TableHead><TableRow><TableCell>Data</TableCell><TableCell>Godzina</TableCell><TableCell>Email</TableCell><TableCell>Numer MO</TableCell><TableCell>Ilość produktu</TableCell><TableCell>Straty opakowania</TableCell><TableCell>Straty wieczka</TableCell><TableCell>Straty surowca</TableCell><TableCell>Raport mieszań</TableCell><TableCell>Akcje</TableCell></TableRow></TableHead><TableBody>{formResponses.completedMO.map((form) => (<TableRow key={form.id}><TableCell>{form.date ? format(new Date(form.date), 'dd.MM.yyyy') : '-'}</TableCell><TableCell>{form.time || (form.date ? format(new Date(form.date), 'HH:mm') : '-')}</TableCell><TableCell>{form.email || '-'}</TableCell><TableCell>{form.moNumber || '-'}</TableCell><TableCell>{form.productQuantity || '-'}</TableCell><TableCell>{form.packagingLoss || '-'}</TableCell><TableCell>{form.bulkLoss || '-'}</TableCell><TableCell>{form.rawMaterialLoss || '-'}</TableCell><TableCell>{form.mixingPlanReportUrl ? (<IconButton size="small" color="primary" component="a" href={form.mixingPlanReportUrl} target="_blank" title="Otwórz raport"><VisibilityIcon fontSize="small" /></IconButton>) : '-'}</TableCell><TableCell><IconButton size="small" color="primary" component={Link} to={`/production/forms/completed-mo?edit=true`} onClick={() => sessionStorage.setItem('editFormData', JSON.stringify(form))} title="Edytuj raport"><EditIcon fontSize="small" /></IconButton></TableCell></TableRow>))}</TableBody></Table></TableContainer>)}</>)}
+                      {formTab === 1 && (<>{formResponses.productionControl.length === 0 ? (<Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>Brak raportów kontroli produkcji dla tego zadania.</Typography>) : (<TableContainer><Table size="small"><TableHead><TableRow><TableCell>Data wypełnienia</TableCell><TableCell>Email</TableCell><TableCell>Imię i nazwisko</TableCell><TableCell>Stanowisko</TableCell><TableCell>Produkt</TableCell><TableCell>Nr LOT</TableCell><TableCell>Data produkcji</TableCell><TableCell>Godzina rozpoczęcia</TableCell><TableCell>Data zakończenia</TableCell><TableCell>Godzina zakończenia</TableCell><TableCell>Data ważności</TableCell><TableCell>Ilość</TableCell><TableCell>Numer zmiany</TableCell><TableCell>Temperatura</TableCell><TableCell>Wilgotność</TableCell><TableCell>Stan surowca</TableCell><TableCell>Stan opakowania</TableCell><TableCell>Zamknięcie opakowania</TableCell><TableCell>Ilość opakowań</TableCell><TableCell>Zamówienie klienta</TableCell><TableCell>Skany dokumentów</TableCell><TableCell>Zdjęcie produktu 1</TableCell><TableCell>Zdjęcie produktu 2</TableCell><TableCell>Zdjęcie produktu 3</TableCell><TableCell>Akcje</TableCell></TableRow></TableHead><TableBody>{formResponses.productionControl.map((form) => (<TableRow key={form.id}><TableCell>{form.fillDate ? format(new Date(form.fillDate), 'dd.MM.yyyy HH:mm') : '-'}</TableCell><TableCell>{form.email || '-'}</TableCell><TableCell>{form.name || '-'}</TableCell><TableCell>{form.position || '-'}</TableCell><TableCell>{form.productName || '-'}</TableCell><TableCell>{form.lotNumber || '-'}</TableCell><TableCell>{form.productionStartDate ? format(new Date(form.productionStartDate), 'dd.MM.yyyy') : '-'}</TableCell><TableCell>{form.productionStartTime || '-'}</TableCell><TableCell>{form.productionEndDate ? format(new Date(form.productionEndDate), 'dd.MM.yyyy') : '-'}</TableCell><TableCell>{form.productionEndTime || '-'}</TableCell><TableCell>{form.expiryDate || '-'}</TableCell><TableCell>{form.quantity || '-'}</TableCell><TableCell>{Array.isArray(form.shiftNumber) ? form.shiftNumber.join(', ') : form.shiftNumber || '-'}</TableCell><TableCell>{form.temperature || '-'}</TableCell><TableCell>{form.humidity || '-'}</TableCell><TableCell>{form.rawMaterialPurity || '-'}</TableCell><TableCell>{form.packagingPurity || '-'}</TableCell><TableCell>{form.packagingClosure || '-'}</TableCell><TableCell>{form.packagingQuantity || '-'}</TableCell><TableCell>{form.customerOrder || '-'}</TableCell><TableCell>{form.documentScanUrl ? (<IconButton size="small" color="primary" component="a" href={form.documentScanUrl} target="_blank" title="Otwórz skan dokumentu"><VisibilityIcon fontSize="small" /></IconButton>) : '-'}</TableCell><TableCell>{form.productPhoto1Url ? (<IconButton size="small" color="primary" component="a" href={form.productPhoto1Url} target="_blank" title="Otwórz zdjęcie produktu 1"><VisibilityIcon fontSize="small" /></IconButton>) : '-'}</TableCell><TableCell>{form.productPhoto2Url ? (<IconButton size="small" color="primary" component="a" href={form.productPhoto2Url} target="_blank" title="Otwórz zdjęcie produktu 2"><VisibilityIcon fontSize="small" /></IconButton>) : '-'}</TableCell><TableCell>{form.productPhoto3Url ? (<IconButton size="small" color="primary" component="a" href={form.productPhoto3Url} target="_blank" title="Otwórz zdjęcie produktu 3"><VisibilityIcon fontSize="small" /></IconButton>) : '-'}</TableCell><TableCell><IconButton size="small" color="primary" component={Link} to={`/production/forms/production-control?edit=true`} onClick={() => sessionStorage.setItem('editFormData', JSON.stringify(form))} title="Edytuj raport"><EditIcon fontSize="small" /></IconButton></TableCell></TableRow>))}</TableBody></Table></TableContainer>)}</>)}
+                      {formTab === 2 && (<>{formResponses.productionShift.length === 0 ? (<Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>Brak raportów zmian produkcyjnych dla tego zadania.</Typography>) : (<TableContainer><Table size="small"><TableHead><TableRow><TableCell>Data wypełnienia</TableCell><TableCell>Email</TableCell><TableCell>Osoba odpowiedzialna</TableCell><TableCell>Typ zmiany</TableCell><TableCell>Ilość produkcji</TableCell><TableCell>Pracownicy</TableCell><TableCell>Nadruk 1</TableCell><TableCell>Ilość nadruku 1</TableCell><TableCell>Straty nadruku 1</TableCell><TableCell>Nadruk 2</TableCell><TableCell>Ilość nadruku 2</TableCell><TableCell>Straty nadruku 2</TableCell><TableCell>Nadruk 3</TableCell><TableCell>Ilość nadruku 3</TableCell><TableCell>Straty nadruku 3</TableCell><TableCell>Problemy maszyn</TableCell><TableCell>Inne aktywności</TableCell><TableCell>Akcje</TableCell></TableRow></TableHead><TableBody>{formResponses.productionShift.map((form) => (<TableRow key={form.id}><TableCell>{form.fillDate ? format(new Date(form.fillDate), 'dd.MM.yyyy') : '-'}</TableCell><TableCell>{form.email || '-'}</TableCell><TableCell>{form.responsiblePerson || '-'}</TableCell><TableCell>{form.shiftType || '-'}</TableCell><TableCell>{form.productionQuantity || '-'}</TableCell><TableCell>{form.shiftWorkers && form.shiftWorkers.length > 0 ? form.shiftWorkers.join(', ') : '-'}</TableCell><TableCell>{form.firstProduct !== 'BRAK' ? form.firstProduct : '-'}</TableCell><TableCell>{form.firstProductQuantity || '-'}</TableCell><TableCell>{form.firstProductLoss || '-'}</TableCell><TableCell>{form.secondProduct !== 'BRAK' ? form.secondProduct : '-'}</TableCell><TableCell>{form.secondProductQuantity || '-'}</TableCell><TableCell>{form.secondProductLoss || '-'}</TableCell><TableCell>{form.thirdProduct !== 'BRAK' ? form.thirdProduct : '-'}</TableCell><TableCell>{form.thirdProductQuantity || '-'}</TableCell><TableCell>{form.thirdProductLoss || '-'}</TableCell><TableCell>{form.machineIssues || '-'}</TableCell><TableCell>{form.otherActivities || '-'}</TableCell><TableCell><IconButton size="small" color="primary" component={Link} to={`/production/forms/production-shift?edit=true`} onClick={() => sessionStorage.setItem('editFormData', JSON.stringify(form))} title="Edytuj raport"><EditIcon fontSize="small" /></IconButton></TableCell></TableRow>))}</TableBody></Table></TableContainer>)}</>)}
+                    </Box>
+                  )}
+                </Paper>
+              </Grid>
+            </Grid>
+          )}
+
+          {mainTab === 4 && ( // Zakładka "Historia zmian"
+             <Grid container spacing={3}>
+                {task.statusHistory && task.statusHistory.length > 0 && (
+                  <Grid item xs={12}>
+                    <Paper sx={{p:3}}> {/* Dodano Paper dla spójności */}
+                      <Accordion defaultExpanded>
+                        <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography variant="h6" component="h2">Historia zmian statusu ({task.statusHistory.length})</Typography></AccordionSummary>
+                        <AccordionDetails>
+                          <TableContainer><Table size="small"><TableHead><TableRow><TableCell>Data i godzina</TableCell><TableCell>Poprzedni status</TableCell><TableCell>Nowy status</TableCell><TableCell>Kto zmienił</TableCell></TableRow></TableHead><TableBody>{[...task.statusHistory].reverse().map((change, index) => (<TableRow key={index}><TableCell>{change.changedAt ? new Date(change.changedAt).toLocaleString('pl') : 'Brak daty'}</TableCell><TableCell>{change.oldStatus}</TableCell><TableCell>{change.newStatus}</TableCell><TableCell>{getUserName(change.changedBy)}</TableCell></TableRow>))}</TableBody></Table></TableContainer>
+                        </AccordionDetails>
+                      </Accordion>
+                    </Paper>
+                  </Grid>
+                )}
+                {/* Tutaj można dodać inne sekcje administracyjne jeśli będą potrzebne */}
+             </Grid>
+          )}
+
+          {/* Wszystkie dialogi pozostają bez zmian na końcu komponentu */}
+          {/* Dialog potwierdzenia */}
+          <Dialog
+            open={deleteHistoryDialogOpen}
+            onClose={() => setDeleteHistoryDialogOpen(false)}
           >
-            {loadingPackaging ? <CircularProgress size={24} /> : 'Dodaj wybrane opakowania'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-      
-      {/* Dialog rezerwacji surowców */}
-      <Dialog
-        open={reserveDialogOpen}
-        onClose={() => setReserveDialogOpen(false)}
-        maxWidth="lg"
-        fullWidth
-      >
-        <DialogTitle>Rezerwacja surowców</DialogTitle>
-        <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
-            Wybierz partie materiałów, które chcesz zarezerwować dla tego zadania produkcyjnego.
-          </DialogContentText>
-          
-          <FormControl component="fieldset" sx={{ mb: 2 }}>
-            <FormLabel component="legend">Metoda rezerwacji</FormLabel>
-            <RadioGroup 
-              row 
-              value={reservationMethod} 
-              onChange={handleReservationMethodChange}
-            >
-              <FormControlLabel 
-                value="automatic" 
-                control={<Radio />} 
-                label="Automatyczna (FIFO)" 
-              />
-              <FormControlLabel 
-                value="manual" 
-                control={<Radio />} 
-                label="Ręczna (wybór partii)" 
-              />
-            </RadioGroup>
-          </FormControl>
-          
-          {reservationMethod === 'manual' && renderManualBatchSelection()}
-          
-          {reservationMethod === 'automatic' && (
-            <Alert severity="info" sx={{ mb: 2 }}>
-              System automatycznie zarezerwuje najstarsze dostępne partie materiałów (FIFO).
-            </Alert>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setReserveDialogOpen(false)}>
-            Anuluj
-          </Button>
-          <Button 
-            onClick={handleReserveMaterials} 
-            variant="contained" 
-            color="primary"
-            disabled={reservingMaterials}
+            <DialogTitle>Potwierdź usunięcie</DialogTitle>
+            <DialogContent>
+              <DialogContentText>
+                Czy na pewno chcesz usunąć wybrany wpis z historii produkcji? Ta operacja jest nieodwracalna.
+              </DialogContentText>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setDeleteHistoryDialogOpen(false)}>
+                Anuluj
+              </Button>
+              <Button 
+                onClick={handleConfirmDeleteHistoryItem} 
+                variant="contained" 
+                color="error"
+                disabled={loading}
+              >
+                {loading ? <CircularProgress size={24} /> : 'Usuń wpis'}
+              </Button>
+            </DialogActions>
+          </Dialog>
+          {/* Dialog usuwania zadania */}
+          <Dialog
+            open={deleteDialog}
+            onClose={() => setDeleteDialog(false)}
           >
-            {reservingMaterials ? <CircularProgress size={24} /> : 'Rezerwuj materiały'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-      
-      {/* Dialog dodawania wpisu historii produkcji */}
-      <Dialog
-        open={addHistoryDialogOpen}
-        onClose={() => setAddHistoryDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>Dodaj wpis historii produkcji</DialogTitle>
-        <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
-            Wprowadź dane nowej sesji produkcyjnej.
-          </DialogContentText>
+            <DialogTitle>Potwierdź usunięcie</DialogTitle>
+            <DialogContent>
+              <DialogContentText>
+                Czy na pewno chcesz usunąć to zadanie produkcyjne (MO: {task?.moNumber})? Ta operacja jest nieodwracalna.
+              </DialogContentText>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setDeleteDialog(false)}>
+                Anuluj
+              </Button>
+              <Button 
+                onClick={handleDelete} 
+                variant="contained" 
+                color="error"
+              >
+                Usuń zadanie
+              </Button>
+            </DialogActions>
+          </Dialog>
           
-          {historyInventoryError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {historyInventoryError}
-            </Alert>
-          )}
-          
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12}>
+          {/* Dialog wyboru opakowań */}
+          <Dialog
+            open={packagingDialogOpen}
+            onClose={() => setPackagingDialogOpen(false)}
+            maxWidth="md"
+            fullWidth
+          >
+            <DialogTitle>Dodaj opakowania do zadania</DialogTitle>
+            <DialogContent>
+              <DialogContentText sx={{ mb: 2 }}>
+                Wybierz opakowania, które chcesz dodać do zadania produkcyjnego.
+              </DialogContentText>
+              
+              {/* Pasek wyszukiwania opakowań */}
               <TextField
-                label="Wyprodukowana ilość"
-                type="number"
-                value={editedHistoryItem.quantity}
-                onChange={(e) => setEditedHistoryItem(prev => ({ 
-                  ...prev, 
-                  quantity: e.target.value === '' ? '' : parseFloat(e.target.value) 
-                }))}
-                inputProps={{ min: 0, step: 'any' }}
                 fullWidth
-                required
+                margin="normal"
+                label="Wyszukaj opakowanie"
+                variant="outlined"
+                value={searchPackaging}
+                onChange={(e) => setSearchPackaging(e.target.value)}
                 InputProps={{
-                  endAdornment: <Typography variant="body2">{task?.unit || 'szt.'}</Typography>
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
+                  ),
                 }}
+                sx={{ mb: 2 }}
               />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                label="Data i czas rozpoczęcia"
-                type="datetime-local"
-                value={editedHistoryItem.startTime instanceof Date 
-                  ? toLocalDateTimeString(editedHistoryItem.startTime) 
-                  : ''}
-                onChange={(e) => {
-                  const newDate = e.target.value ? fromLocalDateTimeString(e.target.value) : new Date();
-                  setEditedHistoryItem(prev => ({ 
-                    ...prev, 
-                    startTime: newDate
-                  }));
-                }}
-                InputLabelProps={{ shrink: true }}
-                fullWidth
-                required
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                label="Data i czas zakończenia"
-                type="datetime-local"
-                value={editedHistoryItem.endTime instanceof Date 
-                  ? toLocalDateTimeString(editedHistoryItem.endTime) 
-                  : ''}
-                onChange={(e) => {
-                  const newDate = e.target.value ? fromLocalDateTimeString(e.target.value) : new Date();
-                  setEditedHistoryItem(prev => ({ 
-                    ...prev, 
-                    endTime: newDate
-                  }));
-                }}
-                InputLabelProps={{ shrink: true }}
-                fullWidth
-                required
-              />
-            </Grid>
-            
-            {/* Sekcja dodawania do magazynu */}
-            <Grid item xs={12}>
-              <Divider sx={{ my: 2 }} />
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={addToInventoryOnHistory}
-                    onChange={(e) => setAddToInventoryOnHistory(e.target.checked)}
-                    color="primary"
+              
+              {loadingPackaging ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                  <CircularProgress />
+                </Box>
+              ) : (
+                <TableContainer>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell padding="checkbox">Wybierz</TableCell>
+                        <TableCell>Nazwa</TableCell>
+                        <TableCell>Kategoria</TableCell>
+                        <TableCell>Dostępna ilość</TableCell>
+                        <TableCell>Ilość do dodania</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {filteredPackagingItems.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} align="center">
+                            {packagingItems.length === 0 
+                              ? "Brak dostępnych opakowań"
+                              : "Brak wyników dla podanego wyszukiwania"}
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredPackagingItems.map((item) => (
+                          <TableRow key={item.id}>
+                            <TableCell padding="checkbox">
+                              <Checkbox
+                                checked={item.selected}
+                                onChange={(e) => handlePackagingSelection(item.id, e.target.checked)}
+                              />
+                            </TableCell>
+                            <TableCell>{item.name}</TableCell>
+                            <TableCell>{item.category}</TableCell>
+                            <TableCell>{item.availableQuantity} {item.unit}</TableCell>
+                            <TableCell>
+                              <TextField
+                                type="number"
+                                value={item.quantity || ''}
+                                onChange={(e) => handlePackagingQuantityChange(item.id, e.target.value)}
+                                disabled={!item.selected}
+                                inputProps={{ min: 0, max: item.availableQuantity, step: 'any' }}
+                                size="small"
+                                sx={{ width: '100px' }}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setPackagingDialogOpen(false)}>
+                Anuluj
+              </Button>
+              <Button 
+                onClick={handleAddPackagingToTask} 
+                variant="contained" 
+                color="primary"
+                disabled={loadingPackaging || packagingItems.filter(item => item.selected && item.quantity > 0).length === 0}
+              >
+                {loadingPackaging ? <CircularProgress size={24} /> : 'Dodaj wybrane opakowania'}
+              </Button>
+            </DialogActions>
+          </Dialog>
+          
+          {/* Dialog rezerwacji surowców */}
+          <Dialog
+            open={reserveDialogOpen}
+            onClose={() => setReserveDialogOpen(false)}
+            maxWidth="lg"
+            fullWidth
+          >
+            <DialogTitle>Rezerwacja surowców</DialogTitle>
+            <DialogContent>
+              <DialogContentText sx={{ mb: 2 }}>
+                Wybierz partie materiałów, które chcesz zarezerwować dla tego zadania produkcyjnego.
+              </DialogContentText>
+              
+              <FormControl component="fieldset" sx={{ mb: 2 }}>
+                <FormLabel component="legend">Metoda rezerwacji</FormLabel>
+                <RadioGroup 
+                  row 
+                  value={reservationMethod} 
+                  onChange={handleReservationMethodChange}
+                >
+                  <FormControlLabel 
+                    value="automatic" 
+                    control={<Radio />} 
+                    label="Automatyczna (FIFO)" 
                   />
-                }
-                label="Dodaj produkt do magazynu po zakończeniu sesji"
-              />
-            </Grid>
-            
-            {addToInventoryOnHistory && (
-              <>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    label="Data ważności"
-                    type="date"
-                    value={historyInventoryData.expiryDate ? 
-                      historyInventoryData.expiryDate.toISOString().split('T')[0] : ''}
-                    onChange={(e) => {
-                      const date = e.target.value ? new Date(e.target.value) : null;
-                      setHistoryInventoryData(prev => ({ ...prev, expiryDate: date }));
-                    }}
-                    InputLabelProps={{ shrink: true }}
-                    fullWidth
-                    required
+                  <FormControlLabel 
+                    value="manual" 
+                    control={<Radio />} 
+                    label="Ręczna (wybór partii)" 
                   />
-                </Grid>
-                
-                <Grid item xs={12} sm={6}>
+                </RadioGroup>
+              </FormControl>
+              
+              {reservationMethod === 'manual' && renderManualBatchSelection()}
+              
+              {reservationMethod === 'automatic' && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  System automatycznie zarezerwuje najstarsze dostępne partie materiałów (FIFO).
+                </Alert>
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setReserveDialogOpen(false)}>
+                Anuluj
+              </Button>
+              <Button 
+                onClick={handleReserveMaterials} 
+                variant="contained" 
+                color="primary"
+                disabled={reservingMaterials}
+              >
+                {reservingMaterials ? <CircularProgress size={24} /> : 'Rezerwuj materiały'}
+              </Button>
+            </DialogActions>
+          </Dialog>
+          
+          {/* Dialog dodawania wpisu historii produkcji */}
+          <Dialog
+            open={addHistoryDialogOpen}
+            onClose={() => setAddHistoryDialogOpen(false)}
+            maxWidth="md"
+            fullWidth
+          >
+            <DialogTitle>Dodaj wpis historii produkcji</DialogTitle>
+            <DialogContent>
+              <DialogContentText sx={{ mb: 2 }}>
+                Wprowadź dane nowej sesji produkcyjnej.
+              </DialogContentText>
+              
+              {historyInventoryError && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {historyInventoryError}
+                </Alert>
+              )}
+              
+              <Grid container spacing={2} sx={{ mt: 1 }}>
+                <Grid item xs={12}>
                   <TextField
-                    label="Numer partii (LOT)"
-                    value={historyInventoryData.lotNumber}
-                    onChange={(e) => setHistoryInventoryData(prev => ({ 
-                      ...prev, 
-                      lotNumber: e.target.value 
-                    }))}
-                    fullWidth
-                    required
-                  />
-                </Grid>
-                
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    label="Ilość końcowa"
+                    label="Wyprodukowana ilość"
                     type="number"
-                    value={historyInventoryData.finalQuantity}
-                    onChange={(e) => setHistoryInventoryData(prev => ({ 
+                    value={editedHistoryItem.quantity}
+                    onChange={(e) => setEditedHistoryItem(prev => ({ 
                       ...prev, 
-                      finalQuantity: e.target.value 
+                      quantity: e.target.value === '' ? '' : parseFloat(e.target.value) 
                     }))}
                     inputProps={{ min: 0, step: 'any' }}
                     fullWidth
@@ -5541,401 +4524,509 @@ const TaskDetailsPage = () => {
                     }}
                   />
                 </Grid>
-                
                 <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth required>
-                    <InputLabel>Magazyn docelowy</InputLabel>
-                    <Select
-                      value={historyInventoryData.warehouseId}
-                      onChange={(e) => setHistoryInventoryData(prev => ({ 
+                  <TextField
+                    label="Data i czas rozpoczęcia"
+                    type="datetime-local"
+                    value={editedHistoryItem.startTime instanceof Date 
+                      ? toLocalDateTimeString(editedHistoryItem.startTime) 
+                      : ''}
+                    onChange={(e) => {
+                      const newDate = e.target.value ? fromLocalDateTimeString(e.target.value) : new Date();
+                      setEditedHistoryItem(prev => ({ 
                         ...prev, 
-                        warehouseId: e.target.value 
-                      }))}
-                      label="Magazyn docelowy"
-                      disabled={warehousesLoading}
-                    >
-                      {warehouses.map(warehouse => (
-                        <MenuItem key={warehouse.id} value={warehouse.id}>
-                          {warehouse.name}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                        startTime: newDate
+                      }));
+                    }}
+                    InputLabelProps={{ shrink: true }}
+                    fullWidth
+                    required
+                  />
                 </Grid>
-              </>
-            )}
-          </Grid>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAddHistoryDialogOpen(false)}>
-            Anuluj
-          </Button>
-          <Button 
-            onClick={handleAddHistoryItem} 
-            variant="contained" 
-            color="primary"
-            disabled={loading}
-          >
-            {loading ? <CircularProgress size={24} /> : (addToInventoryOnHistory ? 'Dodaj sesję i do magazynu' : 'Dodaj sesję')}
-          </Button>
-        </DialogActions>
-      </Dialog>
-      
-      {/* Dialog wyboru surowców */}
-      <Dialog
-        open={rawMaterialsDialogOpen}
-        onClose={() => setRawMaterialsDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>Dodaj surowce do zadania</DialogTitle>
-        <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
-            Wybierz surowce, które chcesz dodać do zadania produkcyjnego.
-          </DialogContentText>
-          
-          {/* Pasek wyszukiwania surowców */}
-          <TextField
-            fullWidth
-            margin="normal"
-            label="Wyszukaj surowiec"
-            variant="outlined"
-            value={searchRawMaterials}
-            onChange={(e) => setSearchRawMaterials(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ mb: 2 }}
-          />
-          
-          {loadingRawMaterials ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-              <CircularProgress />
-            </Box>
-          ) : (
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell padding="checkbox">Wybierz</TableCell>
-                    <TableCell>Nazwa</TableCell>
-                    <TableCell>Kategoria</TableCell>
-                    <TableCell>Dostępna ilość</TableCell>
-                    <TableCell>Ilość do dodania</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filteredRawMaterialsItems.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} align="center">
-                        {rawMaterialsItems.length === 0 
-                          ? "Brak dostępnych surowców"
-                          : "Brak wyników dla podanego wyszukiwania"}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredRawMaterialsItems.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell padding="checkbox">
-                          <Checkbox
-                            checked={item.selected}
-                            onChange={(e) => handleRawMaterialsSelection(item.id, e.target.checked)}
-                          />
-                        </TableCell>
-                        <TableCell>{item.name}</TableCell>
-                        <TableCell>{item.category}</TableCell>
-                        <TableCell>{item.availableQuantity} {item.unit}</TableCell>
-                        <TableCell>
-                          <TextField
-                            type="number"
-                            value={item.quantity || ''}
-                            onChange={(e) => handleRawMaterialsQuantityChange(item.id, e.target.value)}
-                            disabled={!item.selected}
-                            inputProps={{ min: 0, max: item.availableQuantity, step: 'any' }}
-                            size="small"
-                            sx={{ width: '100px' }}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setRawMaterialsDialogOpen(false)}>
-            Anuluj
-          </Button>
-          <Button 
-            onClick={handleAddRawMaterialsToTask} 
-            variant="contained" 
-            color="secondary"
-            disabled={loadingRawMaterials || rawMaterialsItems.filter(item => item.selected && item.quantity > 0).length === 0}
-          >
-            {loadingRawMaterials ? <CircularProgress size={24} /> : 'Dodaj wybrane surowce'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Dialog usuwania materiału */}
-      <Dialog
-        open={deleteMaterialDialogOpen}
-        onClose={() => setDeleteMaterialDialogOpen(false)}
-      >
-        <DialogTitle>Potwierdź usunięcie materiału</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Czy na pewno chcesz usunąć materiał "{materialToDelete?.name}" z zadania produkcyjnego? Ta operacja jest nieodwracalna.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteMaterialDialogOpen(false)}>
-            Anuluj
-          </Button>
-          <Button 
-            onClick={handleConfirmDeleteMaterial} 
-            variant="contained" 
-            color="error"
-            disabled={loading}
-          >
-            {loading ? <CircularProgress size={24} /> : 'Usuń materiał'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Dialog konsumpcji materiałów */}
-      <Dialog
-        open={consumeMaterialsDialogOpen}
-        onClose={() => setConsumeMaterialsDialogOpen(false)}
-        maxWidth="lg"
-        fullWidth
-      >
-        <DialogTitle>Konsumuj materiały</DialogTitle>
-        <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
-            Wybierz partie materiałów i ilości, które chcesz skonsumować. Konsumpcja zmniejszy dostępną ilość w magazynie.
-          </DialogContentText>
-          
-          {consumedMaterials.length === 0 ? (
-            <Alert severity="info">
-              Brak zarezerwowanych materiałów do konsumpcji.
-            </Alert>
-          ) : (
-            consumedMaterials.map((material) => {
-              const materialId = material.inventoryItemId || material.id;
-              const reservedBatches = task.materialBatches[materialId] || [];
-              
-              return (
-                <Box key={materialId} sx={{ mb: 3 }}>
-                  <Typography variant="h6" gutterBottom>
-                    {material.name} ({material.unit})
-                  </Typography>
-                  
-                  <TableContainer>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell padding="checkbox">Konsumuj</TableCell>
-                          <TableCell>Numer partii</TableCell>
-                          <TableCell>Zarezerwowana ilość</TableCell>
-                          <TableCell>Ilość do konsumpcji</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {reservedBatches.map((batch) => {
-                          const batchKey = `${materialId}_${batch.batchId}`;
-                          const isSelected = selectedBatchesToConsume[materialId]?.[batch.batchId] || false;
-                          
-                          return (
-                            <TableRow key={batch.batchId}>
-                              <TableCell padding="checkbox">
-                                <Checkbox
-                                  checked={isSelected}
-                                  onChange={(e) => handleBatchToConsumeSelection(materialId, batch.batchId, e.target.checked)}
-                                />
-                              </TableCell>
-                              <TableCell>{batch.batchNumber}</TableCell>
-                              <TableCell>{batch.quantity} {material.unit}</TableCell>
-                              <TableCell>
-                                <TextField
-                                  type="number"
-                                  value={consumeQuantities[batchKey] || 0}
-                                  onChange={(e) => handleConsumeQuantityChange(materialId, batch.batchId, e.target.value)}
-                                  disabled={!isSelected}
-                                  error={Boolean(consumeErrors[batchKey])}
-                                  helperText={consumeErrors[batchKey]}
-                                  inputProps={{ min: 0, max: batch.quantity, step: 'any' }}
-                                  size="small"
-                                  sx={{ width: '120px' }}
-                                  InputProps={{
-                                    endAdornment: <Typography variant="caption">{material.unit}</Typography>
-                                  }}
-                                />
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </Box>
-              );
-            })
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConsumeMaterialsDialogOpen(false)}>
-            Anuluj
-          </Button>
-          <Button 
-            onClick={handleConfirmConsumeMaterials} 
-            variant="contained" 
-            color="warning"
-            disabled={loading || consumedMaterials.length === 0}
-          >
-            {loading ? <CircularProgress size={24} /> : 'Konsumuj materiały'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Dialog rezerwacji surowców */}
-      <Dialog
-        open={reserveDialogOpen}
-        onClose={() => setReserveDialogOpen(false)}
-        maxWidth="lg"
-        fullWidth
-      >
-        <DialogTitle>Rezerwacja surowców</DialogTitle>
-        <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
-            Wybierz partie materiałów, które chcesz zarezerwować dla tego zadania produkcyjnego.
-          </DialogContentText>
-          
-          <FormControl component="fieldset" sx={{ mb: 2 }}>
-            <FormLabel component="legend">Metoda rezerwacji</FormLabel>
-            <RadioGroup 
-              row 
-              value={reservationMethod} 
-              onChange={handleReservationMethodChange}
-            >
-              <FormControlLabel 
-                value="automatic" 
-                control={<Radio />} 
-                label="Automatyczna (FIFO)" 
-              />
-              <FormControlLabel 
-                value="manual" 
-                control={<Radio />} 
-                label="Ręczna (wybór partii)" 
-              />
-            </RadioGroup>
-          </FormControl>
-          
-          {reservationMethod === 'manual' && renderManualBatchSelection()}
-          
-          {reservationMethod === 'automatic' && (
-            <Alert severity="info" sx={{ mb: 2 }}>
-              System automatycznie zarezerwuje najstarsze dostępne partie materiałów (FIFO).
-            </Alert>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setReserveDialogOpen(false)}>
-            Anuluj
-          </Button>
-          <Button 
-            onClick={handleReserveMaterials} 
-            variant="contained" 
-            color="primary"
-            disabled={reservingMaterials}
-          >
-            {reservingMaterials ? <CircularProgress size={24} /> : 'Rezerwuj materiały'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Dialog korekty konsumpcji */}
-      <Dialog
-        open={editConsumptionDialogOpen}
-        onClose={() => setEditConsumptionDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>Edytuj konsumpcję</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Wprowadź nową ilość konsumpcji dla wybranej partii:
-          </DialogContentText>
-          <TextField
-            label="Nowa ilość"
-            type="number"
-            value={editedQuantity}
-            onChange={(e) => setEditedQuantity(e.target.value)}
-            fullWidth
-            InputProps={{
-              endAdornment: <Typography variant="body2">{task?.unit || 'szt.'}</Typography>
-            }}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditConsumptionDialogOpen(false)}>
-            Anuluj
-          </Button>
-          <Button 
-            onClick={handleConfirmEditConsumption} 
-            variant="contained" 
-            color="primary"
-            disabled={loading}
-          >
-            {loading ? <CircularProgress size={24} /> : 'Zapisz zmiany'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Dialog usuwania konsumpcji */}
-      <Dialog
-        open={deleteConsumptionDialogOpen}
-        onClose={() => setDeleteConsumptionDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>Potwierdź usunięcie konsumpcji</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Czy na pewno chcesz usunąć wybraną konsumpcję? Ta operacja jest nieodwracalna.
-          </DialogContentText>
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={restoreReservation}
-                onChange={(e) => setRestoreReservation(e.target.checked)}
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Data i czas zakończenia"
+                    type="datetime-local"
+                    value={editedHistoryItem.endTime instanceof Date 
+                      ? toLocalDateTimeString(editedHistoryItem.endTime) 
+                      : ''}
+                    onChange={(e) => {
+                      const newDate = e.target.value ? fromLocalDateTimeString(e.target.value) : new Date();
+                      setEditedHistoryItem(prev => ({ 
+                        ...prev, 
+                        endTime: newDate
+                      }));
+                    }}
+                    InputLabelProps={{ shrink: true }}
+                    fullWidth
+                    required
+                  />
+                </Grid>
+                
+                {/* Sekcja dodawania do magazynu */}
+                <Grid item xs={12}>
+                  <Divider sx={{ my: 2 }} />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={addToInventoryOnHistory}
+                        onChange={(e) => setAddToInventoryOnHistory(e.target.checked)}
+                        color="primary"
+                      />
+                    }
+                    label="Dodaj produkt do magazynu po zakończeniu sesji"
+                  />
+                </Grid>
+                
+                {addToInventoryOnHistory && (
+                  <>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        label="Data ważności"
+                        type="date"
+                        value={historyInventoryData.expiryDate ? 
+                          historyInventoryData.expiryDate.toISOString().split('T')[0] : ''}
+                        onChange={(e) => {
+                          const date = e.target.value ? new Date(e.target.value) : null;
+                          setHistoryInventoryData(prev => ({ ...prev, expiryDate: date }));
+                        }}
+                        InputLabelProps={{ shrink: true }}
+                        fullWidth
+                        required
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        label="Numer partii (LOT)"
+                        value={historyInventoryData.lotNumber}
+                        onChange={(e) => setHistoryInventoryData(prev => ({ 
+                          ...prev, 
+                          lotNumber: e.target.value 
+                        }))}
+                        fullWidth
+                        required
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        label="Ilość końcowa"
+                        type="number"
+                        value={historyInventoryData.finalQuantity}
+                        onChange={(e) => setHistoryInventoryData(prev => ({ 
+                          ...prev, 
+                          finalQuantity: e.target.value 
+                        }))}
+                        inputProps={{ min: 0, step: 'any' }}
+                        fullWidth
+                        required
+                        InputProps={{
+                          endAdornment: <Typography variant="body2">{task?.unit || 'szt.'}</Typography>
+                        }}
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} sm={6}>
+                      <FormControl fullWidth required>
+                        <InputLabel>Magazyn docelowy</InputLabel>
+                        <Select
+                          value={historyInventoryData.warehouseId}
+                          onChange={(e) => setHistoryInventoryData(prev => ({ 
+                            ...prev, 
+                            warehouseId: e.target.value 
+                          }))}
+                          label="Magazyn docelowy"
+                          disabled={warehousesLoading}
+                        >
+                          {warehouses.map(warehouse => (
+                            <MenuItem key={warehouse.id} value={warehouse.id}>
+                              {warehouse.name}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                  </>
+                )}
+              </Grid>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setAddHistoryDialogOpen(false)}>
+                Anuluj
+              </Button>
+              <Button 
+                onClick={handleAddHistoryItem} 
+                variant="contained" 
                 color="primary"
-              />
-            }
-            label="Przywróć rezerwację materiału po usunięciu konsumpcji"
-            sx={{ mt: 2, display: 'block' }}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteConsumptionDialogOpen(false)}>
-            Anuluj
-          </Button>
-          <Button 
-            onClick={handleConfirmDeleteConsumption} 
-            variant="contained" 
-            color="error"
-            disabled={loading}
+                disabled={loading}
+              >
+                {loading ? <CircularProgress size={24} /> : (addToInventoryOnHistory ? 'Dodaj sesję i do magazynu' : 'Dodaj sesję')}
+              </Button>
+            </DialogActions>
+          </Dialog>
+          
+          {/* Dialog wyboru surowców */}
+          <Dialog
+            open={rawMaterialsDialogOpen}
+            onClose={() => setRawMaterialsDialogOpen(false)}
+            maxWidth="md"
+            fullWidth
           >
-            {loading ? <CircularProgress size={24} /> : 'Usuń konsumpcję'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+            <DialogTitle>Dodaj surowce do zadania</DialogTitle>
+            <DialogContent>
+              <DialogContentText sx={{ mb: 2 }}>
+                Wybierz surowce, które chcesz dodać do zadania produkcyjnego.
+              </DialogContentText>
+              
+              {/* Pasek wyszukiwania surowców */}
+              <TextField
+                fullWidth
+                margin="normal"
+                label="Wyszukaj surowiec"
+                variant="outlined"
+                value={searchRawMaterials}
+                onChange={(e) => setSearchRawMaterials(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
+                  ),
+                }}
+                sx={{ mb: 2 }}
+              />
+              
+              {loadingRawMaterials ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                  <CircularProgress />
+                </Box>
+              ) : (
+                <TableContainer>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell padding="checkbox">Wybierz</TableCell>
+                        <TableCell>Nazwa</TableCell>
+                        <TableCell>Kategoria</TableCell>
+                        <TableCell>Dostępna ilość</TableCell>
+                        <TableCell>Ilość do dodania</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {filteredRawMaterialsItems.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} align="center">
+                            {rawMaterialsItems.length === 0 
+                              ? "Brak dostępnych surowców"
+                              : "Brak wyników dla podanego wyszukiwania"}
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredRawMaterialsItems.map((item) => (
+                          <TableRow key={item.id}>
+                            <TableCell padding="checkbox">
+                              <Checkbox
+                                checked={item.selected}
+                                onChange={(e) => handleRawMaterialsSelection(item.id, e.target.checked)}
+                              />
+                            </TableCell>
+                            <TableCell>{item.name}</TableCell>
+                            <TableCell>{item.category}</TableCell>
+                            <TableCell>{item.availableQuantity} {item.unit}</TableCell>
+                            <TableCell>
+                              <TextField
+                                type="number"
+                                value={item.quantity || ''}
+                                onChange={(e) => handleRawMaterialsQuantityChange(item.id, e.target.value)}
+                                disabled={!item.selected}
+                                inputProps={{ min: 0, max: item.availableQuantity, step: 'any' }}
+                                size="small"
+                                sx={{ width: '100px' }}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setRawMaterialsDialogOpen(false)}>
+                Anuluj
+              </Button>
+              <Button 
+                onClick={handleAddRawMaterialsToTask} 
+                variant="contained" 
+                color="secondary"
+                disabled={loadingRawMaterials || rawMaterialsItems.filter(item => item.selected && item.quantity > 0).length === 0}
+              >
+                {loadingRawMaterials ? <CircularProgress size={24} /> : 'Dodaj wybrane surowce'}
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Dialog usuwania materiału */}
+          <Dialog
+            open={deleteMaterialDialogOpen}
+            onClose={() => setDeleteMaterialDialogOpen(false)}
+          >
+            <DialogTitle>Potwierdź usunięcie materiału</DialogTitle>
+            <DialogContent>
+              <DialogContentText>
+                Czy na pewno chcesz usunąć materiał "{materialToDelete?.name}" z zadania produkcyjnego? Ta operacja jest nieodwracalna.
+              </DialogContentText>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setDeleteMaterialDialogOpen(false)}>
+                Anuluj
+              </Button>
+              <Button 
+                onClick={handleConfirmDeleteMaterial} 
+                variant="contained" 
+                color="error"
+                disabled={loading}
+              >
+                {loading ? <CircularProgress size={24} /> : 'Usuń materiał'}
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Dialog konsumpcji materiałów */}
+          <Dialog
+            open={consumeMaterialsDialogOpen}
+            onClose={() => setConsumeMaterialsDialogOpen(false)}
+            maxWidth="lg"
+            fullWidth
+          >
+            <DialogTitle>Konsumuj materiały</DialogTitle>
+            <DialogContent>
+              <DialogContentText sx={{ mb: 2 }}>
+                Wybierz partie materiałów i ilości, które chcesz skonsumować. Konsumpcja zmniejszy dostępną ilość w magazynie.
+              </DialogContentText>
+              
+              {consumedMaterials.length === 0 ? (
+                <Alert severity="info">
+                  Brak zarezerwowanych materiałów do konsumpcji.
+                </Alert>
+              ) : (
+                consumedMaterials.map((material) => {
+                  const materialId = material.inventoryItemId || material.id;
+                  const reservedBatches = task.materialBatches[materialId] || [];
+                  
+                  return (
+                    <Box key={materialId} sx={{ mb: 3 }}>
+                      <Typography variant="h6" gutterBottom>
+                        {material.name} ({material.unit})
+                      </Typography>
+                      
+                      <TableContainer>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell padding="checkbox">Konsumuj</TableCell>
+                              <TableCell>Numer partii</TableCell>
+                              <TableCell>Zarezerwowana ilość</TableCell>
+                              <TableCell>Ilość do konsumpcji</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {reservedBatches.map((batch) => {
+                              const batchKey = `${materialId}_${batch.batchId}`;
+                              const isSelected = selectedBatchesToConsume[materialId]?.[batch.batchId] || false;
+                              
+                              return (
+                                <TableRow key={batch.batchId}>
+                                  <TableCell padding="checkbox">
+                                    <Checkbox
+                                      checked={isSelected}
+                                      onChange={(e) => handleBatchToConsumeSelection(materialId, batch.batchId, e.target.checked)}
+                                    />
+                                  </TableCell>
+                                  <TableCell>{batch.batchNumber}</TableCell>
+                                  <TableCell>{batch.quantity} {material.unit}</TableCell>
+                                  <TableCell>
+                                    <TextField
+                                      type="number"
+                                      value={consumeQuantities[batchKey] || 0}
+                                      onChange={(e) => handleConsumeQuantityChange(materialId, batch.batchId, e.target.value)}
+                                      disabled={!isSelected}
+                                      error={Boolean(consumeErrors[batchKey])}
+                                      helperText={consumeErrors[batchKey]}
+                                      inputProps={{ min: 0, max: batch.quantity, step: 'any' }}
+                                      size="small"
+                                      sx={{ width: '120px' }}
+                                      InputProps={{
+                                        endAdornment: <Typography variant="caption">{material.unit}</Typography>
+                                      }}
+                                    />
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    </Box>
+                  );
+                })
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setConsumeMaterialsDialogOpen(false)}>
+                Anuluj
+              </Button>
+              <Button 
+                onClick={handleConfirmConsumeMaterials} 
+                variant="contained" 
+                color="warning"
+                disabled={loading || consumedMaterials.length === 0}
+              >
+                {loading ? <CircularProgress size={24} /> : 'Konsumuj materiały'}
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Dialog rezerwacji surowców */}
+          <Dialog
+            open={reserveDialogOpen}
+            onClose={() => setReserveDialogOpen(false)}
+            maxWidth="lg"
+            fullWidth
+          >
+            <DialogTitle>Rezerwacja surowców</DialogTitle>
+            <DialogContent>
+              <DialogContentText sx={{ mb: 2 }}>
+                Wybierz partie materiałów, które chcesz zarezerwować dla tego zadania produkcyjnego.
+              </DialogContentText>
+              
+              <FormControl component="fieldset" sx={{ mb: 2 }}>
+                <FormLabel component="legend">Metoda rezerwacji</FormLabel>
+                <RadioGroup 
+                  row 
+                  value={reservationMethod} 
+                  onChange={handleReservationMethodChange}
+                >
+                  <FormControlLabel 
+                    value="automatic" 
+                    control={<Radio />} 
+                    label="Automatyczna (FIFO)" 
+                  />
+                  <FormControlLabel 
+                    value="manual" 
+                    control={<Radio />} 
+                    label="Ręczna (wybór partii)" 
+                  />
+                </RadioGroup>
+              </FormControl>
+              
+              {reservationMethod === 'manual' && renderManualBatchSelection()}
+              
+              {reservationMethod === 'automatic' && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  System automatycznie zarezerwuje najstarsze dostępne partie materiałów (FIFO).
+                </Alert>
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setReserveDialogOpen(false)}>
+                Anuluj
+              </Button>
+              <Button 
+                onClick={handleReserveMaterials} 
+                variant="contained" 
+                color="primary"
+                disabled={reservingMaterials}
+              >
+                {reservingMaterials ? <CircularProgress size={24} /> : 'Rezerwuj materiały'}
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Dialog korekty konsumpcji */}
+          <Dialog
+            open={editConsumptionDialogOpen}
+            onClose={() => setEditConsumptionDialogOpen(false)}
+            maxWidth="md"
+            fullWidth
+          >
+            <DialogTitle>Edytuj konsumpcję</DialogTitle>
+            <DialogContent>
+              <DialogContentText>
+                Wprowadź nową ilość konsumpcji dla wybranej partii:
+              </DialogContentText>
+              <TextField
+                label="Nowa ilość"
+                type="number"
+                value={editedQuantity}
+                onChange={(e) => setEditedQuantity(e.target.value)}
+                fullWidth
+                InputProps={{
+                  endAdornment: <Typography variant="body2">{task?.unit || 'szt.'}</Typography>
+                }}
+              />
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setEditConsumptionDialogOpen(false)}>
+                Anuluj
+              </Button>
+              <Button 
+                onClick={handleConfirmEditConsumption} 
+                variant="contained" 
+                color="primary"
+                disabled={loading}
+              >
+                {loading ? <CircularProgress size={24} /> : 'Zapisz zmiany'}
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Dialog usuwania konsumpcji */}
+          <Dialog
+            open={deleteConsumptionDialogOpen}
+            onClose={() => setDeleteConsumptionDialogOpen(false)}
+            maxWidth="md"
+            fullWidth
+          >
+            <DialogTitle>Potwierdź usunięcie konsumpcji</DialogTitle>
+            <DialogContent>
+              <DialogContentText>
+                Czy na pewno chcesz usunąć wybraną konsumpcję? Ta operacja jest nieodwracalna.
+              </DialogContentText>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={restoreReservation}
+                    onChange={(e) => setRestoreReservation(e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label="Przywróć rezerwację materiału po usunięciu konsumpcji"
+                sx={{ mt: 2, display: 'block' }}
+              />
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setDeleteConsumptionDialogOpen(false)}>
+                Anuluj
+              </Button>
+              <Button 
+                onClick={handleConfirmDeleteConsumption} 
+                variant="contained" 
+                color="error"
+                disabled={loading}
+              >
+                {loading ? <CircularProgress size={24} /> : 'Usuń konsumpcję'}
+              </Button>
+            </DialogActions>
+          </Dialog>
+        </>
+      ) : (
+        <Typography variant="body1" color="textSecondary">
+          Nie udało się załadować danych zadania. Spróbuj ponownie.
+        </Typography>
+      )}
     </Container>
   );
 };
