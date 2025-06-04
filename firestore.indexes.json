@@ -37,8 +37,7 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "itemId", "order": "ASCENDING" },
-        { "fieldPath": "expiryDate", "order": "ASCENDING" },
-        { "fieldPath": "_name_", "order": "ASCENDING" }
+        { "fieldPath": "expiryDate", "order": "ASCENDING" }
       ]
     },
     {
@@ -47,8 +46,7 @@
       "fields": [
         { "fieldPath": "itemId", "order": "ASCENDING" },
         { "fieldPath": "warehouseId", "order": "ASCENDING" },
-        { "fieldPath": "expiryDate", "order": "ASCENDING" },
-        { "fieldPath": "_name_", "order": "ASCENDING" }
+        { "fieldPath": "expiryDate", "order": "ASCENDING" }
       ]
     },
     {
@@ -56,8 +54,7 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "expiryDate", "order": "ASCENDING" },
-        { "fieldPath": "quantity", "order": "ASCENDING" },
-        { "fieldPath": "_name_", "order": "ASCENDING" }
+        { "fieldPath": "quantity", "order": "ASCENDING" }
       ]
     },
     {
@@ -65,17 +62,7 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "expiryDate", "order": "DESCENDING" },
-        { "fieldPath": "quantity", "order": "DESCENDING" },
-        { "fieldPath": "_name_", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "inventory",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "itemId", "order": "ASCENDING" },
-        { "fieldPath": "availableQuantity", "order": "ASCENDING" },
-        { "fieldPath": "_name_", "order": "ASCENDING" }
+        { "fieldPath": "quantity", "order": "DESCENDING" }
       ]
     },
     {
@@ -83,8 +70,7 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "name", "order": "ASCENDING" },
-        { "fieldPath": "category", "order": "ASCENDING" },
-        { "fieldPath": "_name_", "order": "ASCENDING" }
+        { "fieldPath": "category", "order": "ASCENDING" }
       ]
     },
     {
@@ -92,8 +78,7 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "category", "order": "ASCENDING" },
-        { "fieldPath": "name", "order": "ASCENDING" },
-        { "fieldPath": "_name_", "order": "ASCENDING" }
+        { "fieldPath": "name", "order": "ASCENDING" }
       ]
     },
     {
@@ -134,15 +119,7 @@
       "fields": [
         { "fieldPath": "itemId", "order": "ASCENDING" },
         { "fieldPath": "warehouseId", "order": "ASCENDING" },
-        { "fieldPath": "expiryDate", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "inventoryBatches",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "expiryDate", "order": "DESCENDING" },
-        { "fieldPath": "quantity", "order": "DESCENDING" }
+        { "fieldPath": "receivedDate", "order": "DESCENDING" }
       ]
     },
     {
@@ -170,27 +147,11 @@
       ]
     },
     {
-      "collectionGroup": "inventoryBatches",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "itemId", "order": "ASCENDING" },
-        { "fieldPath": "expiryDate", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "notifications",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "userId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "inventoryBatches",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "expiryDate", "order": "ASCENDING" },
-        { "fieldPath": "quantity", "order": "ASCENDING" }
       ]
     },
     {
@@ -218,14 +179,6 @@
       ]
     },
     {
-      "collectionGroup": "inventory",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "name", "order": "ASCENDING" },
-        { "fieldPath": "category", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "priceListItems",
       "queryScope": "COLLECTION",
       "fields": [
@@ -239,14 +192,6 @@
       "fields": [
         { "fieldPath": "userId", "order": "ASCENDING" },
         { "fieldPath": "updatedAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "inventory",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "category", "order": "ASCENDING" },
-        { "fieldPath": "name", "order": "ASCENDING" }
       ]
     },
     {
@@ -265,14 +210,6 @@
       "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "orderDate", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "inventory",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "itemId", "order": "ASCENDING" },
-        { "fieldPath": "availableQuantity", "order": "ASCENDING" }
       ]
     },
     {
@@ -306,23 +243,6 @@
       "collectionGroup": "inventoryBatches",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "itemId", "order": "ASCENDING" },
-        { "fieldPath": "warehouseId", "order": "ASCENDING" },
-        { "fieldPath": "receivedDate", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "inventoryBatches",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "itemId", "order": "ASCENDING" },
-        { "fieldPath": "quantity", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "inventoryBatches",
-      "queryScope": "COLLECTION",
-      "fields": [
         { "fieldPath": "warehouseId", "order": "ASCENDING" },
         { "fieldPath": "expiryDate", "order": "ASCENDING" },
         { "fieldPath": "quantity", "order": "ASCENDING" }
@@ -346,10 +266,89 @@
       ]
     },
     {
+      "collectionGroup": "productionTasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "scheduledDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "productionTasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "workstationId", "order": "ASCENDING" },
+        { "fieldPath": "scheduledDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "productionTasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "workstationId", "order": "ASCENDING" },
+        { "fieldPath": "scheduledDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customerId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "orderDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customer.id", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "orderDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "orderNumber", "order": "ASCENDING" },
+        { "fieldPath": "orderDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "productionTasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "workstationId", "order": "ASCENDING" },
+        { "fieldPath": "scheduledDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "productionTasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "workstationId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "scheduledDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "inventory",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "name", "order": "ASCENDING" },
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "quantity", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "inventory",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "quantity", "order": "ASCENDING" },
         { "fieldPath": "name", "order": "ASCENDING" }
       ]
     },
@@ -357,79 +356,93 @@
       "collectionGroup": "inventory",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "category", "order": "DESCENDING" },
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "bookedQuantity", "order": "ASCENDING" },
         { "fieldPath": "name", "order": "ASCENDING" }
       ]
     },
     {
-      "collectionGroup": "productionTasks",
+      "collectionGroup": "inventoryBatches",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "scheduledDate", "order": "ASCENDING" }
+        { "fieldPath": "lotNumber", "order": "ASCENDING" },
+        { "fieldPath": "expiryDate", "order": "ASCENDING" }
       ]
     },
     {
-      "collectionGroup": "productionTasks",
+      "collectionGroup": "inventoryBatches",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "batchNumber", "order": "ASCENDING" },
+        { "fieldPath": "expiryDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "inventoryBatches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "itemName", "order": "ASCENDING" },
+        { "fieldPath": "expiryDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "inventoryTransactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "itemId", "order": "ASCENDING" },
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "transactionDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "purchaseOrders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "supplier.name", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "scheduledDate", "order": "ASCENDING" }
+        { "fieldPath": "orderDate", "order": "DESCENDING" }
       ]
     },
     {
-      "collectionGroup": "productionTasks",
+      "collectionGroup": "customers",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "scheduledDate", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" }
+        { "fieldPath": "name", "order": "ASCENDING" },
+        { "fieldPath": "isActive", "order": "ASCENDING" }
       ]
     },
     {
-      "collectionGroup": "productionTasks",
+      "collectionGroup": "customers",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "endDate", "order": "ASCENDING" },
-        { "fieldPath": "scheduledDate", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "productionTasks",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "workstationId", "order": "ASCENDING" },
-        { "fieldPath": "scheduledDate", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "productionTasks",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "workstationId", "order": "ASCENDING" },
-        { "fieldPath": "scheduledDate", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "productionTasks",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "workstationId", "order": "ASCENDING" },
-        { "fieldPath": "scheduledDate", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "suppliers",
-      "queryScope": "COLLECTION",
-      "fields": [
+        { "fieldPath": "nip", "order": "ASCENDING" },
         { "fieldPath": "name", "order": "ASCENDING" }
       ]
     },
     {
-      "collectionGroup": "contacts",
+      "collectionGroup": "recipes",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "__name__", "order": "ASCENDING" }
+        { "fieldPath": "customerId", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "isRead", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     }
   ],
