@@ -508,7 +508,7 @@ const RecipeForm = ({ recipeId }) => {
   const addIngredient = () => {
     setRecipeData(prev => ({
       ...prev,
-      ingredients: [...prev.ingredients, { name: '', quantity: '', unit: 'g', allergens: [] }]
+      ingredients: [...prev.ingredients, { name: '', quantity: '', unit: 'g', allergens: [], casNumber: '' }]
     }));
   };
 
@@ -541,7 +541,8 @@ const RecipeForm = ({ recipeId }) => {
       name: item.name,
       quantity: '',
       unit: item.unit || 'szt.',
-      notes: ''
+      notes: '',
+      casNumber: item.casNumber || ''
     };
     
     setRecipeData({
@@ -935,13 +936,13 @@ const RecipeForm = ({ recipeId }) => {
             
             <Grid item xs={12} sm={6}>
               <FormControl fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
-                <InputLabel id="customer-select-label">Klient (opcjonalnie)</InputLabel>
+                <InputLabel id="customer-select-label">Klient</InputLabel>
                 <Select
                   labelId="customer-select-label"
                   name="customerId"
                   value={recipeData.customerId}
                   onChange={handleChange}
-                  label="Klient (opcjonalnie)"
+                  label="Klient"
                   displayEmpty
                 >
                   <MenuItem value="">
@@ -953,6 +954,7 @@ const RecipeForm = ({ recipeId }) => {
                     </MenuItem>
                   ))}
                 </Select>
+                <FormHelperText>Opcjonalnie - przypisz recepturę do konkretnego klienta</FormHelperText>
               </FormControl>
             </Grid>
             
@@ -1232,10 +1234,11 @@ const RecipeForm = ({ recipeId }) => {
               <Table>
                 <TableHead sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.6)' : 'rgba(240, 245, 250, 0.8)' }}>
                   <TableRow>
-                    <TableCell width="30%"><Typography variant="subtitle2">SKU składnika</Typography></TableCell>
-                    <TableCell width="15%"><Typography variant="subtitle2">Ilość</Typography></TableCell>
-                    <TableCell width="15%"><Typography variant="subtitle2">Jednostka</Typography></TableCell>
-                    <TableCell width="20%"><Typography variant="subtitle2">Uwagi</Typography></TableCell>
+                    <TableCell width="25%"><Typography variant="subtitle2">SKU składnika</Typography></TableCell>
+                    <TableCell width="12%"><Typography variant="subtitle2">Ilość</Typography></TableCell>
+                    <TableCell width="12%"><Typography variant="subtitle2">Jednostka</Typography></TableCell>
+                    <TableCell width="15%"><Typography variant="subtitle2">Numer CAS</Typography></TableCell>
+                    <TableCell width="16%"><Typography variant="subtitle2">Uwagi</Typography></TableCell>
                     <TableCell width="10%"><Typography variant="subtitle2">Źródło</Typography></TableCell>
                     <TableCell width="10%"><Typography variant="subtitle2">Akcje</Typography></TableCell>
                   </TableRow>
@@ -1294,6 +1297,14 @@ const RecipeForm = ({ recipeId }) => {
                             </Tooltip>
                           )}
                         </Box>
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          fullWidth
+                          variant="standard"
+                          value={ingredient.casNumber || ''}
+                          onChange={(e) => handleIngredientChange(index, 'casNumber', e.target.value)}
+                        />
                       </TableCell>
                       <TableCell>
                         <TextField

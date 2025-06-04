@@ -242,6 +242,7 @@ const RecipeDetailsPage = () => {
         'Ingredient Name': ingredient.name || '',
         Quantity: ingredient.quantity || '0',
         Unit: ingredient.unit || '',
+        'CAS Number': ingredient.casNumber || '',
         Notes: ingredient.notes || ''
       })) : [];
 
@@ -249,7 +250,7 @@ const RecipeDetailsPage = () => {
       const recipeHeaders = ['SKU', 'Description', 'Time/piece (min)', 'Cost/piece (EUR)', 'Workstation', 'Status'];
       
       // Utwórz nagłówki dla składników
-      const ingredientHeaders = ['Ingredient Name', 'Quantity', 'Unit', 'Notes'];
+      const ingredientHeaders = ['Ingredient Name', 'Quantity', 'Unit', 'CAS Number', 'Notes'];
 
       // Utwórz zawartość CSV - używamy apostrofu przed "===" aby uniknąć interpretacji jako formuła
       const csvContent = [
@@ -521,6 +522,7 @@ const RecipeDetailsPage = () => {
                       <TableCell>Składnik</TableCell>
                       <TableCell align="right">Ilość</TableCell>
                       <TableCell>Jednostka</TableCell>
+                      <TableCell>Numer CAS</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -531,6 +533,7 @@ const RecipeDetailsPage = () => {
                         </TableCell>
                         <TableCell align="right">{ingredient.quantity}</TableCell>
                         <TableCell>{ingredient.unit}</TableCell>
+                        <TableCell>{ingredient.casNumber || '-'}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
