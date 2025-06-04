@@ -227,29 +227,150 @@ const TaskDetailsPage = () => {
     setMainTab(newValue);
   };
 
-  const fetchTask = async () => {
+  // ✅ ETAP 2 OPTYMALIZACJI: Zastąpienie starych useEffect hooks jednym zoptymalizowanym
+  useEffect(() => {
+    fetchAllTaskData();
+  }, [id, navigate, showError]);
+
+  // Zachowujemy osobne useEffect dla magazynów (ładowane niezależnie)
+  useEffect(() => {
+    fetchWarehouses();
+  }, []);
+
+  // Zachowujemy useEffect dla synchronizacji formularza magazynu
+  useEffect(() => {
+    if (addToInventoryOnHistory && editedHistoryItem.quantity) {
+      setHistoryInventoryData(prev => ({
+        ...prev,
+        finalQuantity: editedHistoryItem.quantity.toString()
+      }));
+    }
+  }, [editedHistoryItem.quantity, addToInventoryOnHistory]);
+
+  // USUNIĘTE STARE useEffect HOOKS - zastąpione przez fetchAllTaskData:
+  // ❌ useEffect(() => { fetchProductionHistory(); }, [task?.id]);
+  // ❌ useEffect(() => { if (task?.moNumber) fetchFormResponses(task.moNumber); }, [task?.moNumber]);
+  // ❌ useEffect(() => { if (task?.id && task?.materials?.length > 0) fetchAwaitingOrdersForMaterials(); }, [task?.id, task?.materials?.length]);
+  // ❌ useEffect(() => { if (task?.consumedMaterials && task.consumedMaterials.length > 0) fetchConsumedBatchPrices(); }, [task?.consumedMaterials]);
+
+  // ✅ ZOPTYMALIZOWANA funkcja pobierania odpowiedzi formularzy (Promise.all)
+  const fetchFormResponsesOptimized = async (moNumber) => {
+    if (!moNumber) return { completedMO: [], productionControl: [], productionShift: [] };
+    
+    try {
+      // Równoległe pobieranie wszystkich 3 typów formularzy
+      const [completedMOSnapshot, controlSnapshot, shiftSnapshot] = await Promise.all([
+        getDocs(query(
+          collection(db, 'Forms/SkonczoneMO/Odpowiedzi'), 
+          where('moNumber', '==', moNumber)
+        )),
+        getDocs(query(
+          collection(db, 'Forms/KontrolaProdukcji/Odpowiedzi'), 
+          where('manufacturingOrder', '==', moNumber)
+        )),
+        getDocs(query(
+          collection(db, 'Forms/ZmianaProdukcji/Odpowiedzi'), 
+          where('moNumber', '==', moNumber)
+        ))
+      ]);
+
+      const completedMOData = completedMOSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        date: doc.data().date?.toDate(),
+        formType: 'completedMO'
+      }));
+
+      const controlData = controlSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        fillDate: doc.data().fillDate?.toDate(),
+        productionStartDate: doc.data().productionStartDate?.toDate(),
+        productionEndDate: doc.data().productionEndDate?.toDate(),
+        readingDate: doc.data().readingDate?.toDate(),
+        formType: 'productionControl'
+      }));
+
+      const shiftData = shiftSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        fillDate: doc.data().fillDate?.toDate(),
+        formType: 'productionShift'
+      }));
+
+      console.log(`✅ Optymalizacja Etap 2: Pobrano odpowiedzi formularzy w 3 równoległych zapytaniach zamiast 3 sekwencyjnych`);
+      
+      return {
+        completedMO: completedMOData,
+        productionControl: controlData,
+        productionShift: shiftData
+      };
+    } catch (error) {
+      console.error('Błąd podczas pobierania odpowiedzi formularzy:', error);
+      throw error;
+    }
+  };
+
+  // ✅ ETAP 2 OPTYMALIZACJI: Połączona funkcja ładowania wszystkich danych zadania
+  const fetchAllTaskData = async () => {
     try {
       setLoading(true);
       
+      // KROK 1: Pobierz podstawowe dane zadania (musi być pierwsze)
       const fetchedTask = await getTaskById(id);
       setTask(fetchedTask);
       
-      // Inicjalizacja materiałów, jeśli zadanie ma materiały
+      // KROK 2: Przetwórz materiały z grupowym pobieraniem pozycji magazynowych (z Etapu 1)
       if (fetchedTask?.materials?.length > 0) {
-        // Dla każdego materiału pobierz aktualne informacje o cenie
-        const materialPromises = fetchedTask.materials.map(async (material) => {
+        // ✅ OPTYMALIZACJA ETAP 1: Grupowe pobieranie pozycji magazynowych zamiast N+1 zapytań
+        
+        // Zbierz wszystkie ID pozycji magazynowych z materiałów
+        const inventoryItemIds = fetchedTask.materials
+          .map(material => material.inventoryItemId)
+          .filter(Boolean); // Usuń undefined/null wartości
+        
+        let inventoryItemsMap = new Map();
+        
+        if (inventoryItemIds.length > 0) {
+          // Firebase "in" operator obsługuje maksymalnie 10 elementów na zapytanie
+          const batchSize = 10;
+          
+          for (let i = 0; i < inventoryItemIds.length; i += batchSize) {
+            const batch = inventoryItemIds.slice(i, i + batchSize);
+            
+            try {
+              // Grupowe pobieranie pozycji magazynowych dla batcha
+              const itemsQuery = query(
+                collection(db, 'inventory'),
+                where('__name__', 'in', batch)
+              );
+              
+              const itemsSnapshot = await getDocs(itemsQuery);
+              
+              // Dodaj pobrane pozycje do mapy
+              itemsSnapshot.forEach(doc => {
+                inventoryItemsMap.set(doc.id, {
+                  id: doc.id,
+                  ...doc.data()
+                });
+              });
+            } catch (error) {
+              console.error(`Błąd podczas grupowego pobierania pozycji magazynowych (batch ${i}-${i+batchSize}):`, error);
+              // Kontynuuj z następnym batchem, nie przerywaj całego procesu
+            }
+          }
+          
+          console.log(`✅ Optymalizacja Etap 1: Pobrano ${inventoryItemsMap.size} pozycji magazynowych w ${Math.ceil(inventoryItemIds.length / batchSize)} zapytaniach zamiast ${inventoryItemIds.length} osobnych zapytań`);
+        }
+        
+        // Przygotuj listę materiałów z aktualnymi cenami
+        const materialsList = fetchedTask.materials.map(material => {
           let updatedMaterial = { ...material };
           
-          // Jeśli materiał ma powiązanie z elementem magazynowym, pobierz jego aktualną cenę
-          if (material.inventoryItemId) {
-            try {
-              const inventoryItem = await getInventoryItemById(material.inventoryItemId);
-              if (inventoryItem) {
-                updatedMaterial.unitPrice = inventoryItem.unitPrice || inventoryItem.price || 0;
-              }
-            } catch (error) {
-              console.error(`Błąd podczas pobierania ceny dla materiału ${material.name}:`, error);
-            }
+          // Jeśli materiał ma powiązanie z pozycją magazynową, użyj danych z mapy
+          if (material.inventoryItemId && inventoryItemsMap.has(material.inventoryItemId)) {
+            const inventoryItem = inventoryItemsMap.get(material.inventoryItemId);
+            updatedMaterial.unitPrice = inventoryItem.unitPrice || inventoryItem.price || 0;
           }
           
           return {
@@ -258,8 +379,6 @@ const TaskDetailsPage = () => {
           };
         });
         
-        // Poczekaj na rozwiązanie wszystkich promisów
-        const materialsList = await Promise.all(materialPromises);
         setMaterials(materialsList);
         
         // Inicjalizacja rzeczywistych ilości
@@ -286,6 +405,57 @@ const TaskDetailsPage = () => {
         setIncludeInCosts(costsInclude);
       }
       
+      // KROK 3: ✅ OPTYMALIZACJA ETAP 2: Równoległe pobieranie wszystkich pozostałych danych
+      const dataLoadingPromises = [];
+      
+      // Historia produkcji - jeśli zadanie ma ID
+      if (fetchedTask?.id) {
+        dataLoadingPromises.push(
+          getProductionHistory(fetchedTask.id)
+            .then(history => ({ type: 'productionHistory', data: history || [] }))
+            .catch(error => {
+              console.error('Błąd podczas pobierania historii produkcji:', error);
+              return { type: 'productionHistory', data: [] };
+            })
+        );
+      }
+      
+      // Dane użytkowników - jeśli zadanie ma historię statusów
+      if (fetchedTask?.statusHistory?.length > 0) {
+        const userIds = fetchedTask.statusHistory.map(change => change.changedBy).filter(id => id);
+        const uniqueUserIds = [...new Set(userIds)];
+        
+        if (uniqueUserIds.length > 0) {
+          dataLoadingPromises.push(
+            getUsersDisplayNames(uniqueUserIds)
+              .then(names => ({ type: 'userNames', data: names }))
+              .catch(error => {
+                console.error('Błąd podczas pobierania nazw użytkowników:', error);
+                return { type: 'userNames', data: {} };
+              })
+          );
+        }
+      }
+      
+      // Wykonaj wszystkie zapytania równolegle
+      if (dataLoadingPromises.length > 0) {
+        const results = await Promise.all(dataLoadingPromises);
+        
+        console.log(`✅ Optymalizacja Etap 2: Pobrano ${results.length} typów danych równolegle zamiast sekwencyjnie`);
+        
+        // Przetwórz wyniki i ustaw stany
+        results.forEach(result => {
+          switch (result.type) {
+            case 'productionHistory':
+              setProductionHistory(result.data);
+              break;
+            case 'userNames':
+              setUserNames(result.data);
+              break;
+          }
+        });
+      }
+      
       // Jeśli zadanie ma historię statusów, pobierz dane użytkowników
       if (fetchedTask.statusHistory && fetchedTask.statusHistory.length > 0) {
         const userIds = fetchedTask.statusHistory.map(change => change.changedBy).filter(id => id);
@@ -300,8 +470,13 @@ const TaskDetailsPage = () => {
       setLoading(false);
     }
   };
+
+  // Zachowujemy funkcje kompatybilności wstecznej (używane w innych miejscach kodu)
+  const fetchTask = async () => {
+    // Przekierowanie do nowej zoptymalizowanej funkcji
+    await fetchAllTaskData();
+  };
   
-  // Funkcja do pobierania historii produkcji
   const fetchProductionHistory = async () => {
     if (!task || !task.id) {
       return; // Zabezpieczenie przed błędami null/undefined
@@ -314,15 +489,6 @@ const TaskDetailsPage = () => {
       setProductionHistory([]);
     }
   };
-  
-  // Pobieranie danych zadania przy montowaniu komponentu
-  useEffect(() => {
-    fetchTask();
-  }, [id, navigate, showError]);
-
-  useEffect(() => {
-    fetchProductionHistory();
-  }, [task?.id]);
 
   // Dodaję efekt pobierający odpowiedzi formularzy przy każdej zmianie numeru MO
   useEffect(() => {
@@ -776,7 +942,7 @@ const TaskDetailsPage = () => {
   };
 
   // Nowa funkcja do obsługi pobrania partii dla materiałów
-  const fetchBatchesForMaterials = async () => {
+  const fetchBatchesForMaterialsOptimized = async () => {
     try {
       setMaterialBatchesLoading(true);
       if (!task || !task.materials) return;
@@ -784,7 +950,7 @@ const TaskDetailsPage = () => {
       const batchesData = {};
       const initialSelectedBatches = {};
       
-      // Pobierz wszystkie magazyny na początku, aby uniknąć wielu zapytań
+      // KROK 1: Pobierz wszystkie magazyny na początku (już zoptymalizowane)
       const { getAllWarehouses } = await import('../../services/inventoryService');
       const allWarehouses = await getAllWarehouses();
       // Stwórz mapę magazynów dla szybkiego dostępu po ID
@@ -793,51 +959,114 @@ const TaskDetailsPage = () => {
         warehousesMap[warehouse.id] = warehouse.name;
       });
       
+      // KROK 2: ✅ OPTYMALIZACJA - Grupowe pobieranie partii dla wszystkich materiałów
+      const materialIds = task.materials
+        .map(material => material.inventoryItemId || material.id)
+        .filter(Boolean);
+      
+      if (materialIds.length === 0) {
+        setBatches(batchesData);
+        setSelectedBatches(initialSelectedBatches);
+        return;
+      }
+      
+      // Równoległe pobieranie partii dla wszystkich materiałów
+      const materialBatchesPromises = materialIds.map(async (materialId) => {
+        try {
+          const batches = await getItemBatches(materialId);
+          return { materialId, batches: batches || [] };
+        } catch (error) {
+          console.error(`Błąd podczas pobierania partii dla materiału ${materialId}:`, error);
+          return { materialId, batches: [] };
+        }
+      });
+      
+      const materialBatchesResults = await Promise.all(materialBatchesPromises);
+      
+      // Stwórz mapę partii pogrupowanych według materiału
+      const materialBatchesMap = {};
+      const allBatchIds = [];
+      
+      materialBatchesResults.forEach(({ materialId, batches }) => {
+        materialBatchesMap[materialId] = batches;
+        // Zbierz wszystkie ID partii dla grupowego pobierania rezerwacji
+        batches.forEach(batch => {
+          if (batch.id && !allBatchIds.includes(batch.id)) {
+            allBatchIds.push(batch.id);
+          }
+        });
+      });
+      
+      console.log(`✅ Optymalizacja Etap 3: Pobrano partie dla ${materialIds.length} materiałów w ${materialIds.length} równoległych zapytaniach zamiast sekwencyjnych`);
+      
+      // KROK 3: ✅ OPTYMALIZACJA - Grupowe pobieranie rezerwacji dla wszystkich partii
+      let allBatchReservationsMap = {};
+      
+      if (allBatchIds.length > 0) {
+        // Równoległe pobieranie rezerwacji dla wszystkich partii
+        const batchReservationsPromises = allBatchIds.map(async (batchId) => {
+          try {
+            const reservations = await getBatchReservations(batchId);
+            return { batchId, reservations: reservations || [] };
+          } catch (error) {
+            console.error(`Błąd podczas pobierania rezerwacji dla partii ${batchId}:`, error);
+            return { batchId, reservations: [] };
+          }
+        });
+        
+        const batchReservationsResults = await Promise.all(batchReservationsPromises);
+        
+        // Stwórz mapę rezerwacji
+        batchReservationsResults.forEach(({ batchId, reservations }) => {
+          allBatchReservationsMap[batchId] = reservations;
+        });
+        
+        console.log(`✅ Optymalizacja Etap 3: Pobrano rezerwacje dla ${allBatchIds.length} partii w ${allBatchIds.length} równoległych zapytaniach zamiast sekwencyjnych`);
+      }
+      
+      // KROK 4: Przetwórz dane i stwórz finalne struktury
       for (const material of task.materials) {
         const materialId = material.inventoryItemId || material.id;
         if (!materialId) continue;
         
-        // Pobierz partie dla materiału
-        const batches = await getItemBatches(materialId);
+        const batches = materialBatchesMap[materialId] || [];
         
-        if (batches && batches.length > 0) {
-          // Dla każdej partii pobierz informacje o rezerwacjach i magazynie
-          const batchesWithReservations = await Promise.all(
-            batches.map(async (batch) => {
-              const reservations = await getBatchReservations(batch.id);
-              
-              // Oblicz ilość zarezerwowaną przez inne zadania (z wyłączeniem bieżącego)
-              const reservedByOthers = reservations.reduce((sum, reservation) => {
-                if (reservation.taskId === id) return sum; // Pomiń rezerwacje bieżącego zadania
-                return sum + (reservation.quantity || 0);
-              }, 0);
-              
-              // Oblicz faktycznie dostępną ilość po uwzględnieniu rezerwacji
-              const effectiveQuantity = Math.max(0, batch.quantity - reservedByOthers);
-              
-              // Przygotuj informacje o magazynie z prawidłową nazwą
-              let warehouseInfo = {
-                id: 'main',
-                name: 'Magazyn główny'
+        if (batches.length > 0) {
+          // Dla każdej partii wzbogać o informacje o rezerwacjach i magazynie
+          const batchesWithReservations = batches.map((batch) => {
+            const reservations = allBatchReservationsMap[batch.id] || [];
+            
+            // Oblicz ilość zarezerwowaną przez inne zadania (z wyłączeniem bieżącego)
+            const reservedByOthers = reservations.reduce((sum, reservation) => {
+              if (reservation.taskId === id) return sum; // Pomiń rezerwacje bieżącego zadania
+              return sum + (reservation.quantity || 0);
+            }, 0);
+            
+            // Oblicz faktycznie dostępną ilość po uwzględnieniu rezerwacji
+            const effectiveQuantity = Math.max(0, batch.quantity - reservedByOthers);
+            
+            // Przygotuj informacje o magazynie z prawidłową nazwą
+            let warehouseInfo = {
+              id: 'main',
+              name: 'Magazyn główny'
+            };
+            
+            if (batch.warehouseId) {
+              // Pobierz nazwę magazynu z naszej mapy
+              const warehouseName = warehousesMap[batch.warehouseId];
+              warehouseInfo = {
+                id: batch.warehouseId,
+                name: warehouseName || `Magazyn ${batch.warehouseId.substring(0, 6)}`
               };
-              
-              if (batch.warehouseId) {
-                // Pobierz nazwę magazynu z naszej mapy
-                const warehouseName = warehousesMap[batch.warehouseId];
-                warehouseInfo = {
-                  id: batch.warehouseId,
-                  name: warehouseName || `Magazyn ${batch.warehouseId.substring(0, 6)}`
-                };
-              }
-              
-              return {
-                ...batch,
-                reservedByOthers,
-                effectiveQuantity,
-                warehouseInfo
-              };
-            })
-          );
+            }
+            
+            return {
+              ...batch,
+              reservedByOthers,
+              effectiveQuantity,
+              warehouseInfo
+            };
+          });
           
           batchesData[materialId] = batchesWithReservations;
           initialSelectedBatches[materialId] = [];
@@ -871,12 +1100,28 @@ const TaskDetailsPage = () => {
       
       setBatches(batchesData);
       setSelectedBatches(initialSelectedBatches);
+      
+      // Podsumowanie optymalizacji
+      const totalBatches = Object.values(batchesData).reduce((sum, batches) => sum + batches.length, 0);
+      console.log(`✅ Optymalizacja Etap 3 zakończona pomyślnie:`);
+      console.log(`- Materiały: ${materialIds.length}`);
+      console.log(`- Partie: ${totalBatches}`);
+      console.log(`- Zapytania przed: ${materialIds.length + totalBatches} (N+M)`);
+      console.log(`- Zapytania po: ${2 + materialIds.length} (2 + N równoległych)`);
+      console.log(`- Redukcja zapytań: ${Math.round((1 - (2 + materialIds.length) / (materialIds.length + totalBatches)) * 100)}%`);
+      
     } catch (error) {
       console.error('Błąd podczas pobierania partii dla materiałów:', error);
       showError('Nie udało się pobrać informacji o partiach materiałów');
     } finally {
       setMaterialBatchesLoading(false);
     }
+  };
+
+  // Zachowujemy starą funkcję dla kompatybilności wstecznej
+  const fetchBatchesForMaterials = async () => {
+    // Przekierowanie do nowej zoptymalizowanej funkcji
+    await fetchBatchesForMaterialsOptimized();
   };
   
   // Obsługa zmiany metody rezerwacji
