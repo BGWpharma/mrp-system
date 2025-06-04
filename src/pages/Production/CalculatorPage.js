@@ -26,7 +26,9 @@ import {
   RadioGroup,
   FormControlLabel,
   Radio,
-  FormHelperText
+  FormHelperText,
+  Autocomplete,
+  InputAdornment
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -37,7 +39,8 @@ import {
   RestartAlt as ResetIcon,
   Assignment as AssignmentIcon,
   FileDownload as FileDownloadIcon,
-  SaveAlt as SaveAltIcon
+  SaveAlt as SaveAltIcon,
+  Search as SearchIcon
 } from '@mui/icons-material';
 import { useNotification } from '../../hooks/useNotification';
 import { getAllRecipes, getRecipeById } from '../../services/recipeService';
@@ -61,6 +64,10 @@ const CalculatorPage = () => {
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [productionTasks, setProductionTasks] = useState([]);
   const [selectedTaskId, setSelectedTaskId] = useState('');
+  
+  // Stany dla wyszukiwania MO
+  const [moSearchQuery, setMoSearchQuery] = useState('');
+  const [filteredTasks, setFilteredTasks] = useState([]);
   
   // Funkcja do pobierania receptur
   const fetchRecipes = async () => {
@@ -111,6 +118,41 @@ const CalculatorPage = () => {
     fetchRecipes();
     fetchProductionTasks(); // Dodano pobieranie zadań produkcyjnych
   }, []);
+  
+  // Aktualizacja filtrowanej listy zadań produkcyjnych
+  useEffect(() => {
+    if (!moSearchQuery.trim()) {
+      setFilteredTasks(productionTasks);
+    } else {
+      const filtered = productionTasks.filter(task => {
+        const searchLower = moSearchQuery.toLowerCase();
+        return (
+          task.moNumber?.toLowerCase().includes(searchLower) ||
+          task.productName?.toLowerCase().includes(searchLower) ||
+          task.id?.toLowerCase().includes(searchLower)
+        );
+      });
+      setFilteredTasks(filtered);
+    }
+  }, [productionTasks, moSearchQuery]);
+  
+  // Funkcja do obsługi wyszukiwania MO
+  const handleMoSearchChange = (event, newValue) => {
+    if (typeof newValue === 'string') {
+      setMoSearchQuery(newValue);
+    } else if (newValue && newValue.inputValue) {
+      // Utworzenie nowej wartości z inputValue
+      setMoSearchQuery(newValue.inputValue);
+    } else if (newValue) {
+      // Wybrano istniejące zadanie
+      setSelectedTaskId(newValue.id);
+      setMoSearchQuery(newValue.moNumber || '');
+    } else {
+      // Wyczyszczono wyszukiwanie
+      setSelectedTaskId('');
+      setMoSearchQuery('');
+    }
+  };
   
   // Automatyczne generowanie planu po wybraniu zadania produkcyjnego (MO)
   useEffect(() => {
@@ -589,6 +631,7 @@ const CalculatorPage = () => {
     setTargetAmount(1000);
     setSelectedRecipeId('');
     setSelectedTaskId('');
+    setMoSearchQuery('');
     setCalculationResult(null);
     setMixings([]);
     setUsePieces(false);
@@ -792,28 +835,75 @@ const CalculatorPage = () => {
           
           {/* Wybór zadania produkcyjnego (MO) */}
           <Grid item xs={12} md={6}>
-            <FormControl fullWidth>
-              <InputLabel id="mo-select-label">Wybierz zadanie produkcyjne (MO)</InputLabel>
-              <Select
-                labelId="mo-select-label"
-                value={selectedTaskId}
-                onChange={(e) => setSelectedTaskId(e.target.value)}
-                label="Wybierz zadanie produkcyjne (MO)"
-                disabled={loading}
-              >
-                <MenuItem value="">
-                  <em>-- Wybierz zadanie produkcyjne --</em>
-                </MenuItem>
-                {productionTasks.map((task) => (
-                  <MenuItem key={task.id} value={task.id}>
-                    {task.moNumber} - {task.productName} ({task.quantity} {task.unit})
-                  </MenuItem>
-                ))}
-              </Select>
-              <FormHelperText>
-                Wybierz zadanie produkcyjne, aby automatycznie wygenerować plan mieszań
-              </FormHelperText>
-            </FormControl>
+            <Autocomplete
+              options={filteredTasks}
+              getOptionLabel={(option) => {
+                if (typeof option === 'string') {
+                  return option;
+                }
+                return `${option.moNumber || ''} - ${option.productName || ''} (${option.quantity || 0} ${option.unit || ''})`;
+              }}
+              value={selectedTaskId ? filteredTasks.find(task => task.id === selectedTaskId) || null : null}
+              onChange={handleMoSearchChange}
+              onInputChange={(event, newInputValue) => {
+                setMoSearchQuery(newInputValue);
+              }}
+              inputValue={moSearchQuery}
+              filterOptions={(options, { inputValue }) => {
+                const filtered = options.filter(option => {
+                  const searchLower = inputValue.toLowerCase();
+                  return (
+                    option.moNumber?.toLowerCase().includes(searchLower) ||
+                    option.productName?.toLowerCase().includes(searchLower) ||
+                    option.id?.toLowerCase().includes(searchLower)
+                  );
+                });
+                return filtered;
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Wyszukaj zadanie produkcyjne (MO)"
+                  variant="outlined"
+                  placeholder="Wpisz numer MO, nazwę produktu..."
+                  disabled={loading}
+                  InputProps={{
+                    ...params.InputProps,
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon color="action" />
+                      </InputAdornment>
+                    ),
+                    endAdornment: (
+                      <>
+                        {loading ? <CircularProgress color="inherit" size={20} /> : null}
+                        {params.InputProps.endAdornment}
+                      </>
+                    ),
+                  }}
+                  helperText="Wpisz numer MO, nazwę produktu lub ID zadania, aby wyszukać zadanie produkcyjne"
+                />
+              )}
+              renderOption={(props, option) => (
+                <Box component="li" {...props}>
+                  <Box>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                      {option.moNumber}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {option.productName} - {option.quantity} {option.unit}
+                    </Typography>
+                  </Box>
+                </Box>
+              )}
+              freeSolo={false}
+              clearOnBlur={false}
+              selectOnFocus={true}
+              handleHomeEndKeys={true}
+              noOptionsText="Brak zadań produkcyjnych spełniających kryteria wyszukiwania"
+              loadingText="Ładowanie zadań produkcyjnych..."
+              loading={loading}
+            />
           </Grid>
           
           {/* Przyciski akcji */}
