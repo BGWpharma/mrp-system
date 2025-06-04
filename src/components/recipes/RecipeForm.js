@@ -45,7 +45,8 @@ import {
   Build as BuildIcon,
   ProductionQuantityLimits as ProductIcon,
   AccessTime as AccessTimeIcon,
-  SwapHoriz as SwapIcon
+  SwapHoriz as SwapIcon,
+  Science as ScienceIcon
 } from '@mui/icons-material';
 import { createRecipe, updateRecipe, getRecipeById, fixRecipeYield } from '../../services/recipeService';
 import { getAllInventoryItems, getIngredientPrices, createInventoryItem, getAllWarehouses } from '../../services/inventoryService';
@@ -56,6 +57,7 @@ import { db } from '../../services/firebase/config';
 import { getAllCustomers } from '../../services/customerService';
 import { getAllWorkstations } from '../../services/workstationService';
 import { UNIT_GROUPS, UNIT_CONVERSION_FACTORS } from '../../utils/constants';
+import { MICRONUTRIENTS, MICRONUTRIENT_CATEGORIES, DEFAULT_MICRONUTRIENT } from '../../utils/constants';
 
 const RecipeForm = ({ recipeId }) => {
   const { currentUser } = useAuth();
@@ -71,6 +73,7 @@ const RecipeForm = ({ recipeId }) => {
     yield: { quantity: 1, unit: 'szt.' },
     prepTime: '',
     ingredients: [],
+    micronutrients: [],
     allergens: [],
     notes: '',
     status: 'Robocza',
@@ -275,7 +278,14 @@ const RecipeForm = ({ recipeId }) => {
       const fetchRecipe = async () => {
         try {
           const recipe = await getRecipeById(recipeId);
-          setRecipeData(recipe);
+          
+          // Upewnij się, że micronutrients istnieje jako tablica
+          const recipeWithMicronutrients = {
+            ...recipe,
+            micronutrients: recipe.micronutrients || []
+          };
+          
+          setRecipeData(recipeWithMicronutrients);
           
           // Ustawiamy domyślne dane produktu na podstawie receptury
           setProductData(prev => ({
@@ -503,12 +513,11 @@ const RecipeForm = ({ recipeId }) => {
   };
 
   const removeIngredient = (index) => {
-    const updatedIngredients = [...recipeData.ingredients];
-    updatedIngredients.splice(index, 1);
-    
+    const newIngredients = [...recipeData.ingredients];
+    newIngredients.splice(index, 1);
     setRecipeData(prev => ({
       ...prev,
-      ingredients: updatedIngredients
+      ingredients: newIngredients
     }));
   };
 
@@ -766,6 +775,51 @@ const RecipeForm = ({ recipeId }) => {
     }
   };
 
+  // Funkcje obsługujące mikroelementy
+  const handleMicronutrientChange = (index, field, value) => {
+    const newMicronutrients = [...recipeData.micronutrients];
+    
+    if (field === 'code') {
+      // Znajdź mikroelement na podstawie kodu
+      const selectedMicronutrient = MICRONUTRIENTS.find(m => m.code === value);
+      if (selectedMicronutrient) {
+        newMicronutrients[index] = {
+          ...newMicronutrients[index],
+          code: selectedMicronutrient.code,
+          name: selectedMicronutrient.name,
+          unit: selectedMicronutrient.unit,
+          category: selectedMicronutrient.category
+        };
+      }
+    } else {
+      newMicronutrients[index] = {
+        ...newMicronutrients[index],
+        [field]: value
+      };
+    }
+    
+    setRecipeData(prev => ({
+      ...prev,
+      micronutrients: newMicronutrients
+    }));
+  };
+
+  const addMicronutrient = () => {
+    setRecipeData(prev => ({
+      ...prev,
+      micronutrients: [...prev.micronutrients, { ...DEFAULT_MICRONUTRIENT }]
+    }));
+  };
+
+  const removeMicronutrient = (index) => {
+    const newMicronutrients = [...recipeData.micronutrients];
+    newMicronutrients.splice(index, 1);
+    setRecipeData(prev => ({
+      ...prev,
+      micronutrients: newMicronutrients
+    }));
+  };
+
   if (loading) {
     return <div>Ładowanie receptury...</div>;
   }
@@ -831,7 +885,7 @@ const RecipeForm = ({ recipeId }) => {
           p: 0, 
           mb: 3, 
           borderRadius: '12px', 
-          overflow: 'hidden',
+          overflow: 'hidden', 
           transition: 'all 0.3s ease'
         }}
       >
@@ -1301,6 +1355,178 @@ const RecipeForm = ({ recipeId }) => {
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 Dodaj składniki ze stanów lub ręcznie używając przycisków powyżej.
+              </Typography>
+            </Paper>
+          )}
+        </Box>
+      </Paper>
+
+      {/* Sekcja mikroelementów */}
+      <Paper 
+        elevation={3} 
+        sx={{ 
+          p: 0, 
+          mb: 3, 
+          borderRadius: '12px', 
+          overflow: 'hidden' 
+        }}
+      >
+        <Box 
+          sx={{ 
+            p: 2, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            bgcolor: theme => theme.palette.mode === 'dark' 
+              ? 'rgba(25, 35, 55, 0.5)' 
+              : 'rgba(245, 247, 250, 0.8)',
+            justifyContent: 'space-between'
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <ScienceIcon color="primary" sx={{ mr: 1 }} />
+            <Typography variant="h6" fontWeight="500">Mikroelementy</Typography>
+          </Box>
+          
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button 
+              variant="outlined"
+              size="small"
+              onClick={addMicronutrient}
+              startIcon={<AddIcon />}
+              sx={{ borderRadius: '20px' }}
+            >
+              Dodaj mikroelement
+            </Button>
+          </Box>
+        </Box>
+        
+        <Box sx={{ p: 3 }}>
+          {recipeData.micronutrients && recipeData.micronutrients.length > 0 ? (
+            <TableContainer sx={{ borderRadius: '8px', border: '1px solid', borderColor: 'divider' }}>
+              <Table>
+                <TableHead sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.6)' : 'rgba(240, 245, 250, 0.8)' }}>
+                  <TableRow>
+                    <TableCell width="15%"><Typography variant="subtitle2">Kod</Typography></TableCell>
+                    <TableCell width="30%"><Typography variant="subtitle2">Nazwa</Typography></TableCell>
+                    <TableCell width="15%"><Typography variant="subtitle2">Ilość</Typography></TableCell>
+                    <TableCell width="10%"><Typography variant="subtitle2">Jednostka</Typography></TableCell>
+                    <TableCell width="15%"><Typography variant="subtitle2">Kategoria</Typography></TableCell>
+                    <TableCell width="10%"><Typography variant="subtitle2">Uwagi</Typography></TableCell>
+                    <TableCell width="5%"><Typography variant="subtitle2">Akcje</Typography></TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {(recipeData.micronutrients || []).map((micronutrient, index) => (
+                    <TableRow key={index} hover sx={{ '&:nth-of-type(even)': { bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.2)' : 'rgba(245, 247, 250, 0.5)' } }}>
+                      <TableCell>
+                        <FormControl fullWidth variant="standard">
+                          <Select
+                            value={micronutrient.code}
+                            onChange={(e) => handleMicronutrientChange(index, 'code', e.target.value)}
+                            displayEmpty
+                          >
+                            <MenuItem value="">
+                              <em>Wybierz...</em>
+                            </MenuItem>
+                            {MICRONUTRIENTS.map((micro) => (
+                              <MenuItem key={micro.code} value={micro.code}>
+                                {micro.code}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          fullWidth
+                          variant="standard"
+                          value={micronutrient.name}
+                          InputProps={{
+                            readOnly: true
+                          }}
+                          sx={{ 
+                            '& .MuiInputBase-input': { 
+                              color: theme => theme.palette.text.secondary 
+                            } 
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          fullWidth
+                          variant="standard"
+                          type="number"
+                          value={micronutrient.quantity}
+                          onChange={(e) => handleMicronutrientChange(index, 'quantity', e.target.value)}
+                          inputProps={{ min: 0, step: 0.001 }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          fullWidth
+                          variant="standard"
+                          value={micronutrient.unit}
+                          InputProps={{
+                            readOnly: true
+                          }}
+                          sx={{ 
+                            '& .MuiInputBase-input': { 
+                              color: theme => theme.palette.text.secondary 
+                            } 
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          size="small" 
+                          color={micronutrient.category === 'Witaminy' ? 'success' : 'info'} 
+                          label={micronutrient.category} 
+                          sx={{ borderRadius: '16px' }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          fullWidth
+                          variant="standard"
+                          value={micronutrient.notes || ''}
+                          onChange={(e) => handleMicronutrientChange(index, 'notes', e.target.value)}
+                          placeholder="Uwagi..."
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <IconButton 
+                          color="error" 
+                          onClick={() => removeMicronutrient(index)}
+                          size="small"
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          ) : (
+            <Paper 
+              sx={{ 
+                p: 3, 
+                textAlign: 'center', 
+                bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(25, 35, 55, 0.5)' : 'rgba(245, 247, 250, 0.8)',
+                borderRadius: '8px',
+                border: '1px dashed',
+                borderColor: 'divider'
+              }}
+            >
+              <ScienceIcon sx={{ fontSize: 40, color: 'text.secondary', mb: 1 }} />
+              <Typography variant="body1" color="text.secondary" gutterBottom>
+                Brak mikroelementów. 
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Dodaj witaminy, minerały i inne składniki odżywcze używając przycisku powyżej.
               </Typography>
             </Paper>
           )}

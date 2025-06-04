@@ -338,3 +338,61 @@ export const TIME_INTERVALS = [
   { label: '4-8 godzin', value: 480 },
   { label: 'Powyżej 8 godzin', value: 600 }
 ];
+
+// Mikroelementy - witaminy
+export const VITAMINS = [
+  { code: 'A', name: 'Witamina A (Retinol)', unit: 'µg' },
+  { code: 'D', name: 'Witamina D', unit: 'µg' },
+  { code: 'E', name: 'Witamina E (Tokoferole)', unit: 'mg' },
+  { code: 'K', name: 'Witamina K', unit: 'µg' },
+  { code: 'C', name: 'Witamina C (Kwas askorbinowy)', unit: 'mg' },
+  { code: 'B1', name: 'Witamina B1 (Tiamina)', unit: 'mg' },
+  { code: 'B2', name: 'Witamina B2 (Ryboflawina)', unit: 'mg' },
+  { code: 'B3', name: 'Witamina B3 (Niacyna)', unit: 'mg' },
+  { code: 'B5', name: 'Witamina B5 (Kwas pantotenowy)', unit: 'mg' },
+  { code: 'B6', name: 'Witamina B6 (Pirydoksyna)', unit: 'mg' },
+  { code: 'B7', name: 'Witamina B7 (Biotyna)', unit: 'µg' },
+  { code: 'B9', name: 'Witamina B9 (Kwas foliowy)', unit: 'µg' },
+  { code: 'B12', name: 'Witamina B12 (Kobalamina)', unit: 'µg' }
+];
+
+// Mikroelementy - minerały
+export const MINERALS = [
+  { code: 'Ca', name: 'Wapń', unit: 'mg' },
+  { code: 'P', name: 'Fosfor', unit: 'mg' },
+  { code: 'Mg', name: 'Magnez', unit: 'mg' },
+  { code: 'Na', name: 'Sód', unit: 'mg' },
+  { code: 'K+', name: 'Potas', unit: 'mg' },
+  { code: 'Cl', name: 'Chlor', unit: 'mg' },
+  { code: 'Fe', name: 'Żelazo', unit: 'mg' },
+  { code: 'Zn', name: 'Cynk', unit: 'mg' },
+  { code: 'Cu', name: 'Miedź', unit: 'mg' },
+  { code: 'Mn', name: 'Mangan', unit: 'mg' },
+  { code: 'I', name: 'Jod', unit: 'µg' },
+  { code: 'Se', name: 'Selen', unit: 'µg' },
+  { code: 'Cr', name: 'Chrom', unit: 'µg' },
+  { code: 'Mo', name: 'Molibden', unit: 'µg' },
+  { code: 'F', name: 'Fluor', unit: 'mg' }
+];
+
+// Łączna lista wszystkich mikroelementów
+export const MICRONUTRIENTS = [
+  ...VITAMINS.map(vitamin => ({ ...vitamin, category: 'Witaminy' })),
+  ...MINERALS.map(mineral => ({ ...mineral, category: 'Minerały' }))
+];
+
+// Kategorie mikroelementów
+export const MICRONUTRIENT_CATEGORIES = {
+  VITAMINS: 'Witaminy',
+  MINERALS: 'Minerały'
+};
+
+// Domyślna struktura mikroelementu w recepturze
+export const DEFAULT_MICRONUTRIENT = {
+  code: '',
+  name: '',
+  quantity: '',
+  unit: '',
+  category: '',
+  notes: ''
+};

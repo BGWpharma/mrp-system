@@ -536,6 +536,39 @@ const RecipeDetailsPage = () => {
                   </TableBody>
                 </Table>
               </TableContainer>
+              
+              {/* Sekcja mikroelementów */}
+              {recipe.micronutrients && recipe.micronutrients.length > 0 && (
+                <Box sx={{ mt: 3 }}>
+                  <Typography variant="h6" gutterBottom>Mikroelementy</Typography>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Kod</TableCell>
+                          <TableCell>Nazwa</TableCell>
+                          <TableCell align="right">Ilość</TableCell>
+                          <TableCell>Jednostka</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {recipe.micronutrients.map((micronutrient, index) => (
+                          <TableRow key={index}>
+                            <TableCell sx={{ fontWeight: 'bold', color: micronutrient.category === 'Witaminy' ? 'success.main' : 'info.main' }}>
+                              {micronutrient.code}
+                            </TableCell>
+                            <TableCell component="th" scope="row" sx={{ wordBreak: 'break-word' }}>
+                              {micronutrient.name}
+                            </TableCell>
+                            <TableCell align="right">{micronutrient.quantity}</TableCell>
+                            <TableCell>{micronutrient.unit}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              )}
             </Grid>
             <Grid item xs={12} md={7}>
               <Typography variant="h6" gutterBottom>Notatki dodatkowe</Typography>

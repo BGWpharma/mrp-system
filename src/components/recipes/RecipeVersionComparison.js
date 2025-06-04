@@ -19,6 +19,7 @@ const RecipeVersionComparison = ({ currentVersion, previousVersion }) => {
   const [differences, setDifferences] = useState({
     basic: [],
     ingredients: [],
+    micronutrients: [],
     other: []
   });
 
@@ -31,6 +32,7 @@ const RecipeVersionComparison = ({ currentVersion, previousVersion }) => {
   const compareVersions = () => {
     const basicDiffs = [];
     const ingredientDiffs = [];
+    const micronutrientDiffs = [];
     const otherDiffs = [];
 
     // Porównanie podstawowych pól
@@ -129,6 +131,54 @@ const RecipeVersionComparison = ({ currentVersion, previousVersion }) => {
       }
     });
 
+    // Porównanie mikroelementów
+    const oldMicronutrients = previousVersion.data.micronutrients || [];
+    const newMicronutrients = currentVersion.data.micronutrients || [];
+
+    // Znajdź usunięte mikroelementy
+    oldMicronutrients.forEach(oldMicro => {
+      const stillExists = newMicronutrients.some(
+        newMicro => newMicro.code === oldMicro.code && 
+                   newMicro.quantity === oldMicro.quantity && 
+                   newMicro.unit === oldMicro.unit
+      );
+      
+      if (!stillExists) {
+        micronutrientDiffs.push({
+          type: 'removed',
+          name: `${oldMicro.code} (${oldMicro.name})`,
+          oldValue: `${oldMicro.quantity} ${oldMicro.unit}`,
+          newValue: '-'
+        });
+      }
+    });
+
+    // Znajdź dodane lub zmienione mikroelementy
+    newMicronutrients.forEach(newMicro => {
+      const oldMicro = oldMicronutrients.find(old => old.code === newMicro.code);
+      
+      if (!oldMicro) {
+        // Dodany mikroelement
+        micronutrientDiffs.push({
+          type: 'added',
+          name: `${newMicro.code} (${newMicro.name})`,
+          oldValue: '-',
+          newValue: `${newMicro.quantity} ${newMicro.unit}`
+        });
+      } else if (
+        oldMicro.quantity !== newMicro.quantity || 
+        oldMicro.unit !== newMicro.unit
+      ) {
+        // Zmieniony mikroelement
+        micronutrientDiffs.push({
+          type: 'modified',
+          name: `${newMicro.code} (${newMicro.name})`,
+          oldValue: `${oldMicro.quantity} ${oldMicro.unit}`,
+          newValue: `${newMicro.quantity} ${newMicro.unit}`
+        });
+      }
+    });
+
     // Porównanie alergenów
     const oldAllergens = previousVersion.data.allergens || [];
     const newAllergens = currentVersion.data.allergens || [];
@@ -144,6 +194,7 @@ const RecipeVersionComparison = ({ currentVersion, previousVersion }) => {
     setDifferences({
       basic: basicDiffs,
       ingredients: ingredientDiffs,
+      micronutrients: micronutrientDiffs,
       other: otherDiffs
     });
   };
@@ -155,6 +206,7 @@ const RecipeVersionComparison = ({ currentVersion, previousVersion }) => {
   const hasDifferences = 
     differences.basic.length > 0 || 
     differences.ingredients.length > 0 || 
+    differences.micronutrients.length > 0 || 
     differences.other.length > 0;
 
   return (
@@ -255,6 +307,62 @@ const RecipeVersionComparison = ({ currentVersion, previousVersion }) => {
               </TableHead>
               <TableBody>
                 {differences.ingredients.map((diff, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{diff.name}</TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={
+                          diff.type === 'added' ? 'Dodany' : 
+                          diff.type === 'removed' ? 'Usunięty' : 'Zmieniony'
+                        }
+                        color={
+                          diff.type === 'added' ? 'success' : 
+                          diff.type === 'removed' ? 'error' : 'warning'
+                        }
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell 
+                      sx={{ 
+                        backgroundColor: diff.type !== 'added' ? '#ffeeee' : 'inherit',
+                        color: diff.type !== 'added' ? '#000000' : 'inherit'
+                      }}
+                    >
+                      {diff.oldValue}
+                    </TableCell>
+                    <TableCell 
+                      sx={{ 
+                        backgroundColor: diff.type !== 'removed' ? '#eeffee' : 'inherit',
+                        color: diff.type !== 'removed' ? '#000000' : 'inherit'
+                      }}
+                    >
+                      {diff.newValue}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </>
+      )}
+
+      {differences.micronutrients.length > 0 && (
+        <>
+          <Typography variant="subtitle1" sx={{ mt: 3, mb: 1 }}>
+            Zmiany w mikroelementach
+          </Typography>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Mikroelement</TableCell>
+                  <TableCell>Zmiana</TableCell>
+                  <TableCell>Wersja {previousVersion.version}</TableCell>
+                  <TableCell>Wersja {currentVersion.version}</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {differences.micronutrients.map((diff, index) => (
                   <TableRow key={index}>
                     <TableCell>{diff.name}</TableCell>
                     <TableCell>
