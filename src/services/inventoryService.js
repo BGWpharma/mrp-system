@@ -164,7 +164,9 @@ import {
       if (searchTerm && searchTerm.trim() !== '') {
         const searchTermLower = searchTerm.toLowerCase().trim();
         allItems = allItems.filter(item => 
-          (item.name && item.name.toLowerCase().includes(searchTermLower))
+          (item.name && item.name.toLowerCase().includes(searchTermLower)) ||
+          (item.description && item.description.toLowerCase().includes(searchTermLower)) ||
+          (item.casNumber && item.casNumber.toLowerCase().includes(searchTermLower))
         );
         // Usuwamy zbędne logowanie
         // console.log(`Znaleziono ${allItems.length} pozycji pasujących do SKU "${searchTerm}"`);

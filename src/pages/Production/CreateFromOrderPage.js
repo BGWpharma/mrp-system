@@ -96,6 +96,39 @@ const CreateFromOrderPage = () => {
     console.log("==== KONIEC DEBUGOWANIA RECEPTUR ====");
   };
   
+  // Funkcja do ręcznego powiązania produktu z recepturą
+  const manuallyLinkProductToRecipe = (productName, recipeId) => {
+    console.log(`Ręczne powiązanie produktu "${productName}" z recepturą ID: ${recipeId}`);
+    
+    const recipe = recipes.find(r => r.id === recipeId);
+    if (!recipe) {
+      console.error(`Nie znaleziono receptury o ID: ${recipeId}`);
+      showError(`Nie znaleziono receptury o ID: ${recipeId}`);
+      return null;
+    }
+    
+    console.log(`Powiązano produkt "${productName}" z recepturą "${recipe.name}"`);
+    showSuccess(`Powiązano produkt "${productName}" z recepturą "${recipe.name}"`);
+    return recipe;
+  };
+
+  // Funkcja pomocnicza do wyświetlania dostępnych receptur dla debugowania
+  const showAvailableRecipes = () => {
+    console.log("==== DOSTĘPNE RECEPTURY ====");
+    recipes.forEach((recipe, index) => {
+      console.log(`${index + 1}. "${recipe.name}" (ID: ${recipe.id})`);
+    });
+    
+    if (selectedOrder && selectedOrder.items) {
+      console.log("==== PRODUKTY W ZAMÓWIENIU ====");
+      selectedOrder.items.forEach((item, index) => {
+        console.log(`${index + 1}. "${item.name}" (ID: ${item.id})`);
+        const foundRecipe = findRecipeForProduct(item.name);
+        console.log(`   -> ${foundRecipe ? `ZNALEZIONO: "${foundRecipe.name}"` : 'BRAK RECEPTURY'}`);
+      });
+    }
+  };
+  
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
@@ -157,26 +190,71 @@ const CreateFromOrderPage = () => {
       return exactMatch;
     }
     
-    // 2. Jeśli nie znaleziono dokładnego dopasowania, szukaj częściowych dopasowań
+    // 2. Sprawdź czy istnieje receptura powiązana z pozycją magazynową o tej nazwie
+    // (dla przypadków gdy produkt w zamówieniu odnosi się do pozycji magazynowej)
+    const recipeWithInventoryProduct = recipes.find(recipe => {
+      // Sprawdź czy receptura ma powiązany produkt magazynowy o tej nazwie
+      return recipe.productName && recipe.productName.toLowerCase() === productName.toLowerCase();
+    });
+    
+    if (recipeWithInventoryProduct) {
+      console.log(`Znaleziono recepturę powiązaną z produktem magazynowym ${productName}:`, recipeWithInventoryProduct.name);
+      return recipeWithInventoryProduct;
+    }
+    
+    // 3. Szukaj poprzez częściowe dopasowania (elastyczne wyszukiwanie)
     const matchingRecipes = recipes.filter(recipe => {
       const recipeName = recipe.name.toLowerCase();
       const product = productName.toLowerCase();
       
+      // Usuń znaki specjalne i porównaj
+      const cleanRecipeName = recipeName.replace(/[^a-zA-Z0-9]/g, '');
+      const cleanProductName = product.replace(/[^a-zA-Z0-9]/g, '');
+      
       // Sprawdź różne warianty porównania
       const recipeContainsProduct = recipeName.includes(product);
       const productContainsRecipe = product.includes(recipeName);
-      const similar = recipeName.replace(/[^a-zA-Z0-9]/g, '') === product.replace(/[^a-zA-Z0-9]/g, '');
+      const cleanNamesMatch = cleanRecipeName === cleanProductName;
+      const cleanRecipeContainsProduct = cleanRecipeName.includes(cleanProductName);
+      const cleanProductContainsRecipe = cleanProductName.includes(cleanRecipeName);
+      
+      // Sprawdź podobieństwo słów (podziel na słowa i sprawdź wspólne)
+      const recipeWords = recipeName.split(/\s+/);
+      const productWords = product.split(/\s+/);
+      const commonWords = recipeWords.filter(word => 
+        word.length > 2 && productWords.some(pWord => pWord.includes(word) || word.includes(pWord))
+      );
+      const hasCommonWords = commonWords.length > 0;
       
       // Sprawdź wyniki poszczególnych porównań dla debugowania
-      if (recipeContainsProduct || productContainsRecipe || similar) {
-        console.log(`Częściowe dopasowanie: "${recipeName}" i "${product}" (${recipeContainsProduct ? 'receptura zawiera produkt' : ''}${productContainsRecipe ? 'produkt zawiera recepturę' : ''}${similar ? 'podobne' : ''})`);
+      if (recipeContainsProduct || productContainsRecipe || cleanNamesMatch || 
+          cleanRecipeContainsProduct || cleanProductContainsRecipe || hasCommonWords) {
+        console.log(`Częściowe dopasowanie: "${recipeName}" i "${product}"`);
+        console.log(`  - receptura zawiera produkt: ${recipeContainsProduct}`);
+        console.log(`  - produkt zawiera recepturę: ${productContainsRecipe}`);
+        console.log(`  - czyste nazwy identyczne: ${cleanNamesMatch}`);
+        console.log(`  - wspólne słowa: ${hasCommonWords} (${commonWords.join(', ')})`);
       }
       
-      return recipeContainsProduct || productContainsRecipe || similar;
+      return recipeContainsProduct || productContainsRecipe || cleanNamesMatch || 
+             cleanRecipeContainsProduct || cleanProductContainsRecipe || hasCommonWords;
     });
     
     if (matchingRecipes.length > 0) {
-      // Jeśli znaleziono wiele dopasowań, wybierz najkrótszą nazwę (zwykle najbardziej dokładne dopasowanie)
+      // Preferuj dokładne dopasowania oczyszczonych nazw
+      const perfectCleanMatch = matchingRecipes.find(recipe => {
+        const cleanRecipeName = recipe.name.toLowerCase().replace(/[^a-zA-Z0-9]/g, '');
+        const cleanProductName = productName.toLowerCase().replace(/[^a-zA-Z0-9]/g, '');
+        return cleanRecipeName === cleanProductName;
+      });
+      
+      if (perfectCleanMatch) {
+        console.log(`Znaleziono najlepsze dopasowanie (czyste nazwy) dla produktu ${productName}:`, perfectCleanMatch.name);
+        console.log(`Receptura ma domyślne stanowisko: ${perfectCleanMatch.defaultWorkstationId || 'BRAK'}`);
+        return perfectCleanMatch;
+      }
+      
+      // Jeśli nie ma idealnego dopasowania, wybierz najkrótszą nazwę (zwykle najbardziej dokładne dopasowanie)
       const bestMatch = matchingRecipes.reduce((prev, current) => 
         prev.name.length < current.name.length ? prev : current
       );
@@ -187,6 +265,7 @@ const CreateFromOrderPage = () => {
     }
     
     console.log(`Nie znaleziono receptury dla produktu ${productName}`);
+    console.log(`Dostępne receptury:`, recipes.map(r => r.name));
     return null;
   };
   

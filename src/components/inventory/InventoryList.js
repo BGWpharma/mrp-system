@@ -1356,6 +1356,7 @@ const InventoryList = () => {
         return {
           category: item.category || '',
           sku: item.name || '', // Przenosimy name do kolumny SKU
+          casNumber: item.casNumber || '',
           totalQuantity: (Number(item.quantity) || 0).toFixed(2),
           unit: item.unit || 'pcs.',
           reservedQuantity: bookedQuantity.toFixed(2),
@@ -1371,6 +1372,7 @@ const InventoryList = () => {
       const headers = [
         { label: 'Category', key: 'category' },
         { label: 'SKU', key: 'sku' },
+        { label: 'CAS Number', key: 'casNumber' },
         { label: 'Total Quantity', key: 'totalQuantity' },
         { label: 'Unit', key: 'unit' },
         { label: 'Reserved Quantity', key: 'reservedQuantity' },

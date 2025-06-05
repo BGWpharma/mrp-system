@@ -760,6 +760,10 @@ const ItemDetailsPage = () => {
                   <Table sx={{ '& td, & th': { borderBottom: '1px solid', borderColor: theme => theme.palette.mode === 'dark' ? 'divider' : '#f5f5f5', py: 1.5 } }}>
                     <TableBody>
                       <TableRow>
+                        <TableCell component="th" sx={{ width: '40%', fontWeight: 'medium' }}>Numer CAS</TableCell>
+                        <TableCell>{item.casNumber || 'Nie określono'}</TableCell>
+                      </TableRow>
+                      <TableRow>
                         <TableCell component="th" sx={{ width: '40%', fontWeight: 'medium' }}>Minimalny stan</TableCell>
                         <TableCell>{item.minStock ? `${formatQuantity(item.minStock)} ${item.unit}` : 'Nie określono'}</TableCell>
                       </TableRow>

@@ -57,7 +57,8 @@ import {
   Cancel as CancelIcon,
   ViewColumn as ViewColumnIcon,
   BuildCircle as BuildCircleIcon,
-  ArrowDropDown as ArrowDropDownIcon
+  ArrowDropDown as ArrowDropDownIcon,
+  Download as DownloadIcon
 } from '@mui/icons-material';
 import { getAllTasks, updateTaskStatus, deleteTask, addTaskProductToInventory, stopProduction, getTasksWithPagination } from '../../services/productionService';
 import { getAllWarehouses } from '../../services/inventoryService';
@@ -75,6 +76,8 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { pl } from 'date-fns/locale';
 import { getWorkstationById } from '../../services/workstationService';
 import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
+import { exportToCSV } from '../../utils/exportUtils';
+import { getUsersDisplayNames } from '../../services/userService';
 
 const TaskList = () => {
   const [tasks, setTasks] = useState([]);
@@ -779,6 +782,153 @@ const TaskList = () => {
     setPage(1); // Reset do pierwszej strony przy zmianie sortowania
   };
 
+  // Funkcja eksportu wszystkich zadań do CSV
+  const handleExportCSV = async () => {
+    try {
+      setLoading(true);
+      
+      // Pobierz wszystkie zadania bez paginacji
+      const allTasks = await getAllTasks();
+      
+      if (!allTasks || allTasks.length === 0) {
+        showError('Brak zadań do eksportu');
+        return;
+      }
+
+      // Pobierz nazwy stanowisk dla zadań, które je mają
+      const workstationDataMap = { ...workstationNames };
+      for (const task of allTasks) {
+        if (task.workstationId && !workstationDataMap[task.workstationId]) {
+          try {
+            const workstation = await getWorkstationById(task.workstationId);
+            workstationDataMap[task.workstationId] = workstation.name;
+          } catch (error) {
+            console.error(`Błąd podczas pobierania stanowiska ${task.workstationId}:`, error);
+            workstationDataMap[task.workstationId] = 'Nieznane stanowisko';
+          }
+        }
+      }
+
+      // Pobierz nazwy użytkowników dla pól createdBy i updatedBy
+      const allUserIds = [
+        ...new Set([
+          ...allTasks.map(task => task.createdBy).filter(Boolean),
+          ...allTasks.map(task => task.updatedBy).filter(Boolean)
+        ])
+      ];
+      
+      let userNamesMap = {};
+      if (allUserIds.length > 0) {
+        try {
+          userNamesMap = await getUsersDisplayNames(allUserIds);
+        } catch (error) {
+          console.error('Błąd podczas pobierania nazw użytkowników:', error);
+        }
+      }
+
+      // Funkcja pomocnicza do formatowania dat
+      const formatDateForCSV = (dateValue) => {
+        if (!dateValue) return '';
+        
+        try {
+          let date;
+          
+          // Obsługa różnych formatów dat
+          if (dateValue.toDate && typeof dateValue.toDate === 'function') {
+            // Firebase Timestamp
+            date = dateValue.toDate();
+          } else if (dateValue.seconds) {
+            // Firebase Timestamp w formie obiektu
+            date = new Date(dateValue.seconds * 1000);
+          } else if (typeof dateValue === 'string') {
+            // String
+            date = new Date(dateValue);
+          } else if (dateValue instanceof Date) {
+            // Już jest obiektem Date
+            date = dateValue;
+          } else {
+            return '';
+          }
+          
+          // Sprawdź czy data jest prawidłowa
+          if (isNaN(date.getTime())) {
+            return '';
+          }
+          
+          return date.toLocaleDateString('pl-PL');
+        } catch (error) {
+          console.error('Błąd formatowania daty:', error, dateValue);
+          return '';
+        }
+      };
+
+      // Definicja nagłówków dla CSV (usunięto "Priorytet")
+      const headers = [
+        { label: 'Numer MO', key: 'moNumber' },
+        { label: 'Nazwa zadania', key: 'name' },
+        { label: 'Produkt', key: 'productName' },
+        { label: 'Ilość', key: 'quantity' },
+        { label: 'Jednostka', key: 'unit' },
+        { label: 'Pozostało do produkcji', key: 'remainingQuantity' },
+        { label: 'Status', key: 'status' },
+        { label: 'Stanowisko produkcyjne', key: 'workstationName' },
+        { label: 'Planowany start', key: 'scheduledDate' },
+        { label: 'Planowane zakończenie', key: 'endDate' },
+        { label: 'Szacowany czas produkcji (godz.)', key: 'estimatedDurationHours' },
+        { label: 'Czas na jednostkę (min.)', key: 'productionTimePerUnit' },
+        { label: 'Numer zamówienia klienta', key: 'orderNumber' },
+        { label: 'Klient', key: 'clientName' },
+        { label: 'Opis', key: 'description' },
+        { label: 'Numer partii (LOT)', key: 'lotNumber' },
+        { label: 'Data utworzenia', key: 'createdAt' },
+        { label: 'Utworzony przez', key: 'createdBy' }
+      ];
+      
+      // Przygotuj dane do eksportu
+      const exportData = allTasks.map(task => {
+        const totalCompletedQuantity = task.totalCompletedQuantity || 0;
+        const remainingQuantity = Math.max(0, task.quantity - totalCompletedQuantity);
+        
+        return {
+          moNumber: task.moNumber || '',
+          name: task.name || '',
+          productName: task.productName || '',
+          quantity: task.quantity || 0,
+          unit: task.unit || 'szt.',
+          remainingQuantity: remainingQuantity,
+          status: task.status || '',
+          workstationName: workstationDataMap[task.workstationId] || '',
+          scheduledDate: formatDateForCSV(task.scheduledDate),
+          endDate: formatDateForCSV(task.endDate),
+          estimatedDurationHours: task.estimatedDuration ? (task.estimatedDuration / 60).toFixed(2) : '',
+          productionTimePerUnit: task.productionTimePerUnit || '',
+          orderNumber: task.orderNumber || '',
+          clientName: task.clientName || task.customerName || '',
+          description: task.description || '',
+          lotNumber: task.lotNumber || '',
+          createdAt: formatDateForCSV(task.createdAt),
+          createdBy: userNamesMap[task.createdBy] || task.createdBy || ''
+        };
+      });
+      
+      // Wygeneruj plik CSV
+      const currentDate = new Date().toISOString().slice(0, 10);
+      const filename = `zadania_produkcyjne_${currentDate}`;
+      const success = exportToCSV(exportData, headers, filename);
+      
+      if (success) {
+        showSuccess(`Wyeksportowano ${allTasks.length} zadań produkcyjnych do pliku CSV`);
+      } else {
+        showError('Nie udało się wyeksportować zadań do CSV');
+      }
+    } catch (error) {
+      console.error('Błąd podczas eksportu CSV:', error);
+      showError('Wystąpił błąd podczas eksportu: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Renderowanie zadania jako karta na urządzeniach mobilnych
   const renderTaskCard = (task) => {
     // Obliczenie pozostałej ilości do produkcji
@@ -944,18 +1094,36 @@ const TaskList = () => {
           mb: 2,
           gap: isMobile ? 1 : 0
         }}>
-          <Button 
-            variant="contained" 
-            color="primary" 
-            startIcon={<AddIcon />}
-            component={Link}
-            to="/production/create-from-order"
-            fullWidth={isMobile}
-            size={isMobile ? "small" : "medium"}
-            sx={isMobile ? { mb: 1 } : {}}
-          >
-            Nowe Zadanie
-          </Button>
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: isMobile ? 'column' : 'row',
+            gap: 1,
+            width: isMobile ? '100%' : 'auto'
+          }}>
+            <Button 
+              variant="contained" 
+              color="primary" 
+              startIcon={<AddIcon />}
+              component={Link}
+              to="/production/create-from-order"
+              fullWidth={isMobile}
+              size={isMobile ? "small" : "medium"}
+            >
+              Nowe Zadanie
+            </Button>
+            
+            <Button 
+              variant="outlined" 
+              color="secondary" 
+              startIcon={<DownloadIcon />}
+              onClick={handleExportCSV}
+              disabled={loading}
+              fullWidth={isMobile}
+              size={isMobile ? "small" : "medium"}
+            >
+              {loading ? 'Eksportowanie...' : 'Eksportuj CSV'}
+            </Button>
+          </Box>
           
           <Box sx={{ 
             display: 'flex', 

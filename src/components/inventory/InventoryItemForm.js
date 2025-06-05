@@ -43,6 +43,7 @@ const InventoryItemForm = ({ itemId }) => {
   const [itemData, setItemData] = useState({
     name: '',
     description: '',
+    casNumber: '',
     category: '',
     unit: 'szt.',
     location: '',
@@ -232,6 +233,7 @@ const InventoryItemForm = ({ itemId }) => {
                 </Select>
               </FormControl>
             </Grid>
+            
             <Grid item xs={12}>
               <TextField
                 label="Opis"
@@ -244,6 +246,20 @@ const InventoryItemForm = ({ itemId }) => {
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
               />
             </Grid>
+            
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Numer CAS"
+                name="casNumber"
+                value={itemData.casNumber || ''}
+                onChange={handleChange}
+                fullWidth
+                helperText="Chemical Abstracts Service number (opcjonalny)"
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                placeholder="np. 64-17-5"
+              />
+            </Grid>
+            
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
@@ -260,6 +276,7 @@ const InventoryItemForm = ({ itemId }) => {
                 <MenuItem value="caps">caps</MenuItem>
               </TextField>
             </Grid>
+            
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth

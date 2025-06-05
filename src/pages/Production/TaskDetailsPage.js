@@ -81,7 +81,8 @@ import {
   Visibility as VisibilityIcon,
   Info as InfoIcon,
   Science as RawMaterialsIcon,
-  BuildCircle as BuildCircleIcon
+  BuildCircle as BuildCircleIcon,
+  Assessment as AssessmentIcon
 } from '@mui/icons-material';
 import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession, addProductionSession, deleteProductionSession } from '../../services/productionService';
 import { getItemBatches, bookInventoryForTask, cancelBooking, getBatchReservations, getAllInventoryItems, getInventoryItemById, getInventoryBatch } from '../../services/inventoryService';
@@ -4287,6 +4288,7 @@ const TaskDetailsPage = () => {
               <Tab label="Produkcja i Plan" />
               <Tab label="Formularze" />
               <Tab label="Historia zmian" />
+              <Tab label="Raport gotowego produktu" icon={<AssessmentIcon />} iconPosition="start" />
             </Tabs>
           </Box>
 
@@ -4315,7 +4317,7 @@ const TaskDetailsPage = () => {
                   <Grid container spacing={2}>
                     <Grid item xs={12} md={6}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Produkt:</Typography><Typography variant="body1">{task.productName}</Typography></Grid>
                     <Grid item xs={12} md={6}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Ilość:</Typography><Typography variant="body1">{task.quantity} {task.unit}</Typography></Grid>
-                    {task.estimatedDuration > 0 && (<Grid item xs={12} md={6}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Szacowany czas produkcji:</Typography><Typography variant="body1">{task.estimatedDuration.toFixed(1)} godz.</Typography></Grid>)}
+                    {task.estimatedDuration > 0 && (<Grid item xs={12} md={6}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Szacowany czas produkcji:</Typography><Typography variant="body1">{(task.estimatedDuration / 60).toFixed(1)} godz.</Typography></Grid>)}
                     {task.recipe && task.recipe.recipeName && (<Grid item xs={12} md={6}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Receptura:</Typography><Typography variant="body1"><Link to={`/recipes/${task.recipe.recipeId}`}>{task.recipe.recipeName}</Link></Typography></Grid>)}
                     <Grid item xs={12}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Opis:</Typography><Typography variant="body1">{task.description || 'Brak opisu'}</Typography></Grid>
                   </Grid>
@@ -4521,6 +4523,242 @@ const TaskDetailsPage = () => {
                 )}
                 {/* Tutaj można dodać inne sekcje administracyjne jeśli będą potrzebne */}
              </Grid>
+          )}
+
+          {mainTab === 5 && ( // Zakładka "Raport gotowego produktu"
+            <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <Paper sx={{ p: 3 }}>
+                  <Typography variant="h6" component="h2" gutterBottom>
+                    Raport gotowego produktu
+                  </Typography>
+                  
+                  {/* Informacje o produkcie */}
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="h6" sx={{ mb: 2, color: 'primary.main' }}>
+                      Informacje o produkcie
+                    </Typography>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} md={6}>
+                        <Typography variant="subtitle2" color="text.secondary">Nazwa produktu:</Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 'medium' }}>{task.productName}</Typography>
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <Typography variant="subtitle2" color="text.secondary">Numer MO:</Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 'medium' }}>{task.moNumber || 'Brak numeru'}</Typography>
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <Typography variant="subtitle2" color="text.secondary">Planowana ilość:</Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 'medium' }}>{task.quantity} {task.unit}</Typography>
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <Typography variant="subtitle2" color="text.secondary">Wyprodukowana ilość:</Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 'medium', color: 'success.main' }}>
+                          {task.totalCompletedQuantity || 0} {task.unit}
+                        </Typography>
+                      </Grid>
+                      {task.lotNumber && (
+                        <Grid item xs={12} md={6}>
+                          <Typography variant="subtitle2" color="text.secondary">Numer partii (LOT):</Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 'medium' }}>{task.lotNumber}</Typography>
+                        </Grid>
+                      )}
+                      <Grid item xs={12} md={6}>
+                        <Typography variant="subtitle2" color="text.secondary">Status zadania:</Typography>
+                        <Chip 
+                          label={task.status} 
+                          color={getStatusColor(task.status)} 
+                          size="small" 
+                          sx={{ fontWeight: 'medium' }}
+                        />
+                      </Grid>
+                    </Grid>
+                  </Box>
+
+                  <Divider sx={{ my: 3 }} />
+
+                  {/* Podsumowanie produkcji */}
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="h6" sx={{ mb: 2, color: 'primary.main' }}>
+                      Podsumowanie produkcji
+                    </Typography>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} md={4}>
+                        <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                          <Typography variant="subtitle2" color="text.secondary">Całkowity czas produkcji</Typography>
+                          <Typography variant="h6" color="primary.main">
+                            {productionHistory.reduce((sum, item) => sum + (item.timeSpent || 0), 0)} min
+                          </Typography>
+                        </Card>
+                      </Grid>
+                      <Grid item xs={12} md={4}>
+                        <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                          <Typography variant="subtitle2" color="text.secondary">Liczba sesji produkcyjnych</Typography>
+                          <Typography variant="h6" color="info.main">
+                            {productionHistory.length}
+                          </Typography>
+                        </Card>
+                      </Grid>
+                      <Grid item xs={12} md={4}>
+                        <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                          <Typography variant="subtitle2" color="text.secondary">Efektywność</Typography>
+                          <Typography variant="h6" color="success.main">
+                            {task.quantity > 0 ? Math.round((task.totalCompletedQuantity / task.quantity) * 100) : 0}%
+                          </Typography>
+                        </Card>
+                      </Grid>
+                    </Grid>
+                  </Box>
+
+                  <Divider sx={{ my: 3 }} />
+
+                  {/* Historia sesji produkcyjnych */}
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="h6" sx={{ mb: 2, color: 'primary.main' }}>
+                      Historia sesji produkcyjnych
+                    </Typography>
+                    {productionHistory.length === 0 ? (
+                      <Alert severity="info">
+                        Brak historii produkcji dla tego zadania.
+                      </Alert>
+                    ) : (
+                      <TableContainer>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>Data rozpoczęcia</TableCell>
+                              <TableCell>Data zakończenia</TableCell>
+                              <TableCell>Czas trwania</TableCell>
+                              <TableCell>Wyprodukowana ilość</TableCell>
+                              <TableCell>Operator</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {productionHistory.map((item, index) => (
+                              <TableRow key={item.id}>
+                                <TableCell>{item.startTime ? formatDateTime(item.startTime) : '-'}</TableCell>
+                                <TableCell>{item.endTime ? formatDateTime(item.endTime) : '-'}</TableCell>
+                                <TableCell>{item.timeSpent ? `${item.timeSpent} min` : '-'}</TableCell>
+                                <TableCell>{item.quantity} {task.unit}</TableCell>
+                                <TableCell>{getUserName(item.userId)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    )}
+                  </Box>
+
+                  <Divider sx={{ my: 3 }} />
+
+                  {/* Zużyte materiały */}
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="h6" sx={{ mb: 2, color: 'primary.main' }}>
+                      Zużyte materiały
+                    </Typography>
+                    {task.consumedMaterials && task.consumedMaterials.length > 0 ? (
+                      <TableContainer>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>Materiał</TableCell>
+                              <TableCell>Partia (LOT)</TableCell>
+                              <TableCell>Zużyta ilość</TableCell>
+                              <TableCell>Data zużycia</TableCell>
+                              <TableCell>Operator</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {task.consumedMaterials.map((consumed, index) => {
+                              const material = materials.find(m => (m.inventoryItemId || m.id) === consumed.materialId);
+                              return (
+                                <TableRow key={index}>
+                                  <TableCell>{material ? material.name : 'Nieznany materiał'}</TableCell>
+                                  <TableCell>
+                                    {consumed.batchNumber || consumed.batchId || 'Brak numeru partii'}
+                                  </TableCell>
+                                  <TableCell>{consumed.quantity} {material ? material.unit : ''}</TableCell>
+                                  <TableCell>{new Date(consumed.timestamp).toLocaleString('pl')}</TableCell>
+                                  <TableCell>{consumed.userName || 'Nieznany użytkownik'}</TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    ) : (
+                      <Alert severity="info">
+                        Brak zużytych materiałów dla tego zadania.
+                      </Alert>
+                    )}
+                  </Box>
+
+                  <Divider sx={{ my: 3 }} />
+
+                  {/* Podsumowanie kosztów */}
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="h6" sx={{ mb: 2, color: 'primary.main' }}>
+                      Podsumowanie kosztów
+                    </Typography>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} md={6}>
+                        <Card variant="outlined" sx={{ p: 2 }}>
+                          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                            Koszt materiałów
+                          </Typography>
+                          <Typography variant="h6" color="warning.main">
+                            {(() => {
+                              const cost = calculateConsumedMaterialsCost();
+                              return cost.toFixed(2);
+                            })()} €
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Na podstawie zużytych materiałów
+                          </Typography>
+                        </Card>
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <Card variant="outlined" sx={{ p: 2 }}>
+                          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                            Koszt jednostkowy
+                          </Typography>
+                          <Typography variant="h6" color="secondary.main">
+                            {(() => {
+                              const cost = calculateConsumedMaterialsCost();
+                              const totalProduced = task.totalCompletedQuantity || 0;
+                              return totalProduced > 0 ? (cost / totalProduced).toFixed(4) : '0.0000';
+                            })()} € / {task.unit}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Koszt za jednostkę produktu
+                          </Typography>
+                        </Card>
+                      </Grid>
+                    </Grid>
+                  </Box>
+
+                  {/* Przyciski akcji */}
+                  <Box sx={{ display: 'flex', gap: 2, mt: 3 }}>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      startIcon={<PrintIcon />}
+                      onClick={handlePrintMODetails}
+                    >
+                      Drukuj raport
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="secondary"
+                      startIcon={<AssessmentIcon />}
+                      onClick={() => navigate(`/production/reports?taskId=${task.id}`)}
+                    >
+                      Szczegółowe raporty
+                    </Button>
+                  </Box>
+                </Paper>
+              </Grid>
+            </Grid>
           )}
 
           {/* Wszystkie dialogi pozostają bez zmian na końcu komponentu */}
