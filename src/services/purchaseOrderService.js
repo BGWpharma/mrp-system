@@ -10,7 +10,8 @@ import {
   where,
   orderBy,
   serverTimestamp,
-  limit as firebaseLimit
+  limit as firebaseLimit,
+  limit
 } from 'firebase/firestore';
 import { db } from './firebase/config';
 import { createNotification } from './notificationService';
@@ -860,6 +861,7 @@ export const createPurchaseOrder = async (purchaseOrderData, userId) => {
     
     // Wyczyść cache po utworzeniu nowego zamówienia
     searchCache.clear();
+    clearLimitedPOCache();
     
     return result;
   } catch (error) {
@@ -923,6 +925,10 @@ export const updatePurchaseOrder = async (purchaseOrderId, updatedData, userId =
       await updateBatchPricesWithAdditionalCosts(purchaseOrderId, newPoData, userId || 'system');
     }
     
+    // Wyczyść cache po aktualizacji
+    searchCache.invalidateForOrder(purchaseOrderId);
+    clearLimitedPOCache();
+    
     // Pobierz zaktualizowane dane
     return await getPurchaseOrderById(purchaseOrderId);
   } catch (error) {
@@ -946,6 +952,7 @@ export const deletePurchaseOrder = async (id) => {
     
     // Wyczyść cache dotyczące tego zamówienia
     searchCache.invalidateForOrder(id);
+    clearLimitedPOCache();
     
     return { id };
   } catch (error) {
@@ -1724,6 +1731,13 @@ export const updateBatchesForPurchaseOrder = async (purchaseOrderId, userId) => 
   }
 };
 
+// Funkcja do czyszczenia cache ograniczonej listy zamówień
+export const clearLimitedPOCache = () => {
+  limitedPOCache = null;
+  limitedPOCacheTimestamp = null;
+  console.log('Wyczyszczono cache ograniczonej listy zamówień');
+};
+
 // Eksportuj funkcję do czyszczenia cache wyszukiwania
 export const clearSearchCache = () => {
   searchCache.clearSearchCache();
@@ -1732,6 +1746,7 @@ export const clearSearchCache = () => {
 // Eksportuj funkcję do czyszczenia całego cache
 export const clearAllCache = () => {
   searchCache.clear();
+  clearLimitedPOCache();
 };
 
 /**
@@ -2059,6 +2074,99 @@ export const updateBatchBasePricesForPurchaseOrder = async (purchaseOrderId, use
     return { success: true, updated: updatePromises.length };
   } catch (error) {
     console.error('Błąd podczas ręcznej aktualizacji cen bazowych partii dla zamówienia:', error);
+    throw error;
+  }
+};
+
+// Cache dla ograniczonej listy zamówień
+let limitedPOCache = null;
+let limitedPOCacheTimestamp = null;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minut
+
+/**
+ * Pobiera ograniczoną listę zamówień zakupowych dla edycji partii
+ * Optymalizowana wersja - pobiera tylko niezbędne pola i ogranicza liczbę dokumentów
+ * @returns {Promise<Array>} - Lista zamówień z podstawowymi danymi
+ */
+export const getLimitedPurchaseOrdersForBatchEdit = async () => {
+  try {
+    // Sprawdź cache
+    const now = Date.now();
+    if (limitedPOCache && limitedPOCacheTimestamp && (now - limitedPOCacheTimestamp < CACHE_DURATION)) {
+      console.log('Używam danych z cache dla ograniczonej listy zamówień');
+      return limitedPOCache;
+    }
+    // Pobierz tylko najnowsze 50 zamówień (większość edycji dotyczy najnowszych zamówień)
+    const q = query(
+      collection(db, PURCHASE_ORDERS_COLLECTION), 
+      orderBy('createdAt', 'desc'),
+      limit(50) // Ograniczenie do 50 najnowszych zamówień
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const purchaseOrders = [];
+    
+    // Zbierz wszystkie unikalne ID dostawców
+    const supplierIds = new Set();
+    const docsData = [];
+    
+    querySnapshot.docs.forEach(docRef => {
+      const poData = docRef.data();
+      docsData.push({ id: docRef.id, data: poData });
+      
+      if (poData.supplierId) {
+        supplierIds.add(poData.supplierId);
+      }
+    });
+    
+    // Pobierz wszystkich dostawców jednym zapytaniem batch
+    const suppliersData = {};
+    if (supplierIds.size > 0) {
+      const supplierPromises = Array.from(supplierIds).map(async (supplierId) => {
+        try {
+          const supplierDoc = await getDoc(doc(db, SUPPLIERS_COLLECTION, supplierId));
+          if (supplierDoc.exists()) {
+            return { id: supplierDoc.id, ...supplierDoc.data() };
+          }
+          return null;
+        } catch (error) {
+          console.error(`Błąd podczas pobierania dostawcy ${supplierId}:`, error);
+          return null;
+        }
+      });
+      
+      const suppliersResults = await Promise.all(supplierPromises);
+      suppliersResults.forEach(supplier => {
+        if (supplier) {
+          suppliersData[supplier.id] = supplier;
+        }
+      });
+    }
+    
+    // Przetwórz dokumenty z już pobranymi danymi dostawców
+    docsData.forEach(({ id, data: poData }) => {
+      purchaseOrders.push({
+        id: id,
+        number: poData.number,
+        status: poData.status,
+        supplier: suppliersData[poData.supplierId] || null,
+        // Tylko podstawowe daty - bez kosztownych obliczeń
+        orderDate: safeConvertDate(poData.orderDate),
+        createdAt: safeConvertDate(poData.createdAt),
+        // Tylko podstawowe pola potrzebne do wyświetlenia
+        items: poData.items || [],
+        supplierId: poData.supplierId
+      });
+    });
+    
+    // Zapisz do cache
+    limitedPOCache = purchaseOrders;
+    limitedPOCacheTimestamp = now;
+    console.log(`Pobrano i zapisano do cache ${purchaseOrders.length} zamówień dla edycji partii`);
+    
+    return purchaseOrders;
+  } catch (error) {
+    console.error('Błąd podczas pobierania ograniczonej listy zamówień zakupowych:', error);
     throw error;
   }
 };

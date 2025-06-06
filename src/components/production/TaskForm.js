@@ -1,6 +1,6 @@
 // src/components/production/TaskForm.js
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -62,6 +62,7 @@ const TaskForm = ({ taskId }) => {
   const { currentUser } = useAuth();
   const { showSuccess, showError, showWarning } = useNotification();
   const navigate = useNavigate();
+  const location = useLocation();
   
   const [workstations, setWorkstations] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
@@ -441,7 +442,17 @@ const TaskForm = ({ taskId }) => {
         showSuccess('Zadanie zostało utworzone');
       }
       
-      navigate('/production');
+      // Sprawdź czy jest parametr returnTo w URL
+      const searchParams = new URLSearchParams(location.search);
+      const returnTo = searchParams.get('returnTo');
+      
+      if (returnTo && taskId) {
+        // Jeśli edytujemy zadanie i jest parametr returnTo, wróć do szczegółów zadania
+        navigate(`/production/tasks/${taskId}`);
+      } else {
+        // W przeciwnym przypadku idź do listy zadań
+        navigate('/production');
+      }
     } catch (error) {
       showError('Błąd podczas zapisywania zadania: ' + error.message);
       console.error('Error saving task:', error);
@@ -1173,7 +1184,19 @@ const TaskForm = ({ taskId }) => {
             <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Button 
                 startIcon={<ArrowBackIcon />} 
-                onClick={() => navigate('/production')}
+                onClick={() => {
+                  // Sprawdź czy jest parametr returnTo w URL
+                  const searchParams = new URLSearchParams(location.search);
+                  const returnTo = searchParams.get('returnTo');
+                  
+                  if (returnTo && taskId) {
+                    // Jeśli edytujemy zadanie i jest parametr returnTo, wróć do szczegółów zadania
+                    navigate(`/production/tasks/${taskId}`);
+                  } else {
+                    // W przeciwnym przypadku idź do listy zadań
+                    navigate('/production');
+                  }
+                }}
                 variant="outlined"
                 size="large"
               >

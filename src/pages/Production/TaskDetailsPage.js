@@ -4292,7 +4292,7 @@ const TaskDetailsPage = () => {
               <IconButton
                 color="primary"
                 component={Link}
-                to={`/production/tasks/${id}/edit`}
+                to={`/production/tasks/${id}/edit?returnTo=details`}
                 title="Edytuj zadanie"
                 sx={{ mr: isMobile ? 1 : 1 }}
               >

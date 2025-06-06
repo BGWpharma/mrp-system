@@ -618,11 +618,11 @@ const BatchesPage = () => {
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 2 : 0 }}>
         <Button 
           startIcon={<ArrowBackIcon />} 
-          onClick={() => navigate(-1)}
+          onClick={() => navigate(`/inventory/${id}`)}
           variant="outlined"
           sx={{ alignSelf: isMobile ? 'stretch' : 'flex-start' }}
         >
-          Powrót
+          Powrót do szczegółów
         </Button>
         <Typography variant="h5" align={isMobile ? "center" : "left"}>
           {item ? `Partie: ${item.name}` : 'Partie (Produkt niedostępny)'}

@@ -23,7 +23,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { ArrowBack as ArrowBackIcon, Save as SaveIcon, ShoppingCart as ShoppingCartIcon } from '@mui/icons-material';
 import { getInventoryItemById, getItemBatches, updateBatch, getInventoryBatch } from '../../services/inventoryService';
-import { getAllPurchaseOrders, getPurchaseOrderById } from '../../services/purchaseOrderService';
+import { getLimitedPurchaseOrdersForBatchEdit, getPurchaseOrderById } from '../../services/purchaseOrderService';
 import { updateBatchesForPurchaseOrder } from '../../services/purchaseOrderService';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
@@ -41,6 +41,7 @@ const BatchEditForm = () => {
   const [loadingPurchaseOrders, setLoadingPurchaseOrders] = useState(false);
   const [selectedPurchaseOrder, setSelectedPurchaseOrder] = useState(null);
   const [selectedPOItemId, setSelectedPOItemId] = useState('');
+  const [purchaseOrdersLoaded, setPurchaseOrdersLoaded] = useState(false);
 
   const [batchData, setBatchData] = useState({
     batchNumber: '',
@@ -165,16 +166,9 @@ const BatchEditForm = () => {
           }
         }
 
-        // Pobierz dostępne zamówienia zakupowe
-        setLoadingPurchaseOrders(true);
-        try {
-          const poList = await getAllPurchaseOrders();
-          setPurchaseOrders(poList);
-        } catch (error) {
-          console.error('Błąd podczas pobierania listy zamówień zakupowych:', error);
-        } finally {
-          setLoadingPurchaseOrders(false);
-        }
+        // USUNIĘTO: Pobieranie zamówień zakupowych na początku
+        // Będą ładowane dopiero gdy użytkownik kliknie w pole Autocomplete
+        
       } catch (error) {
         showError('Błąd podczas pobierania danych: ' + error.message);
         console.error('Error fetching data:', error);
@@ -185,6 +179,22 @@ const BatchEditForm = () => {
     
     fetchData();
   }, [id, batchId, navigate, showError]);
+
+  // Nowa funkcja do lazy loading zamówień zakupowych
+  const loadPurchaseOrdersIfNeeded = async () => {
+    if (!purchaseOrdersLoaded && !loadingPurchaseOrders) {
+      setLoadingPurchaseOrders(true);
+      try {
+        const poList = await getLimitedPurchaseOrdersForBatchEdit();
+        setPurchaseOrders(poList);
+        setPurchaseOrdersLoaded(true);
+      } catch (error) {
+        console.error('Błąd podczas pobierania listy zamówień zakupowych:', error);
+      } finally {
+        setLoadingPurchaseOrders(false);
+      }
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -530,13 +540,23 @@ const BatchEditForm = () => {
                 value={selectedPurchaseOrder}
                 onChange={handlePurchaseOrderChange}
                 loading={loadingPurchaseOrders}
+                onOpen={loadPurchaseOrdersIfNeeded}
                 renderInput={(params) => (
                   <TextField
                     {...params}
                     label="Wybierz zamówienie zakupowe"
                     margin="normal"
                     fullWidth
-                    helperText="Wybierz PO, z którym chcesz powiązać tę partię"
+                    helperText={loadingPurchaseOrders ? "Ładowanie zamówień..." : "Wybierz PO, z którym chcesz powiązać tę partię"}
+                    InputProps={{
+                      ...params.InputProps,
+                      endAdornment: (
+                        <>
+                          {loadingPurchaseOrders ? <CircularProgress color="inherit" size={20} /> : null}
+                          {params.InputProps.endAdornment}
+                        </>
+                      ),
+                    }}
                   />
                 )}
               />

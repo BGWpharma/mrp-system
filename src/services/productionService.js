@@ -201,16 +201,36 @@ import {
       let filteredDocs = allDocs;
       if (filters.searchTerm && filters.searchTerm.trim() !== '') {
         const searchTermLower = filters.searchTerm.toLowerCase().trim();
-        filteredDocs = allDocs.filter(doc => {
+        
+        // Podziel dokumenty na kategorie według dopasowania
+        const moNumberMatches = [];
+        const otherMatches = [];
+        
+        allDocs.forEach(doc => {
           const data = doc.data();
-          return (
+          
+          // Sprawdź czy dopasowanie jest w numerze MO (najwyższy priorytet)
+          const moNumberMatch = data.moNumber && data.moNumber.toLowerCase().includes(searchTermLower);
+          
+          // Sprawdź inne pola
+          const otherFieldsMatch = (
             (data.name && data.name.toLowerCase().includes(searchTermLower)) ||
             (data.description && data.description.toLowerCase().includes(searchTermLower)) ||
             (data.productName && data.productName.toLowerCase().includes(searchTermLower)) ||
-            (data.moNumber && data.moNumber.toLowerCase().includes(searchTermLower)) ||
             (data.clientName && data.clientName.toLowerCase().includes(searchTermLower))
           );
+          
+          if (moNumberMatch) {
+            // Jeśli dopasowanie w numerze MO, dodaj do kategorii o wysokim priorytecie
+            moNumberMatches.push(doc);
+          } else if (otherFieldsMatch) {
+            // Jeśli dopasowanie w innych polach, dodaj do kategorii o niskim priorytecie
+            otherMatches.push(doc);
+          }
         });
+        
+        // Połącz wyniki z priorytetem: najpierw dopasowania MO, potem pozostałe
+        filteredDocs = [...moNumberMatches, ...otherMatches];
         
         // Aktualizujemy liczby po filtrowaniu
         const filteredTotalCount = filteredDocs.length;

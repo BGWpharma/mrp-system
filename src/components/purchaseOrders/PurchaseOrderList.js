@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Container, Typography, Paper, Table, TableBody, TableCell, TableContainer,
@@ -7,12 +7,13 @@ import {
   Tooltip, Menu, Checkbox, ListItemText, TableSortLabel, Pagination, TableFooter, CircularProgress,
   Fade, Skeleton
 } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, Description as DescriptionIcon, ViewColumn as ViewColumnIcon } from '@mui/icons-material';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, Description as DescriptionIcon, ViewColumn as ViewColumnIcon, Clear as ClearIcon } from '@mui/icons-material';
 import { getAllPurchaseOrders, deletePurchaseOrder, updatePurchaseOrderStatus, getPurchaseOrdersWithPagination, clearSearchCache } from '../../services/purchaseOrderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { STATUS_TRANSLATIONS, PURCHASE_ORDER_STATUSES } from '../../config';
 import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
+import { usePurchaseOrderListState } from '../../contexts/PurchaseOrderListStateContext';
 
 const PurchaseOrderList = () => {
   const { currentUser } = useAuth();
@@ -22,33 +23,33 @@ const PurchaseOrderList = () => {
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [filteredPOs, setFilteredPOs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [poToDelete, setPoToDelete] = useState(null);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [poToUpdateStatus, setPoToUpdateStatus] = useState(null);
   const [newStatus, setNewStatus] = useState('');
   const [columnMenuAnchor, setColumnMenuAnchor] = useState(null);
-  
-  // Dodajemy stany do obsługi sortowania
-  const [orderBy, setOrderBy] = useState('number'); // Domyślnie sortowanie po numerze
-  const [order, setOrder] = useState('asc'); // Domyślnie rosnąco
-  
-  // Dodajemy stany do obsługi paginacji
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   
   // Dodajemy stan dla opóźnionego wyszukiwania
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
-  const [searchTimeout, setSearchTimeout] = useState(null);
+  const searchTimeout = useRef(null);
   
   // Używamy kontekstu preferencji kolumn
   const { getColumnPreferencesForView, updateColumnPreferences } = useColumnPreferences();
   // Pobieramy preferencje dla widoku 'purchaseOrders'
   const visibleColumns = getColumnPreferencesForView('purchaseOrders');
+  
+  // Użyj kontekstu stanu listy zamówień zakupu
+  const { state: listState, actions: listActions } = usePurchaseOrderListState();
+
+  // Zmienne stanu z kontekstu
+  const searchTerm = listState.searchTerm;
+  const statusFilter = listState.statusFilter;
+  const page = listState.page;
+  const pageSize = listState.pageSize;
+  const tableSort = listState.tableSort;
   
   // Funkcja pobierająca dane z obsługą debounce dla wyszukiwania
   const fetchPurchaseOrders = useCallback(async () => {
@@ -67,21 +68,16 @@ const PurchaseOrderList = () => {
         console.log('Wyczyszczono cache wyszukiwania');
       }
       
-      // OPTYMALIZACJA: Zwiększamy interwały między zapytaniami i zmniejszamy ilość danych
-      // Zmniejszamy domyślną liczbę elementów z 10 do 5, jeśli nie jest określona inaczej
-      const optimizedLimit = limit || 5;
-      
       // Używamy funkcji z paginacją i filtrowaniem po stronie serwera
-      // Dodajemy ograniczenie ilości pobieranych pól, aby zmniejszyć rozmiar odpowiedzi
       const response = await getPurchaseOrdersWithPagination(
         page, 
-        optimizedLimit, 
-        orderBy, 
-        order,
+        pageSize, 
+        tableSort.field, 
+        tableSort.order,
         filters // Przekazujemy filtry do funkcji
       );
       
-      console.log(`Zoptymalizowane pobieranie: strona ${page}, limit ${optimizedLimit}`);
+      console.log(`Pobieranie zamówień: strona ${page}, rozmiar ${pageSize}`);
       
       // Ustawiamy dane i informacje o paginacji
       setPurchaseOrders(response.data);
@@ -99,7 +95,7 @@ const PurchaseOrderList = () => {
       showError('Nie udało się pobrać listy zamówień zakupu');
       setLoading(false);
     }
-  }, [page, limit, orderBy, order, statusFilter, debouncedSearchTerm, showError]);
+  }, [page, pageSize, tableSort.field, tableSort.order, statusFilter, debouncedSearchTerm, showError]);
   
   // Wywołujemy fetchPurchaseOrders przy zmianach parametrów
   useEffect(() => {
@@ -108,50 +104,85 @@ const PurchaseOrderList = () => {
   
   // Obsługa debounce dla wyszukiwania
   useEffect(() => {
-    if (searchTimeout) {
-      clearTimeout(searchTimeout);
+    if (searchTimeout.current) {
+      clearTimeout(searchTimeout.current);
     }
     
-    const timeoutId = setTimeout(() => {
+    searchTimeout.current = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
     }, 1000); // 1000ms opóźnienia (1 sekunda)
     
-    setSearchTimeout(timeoutId);
-    
     return () => {
-      if (searchTimeout) {
-        clearTimeout(searchTimeout);
+      if (searchTimeout.current) {
+        clearTimeout(searchTimeout.current);
       }
     };
   }, [searchTerm]);
   
   // Funkcja obsługująca kliknięcie w nagłówek kolumny
   const handleRequestSort = (property) => {
-    const isAsc = orderBy === property && order === 'asc';
-    setOrder(isAsc ? 'desc' : 'asc');
-    setOrderBy(property);
-    setPage(1); // Resetujemy do pierwszej strony przy zmianie sortowania
+    const isAsc = tableSort.field === property && tableSort.order === 'asc';
+    const newOrder = isAsc ? 'desc' : 'asc';
+    listActions.setTableSort({ field: property, order: newOrder });
+    listActions.setPage(1); // Resetujemy do pierwszej strony przy zmianie sortowania
   };
   
   // Funkcja obsługująca zmianę strony
   const handleChangePage = (event, newPage) => {
-    setPage(newPage);
+    listActions.setPage(newPage);
   };
   
   // Funkcja obsługująca zmianę liczby elementów na stronę
   const handleChangeRowsPerPage = (event) => {
-    setLimit(parseInt(event.target.value, 10));
-    setPage(1); // Resetujemy do pierwszej strony
+    listActions.setPageSize(parseInt(event.target.value, 10));
   };
   
   const handleSearchChange = (e) => {
-    setSearchTerm(e.target.value);
+    listActions.setSearchTerm(e.target.value);
     // Nie resetujemy strony tutaj, to nastąpi przy zmianie debouncedSearchTerm
   };
   
   const handleStatusFilterChange = (e) => {
-    setStatusFilter(e.target.value);
-    setPage(1); // Resetujemy do pierwszej strony przy zmianie filtra
+    listActions.setStatusFilter(e.target.value);
+  };
+  
+  // Funkcja czyszczenia wyszukiwania i filtrów
+  const handleClearFilters = async () => {
+    listActions.setSearchTerm('');
+    listActions.setStatusFilter('all');
+    setDebouncedSearchTerm(''); // Natychmiastowe wyczyszczenie również debounced term
+    
+    // Natychmiast odśwież listę z pustymi filtrami
+    try {
+      setLoading(true);
+      
+      // Wywołaj API z pustymi filtrami
+      const response = await getPurchaseOrdersWithPagination(
+        1, // Reset do pierwszej strony
+        pageSize, 
+        tableSort.field, 
+        tableSort.order,
+        { status: null, searchTerm: null } // Puste filtry
+      );
+      
+      // Ustawiamy dane i informacje o paginacji
+      setPurchaseOrders(response.data);
+      setFilteredPOs(response.data);
+      
+      setTotalItems(response.pagination.totalItems);
+      setTotalPages(response.pagination.totalPages);
+      
+      // Resetuj również stronę
+      listActions.setPage(1);
+      
+      setTimeout(() => {
+        setLoading(false);
+      }, 300);
+    } catch (error) {
+      console.error('Błąd podczas czyszczenia filtrów:', error);
+      showError('Nie udało się wyczyścić filtrów');
+      setLoading(false);
+    }
   };
   
   const handleDeleteClick = (po) => {
@@ -253,8 +284,8 @@ const PurchaseOrderList = () => {
           label
         ) : (
           <TableSortLabel
-            active={orderBy === id}
-            direction={orderBy === id ? order : 'asc'}
+            active={tableSort.field === id}
+            direction={tableSort.field === id ? tableSort.order : 'asc'}
             onClick={() => handleRequestSort(id)}
           >
             {label}
@@ -305,6 +336,17 @@ const PurchaseOrderList = () => {
               ))}
             </Select>
           </FormControl>
+          
+          <Tooltip title="Wyczyść filtry">
+            <IconButton 
+              color="secondary" 
+              onClick={handleClearFilters}
+              size="small"
+              disabled={searchTerm === '' && statusFilter === 'all'}
+            >
+              <ClearIcon />
+            </IconButton>
+          </Tooltip>
           
           <Tooltip title="Konfiguracja kolumn">
             <IconButton 
@@ -369,7 +411,7 @@ const PurchaseOrderList = () => {
               </TableHead>
               <TableBody>
                 {loading ? (
-                  Array.from({ length: limit }).map((_, index) => (
+                  Array.from({ length: pageSize }).map((_, index) => (
                     <TableRow key={index}>
                       {visibleColumns['number'] && (
                         <TableCell>
@@ -520,13 +562,13 @@ const PurchaseOrderList = () => {
                           Wierszy na stronę:
                         </Typography>
                         <Select
-                          value={limit}
+                          value={pageSize}
                           onChange={handleChangeRowsPerPage}
                           size="small"
                         >
-                          {[5, 10, 25, 50].map(pageSize => (
-                            <MenuItem key={pageSize} value={pageSize}>
-                              {pageSize}
+                          {[5, 10, 25, 50].map(size => (
+                            <MenuItem key={size} value={size}>
+                              {size}
                             </MenuItem>
                           ))}
                         </Select>
@@ -540,7 +582,7 @@ const PurchaseOrderList = () => {
                         showLastButton
                       />
                       <Typography variant="body2">
-                        Wyświetlanie {filteredPOs.length > 0 ? (page - 1) * limit + 1 : 0}-{Math.min(page * limit, totalItems)} z {totalItems}
+                        Wyświetlanie {filteredPOs.length > 0 ? (page - 1) * pageSize + 1 : 0}-{Math.min(page * pageSize, totalItems)} z {totalItems}
                       </Typography>
                     </Box>
                   </TableCell>

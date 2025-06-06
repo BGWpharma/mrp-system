@@ -630,7 +630,7 @@ const ConsumptionPage = () => {
       {/* Nagłówek */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <IconButton onClick={() => navigate(-1)} sx={{ mr: 2 }}>
+          <IconButton onClick={() => navigate(`/production/tasks/${taskId}`)} sx={{ mr: 2 }}>
             <ArrowBackIcon />
           </IconButton>
           <Typography variant="h4" component="h1">
