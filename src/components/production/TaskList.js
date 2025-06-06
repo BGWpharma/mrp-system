@@ -1073,10 +1073,6 @@ const TaskList = () => {
     );
   };
 
-  if (loading) {
-    return <div>Ładowanie zadań produkcyjnych...</div>;
-  }
-
   return (
     <Container maxWidth="xl" sx={{ 
       px: isMobile ? 1 : 2,
@@ -1115,7 +1111,7 @@ const TaskList = () => {
             <Button 
               variant="outlined" 
               color="secondary" 
-              startIcon={<DownloadIcon />}
+              startIcon={loading ? <CircularProgress size={16} /> : <DownloadIcon />}
               onClick={handleExportCSV}
               disabled={loading}
               fullWidth={isMobile}
