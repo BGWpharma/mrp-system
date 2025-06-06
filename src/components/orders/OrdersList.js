@@ -52,7 +52,8 @@ import {
   Refresh as RefreshIcon,
   People as CustomersIcon,
   ShoppingCart as ShoppingCartIcon,
-  ArrowDropDown as ArrowDropDownIcon
+  ArrowDropDown as ArrowDropDownIcon,
+  Download as DownloadIcon
 } from '@mui/icons-material';
 import { 
   getAllOrders, 
@@ -67,6 +68,8 @@ import { useNotification } from '../../hooks/useNotification';
 import { formatDate, formatTimestamp, formatDateForInput } from '../../utils/dateUtils';
 import { formatCurrency } from '../../utils/formatUtils';
 import { getRecipeById } from '../../services/recipeService';
+import { exportToCSV, formatDateForExport, formatCurrencyForExport } from '../../utils/exportUtils';
+import { getUsersDisplayNames } from '../../services/userService';
 
 const OrdersList = () => {
   const [orders, setOrders] = useState([]);
@@ -859,6 +862,141 @@ const OrdersList = () => {
     setPage(1); // Reset do pierwszej strony
   };
 
+  // Funkcja do odświeżania wartości przed eksportem
+  const refreshOrdersForExport = async () => {
+    try {
+      // Import potrzebnych funkcji
+      const { getAllOrders } = await import('../../services/orderService');
+      const { getOrderById } = await import('../../services/orderService');
+      const { getPurchaseOrderById } = await import('../../services/purchaseOrderService');
+      
+      // Pobierz wszystkie zamówienia z uwzględnieniem filtrów
+      let ordersToRefresh = orders;
+      
+      // Jeśli mamy więcej niż jedną stronę, pobierz wszystkie zamówienia
+      if (totalPages > 1) {
+        const allOrdersResult = await getOrdersWithPagination(
+          1, // pierwsza strona
+          totalItems, // wszystkie elementy
+          orderBy,
+          orderDirection,
+          { ...filters, searchTerm: debouncedSearchTerm }
+        );
+        ordersToRefresh = allOrdersResult.data;
+      }
+      
+      // Przelicz wartości dla każdego zamówienia
+      const updatedOrders = await Promise.all(ordersToRefresh.map(async (order) => {
+        console.log(`[Export] Odświeżam wartości zamówienia ${order.id}`);
+        
+        // Pobierz zaktualizowane pełne dane zamówienia
+        const updatedOrderData = await getOrderById(order.id);
+        
+        // Aktualizuj koszty produkcji dla pozycji zamówienia
+        if (updatedOrderData.productionTasks && updatedOrderData.productionTasks.length > 0 && updatedOrderData.items && updatedOrderData.items.length > 0) {
+          const { getTaskById } = await import('../../services/productionService');
+          const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/costCalculator');
+          
+          for (let i = 0; i < updatedOrderData.items.length; i++) {
+            const item = updatedOrderData.items[i];
+            
+            // Znajdź powiązane zadanie produkcyjne
+            const associatedTask = updatedOrderData.productionTasks?.find(task => 
+              task.id === item.productionTaskId
+            );
+            
+            if (associatedTask) {
+              try {
+                // Pobierz szczegółowe dane zadania z bazy danych
+                const taskDetails = await getTaskById(associatedTask.id);
+                
+                const fullProductionCost = taskDetails.totalFullProductionCost || associatedTask.totalFullProductionCost || 0;
+                const productionCost = taskDetails.totalMaterialCost || associatedTask.totalMaterialCost || 0;
+                
+                // Oblicz koszty jednostkowe z uwzględnieniem logiki listy cenowej
+                const calculatedFullProductionUnitCost = calculateFullProductionUnitCost(item, fullProductionCost);
+                const calculatedProductionUnitCost = calculateProductionUnitCost(item, productionCost);
+                
+                // Aktualizuj informacje o zadaniu produkcyjnym w elemencie zamówienia
+                updatedOrderData.items[i] = {
+                  ...item,
+                  productionTaskId: associatedTask.id,
+                  productionTaskNumber: associatedTask.moNumber || taskDetails.moNumber,
+                  productionStatus: associatedTask.status || taskDetails.status,
+                  productionCost: productionCost,
+                  fullProductionCost: fullProductionCost,
+                  productionUnitCost: calculatedProductionUnitCost,
+                  fullProductionUnitCost: calculatedFullProductionUnitCost
+                };
+              } catch (error) {
+                console.error(`Błąd podczas pobierania szczegółów zadania ${associatedTask.id}:`, error);
+                
+                // W przypadku błędu, użyj podstawowych danych z associatedTask
+                const fullProductionCost = associatedTask.totalFullProductionCost || 0;
+                const productionCost = associatedTask.totalMaterialCost || 0;
+                
+                updatedOrderData.items[i] = {
+                  ...item,
+                  productionTaskId: associatedTask.id,
+                  productionTaskNumber: associatedTask.moNumber,
+                  productionStatus: associatedTask.status,
+                  productionCost: productionCost,
+                  fullProductionCost: fullProductionCost,
+                  productionUnitCost: productionCost / (parseFloat(item.quantity) || 1),
+                  fullProductionUnitCost: fullProductionCost / (parseFloat(item.quantity) || 1)
+                };
+              }
+            }
+          }
+        }
+        
+        // Oblicz wartość produktów z uwzględnieniem kosztów produkcji
+        const calculateItemTotalValue = (item) => {
+          const itemValue = (parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0);
+          if (item.fromPriceList) {
+            return itemValue;
+          }
+          if (item.productionTaskId && item.productionCost !== undefined) {
+            return itemValue + parseFloat(item.productionCost || 0);
+          }
+          return itemValue;
+        };
+        
+        const subtotal = (updatedOrderData.items || []).reduce((sum, item) => {
+          return sum + calculateItemTotalValue(item);
+        }, 0);
+        
+        const shippingCost = parseFloat(updatedOrderData.shippingCost) || 0;
+        const additionalCosts = updatedOrderData.additionalCostsItems ? 
+          updatedOrderData.additionalCostsItems
+            .filter(cost => parseFloat(cost.value) > 0)
+            .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0) : 0;
+        const discounts = updatedOrderData.additionalCostsItems ? 
+          Math.abs(updatedOrderData.additionalCostsItems
+            .filter(cost => parseFloat(cost.value) < 0)
+            .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)) : 0;
+        
+        const recalculatedTotalValue = subtotal + shippingCost + additionalCosts - discounts;
+        
+        return {
+          ...updatedOrderData,
+          totalValue: recalculatedTotalValue,
+          productsValue: subtotal,
+          shippingCost: shippingCost
+        };
+      }));
+      
+      // Aktualizuj stan z odświeżonymi danymi
+      setOrders(updatedOrders);
+      console.log(`[Export] Odświeżono wartości dla ${updatedOrders.length} zamówień`);
+      
+    } catch (error) {
+      console.error('Błąd podczas odświeżania wartości przed eksportem:', error);
+      showError('Wystąpił błąd podczas odświeżania wartości');
+      throw error; // Przerwij eksport w przypadku błędu
+    }
+  };
+
   const handleRefreshMO = async (order) => {
     try {
       setLoading(true);
@@ -984,6 +1122,214 @@ const OrdersList = () => {
     }
   };
 
+  // Funkcja eksportu zamówień klientów z pozycjami do CSV
+  const handleExportOrdersToCSV = async () => {
+    try {
+      setLoading(true);
+      showInfo('Odświeżanie wartości przed eksportem...');
+      
+      // Najpierw odśwież wszystkie wartości zamówień
+      await refreshOrdersForExport();
+      
+      // Pobierz wszystkie zamówienia z uwzględnieniem aktualnych filtrów
+      let exportOrders = orders;
+      
+      // Jeśli mamy tylko jedną stronę danych, pobieramy wszystkie zamówienia z filtrami
+      if (totalPages > 1) {
+        const allOrdersResult = await getOrdersWithPagination(
+          1, // pierwsza strona
+          totalItems, // wszystkie elementy
+          orderBy,
+          orderDirection,
+          { ...filters, searchTerm: debouncedSearchTerm }
+        );
+        exportOrders = allOrdersResult.data;
+      }
+
+      // Pobierz nazwy użytkowników dla pól "Utworzone przez"
+      const createdByUserIds = exportOrders
+        .map(order => order.createdBy)
+        .filter(id => id)
+        .filter((id, index, array) => array.indexOf(id) === index); // usuń duplikaty
+      
+      let userNames = {};
+      if (createdByUserIds.length > 0) {
+        try {
+          userNames = await getUsersDisplayNames(createdByUserIds);
+        } catch (error) {
+          console.error('Błąd podczas pobierania nazw użytkowników:', error);
+        }
+      }
+
+      // Przygotuj dane do eksportu - każda pozycja zamówienia jako osobny wiersz
+      const exportData = [];
+      
+      exportOrders.forEach(order => {
+        if (order.items && order.items.length > 0) {
+          order.items.forEach((item, itemIndex) => {
+            // Znajdź powiązane zadanie produkcyjne dla tej pozycji
+            let associatedTask = null;
+            if (order.productionTasks && order.productionTasks.length > 0) {
+              // Najpierw szukaj po orderItemId (najdokładniejsze dopasowanie)
+              associatedTask = order.productionTasks.find(task => 
+                task.orderItemId && task.orderItemId === item.id
+              );
+              
+              // Jeśli nie znaleziono po orderItemId, spróbuj dopasować po nazwie i ilości
+              if (!associatedTask) {
+                associatedTask = order.productionTasks.find(task => 
+                  task.productName === item.name && 
+                  parseFloat(task.quantity) === parseFloat(item.quantity) &&
+                  !order.productionTasks.some(t => t.orderItemId === item.id) // upewnij się, że zadanie nie jest już przypisane
+                );
+              }
+            }
+
+            // Pobierz dane zadania produkcyjnego - priorytet dla danych z order.productionTasks
+            const productionTaskId = associatedTask?.id || item.productionTaskId || '';
+            const productionTaskNumber = associatedTask?.moNumber || item.productionTaskNumber || '';
+            const productionStatus = associatedTask?.status || item.productionStatus || '';
+            
+            // Oblicz wartość pozycji z uwzględnieniem kosztów produkcji
+            const itemValue = (parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0);
+            let totalItemValue = itemValue;
+            
+            // Jeśli produkt nie jest z listy cenowej i ma koszt produkcji, dodaj go
+            if (!item.fromPriceList && (associatedTask || item.productionTaskId) && item.productionCost !== undefined) {
+              totalItemValue += parseFloat(item.productionCost || 0);
+            }
+
+            // Pobierz poprawny adres klienta (priorytet: shippingAddress > billingAddress > address)
+            const customerAddress = order.customer?.shippingAddress || 
+                                   order.customer?.billingAddress || 
+                                   order.customer?.address || '';
+
+            exportData.push({
+              orderNumber: order.orderNumber || order.id,
+              orderDate: formatDateForExport(order.orderDate),
+              customerName: order.customer?.name || 'Nieznany klient',
+              customerEmail: order.customer?.email || '',
+              customerPhone: order.customer?.phone || '',
+              customerAddress: customerAddress,
+              orderStatus: order.status || '',
+              itemNumber: itemIndex + 1,
+              itemName: item.name || '',
+              itemDescription: item.description || '',
+              itemQuantity: parseFloat(item.quantity) || 0,
+              itemUnit: item.unit || 'szt.',
+              itemPrice: parseFloat(item.price) || 0,
+              itemValue: Number(itemValue.toFixed(2)),
+              itemFromPriceList: item.fromPriceList,
+              productionTaskId: productionTaskId,
+              productionTaskNumber: productionTaskNumber,
+              productionStatus: productionStatus,
+              productionCost: Number((parseFloat(item.productionCost || 0)).toFixed(2)),
+              totalItemValue: Number(totalItemValue.toFixed(2)),
+              expectedDeliveryDate: formatDateForExport(order.expectedDeliveryDate),
+              deadline: formatDateForExport(order.deadline),
+              deliveryDate: formatDateForExport(order.deliveryDate),
+              shippingCost: Number((parseFloat(order.shippingCost || 0)).toFixed(2)),
+              orderTotalValue: Number((parseFloat(order.totalValue || 0)).toFixed(2)),
+              paymentStatus: order.paymentStatus || '',
+              notes: order.notes || '',
+              createdBy: userNames[order.createdBy] || order.createdBy || '',
+              createdAt: formatDateForExport(order.createdAt),
+              updatedAt: formatDateForExport(order.updatedAt)
+            });
+          });
+        } else {
+          // Jeśli zamówienie nie ma pozycji, dodaj wiersz z danymi zamówienia
+          const customerAddress = order.customer?.shippingAddress || 
+                                 order.customer?.billingAddress || 
+                                 order.customer?.address || '';
+
+          exportData.push({
+            orderNumber: order.orderNumber || order.id,
+            orderDate: formatDateForExport(order.orderDate),
+            customerName: order.customer?.name || 'Nieznany klient',
+            customerEmail: order.customer?.email || '',
+            customerPhone: order.customer?.phone || '',
+            customerAddress: customerAddress,
+            orderStatus: order.status || '',
+            itemNumber: 0,
+            itemName: 'BRAK POZYCJI',
+            itemDescription: '',
+            itemQuantity: 0,
+            itemUnit: '',
+            itemPrice: 0,
+            itemValue: 0,
+            itemFromPriceList: false,
+            productionTaskId: '',
+            productionTaskNumber: '',
+            productionStatus: '',
+            productionCost: 0,
+            totalItemValue: 0,
+            expectedDeliveryDate: formatDateForExport(order.expectedDeliveryDate),
+            deadline: formatDateForExport(order.deadline),
+            deliveryDate: formatDateForExport(order.deliveryDate),
+            shippingCost: Number((parseFloat(order.shippingCost || 0)).toFixed(2)),
+            orderTotalValue: Number((parseFloat(order.totalValue || 0)).toFixed(2)),
+            paymentStatus: order.paymentStatus || '',
+            notes: order.notes || '',
+            createdBy: userNames[order.createdBy] || order.createdBy || '',
+            createdAt: formatDateForExport(order.createdAt),
+            updatedAt: formatDateForExport(order.updatedAt)
+          });
+        }
+      });
+
+      // Definicja nagłówków dla CSV
+      const headers = [
+        { label: 'Numer zamówienia', key: 'orderNumber' },
+        { label: 'Data zamówienia', key: 'orderDate' },
+        { label: 'Nazwa klienta', key: 'customerName' },
+        { label: 'Email klienta', key: 'customerEmail' },
+        { label: 'Telefon klienta', key: 'customerPhone' },
+        { label: 'Adres klienta', key: 'customerAddress' },
+        { label: 'Status zamówienia', key: 'orderStatus' },
+        { label: 'Nr pozycji', key: 'itemNumber' },
+        { label: 'Nazwa produktu', key: 'itemName' },
+        { label: 'Opis produktu', key: 'itemDescription' },
+        { label: 'Ilość', key: 'itemQuantity' },
+        { label: 'Jednostka', key: 'itemUnit' },
+        { label: 'Cena jednostkowa', key: 'itemPrice' },
+        { label: 'Wartość pozycji', key: 'itemValue' },
+        { label: 'Z listy cenowej', key: 'itemFromPriceList' },
+        { label: 'ID zadania produkcyjnego', key: 'productionTaskId' },
+        { label: 'Numer MO', key: 'productionTaskNumber' },
+        { label: 'Status produkcji', key: 'productionStatus' },
+        { label: 'Koszt produkcji', key: 'productionCost' },
+        { label: 'Łączna wartość pozycji', key: 'totalItemValue' },
+        { label: 'Planowana dostawa', key: 'expectedDeliveryDate' },
+        { label: 'Termin realizacji', key: 'deadline' },
+        { label: 'Data dostawy', key: 'deliveryDate' },
+        { label: 'Koszt dostawy', key: 'shippingCost' },
+        { label: 'Łączna wartość zamówienia', key: 'orderTotalValue' },
+        { label: 'Status płatności', key: 'paymentStatus' },
+        { label: 'Uwagi', key: 'notes' },
+        { label: 'Utworzone przez', key: 'createdBy' },
+        { label: 'Data utworzenia', key: 'createdAt' },
+        { label: 'Data aktualizacji', key: 'updatedAt' }
+      ];
+
+      // Wygeneruj plik CSV
+      const currentDate = new Date().toISOString().slice(0, 10);
+      const filename = `zamowienia_klientow_pozycje_${currentDate}`;
+      const success = exportToCSV(exportData, headers, filename);
+
+      if (success) {
+        showSuccess(`Odświeżono wartości i wyeksportowano ${exportData.length} pozycji z ${exportOrders.length} zamówień do pliku CSV`);
+      } else {
+        showError('Nie udało się wyeksportować zamówień do CSV');
+      }
+    } catch (error) {
+      console.error('Błąd podczas eksportu CSV:', error);
+      showError('Wystąpił błąd podczas eksportu: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexDirection: { xs: 'column', sm: 'row' }, gap: { xs: 2, sm: 0 } }}>
@@ -1038,6 +1384,15 @@ const OrdersList = () => {
           />
 
           <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button 
+              variant="outlined" 
+              color="secondary" 
+              startIcon={<DownloadIcon />}
+              onClick={handleExportOrdersToCSV}
+              disabled={loading}
+            >
+              {loading ? 'Eksportowanie...' : 'Eksportuj CSV'}
+            </Button>
             <Button 
               variant={showFilters ? "contained" : "outlined"} 
               startIcon={<FilterListIcon />}

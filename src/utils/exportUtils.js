@@ -29,15 +29,30 @@ export const exportToCSV = (data, headers, filename) => {
           return obj && obj[key] !== undefined ? obj[key] : '';
         }, row);
         
-        // Format the value for CSV (quotes for strings, handle null/undefined)
-        if (value === null || value === undefined) {
-          return '""';
-        } else if (typeof value === 'string') {
-          // Escape quotes in strings by doubling them
-          return `"${value.replace(/"/g, '""')}"`;
+        // Format the value for CSV based on type
+        if (value === null || value === undefined || value === '') {
+          return '';
+        } else if (typeof value === 'number') {
+          // Numbers without quotes for proper Excel recognition
+          return isNaN(value) ? '' : value.toString();
+        } else if (typeof value === 'boolean') {
+          // Booleans as text
+          return `"${value ? 'Tak' : 'Nie'}"`;
         } else if (value instanceof Date) {
+          // Dates with quotes
           return `"${value.toLocaleDateString()}"`;
+        } else if (typeof value === 'string') {
+          // Check if string represents a number
+          const numValue = parseFloat(value);
+          if (!isNaN(numValue) && isFinite(numValue) && value.trim() === numValue.toString()) {
+            // If string is actually a number, export as number
+            return numValue.toString();
+          } else {
+            // Escape quotes in strings by doubling them
+            return `"${value.replace(/"/g, '""')}"`;
+          }
         } else {
+          // Other types as quoted strings
           return `"${value}"`;
         }
       }).join(',');
