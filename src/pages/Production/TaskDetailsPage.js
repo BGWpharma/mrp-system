@@ -220,6 +220,12 @@ const TaskDetailsPage = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
+  // Funkcja pomocnicza do formatowania wartości liczbowych z precyzją
+  const formatQuantityPrecision = (value, precision = 3) => {
+    if (typeof value !== 'number' || isNaN(value)) return 0;
+    return Math.round(value * Math.pow(10, precision)) / Math.pow(10, precision);
+  };
+
   // Stan dla głównej zakładki
   const [mainTab, setMainTab] = useState(0);
 
@@ -1273,9 +1279,12 @@ const TaskDetailsPage = () => {
       return 0;
     }
 
-    return task.consumedMaterials
+    const total = task.consumedMaterials
       .filter(consumed => consumed.materialId === materialId)
       .reduce((total, consumed) => total + Number(consumed.quantity || 0), 0);
+    
+    // Formatowanie do 3 miejsc po przecinku, aby uniknąć błędów precyzji float
+    return formatQuantityPrecision(total, 3);
   };
 
   // Funkcja pomocnicza do obliczania wymaganej ilości do rezerwacji (po uwzględnieniu konsumpcji)
@@ -4476,7 +4485,7 @@ const TaskDetailsPage = () => {
                               )}
                             </TableRow>
                           ))}
-                          <TableRow sx={{ '& td': { fontWeight: 'bold', bgcolor: 'rgba(0, 0, 0, 0.04)' } }}><TableCell colSpan={2} align="right">Suma:</TableCell><TableCell>{productionHistory.reduce((sum, item) => sum + (item.timeSpent || 0), 0)} min</TableCell><TableCell>{productionHistory.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0)} {task.unit}</TableCell><TableCell colSpan={2}></TableCell></TableRow>
+                          <TableRow sx={{ '& td': { fontWeight: 'bold', bgcolor: 'rgba(0, 0, 0, 0.04)' } }}><TableCell colSpan={2} align="right">Suma:</TableCell><TableCell>{productionHistory.reduce((sum, item) => sum + (item.timeSpent || 0), 0)} min</TableCell><TableCell>{formatQuantityPrecision(productionHistory.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0), 3)} {task.unit}</TableCell><TableCell colSpan={2}></TableCell></TableRow>
                         </TableBody>
                       </Table>
                     </TableContainer>

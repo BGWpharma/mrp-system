@@ -44,6 +44,12 @@ import {
   const INVENTORY_SUPPLIER_PRICES_COLLECTION = 'inventorySupplierPrices';
   const INVENTORY_SUPPLIER_PRICE_HISTORY_COLLECTION = 'inventorySupplierPriceHistory';
   
+  // Funkcja pomocnicza do formatowania wartości liczbowych z precyzją
+  const formatQuantityPrecision = (value, precision = 3) => {
+    if (typeof value !== 'number' || isNaN(value)) return 0;
+    return Math.round(value * Math.pow(10, precision)) / Math.pow(10, precision);
+  };
+  
   // ------ ZARZĄDZANIE MAGAZYNAMI ------
   
   // Pobieranie wszystkich magazynów
@@ -1702,17 +1708,22 @@ import {
       // Aktualizuj pole bookedQuantity w produkcie
       const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
       
+      // Formatuj quantity do odpowiedniej precyzji
+      const formattedQuantity = formatQuantityPrecision(quantity, 3);
+      
       // Jeśli pole bookedQuantity nie istnieje, utwórz je
       if (item.bookedQuantity === undefined) {
         await updateDoc(itemRef, {
-          bookedQuantity: quantity,
+          bookedQuantity: formattedQuantity,
           updatedAt: serverTimestamp(),
           updatedBy: userId
         });
       } else {
-        // W przeciwnym razie zwiększ istniejącą wartość
+        // W przeciwnym razie zwiększ istniejącą wartość - formatuj wynik
+        const currentBookedQuantity = item.bookedQuantity || 0;
+        const newBookedQuantity = formatQuantityPrecision(currentBookedQuantity + formattedQuantity, 3);
         await updateDoc(itemRef, {
-          bookedQuantity: increment(quantity),
+          bookedQuantity: newBookedQuantity,
           updatedAt: serverTimestamp(),
           updatedBy: userId
         });
@@ -1991,7 +2002,7 @@ import {
       // Po potwierdzeniu zużycia materiałów, cała rezerwacja powinna być anulowana
       // niezależnie od tego, ile faktycznie zużyto (nawet jeśli zużycie < rezerwacja)
       const shouldCancelAllBooking = true; // Zawsze anuluj całą rezerwację
-      const quantityToCancel = item.bookedQuantity || 0; // Zawsze anuluj całą zarezerwowaną ilość
+      const quantityToCancel = formatQuantityPrecision(item.bookedQuantity || 0, 3); // Zawsze anuluj całą zarezerwowaną ilość
       
       console.log(`[DEBUG REZERWACJE] Anulujemy całą rezerwację niezależnie od zużycia, bookedQuantity=${item.bookedQuantity}`); 
       
@@ -2055,12 +2066,15 @@ import {
           });
           console.log(`[DEBUG REZERWACJE] Zerowanie całej rezerwacji dla ${item.name} z powodu zużycia większego niż rezerwacja`);
         } else {
+          // Oblicz nową wartość bookedQuantity z formatowaniem precyzji
+          const currentBookedQuantity = item.bookedQuantity || 0;
+          const newBookedQuantity = formatQuantityPrecision(Math.max(0, currentBookedQuantity - quantityToCancel), 3);
           await updateDoc(itemRef, {
-            bookedQuantity: increment(-quantityToCancel),
+            bookedQuantity: newBookedQuantity,
             updatedAt: serverTimestamp(),
             updatedBy: userId
           });
-          console.log(`[DEBUG REZERWACJE] Zmniejszenie rezerwacji dla ${item.name} o ${quantityToCancel} (z ${item.bookedQuantity} do ${item.bookedQuantity - quantityToCancel})`);
+          console.log(`[DEBUG REZERWACJE] Zmniejszenie rezerwacji dla ${item.name} o ${quantityToCancel} (z ${currentBookedQuantity} do ${newBookedQuantity})`);
         }
       }
       
@@ -3446,8 +3460,14 @@ import {
       
       // Aktualizuj pole bookedQuantity w produkcie
       const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
+      
+      // Formatuj quantityDiff i oblicz nową wartość bookedQuantity z precyzją
+      const formattedQuantityDiff = formatQuantityPrecision(quantityDiff, 3);
+      const currentBookedQuantity = item.bookedQuantity || 0;
+      const newBookedQuantity = formatQuantityPrecision(currentBookedQuantity + formattedQuantityDiff, 3);
+      
       await updateDoc(itemRef, {
-        bookedQuantity: increment(quantityDiff),
+        bookedQuantity: newBookedQuantity,
         updatedAt: serverTimestamp(),
         updatedBy: userId
       });
@@ -3727,7 +3747,7 @@ import {
                 const bookedQuantity = itemData.bookedQuantity || 0;
                 
                 // Oblicz nową wartość bookedQuantity (nie może być ujemna)
-                const newBookedQuantity = Math.max(0, bookedQuantity - quantity);
+                const newBookedQuantity = formatQuantityPrecision(Math.max(0, bookedQuantity - quantity), 3);
                 
                 // Aktualizuj pozycję magazynową
                 await updateDoc(itemRef, {
@@ -4213,7 +4233,7 @@ import {
           const bookedQuantity = itemData.bookedQuantity || 0;
           
           // Oblicz nową wartość bookedQuantity (nie może być ujemna)
-          const newBookedQuantity = Math.max(0, bookedQuantity - quantity);
+          const newBookedQuantity = formatQuantityPrecision(Math.max(0, bookedQuantity - quantity), 3);
           
           // Aktualizuj pole bookedQuantity w produkcie
           await updateDoc(itemRef, {
@@ -4346,7 +4366,7 @@ import {
               const bookedQuantity = itemData.bookedQuantity || 0;
               
               // Oblicz nową wartość bookedQuantity (nie może być ujemna)
-              const newBookedQuantity = Math.max(0, bookedQuantity - quantity);
+              const newBookedQuantity = formatQuantityPrecision(Math.max(0, bookedQuantity - quantity), 3);
               
               // Aktualizuj pozycję magazynową
               await updateDoc(itemRef, {
@@ -4550,7 +4570,7 @@ import {
             const bookedQuantity = itemData.bookedQuantity || 0;
             
             // Oblicz nową wartość bookedQuantity (odejmij mikrorezerwację)
-            const newBookedQuantity = Math.max(0, bookedQuantity - reservation.quantity);
+            const newBookedQuantity = formatQuantityPrecision(Math.max(0, bookedQuantity - reservation.quantity), 3);
             
             // Aktualizuj pozycję magazynową
             await updateDoc(itemRef, {
