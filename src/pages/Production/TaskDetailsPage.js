@@ -781,8 +781,36 @@ const TaskDetailsPage = () => {
       setLoading(true);
       setReceiveDialogOpen(false);
       
+      // Sprawdź czy zadanie ma pozycję magazynową, jeśli nie - spróbuj znaleźć przez recepturę
+      let inventoryProductId = task.inventoryProductId;
+      
+      if (!inventoryProductId && task.recipeId) {
+        try {
+          console.log(`Sprawdzanie pozycji magazynowej dla receptury ${task.recipeId}`);
+          const { getInventoryItemByRecipeId } = await import('../../services/inventoryService');
+          const recipeInventoryItem = await getInventoryItemByRecipeId(task.recipeId);
+          
+          if (recipeInventoryItem) {
+            inventoryProductId = recipeInventoryItem.id;
+            console.log(`Znaleziono pozycję magazynową z receptury: ${recipeInventoryItem.name} (ID: ${inventoryProductId})`);
+            
+            // Zaktualizuj zadanie z pozycją magazynową z receptury
+            const { updateTask } = await import('../../services/productionService');
+            await updateTask(id, {
+              inventoryProductId: inventoryProductId
+            }, currentUser.uid);
+            
+            // Odśwież dane zadania z nową pozycją magazynową
+            const updatedTask = await getTaskById(id);
+            setTask(updatedTask);
+          }
+        } catch (error) {
+          console.error('Błąd podczas pobierania pozycji magazynowej z receptury:', error);
+        }
+      }
+      
       // Jeśli produkt jest powiązany z pozycją w magazynie, przenieś do formularza przyjęcia
-      if (task.inventoryProductId) {
+      if (inventoryProductId) {
         // Przekieruj do strony przyjęcia towaru z parametrami
         const unitPrice = task.costs && task.quantity ? 
           Number(task.costs.totalCost / task.quantity) : 0;
@@ -853,7 +881,7 @@ const TaskDetailsPage = () => {
         
         console.log('Przekazuję parametry do formularza przyjęcia:', Object.fromEntries(sourceInfo));
         
-        navigate(`/inventory/${task.inventoryProductId}/receive?${sourceInfo.toString()}`);
+        navigate(`/inventory/${inventoryProductId}/receive?${sourceInfo.toString()}`);
       } else {
         // Jeśli nie ma powiązanej pozycji magazynowej, użyj standardowej funkcji
         await addTaskProductToInventory(id, currentUser.uid);

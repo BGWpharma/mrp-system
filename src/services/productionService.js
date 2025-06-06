@@ -1197,54 +1197,110 @@ import {
       let inventoryItemId = taskData.inventoryProductId;
       let inventoryItem = null;
       
-      if (!inventoryItemId) {
-        // Jeśli nie ma określonego produktu, spróbuj znaleźć go według nazwy
-        const inventoryRef = collection(db, 'inventory');
-        const q = query(inventoryRef, where('name', '==', taskData.productName));
-        const querySnapshot = await getDocs(q);
-        
-        if (!querySnapshot.empty) {
-          // Użyj pierwszego znalezionego produktu
-          const doc = querySnapshot.docs[0];
-          inventoryItemId = doc.id;
-          inventoryItem = doc.data();
+      // Jeśli zadanie ma przypisane inventoryProductId, sprawdź czy pozycja rzeczywiście istnieje
+      if (inventoryItemId) {
+        try {
+          const { getInventoryItemById } = await import('./inventoryService');
+          inventoryItem = await getInventoryItemById(inventoryItemId);
           
-          // Zaktualizuj zadanie z informacją o znalezionym produkcie magazynowym
-          await updateDoc(taskRef, {
-            inventoryProductId: inventoryItemId,
-            updatedAt: serverTimestamp(),
-            updatedBy: userId
-          });
-        } else {
-          // Produkt nie istnieje, utwórz nowy
-          const newItemRef = doc(collection(db, 'inventory'));
-          inventoryItemId = newItemRef.id;
-          
-          const newItem = {
-            name: taskData.productName,
-            description: `Produkt utworzony automatycznie z zadania produkcyjnego: ${taskData.name}`,
-            category: 'Gotowe produkty',
-            quantity: 0,
-            unit: taskData.unit || 'szt.',
-            minStockLevel: 0,
-            optimalStockLevel: taskData.quantity * 2, // Przykładowa wartość
-            location: 'Magazyn główny',
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-            createdBy: userId,
-            updatedBy: userId
-          };
-          
-          await setDoc(newItemRef, newItem);
-          inventoryItem = newItem;
-          
-          // Zaktualizuj zadanie z informacją o nowo utworzonym produkcie magazynowym
-          await updateDoc(taskRef, {
-            inventoryProductId: inventoryItemId,
-            updatedAt: serverTimestamp(),
-            updatedBy: userId
-          });
+          if (!inventoryItem) {
+            console.warn(`Pozycja magazynowa ${inventoryItemId} z zadania nie istnieje, będę szukać innej`);
+            inventoryItemId = null; // Wyzeruj ID, żeby wyszukać pozycję innym sposobem
+          } else {
+            console.log(`Używam pozycji magazynowej z zadania: ${inventoryItem.name} (ID: ${inventoryItemId})`);
+          }
+        } catch (error) {
+          console.error('Błąd podczas sprawdzania pozycji magazynowej z zadania:', error);
+          inventoryItemId = null; // Wyzeruj ID w przypadku błędu
         }
+      }
+      
+      if (!inventoryItemId) {
+        // Jeśli zadanie ma recepturę, sprawdź czy ta receptura ma już powiązaną pozycję magazynową
+        if (taskData.recipeId) {
+          console.log(`Sprawdzanie pozycji magazynowej powiązanej z recepturą ${taskData.recipeId}`);
+          
+          try {
+            // Importuj funkcję do pobierania pozycji magazynowej powiązanej z recepturą
+            const { getInventoryItemByRecipeId } = await import('./inventoryService');
+            const recipeInventoryItem = await getInventoryItemByRecipeId(taskData.recipeId);
+            
+            if (recipeInventoryItem) {
+              inventoryItemId = recipeInventoryItem.id;
+              inventoryItem = recipeInventoryItem;
+              
+              console.log(`Znaleziono pozycję magazynową powiązaną z recepturą: ${recipeInventoryItem.name} (ID: ${inventoryItemId})`);
+              
+              // Zaktualizuj zadanie z informacją o pozycji magazynowej z receptury
+              await updateDoc(taskRef, {
+                inventoryProductId: inventoryItemId,
+                updatedAt: serverTimestamp(),
+                updatedBy: userId
+              });
+            }
+          } catch (error) {
+            console.error('Błąd podczas pobierania pozycji magazynowej z receptury:', error);
+          }
+        }
+        
+        // Jeśli nie znaleziono pozycji przez recepturę, spróbuj znaleźć według nazwy
+        if (!inventoryItemId) {
+          const inventoryRef = collection(db, 'inventory');
+          const q = query(inventoryRef, where('name', '==', taskData.productName));
+          const querySnapshot = await getDocs(q);
+          
+          if (!querySnapshot.empty) {
+            // Użyj pierwszego znalezionego produktu
+            const doc = querySnapshot.docs[0];
+            inventoryItemId = doc.id;
+            inventoryItem = doc.data();
+            
+            console.log(`Znaleziono pozycję magazynową według nazwy: ${inventoryItem.name} (ID: ${inventoryItemId})`);
+            
+            // Zaktualizuj zadanie z informacją o znalezionym produkcie magazynowym
+            await updateDoc(taskRef, {
+              inventoryProductId: inventoryItemId,
+              updatedAt: serverTimestamp(),
+              updatedBy: userId
+            });
+          } else {
+            // Produkt nie istnieje, utwórz nowy
+            const newItemRef = doc(collection(db, 'inventory'));
+            inventoryItemId = newItemRef.id;
+            
+            const newItem = {
+              name: taskData.productName,
+              description: `Produkt utworzony automatycznie z zadania produkcyjnego: ${taskData.name}`,
+              category: 'Gotowe produkty',
+              quantity: 0,
+              unit: taskData.unit || 'szt.',
+              minStockLevel: 0,
+              optimalStockLevel: taskData.quantity * 2, // Przykładowa wartość
+              location: 'Magazyn główny',
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+              createdBy: userId,
+              updatedBy: userId
+            };
+            
+            await setDoc(newItemRef, newItem);
+            inventoryItem = newItem;
+            
+            console.log(`Utworzono nową pozycję magazynową: ${newItem.name} (ID: ${inventoryItemId})`);
+            
+            // Zaktualizuj zadanie z informacją o nowo utworzonym produkcie magazynowym
+            await updateDoc(taskRef, {
+              inventoryProductId: inventoryItemId,
+              updatedAt: serverTimestamp(),
+              updatedBy: userId
+            });
+          }
+        }
+      }
+      
+      // Sprawdź czy udało się znaleźć lub utworzyć pozycję magazynową
+      if (!inventoryItemId) {
+        throw new Error('Nie udało się znaleźć ani utworzyć pozycji magazynowej dla produktu');
       }
       
       // Użyj parametrów przekazanych z formularza lub wartości z zadania produkcyjnego

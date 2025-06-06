@@ -336,6 +336,28 @@ import {
     return null;
   };
   
+  // Pobieranie pozycji magazynowej powiązanej z recepturą
+  export const getInventoryItemByRecipeId = async (recipeId) => {
+    try {
+      const itemsRef = collection(db, INVENTORY_COLLECTION);
+      const q = query(itemsRef, where('recipeId', '==', recipeId));
+      
+      const querySnapshot = await getDocs(q);
+      if (querySnapshot.docs.length > 0) {
+        const doc = querySnapshot.docs[0];
+        return {
+          id: doc.id,
+          ...doc.data()
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Błąd podczas pobierania pozycji magazynowej dla receptury:', error);
+      return null;
+    }
+  };
+  
   // Tworzenie nowej pozycji magazynowej
   export const createInventoryItem = async (itemData, userId) => {
     // Sprawdź, czy pozycja o takiej nazwie już istnieje
@@ -3756,6 +3778,15 @@ import {
     try {
       console.log(`Przeliczanie ilości dla pozycji ${itemId} na podstawie partii...`);
       
+      // Sprawdź czy pozycja magazynowa istnieje
+      const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
+      const itemSnapshot = await getDoc(itemRef);
+      
+      if (!itemSnapshot.exists()) {
+        console.warn(`Pozycja magazynowa ${itemId} nie istnieje - pomijam przeliczanie`);
+        return 0;
+      }
+      
       // Pobierz wszystkie partie dla danej pozycji - pobierzmy bezpośrednio z bazy danych
       // zamiast używać funkcji getItemBatches, która może stosować filtrowanie
       const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
@@ -3774,7 +3805,6 @@ import {
       console.log(`Suma ilości z partii (włącznie z partiami bez daty ważności): ${totalQuantity}`);
       
       // Zaktualizuj stan głównej pozycji magazynowej
-      const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
       await updateDoc(itemRef, {
         quantity: totalQuantity,
         lastUpdated: new Date().toISOString()

@@ -47,7 +47,7 @@ import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
 import { useAuth } from '../../hooks/useAuth';
 import RecipeVersionComparison from '../../components/recipes/RecipeVersionComparison';
-import { createInventoryItem, getAllInventoryItems } from '../../services/inventoryService';
+import { createInventoryItem, getAllInventoryItems, getInventoryItemByRecipeId } from '../../services/inventoryService';
 import { db } from '../../services/firebase/config';
 import { collection, query, where, limit, getDocs, doc, getDoc, updateDoc, orderBy } from 'firebase/firestore';
 import { getAllWorkstations } from '../../services/workstationService';
@@ -89,6 +89,7 @@ const RecipeDetailsPage = () => {
   const [restoringVersion, setRestoringVersion] = useState(false);
   const [linking, setLinking] = useState(false);
   const [workstations, setWorkstations] = useState([]);
+  const [inventoryProduct, setInventoryProduct] = useState(null);
 
   useEffect(() => {
     const fetchRecipeData = async () => {
@@ -97,6 +98,7 @@ const RecipeDetailsPage = () => {
         await fetchRecipe();
         await fetchVersions();
         await fetchWorkstations();
+        await fetchInventoryProduct();
       } catch (error) {
         console.error('Error fetching recipe data:', error);
         showError('Błąd podczas pobierania danych receptury');
@@ -134,6 +136,15 @@ const RecipeDetailsPage = () => {
       setWorkstations(workstationsData);
     } catch (error) {
       console.error('Błąd podczas pobierania stanowisk produkcyjnych:', error);
+    }
+  };
+
+  const fetchInventoryProduct = async () => {
+    try {
+      const inventoryItem = await getInventoryItemByRecipeId(id);
+      setInventoryProduct(inventoryItem);
+    } catch (error) {
+      console.error('Błąd podczas pobierania pozycji magazynowej:', error);
     }
   };
 
@@ -499,6 +510,24 @@ const RecipeDetailsPage = () => {
             <Grid item xs={12} md={6}>
               <Typography variant="subtitle2" color="text.secondary">
                 Koszt/sztuka: {recipe.processingCostPerUnit ? `${recipe.processingCostPerUnit.toFixed(2)} EUR` : 'Nie określono'}
+              </Typography>
+            </Grid>
+            <Grid item xs={12}>
+              <Typography variant="subtitle2" color="text.secondary">
+                Pozycja magazynowa: {inventoryProduct ? 
+                  <Link 
+                    to={`/inventory/${inventoryProduct.id}`} 
+                    style={{ textDecoration: 'none', color: 'inherit' }}
+                  >
+                    <Chip 
+                      label={`${inventoryProduct.name} (${inventoryProduct.quantity || 0} ${inventoryProduct.unit || 'szt.'})`}
+                      size="small"
+                      color="primary"
+                      variant="outlined"
+                      sx={{ ml: 1, cursor: 'pointer' }}
+                    />
+                  </Link>
+                  : 'Brak powiązanej pozycji magazynowej'}
               </Typography>
             </Grid>
           </Grid>

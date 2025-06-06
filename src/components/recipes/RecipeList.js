@@ -51,6 +51,7 @@ import {
   Download as DownloadIcon
 } from '@mui/icons-material';
 import { getAllRecipes, deleteRecipe, getRecipesByCustomer, getRecipesWithPagination } from '../../services/recipeService';
+import { getInventoryItemByRecipeId } from '../../services/inventoryService';
 import { useCustomersCache } from '../../hooks/useCustomersCache';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
@@ -113,6 +114,9 @@ const RecipeList = () => {
   // Dodajemy stan dla stanowisk produkcyjnych
   const [workstations, setWorkstations] = useState([]);
   
+  // Stan do przechowywania pozycji magazynowych powiązanych z recepturami
+  const [inventoryProducts, setInventoryProducts] = useState({});
+  
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const mode = theme.palette.mode;
@@ -125,6 +129,24 @@ const RecipeList = () => {
     } catch (error) {
       console.error('Błąd podczas pobierania stanowisk:', error);
     }
+  }, []);
+  
+  // Funkcja do pobierania pozycji magazynowych dla receptur
+  const fetchInventoryProducts = useCallback(async (recipesList) => {
+    const inventoryProductsMap = {};
+    
+    for (const recipe of recipesList) {
+      try {
+        const inventoryItem = await getInventoryItemByRecipeId(recipe.id);
+        if (inventoryItem) {
+          inventoryProductsMap[recipe.id] = inventoryItem;
+        }
+      } catch (error) {
+        console.error(`Błąd podczas pobierania pozycji magazynowej dla receptury ${recipe.id}:`, error);
+      }
+    }
+    
+    setInventoryProducts(prev => ({ ...prev, ...inventoryProductsMap }));
   }, []);
   
   // Obsługa debounce dla wyszukiwania
@@ -169,6 +191,11 @@ const RecipeList = () => {
       setTotalItems(result.pagination.totalItems);
       setTotalPages(result.pagination.totalPages);
       
+      // Pobierz pozycje magazynowe dla receptur
+      if (result.data.length > 0) {
+        await fetchInventoryProducts(result.data);
+      }
+      
       // Aktualizacja informacji o indeksie
       setSearchIndexStatus({
         isLoaded: true,
@@ -199,6 +226,11 @@ const RecipeList = () => {
         setFilteredRecipes(fallbackResult.data);
         setTotalItems(fallbackResult.pagination.totalItems);
         setTotalPages(fallbackResult.pagination.totalPages);
+        
+        // Pobierz pozycje magazynowe dla receptur w fallback
+        if (fallbackResult.data.length > 0) {
+          await fetchInventoryProducts(fallbackResult.data);
+        }
       } catch (fallbackError) {
         console.error('Błąd podczas awaryjnego pobierania receptur:', fallbackError);
         showError('Nie udało się pobrać receptur');
@@ -296,6 +328,11 @@ const RecipeList = () => {
       const result = await searchService.searchRecipes(debouncedSearchTerm, searchOptions);
       customerRecipesData = result.data;
       
+      // Pobierz pozycje magazynowe dla receptur klienta
+      if (customerRecipesData.length > 0) {
+        await fetchInventoryProducts(customerRecipesData);
+      }
+      
       // Zapisz receptury dla danego klienta
       setCustomerRecipes(prev => ({
         ...prev,
@@ -325,6 +362,11 @@ const RecipeList = () => {
             (recipe.name && recipe.name.toLowerCase().includes(searchTermLower)) ||
             (recipe.description && recipe.description.toLowerCase().includes(searchTermLower))
           );
+        }
+        
+        // Pobierz pozycje magazynowe dla receptur klienta (fallback)
+        if (fallbackData.length > 0) {
+          await fetchInventoryProducts(fallbackData);
         }
         
         // Zapisz receptury dla danego klienta
@@ -573,6 +615,23 @@ const RecipeList = () => {
                           </Box>
                         </Box>
                       )}
+                      
+                      {inventoryProducts[recipe.id] && (
+                        <Box sx={{ mb: 0.5 }}>
+                          <Link 
+                            to={`/inventory/${inventoryProducts[recipe.id].id}`} 
+                            style={{ textDecoration: 'none', color: 'inherit' }}
+                          >
+                            <Chip 
+                              label={`Magazyn: ${inventoryProducts[recipe.id].name} (${inventoryProducts[recipe.id].quantity || 0} ${inventoryProducts[recipe.id].unit || 'szt.'})`}
+                              size="small"
+                              color="secondary"
+                              variant="outlined"
+                              sx={{ fontSize: '0.7rem', cursor: 'pointer' }}
+                            />
+                          </Link>
+                        </Box>
+                      )}
                     </Box>
                   </CardContent>
                   
@@ -673,6 +732,7 @@ const RecipeList = () => {
                   )}
                 </Box>
               </TableCell>
+              <TableCell>Pozycja magazynowa</TableCell>
               <TableCell onClick={() => handleTableSort('updatedAt')} style={{ cursor: 'pointer' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                   Ostatnia aktualizacja
@@ -692,7 +752,7 @@ const RecipeList = () => {
           <TableBody>
             {recipesToRender.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} align="center">
+                <TableCell colSpan={6} align="center">
                   Nie znaleziono receptur
                 </TableCell>
               </TableRow>
@@ -722,6 +782,26 @@ const RecipeList = () => {
                         />
                       ) : (
                         <Chip label="Ogólna" size="small" variant="outlined" />
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {inventoryProducts[recipe.id] ? (
+                        <Link 
+                          to={`/inventory/${inventoryProducts[recipe.id].id}`} 
+                          style={{ textDecoration: 'none', color: 'inherit' }}
+                        >
+                          <Chip 
+                            label={`${inventoryProducts[recipe.id].name} (${inventoryProducts[recipe.id].quantity || 0} ${inventoryProducts[recipe.id].unit || 'szt.'})`}
+                            size="small"
+                            color="secondary"
+                            variant="outlined"
+                            sx={{ cursor: 'pointer' }}
+                          />
+                        </Link>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">
+                          Brak pozycji
+                        </Typography>
                       )}
                     </TableCell>
                     <TableCell>
