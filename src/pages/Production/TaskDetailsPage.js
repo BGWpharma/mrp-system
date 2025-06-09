@@ -104,6 +104,8 @@ import { getDoc, doc, updateDoc, serverTimestamp, arrayUnion, collection, query,
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../../services/firebase/config';
 import { getUsersDisplayNames } from '../../services/userService';
+import { getCompanyData } from '../../services/companyService';
+import { getWorkstationById } from '../../services/workstationService';
 
 const TaskDetailsPage = () => {
   const { id } = useParams();
@@ -206,6 +208,10 @@ const TaskDetailsPage = () => {
   const [loadingRawMaterials, setLoadingRawMaterials] = useState(false);
   const [searchRawMaterials, setSearchRawMaterials] = useState('');
 
+  // Stany dla sekcji 5. Production w raporcie
+  const [companyData, setCompanyData] = useState(null);
+  const [workstationData, setWorkstationData] = useState(null);
+
   // Nowe stany dla funkcjonalności usuwania materiałów
   const [deleteMaterialDialogOpen, setDeleteMaterialDialogOpen] = useState(false);
   const [materialToDelete, setMaterialToDelete] = useState(null);
@@ -229,6 +235,9 @@ const TaskDetailsPage = () => {
   
   // Stan dla załączników z powiązanych PO
   const [ingredientAttachments, setIngredientAttachments] = useState({});
+  
+  // Stan dla załączników z partii składników
+  const [ingredientBatchAttachments, setIngredientBatchAttachments] = useState({});
   
   // Stan dla załączników badań klinicznych
   const [clinicalAttachments, setClinicalAttachments] = useState([]);
@@ -576,6 +585,7 @@ const TaskDetailsPage = () => {
   useEffect(() => {
     if (task?.recipe?.ingredients && task?.consumedMaterials && materials.length > 0) {
       fetchIngredientAttachments();
+      fetchIngredientBatchAttachments();
     }
   }, [task?.recipe?.ingredients, task?.consumedMaterials, materials]);
 
@@ -4578,6 +4588,99 @@ const TaskDetailsPage = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  // Funkcja do pobierania załączników z partii składników
+  const fetchIngredientBatchAttachments = async () => {
+    if (!task?.recipe?.ingredients || !task?.consumedMaterials || materials.length === 0) {
+      return;
+    }
+
+    try {
+      const attachments = {};
+
+      // Dla każdego składnika receptury
+      for (const ingredient of task.recipe.ingredients) {
+        const ingredientAttachments = [];
+
+        // Znajdź skonsumowane materiały pasujące do tego składnika
+        const matchingConsumedMaterials = task.consumedMaterials.filter(consumed => {
+          // Znajdź materiał w liście materiałów zadania
+          const material = materials.find(m => (m.inventoryItemId || m.id) === consumed.materialId);
+          const materialName = consumed.materialName || material?.name || '';
+          
+          // Sprawdź czy nazwa materiału pasuje do nazwy składnika (case-insensitive)
+          return materialName.toLowerCase().includes(ingredient.name.toLowerCase()) ||
+                 ingredient.name.toLowerCase().includes(materialName.toLowerCase());
+        });
+
+        // Dla każdego pasującego skonsumowanego materiału pobierz załączniki z partii
+        for (const consumed of matchingConsumedMaterials) {
+          if (consumed.batchId) {
+            try {
+              // Pobierz dane partii magazynowej
+              const { getInventoryBatch } = await import('../../services/inventoryService');
+              const batchData = await getInventoryBatch(consumed.batchId);
+              
+              // Sprawdź czy partia ma załączniki lub certyfikat
+              const hasAttachments = (batchData.attachments && batchData.attachments.length > 0);
+              const hasCertificate = (batchData.certificateFileName && batchData.certificateDownloadURL);
+              
+              if (hasAttachments || hasCertificate) {
+                const batchAttachments = [];
+                
+                // Dodaj standardowe załączniki (jeśli istnieją)
+                if (hasAttachments) {
+                  const attachments = batchData.attachments.map(attachment => ({
+                    ...attachment,
+                    batchNumber: consumed.batchNumber || batchData.lotNumber || batchData.batchNumber,
+                    batchId: consumed.batchId,
+                    materialName: consumed.materialName || 'Nieznany materiał',
+                    source: 'batch_attachment'
+                  }));
+                  batchAttachments.push(...attachments);
+                }
+                
+                // Dodaj certyfikat jako załącznik (jeśli istnieje)
+                if (hasCertificate) {
+                  const certificateAttachment = {
+                    id: `cert_${batchData.id}`,
+                    fileName: batchData.certificateFileName,
+                    downloadURL: batchData.certificateDownloadURL,
+                    contentType: batchData.certificateContentType || 'application/octet-stream',
+                    size: 0, // Brak informacji o rozmiarze dla starych certyfikatów
+                    uploadedAt: batchData.certificateUploadedAt?.toDate?.() || new Date(),
+                    batchNumber: consumed.batchNumber || batchData.lotNumber || batchData.batchNumber,
+                    batchId: consumed.batchId,
+                    materialName: consumed.materialName || 'Nieznany materiał',
+                    source: 'batch_certificate'
+                  };
+                  batchAttachments.push(certificateAttachment);
+                }
+                
+                ingredientAttachments.push(...batchAttachments);
+              }
+            } catch (error) {
+              console.warn(`Nie udało się pobrać załączników dla partii ${consumed.batchId}:`, error);
+            }
+          }
+        }
+
+        // Usuń duplikaty załączników (po nazwie pliku)
+        const uniqueAttachments = ingredientAttachments.filter((attachment, index, self) => 
+          index === self.findIndex(a => a.fileName === attachment.fileName)
+        );
+
+        if (uniqueAttachments.length > 0) {
+          attachments[ingredient.name] = uniqueAttachments;
+        }
+      }
+
+      setIngredientBatchAttachments(attachments);
+      console.log('Pobrano załączniki z partii dla składników:', attachments);
+    } catch (error) {
+      console.warn('Błąd podczas pobierania załączników z partii składników:', error);
+    }
+  };
+
   // Funkcja naprawy danych receptury dla starych zadań
   const handleFixRecipeData = async () => {
     if (!task?.recipeId) {
@@ -4640,6 +4743,37 @@ const TaskDetailsPage = () => {
     }
   };
 
+  // Funkcja do pobierania danych firmy
+  const fetchCompanyData = async () => {
+    try {
+      const data = await getCompanyData();
+      setCompanyData(data);
+    } catch (error) {
+      console.error('Błąd podczas pobierania danych firmy:', error);
+      // Używamy domyślnych wartości przy błędzie
+      setCompanyData({
+        name: 'BGW Pharma Sp. z o.o.',
+        address: 'Szkolna 43B, 84-100 Polchowo'
+      });
+    }
+  };
+
+  // Funkcja do pobierania danych stanowiska
+  const fetchWorkstationData = async () => {
+    try {
+      if (task?.workstationId) {
+        const data = await getWorkstationById(task.workstationId);
+        setWorkstationData(data);
+      } else {
+        // Jeśli nie ma workstationId, ustaw pusty obiekt aby zatrzymać "Ładowanie..."
+        setWorkstationData({});
+      }
+    } catch (error) {
+      console.error('Błąd podczas pobierania danych stanowiska:', error);
+      setWorkstationData(null);
+    }
+  };
+
   // Inicjalizacja stanu checkboxów dla skonsumowanych materiałów
   useEffect(() => {
     if (task?.consumedMaterials && materials.length > 0) {
@@ -4676,6 +4810,14 @@ const TaskDetailsPage = () => {
       }
     }
   }, [task?.consumedMaterials?.length, materials.length, includeInCosts]); // Kontrolowane zależności
+
+  // Pobieranie danych firmy i stanowiska dla raportu
+  useEffect(() => {
+    if (mainTab === 5) { // Tylko gdy jesteśmy w zakładce "Raport gotowego produktu"
+      fetchCompanyData();
+      fetchWorkstationData();
+    }
+  }, [mainTab, task?.workstationId]);
 
   // Renderuj stronę
     return (
@@ -4992,29 +5134,56 @@ const TaskDetailsPage = () => {
           {mainTab === 5 && ( // Zakładka "Raport gotowego produktu"
             <Grid container spacing={3}>
               <Grid item xs={12}>
-                <Paper sx={{ p: 3 }}>
-                  <Typography variant="h6" component="h2" gutterBottom>
-                    Raport gotowego produktu
-                  </Typography>
+                <Paper sx={{ p: 4, backgroundColor: '#ffffff', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }}>
+                  <Box sx={{ mb: 4, textAlign: 'center', borderBottom: '3px solid #1976d2', pb: 3 }}>
+                    <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', color: '#1976d2', mb: 1 }}>
+                      RAPORT GOTOWEGO PRODUKTU
+                    </Typography>
+                    <Typography variant="subtitle1" color="text.secondary">
+                      Szczegółowy raport kontroli jakości i produkcji
+                    </Typography>
+                  </Box>
                   
                   {/* Product identification */}
-                  <Paper sx={{ p: 3, mb: 3, backgroundColor: '#f8f9fa' }} elevation={1}>
-                    <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
-                      1. Product identification
-                    </Typography>
+                  <Paper sx={{ p: 4, mb: 4, backgroundColor: '#f8faff', border: '2px solid #e3f2fd', borderRadius: 2 }} elevation={2}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, pb: 2, borderBottom: '1px solid #e0e0e0' }}>
+                      <Box sx={{ 
+                        backgroundColor: '#1976d2', 
+                        color: 'white', 
+                        borderRadius: '50%', 
+                        width: 32, 
+                        height: 32, 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        fontWeight: 'bold',
+                        mr: 2 
+                      }}>
+                        1
+                      </Box>
+                      <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#1976d2' }}>
+                        Product identification
+                      </Typography>
+                    </Box>
                     
                     <Grid container spacing={3}>
                       <Grid item xs={12} md={6}>
-                        <TextField
-                          fullWidth
-                          label="SKU"
-                          value={task?.recipeName || task?.productName || ''}
-                          variant="outlined"
-                          InputProps={{
-                            readOnly: true,
-                          }}
-                          helperText="Nazwa receptury"
-                        />
+                        <Box sx={{ mb: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#555', mb: 1 }}>
+                            SKU
+                          </Typography>
+                          <TextField
+                            fullWidth
+                            value={task?.recipeName || task?.productName || ''}
+                            variant="outlined"
+                            size="small"
+                            InputProps={{
+                              readOnly: true,
+                              sx: { backgroundColor: '#f9f9f9' }
+                            }}
+                            helperText="Nazwa receptury"
+                          />
+                        </Box>
                       </Grid>
                       
                       <Grid item xs={12} md={6}>
@@ -5080,10 +5249,26 @@ const TaskDetailsPage = () => {
                   </Paper>
                   
                   {/* TDS Specification */}
-                  <Paper sx={{ p: 3, mb: 3, backgroundColor: '#f8f9fa' }} elevation={1}>
-                    <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
-                      2. TDS Specification
-                    </Typography>
+                  <Paper sx={{ p: 4, mb: 4, backgroundColor: '#fff8f0', border: '2px solid #ffe0b2', borderRadius: 2 }} elevation={2}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, pb: 2, borderBottom: '1px solid #e0e0e0' }}>
+                      <Box sx={{ 
+                        backgroundColor: '#ff9800', 
+                        color: 'white', 
+                        borderRadius: '50%', 
+                        width: 32, 
+                        height: 32, 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        fontWeight: 'bold',
+                        mr: 2 
+                      }}>
+                        2
+                      </Box>
+                      <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#ff9800' }}>
+                        TDS Specification
+                      </Typography>
+                    </Box>
                     
                     <Grid container spacing={3}>
                       {/* Microelements + Nutrition data */}
@@ -5210,10 +5395,26 @@ const TaskDetailsPage = () => {
                   </Paper>
                   
                   {/* Active Ingredients */}
-                  <Paper sx={{ p: 3, mb: 3, backgroundColor: '#f8f9fa' }} elevation={1}>
-                    <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
-                      3. Active Ingredients
-                    </Typography>
+                  <Paper sx={{ p: 4, mb: 4, backgroundColor: '#f0fff4', border: '2px solid #c8e6c9', borderRadius: 2 }} elevation={2}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, pb: 2, borderBottom: '1px solid #e0e0e0' }}>
+                      <Box sx={{ 
+                        backgroundColor: '#4caf50', 
+                        color: 'white', 
+                        borderRadius: '50%', 
+                        width: 32, 
+                        height: 32, 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        fontWeight: 'bold',
+                        mr: 2 
+                      }}>
+                        3
+                      </Box>
+                      <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#4caf50' }}>
+                        Active Ingredients
+                      </Typography>
+                    </Box>
                     
                     <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', mt: 2 }}>
                       3.1 List of materials
@@ -5233,7 +5434,7 @@ const TaskDetailsPage = () => {
                               <TableCell sx={{ fontWeight: 'bold' }}>Jednostka</TableCell>
                               <TableCell sx={{ fontWeight: 'bold' }}>Numer CAS</TableCell>
                               <TableCell sx={{ fontWeight: 'bold' }}>Uwagi</TableCell>
-                              <TableCell sx={{ fontWeight: 'bold' }}>Załączniki z PO</TableCell>
+                              <TableCell sx={{ fontWeight: 'bold' }}>Załączniki z partii</TableCell>
                             </TableRow>
                           </TableHead>
                           <TableBody>
@@ -5255,9 +5456,9 @@ const TaskDetailsPage = () => {
                                   {ingredient.notes || '-'}
                                 </TableCell>
                                 <TableCell sx={{ minWidth: '200px' }}>
-                                  {ingredientAttachments[ingredient.name] && ingredientAttachments[ingredient.name].length > 0 ? (
+                                  {ingredientBatchAttachments[ingredient.name] && ingredientBatchAttachments[ingredient.name].length > 0 ? (
                                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                                      {ingredientAttachments[ingredient.name].map((attachment, attachIndex) => (
+                                      {ingredientBatchAttachments[ingredient.name].map((attachment, attachIndex) => (
                                         <Box key={attachIndex} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                           <Button
                                             size="small"
@@ -5276,12 +5477,14 @@ const TaskDetailsPage = () => {
                                           </Button>
                                           <Chip 
                                             size="small" 
-                                            label={`PO: ${attachment.poNumber}`}
+                                            label={attachment.source === 'batch_certificate' 
+                                              ? `Certyfikat: ${attachment.batchNumber}` 
+                                              : `Partia: ${attachment.batchNumber}`}
                                             variant="outlined"
-                                            color="info"
+                                            color={attachment.source === 'batch_certificate' ? 'success' : 'secondary'}
                                             sx={{ fontSize: '0.65rem' }}
                                           />
-                                        </Box>
+                  </Box>
                                       ))}
                                     </Box>
                                   ) : (
@@ -5310,7 +5513,7 @@ const TaskDetailsPage = () => {
                         <Typography variant="body2" color="text.secondary" align="center">
                           Brak składników w recepturze
                         </Typography>
-                      </Paper>
+                </Paper>
                     )}
                     
                     {/* Daty ważności skonsumowanych materiałów */}
@@ -5318,10 +5521,27 @@ const TaskDetailsPage = () => {
                   
                   {/* 3.2 Expiration date of materials */}
                   {task?.consumedMaterials && task.consumedMaterials.length > 0 && (
-                    <Paper sx={{ p: 3, mb: 3, backgroundColor: '#f8f9fa' }} elevation={1}>
-                      <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
-                        3.2 Expiration date of materials
-                      </Typography>
+                    <Paper sx={{ p: 4, mb: 4, backgroundColor: '#f0fff4', border: '2px solid #c8e6c9', borderRadius: 2 }} elevation={2}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, pb: 2, borderBottom: '1px solid #e0e0e0' }}>
+                        <Box sx={{ 
+                          backgroundColor: '#4caf50', 
+                          color: 'white', 
+                          borderRadius: '20px', 
+                          width: 48, 
+                          height: 24, 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          fontWeight: 'bold',
+                          mr: 2,
+                          fontSize: '0.875rem'
+                        }}>
+                          3.2
+                        </Box>
+                        <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#4caf50' }}>
+                          Expiration date of materials
+                        </Typography>
+                      </Box>
                         
                         <TableContainer component={Paper} sx={{ mt: 2 }}>
                           <Table size="small">
@@ -5412,10 +5632,27 @@ const TaskDetailsPage = () => {
                   )}
 
                   {/* 3.3 Clinical and bibliographic research */}
-                  <Paper sx={{ p: 3, mb: 3, backgroundColor: '#f8f9fa' }} elevation={1}>
-                    <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
-                      3.3 Clinical and bibliographic research
-                    </Typography>
+                  <Paper sx={{ p: 4, mb: 4, backgroundColor: '#f0fff4', border: '2px solid #c8e6c9', borderRadius: 2 }} elevation={2}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, pb: 2, borderBottom: '1px solid #e0e0e0' }}>
+                      <Box sx={{ 
+                        backgroundColor: '#4caf50', 
+                        color: 'white', 
+                        borderRadius: '20px', 
+                        width: 48, 
+                        height: 24, 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        fontWeight: 'bold',
+                        mr: 2,
+                        fontSize: '0.875rem'
+                      }}>
+                        3.3
+                      </Box>
+                      <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#4caf50' }}>
+                        Clinical and bibliographic research
+                      </Typography>
+                    </Box>
                     
                     {/* Sekcja przesyłania plików */}
                     <Box sx={{ mb: 3, p: 2, backgroundColor: '#e3f2fd', borderRadius: 1, border: '1px dashed #2196f3' }}>
@@ -5532,6 +5769,127 @@ const TaskDetailsPage = () => {
                       </Paper>
                     )}
                   </Paper>
+
+                  {/* 4. Physicochemical properties */}
+                  <Paper sx={{ p: 4, mb: 4, backgroundColor: '#fff3e0', border: '2px solid #ffcc02', borderRadius: 2 }} elevation={2}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, pb: 2, borderBottom: '1px solid #e0e0e0' }}>
+                      <Box sx={{ 
+                        backgroundColor: '#ffc107', 
+                        color: 'white', 
+                        borderRadius: '50%', 
+                        width: 32, 
+                        height: 32, 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        fontWeight: 'bold',
+                        mr: 2 
+                      }}>
+                        4
+                      </Box>
+                      <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#ffc107' }}>
+                        Physicochemical properties
+                      </Typography>
+                    </Box>
+                    
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                      Załączniki związane z właściwościami fizykochemicznymi składników z powiązanych zamówień zakupu
+                    </Typography>
+
+                    {/* Wyświetlanie załączników z PO pogrupowanych według składników */}
+                    {Object.keys(ingredientAttachments).length > 0 ? (
+                      <Box>
+                        {Object.entries(ingredientAttachments).map(([ingredientName, attachments]) => (
+                          <Paper key={ingredientName} sx={{ p: 2, mb: 2, backgroundColor: '#ffffff', border: '1px solid #e0e0e0' }} elevation={0}>
+                            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                              {ingredientName}
+                            </Typography>
+                            
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                              {attachments.map((attachment, attachIndex) => (
+                                <Box key={attachIndex} sx={{ 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  gap: 2,
+                                  p: 1.5,
+                                  backgroundColor: '#f9f9f9',
+                                  borderRadius: 1,
+                                  border: '1px solid #e0e0e0'
+                                }}>
+                                  <Box sx={{ minWidth: 40 }}>
+                                    {getClinicalFileIcon(attachment.contentType)}
+                                  </Box>
+                                  
+                                  <Box sx={{ flex: 1 }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                                      {attachment.fileName}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                      {formatClinicalFileSize(attachment.size)} • 
+                                      {new Date(attachment.uploadedAt).toLocaleDateString('pl-PL')}
+                                    </Typography>
+                                  </Box>
+                                  
+                                  <Chip 
+                                    size="small" 
+                                    label={`PO: ${attachment.poNumber}`}
+                                    variant="outlined"
+                                    color="info"
+                                    sx={{ fontSize: '0.75rem' }}
+                                  />
+                                  
+                                  <Box sx={{ display: 'flex', gap: 1 }}>
+                                    <Tooltip title="Pobierz">
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => window.open(attachment.downloadURL || attachment.fileUrl, '_blank')}
+                                        sx={{ color: 'primary.main' }}
+                                      >
+                                        <DownloadIcon fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                  </Box>
+                                </Box>
+                              ))}
+                            </Box>
+                            
+                            {/* Podsumowanie dla składnika */}
+                            <Box sx={{ mt: 1, p: 1, backgroundColor: '#e8f5e8', borderRadius: 1 }}>
+                              <Typography variant="caption" color="text.secondary">
+                                Załączników: {attachments.length} • 
+                                Zamówienia: {[...new Set(attachments.map(a => a.poNumber))].length} • 
+                                Łączny rozmiar: {formatClinicalFileSize(attachments.reduce((sum, a) => sum + a.size, 0))}
+                              </Typography>
+                            </Box>
+                          </Paper>
+                        ))}
+                        
+                        {/* Globalne podsumowanie */}
+                        <Box sx={{ p: 2, backgroundColor: '#f0f8f0', borderRadius: 1, border: '1px solid #e0e0e0' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                            Podsumowanie załączników fizykochemicznych:
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                            • Składników z załącznikami: {Object.keys(ingredientAttachments).length}<br/>
+                            • Łączna liczba załączników: {Object.values(ingredientAttachments).reduce((sum, attachments) => sum + attachments.length, 0)}<br/>
+                            • Powiązane zamówienia: {[...new Set(Object.values(ingredientAttachments).flat().map(a => a.poNumber))].length}<br/>
+                            • Łączny rozmiar: {formatClinicalFileSize(
+                              Object.values(ingredientAttachments).flat().reduce((sum, attachment) => sum + attachment.size, 0)
+                            )}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    ) : (
+                      <Paper sx={{ p: 3, backgroundColor: '#fff3e0', border: '1px dashed #ffb74d' }}>
+                        <Typography variant="body2" color="text.secondary" align="center">
+                          Brak załączników fizykochemicznych z powiązanych zamówień zakupu
+                        </Typography>
+                        <Typography variant="caption" display="block" align="center" sx={{ mt: 1, color: 'text.secondary' }}>
+                          Załączniki zostaną wyświetlone po konsumpcji materiałów z zamówień zawierających dokumenty
+                        </Typography>
+                      </Paper>
+                    )}
+                  </Paper>
                   
                   {/* Diagnoza problemu dla starych zadań bez pełnych danych receptury */}
                   {task && task.recipeId && !task.recipe?.ingredients && (
@@ -5569,12 +5927,797 @@ const TaskDetailsPage = () => {
                     </Paper>
                   )}
                   
-                  {/* Tutaj będzie przygotowany nowy raport w etapach */}
-                  <Box sx={{ p: 4, textAlign: 'center' }}>
-                    <Typography variant="body1" color="text.secondary">
-                      Pozostałe sekcje raportu zostaną przygotowane w kolejnych etapach
+                  {/* 5. Production */}
+                  <Paper sx={{ p: 4, mb: 4, backgroundColor: '#fce4ec', border: '2px solid #f48fb1', borderRadius: 2 }} elevation={2}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, pb: 2, borderBottom: '1px solid #e0e0e0' }}>
+                      <Box sx={{ 
+                        backgroundColor: '#e91e63', 
+                        color: 'white', 
+                        borderRadius: '50%', 
+                        width: 32, 
+                        height: 32, 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        fontWeight: 'bold',
+                        mr: 2 
+                      }}>
+                        5
+                      </Box>
+                      <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#e91e63' }}>
+                        Production
+                      </Typography>
+                    </Box>
+                    
+                                        <Grid container spacing={3}>
+                      {/* Start date i End date */}
+                      <Grid item xs={12} md={6}>
+                        <Box sx={{ mb: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#555', mb: 1 }}>
+                            Start date
+                          </Typography>
+                          <TextField
+                            fullWidth
+                            value={
+                              productionHistory && productionHistory.length > 0
+                                ? formatDateTime(productionHistory[0].startTime)
+                                : 'Brak danych z historii produkcji'
+                            }
+                            variant="outlined"
+                            size="small"
+                            InputProps={{
+                              readOnly: true,
+                              sx: { backgroundColor: '#f9f9f9' }
+                            }}
+                            helperText="Data rozpoczęcia produkcji z pierwszego wpisu w historii"
+                          />
+                        </Box>
+                      </Grid>
+                      
+                      <Grid item xs={12} md={6}>
+                        <Box sx={{ mb: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#555', mb: 1 }}>
+                            End date
+                          </Typography>
+                          <TextField
+                            fullWidth
+                            value={
+                              productionHistory && productionHistory.length > 0
+                                ? formatDateTime(productionHistory[productionHistory.length - 1].endTime)
+                                : 'Brak danych z historii produkcji'
+                            }
+                            variant="outlined"
+                            size="small"
+                            InputProps={{
+                              readOnly: true,
+                              sx: { backgroundColor: '#f9f9f9' }
+                            }}
+                            helperText="Data zakończenia produkcji z ostatniego wpisu w historii"
+                          />
+                        </Box>
+                      </Grid>
+                      
+                      {/* MO number */}
+                      <Grid item xs={12} md={6}>
+                        <Box sx={{ mb: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#555', mb: 1 }}>
+                            MO number
+                          </Typography>
+                          <TextField
+                            fullWidth
+                            value={task?.moNumber || 'Nie określono'}
+                            variant="outlined"
+                            size="small"
+                            InputProps={{
+                              readOnly: true,
+                              sx: { backgroundColor: '#f9f9f9' }
+                            }}
+                            helperText="Numer zamówienia produkcyjnego"
+                          />
+                        </Box>
+                      </Grid>
+                      
+                      {/* Company name */}
+                      <Grid item xs={12} md={6}>
+                        <Box sx={{ mb: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#555', mb: 1 }}>
+                            Company name
+                          </Typography>
+                          <TextField
+                            fullWidth
+                            value={companyData?.name || 'Ładowanie...'}
+                            variant="outlined"
+                            size="small"
+                            InputProps={{
+                              readOnly: true,
+                              sx: { backgroundColor: '#f9f9f9' }
+                            }}
+                            helperText="Nazwa firmy"
+                          />
+                        </Box>
+                      </Grid>
+                      
+                      {/* Company address */}
+                      <Grid item xs={12} md={6}>
+                        <Box sx={{ mb: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#555', mb: 1 }}>
+                            Address
+                          </Typography>
+                          <TextField
+                            fullWidth
+                            value={companyData?.address || companyData ? `${companyData.address || ''} ${companyData.city || ''}`.trim() : 'Ładowanie...'}
+                            variant="outlined"
+                            size="small"
+                            multiline
+                            maxRows={2}
+                            InputProps={{
+                              readOnly: true,
+                              sx: { backgroundColor: '#f9f9f9' }
+                            }}
+                            helperText="Adres firmy"
+                          />
+                        </Box>
+                      </Grid>
+                      
+                      {/* Workstation */}
+                      <Grid item xs={12} md={6}>
+                        <Box sx={{ mb: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#555', mb: 1 }}>
+                            Workstation
+                          </Typography>
+                          <TextField
+                            fullWidth
+                            value={
+                              workstationData === null 
+                                ? 'Ładowanie...' 
+                                : workstationData?.name 
+                                  ? workstationData.name 
+                                  : 'Nie przypisano stanowiska'
+                            }
+                            variant="outlined"
+                            size="small"
+                            InputProps={{
+                              readOnly: true,
+                              sx: { backgroundColor: '#f9f9f9' }
+                            }}
+                            helperText="Stanowisko produkcyjne"
+                          />
+                        </Box>
+                      </Grid>
+                      
+                      {/* Time per unit */}
+                      <Grid item xs={12} md={6}>
+                        <Box sx={{ mb: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#555', mb: 1 }}>
+                            Time per unit
+                          </Typography>
+                          <TextField
+                            fullWidth
+                            value={
+                              task?.productionTimePerUnit 
+                                ? `${task.productionTimePerUnit} min/szt`
+                                : task?.recipe?.productionTimePerUnit
+                                  ? `${task.recipe.productionTimePerUnit} min/szt`
+                                  : 'Nie określono'
+                            }
+                            variant="outlined"
+                            size="small"
+                            InputProps={{
+                              readOnly: true,
+                              sx: { backgroundColor: '#f9f9f9' }
+                            }}
+                            helperText="Czas produkcji na jedną sztukę z receptury"
+                          />
+                        </Box>
+                      </Grid>
+                    </Grid>
+                    
+                    {/* History of production */}
+                    <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', mt: 3, mb: 2 }}>
+                      History of production:
                     </Typography>
-                  </Box>
+                    
+                    {productionHistory && productionHistory.length > 0 ? (
+                      <TableContainer component={Paper} sx={{ mt: 2 }}>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow sx={{ backgroundColor: '#e3f2fd' }}>
+                              <TableCell sx={{ fontWeight: 'bold' }}>Start date</TableCell>
+                              <TableCell sx={{ fontWeight: 'bold' }}>End date</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 'bold' }}>Quantity</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 'bold' }}>Time spent</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {productionHistory.map((session, index) => (
+                              <TableRow key={index}>
+                                <TableCell>{formatDateTime(session.startTime)}</TableCell>
+                                <TableCell>{formatDateTime(session.endTime)}</TableCell>
+                                <TableCell align="right">
+                                  {session.quantity} {task?.unit || 'szt'}
+                                </TableCell>
+                                <TableCell align="right">
+                                  {session.timeSpent ? `${session.timeSpent} min` : '-'}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                            {/* Wiersz podsumowania */}
+                            <TableRow sx={{ '& td': { fontWeight: 'bold', bgcolor: 'rgba(0, 0, 0, 0.04)' } }}>
+                              <TableCell colSpan={2} align="right">Suma:</TableCell>
+                              <TableCell align="right">
+                                {formatQuantityPrecision(
+                                  productionHistory.reduce((sum, session) => sum + (parseFloat(session.quantity) || 0), 0), 
+                                  3
+                                )} {task?.unit || 'szt'}
+                              </TableCell>
+                              <TableCell align="right">
+                                {productionHistory.reduce((sum, session) => sum + (session.timeSpent || 0), 0)} min
+                              </TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    ) : (
+                      <Paper sx={{ p: 3, backgroundColor: '#fff3e0', border: '1px dashed #ffb74d' }}>
+                        <Typography variant="body2" color="text.secondary" align="center">
+                          Brak historii produkcji dla tego zadania
+                        </Typography>
+                        <Typography variant="caption" display="block" align="center" sx={{ mt: 1, color: 'text.secondary' }}>
+                          Historia produkcji będzie dostępna po rozpoczęciu i zakończeniu sesji produkcyjnych
+                        </Typography>
+                      </Paper>
+                    )}
+                    
+                    {/* Dane z raportu zakończonych MO */}
+                    <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', mt: 4, mb: 2 }}>
+                      Report Data from Completed MO Forms:
+                    </Typography>
+                    
+                    {formResponses?.completedMO && formResponses.completedMO.length > 0 ? (
+                      <Grid container spacing={3}>
+                        {formResponses.completedMO.map((report, index) => (
+                          <Grid item xs={12} key={index}>
+                            <Paper sx={{ p: 3, backgroundColor: '#f0f7ff', border: '1px solid #1976d2' }}>
+                              <Typography variant="subtitle2" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
+                                Raport #{index + 1} - {formatDateTime(report.date)}
+                              </Typography>
+                              
+                              <Grid container spacing={2}>
+                                {/* Dane podstawowe */}
+                                <Grid item xs={12} sm={6} md={3}>
+                                  <TextField
+                                    fullWidth
+                                    label="Data wypełnienia"
+                                    value={formatDateTime(report.date)}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                  />
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={6} md={3}>
+                                  <TextField
+                                    fullWidth
+                                    label="Godzina"
+                                    value={report.time || 'Nie podano'}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                  />
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={6} md={3}>
+                                  <TextField
+                                    fullWidth
+                                    label="Odpowiedzialny"
+                                    value={report.email || 'Nie podano'}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                  />
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={6} md={3}>
+                                  <TextField
+                                    fullWidth
+                                    label="Ilość produktu końcowego"
+                                    value={report.productQuantity ? `${report.productQuantity} ${task?.unit || 'szt'}` : 'Nie podano'}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                  />
+                                </Grid>
+                                
+                                {/* Straty */}
+                                <Grid item xs={12} sm={4}>
+                                  <TextField
+                                    fullWidth
+                                    label="Strata - Opakowanie"
+                                    value={report.packagingLoss || 'Brak strat'}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                  />
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={4}>
+                                  <TextField
+                                    fullWidth
+                                    label="Strata - Wieczka"
+                                    value={report.bulkLoss || 'Brak strat'}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                  />
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={4}>
+                                  <TextField
+                                    fullWidth
+                                    label="Strata - Surowiec"
+                                    value={report.rawMaterialLoss || 'Brak strat'}
+                                    variant="outlined"
+                                    size="small"
+                                    multiline
+                                    maxRows={2}
+                                    InputProps={{ readOnly: true }}
+                                  />
+                                </Grid>
+                                
+                                {/* Załącznik - Raport z planu mieszań */}
+                                {report.mixingPlanReportUrl && (
+                                  <Grid item xs={12}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                      <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                        Raport z planu mieszań:
+                                      </Typography>
+                                      <Button
+                                        variant="outlined"
+                                        size="small"
+                                        startIcon={<AttachFileIcon />}
+                                        href={report.mixingPlanReportUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                      >
+                                        {report.mixingPlanReportName || 'Pobierz raport'}
+                                      </Button>
+                                    </Box>
+                                  </Grid>
+                                )}
+                              </Grid>
+                            </Paper>
+                          </Grid>
+                        ))}
+                      </Grid>
+                    ) : (
+                      <Paper sx={{ p: 3, backgroundColor: '#fff3e0', border: '1px dashed #ffb74d' }}>
+                        <Typography variant="body2" color="text.secondary" align="center">
+                          Brak raportów zakończonych MO dla tego zadania
+                        </Typography>
+                        <Typography variant="caption" display="block" align="center" sx={{ mt: 1, color: 'text.secondary' }}>
+                          Raporty zakończonych MO będą widoczne po wypełnieniu odpowiednich formularzy
+                        </Typography>
+                      </Paper>
+                    )}
+                  </Paper>
+                  
+                  {/* 6. Quality control */}
+                  <Paper sx={{ p: 4, mb: 4, backgroundColor: '#f3e5f5', border: '2px solid #ce93d8', borderRadius: 2 }} elevation={2}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, pb: 2, borderBottom: '1px solid #e0e0e0' }}>
+                      <Box sx={{ 
+                        backgroundColor: '#9c27b0', 
+                        color: 'white', 
+                        borderRadius: '50%', 
+                        width: 32, 
+                        height: 32, 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        fontWeight: 'bold',
+                        mr: 2 
+                      }}>
+                        6
+                      </Box>
+                      <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#9c27b0' }}>
+                        Quality control
+                      </Typography>
+                    </Box>
+                    
+                    {formResponses?.productionControl && formResponses.productionControl.length > 0 ? (
+                      <Grid container spacing={3}>
+                        {formResponses.productionControl.map((report, index) => (
+                          <Grid item xs={12} key={index}>
+                            <Paper sx={{ p: 3, backgroundColor: '#f0fff0', border: '1px solid #4caf50' }}>
+                              <Typography variant="subtitle2" gutterBottom sx={{ color: 'success.main', fontWeight: 'bold' }}>
+                                Raport kontroli #{index + 1} - {formatDateTime(report.fillDate)}
+                              </Typography>
+                              
+                              <Grid container spacing={2}>
+                                {/* Identyfikacja */}
+                                <Grid item xs={12}>
+                                  <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                                    Identyfikacja:
+                                  </Typography>
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={6} md={4}>
+                                  <TextField
+                                    fullWidth
+                                    label="Imię i nazwisko"
+                                    value={report.name || 'Nie podano'}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                  />
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={6} md={4}>
+                                  <TextField
+                                    fullWidth
+                                    label="Stanowisko"
+                                    value={report.position || 'Nie podano'}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                  />
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={6} md={4}>
+                                  <TextField
+                                    fullWidth
+                                    label="Data wypełnienia"
+                                    value={formatDateTime(report.fillDate)}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                  />
+                                </Grid>
+                                
+                                {/* Protokół kontroli produkcji */}
+                                <Grid item xs={12} sx={{ mt: 2 }}>
+                                  <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                                    Protokół kontroli produkcji:
+                                  </Typography>
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={6} md={4}>
+                                  <TextField
+                                    fullWidth
+                                    label="Customer Order"
+                                    value={report.customerOrder || 'Nie podano'}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                  />
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={6} md={4}>
+                                  <TextField
+                                    fullWidth
+                                    label="Data rozpoczęcia produkcji"
+                                    value={report.productionStartDate ? formatDateTime(report.productionStartDate) : 'Nie podano'}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                  />
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={6} md={4}>
+                                  <TextField
+                                    fullWidth
+                                    label="Godzina rozpoczęcia"
+                                    value={report.productionStartTime || 'Nie podano'}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                  />
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={6} md={4}>
+                                  <TextField
+                                    fullWidth
+                                    label="Data zakończenia produkcji"
+                                    value={report.productionEndDate ? formatDateTime(report.productionEndDate) : 'Nie podano'}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                  />
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={6} md={4}>
+                                  <TextField
+                                    fullWidth
+                                    label="Godzina zakończenia"
+                                    value={report.productionEndTime || 'Nie podano'}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                  />
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={6} md={4}>
+                                  <TextField
+                                    fullWidth
+                                    label="Data odczytu warunków"
+                                    value={report.readingDate ? formatDateTime(report.readingDate) : 'Nie podano'}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                  />
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={6} md={4}>
+                                  <TextField
+                                    fullWidth
+                                    label="Godzina odczytu"
+                                    value={report.readingTime || 'Nie podano'}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                  />
+                                </Grid>
+                                
+                                {/* Dane produktu */}
+                                <Grid item xs={12} sx={{ mt: 2 }}>
+                                  <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                                    Dane produktu:
+                                  </Typography>
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={6} md={4}>
+                                  <TextField
+                                    fullWidth
+                                    label="Nazwa produktu"
+                                    value={report.productName || 'Nie podano'}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                  />
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={6} md={4}>
+                                  <TextField
+                                    fullWidth
+                                    label="Numer LOT"
+                                    value={report.lotNumber || 'Nie podano'}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                  />
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={6} md={4}>
+                                  <TextField
+                                    fullWidth
+                                    label="Data ważności (EXP)"
+                                    value={report.expiryDate || 'Nie podano'}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                  />
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={6} md={4}>
+                                  <TextField
+                                    fullWidth
+                                    label="Ilość (szt.)"
+                                    value={report.quantity ? `${report.quantity} szt` : 'Nie podano'}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                  />
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={6} md={4}>
+                                  <TextField
+                                    fullWidth
+                                    label="Numer zmiany"
+                                    value={report.shiftNumber && report.shiftNumber.length > 0 ? report.shiftNumber.join(', ') : 'Nie podano'}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                  />
+                                </Grid>
+                                
+                                {/* Warunki atmosferyczne */}
+                                <Grid item xs={12} sx={{ mt: 2 }}>
+                                  <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                                    Warunki atmosferyczne:
+                                  </Typography>
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={6}>
+                                  <TextField
+                                    fullWidth
+                                    label="Wilgotność powietrza"
+                                    value={report.humidity || 'Nie podano'}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                    sx={{
+                                      '& .MuiOutlinedInput-root': {
+                                        backgroundColor: report.humidity && (
+                                          report.humidity.includes('PONIŻEJ') || 
+                                          report.humidity.includes('POWYŻEJ') ||
+                                          (typeof report.humidity === 'string' && 
+                                           ((report.humidity.includes('%') && (parseInt(report.humidity) < 40 || parseInt(report.humidity) > 60)) ||
+                                            (!report.humidity.includes('%') && (parseFloat(report.humidity) < 40 || parseFloat(report.humidity) > 60))))
+                                        ) ? '#ffebee' : 'inherit'
+                                      }
+                                    }}
+                                  />
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={6}>
+                                  <TextField
+                                    fullWidth
+                                    label="Temperatura powietrza"
+                                    value={report.temperature || 'Nie podano'}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                    sx={{
+                                      '& .MuiOutlinedInput-root': {
+                                        backgroundColor: report.temperature && (
+                                          report.temperature.includes('PONIŻEJ') || 
+                                          report.temperature.includes('POWYŻEJ') ||
+                                          (typeof report.temperature === 'string' && 
+                                           ((report.temperature.includes('°C') && (parseInt(report.temperature) < 10 || parseInt(report.temperature) > 25)) ||
+                                            (!report.temperature.includes('°C') && (parseFloat(report.temperature) < 10 || parseFloat(report.temperature) > 25))))
+                                        ) ? '#ffebee' : 'inherit'
+                                      }
+                                    }}
+                                  />
+                                </Grid>
+                                
+                                {/* Kontrola jakości */}
+                                <Grid item xs={12} sx={{ mt: 2 }}>
+                                  <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                                    Kontrola jakości:
+                                  </Typography>
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={6} md={3}>
+                                  <TextField
+                                    fullWidth
+                                    label="Czystość surowca"
+                                    value={report.rawMaterialPurity || 'Nie podano'}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                    sx={{
+                                      '& .MuiOutlinedInput-root': {
+                                        backgroundColor: report.rawMaterialPurity === 'Nieprawidłowa' ? '#ffebee' : 'inherit'
+                                      }
+                                    }}
+                                  />
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={6} md={3}>
+                                  <TextField
+                                    fullWidth
+                                    label="Czystość opakowania"
+                                    value={report.packagingPurity || 'Nie podano'}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                    sx={{
+                                      '& .MuiOutlinedInput-root': {
+                                        backgroundColor: report.packagingPurity === 'Nieprawidłowa' ? '#ffebee' : 'inherit'
+                                      }
+                                    }}
+                                  />
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={6} md={3}>
+                                  <TextField
+                                    fullWidth
+                                    label="Zamknięcie opakowania"
+                                    value={report.packagingClosure || 'Nie podano'}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                    sx={{
+                                      '& .MuiOutlinedInput-root': {
+                                        backgroundColor: report.packagingClosure === 'Nieprawidłowa' ? '#ffebee' : 'inherit'
+                                      }
+                                    }}
+                                  />
+                                </Grid>
+                                
+                                <Grid item xs={12} sm={6} md={3}>
+                                  <TextField
+                                    fullWidth
+                                    label="Ilość na palecie"
+                                    value={report.packagingQuantity || 'Nie podano'}
+                                    variant="outlined"
+                                    size="small"
+                                    InputProps={{ readOnly: true }}
+                                    sx={{
+                                      '& .MuiOutlinedInput-root': {
+                                        backgroundColor: report.packagingQuantity === 'Nieprawidłowa' ? '#ffebee' : 'inherit'
+                                      }
+                                    }}
+                                  />
+                                </Grid>
+                                
+                                {/* Załączniki */}
+                                {(report.documentScansUrl || report.productPhoto1Url || report.productPhoto2Url || report.productPhoto3Url) && (
+                                  <Grid item xs={12} sx={{ mt: 2 }}>
+                                    <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                                      Załączniki:
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                                      {report.documentScansUrl && (
+                                        <Button
+                                          variant="outlined"
+                                          size="small"
+                                          startIcon={<AttachFileIcon />}
+                                          href={report.documentScansUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                        >
+                                          {report.documentScansName || 'Skany dokumentów'}
+                                        </Button>
+                                      )}
+                                      {report.productPhoto1Url && (
+                                        <Button
+                                          variant="outlined"
+                                          size="small"
+                                          startIcon={<AttachFileIcon />}
+                                          href={report.productPhoto1Url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          color="secondary"
+                                        >
+                                          {report.productPhoto1Name || 'Zdjęcie produktu 1'}
+                                        </Button>
+                                      )}
+                                      {report.productPhoto2Url && (
+                                        <Button
+                                          variant="outlined"
+                                          size="small"
+                                          startIcon={<AttachFileIcon />}
+                                          href={report.productPhoto2Url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          color="secondary"
+                                        >
+                                          {report.productPhoto2Name || 'Zdjęcie produktu 2'}
+                                        </Button>
+                                      )}
+                                      {report.productPhoto3Url && (
+                                        <Button
+                                          variant="outlined"
+                                          size="small"
+                                          startIcon={<AttachFileIcon />}
+                                          href={report.productPhoto3Url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          color="secondary"
+                                        >
+                                          {report.productPhoto3Name || 'Zdjęcie produktu 3'}
+                                        </Button>
+                                      )}
+                                    </Box>
+                                  </Grid>
+                                )}
+                              </Grid>
+                            </Paper>
+                          </Grid>
+                        ))}
+                      </Grid>
+                    ) : (
+                      <Paper sx={{ p: 3, backgroundColor: '#fff3e0', border: '1px dashed #ffb74d' }}>
+                        <Typography variant="body2" color="text.secondary" align="center">
+                          Brak raportów kontroli produkcji dla tego zadania
+                        </Typography>
+                        <Typography variant="caption" display="block" align="center" sx={{ mt: 1, color: 'text.secondary' }}>
+                          Raporty kontroli produkcji będą widoczne po wypełnieniu odpowiednich formularzy
+                        </Typography>
+                      </Paper>
+                    )}
+                  </Paper>
                 </Paper>
               </Grid>
             </Grid>
