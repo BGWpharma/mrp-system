@@ -46,7 +46,8 @@ import {
   ProductionQuantityLimits as ProductIcon,
   AccessTime as AccessTimeIcon,
   SwapHoriz as SwapIcon,
-  Science as ScienceIcon
+  Science as ScienceIcon,
+  Sync as SyncIcon
 } from '@mui/icons-material';
 import { createRecipe, updateRecipe, getRecipeById, fixRecipeYield } from '../../services/recipeService';
 import { getAllInventoryItems, getIngredientPrices, createInventoryItem, getAllWarehouses } from '../../services/inventoryService';
@@ -776,6 +777,87 @@ const RecipeForm = ({ recipeId }) => {
     }
   };
 
+  // Funkcja do pobierania numerów CAS z pozycji magazynowych
+  const syncCASNumbers = async () => {
+    if (!recipeData.ingredients || recipeData.ingredients.length === 0) {
+      showWarning('Receptura nie zawiera składników');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      let syncedCount = 0;
+      let skippedCount = 0;
+      
+      // Przygotuj kopię składników do modyfikacji
+      const updatedIngredients = [...recipeData.ingredients];
+      
+      // Przejdź przez wszystkie składniki które mają powiązanie z magazynem
+      for (const [index, ingredient] of updatedIngredients.entries()) {
+        if (ingredient.id) {
+          try {
+            // Pobierz szczegóły pozycji magazynowej
+            const inventoryRef = collection(db, 'inventory');
+            const q = query(
+              inventoryRef,
+              where('__name__', '==', ingredient.id),
+              limit(1)
+            );
+            
+            const querySnapshot = await getDocs(q);
+            
+            if (!querySnapshot.empty) {
+              const inventoryItem = {
+                id: querySnapshot.docs[0].id,
+                ...querySnapshot.docs[0].data()
+              };
+              
+              // Jeśli pozycja magazynowa ma numer CAS i składnik go nie ma lub jest pusty
+              if (inventoryItem.casNumber && (!ingredient.casNumber || ingredient.casNumber.trim() === '')) {
+                updatedIngredients[index] = {
+                  ...ingredient,
+                  casNumber: inventoryItem.casNumber
+                };
+                syncedCount++;
+              } else {
+                skippedCount++;
+              }
+            }
+          } catch (error) {
+            console.error(`Błąd podczas pobierania danych dla składnika ${ingredient.name}:`, error);
+            skippedCount++;
+          }
+        } else {
+          // Składnik nie jest powiązany z magazynem
+          skippedCount++;
+        }
+      }
+      
+      // Aktualizuj stan receptury z pobranymi numerami CAS
+      if (syncedCount > 0) {
+        setRecipeData(prev => ({
+          ...prev,
+          ingredients: updatedIngredients
+        }));
+        
+        showSuccess(`Pobrano numery CAS dla ${syncedCount} składników z pozycji magazynowych`);
+      }
+      
+      if (skippedCount > 0) {
+        showInfo(`Pominięto ${skippedCount} składników (brak powiązania z magazynem lub CAS już wypełniony)`);
+      }
+      
+      if (syncedCount === 0) {
+        showInfo('Brak nowych numerów CAS do pobrania. Wszystkie składniki mają już wypełnione numery CAS lub nie są powiązane z magazynem.');
+      }
+    } catch (error) {
+      showError('Błąd podczas pobierania numerów CAS: ' + error.message);
+      console.error('Error syncing CAS numbers:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Funkcje obsługujące składniki odżywcze
   const handleMicronutrientChange = (index, field, value) => {
     const newMicronutrients = [...recipeData.micronutrients];
@@ -1237,7 +1319,22 @@ const RecipeForm = ({ recipeId }) => {
                     <TableCell width="25%"><Typography variant="subtitle2">SKU składnika</Typography></TableCell>
                     <TableCell width="12%"><Typography variant="subtitle2">Ilość</Typography></TableCell>
                     <TableCell width="12%"><Typography variant="subtitle2">Jednostka</Typography></TableCell>
-                    <TableCell width="15%"><Typography variant="subtitle2">Numer CAS</Typography></TableCell>
+                    <TableCell width="15%">
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Typography variant="subtitle2">Numer CAS</Typography>
+                        <Tooltip title="Pobierz numery CAS z pozycji magazynowych">
+                          <IconButton 
+                            size="small" 
+                            color="primary" 
+                            onClick={syncCASNumbers}
+                            disabled={loading}
+                            sx={{ ml: 1 }}
+                          >
+                            <SyncIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    </TableCell>
                     <TableCell width="16%"><Typography variant="subtitle2">Uwagi</Typography></TableCell>
                     <TableCell width="10%"><Typography variant="subtitle2">Źródło</Typography></TableCell>
                     <TableCell width="10%"><Typography variant="subtitle2">Akcje</Typography></TableCell>

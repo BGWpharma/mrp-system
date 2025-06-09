@@ -500,12 +500,21 @@ const TaskForm = ({ taskId }) => {
       
       setRecipe(selectedRecipe);
       
-      // Ustaw nazwę produktu z receptury
+      // Ustaw nazwę produktu z receptury oraz informacje o wersji
       if (selectedRecipe.output && selectedRecipe.output.name) {
         setTaskData(prev => ({
           ...prev,
           productName: selectedRecipe.output.name,
-          unit: selectedRecipe.output.unit || 'szt.'
+          unit: selectedRecipe.output.unit || 'szt.',
+          recipeVersion: selectedRecipe.version || 1,
+          recipeName: selectedRecipe.name || selectedRecipe.output.name
+        }));
+      } else {
+        // Jeśli nie ma output, ustaw tylko wersję i nazwę receptury
+        setTaskData(prev => ({
+          ...prev,
+          recipeVersion: selectedRecipe.version || 1,
+          recipeName: selectedRecipe.name
         }));
       }
       

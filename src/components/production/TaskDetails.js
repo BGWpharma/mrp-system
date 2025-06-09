@@ -104,12 +104,51 @@ const TaskDetails = ({ task }) => {
                       lotNumber: batchInfo.batchNumber || batchData.lotNumber || batchData.batchNumber,
                       quantity: batchInfo.quantity,
                       materialName: batchData.itemName || "Materiał",
-                      purchaseOrderDetails: batchData.purchaseOrderDetails
+                      purchaseOrderDetails: batchData.purchaseOrderDetails,
+                      source: 'reserved' // Oznacz jako zarezerwowane
                     });
                   }
                 }
               } catch (error) {
                 console.error(`Błąd podczas pobierania danych partii ${batchInfo.batchId}:`, error);
+              }
+            }
+          }
+        }
+
+        // 1.5. Pobierz partie ze skonsumowanych materiałów (consumedMaterials)
+        if (task.consumedMaterials && task.consumedMaterials.length > 0) {
+          console.log("Znaleziono skonsumowane materiały:", task.consumedMaterials);
+          
+          // Dla każdego skonsumowanego materiału
+          for (const consumed of task.consumedMaterials) {
+            if (consumed.batchId) {
+              try {
+                // Pobierz szczegółowe dane partii z bazy danych
+                const batchRef = doc(db, 'inventoryBatches', consumed.batchId);
+                const batchSnapshot = await getDoc(batchRef);
+                
+                if (batchSnapshot.exists()) {
+                  const batchData = batchSnapshot.data();
+                  
+                  // Jeśli partia ma dane o powiązanym PO
+                  if (batchData.purchaseOrderDetails) {
+                    // Sprawdź czy już nie dodaliśmy tej partii z zarezerwowanych materiałów
+                    const existingBatch = batchesWithPO.find(batch => batch.id === consumed.batchId);
+                    if (!existingBatch) {
+                      batchesWithPO.push({
+                        id: consumed.batchId,
+                        lotNumber: consumed.batchNumber || batchData.lotNumber || batchData.batchNumber,
+                        quantity: consumed.quantity,
+                        materialName: batchData.itemName || "Materiał",
+                        purchaseOrderDetails: batchData.purchaseOrderDetails,
+                        source: 'consumed' // Oznacz jako skonsumowane
+                      });
+                    }
+                  }
+                }
+              } catch (error) {
+                console.error(`Błąd podczas pobierania danych partii skonsumowanej ${consumed.batchId}:`, error);
               }
             }
           }
@@ -145,7 +184,7 @@ const TaskDetails = ({ task }) => {
     };
     
     fetchRelatedBatches();
-  }, [task?.moNumber, task?.materialBatches, showError]);
+  }, [task?.moNumber, task?.materialBatches, task?.consumedMaterials, showError]);
   
   // Styl dla nagłówka sekcji z ikoną zwijania/rozwijania
   const sectionHeaderStyle = {

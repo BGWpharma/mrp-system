@@ -82,9 +82,16 @@ import {
   Info as InfoIcon,
   Science as RawMaterialsIcon,
   BuildCircle as BuildCircleIcon,
-  Assessment as AssessmentIcon
+  Assessment as AssessmentIcon,
+  AttachFile as AttachFileIcon,
+  CloudUpload as CloudUploadIcon,
+  Description as DescriptionIcon,
+  Image as ImageIcon,
+  PictureAsPdf as PdfIcon,
+  Download as DownloadIcon
 } from '@mui/icons-material';
 import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession, addProductionSession, deleteProductionSession } from '../../services/productionService';
+import { getRecipeVersion } from '../../services/recipeService';
 import { getItemBatches, bookInventoryForTask, cancelBooking, getBatchReservations, getAllInventoryItems, getInventoryItemById, getInventoryBatch } from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -94,6 +101,8 @@ import { format, parseISO } from 'date-fns';
 import TaskDetails from '../../components/production/TaskDetails';
 import { db } from '../../services/firebase/config';
 import { getDoc, doc, updateDoc, serverTimestamp, arrayUnion, collection, query, where, getDocs } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { storage } from '../../services/firebase/config';
 import { getUsersDisplayNames } from '../../services/userService';
 
 const TaskDetailsPage = () => {
@@ -216,6 +225,14 @@ const TaskDetailsPage = () => {
   const [consumedBatchPrices, setConsumedBatchPrices] = useState({});
   const [consumedIncludeInCosts, setConsumedIncludeInCosts] = useState({});
   const [restoreReservation, setRestoreReservation] = useState(true); // Domyślnie włączone
+  const [fixingRecipeData, setFixingRecipeData] = useState(false);
+  
+  // Stan dla załączników z powiązanych PO
+  const [ingredientAttachments, setIngredientAttachments] = useState({});
+  
+  // Stan dla załączników badań klinicznych
+  const [clinicalAttachments, setClinicalAttachments] = useState([]);
+  const [uploadingClinical, setUploadingClinical] = useState(false);
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -412,6 +429,22 @@ const TaskDetailsPage = () => {
         setIncludeInCosts(costsInclude);
       }
       
+      // KROK 2.5: ✅ Wzbogać dane skonsumowanych materiałów o informacje z partii magazynowych
+      if (fetchedTask?.consumedMaterials?.length > 0) {
+        try {
+          console.log('🔄 Wzbogacanie danych skonsumowanych materiałów...');
+          const enrichedConsumedMaterials = await enrichConsumedMaterialsData(fetchedTask.consumedMaterials);
+          fetchedTask.consumedMaterials = enrichedConsumedMaterials;
+          setTask(prevTask => ({
+            ...prevTask,
+            consumedMaterials: enrichedConsumedMaterials
+          }));
+          console.log('✅ Dane skonsumowanych materiałów zostały wzbogacone');
+        } catch (error) {
+          console.warn('⚠️ Nie udało się wzbogacić danych skonsumowanych materiałów:', error);
+        }
+      }
+      
       // KROK 3: ✅ OPTYMALIZACJA ETAP 2: Równoległe pobieranie wszystkich pozostałych danych
       const dataLoadingPromises = [];
       
@@ -423,6 +456,18 @@ const TaskDetailsPage = () => {
             .catch(error => {
               console.error('Błąd podczas pobierania historii produkcji:', error);
               return { type: 'productionHistory', data: [] };
+            })
+        );
+      }
+      
+      // Dane wersji receptury - jeśli zadanie ma recipeId i recipeVersion
+      if (fetchedTask?.recipeId && fetchedTask?.recipeVersion) {
+        dataLoadingPromises.push(
+          getRecipeVersion(fetchedTask.recipeId, fetchedTask.recipeVersion)
+            .then(recipeVersion => ({ type: 'recipeVersion', data: recipeVersion }))
+            .catch(error => {
+              console.error('Błąd podczas pobierania wersji receptury:', error);
+              return { type: 'recipeVersion', data: null };
             })
         );
       }
@@ -458,6 +503,15 @@ const TaskDetailsPage = () => {
               break;
             case 'userNames':
               setUserNames(result.data);
+              break;
+            case 'recipeVersion':
+              if (result.data && result.data.data) {
+                // Dodaj dane wersji receptury do obiektu task
+                setTask(prevTask => ({
+                  ...prevTask,
+                  recipe: result.data.data // result.data.data zawiera pełne dane receptury z tej wersji
+                }));
+              }
               break;
           }
         });
@@ -517,6 +571,20 @@ const TaskDetailsPage = () => {
       fetchConsumedBatchPrices();
     }
   }, [task?.consumedMaterials]);
+
+  // Dodaję efekt pobierający załączniki z PO dla składników
+  useEffect(() => {
+    if (task?.recipe?.ingredients && task?.consumedMaterials && materials.length > 0) {
+      fetchIngredientAttachments();
+    }
+  }, [task?.recipe?.ingredients, task?.consumedMaterials, materials]);
+
+  // Pobieranie załączników badań klinicznych
+  useEffect(() => {
+    if (task?.id) {
+      fetchClinicalAttachments();
+    }
+  }, [task?.id]);
 
   // Funkcja do pobierania magazynów
   const fetchWarehouses = async () => {
@@ -2502,6 +2570,7 @@ const TaskDetailsPage = () => {
             <tr><th>Ilość:</th><td>${task.quantity || '0'} ${task.unit || 'szt.'}</td></tr>
             <tr><th>Status:</th><td>${task.status || 'Nie określono'}</td></tr>
             <tr><th>Priorytet:</th><td>${task.priority || 'Normalny'}</td></tr>
+            ${(task.recipeName || task.recipe?.recipeName) ? `<tr><th>Receptura:</th><td>${task.recipeName || task.recipe?.recipeName}${task.recipeVersion ? ` (wersja ${task.recipeVersion})` : ''}</td></tr>` : ''}
           </table>
         </div>
 
@@ -4227,6 +4296,350 @@ const TaskDetailsPage = () => {
     }
   };
 
+  // Funkcja do wzbogacenia danych skonsumowanych materiałów o informacje z partii
+  const enrichConsumedMaterialsData = async (consumedMaterials) => {
+    if (!consumedMaterials || consumedMaterials.length === 0) {
+      return consumedMaterials;
+    }
+
+    const enrichedMaterials = await Promise.all(
+      consumedMaterials.map(async (consumed) => {
+        let enrichedConsumed = { ...consumed };
+
+        // Pobierz dane z partii magazynowej jeśli brakuje informacji
+        if (consumed.batchId && (!consumed.expiryDate || !consumed.materialName || !consumed.unit)) {
+          try {
+            const { getInventoryBatch } = await import('../../services/inventoryService');
+            const batchData = await getInventoryBatch(consumed.batchId);
+            
+            if (batchData) {
+              // Dodaj datę ważności jeśli nie ma
+              if (!enrichedConsumed.expiryDate && batchData.expiryDate) {
+                enrichedConsumed.expiryDate = batchData.expiryDate;
+              }
+
+              // Dodaj numer partii jeśli nie ma
+              if (!enrichedConsumed.batchNumber && (batchData.lotNumber || batchData.batchNumber)) {
+                enrichedConsumed.batchNumber = batchData.lotNumber || batchData.batchNumber;
+              }
+
+              // Pobierz nazwę materiału i jednostkę z pozycji magazynowej
+              if (batchData.inventoryItemId && (!enrichedConsumed.materialName || !enrichedConsumed.unit)) {
+                try {
+                  const { getInventoryItemById } = await import('../../services/inventoryService');
+                  const inventoryItem = await getInventoryItemById(batchData.inventoryItemId);
+                  
+                  if (inventoryItem) {
+                    if (!enrichedConsumed.materialName) {
+                      enrichedConsumed.materialName = inventoryItem.name;
+                    }
+                    if (!enrichedConsumed.unit) {
+                      enrichedConsumed.unit = inventoryItem.unit;
+                    }
+                  }
+                } catch (error) {
+                  console.warn(`Nie udało się pobrać danych pozycji magazynowej ${batchData.inventoryItemId}:`, error);
+                }
+              }
+            }
+          } catch (error) {
+            console.warn(`Nie udało się pobrać danych partii ${consumed.batchId}:`, error);
+          }
+        }
+
+        return enrichedConsumed;
+      })
+    );
+
+    return enrichedMaterials;
+  };
+
+  // Funkcja do pobierania załączników z PO dla składników
+  const fetchIngredientAttachments = async () => {
+    if (!task?.recipe?.ingredients || task.recipe.ingredients.length === 0) {
+      return;
+    }
+
+    if (!task?.consumedMaterials || task.consumedMaterials.length === 0) {
+      return;
+    }
+
+    try {
+      const attachments = {};
+      
+      // Dla każdego składnika sprawdź czy można znaleźć odpowiadający mu skonsumowany materiał
+      for (const ingredient of task.recipe.ingredients) {
+        const ingredientAttachments = [];
+        
+        // Znajdź skonsumowane materiały o tej samej nazwie co składnik
+        const matchingConsumedMaterials = task.consumedMaterials.filter(consumed => {
+          // Znajdź materiał w liście materiałów zadania
+          const material = materials.find(m => (m.inventoryItemId || m.id) === consumed.materialId);
+          const materialName = consumed.materialName || material?.name || '';
+          
+          // Sprawdź czy nazwa materiału pasuje do nazwy składnika (case-insensitive)
+          return materialName.toLowerCase().includes(ingredient.name.toLowerCase()) ||
+                 ingredient.name.toLowerCase().includes(materialName.toLowerCase());
+        });
+        
+        // Dla każdego pasującego skonsumowanego materiału pobierz załączniki z PO
+        for (const consumed of matchingConsumedMaterials) {
+          if (consumed.batchId) {
+            try {
+              // Pobierz dane partii magazynowej
+              const { getInventoryBatch } = await import('../../services/inventoryService');
+              const batchData = await getInventoryBatch(consumed.batchId);
+              
+              if (batchData && batchData.purchaseOrderDetails && batchData.purchaseOrderDetails.id) {
+                // Pobierz pełne dane zamówienia zakupu
+                const { getPurchaseOrderById } = await import('../../services/purchaseOrderService');
+                const poData = await getPurchaseOrderById(batchData.purchaseOrderDetails.id);
+                
+                if (poData && poData.attachments && poData.attachments.length > 0) {
+                  // Dodaj załączniki z informacją o źródle
+                  const poAttachments = poData.attachments.map(attachment => ({
+                    ...attachment,
+                    poNumber: poData.number,
+                    poId: poData.id,
+                    lotNumber: consumed.batchNumber || batchData.lotNumber || batchData.batchNumber
+                  }));
+                  
+                  ingredientAttachments.push(...poAttachments);
+                }
+              }
+            } catch (error) {
+              console.warn(`Nie udało się pobrać załączników dla partii ${consumed.batchId}:`, error);
+            }
+          }
+        }
+        
+        // Usuń duplikaty załączników (po nazwie pliku)
+        const uniqueAttachments = ingredientAttachments.filter((attachment, index, self) => 
+          index === self.findIndex(a => a.fileName === attachment.fileName)
+        );
+        
+        if (uniqueAttachments.length > 0) {
+          attachments[ingredient.name] = uniqueAttachments;
+        }
+      }
+      
+      setIngredientAttachments(attachments);
+      console.log('Pobrano załączniki dla składników:', attachments);
+    } catch (error) {
+      console.warn('Błąd podczas pobierania załączników składników:', error);
+    }
+  };
+
+  // Funkcja do pobierania załączników badań klinicznych
+  const fetchClinicalAttachments = async () => {
+    if (!task?.id) return;
+    
+    try {
+      // Pobierz obecne załączniki z zadania
+      const taskRef = doc(db, 'productionTasks', task.id);
+      const taskDoc = await getDoc(taskRef);
+      
+      if (taskDoc.exists()) {
+        const taskData = taskDoc.data();
+        setClinicalAttachments(taskData.clinicalAttachments || []);
+      }
+    } catch (error) {
+      console.warn('Błąd podczas pobierania załączników badań klinicznych:', error);
+    }
+  };
+
+  // Funkcja do przesyłania pliku badań klinicznych
+  const uploadClinicalFile = async (file) => {
+    try {
+      // Walidacja pliku
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (file.size > maxSize) {
+        throw new Error('Plik jest za duży. Maksymalny rozmiar to 10MB.');
+      }
+
+      // Dozwolone typy plików
+      const allowedTypes = [
+        'application/pdf',
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'text/plain'
+      ];
+      
+      if (!allowedTypes.includes(file.type)) {
+        throw new Error('Nieobsługiwany typ pliku. Dozwolone: PDF, JPG, PNG, GIF, DOC, DOCX, TXT');
+      }
+
+      const timestamp = new Date().getTime();
+      const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const fileName = `${timestamp}_${sanitizedFileName}`;
+      const storagePath = `clinical-research-attachments/${task.id}/${fileName}`;
+
+      const fileRef = ref(storage, storagePath);
+      await uploadBytes(fileRef, file);
+      const downloadURL = await getDownloadURL(fileRef);
+
+      return {
+        id: `${timestamp}_${Math.random().toString(36).substr(2, 9)}`,
+        fileName: file.name,
+        storagePath,
+        downloadURL,
+        contentType: file.type,
+        size: file.size,
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: currentUser?.uid
+      };
+    } catch (error) {
+      console.error('Błąd podczas przesyłania pliku:', error);
+      throw error;
+    }
+  };
+
+  // Funkcja do obsługi wyboru plików
+  const handleClinicalFileSelect = async (files) => {
+    if (!files || files.length === 0) return;
+
+    setUploadingClinical(true);
+    const newAttachments = [...clinicalAttachments];
+
+    try {
+      for (const file of files) {
+        try {
+          const uploadedFile = await uploadClinicalFile(file);
+          newAttachments.push(uploadedFile);
+          showSuccess(`Plik "${file.name}" został przesłany pomyślnie`);
+        } catch (error) {
+          showError(`Błąd podczas przesyłania pliku "${file.name}": ${error.message}`);
+        }
+      }
+
+      // Zapisz załączniki w bazie danych
+      const taskRef = doc(db, 'productionTasks', task.id);
+      await updateDoc(taskRef, {
+        clinicalAttachments: newAttachments,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      });
+
+      setClinicalAttachments(newAttachments);
+    } finally {
+      setUploadingClinical(false);
+    }
+  };
+
+  // Funkcja do usuwania pliku
+  const handleDeleteClinicalFile = async (attachment) => {
+    try {
+      const fileRef = ref(storage, attachment.storagePath);
+      await deleteObject(fileRef);
+
+      const updatedAttachments = clinicalAttachments.filter(a => a.id !== attachment.id);
+      
+      // Zaktualizuj bazę danych
+      const taskRef = doc(db, 'productionTasks', task.id);
+      await updateDoc(taskRef, {
+        clinicalAttachments: updatedAttachments,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      });
+
+      setClinicalAttachments(updatedAttachments);
+      showSuccess(`Plik "${attachment.fileName}" został usunięty`);
+    } catch (error) {
+      console.error('Błąd podczas usuwania pliku:', error);
+      showError(`Błąd podczas usuwania pliku: ${error.message}`);
+    }
+  };
+
+  // Funkcja do pobierania pliku
+  const handleDownloadClinicalFile = (attachment) => {
+    window.open(attachment.downloadURL, '_blank');
+  };
+
+  // Funkcja do uzyskania ikony pliku
+  const getClinicalFileIcon = (contentType) => {
+    if (contentType.startsWith('image/')) {
+      return <ImageIcon sx={{ color: 'primary.main' }} />;
+    } else if (contentType === 'application/pdf') {
+      return <PdfIcon sx={{ color: 'error.main' }} />;
+    } else {
+      return <DescriptionIcon sx={{ color: 'action.active' }} />;
+    }
+  };
+
+  // Funkcja do formatowania rozmiaru pliku
+  const formatClinicalFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // Funkcja naprawy danych receptury dla starych zadań
+  const handleFixRecipeData = async () => {
+    if (!task?.recipeId) {
+      showError('Brak ID receptury w zadaniu');
+      return;
+    }
+
+    try {
+      setFixingRecipeData(true);
+      
+      // Pobierz pełne dane receptury
+      let recipeData = null;
+      
+      if (task.recipeVersion) {
+        // Jeśli mamy wersję, pobierz konkretną wersję receptury
+        try {
+          const recipeVersion = await getRecipeVersion(task.recipeId, task.recipeVersion);
+          recipeData = recipeVersion.data;
+          console.log(`Pobrano dane wersji ${task.recipeVersion} receptury ${task.recipeId}`);
+        } catch (error) {
+          console.warn(`Nie udało się pobrać wersji ${task.recipeVersion}, próbuję pobrać aktualną recepturę:`, error);
+          // Jeśli nie udało się pobrać konkretnej wersji, pobierz aktualną recepturę
+          const { getRecipeById } = await import('../../services/recipeService');
+          recipeData = await getRecipeById(task.recipeId);
+          console.log('Pobrano aktualną wersję receptury');
+        }
+      } else {
+        // Jeśli nie ma wersji, pobierz aktualną recepturę
+        const { getRecipeById } = await import('../../services/recipeService');
+        recipeData = await getRecipeById(task.recipeId);
+        console.log('Pobrano aktualną recepturę (brak wersji w zadaniu)');
+      }
+
+      if (!recipeData) {
+        throw new Error('Nie udało się pobrać danych receptury');
+      }
+
+      // Zaktualizuj zadanie w bazie danych z pełnymi danymi receptury
+      const taskRef = doc(db, 'productionTasks', id);
+      await updateDoc(taskRef, {
+        recipe: recipeData,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      });
+
+      // Zaktualizuj lokalny stan
+      setTask(prevTask => ({
+        ...prevTask,
+        recipe: recipeData
+      }));
+
+      showSuccess('Dane receptury zostały pomyślnie naprawione! Sekcje składników i mikroelementów będą teraz dostępne.');
+      console.log('Naprawiono dane receptury dla zadania:', id);
+
+    } catch (error) {
+      console.error('Błąd podczas naprawy danych receptury:', error);
+      showError('Nie udało się naprawić danych receptury: ' + error.message);
+    } finally {
+      setFixingRecipeData(false);
+    }
+  };
+
   // Inicjalizacja stanu checkboxów dla skonsumowanych materiałów
   useEffect(() => {
     if (task?.consumedMaterials && materials.length > 0) {
@@ -4355,7 +4768,21 @@ const TaskDetailsPage = () => {
                     <Grid item xs={12} md={6}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Produkt:</Typography><Typography variant="body1">{task.productName}</Typography></Grid>
                     <Grid item xs={12} md={6}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Ilość:</Typography><Typography variant="body1">{task.quantity} {task.unit}</Typography></Grid>
                     {task.estimatedDuration > 0 && (<Grid item xs={12} md={6}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Szacowany czas produkcji:</Typography><Typography variant="body1">{(task.estimatedDuration / 60).toFixed(1)} godz.</Typography></Grid>)}
-                    {task.recipe && task.recipe.recipeName && (<Grid item xs={12} md={6}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Receptura:</Typography><Typography variant="body1"><Link to={`/recipes/${task.recipe.recipeId}`}>{task.recipe.recipeName}</Link></Typography></Grid>)}
+                    {(task.recipe && task.recipe.recipeName) || (task.recipeId && task.recipeName) ? (
+                      <Grid item xs={12} md={6}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Receptura:</Typography>
+                        <Typography variant="body1">
+                          <Link to={`/recipes/${task.recipe?.recipeId || task.recipeId}`}>
+                            {task.recipe?.recipeName || task.recipeName}
+                            {task.recipeVersion && (
+                              <Typography component="span" variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
+                                (wersja {task.recipeVersion})
+                              </Typography>
+                            )}
+                          </Link>
+                        </Typography>
+                      </Grid>
+                    ) : null}
                     <Grid item xs={12}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Opis:</Typography><Typography variant="body1">{task.description || 'Brak opisu'}</Typography></Grid>
                   </Grid>
                 </Paper>
@@ -4570,228 +4997,583 @@ const TaskDetailsPage = () => {
                     Raport gotowego produktu
                   </Typography>
                   
-                  {/* Informacje o produkcie */}
-                  <Box sx={{ mb: 3 }}>
-                    <Typography variant="h6" sx={{ mb: 2, color: 'primary.main' }}>
-                      Informacje o produkcie
+                  {/* Product identification */}
+                  <Paper sx={{ p: 3, mb: 3, backgroundColor: '#f8f9fa' }} elevation={1}>
+                    <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
+                      1. Product identification
                     </Typography>
-                    <Grid container spacing={2}>
+                    
+                    <Grid container spacing={3}>
                       <Grid item xs={12} md={6}>
-                        <Typography variant="subtitle2" color="text.secondary">Nazwa produktu:</Typography>
-                        <Typography variant="body1" sx={{ fontWeight: 'medium' }}>{task.productName}</Typography>
+                        <TextField
+                          fullWidth
+                          label="SKU"
+                          value={task?.recipeName || task?.productName || ''}
+                          variant="outlined"
+                          InputProps={{
+                            readOnly: true,
+                          }}
+                          helperText="Nazwa receptury"
+                        />
                       </Grid>
+                      
                       <Grid item xs={12} md={6}>
-                        <Typography variant="subtitle2" color="text.secondary">Numer MO:</Typography>
-                        <Typography variant="body1" sx={{ fontWeight: 'medium' }}>{task.moNumber || 'Brak numeru'}</Typography>
+                        <TextField
+                          fullWidth
+                          label="Description"
+                          value={task?.recipe?.description || task?.description || ''}
+                          variant="outlined"
+                          multiline
+                          maxRows={3}
+                          InputProps={{
+                            readOnly: true,
+                          }}
+                          helperText="Opis receptury"
+                        />
                       </Grid>
+                      
                       <Grid item xs={12} md={6}>
-                        <Typography variant="subtitle2" color="text.secondary">Planowana ilość:</Typography>
-                        <Typography variant="body1" sx={{ fontWeight: 'medium' }}>{task.quantity} {task.unit}</Typography>
+                        <TextField
+                          fullWidth
+                          label="Version"
+                          value={task?.recipeVersion || '1'}
+                          variant="outlined"
+                          InputProps={{
+                            readOnly: true,
+                          }}
+                          helperText="Wersja receptury"
+                        />
                       </Grid>
+                      
                       <Grid item xs={12} md={6}>
-                        <Typography variant="subtitle2" color="text.secondary">Wyprodukowana ilość:</Typography>
-                        <Typography variant="body1" sx={{ fontWeight: 'medium', color: 'success.main' }}>
-                          {task.totalCompletedQuantity || 0} {task.unit}
-                        </Typography>
+                        <TextField
+                          fullWidth
+                          label="Report creation date"
+                          value={new Date().toLocaleDateString('pl-PL', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                          variant="outlined"
+                          InputProps={{
+                            readOnly: true,
+                          }}
+                          helperText="Data utworzenia raportu"
+                        />
                       </Grid>
-                      {task.lotNumber && (
-                        <Grid item xs={12} md={6}>
-                          <Typography variant="subtitle2" color="text.secondary">Numer partii (LOT):</Typography>
-                          <Typography variant="body1" sx={{ fontWeight: 'medium' }}>{task.lotNumber}</Typography>
-                        </Grid>
-                      )}
+                      
                       <Grid item xs={12} md={6}>
-                        <Typography variant="subtitle2" color="text.secondary">Status zadania:</Typography>
-                        <Chip 
-                          label={task.status} 
-                          color={getStatusColor(task.status)} 
-                          size="small" 
-                          sx={{ fontWeight: 'medium' }}
+                        <TextField
+                          fullWidth
+                          label="User"
+                          value={currentUser?.displayName || currentUser?.email || 'Nieznany użytkownik'}
+                          variant="outlined"
+                          InputProps={{
+                            readOnly: true,
+                          }}
+                          helperText="Nazwa użytkownika"
                         />
                       </Grid>
                     </Grid>
-                  </Box>
-
-                  <Divider sx={{ my: 3 }} />
-
-                  {/* Podsumowanie produkcji */}
-                  <Box sx={{ mb: 3 }}>
-                    <Typography variant="h6" sx={{ mb: 2, color: 'primary.main' }}>
-                      Podsumowanie produkcji
+                  </Paper>
+                  
+                  {/* TDS Specification */}
+                  <Paper sx={{ p: 3, mb: 3, backgroundColor: '#f8f9fa' }} elevation={1}>
+                    <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
+                      2. TDS Specification
                     </Typography>
-                    <Grid container spacing={2}>
-                      <Grid item xs={12} md={4}>
-                        <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-                          <Typography variant="subtitle2" color="text.secondary">Całkowity czas produkcji</Typography>
-                          <Typography variant="h6" color="primary.main">
-                            {productionHistory.reduce((sum, item) => sum + (item.timeSpent || 0), 0)} min
-                          </Typography>
-                        </Card>
+                    
+                    <Grid container spacing={3}>
+                      {/* Microelements + Nutrition data */}
+                      <Grid item xs={12}>
+                        <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>
+                          Mikroelementy + Dane żywieniowe:
+                        </Typography>
+                        
+                        {task?.recipe?.micronutrients && task.recipe.micronutrients.length > 0 ? (
+                          <TableContainer component={Paper} sx={{ mt: 2 }}>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow sx={{ backgroundColor: '#e3f2fd' }}>
+                                  <TableCell sx={{ fontWeight: 'bold' }}>Kod</TableCell>
+                                  <TableCell sx={{ fontWeight: 'bold' }}>Nazwa</TableCell>
+                                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>Ilość</TableCell>
+                                  <TableCell sx={{ fontWeight: 'bold' }}>Jednostka</TableCell>
+                                  <TableCell sx={{ fontWeight: 'bold' }}>Kategoria</TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {task.recipe.micronutrients.map((micronutrient, index) => (
+                                  <TableRow key={index}>
+                                    <TableCell sx={{ 
+                                      fontWeight: 'bold', 
+                                      color: micronutrient.category === 'Witaminy' ? 'success.main' : 
+                                             micronutrient.category === 'Minerały' ? 'info.main' :
+                                             micronutrient.category === 'Makroelementy' ? 'primary.main' :
+                                             micronutrient.category === 'Energia' ? 'warning.main' :
+                                             'text.primary'
+                                    }}>
+                                      {micronutrient.code}
+                                    </TableCell>
+                                    <TableCell>{micronutrient.name}</TableCell>
+                                    <TableCell align="right">{micronutrient.quantity}</TableCell>
+                                    <TableCell>{micronutrient.unit}</TableCell>
+                                    <TableCell>
+                                      <Chip 
+                                        size="small" 
+                                        color={
+                                          micronutrient.category === 'Witaminy' ? 'success' :
+                                          micronutrient.category === 'Minerały' ? 'info' :
+                                          micronutrient.category === 'Makroelementy' ? 'primary' :
+                                          micronutrient.category === 'Energia' ? 'warning' :
+                                          'default'
+                                        } 
+                                        label={micronutrient.category} 
+                                        sx={{ borderRadius: '16px' }}
+                                      />
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        ) : (
+                          <Paper sx={{ p: 2, backgroundColor: '#fff3e0', border: '1px dashed #ffb74d' }}>
+                            <Typography variant="body2" color="text.secondary" align="center">
+                              Brak danych o mikroelementach w recepturze
+                            </Typography>
+                          </Paper>
+                        )}
                       </Grid>
-                      <Grid item xs={12} md={4}>
-                        <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-                          <Typography variant="subtitle2" color="text.secondary">Liczba sesji produkcyjnych</Typography>
-                          <Typography variant="h6" color="info.main">
-                            {productionHistory.length}
-                          </Typography>
-                        </Card>
+                      
+                      {/* Date and Expiration Date */}
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="Date"
+                          value={task?.recipe?.updatedAt 
+                            ? (task.recipe.updatedAt && typeof task.recipe.updatedAt === 'object' && typeof task.recipe.updatedAt.toDate === 'function'
+                              ? task.recipe.updatedAt.toDate().toLocaleDateString('pl-PL', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric'
+                                })
+                              : new Date(task.recipe.updatedAt).toLocaleDateString('pl-PL', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric'
+                                }))
+                            : 'Brak danych'}
+                          variant="outlined"
+                          InputProps={{
+                            readOnly: true,
+                          }}
+                          helperText="Ostatnia data aktualizacji receptury"
+                        />
                       </Grid>
-                      <Grid item xs={12} md={4}>
-                        <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-                          <Typography variant="subtitle2" color="text.secondary">Efektywność</Typography>
-                          <Typography variant="h6" color="success.main">
-                            {task.quantity > 0 ? Math.round((task.totalCompletedQuantity / task.quantity) * 100) : 0}%
-                          </Typography>
-                        </Card>
+                      
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="Expiration date"
+                          value={task?.expiryDate 
+                            ? (task.expiryDate instanceof Date 
+                              ? task.expiryDate.toLocaleDateString('pl-PL', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric'
+                                })
+                              : typeof task.expiryDate === 'string'
+                                ? new Date(task.expiryDate).toLocaleDateString('pl-PL', {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    year: 'numeric'
+                                  })
+                                : task.expiryDate && task.expiryDate.toDate
+                                  ? task.expiryDate.toDate().toLocaleDateString('pl-PL', {
+                                      day: '2-digit',
+                                      month: '2-digit',
+                                      year: 'numeric'
+                                    })
+                                  : 'Nie określono')
+                            : 'Nie określono'}
+                          variant="outlined"
+                          InputProps={{
+                            readOnly: true,
+                          }}
+                          helperText="Data ważności gotowego produktu"
+                        />
                       </Grid>
                     </Grid>
-                  </Box>
-
-                  <Divider sx={{ my: 3 }} />
-
-                  {/* Historia sesji produkcyjnych */}
-                  <Box sx={{ mb: 3 }}>
-                    <Typography variant="h6" sx={{ mb: 2, color: 'primary.main' }}>
-                      Historia sesji produkcyjnych
+                  </Paper>
+                  
+                  {/* Active Ingredients */}
+                  <Paper sx={{ p: 3, mb: 3, backgroundColor: '#f8f9fa' }} elevation={1}>
+                    <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
+                      3. Active Ingredients
                     </Typography>
-                    {productionHistory.length === 0 ? (
-                      <Alert severity="info">
-                        Brak historii produkcji dla tego zadania.
-                      </Alert>
-                    ) : (
-                      <TableContainer>
+                    
+                    <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', mt: 2 }}>
+                      3.1 List of materials
+                    </Typography>
+                    
+                    <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'text.secondary' }}>
+                      Ingredients:
+                    </Typography>
+                    
+                    {task?.recipe?.ingredients && task.recipe.ingredients.length > 0 ? (
+                      <TableContainer component={Paper} sx={{ mt: 2 }}>
                         <Table size="small">
                           <TableHead>
-                            <TableRow>
-                              <TableCell>Data rozpoczęcia</TableCell>
-                              <TableCell>Data zakończenia</TableCell>
-                              <TableCell>Czas trwania</TableCell>
-                              <TableCell>Wyprodukowana ilość</TableCell>
-                              <TableCell>Operator</TableCell>
+                            <TableRow sx={{ backgroundColor: '#e8f5e8' }}>
+                              <TableCell sx={{ fontWeight: 'bold' }}>Nazwa składnika</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 'bold' }}>Ilość</TableCell>
+                              <TableCell sx={{ fontWeight: 'bold' }}>Jednostka</TableCell>
+                              <TableCell sx={{ fontWeight: 'bold' }}>Numer CAS</TableCell>
+                              <TableCell sx={{ fontWeight: 'bold' }}>Uwagi</TableCell>
+                              <TableCell sx={{ fontWeight: 'bold' }}>Załączniki z PO</TableCell>
                             </TableRow>
                           </TableHead>
                           <TableBody>
-                            {productionHistory.map((item, index) => (
-                              <TableRow key={item.id}>
-                                <TableCell>{item.startTime ? formatDateTime(item.startTime) : '-'}</TableCell>
-                                <TableCell>{item.endTime ? formatDateTime(item.endTime) : '-'}</TableCell>
-                                <TableCell>{item.timeSpent ? `${item.timeSpent} min` : '-'}</TableCell>
-                                <TableCell>{item.quantity} {task.unit}</TableCell>
-                                <TableCell>{getUserName(item.userId)}</TableCell>
+                            {task.recipe.ingredients.map((ingredient, index) => (
+                              <TableRow key={index} sx={{ '&:nth-of-type(even)': { backgroundColor: '#f9f9f9' } }}>
+                                <TableCell sx={{ fontWeight: 'medium' }}>
+                                  {ingredient.name}
+                                </TableCell>
+                                <TableCell align="right" sx={{ fontWeight: 'medium' }}>
+                                  {ingredient.quantity}
+                                </TableCell>
+                                <TableCell>
+                                  {ingredient.unit}
+                                </TableCell>
+                                <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.9rem' }}>
+                                  {ingredient.casNumber || '-'}
+                                </TableCell>
+                                <TableCell sx={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {ingredient.notes || '-'}
+                                </TableCell>
+                                <TableCell sx={{ minWidth: '200px' }}>
+                                  {ingredientAttachments[ingredient.name] && ingredientAttachments[ingredient.name].length > 0 ? (
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                                      {ingredientAttachments[ingredient.name].map((attachment, attachIndex) => (
+                                        <Box key={attachIndex} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                          <Button
+                                            size="small"
+                                            variant="outlined"
+                                            startIcon={<AttachFileIcon />}
+                                            onClick={() => window.open(attachment.downloadURL || attachment.fileUrl, '_blank')}
+                                            sx={{ 
+                                              textTransform: 'none',
+                                              fontSize: '0.75rem',
+                                              minWidth: 'auto',
+                                              flex: 1,
+                                              justifyContent: 'flex-start'
+                                            }}
+                                          >
+                                            {attachment.fileName}
+                                          </Button>
+                                          <Chip 
+                                            size="small" 
+                                            label={`PO: ${attachment.poNumber}`}
+                                            variant="outlined"
+                                            color="info"
+                                            sx={{ fontSize: '0.65rem' }}
+                                          />
+                                        </Box>
+                                      ))}
+                                    </Box>
+                                  ) : (
+                                    <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                                      Brak załączników
+                                    </Typography>
+                                  )}
+                                </TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
                         </Table>
-                      </TableContainer>
-                    )}
-                  </Box>
-
-                  <Divider sx={{ my: 3 }} />
-
-                  {/* Zużyte materiały */}
-                  <Box sx={{ mb: 3 }}>
-                    <Typography variant="h6" sx={{ mb: 2, color: 'primary.main' }}>
-                      Zużyte materiały
-                    </Typography>
-                    {task.consumedMaterials && task.consumedMaterials.length > 0 ? (
-                      <TableContainer>
-                        <Table size="small">
-                          <TableHead>
-                            <TableRow>
-                              <TableCell>Materiał</TableCell>
-                              <TableCell>Partia (LOT)</TableCell>
-                              <TableCell>Zużyta ilość</TableCell>
-                              <TableCell>Data zużycia</TableCell>
-                              <TableCell>Operator</TableCell>
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {task.consumedMaterials.map((consumed, index) => {
-                              const material = materials.find(m => (m.inventoryItemId || m.id) === consumed.materialId);
-                              return (
-                                <TableRow key={index}>
-                                  <TableCell>{material ? material.name : 'Nieznany materiał'}</TableCell>
-                                  <TableCell>
-                                    {consumed.batchNumber || consumed.batchId || 'Brak numeru partii'}
-                                  </TableCell>
-                                  <TableCell>{consumed.quantity} {material ? material.unit : ''}</TableCell>
-                                  <TableCell>{new Date(consumed.timestamp).toLocaleString('pl')}</TableCell>
-                                  <TableCell>{consumed.userName || 'Nieznany użytkownik'}</TableCell>
-                                </TableRow>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
+                        
+                        {/* Podsumowanie składników */}
+                        <Box sx={{ p: 2, backgroundColor: '#f0f8f0', borderTop: '1px solid #e0e0e0' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                            Łączna liczba składników: {task.recipe.ingredients.length}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                            Składniki na {task.recipe.yield?.quantity || 1} {task.recipe.yield?.unit || 'szt.'} produktu
+                          </Typography>
+                        </Box>
                       </TableContainer>
                     ) : (
-                      <Alert severity="info">
-                        Brak zużytych materiałów dla tego zadania.
-                      </Alert>
+                      <Paper sx={{ p: 2, backgroundColor: '#fff3e0', border: '1px dashed #ffb74d' }}>
+                        <Typography variant="body2" color="text.secondary" align="center">
+                          Brak składników w recepturze
+                        </Typography>
+                      </Paper>
                     )}
-                  </Box>
+                    
+                    {/* Daty ważności skonsumowanych materiałów */}
+                  </Paper>
+                  
+                  {/* 3.2 Expiration date of materials */}
+                  {task?.consumedMaterials && task.consumedMaterials.length > 0 && (
+                    <Paper sx={{ p: 3, mb: 3, backgroundColor: '#f8f9fa' }} elevation={1}>
+                      <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
+                        3.2 Expiration date of materials
+                      </Typography>
+                        
+                        <TableContainer component={Paper} sx={{ mt: 2 }}>
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow sx={{ backgroundColor: '#fff3e0' }}>
+                                <TableCell sx={{ fontWeight: 'bold' }}>Nazwa materiału</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold' }}>Partia</TableCell>
+                                <TableCell align="right" sx={{ fontWeight: 'bold' }}>Ilość</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold' }}>Jednostka</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold' }}>Data ważności</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {task.consumedMaterials.map((consumed, index) => {
+                                // Znajdź materiał w liście materiałów zadania aby pobrać nazwę i jednostkę
+                                const material = materials.find(m => (m.inventoryItemId || m.id) === consumed.materialId);
+                                
+                                // Pobierz nazwę materiału
+                                const materialName = consumed.materialName || material?.name || 'Nieznany materiał';
+                                
+                                // Pobierz jednostkę materiału
+                                const materialUnit = consumed.unit || material?.unit || '-';
+                                
+                                // Pobierz numer partii
+                                let batchNumber = consumed.batchNumber || consumed.lotNumber || '-';
+                                
+                                // Jeśli nie ma numeru partii w konsumpcji, spróbuj znaleźć w task.materialBatches
+                                if (batchNumber === '-' && task.materialBatches && task.materialBatches[consumed.materialId]) {
+                                  const batch = task.materialBatches[consumed.materialId].find(b => b.batchId === consumed.batchId);
+                                  if (batch && batch.batchNumber) {
+                                    batchNumber = batch.batchNumber;
+                                  }
+                                }
+                                
+                                // Pobierz datę ważności - najpierw z konsumpcji, potem spróbuj z partii
+                                let expiryDate = consumed.expiryDate;
+                                let formattedExpiryDate = 'Nie określono';
+                                
+                                if (expiryDate) {
+                                  const expiry = expiryDate instanceof Date 
+                                    ? expiryDate 
+                                    : expiryDate.toDate 
+                                      ? expiryDate.toDate() 
+                                      : new Date(expiryDate);
+                                  
+                                  formattedExpiryDate = expiry.toLocaleDateString('pl-PL', {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    year: 'numeric'
+                                  });
+                                }
+                                
+                                return (
+                                  <TableRow key={index} sx={{ '&:nth-of-type(even)': { backgroundColor: '#fafafa' } }}>
+                                    <TableCell sx={{ fontWeight: 'medium' }}>
+                                      {materialName}
+                                    </TableCell>
+                                    <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.9rem' }}>
+                                      {batchNumber}
+                                    </TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 'medium' }}>
+                                      {consumed.quantity || consumed.consumedQuantity || '-'}
+                                    </TableCell>
+                                    <TableCell>
+                                      {materialUnit}
+                                    </TableCell>
+                                    <TableCell sx={{ fontWeight: 'medium' }}>
+                                      {formattedExpiryDate}
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                          
+                          {/* Podsumowanie dat ważności */}
+                          <Box sx={{ p: 2, backgroundColor: '#f5f5f5', borderTop: '1px solid #e0e0e0' }}>
+                            <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                              Podsumowanie: {task.consumedMaterials.length} skonsumowanych materiałów
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                              • Z datą ważności: {task.consumedMaterials.filter(m => m.expiryDate).length}<br/>
+                              • Użyte partie: {[...new Set(task.consumedMaterials.map(m => m.batchNumber || m.lotNumber || m.batchId).filter(Boolean))].length}
+                            </Typography>
+                          </Box>
+                        </TableContainer>
+                    </Paper>
+                  )}
 
-                  <Divider sx={{ my: 3 }} />
-
-                  {/* Podsumowanie kosztów */}
-                  <Box sx={{ mb: 3 }}>
-                    <Typography variant="h6" sx={{ mb: 2, color: 'primary.main' }}>
-                      Podsumowanie kosztów
+                  {/* 3.3 Clinical and bibliographic research */}
+                  <Paper sx={{ p: 3, mb: 3, backgroundColor: '#f8f9fa' }} elevation={1}>
+                    <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
+                      3.3 Clinical and bibliographic research
                     </Typography>
-                    <Grid container spacing={2}>
-                      <Grid item xs={12} md={6}>
-                        <Card variant="outlined" sx={{ p: 2 }}>
-                          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                            Koszt materiałów
-                          </Typography>
-                          <Typography variant="h6" color="warning.main">
-                            {(() => {
-                              const cost = calculateConsumedMaterialsCost();
-                              return cost.toFixed(2);
-                            })()} €
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            Na podstawie zużytych materiałów
-                          </Typography>
-                        </Card>
-                      </Grid>
-                      <Grid item xs={12} md={6}>
-                        <Card variant="outlined" sx={{ p: 2 }}>
-                          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                            Koszt jednostkowy
-                          </Typography>
-                          <Typography variant="h6" color="secondary.main">
-                            {(() => {
-                              const cost = calculateConsumedMaterialsCost();
-                              const totalProduced = task.totalCompletedQuantity || 0;
-                              return totalProduced > 0 ? (cost / totalProduced).toFixed(4) : '0.0000';
-                            })()} € / {task.unit}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            Koszt za jednostkę produktu
-                          </Typography>
-                        </Card>
-                      </Grid>
-                    </Grid>
-                  </Box>
+                    
+                    {/* Sekcja przesyłania plików */}
+                    <Box sx={{ mb: 3, p: 2, backgroundColor: '#e3f2fd', borderRadius: 1, border: '1px dashed #2196f3' }}>
+                      <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
+                        <CloudUploadIcon sx={{ mr: 1 }} />
+                        Dodaj dokumenty badań klinicznych i bibliograficznych
+                      </Typography>
+                      
+                      <input
+                        accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.txt"
+                        style={{ display: 'none' }}
+                        id="clinical-file-upload"
+                        multiple
+                        type="file"
+                        onChange={(e) => handleClinicalFileSelect(Array.from(e.target.files))}
+                        disabled={uploadingClinical}
+                      />
+                      <label htmlFor="clinical-file-upload">
+                        <Button
+                          variant="contained"
+                          component="span"
+                          startIcon={uploadingClinical ? <CircularProgress size={20} color="inherit" /> : <CloudUploadIcon />}
+                          disabled={uploadingClinical}
+                          sx={{ mt: 1 }}
+                        >
+                          {uploadingClinical ? 'Przesyłanie...' : 'Wybierz pliki'}
+                        </Button>
+                      </label>
+                      
+                      <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
+                        Dozwolone formaty: PDF, JPG, PNG, GIF, DOC, DOCX, TXT (max 10MB na plik)
+                      </Typography>
+                    </Box>
 
-                  {/* Przyciski akcji */}
-                  <Box sx={{ display: 'flex', gap: 2, mt: 3 }}>
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      startIcon={<PrintIcon />}
-                      onClick={handlePrintMODetails}
-                    >
-                      Drukuj raport
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      color="secondary"
-                      startIcon={<AssessmentIcon />}
-                      onClick={() => navigate(`/production/reports?taskId=${task.id}`)}
-                    >
-                      Szczegółowe raporty
-                    </Button>
+                    {/* Lista załączników */}
+                    {clinicalAttachments.length > 0 ? (
+                      <Box>
+                        <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold' }}>
+                          <AttachFileIcon sx={{ mr: 1 }} />
+                          Załączone dokumenty ({clinicalAttachments.length})
+                        </Typography>
+                        
+                        <TableContainer component={Paper} sx={{ mt: 2 }}>
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow sx={{ backgroundColor: '#fff3e0' }}>
+                                <TableCell sx={{ fontWeight: 'bold', width: 60 }}>Typ</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold' }}>Nazwa pliku</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold', width: 100 }}>Rozmiar</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold', width: 120 }}>Data dodania</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold', width: 120 }} align="center">Akcje</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {clinicalAttachments.map((attachment, index) => (
+                                <TableRow key={attachment.id} sx={{ '&:nth-of-type(even)': { backgroundColor: '#fafafa' } }}>
+                                  <TableCell>
+                                    {getClinicalFileIcon(attachment.contentType)}
+                                  </TableCell>
+                                  <TableCell sx={{ fontWeight: 'medium' }}>
+                                    {attachment.fileName}
+                                  </TableCell>
+                                  <TableCell sx={{ fontSize: '0.875rem' }}>
+                                    {formatClinicalFileSize(attachment.size)}
+                                  </TableCell>
+                                  <TableCell sx={{ fontSize: '0.875rem' }}>
+                                    {new Date(attachment.uploadedAt).toLocaleDateString('pl-PL', {
+                                      day: '2-digit',
+                                      month: '2-digit',
+                                      year: 'numeric'
+                                    })}
+                                  </TableCell>
+                                  <TableCell align="center">
+                                    <Tooltip title="Pobierz">
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => handleDownloadClinicalFile(attachment)}
+                                        sx={{ mr: 0.5 }}
+                                      >
+                                        <DownloadIcon fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                    <Tooltip title="Usuń">
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => handleDeleteClinicalFile(attachment)}
+                                        color="error"
+                                      >
+                                        <DeleteIcon fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                          
+                          {/* Podsumowanie załączników */}
+                          <Box sx={{ p: 2, backgroundColor: '#f0f8f0', borderTop: '1px solid #e0e0e0' }}>
+                            <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                              Łączna liczba dokumentów: {clinicalAttachments.length}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                              Łączny rozmiar: {formatClinicalFileSize(clinicalAttachments.reduce((sum, attachment) => sum + attachment.size, 0))}
+                            </Typography>
+                          </Box>
+                        </TableContainer>
+                      </Box>
+                    ) : (
+                      <Paper sx={{ p: 2, backgroundColor: '#fff3e0', border: '1px dashed #ffb74d' }}>
+                        <Typography variant="body2" color="text.secondary" align="center">
+                          Brak załączonych dokumentów badań klinicznych
+                        </Typography>
+                      </Paper>
+                    )}
+                  </Paper>
+                  
+                  {/* Diagnoza problemu dla starych zadań bez pełnych danych receptury */}
+                  {task && task.recipeId && !task.recipe?.ingredients && (
+                    <Paper sx={{ p: 3, mb: 3, backgroundColor: '#fff3e0', border: '2px solid #ff9800' }} elevation={2}>
+                      <Typography variant="h6" gutterBottom sx={{ color: 'warning.main', fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
+                        ⚠️ Wykryto problem z danymi receptury
+                      </Typography>
+                      
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        To zadanie zostało utworzone przed wprowadzeniem systemu automatycznego pobierania pełnych danych receptury. 
+                        Brak jest składników, mikroelementów i innych szczegółowych danych receptury.
+                      </Typography>
+                      
+                      <Typography variant="body2" sx={{ mb: 2 }}>
+                        <strong>Wykryte informacje o recepturze:</strong><br/>
+                        • ID Receptury: {task.recipeId}<br/>
+                        • Nazwa Receptury: {task.recipeName || 'Nie określono'}<br/>
+                        • Wersja Receptury: {task.recipeVersion || 'Nie określono'}
+                      </Typography>
+                      
+                      <Button 
+                        variant="contained" 
+                        color="warning"
+                        onClick={handleFixRecipeData}
+                        disabled={fixingRecipeData}
+                        startIcon={fixingRecipeData ? <CircularProgress size={20} color="inherit" /> : null}
+                        sx={{ mt: 1 }}
+                      >
+                        {fixingRecipeData ? 'Naprawiam dane...' : 'Napraw dane receptury'}
+                      </Button>
+                      
+                      <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
+                        Ta operacja pobierze i doda brakujące dane receptury do zadania produkcyjnego.
+                      </Typography>
+                    </Paper>
+                  )}
+                  
+                  {/* Tutaj będzie przygotowany nowy raport w etapach */}
+                  <Box sx={{ p: 4, textAlign: 'center' }}>
+                    <Typography variant="body1" color="text.secondary">
+                      Pozostałe sekcje raportu zostaną przygotowane w kolejnych etapach
+                    </Typography>
                   </Box>
                 </Paper>
               </Grid>

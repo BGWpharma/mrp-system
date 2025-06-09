@@ -630,6 +630,8 @@ const CreateFromOrderPage = () => {
           createdBy: currentUser.uid,
           createdAt: new Date().toISOString(),
           recipe: recipeData,
+          recipeVersion: recipeData?.version || 1, // Dodanie wersji receptury
+          recipeName: recipeData?.name || item.name, // Dodanie nazwy receptury
           orderId: selectedOrder.id, // Dodanie orderId do zadania
           orderNumber: selectedOrder.orderNumber || selectedOrder.id,
           orderItemId: item.id, // Dodanie identyfikatora pozycji zamówienia
@@ -904,6 +906,8 @@ const CreateFromOrderPage = () => {
             name: taskName,
             description: `Zadanie produkcyjne utworzone automatycznie na podstawie zamówienia ${selectedOrder.orderNumber || selectedOrder.id} dla klienta ${selectedOrder.customer?.name || 'Nieznany'}.`,
             recipeId: recipeId,
+            recipeVersion: recipeData.version || 1, // Dodanie wersji receptury
+            recipeName: recipeData.name || orderItem.name, // Dodanie nazwy receptury
             productName: orderItem.name,
             quantity: orderItem.quantity,
             unit: unit,
