@@ -653,7 +653,7 @@ const generateGanttReport = (tasks, workstations, customers, startDate, endDate,
 const ProductionCalendar = () => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState('dayGridMonth');
+  const [view, setView] = useState('resourceTimelineWeek');
   const [ganttView, setGanttView] = useState('resourceTimelineWeek');
   const [ganttMenuAnchor, setGanttMenuAnchor] = useState(null);
   const [editable, setEditable] = useState(true);
@@ -664,9 +664,74 @@ const ProductionCalendar = () => {
   const [customers, setCustomers] = useState([]);
   const [selectedCustomers, setSelectedCustomers] = useState({});
   const [customerMenuAnchor, setCustomerMenuAnchor] = useState(null);
-  const [customDateRange, setCustomDateRange] = useState(false);
-  const [startDate, setStartDate] = useState(startOfMonth(new Date()));
-  const [endDate, setEndDate] = useState(endOfMonth(new Date()));
+  
+  // Funkcje do obsługi cache zakresu dat
+  const CALENDAR_CACHE_KEY = 'production-calendar-date-range';
+  
+  const saveDateRangeToCache = useCallback((customRange, start, end) => {
+    try {
+      const cacheData = {
+        customDateRange: customRange,
+        startDate: start ? start.toISOString() : null,
+        endDate: end ? end.toISOString() : null,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(CALENDAR_CACHE_KEY, JSON.stringify(cacheData));
+      console.log('Zapisano zakres dat do cache:', cacheData);
+    } catch (error) {
+      console.error('Błąd podczas zapisywania zakresu dat do cache:', error);
+    }
+  }, []);
+  
+  const loadDateRangeFromCache = useCallback(() => {
+    try {
+      const cachedData = localStorage.getItem(CALENDAR_CACHE_KEY);
+      if (cachedData) {
+        const parsed = JSON.parse(cachedData);
+        // Sprawdź czy cache nie jest starszy niż 1 godzina
+        const maxAge =  60 * 60 * 1000; // 1 godzina w milisekundach
+        if (parsed.timestamp && (Date.now() - parsed.timestamp) < maxAge) {
+          console.log('Odczytano zakres dat z cache:', parsed);
+          return {
+            customDateRange: parsed.customDateRange,
+            startDate: parsed.startDate ? new Date(parsed.startDate) : null,
+            endDate: parsed.endDate ? new Date(parsed.endDate) : null
+          };
+        } else {
+          // Usuń stary cache
+          localStorage.removeItem(CALENDAR_CACHE_KEY);
+          console.log('Cache zakresu dat wygasł - usunięto');
+        }
+      }
+    } catch (error) {
+      console.error('Błąd podczas odczytywania zakresu dat z cache:', error);
+      localStorage.removeItem(CALENDAR_CACHE_KEY);
+    }
+    return null;
+  }, []);
+  
+  // Inicjalizacja stanów z cache lub wartości domyślnych
+  const initializeDateRange = useCallback(() => {
+    const cachedRange = loadDateRangeFromCache();
+    if (cachedRange && cachedRange.customDateRange && cachedRange.startDate && cachedRange.endDate) {
+      return {
+        customDateRange: true,
+        startDate: cachedRange.startDate,
+        endDate: cachedRange.endDate
+      };
+    }
+    return {
+      customDateRange: false,
+      startDate: startOfMonth(new Date()),
+      endDate: endOfMonth(new Date())
+    };
+  }, [loadDateRangeFromCache]);
+  
+  const initialDateRange = initializeDateRange();
+  const [customDateRange, setCustomDateRange] = useState(initialDateRange.customDateRange);
+  const [startDate, setStartDate] = useState(initialDateRange.startDate);
+  const [endDate, setEndDate] = useState(initialDateRange.endDate);
+  
   const [dateRangeMenuAnchor, setDateRangeMenuAnchor] = useState(null);
   const [filterMenuAnchor, setFilterMenuAnchor] = useState(null);
   const [ganttDetail, setGanttDetail] = useState('day');
@@ -777,6 +842,18 @@ const ProductionCalendar = () => {
     fetchWorkstations();
     fetchCustomers();
   }, []);
+  
+  // Efekt do zastosowania zakresu dat z cache po inicjalizacji komponentu
+  useEffect(() => {
+    if (customDateRange && startDate && endDate && calendarRef.current) {
+      console.log('Zastosowanie zakresu dat z cache przy inicjalizacji');
+      // Opóźnienie aby dać czas na pełne załadowanie kalendarza
+      setTimeout(() => {
+        showSuccess(`Przywrócono zakres dat z ostatniej sesji: ${format(startDate, 'dd.MM.yyyy', { locale: pl })} - ${format(endDate, 'dd.MM.yyyy', { locale: pl })}`);
+        applyCustomDateRange();
+      }, 500);
+    }
+  }, []); // Uruchom tylko raz przy mount
   
   const fetchWorkstations = async () => {
     try {
@@ -1868,6 +1945,7 @@ const ProductionCalendar = () => {
       // Logging
       console.log("Zastosowanie zakresu dat:", format(startDate, 'dd.MM.yyyy'), "-", format(adjustedEndDate, 'dd.MM.yyyy'));
       console.log("Daty ISO:", startDate.toISOString(), "-", adjustedEndDate.toISOString());
+      console.log("Zakres dat zostanie zapisany do cache przeglądarki");
       
       // Najprostsze rozwiązanie - całkowite zniszczenie i odbudowa komponentu
       // bez zależności od wszystkich opcji konfiguracyjnych
@@ -1881,10 +1959,13 @@ const ProductionCalendar = () => {
           "Typ widoku:", calendarApi.view.type
         );
         
-        // Włącz flagę customDateRange
-        setCustomDateRange(true);
-        
-        // Oblicz długość trwania w dniach (+1, aby uwzględnić dzień końcowy)
+              // Włącz flagę customDateRange
+      setCustomDateRange(true);
+      
+      // Zapisz zakres dat do cache
+      saveDateRangeToCache(true, startDate, adjustedEndDate);
+      
+      // Oblicz długość trwania w dniach (+1, aby uwzględnić dzień końcowy)
         const durationDays = Math.ceil((adjustedEndDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
         console.log("Długość trwania w dniach:", durationDays);
         
@@ -2590,8 +2671,13 @@ const ProductionCalendar = () => {
       setView('dayGridMonth');
       setGanttView('resourceTimelineWeek');
       setCustomDateRange(false);
-      setStartDate(startOfMonth(new Date()));
-      setEndDate(endOfMonth(new Date()));
+      const newStartDate = startOfMonth(new Date());
+      const newEndDate = endOfMonth(new Date());
+      setStartDate(newStartDate);
+      setEndDate(newEndDate);
+      
+      // Zapisz reset do cache
+      saveDateRangeToCache(false, newStartDate, newEndDate);
       setUseWorkstationColors(false);
       setEditable(true);
       setGanttDetail('day');
