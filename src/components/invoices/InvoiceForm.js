@@ -20,7 +20,9 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Autocomplete
+  Autocomplete,
+  FormControlLabel,
+  Checkbox
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -35,7 +37,8 @@ import {
   updateInvoice, 
   createInvoiceFromOrder,
   DEFAULT_INVOICE,
-  calculateInvoiceTotal
+  calculateInvoiceTotal,
+  generateProformaNumber
 } from '../../services/invoiceService';
 import { getAllCustomers, getCustomerById } from '../../services/customerService';
 import { getAllOrders } from '../../services/orderService';
@@ -246,7 +249,7 @@ const InvoiceForm = ({ invoiceId }) => {
   };
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, checked, type } = e.target;
     
     if (name === 'settledAdvancePayments') {
       // Przy zmianie rozliczonych zaliczek aktualizuj tylko to pole (total jest obliczane gdzie indziej)
@@ -254,12 +257,18 @@ const InvoiceForm = ({ invoiceId }) => {
         ...prev,
         [name]: parseFloat(value) || 0
       }));
+    } else if (type === 'checkbox') {
+      // Obsługa checkboxów (np. isProforma)
+      setInvoice(prev => ({
+        ...prev,
+        [name]: checked
+      }));
     } else {
       // Dla pozostałych pól, standardowa obsługa
-    setInvoice(prev => ({
-      ...prev,
-      [name]: value
-    }));
+      setInvoice(prev => ({
+        ...prev,
+        [name]: value
+      }));
     }
   };
 
@@ -300,15 +309,28 @@ const InvoiceForm = ({ invoiceId }) => {
       }
     }
     
-    // Upewnij się, że quantity i price są liczbami
-    if (field === 'quantity' || field === 'price') {
+    // Upewnij się, że quantity, price i netValue są liczbami
+    if (field === 'quantity' || field === 'price' || field === 'netValue') {
       value = parseFloat(value) || 0;
     }
     
+    const currentItem = updatedItems[index];
     updatedItems[index] = {
-      ...updatedItems[index],
+      ...currentItem,
       [field]: value
     };
+    
+    // Jeśli zmieniono wartość netto, oblicz cenę jednostkową
+    if (field === 'netValue') {
+      const quantity = updatedItems[index].quantity || 1;
+      updatedItems[index].price = quantity > 0 ? value / quantity : 0;
+    }
+    // Jeśli zmieniono ilość lub cenę jednostkową, oblicz wartość netto
+    else if (field === 'quantity' || field === 'price') {
+      const quantity = field === 'quantity' ? value : (updatedItems[index].quantity || 0);
+      const price = field === 'price' ? value : (updatedItems[index].price || 0);
+      updatedItems[index].netValue = quantity * price;
+    }
     
     setInvoice(prev => ({
       ...prev,
@@ -325,6 +347,7 @@ const InvoiceForm = ({ invoiceId }) => {
       quantity: 1,
       unit: 'szt.',
       price: 0,
+      netValue: 0,
       vat: 0
     };
     
@@ -702,6 +725,18 @@ const InvoiceForm = ({ invoiceId }) => {
                   helperText={invoiceId ? 'Numer faktury nie może być zmieniony' : 'Zostanie wygenerowany automatycznie jeśli pozostawisz to pole puste'}
                 />
               </Grid>
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      name="isProforma"
+                      checked={invoice.isProforma || false}
+                      onChange={handleChange}
+                    />
+                  }
+                  label="Faktura proforma"
+                />
+              </Grid>
               <Grid item xs={12} sm={6}>
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
                   <DatePicker
@@ -774,6 +809,26 @@ const InvoiceForm = ({ invoiceId }) => {
                   </Select>
                 </FormControl>
               </Grid>
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>Rachunek bankowy</InputLabel>
+                  <Select
+                    name="selectedBankAccount"
+                    value={invoice.selectedBankAccount || ''}
+                    onChange={handleChange}
+                    label="Rachunek bankowy"
+                  >
+                    <MenuItem value="">Brak rachunku</MenuItem>
+                    {companyInfo?.bankAccounts?.map(account => (
+                      <MenuItem key={account.id} value={account.id}>
+                        {account.bankName} - {account.accountNumber}
+                        {account.swift && ` (SWIFT: ${account.swift})`}
+                        {account.isDefault && ' (domyślny)'}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
             </Grid>
           </Grid>
           <Grid item xs={12} md={6}>
@@ -826,31 +881,52 @@ const InvoiceForm = ({ invoiceId }) => {
                     
                     <Divider sx={{ my: 2 }} />
                     
-                    <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-                      <InputLabel>Powiązane zamówienie</InputLabel>
-                      <Select
-                        value={selectedOrderId}
-                        onChange={(e) => handleOrderSelect(e.target.value, selectedOrderType)}
-                        label="Powiązane zamówienie"
-                        disabled={filteredOrders.length === 0 || ordersLoading}
-                      >
-                        <MenuItem value="">Brak powiązanego zamówienia</MenuItem>
-                        {selectedOrderType === 'customer' ? (
-                          filteredOrders.map(order => (
-                          <MenuItem key={order.id} value={order.id}>
-                              {order.orderNumber} - {order.customer?.name} 
-                              {order.orderDate ? ` (${order.orderDate.toLocaleDateString()})` : ''}
-                          </MenuItem>
-                          ))
-                        ) : (
-                          purchaseOrders.map(po => (
-                            <MenuItem key={po.id} value={po.id}>
-                              {po.number} - {po.supplier?.name} ({po.status})
-                            </MenuItem>
-                          ))
-                        )}
-                      </Select>
-                    </FormControl>
+                    <Autocomplete
+                      fullWidth
+                      size="small"
+                      sx={{ mb: 2 }}
+                      options={selectedOrderType === 'customer' ? filteredOrders : purchaseOrders}
+                      getOptionLabel={(option) => {
+                        if (selectedOrderType === 'customer') {
+                          return `${option.orderNumber} - ${option.customer?.name}${option.orderDate ? ` (${option.orderDate.toLocaleDateString()})` : ''}`;
+                        } else {
+                          return `${option.number} - ${option.supplier?.name} (${option.status})`;
+                        }
+                      }}
+                      value={selectedOrderType === 'customer' 
+                        ? filteredOrders.find(order => order.id === selectedOrderId) || null
+                        : purchaseOrders.find(po => po.id === selectedOrderId) || null
+                      }
+                      onChange={(event, newValue) => {
+                        handleOrderSelect(newValue ? newValue.id : '', selectedOrderType);
+                      }}
+                      loading={ordersLoading || purchaseOrdersLoading}
+                      disabled={
+                        (selectedOrderType === 'customer' && filteredOrders.length === 0) || 
+                        (selectedOrderType === 'purchase' && purchaseOrders.length === 0) ||
+                        ordersLoading || purchaseOrdersLoading
+                      }
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Powiązane zamówienie"
+                          placeholder="Wyszukaj zamówienie..."
+                          InputProps={{
+                            ...params.InputProps,
+                            endAdornment: (
+                              <>
+                                {ordersLoading || purchaseOrdersLoading ? <CircularProgress color="inherit" size={20} /> : null}
+                                {params.InputProps.endAdornment}
+                              </>
+                            ),
+                          }}
+                        />
+                      )}
+                      noOptionsText="Brak zamówień do wyświetlenia"
+                      clearText="Wyczyść"
+                      closeText="Zamknij"
+                      openText="Otwórz"
+                    />
                     
                     {selectedOrderId && (
                       <Typography variant="body2" color="primary">
@@ -952,13 +1028,21 @@ const InvoiceForm = ({ invoiceId }) => {
                 </FormControl>
               </Grid>
               <Grid item xs={6} sm={3}>
-                <Typography variant="body1" fontWeight="bold">
-                  Wartość netto: {(item.quantity * item.price).toFixed(2)} {invoice.currency || 'zł'}
-                </Typography>
+                <TextField
+                  fullWidth
+                  label="Wartość netto"
+                  type="number"
+                  value={item.netValue || (item.quantity * item.price)}
+                  onChange={(e) => handleItemChange(index, 'netValue', parseFloat(e.target.value))}
+                  inputProps={{ min: 0, step: 0.01 }}
+                  InputProps={{
+                    endAdornment: invoice.currency || 'zł'
+                  }}
+                />
               </Grid>
               <Grid item xs={6} sm={3}>
                 <Typography variant="body1" fontWeight="bold">
-                  Wartość brutto: {(item.quantity * item.price * (1 + (typeof item.vat === 'number' || item.vat === 0 ? item.vat : 0) / 100)).toFixed(2)} {invoice.currency || 'zł'}
+                  Wartość brutto: {((item.netValue || (item.quantity * item.price)) * (1 + (typeof item.vat === 'number' || item.vat === 0 ? item.vat : 0) / 100)).toFixed(2)} {invoice.currency || 'zł'}
                 </Typography>
               </Grid>
               <Grid item xs={12} sm={6} sx={{ display: 'flex', justifyContent: 'flex-end' }}>

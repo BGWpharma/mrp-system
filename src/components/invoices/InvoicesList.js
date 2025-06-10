@@ -262,43 +262,7 @@ const InvoicesList = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', mb: 3, flexDirection: { xs: 'column', sm: 'row' }, gap: { xs: 2, sm: 0 } }}>
-        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, width: { xs: '100%', sm: 'auto' } }}>
-          <Box sx={{ display: 'flex', gap: 1, width: '100%' }}>
-            <Button
-              variant="outlined"
-              color="primary"
-              startIcon={<CustomersIcon />}
-              onClick={() => navigate('/customers')}
-              sx={{ flex: 1 }}
-            >
-              Zarządzaj klientami
-            </Button>
-            <Button
-              variant="outlined"
-              color="primary"
-              startIcon={<SettingsIcon />}
-              onClick={() => navigate('/invoices/company-settings')}
-              sx={{ flex: 1 }}
-            >
-              Dane firmy
-            </Button>
-          </Box>
-          <Box sx={{ display: 'flex', width: '100%' }}>
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<AddIcon />}
-              onClick={handleAddInvoice}
-              sx={{ flex: 1 }}
-            >
-              Nowa faktura
-            </Button>
-          </Box>
-        </Box>
-      </Box>
-
-      {/* Pasek wyszukiwania */}
+      {/* Pasek wyszukiwania z przyciskami zarządzania */}
       <Paper sx={{ mb: 3, p: 2 }}>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} sm={6} md={4}>
@@ -338,6 +302,39 @@ const InvoicesList = () => {
             >
               Filtry {filtersExpanded ? <ExpandMoreIcon style={{ transform: 'rotate(180deg)' }} /> : <ExpandMoreIcon />}
             </Button>
+          </Grid>
+          
+          {/* Przyciski zarządzania po prawej stronie */}
+          <Grid item xs={12} md="auto" sx={{ ml: 'auto' }}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1 }}>
+              <Button
+                variant="outlined"
+                color="primary"
+                startIcon={<CustomersIcon />}
+                onClick={() => navigate('/customers')}
+                size="small"
+              >
+                Zarządzaj klientami
+              </Button>
+              <Button
+                variant="outlined"
+                color="primary"
+                startIcon={<SettingsIcon />}
+                onClick={() => navigate('/invoices/company-settings')}
+                size="small"
+              >
+                Dane firmy
+              </Button>
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<AddIcon />}
+                onClick={handleAddInvoice}
+                size="small"
+              >
+                Nowa faktura
+              </Button>
+            </Box>
           </Grid>
         </Grid>
 
@@ -470,7 +467,19 @@ const InvoicesList = () => {
                     .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                     .map((invoice) => (
                       <TableRow key={invoice.id}>
-                        <TableCell>{invoice.number}</TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            {invoice.number}
+                            {invoice.isProforma && (
+                              <Chip 
+                                label="Proforma" 
+                                size="small" 
+                                color="primary" 
+                                variant="outlined"
+                              />
+                            )}
+                          </Box>
+                        </TableCell>
                         <TableCell>
                           <Button
                             size="small"

@@ -9,21 +9,20 @@ export const APP_VERSION = '1.0.0';
 
 // Konfiguracja informacji firmowych (dla faktur)
 export const COMPANY_INFO = {
-  name: 'BGW Pharma Sp. z o.o.',
-  address: 'Szkolna 43B',
-  city: '84-100 Polchowo',
-  zipCode: '84-100',
-  postalCode: '84-100',
-  country: 'Polska',
-  nip: 'PL52 13953525',
-  vatId: 'PL521953525',
-  regon: '123456789',
-  krs: '0000123456',
-  email: 'mateusz@bgwpharma.com',
-  phone: '+48 123 456 789',
-  website: 'www.bgwpharma.com',
-  bankName: 'Bank Polski S.A.',
-  bankAccount: 'PL 00 1234 5678 9012 3456 7890 1234'
+  name: '',
+  address: '',
+  city: '',
+  zipCode: '',
+  postalCode: '',
+  country: '',
+  nip: '',
+  vatId: '',
+  regon: '',
+  krs: '',
+  email: '',
+  phone: '',
+  website: '',
+  bankAccounts: [] // Zmieniam na tablicę rachunków bankowych
 };
 
 // Konfiguracja paginacji

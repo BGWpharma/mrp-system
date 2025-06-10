@@ -1086,47 +1086,38 @@ const TaskList = () => {
         <Box sx={{ 
           display: 'flex', 
           flexDirection: isMobile ? 'column' : 'row',
-          justifyContent: 'space-between', 
+          justifyContent: 'space-between',
+          alignItems: isMobile ? 'stretch' : 'center', 
           mb: 2,
-          gap: isMobile ? 1 : 0
+          gap: isMobile ? 1 : 2
         }}>
-          <Box sx={{ 
-            display: 'flex', 
-            flexDirection: isMobile ? 'column' : 'row',
-            gap: 1,
-            width: isMobile ? '100%' : 'auto'
-          }}>
-            <Button 
-              variant="contained" 
-              color="primary" 
-              startIcon={<AddIcon />}
-              component={Link}
-              to="/production/create-from-order"
-              fullWidth={isMobile}
-              size={isMobile ? "small" : "medium"}
-            >
-              Nowe Zadanie
-            </Button>
-            
-            <Button 
-              variant="outlined" 
-              color="secondary" 
-              startIcon={loading ? <CircularProgress size={16} /> : <DownloadIcon />}
-              onClick={handleExportCSV}
-              disabled={loading}
-              fullWidth={isMobile}
-              size={isMobile ? "small" : "medium"}
-            >
-              {loading ? 'Eksportowanie...' : 'Eksportuj CSV'}
-            </Button>
-          </Box>
-          
+          {/* Lewa strona - Wyszukiwanie i filtrowanie */}
           <Box sx={{ 
             display: 'flex', 
             flexDirection: isMobile ? 'column' : 'row',
             gap: isMobile ? 1 : 2,
-            width: isMobile ? '100%' : 'auto'
+            order: isMobile ? 1 : 1
           }}>
+            {/* Wyszukiwanie - pierwsze od lewej */}
+            <TextField
+              variant="outlined"
+              size="small"
+              placeholder="Szukaj zadania..."
+              value={searchTerm}
+              onChange={handleSearchChange}
+              sx={{ 
+                width: isMobile ? '100%' : 250
+              }}
+              InputProps={{
+                startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
+                sx: {
+                  borderRadius: '4px',
+                  bgcolor: mode === 'dark' ? 'background.paper' : 'white'
+                }
+              }}
+            />
+            
+            {/* Filtrowanie - drugie od lewej */}
             <FormControl 
               variant="outlined" 
               size="small" 
@@ -1154,34 +1145,49 @@ const TaskList = () => {
                 <MenuItem value="Anulowane">Anulowane</MenuItem>
               </Select>
             </FormControl>
+          </Box>
+          
+          {/* Prawa strona - Przyciski i konfiguracja */}
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: isMobile ? 'column' : 'row',
+            gap: 1,
+            width: isMobile ? '100%' : 'auto',
+            order: isMobile ? 2 : 2
+          }}>
+            <Button 
+              variant="contained" 
+              color="primary" 
+              startIcon={<AddIcon />}
+              component={Link}
+              to="/production/create-from-order"
+              fullWidth={isMobile}
+              size={isMobile ? "small" : "medium"}
+            >
+              Nowe Zadanie
+            </Button>
             
-            <Box sx={{ 
-              display: 'flex',
-              width: isMobile ? '100%' : 'auto',
-              gap: 1
-            }}>
-              <TextField
-                variant="outlined"
-                size="small"
-                placeholder="Szukaj zadania..."
-                value={searchTerm}
-                onChange={handleSearchChange}
-                fullWidth={isMobile}
-                InputProps={{
-                  startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
-                  sx: {
-                    borderRadius: '4px',
-                    bgcolor: mode === 'dark' ? 'background.paper' : 'white'
-                  }
-                }}
-              />
-              
-              <Tooltip title="Konfiguruj widoczne kolumny">
-                <IconButton onClick={handleColumnMenuOpen} size={isMobile ? "small" : "medium"}>
-                  <ViewColumnIcon />
-                </IconButton>
-              </Tooltip>
-            </Box>
+            <Button 
+              variant="outlined" 
+              color="secondary" 
+              startIcon={loading ? <CircularProgress size={16} /> : <DownloadIcon />}
+              onClick={handleExportCSV}
+              disabled={loading}
+              fullWidth={isMobile}
+              size={isMobile ? "small" : "medium"}
+            >
+              {loading ? 'Eksportowanie...' : 'Eksportuj CSV'}
+            </Button>
+            
+            {/* Konfiguracja kolumn */}
+            <Tooltip title="Konfiguruj widoczne kolumny">
+              <IconButton 
+                onClick={handleColumnMenuOpen} 
+                size={isMobile ? "small" : "medium"}
+              >
+                <ViewColumnIcon />
+              </IconButton>
+            </Tooltip>
           </Box>
         </Box>
         
@@ -1335,9 +1341,19 @@ const TaskList = () => {
                   return (
                     <TableRow key={task.id}>
                       {visibleColumns.name && (
-                        <TableCell>
+                        <TableCell sx={{ maxWidth: 200 }}>
                           <Link to={`/production/tasks/${task.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                            <Typography variant="body1" color="primary">{task.name}</Typography>
+                            <Typography 
+                              variant="body2" 
+                              color="primary"
+                              sx={{ 
+                                wordWrap: 'break-word',
+                                overflowWrap: 'break-word',
+                                hyphens: 'auto'
+                              }}
+                            >
+                              {task.name}
+                            </Typography>
                             {task.clientName && (
                               <Typography variant="body2" color="textSecondary">
                                 {task.clientName}
@@ -1357,7 +1373,7 @@ const TaskList = () => {
                       )}
                       {visibleColumns.productName && (
                         <TableCell>
-                          <Typography variant="body1">{task.productName}</Typography>
+                          <Typography variant="body2">{task.productName}</Typography>
                         </TableCell>
                       )}
                       {visibleColumns.quantity && (
@@ -1384,7 +1400,8 @@ const TaskList = () => {
                         <TableCell>
                           <Chip 
                             label={task.status} 
-                            color={getStatusColor(task.status)} 
+                            color={getStatusColor(task.status)}
+                            size="small" 
                           />
                         </TableCell>
                       )}
@@ -1429,9 +1446,9 @@ const TaskList = () => {
                       {visibleColumns.cost && (
                         <TableCell>
                           {task.unitMaterialCost !== undefined ? 
-                            `${parseFloat(task.unitMaterialCost)} €` : 
+                            `${parseFloat(task.unitMaterialCost).toFixed(4).replace(/\.?0+$/, '')} €` : 
                             (task.totalMaterialCost !== undefined && task.quantity ? 
-                              `${parseFloat(task.totalMaterialCost) / parseFloat(task.quantity)} €` : '-')}
+                              `${(parseFloat(task.totalMaterialCost) / parseFloat(task.quantity)).toFixed(4).replace(/\.?0+$/, '')} €` : '-')}
                         </TableCell>
                       )}
                       {visibleColumns.totalCost && (

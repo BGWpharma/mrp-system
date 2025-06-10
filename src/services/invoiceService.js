@@ -207,7 +207,7 @@ export const createInvoice = async (invoiceData, userId) => {
     
     // Generowanie numeru faktury, jeśli nie został podany
     if (!invoiceData.number) {
-      invoiceData.number = await generateInvoiceNumber();
+      invoiceData.number = await generateInvoiceNumber(invoiceData.isProforma);
     }
     
     // Upewnij się, że mamy właściwe dane o zaliczkach/przedpłatach
@@ -479,27 +479,29 @@ export const calculateInvoiceTotal = (items) => {
   if (!items || !Array.isArray(items)) return 0;
   
   return items.reduce((total, item) => {
-    const quantity = Number(item.quantity) || 0;
-    const price = Number(item.price) || 0;
-    return total + (quantity * price);
+    // Użyj netValue jeśli istnieje, w przeciwnym razie oblicz z quantity * price
+    const netValue = Number(item.netValue) || 0;
+    const calculatedValue = Number(item.quantity) * Number(item.price) || 0;
+    return total + (netValue || calculatedValue);
   }, 0);
 };
 
 /**
  * Generuje numer faktury
- * Format: FV/ROK/MIESIĄC/NUMER
+ * Format: FV/ROK/MIESIĄC/NUMER lub PROFORMA/ROK/MIESIĄC/NUMER
  */
-export const generateInvoiceNumber = async () => {
+export const generateInvoiceNumber = async (isProforma = false) => {
   try {
     const today = new Date();
     const year = today.getFullYear();
     const month = (today.getMonth() + 1).toString().padStart(2, '0');
+    const prefix = isProforma ? 'PROFORMA' : 'FV';
     
-    // Pobierz wszystkie faktury z bieżącego miesiąca i roku
+    // Pobierz wszystkie faktury z bieżącego miesiąca i roku o danym typie
     const invoicesQuery = query(
       collection(db, INVOICES_COLLECTION),
-      where('number', '>=', `FV/${year}/${month}/`),
-      where('number', '<', `FV/${year}/${month}/\uf8ff`)
+      where('number', '>=', `${prefix}/${year}/${month}/`),
+      where('number', '<', `${prefix}/${year}/${month}/\uf8ff`)
     );
     
     const querySnapshot = await getDocs(invoicesQuery);
@@ -508,11 +510,19 @@ export const generateInvoiceNumber = async () => {
     // Numer faktury to liczba istniejących faktur + 1, sformatowana jako 3-cyfrowa liczba
     const invoiceNumber = (invoiceCount + 1).toString().padStart(3, '0');
     
-    return `FV/${year}/${month}/${invoiceNumber}`;
+    return `${prefix}/${year}/${month}/${invoiceNumber}`;
   } catch (error) {
     console.error('Błąd podczas generowania numeru faktury:', error);
     throw error;
   }
+};
+
+/**
+ * Generuje numer faktury proforma
+ * Format: PROFORMA/ROK/MIESIĄC/NUMER
+ */
+export const generateProformaNumber = async () => {
+  return await generateInvoiceNumber(true);
 };
 
 /**
@@ -534,21 +544,24 @@ export const DEFAULT_INVOICE = {
     quantity: 1,
     unit: 'szt.',
     price: 0,
+    netValue: 0,
     vat: 0
   }],
   total: 0,
   currency: 'zł',
+  selectedBankAccount: '',
   notes: '',
   status: 'draft',
   billingAddress: '',
   shippingAddress: '',
   invoiceType: 'standard',
+  isProforma: false,
   originalOrderType: null,
   orderId: null,
   orderNumber: null,
   shippingInfo: null,
   additionalCostsItems: [],
-  settledAdvancePayments: 0, // Dodaję nowe pole dla rozliczonych zaliczek
+  settledAdvancePayments: 0,
   statusHistory: [],
   createdBy: null,
   createdAt: null,

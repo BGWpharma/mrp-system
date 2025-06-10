@@ -386,7 +386,7 @@ const CreateFromOrderPage = () => {
       
       // Ustaw początkowe wartości dla formularza zadania
       setTaskForm({
-        name: `Produkcja z zamówienia #${verifiedOrderData.orderNumber || verifiedOrderData.id.substring(0, 8)}`,
+        name: `Zamówienie #${verifiedOrderData.orderNumber || verifiedOrderData.id.substring(0, 8)}`,
         priority: 'Normalny',
         description: `Zadanie utworzone na podstawie zamówienia klienta ${verifiedOrderData.customer?.name || '(brak danych)'}`,
         status: 'Zaplanowane',
@@ -617,7 +617,7 @@ const CreateFromOrderPage = () => {
         
         // Przy tworzeniu obiektów zadań, dodajemy pola lotNumber i expiryDate:
         const taskData = {
-          name: taskForm.name || `Produkcja ${item.name}`,
+          name: taskForm.name || `${item.name}`,
           status: taskForm.status || 'Zaplanowane',
           priority: taskForm.priority || 'Normalny',
           scheduledDate: formattedStartDate,
@@ -876,7 +876,7 @@ const CreateFromOrderPage = () => {
           const orderItemDate = productDates[itemId] || new Date();
           
           // Tworzenie nazwy zadania
-          const taskName = `Produkcja: ${orderItem.name} (zam. ${selectedOrder.orderNumber || selectedOrder.id.substring(0, 8)})`;
+          const taskName = `${orderItem.name} (zam. ${selectedOrder.orderNumber || selectedOrder.id.substring(0, 8)})`;
           
           // Utworzenie listy materiałów na podstawie receptury
           const materials = recipeData ? createMaterialsFromRecipe(recipeData, orderItem.quantity) : [];

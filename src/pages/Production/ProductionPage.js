@@ -83,11 +83,11 @@ const ProductionPage = () => {
   const tabData = [
     { icon: <ListIcon />, label: "Lista zadań produkcyjnych", value: 0 },
     { icon: <CalendarIcon />, label: "Kalendarz", value: 1 },
-    { icon: <ReportIcon />, label: "Raporty", value: 2 },
+    { icon: <ReportIcon />, label: "Raport MO", value: 2 },
     { icon: <FormsIcon />, label: "Formularze", value: 3 },
-    { icon: <BusinessIcon />, label: "Stanowiska produkcyjne", value: 4 },
-    { icon: <ForecastIcon />, label: "Prognoza zapotrzebowania", value: 5 },
-    { icon: <CalculateIcon />, label: "Kalkulator", value: 6 }
+    { icon: <ForecastIcon />, label: "Prognoza zapotrzebowania", value: 4 },
+    { icon: <CalculateIcon />, label: "Kalkulator", value: 5 },
+    { icon: <BusinessIcon />, label: "Stanowiska produkcyjne", value: 6 }
   ];
   
   // Funkcja renderująca zawartość aktualnie wybranej zakładki
@@ -97,18 +97,18 @@ const ProductionPage = () => {
       case 1: return <ProductionCalendar />;
       case 2: return <ProductionReportPage />;
       case 3: return <FormsPage />;
-      case 4: return <WorkstationsPage />;
-      case 5: return <ForecastPage />;
-      case 6: return <CalculatorPage />;
+      case 4: return <ForecastPage />;
+      case 5: return <CalculatorPage />;
+      case 6: return <WorkstationsPage />;
       default: return <TaskList />;
     }
   };
   
   return (
-    <Container maxWidth="lg" sx={{ mt: isMobile ? 2 : 4, mb: 4, px: isMobile ? 1 : 2 }}>
+    <Container maxWidth="lg" sx={{ mt: isMobile ? 2 : 0, mb: 4, px: isMobile ? 1 : 2 }}>
       <Box sx={{ mb: 3, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: 'center' }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
-          <Typography variant="h5" gutterBottom sx={{ fontSize: isMobile ? '1.25rem' : '1.5rem', mb: isMobile ? 0 : 1 }}>
+          <Typography variant="h5" gutterBottom sx={{ fontSize: isMobile ? '1.25rem' : '1.5rem', mb: 0 }}>
             Produkcja
           </Typography>
           
@@ -218,7 +218,7 @@ const ProductionPage = () => {
           onChange={handleTabChange} 
           variant="scrollable"
           scrollButtons="auto"
-          sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}
+          sx={{ borderBottom: 1, borderColor: 'divider', mb: 1 }}
         >
           {tabData.map((tab, index) => (
             <Tab key={index} icon={tab.icon} label={tab.label} iconPosition="start" />

@@ -208,15 +208,14 @@ export const getAllCompanyData = async () => {
  * Domyślne dane firmy
  */
 export const DEFAULT_COMPANY = {
-  name: 'Twoja Firma Sp. z o.o.',
-  address: 'ul. Przykładowa 123',
-  city: '00-000 Miasto',
-  nip: '123-456-78-90',
-  regon: '123456789',
-  krs: '0000123456',
-  email: 'kontakt@twojafirma.pl',
-  phone: '+48 123 456 789',
-  website: 'www.twojafirma.pl',
-  bankName: 'Bank Polski S.A.',
-  bankAccount: 'PL 00 1234 5678 9012 3456 7890 1234'
+  name: '',
+  address: '',
+  city: '',
+  nip: '',
+  regon: '',
+  krs: '',
+  email: '',
+  phone: '',
+  website: '',
+  bankAccounts: []
 }; 

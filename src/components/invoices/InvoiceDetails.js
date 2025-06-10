@@ -172,6 +172,7 @@ const InvoiceDetails = () => {
       const translations = {
         pl: {
           invoice: 'Faktura',
+          proformaInvoice: 'Faktura proforma',
           invoiceNumber: 'Numer faktury',
           issueDate: 'Data wystawienia',
           dueDate: 'Termin płatności',
@@ -183,6 +184,7 @@ const InvoiceDetails = () => {
           paymentMethod: 'Metoda płatności:',
           bank: 'Bank:',
           accountNumber: 'Nr konta:',
+          swift: 'SWIFT:',
           lp: 'Opis',
           quantity: 'Ilość',
           unitPrice: 'Cena jednostkowa',
@@ -223,6 +225,7 @@ const InvoiceDetails = () => {
           paymentMethod: 'Payment method:',
           bank: 'Bank:',
           accountNumber: 'Account number:',
+          swift: 'SWIFT:',
           lp: 'Description',
           quantity: 'Quantity',
           unitPrice: 'Unit Price',
@@ -285,12 +288,13 @@ const InvoiceDetails = () => {
             .replace(/Ś/g, 'S').replace(/Ź/g, 'Z').replace(/Ż/g, 'Z');
         };
         
-        // Główny tytuł "FAKTURA" - wyśrodkowany (przesunięty niżej dla logo)
+        // Główny tytuł "FAKTURA" lub "FAKTURA PROFORMA" - wyśrodkowany (przesunięty niżej dla logo)
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(24);
         doc.setTextColor(0, 0, 0);
         const pageWidth = doc.internal.pageSize.getWidth();
-        doc.text(t.invoice, pageWidth / 2, 45, { align: 'center' });
+        const invoiceTitle = invoice.isProforma ? t.proformaInvoice.toUpperCase() : t.invoice.toUpperCase();
+        doc.text(invoiceTitle, pageWidth / 2, 45, { align: 'center' });
         
         // Numer faktury - wyśrodkowany pod tytułem
         doc.setFont('helvetica', 'normal');
@@ -369,6 +373,25 @@ const InvoiceDetails = () => {
           currentY += 5;
         }
         
+        // Dane bankowe wybranego rachunku
+        if (invoice.selectedBankAccount && companyInfo?.bankAccounts) {
+          const selectedAccount = companyInfo.bankAccounts.find(acc => acc.id === invoice.selectedBankAccount);
+          if (selectedAccount) {
+            if (selectedAccount.bankName) {
+              doc.text(`${t.bank} ${selectedAccount.bankName}`, 14, currentY);
+              currentY += 5;
+            }
+            if (selectedAccount.accountNumber) {
+              doc.text(`${t.accountNumber} ${selectedAccount.accountNumber}`, 14, currentY);
+              currentY += 5;
+            }
+            if (selectedAccount.swift) {
+              doc.text(`${t.swift} ${selectedAccount.swift}`, 14, currentY);
+              currentY += 5;
+            }
+          }
+        }
+        
         // Dane odbiorcy faktury (prawa kolumna) - zaczynamy wyżej
         let buyerY = 85;
         doc.setFont('helvetica', 'bold');
@@ -440,7 +463,9 @@ const InvoiceDetails = () => {
         invoice.items.forEach((item) => {
           const quantity = Number(item.quantity) || 0;
           const price = Number(item.price) || 0;
-          const amount = quantity * price;
+          // Użyj netValue jeśli istnieje, w przeciwnym razie oblicz z quantity * price
+          const netValue = Number(item.netValue) || 0;
+          const amount = netValue || (quantity * price);
           totalNetto += amount;
           
           tableRows.push({
@@ -724,7 +749,10 @@ const InvoiceDetails = () => {
         doc.text(t.footerLine2, pageWidth / 2, pageHeight - 15, { align: 'center' });
         
         // Pobierz plik PDF
-        doc.save(`Faktura_${invoice.number}_${language.toUpperCase()}.pdf`);
+        const filename = invoice.isProforma 
+        ? `Faktura_Proforma_${invoice.number}_${language.toUpperCase()}.pdf`
+        : `Faktura_${invoice.number}_${language.toUpperCase()}.pdf`;
+      doc.save(filename);
         showSuccess(`Faktura została pobrana w formacie PDF (${language.toUpperCase()})`);
       };
       
@@ -741,9 +769,10 @@ const InvoiceDetails = () => {
     if (!items || !Array.isArray(items)) return 0;
     
     return items.reduce((sum, item) => {
-      const quantity = Number(item.quantity) || 0;
-      const price = Number(item.price) || 0;
-      return sum + (quantity * price);
+      // Użyj netValue jeśli istnieje, w przeciwnym razie oblicz z quantity * price
+      const netValue = Number(item.netValue) || 0;
+      const calculatedValue = Number(item.quantity) * Number(item.price) || 0;
+      return sum + (netValue || calculatedValue);
     }, 0);
   };
   
@@ -751,8 +780,10 @@ const InvoiceDetails = () => {
     if (!items || !Array.isArray(items)) return 0;
     
     return items.reduce((sum, item) => {
-      const quantity = Number(item.quantity) || 0;
-      const price = Number(item.price) || 0;
+      // Użyj netValue jeśli istnieje, w przeciwnym razie oblicz z quantity * price
+      const netValue = Number(item.netValue) || 0;
+      const calculatedValue = Number(item.quantity) * Number(item.price) || 0;
+      const baseValue = netValue || calculatedValue;
       
       let vatRate = 0;
       if (fixedVatRate !== null) {
@@ -768,7 +799,7 @@ const InvoiceDetails = () => {
         // Dla "ZW" i "NP" vatRate pozostaje 0
       }
       
-      return sum + (quantity * price * (vatRate / 100));
+      return sum + (baseValue * (vatRate / 100));
     }, 0);
   };
   
@@ -807,7 +838,7 @@ const InvoiceDetails = () => {
           Powrót do listy
         </Button>
         <Typography variant="h4" component="h1">
-          Faktura {invoice.number}
+          {invoice.isProforma ? 'Faktura proforma' : 'Faktura'} {invoice.number}
         </Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
           {invoice.status === 'draft' && (
@@ -874,6 +905,16 @@ const InvoiceDetails = () => {
                     {renderInvoiceStatus(invoice.status)}
                   </Box>
                 </Grid>
+                {invoice.isProforma && (
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      Typ faktury
+                    </Typography>
+                    <Typography variant="body1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                      Faktura proforma
+                    </Typography>
+                  </Grid>
+                )}
                 <Grid item xs={12} sm={6}>
                   <Typography variant="body2" color="text.secondary">
                     Data wystawienia

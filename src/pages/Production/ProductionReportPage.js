@@ -314,7 +314,7 @@ const ProductionReportPage = () => {
     <Container maxWidth="lg" sx={{ mt: isMobile ? 1 : 4, mb: 4, px: isMobile ? 0.5 : 3 }}>
       <Box sx={{ mb: isMobile ? 1 : 2, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
         <Typography variant="h5" align="center" sx={{ fontSize: isMobile ? '1.15rem' : '1.5rem' }}>
-          Raport
+          Raport MO
         </Typography>
       </Box>
 
@@ -635,7 +635,6 @@ const ProductionReportPage = () => {
                     <TableCell>Nr MO</TableCell>
                     <TableCell>Produkt</TableCell>
                     <TableCell>Klient</TableCell>
-                    <TableCell>Stanowisko</TableCell>
                     <TableCell>Data</TableCell>
                     <TableCell>Status</TableCell>
                     <TableCell align="right">Czas pracy (min)</TableCell>
@@ -653,12 +652,6 @@ const ProductionReportPage = () => {
                       <TableCell>{task.moNumber}</TableCell>
                       <TableCell>{task.productName}</TableCell>
                       <TableCell>{getTaskCustomerName(task)}</TableCell>
-                      <TableCell>
-                        {task.workstationId 
-                          ? (workstationNames[task.workstationId] || "Ładowanie...") 
-                          : "Nie przypisano"
-                        }
-                      </TableCell>
                       <TableCell>
                         {task.scheduledDate 
                           ? format(
