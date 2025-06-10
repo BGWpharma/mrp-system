@@ -54,7 +54,8 @@ import {
   PictureAsPdf as PdfIcon,
   Link as LinkIcon,
   OpenInNew as OpenInNewIcon,
-  Label as LabelIcon
+  Label as LabelIcon,
+  Add as AddIcon
 } from '@mui/icons-material';
 import { getOrderById, ORDER_STATUSES, updateOrder, migrateCmrHistoryData } from '../../services/orderService';
 import { useNotification } from '../../hooks/useNotification';
@@ -68,6 +69,8 @@ import { db } from '../../services/firebase/config';
 import { getDoc, doc } from 'firebase/firestore';
 import { getUsersDisplayNames } from '../../services/userService';
 import { calculateFullProductionUnitCost, calculateProductionUnitCost } from '../../utils/costCalculator';
+import { getInvoicesByOrderId } from '../../services/invoiceService';
+import { getCmrDocumentsByOrderId, CMR_STATUSES } from '../../services/cmrService';
 
 // Funkcja obliczająca sumę wartości pozycji z uwzględnieniem kosztów produkcji dla pozycji spoza listy cenowej
 const calculateItemTotalValue = (item) => {
@@ -178,6 +181,10 @@ const OrderDetails = () => {
   const [driveLink, setDriveLink] = useState('');
   const [labelDialogOpen, setLabelDialogOpen] = useState(false);
   const [selectedItemForLabel, setSelectedItemForLabel] = useState(null);
+  const [invoices, setInvoices] = useState([]);
+  const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const [cmrDocuments, setCmrDocuments] = useState([]);
+  const [loadingCmrDocuments, setLoadingCmrDocuments] = useState(false);
 
   useEffect(() => {
     const fetchOrderDetails = async (retries = 3, delay = 1000) => {
@@ -217,6 +224,32 @@ const OrderDetails = () => {
           const names = await getUsersDisplayNames(uniqueUserIds);
           setUserNames(names);
         }
+
+        // Pobierz faktury powiązane z zamówieniem (osobno, po ustawieniu głównych danych)
+        setTimeout(async () => {
+          try {
+            setLoadingInvoices(true);
+            const orderInvoices = await getInvoicesByOrderId(orderId);
+            setInvoices(orderInvoices);
+          } catch (error) {
+            console.error('Błąd podczas pobierania faktur:', error);
+          } finally {
+            setLoadingInvoices(false);
+          }
+        }, 100);
+
+        // Pobierz dokumenty CMR powiązane z zamówieniem
+        setTimeout(async () => {
+          try {
+            setLoadingCmrDocuments(true);
+            const orderCmrDocuments = await getCmrDocumentsByOrderId(orderId);
+            setCmrDocuments(orderCmrDocuments);
+          } catch (error) {
+            console.error('Błąd podczas pobierania dokumentów CMR:', error);
+          } finally {
+            setLoadingCmrDocuments(false);
+          }
+        }, 150);
       } catch (error) {
         // Sprawdź, czy nie jesteśmy na stronie zamówienia zakupowego
         if (!location.pathname.includes('/purchase-orders/')) {
@@ -720,6 +753,79 @@ const OrderDetails = () => {
   };
 
   // Funkcja do określania statusu produkcji dla danego elementu
+  // Funkcja do pobierania faktur powiązanych z zamówieniem
+  const fetchInvoices = async () => {
+    try {
+      setLoadingInvoices(true);
+      const orderInvoices = await getInvoicesByOrderId(orderId);
+      setInvoices(orderInvoices);
+    } catch (error) {
+      console.error('Błąd podczas pobierania faktur:', error);
+      showError('Nie udało się pobrać faktur powiązanych z zamówieniem');
+    } finally {
+      setLoadingInvoices(false);
+    }
+  };
+
+  // Funkcja renderująca status faktury
+  const renderInvoiceStatus = (status) => {
+    const statusConfig = {
+      'draft': { color: 'default', label: 'Szkic' },
+      'sent': { color: 'info', label: 'Wysłana' },
+      'paid': { color: 'success', label: 'Opłacona' },
+      'overdue': { color: 'error', label: 'Przeterminowana' },
+      'unpaid': { color: 'warning', label: 'Nieopłacona' },
+      'cancelled': { color: 'error', label: 'Anulowana' }
+    };
+    
+    const config = statusConfig[status] || { color: 'default', label: status };
+    
+    return (
+      <Chip 
+        label={config.label} 
+        color={config.color}
+        size="small"
+      />
+    );
+  };
+
+  // Funkcja do pobierania dokumentów CMR powiązanych z zamówieniem
+  const fetchCmrDocuments = async () => {
+    try {
+      setLoadingCmrDocuments(true);
+      const orderCmrDocuments = await getCmrDocumentsByOrderId(orderId);
+      setCmrDocuments(orderCmrDocuments);
+    } catch (error) {
+      console.error('Błąd podczas pobierania dokumentów CMR:', error);
+      showError('Nie udało się pobrać dokumentów CMR powiązanych z zamówieniem');
+    } finally {
+      setLoadingCmrDocuments(false);
+    }
+  };
+
+  // Funkcja renderująca status dokumentu CMR
+  const renderCmrStatus = (status) => {
+    const statusConfig = {
+      [CMR_STATUSES.DRAFT]: { color: 'default', label: 'Szkic' },
+      [CMR_STATUSES.ISSUED]: { color: 'info', label: 'Wystawiony' },
+      [CMR_STATUSES.IN_TRANSIT]: { color: 'warning', label: 'W transporcie' },
+      [CMR_STATUSES.DELIVERED]: { color: 'success', label: 'Dostarczone' },
+      [CMR_STATUSES.COMPLETED]: { color: 'primary', label: 'Zakończony' },
+      [CMR_STATUSES.CANCELED]: { color: 'error', label: 'Anulowany' }
+    };
+    
+    const config = statusConfig[status] || { color: 'default', label: status || 'Nieznany' };
+    
+    return (
+      <Chip 
+        label={config.label}
+        color={config.color}
+        size="small"
+        variant="outlined"
+      />
+    );
+  };
+
   const getProductionStatus = (item, productionTasks) => {
     // Sprawdź, czy element ma bezpośrednio przypisane zadanie produkcyjne
     if (item.productionTaskId && item.productionStatus) {
@@ -1647,6 +1753,188 @@ const OrderDetails = () => {
                         size="small"
                         component={RouterLink}
                         to={`/production/tasks/${task.id}`}
+                        variant="outlined"
+                      >
+                        Szczegóły
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Paper>
+
+        {/* Sekcja faktur powiązanych z zamówieniem */}
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">Faktury powiązane z zamówieniem</Typography>
+            <Box>
+              <IconButton 
+                color="primary" 
+                onClick={fetchInvoices}
+                title="Odśwież listę faktur"
+              >
+                <RefreshIcon />
+              </IconButton>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<AddIcon />}
+                onClick={() => navigate(`/invoices/new?customerId=${order.customer?.id || ''}&orderId=${orderId}`)}
+                sx={{ ml: 1 }}
+              >
+                Utwórz fakturę
+              </Button>
+            </Box>
+          </Box>
+          
+          {loadingInvoices ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : invoices.length === 0 ? (
+            <Typography variant="body1" color="text.secondary">
+              Brak faktur powiązanych z tym zamówieniem
+            </Typography>
+          ) : (
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Numer faktury</TableCell>
+                  <TableCell>Data wystawienia</TableCell>
+                  <TableCell>Termin płatności</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell align="right">Wartość</TableCell>
+                  <TableCell align="right">Akcje</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {invoices.map((invoice) => (
+                  <TableRow key={invoice.id}>
+                    <TableCell>
+                      <Link
+                        component={RouterLink}
+                        to={`/invoices/${invoice.id}`}
+                        sx={{ 
+                          textDecoration: 'none',
+                          fontWeight: 'medium',
+                          '&:hover': {
+                            textDecoration: 'underline'
+                          }
+                        }}
+                      >
+                        {invoice.number || `#${invoice.id.substring(0, 8).toUpperCase()}`}
+                      </Link>
+                    </TableCell>
+                    <TableCell>
+                      {invoice.issueDate ? formatDate(invoice.issueDate) : '-'}
+                    </TableCell>
+                    <TableCell>
+                      {invoice.dueDate ? formatDate(invoice.dueDate) : '-'}
+                    </TableCell>
+                    <TableCell>
+                      {renderInvoiceStatus(invoice.status)}
+                    </TableCell>
+                    <TableCell align="right">
+                      {formatCurrency(invoice.total || 0, invoice.currency || 'EUR')}
+                    </TableCell>
+                    <TableCell align="right">
+                      <Button
+                        size="small"
+                        component={RouterLink}
+                        to={`/invoices/${invoice.id}`}
+                        variant="outlined"
+                      >
+                        Szczegóły
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Paper>
+
+        {/* Sekcja dokumentów CMR powiązanych z zamówieniem */}
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">Dokumenty CMR powiązane z zamówieniem</Typography>
+            <Box>
+              <IconButton 
+                color="primary" 
+                onClick={fetchCmrDocuments}
+                title="Odśwież listę dokumentów CMR"
+              >
+                <RefreshIcon />
+              </IconButton>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<AddIcon />}
+                onClick={() => navigate(`/inventory/cmr/new`)}
+                sx={{ ml: 1 }}
+              >
+                Utwórz CMR
+              </Button>
+            </Box>
+          </Box>
+          
+          {loadingCmrDocuments ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : cmrDocuments.length === 0 ? (
+            <Typography variant="body1" color="text.secondary">
+              Brak dokumentów CMR powiązanych z tym zamówieniem
+            </Typography>
+          ) : (
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Numer CMR</TableCell>
+                  <TableCell>Data wystawienia</TableCell>
+                  <TableCell>Data dostawy</TableCell>
+                  <TableCell>Odbiorca</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell align="right">Akcje</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {cmrDocuments.map((cmr) => (
+                  <TableRow key={cmr.id}>
+                    <TableCell>
+                      <Link
+                        component={RouterLink}
+                        to={`/inventory/cmr/${cmr.id}`}
+                        sx={{ 
+                          textDecoration: 'none',
+                          fontWeight: 'medium',
+                          '&:hover': {
+                            textDecoration: 'underline'
+                          }
+                        }}
+                      >
+                        {cmr.cmrNumber || `#${cmr.id.substring(0, 8).toUpperCase()}`}
+                      </Link>
+                    </TableCell>
+                    <TableCell>
+                      {cmr.issueDate ? formatDate(cmr.issueDate) : '-'}
+                    </TableCell>
+                    <TableCell>
+                      {cmr.deliveryDate ? formatDate(cmr.deliveryDate) : '-'}
+                    </TableCell>
+                    <TableCell>
+                      {cmr.recipient || '-'}
+                    </TableCell>
+                    <TableCell>
+                      {renderCmrStatus(cmr.status)}
+                    </TableCell>
+                    <TableCell align="right">
+                      <Button
+                        size="small"
+                        component={RouterLink}
+                        to={`/inventory/cmr/${cmr.id}`}
                         variant="outlined"
                       >
                         Szczegóły

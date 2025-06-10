@@ -158,6 +158,46 @@ export const getInvoicesByCustomerId = async (customerId) => {
 };
 
 /**
+ * Pobiera faktury powiązane z określonym zamówieniem
+ */
+export const getInvoicesByOrderId = async (orderId) => {
+  try {
+    const invoicesQuery = query(
+      collection(db, INVOICES_COLLECTION),
+      where('orderId', '==', orderId)
+    );
+    
+    const querySnapshot = await getDocs(invoicesQuery);
+    
+    const invoices = [];
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      invoices.push({
+        id: doc.id,
+        ...data,
+        issueDate: data.issueDate && typeof data.issueDate.toDate === 'function' ? data.issueDate.toDate() : data.issueDate,
+        dueDate: data.dueDate && typeof data.dueDate.toDate === 'function' ? data.dueDate.toDate() : data.dueDate,
+        paymentDate: data.paymentDate && typeof data.paymentDate.toDate === 'function' ? data.paymentDate.toDate() : data.paymentDate,
+        createdAt: data.createdAt && typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate() : data.createdAt,
+        updatedAt: data.updatedAt && typeof data.updatedAt.toDate === 'function' ? data.updatedAt.toDate() : data.updatedAt
+      });
+    });
+    
+    // Sortowanie po dacie wystawienia (od najnowszych do najstarszych)
+    invoices.sort((a, b) => {
+      const dateA = a.issueDate instanceof Date ? a.issueDate : new Date(a.issueDate || 0);
+      const dateB = b.issueDate instanceof Date ? b.issueDate : new Date(b.issueDate || 0);
+      return dateB - dateA;
+    });
+    
+    return invoices;
+  } catch (error) {
+    console.error('Błąd podczas pobierania faktur dla zamówienia:', error);
+    throw error;
+  }
+};
+
+/**
  * Tworzy nową fakturę
  */
 export const createInvoice = async (invoiceData, userId) => {

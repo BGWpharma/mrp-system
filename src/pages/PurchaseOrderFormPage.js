@@ -8,10 +8,10 @@ const PurchaseOrderFormPage = () => {
   const isNew = id === 'new';
   
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ mb: 3 }}>
         <Typography variant="h5">
-          {isNew ? 'Utwórz Zamówienie Zakupu' : 'Edycja Zamówienia Zakupu'}
+          {'Zamówienia komponentów'}
         </Typography>
       </Box>
       <PurchaseOrderForm orderId={id} />

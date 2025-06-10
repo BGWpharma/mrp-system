@@ -418,14 +418,14 @@ const TaskList = () => {
     // Ustaw wartości w formularzu na podstawie danych z zadania produkcyjnego
     setInventoryData({
       expiryDate: expiryDate,
-      lotNumber: task.lotNumber || `LOT-${task.moNumber || ''}`,
+      lotNumber: task.lotNumber || `SN/${task.moNumber || ''}`,
       finalQuantity: task.quantity.toString(),
       warehouseId: task.warehouseId || (warehouses.length > 0 ? warehouses[0].id : '')
     });
     
     console.log('Dane formularza po konwersji:', {
       expiryDate: expiryDate,
-      lotNumber: task.lotNumber || `LOT-${task.moNumber || ''}`,
+      lotNumber: task.lotNumber || `SN/${task.moNumber || ''}`,
       finalQuantity: task.quantity.toString(),
       warehouseId: task.warehouseId || (warehouses.length > 0 ? warehouses[0].id : '')
     });
@@ -596,7 +596,7 @@ const TaskList = () => {
     // Ustaw domyślne dane dla formularza dodawania do magazynu
     setStopProductionInventoryData({
       expiryDate: expiryDate,
-      lotNumber: task.lotNumber || `LOT-${task.moNumber || ''}`,
+      lotNumber: task.lotNumber || `SN/${task.moNumber || ''}`,
       finalQuantity: task.quantity.toString(),
       warehouseId: task.warehouseId || (warehouses.length > 0 ? warehouses[0].id : '')
     });

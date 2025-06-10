@@ -909,6 +909,40 @@ export const generateCmrNumber = () => {
   return `CMR-${year}${month}${day}-${random}`;
 };
 
+/**
+ * Pobiera dokumenty CMR powiązane z określonym zamówieniem
+ */
+export const getCmrDocumentsByOrderId = async (orderId) => {
+  try {
+    const cmrQuery = query(
+      collection(db, CMR_COLLECTION),
+      where('linkedOrderId', '==', orderId),
+      orderBy('issueDate', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(cmrQuery);
+    
+    const cmrDocuments = [];
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      cmrDocuments.push({
+        id: doc.id,
+        ...data,
+        issueDate: data.issueDate && typeof data.issueDate.toDate === 'function' ? data.issueDate.toDate() : data.issueDate,
+        deliveryDate: data.deliveryDate && typeof data.deliveryDate.toDate === 'function' ? data.deliveryDate.toDate() : data.deliveryDate,
+        loadingDate: data.loadingDate && typeof data.loadingDate.toDate === 'function' ? data.loadingDate.toDate() : data.loadingDate,
+        createdAt: data.createdAt && typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate() : data.createdAt,
+        updatedAt: data.updatedAt && typeof data.updatedAt.toDate === 'function' ? data.updatedAt.toDate() : data.updatedAt
+      });
+    });
+    
+    return cmrDocuments;
+  } catch (error) {
+    console.error('Błąd podczas pobierania dokumentów CMR dla zamówienia:', error);
+    throw error;
+  }
+};
+
 // Generowanie raportu z dokumentów CMR
 export const generateCmrReport = async (filters = {}) => {
   try {

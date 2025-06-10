@@ -106,6 +106,7 @@ import { storage } from '../../services/firebase/config';
 import { getUsersDisplayNames } from '../../services/userService';
 import { getCompanyData } from '../../services/companyService';
 import { getWorkstationById } from '../../services/workstationService';
+import { generateEndProductReportPDF } from '../../services/endProductReportService';
 
 const TaskDetailsPage = () => {
   const { id } = useParams();
@@ -242,6 +243,9 @@ const TaskDetailsPage = () => {
   // Stan dla załączników badań klinicznych
   const [clinicalAttachments, setClinicalAttachments] = useState([]);
   const [uploadingClinical, setUploadingClinical] = useState(false);
+
+  // Stan dla generowania raportu PDF
+  const [generatingPDF, setGeneratingPDF] = useState(false);
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -902,7 +906,7 @@ const TaskDetailsPage = () => {
         // Użyj LOT z zadania produkcyjnego, jeśli jest dostępny,
         // w przeciwnym przypadku wygeneruj na podstawie numeru MO
         const lotNumber = task.lotNumber || 
-                         (task.moNumber ? `LOT-${task.moNumber}` : `LOT-PROD-${id.substring(0, 6)}`);
+                         (task.moNumber ? `SN/${task.moNumber}` : `LOT-PROD-${id.substring(0, 6)}`);
           
         // Przygotuj dodatkowe informacje o pochodzeniu produktu
         const sourceInfo = new URLSearchParams();
@@ -4774,6 +4778,46 @@ const TaskDetailsPage = () => {
     }
   };
 
+  // Funkcja do generowania raportu PDF
+  const handleGenerateEndProductReport = async () => {
+    if (!task) {
+      showError('Brak danych zadania do wygenerowania raportu');
+      return;
+    }
+
+    try {
+      setGeneratingPDF(true);
+      showInfo('Generowanie raportu PDF...');
+
+      // Przygotowanie danych dodatkowych dla raportu
+      const additionalData = {
+        companyData,
+        workstationData,
+        productionHistory,
+        formResponses,
+        clinicalAttachments,
+        ingredientAttachments,
+        ingredientBatchAttachments,
+        materials,
+        currentUser
+      };
+
+      // Generowanie raportu PDF
+      const result = await generateEndProductReportPDF(task, additionalData);
+      
+      if (result.success) {
+        showSuccess(`Raport PDF został wygenerowany: ${result.fileName}`);
+      } else {
+        showError('Wystąpił błąd podczas generowania raportu PDF');
+      }
+    } catch (error) {
+      console.error('Błąd podczas generowania raportu PDF:', error);
+      showError(`Błąd generowania raportu: ${error.message}`);
+    } finally {
+      setGeneratingPDF(false);
+    }
+  };
+
   // Inicjalizacja stanu checkboxów dla skonsumowanych materiałów
   useEffect(() => {
     if (task?.consumedMaterials && materials.length > 0) {
@@ -5039,7 +5083,7 @@ const TaskDetailsPage = () => {
                 <Paper sx={{ p: 3 }}>
                   <Typography variant="h6" component="h2" gutterBottom>Historia produkcji</Typography>
                   <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-                    <Button variant="contained" color="primary" startIcon={<AddIcon />} onClick={() => { setEditedHistoryItem({ quantity: '', startTime: new Date(), endTime: new Date(), }); let expiryDate = null; if (task.expiryDate) { try { if (task.expiryDate instanceof Date) { expiryDate = task.expiryDate; } else if (task.expiryDate.toDate && typeof task.expiryDate.toDate === 'function') { expiryDate = task.expiryDate.toDate(); } else if (task.expiryDate.seconds) { expiryDate = new Date(task.expiryDate.seconds * 1000); } else if (typeof task.expiryDate === 'string') { expiryDate = new Date(task.expiryDate); } } catch (error) { console.error('Błąd konwersji daty ważności:', error); expiryDate = new Date(new Date().setFullYear(new Date().getFullYear() + 1)); } } else { expiryDate = new Date(new Date().setFullYear(new Date().getFullYear() + 1)); } setHistoryInventoryData({ expiryDate: expiryDate, lotNumber: task.lotNumber || `LOT-${task.moNumber || ''}`, finalQuantity: '', warehouseId: task.warehouseId || (warehouses.length > 0 ? warehouses[0].id : '') }); setAddHistoryDialogOpen(true); }} size="small">Dodaj wpis</Button>
+                    <Button variant="contained" color="primary" startIcon={<AddIcon />} onClick={() => { setEditedHistoryItem({ quantity: '', startTime: new Date(), endTime: new Date(), }); let expiryDate = null; if (task.expiryDate) { try { if (task.expiryDate instanceof Date) { expiryDate = task.expiryDate; } else if (task.expiryDate.toDate && typeof task.expiryDate.toDate === 'function') { expiryDate = task.expiryDate.toDate(); } else if (task.expiryDate.seconds) { expiryDate = new Date(task.expiryDate.seconds * 1000); } else if (typeof task.expiryDate === 'string') { expiryDate = new Date(task.expiryDate); } } catch (error) { console.error('Błąd konwersji daty ważności:', error); expiryDate = new Date(new Date().setFullYear(new Date().getFullYear() + 1)); } } else { expiryDate = new Date(new Date().setFullYear(new Date().getFullYear() + 1)); } setHistoryInventoryData({ expiryDate: expiryDate, lotNumber: task.lotNumber || `SN/${task.moNumber || ''}`, finalQuantity: '', warehouseId: task.warehouseId || (warehouses.length > 0 ? warehouses[0].id : '') }); setAddHistoryDialogOpen(true); }} size="small">Dodaj wpis</Button>
                   </Box>
                   {productionHistory.length === 0 ? (<Typography variant="body2" color="text.secondary">Brak historii produkcji dla tego zadania</Typography>) : (
                     <TableContainer>
@@ -5139,9 +5183,33 @@ const TaskDetailsPage = () => {
                     <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', color: '#1976d2', mb: 1 }}>
                       RAPORT GOTOWEGO PRODUKTU
                     </Typography>
-                    <Typography variant="subtitle1" color="text.secondary">
+                    <Typography variant="subtitle1" color="text.secondary" sx={{ mb: 2 }}>
                       Szczegółowy raport kontroli jakości i produkcji
                     </Typography>
+                    
+                    {/* Przycisk generowania PDF */}
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      size="large"
+                      startIcon={generatingPDF ? <CircularProgress size={20} color="inherit" /> : <PdfIcon />}
+                      onClick={handleGenerateEndProductReport}
+                      disabled={generatingPDF}
+                      sx={{
+                        fontSize: '1.1rem',
+                        fontWeight: 'bold',
+                        px: 4,
+                        py: 1.5,
+                        mt: 1,
+                        boxShadow: '0 4px 8px rgba(25, 118, 210, 0.3)',
+                        '&:hover': {
+                          boxShadow: '0 6px 12px rgba(25, 118, 210, 0.4)',
+                          transform: 'translateY(-1px)'
+                        }
+                      }}
+                    >
+                      {generatingPDF ? 'Generating PDF Report...' : 'Generate PDF Report'}
+                    </Button>
                   </Box>
                   
                   {/* Product identification */}

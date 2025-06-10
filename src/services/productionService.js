@@ -615,7 +615,7 @@ import {
       
       // Jeśli określono numer LOT, użyj go, w przeciwnym razie wygeneruj domyślny numer LOT na podstawie MO
       if (!taskWithMeta.lotNumber) {
-        taskWithMeta.lotNumber = `LOT-${moNumber}`;
+        taskWithMeta.lotNumber = `SN/${moNumber}`;
       }
       
       // Jeśli nie określono daty ważności, ustaw domyślnie na rok od teraz
@@ -1331,7 +1331,7 @@ import {
       // a jeśli nie, wygeneruj domyślny numer LOT
       const lotNumber = inventoryParams.lotNumber || 
                         taskData.lotNumber || 
-                        (taskData.moNumber ? `LOT-${taskData.moNumber}` : `LOT-PROD-${taskId.substring(0, 6)}`);
+                        (taskData.moNumber ? `SN/${taskData.moNumber}` : `LOT-PROD-${taskId.substring(0, 6)}`);
       
       // Przygotuj datę ważności - użyj przekazanej w parametrach, 
       // lub z zadania produkcyjnego, lub ustaw null

@@ -139,7 +139,7 @@ const getMODetailsById = async (moNumber) => {
         id: taskDoc.id,
         moNumber: taskData.moNumber,
         productName: productName,
-        lotNumber: taskData.lotNumber || `LOT-${taskData.moNumber}`,
+        lotNumber: taskData.lotNumber || `SN/${taskData.moNumber}`,
         expiryDate: expiryDate,
         quantity: taskData.quantity || ''
       };

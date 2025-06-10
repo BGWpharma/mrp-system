@@ -2032,14 +2032,14 @@ const PurchaseOrderForm = ({ orderId }) => {
   
   if (loading) {
     return (
-      <Container>
+      <Container maxWidth="xl">
         <Typography variant="h6">Ładowanie danych zamówienia...</Typography>
       </Container>
     );
   }
   
   return (
-    <Container>
+    <Container maxWidth="xl">
       <Box sx={{ mb: 3 }}>
         <Typography variant="h5">
           {currentOrderId && currentOrderId !== 'new' ? 'Edycja Zamówienia Zakupu' : 'Utwórz Zamówienie Zakupu'}
@@ -2138,10 +2138,6 @@ const PurchaseOrderForm = ({ orderId }) => {
                 fullWidth
                 multiline
                 rows={3}
-                helperText={poData.supplier && poData.supplier.addresses && poData.supplier.addresses.length > 0 
-                  ? 'Możesz wybrać z adresów dostawcy:' 
-                  : 'Wprowadź adres dostawcy'
-                }
               />
               
               {/* Lista adresów dostawcy */}
@@ -2187,91 +2183,7 @@ const PurchaseOrderForm = ({ orderId }) => {
               />
             </Grid>
             
-            {/* Faktury - wielu linków */}
-            <Grid item xs={12}>
-              <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="subtitle1">Faktury</Typography>
-                <Button
-                  startIcon={<AddIcon />}
-                  onClick={handleAddInvoiceLink}
-                  variant="outlined"
-                  size="small"
-                >
-                  Dodaj fakturę
-                </Button>
-              </Box>
-              
-              {!poData.invoiceLinks || poData.invoiceLinks.length === 0 ? (
-                <Typography variant="body2" color="text.secondary" sx={{ my: 2 }}>
-                  Brak faktur. Kliknij "Dodaj fakturę", aby dodać link do faktury.
-                </Typography>
-              ) : (
-                <TableContainer component={Paper} sx={{ mb: 2 }}>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Opis</TableCell>
-                        <TableCell>Link do faktury</TableCell>
-                        <TableCell width="100px"></TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {poData.invoiceLinks.map((invoice, index) => (
-                        <TableRow key={invoice.id}>
-                          <TableCell>
-                            <TextField
-                              fullWidth
-                              size="small"
-                              value={invoice.description}
-                              onChange={(e) => handleInvoiceLinkChange(invoice.id, 'description', e.target.value)}
-                              placeholder="Opis faktury, np. Faktura główna, Faktura transportowa itp."
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <TextField
-                              fullWidth
-                              size="small"
-                              value={invoice.url}
-                              onChange={(e) => handleInvoiceLinkChange(invoice.id, 'url', e.target.value)}
-                              placeholder="https://drive.google.com/file/d/..."
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <IconButton
-                              size="small"
-                              onClick={() => handleRemoveInvoiceLink(invoice.id)}
-                              color="error"
-                            >
-                              <DeleteIcon />
-                            </IconButton>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              )}
-              
-              {/* Zachowujemy stare pole dla kompatybilności, ale ukrywamy je */}
-              <input
-                type="hidden"
-                name="invoiceLink"
-                value={poData.invoiceLink || ''}
-              />
-            </Grid>
-            
-            {/* Załączniki */}
-            <Grid item xs={12}>
-              <Typography variant="subtitle1" gutterBottom>
-                Załączniki
-              </Typography>
-              <PurchaseOrderFileUpload
-                orderId={currentOrderId || 'temp'}
-                attachments={poData.attachments || []}
-                onAttachmentsChange={handleAttachmentsChange}
-                disabled={saving}
-              />
-            </Grid>
+
             
             {/* Dodatkowe koszty */}
             <Grid item xs={12}>
@@ -2279,9 +2191,6 @@ const PurchaseOrderForm = ({ orderId }) => {
                 <Box>
                   <Typography variant="subtitle1">
                     Dodatkowe koszty
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Dla każdego kosztu można ustawić indywidualną stawkę VAT
                   </Typography>
                 </Box>
                 <Button
@@ -2331,7 +2240,20 @@ const PurchaseOrderForm = ({ orderId }) => {
                                 value={cost.currency === poData.currency ? cost.value : (cost.originalValue || 0)}
                                 onChange={(e) => handleAdditionalCostChange(cost.id, 'value', e.target.value)}
                                 inputProps={{ step: 'any' }}
-                                sx={{ width: 120 }}
+                                sx={{ 
+                                  width: 120,
+                                  '& input[type=number]': {
+                                    '-moz-appearance': 'textfield',
+                                  },
+                                  '& input[type=number]::-webkit-outer-spin-button': {
+                                    '-webkit-appearance': 'none',
+                                    margin: 0,
+                                  },
+                                  '& input[type=number]::-webkit-inner-spin-button': {
+                                    '-webkit-appearance': 'none',
+                                    margin: 0,
+                                  },
+                                }}
                               />
                             </TableCell>
                             <TableCell align="right">
@@ -2469,6 +2391,19 @@ const PurchaseOrderForm = ({ orderId }) => {
                                       placeholder="Kurs"
                                       inputProps={{ min: 0, step: 'any' }}
                                       disabled={cost.currency === poData.currency}
+                                      sx={{
+                                        '& input[type=number]': {
+                                          '-moz-appearance': 'textfield',
+                                        },
+                                        '& input[type=number]::-webkit-outer-spin-button': {
+                                          '-webkit-appearance': 'none',
+                                          margin: 0,
+                                        },
+                                        '& input[type=number]::-webkit-inner-spin-button': {
+                                          '-webkit-appearance': 'none',
+                                          margin: 0,
+                                        },
+                                      }}
                                     />
                                   </Grid>
                                 </Grid>
@@ -2551,11 +2486,51 @@ const PurchaseOrderForm = ({ orderId }) => {
           <Divider sx={{ my: 3 }} />
           
           {/* Pozycje zamówienia */}
-          <Box sx={{ mb: 2 }}>
+          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="h6">Pozycje zamówienia</Typography>
-            <Typography variant="body2" color="text.secondary">
-              Dla każdej pozycji można ustawić indywidualną stawkę VAT
-            </Typography>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <Button
+                variant="outlined"
+                startIcon={<AddIcon />}
+                onClick={handleAddItem}
+                size="small"
+              >
+                Dodaj pozycję
+              </Button>
+              
+              <Button
+                variant="outlined"
+                color="info"
+                startIcon={<PlaylistAddCheckIcon />}
+                onClick={fillMinimumOrderQuantities}
+                size="small"
+              >
+                Uzupełnij minimalne ilości
+              </Button>
+              
+              <Button
+                variant="outlined"
+                color="warning"
+                startIcon={<SearchIcon />}
+                onClick={findBestSuppliers}
+                disabled={loadingSupplierSuggestions}
+                size="small"
+              >
+                Znajdź najlepsze ceny
+              </Button>
+
+              {Object.keys(supplierSuggestions).length > 0 && (
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  startIcon={<AutorenewIcon />}
+                  onClick={applyBestSupplierPrices}
+                  size="small"
+                >
+                  Zastosuj najlepsze ceny
+                </Button>
+              )}
+            </Box>
           </Box>
           
           <TableContainer component={Paper} sx={{ overflowX: 'visible' }}>
@@ -2564,13 +2539,13 @@ const PurchaseOrderForm = ({ orderId }) => {
                 <TableRow>
                   {/* Podstawowe kolumny - zawsze widoczne */}
                   <TableCell width="25%">Produkt</TableCell>
-                  <TableCell width="10%">Ilość</TableCell>
+                  <TableCell width="17%">Ilość</TableCell>
                   <TableCell width="8%">Jedn.</TableCell>
-                  <TableCell width="12%">Cena jedn.</TableCell>
-                  <TableCell width="10%">Waluta</TableCell>
-                  <TableCell width="8%">VAT</TableCell>
+                  <TableCell width="18%">Cena jedn.</TableCell>
+                  <TableCell width="7%">Waluta</TableCell>
+                  <TableCell width="5%">VAT</TableCell>
                   <TableCell width="15%">Kwota po przew.</TableCell>
-                  <TableCell width="12%"></TableCell>
+                  <TableCell width="5%"></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -2602,7 +2577,20 @@ const PurchaseOrderForm = ({ orderId }) => {
                           onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
                           size="small"
                           inputProps={{ min: 0, step: 'any' }}
-                          sx={{ width: '100%' }}
+                          sx={{ 
+                            width: '100%',
+                            '& input[type=number]': {
+                              '-moz-appearance': 'textfield',
+                            },
+                            '& input[type=number]::-webkit-outer-spin-button': {
+                              '-webkit-appearance': 'none',
+                              margin: 0,
+                            },
+                            '& input[type=number]::-webkit-inner-spin-button': {
+                              '-webkit-appearance': 'none',
+                              margin: 0,
+                            },
+                          }}
                         />
                       </TableCell>
                       <TableCell>
@@ -2626,7 +2614,20 @@ const PurchaseOrderForm = ({ orderId }) => {
                             onChange={(e) => handleItemChange(index, 'unitPrice', e.target.value)}
                             size="small"
                             inputProps={{ min: 0, step: 'any' }}
-                            sx={{ width: '100%' }}
+                            sx={{ 
+                              width: '100%',
+                              '& input[type=number]': {
+                                '-moz-appearance': 'textfield',
+                              },
+                              '& input[type=number]::-webkit-outer-spin-button': {
+                                '-webkit-appearance': 'none',
+                                margin: 0,
+                              },
+                              '& input[type=number]::-webkit-inner-spin-button': {
+                                '-webkit-appearance': 'none',
+                                margin: 0,
+                              },
+                            }}
                           />
                         </Box>
                       </TableCell>
@@ -2772,6 +2773,19 @@ const PurchaseOrderForm = ({ orderId }) => {
                                 placeholder="Kurs"
                                 inputProps={{ min: 0, step: 'any' }}
                                 disabled={item.currency === poData.currency}
+                                sx={{
+                                  '& input[type=number]': {
+                                    '-moz-appearance': 'textfield',
+                                  },
+                                  '& input[type=number]::-webkit-outer-spin-button': {
+                                    '-webkit-appearance': 'none',
+                                    margin: 0,
+                                  },
+                                  '& input[type=number]::-webkit-inner-spin-button': {
+                                    '-webkit-appearance': 'none',
+                                    margin: 0,
+                                  },
+                                }}
                               />
                             </Grid>
                             {Object.keys(supplierSuggestions).length > 0 && item.inventoryItemId && supplierSuggestions[item.inventoryItemId] && (
@@ -2795,46 +2809,7 @@ const PurchaseOrderForm = ({ orderId }) => {
             </Table>
           </TableContainer>
           
-          {/* Przyciski akcji */}
-          <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
-            <Button
-              variant="outlined"
-              startIcon={<AddIcon />}
-              onClick={handleAddItem}
-            >
-              Dodaj pozycję
-            </Button>
-            
-            {Object.keys(supplierSuggestions).length > 0 && (
-              <Button
-                variant="outlined"
-                color="secondary"
-                startIcon={<AutorenewIcon />}
-                onClick={applyBestSupplierPrices}
-              >
-                Zastosuj najlepsze ceny
-              </Button>
-            )}
-            
-            <Button
-              variant="outlined"
-              color="info"
-              startIcon={<PlaylistAddCheckIcon />}
-              onClick={fillMinimumOrderQuantities}
-            >
-              Uzupełnij minimalne ilości
-            </Button>
-            
-            <Button
-              variant="outlined"
-              color="warning"
-              startIcon={<SearchIcon />}
-              onClick={findBestSuppliers}
-              disabled={loadingSupplierSuggestions}
-            >
-              Znajdź najlepsze ceny
-            </Button>
-          </Box>
+
           
           {loadingSupplierSuggestions && (
             <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -2844,7 +2819,7 @@ const PurchaseOrderForm = ({ orderId }) => {
           )}
           
           {Object.keys(supplierSuggestions).length > 0 && (
-            <Alert severity="info" sx={{ mt: 2 }}>
+            <Alert severity="info" sx={{ mt: 2, mb: 3 }}>
               Znaleziono sugestie cen dostawców dla {Object.keys(supplierSuggestions).length} pozycji.
               Kliknij "Zastosuj najlepsze ceny", aby zaktualizować zamówienie.
             </Alert>
@@ -2935,11 +2910,102 @@ const PurchaseOrderForm = ({ orderId }) => {
             </Grid>
           </Box>
           
-          <Box sx={{ mb: 3 }}>
+          <Divider sx={{ my: 3 }} />
+          
+          {/* Faktury - wielu linków */}
+          <Grid container spacing={3}>
+            <Grid item xs={12}>
+              <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="subtitle1">Faktury</Typography>
+                <Button
+                  startIcon={<AddIcon />}
+                  onClick={handleAddInvoiceLink}
+                  variant="outlined"
+                  size="small"
+                >
+                  Dodaj fakturę
+                </Button>
+              </Box>
+              
+              {!poData.invoiceLinks || poData.invoiceLinks.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" sx={{ my: 2 }}>
+                  Brak faktur. Kliknij "Dodaj fakturę", aby dodać link do faktury.
+                </Typography>
+              ) : (
+                <TableContainer component={Paper} sx={{ mb: 2 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Opis</TableCell>
+                        <TableCell>Link do faktury</TableCell>
+                        <TableCell width="100px"></TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {poData.invoiceLinks.map((invoice, index) => (
+                        <TableRow key={invoice.id}>
+                          <TableCell>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              value={invoice.description}
+                              onChange={(e) => handleInvoiceLinkChange(invoice.id, 'description', e.target.value)}
+                              placeholder="Opis faktury, np. Faktura główna, Faktura transportowa itp."
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              value={invoice.url}
+                              onChange={(e) => handleInvoiceLinkChange(invoice.id, 'url', e.target.value)}
+                              placeholder="https://drive.google.com/file/d/..."
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <IconButton
+                              size="small"
+                              onClick={() => handleRemoveInvoiceLink(invoice.id)}
+                              color="error"
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+              
+              {/* Zachowujemy stare pole dla kompatybilności, ale ukrywamy je */}
+              <input
+                type="hidden"
+                name="invoiceLink"
+                value={poData.invoiceLink || ''}
+              />
+            </Grid>
+            
+            {/* Załączniki */}
+            <Grid item xs={12}>
+              <Typography variant="subtitle1" gutterBottom>
+                Załączniki
+              </Typography>
+              <PurchaseOrderFileUpload
+                orderId={currentOrderId || 'temp'}
+                attachments={poData.attachments || []}
+                onAttachmentsChange={handleAttachmentsChange}
+                disabled={saving}
+              />
+            </Grid>
+          </Grid>
+
+          <Box sx={{ mb: 3, mt: 3 }}>
             <Button
               variant="outlined"
               onClick={handleCancel}
               disabled={saving}
+              sx={{ mr: 2 }}
             >
               Anuluj
             </Button>
