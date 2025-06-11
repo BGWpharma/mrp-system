@@ -88,7 +88,8 @@ import {
   Description as DescriptionIcon,
   Image as ImageIcon,
   PictureAsPdf as PdfIcon,
-  Download as DownloadIcon
+  Download as DownloadIcon,
+  ArrowForward as ArrowForwardIcon
 } from '@mui/icons-material';
 import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession, addProductionSession, deleteProductionSession } from '../../services/productionService';
 import { getRecipeVersion } from '../../services/recipeService';
@@ -248,6 +249,9 @@ const TaskDetailsPage = () => {
   // Stan dla generowania raportu PDF
   const [generatingPDF, setGeneratingPDF] = useState(false);
 
+  // Stan dla sekcji alergenów w raporcie gotowego produktu
+  const [selectedAllergens, setSelectedAllergens] = useState([]);
+
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -255,6 +259,35 @@ const TaskDetailsPage = () => {
   const formatQuantityPrecision = (value, precision = 3) => {
     if (typeof value !== 'number' || isNaN(value)) return 0;
     return Math.round(value * Math.pow(10, precision)) / Math.pow(10, precision);
+  };
+
+  // Lista dostępnych alergenów
+  const availableAllergens = [
+    'Gluten',
+    'Crustaceans',
+    'Eggs',
+    'Fish',
+    'Peanuts',
+    'Soybeans',
+    'Milk',
+    'Nuts',
+    'Celery',
+    'Mustard',
+    'Sesame seeds',
+    'Sulphur dioxide and sulphites',
+    'Lupin',
+    'Molluscs'
+  ];
+
+  // Funkcja do obsługi zmiany alergenów
+  const handleAllergenChange = (allergen, checked) => {
+    setSelectedAllergens(prev => {
+      if (checked) {
+        return [...prev, allergen];
+      } else {
+        return prev.filter(item => item !== allergen);
+      }
+    });
   };
 
   // Stan dla głównej zakładki
@@ -1262,25 +1295,28 @@ const TaskDetailsPage = () => {
   
   // Obsługa zmiany wybranej partii
   const handleBatchSelection = (materialId, batchId, quantity) => {
+    // Upewnij się, że quantity jest liczbą
+    const numericQuantity = parseFloat(quantity) || 0;
+    
     setSelectedBatches(prev => {
       const materialBatches = [...(prev[materialId] || [])];
       const existingBatchIndex = materialBatches.findIndex(b => b.batchId === batchId);
       
       if (existingBatchIndex >= 0) {
         // Aktualizuj istniejącą partię
-        if (quantity <= 0) {
+        if (numericQuantity <= 0) {
           // Usuń partię, jeśli ilość jest 0 lub ujemna
           materialBatches.splice(existingBatchIndex, 1);
         } else {
-          materialBatches[existingBatchIndex].quantity = quantity;
+          materialBatches[existingBatchIndex].quantity = numericQuantity;
         }
-      } else if (quantity > 0) {
+      } else if (numericQuantity > 0) {
         // Dodaj nową partię
         const batch = batches[materialId].find(b => b.id === batchId);
         if (batch) {
           materialBatches.push({
             batchId: batchId,
-            quantity: quantity,
+            quantity: numericQuantity,
             batchNumber: batch.batchNumber || batch.lotNumber || 'Bez numeru'
           });
         }
@@ -1310,7 +1346,7 @@ const TaskDetailsPage = () => {
       }
       
       const materialBatches = selectedBatches[materialId] || [];
-      const totalSelectedQuantity = materialBatches.reduce((sum, batch) => sum + batch.quantity, 0);
+      const totalSelectedQuantity = materialBatches.reduce((sum, batch) => sum + parseFloat(batch.quantity || 0), 0);
       
       if (totalSelectedQuantity < requiredQuantity) {
         return { 
@@ -1340,7 +1376,7 @@ const TaskDetailsPage = () => {
       return { valid: true };
     }
     
-    const totalSelectedQuantity = materialBatches.reduce((sum, batch) => sum + batch.quantity, 0);
+    const totalSelectedQuantity = materialBatches.reduce((sum, batch) => sum + parseFloat(batch.quantity || 0), 0);
     
     if (totalSelectedQuantity === 0) {
       return { valid: false, error: `Nie wybrano żadnych partii dla materiału ${material.name}` };
@@ -1541,7 +1577,7 @@ const TaskDetailsPage = () => {
           
           let materialBatches = batches[materialId] || [];
           const selectedMaterialBatches = selectedBatches[materialId] || [];
-          const totalSelectedQuantity = selectedMaterialBatches.reduce((sum, batch) => sum + batch.quantity, 0);
+          const totalSelectedQuantity = selectedMaterialBatches.reduce((sum, batch) => sum + parseFloat(batch.quantity || 0), 0);
           const isComplete = totalSelectedQuantity >= requiredQuantity;
           
           // Sprawdź, czy materiał jest już zarezerwowany
@@ -1688,13 +1724,26 @@ const TaskDetailsPage = () => {
                                       const quantity = isNaN(value) ? 0 : Math.min(value, effectiveQuantity);
                                       handleBatchSelection(materialId, batch.id, quantity);
                                     }}
+                                    onFocus={(e) => {
+                                      // Jeśli wartość to 0, wyczyść pole przy focusie
+                                      if (selectedQuantity === 0) {
+                                        e.target.select();
+                                      }
+                                    }}
+                                    onBlur={(e) => {
+                                      // Jeśli pole jest puste po utracie focusu, ustaw 0
+                                      if (e.target.value === '' || e.target.value === null) {
+                                        handleBatchSelection(materialId, batch.id, 0);
+                                      }
+                                    }}
+                                    onWheel={(e) => e.target.blur()} // Wyłącza reakcję na scroll
                                     inputProps={{ 
                                       min: 0, 
                                       max: effectiveQuantity, // Maksymalna wartość to efektywnie dostępna ilość
                                       step: 'any'
                                     }}
                                     size="small"
-                                    sx={{ width: '100px' }}
+                                    sx={{ width: '130px' }} // Poszerzony z 100px do 130px
                                     error={effectiveQuantity <= 0}
                                     helperText={effectiveQuantity <= 0 ? "Brak dostępnej ilości" : ""}
                                     disabled={effectiveQuantity <= 0}
@@ -1730,11 +1779,14 @@ const TaskDetailsPage = () => {
                                 <TableCell>Cena jednostkowa</TableCell>
                                 <TableCell>Data zamówienia</TableCell>
                                 <TableCell>Oczekiwana dostawa</TableCell>
-                                <TableCell>Tymczasowe ID</TableCell>
+                                <TableCell>Akcje</TableCell>
                               </TableRow>
                             </TableHead>
                             <TableBody>
-                              {awaitingOrders[materialId].map(order => {
+                              {awaitingOrders[materialId].flatMap(order => 
+                                order.items ? order.items.map(item => ({ ...item, orderData: order })) : []
+                              ).map((item, index) => {
+                                const order = item.orderData;
                                 const statusText = (() => {
                                   switch(order.status) {
                                     case 'ordered': return 'Zamówione';
@@ -1753,9 +1805,41 @@ const TaskDetailsPage = () => {
                                   }
                                 })();
                                 
+                                // Pomocnicza funkcja do formatowania dat
+                                const formatOrderDate = (dateValue) => {
+                                  if (!dateValue) return '-';
+                                  
+                                  try {
+                                    let date;
+                                    
+                                    // Obsługa Timestamp z Firebase
+                                    if (dateValue.toDate && typeof dateValue.toDate === 'function') {
+                                      date = dateValue.toDate();
+                                    }
+                                    // Obsługa obiektu z seconds (Firebase Timestamp JSON)
+                                    else if (dateValue.seconds) {
+                                      date = new Date(dateValue.seconds * 1000);
+                                    }
+                                    // Obsługa standardowego Date lub string
+                                    else {
+                                      date = new Date(dateValue);
+                                    }
+                                    
+                                    // Sprawdź czy data jest prawidłowa
+                                    if (isNaN(date.getTime())) {
+                                      return '-';
+                                    }
+                                    
+                                    return date.toLocaleDateString('pl-PL');
+                                  } catch (error) {
+                                    console.error('Błąd formatowania daty:', error, dateValue);
+                                    return '-';
+                                  }
+                                };
+
                                 return (
-                                  <TableRow key={order.id}>
-                                    <TableCell>{order.poNumber}</TableCell>
+                                  <TableRow key={`${order.id}-${index}`}>
+                                    <TableCell>{order.number || order.poNumber || '-'}</TableCell>
                                     <TableCell>
                                       <Chip 
                                         label={statusText} 
@@ -1764,22 +1848,33 @@ const TaskDetailsPage = () => {
                                       />
                                     </TableCell>
                                     <TableCell align="right">
-                                      {order.orderedQuantity} {order.unit}
+                                      {item.quantityOrdered || item.quantity || '-'} {item.unit || ''}
                                     </TableCell>
                                     <TableCell align="right">
-                                      {order.receivedQuantity} {order.unit}
+                                      {item.quantityReceived || '0'} {item.unit || ''}
                                     </TableCell>
                                     <TableCell align="right">
-                                      {order.unitPrice && typeof order.unitPrice === 'number' ? `${order.unitPrice.toFixed(2)} EUR` : '-'}
+                                      {(() => {
+                                        if (!item.unitPrice) return '-';
+                                        const price = parseFloat(item.unitPrice);
+                                        return !isNaN(price) ? `${price.toFixed(2)} EUR` : '-';
+                                      })()}
                                     </TableCell>
                                     <TableCell>
-                                      {order.orderDate ? new Date(order.orderDate).toLocaleDateString('pl-PL') : '-'}
+                                      {formatOrderDate(order.orderDate || order.createdAt)}
                                     </TableCell>
                                     <TableCell>
-                                      {order.expectedDeliveryDate ? new Date(order.expectedDeliveryDate).toLocaleDateString('pl-PL') : 'Nie określono'}
+                                      {formatOrderDate(item.expectedDeliveryDate || order.expectedDeliveryDate) || 'Nie określono'}
                                     </TableCell>
                                     <TableCell>
-                                      {order.tempId || 'temp-' + order.id.substring(0, 8)}
+                                      <IconButton
+                                        size="small"
+                                        color="primary"
+                                        onClick={() => navigate(`/purchase-orders/${order.id}`)}
+                                        title="Przejdź do zamówienia"
+                                      >
+                                        <ArrowForwardIcon />
+                                      </IconButton>
                                     </TableCell>
                                   </TableRow>
                                 );
@@ -3382,6 +3477,9 @@ const TaskDetailsPage = () => {
           const { getAwaitingOrdersForInventoryItem } = await import('../../services/inventoryService');
           const materialOrders = await getAwaitingOrdersForInventoryItem(materialId);
           
+          // Debugowanie struktury danych
+          console.log(`Oczekiwane zamówienia dla materiału ${materialId}:`, materialOrders);
+          
           if (materialOrders.length > 0) {
             ordersData[materialId] = materialOrders;
           } else {
@@ -4931,7 +5029,8 @@ const TaskDetailsPage = () => {
         ingredientAttachments,
         ingredientBatchAttachments,
         materials,
-        currentUser
+        currentUser,
+        selectedAllergens
       };
 
       // Generowanie raportu PDF
@@ -5113,6 +5212,47 @@ const TaskDetailsPage = () => {
 
           {mainTab === 1 && ( // Zakładka "Materiały i Koszty"
             <Grid container spacing={3}>
+              {/* Sekcja materiałów */}
+              <Grid item xs={12}>
+                <Paper sx={{ p: 3 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                    <Typography variant="h6" component="h2">Materiały</Typography>
+                    <Box>
+                      <Button variant="outlined" color="primary" startIcon={<PackagingIcon />} onClick={handleOpenPackagingDialog} sx={{ mt: 2, mb: 2, mr: 2 }}>Dodaj opakowania</Button>
+                      <Button variant="outlined" color="secondary" startIcon={<RawMaterialsIcon />} onClick={handleOpenRawMaterialsDialog} sx={{ mt: 2, mb: 2, mr: 2 }}>Dodaj surowce</Button>
+                      <Button variant="outlined" color="primary" startIcon={<BookmarkAddIcon />} onClick={() => setReserveDialogOpen(true)} sx={{ mt: 2, mb: 2, mr: 2 }}>Rezerwuj surowce</Button>
+                      <Button variant="outlined" color="warning" startIcon={<InventoryIcon />} onClick={handleOpenConsumeMaterialsDialog} sx={{ mt: 2, mb: 2 }} disabled={!materials.some(material => { const materialId = material.inventoryItemId || material.id; const reservedBatches = task.materialBatches && task.materialBatches[materialId]; return reservedBatches && reservedBatches.length > 0; })}>Konsumuj materiały</Button>
+                    </Box>
+                  </Box>
+                  <TableContainer>
+                    <Table>
+                      <TableHead><TableRow><TableCell>Nazwa</TableCell><TableCell>Ilość</TableCell><TableCell>Jednostka</TableCell><TableCell>Rzeczywista ilość</TableCell><TableCell>Ilość skonsumowana</TableCell><TableCell>Cena jedn.</TableCell><TableCell>Koszt</TableCell><TableCell>Zarezerwowane partie (LOT)</TableCell><TableCell>Wliczaj</TableCell><TableCell>Akcje</TableCell></TableRow></TableHead>
+                      <TableBody>
+                        {materials.map((material) => {
+                          const materialId = material.inventoryItemId || material.id;
+                          const reservedBatches = task.materialBatches && task.materialBatches[materialId];
+                          const quantity = materialQuantities[material.id] || material.quantity || 0;
+                          const unitPrice = material.unitPrice || 0;
+                          const cost = quantity * unitPrice;
+                          return (
+                            <TableRow key={material.id}>
+                              <TableCell>{material.name}</TableCell><TableCell>{material.quantity}</TableCell><TableCell>{material.unit}</TableCell>
+                              <TableCell>{editMode ? (<TextField type="number" value={materialQuantities[material.id] || 0} onChange={(e) => handleQuantityChange(material.id, e.target.value)} onWheel={(e) => e.target.blur()} error={Boolean(errors[material.id])} helperText={errors[material.id]} inputProps={{ min: 0, step: 'any' }} size="small" sx={{ width: '130px' }} />) : (materialQuantities[material.id] || 0)}</TableCell>
+                              <TableCell>{(() => { const consumedQuantity = getConsumedQuantityForMaterial(materialId); return consumedQuantity > 0 ? `${consumedQuantity} ${material.unit}` : '—'; })()}</TableCell>
+                              <TableCell>{reservedBatches && reservedBatches.length > 0 ? (unitPrice.toFixed(4) + ' €') : ('—')}</TableCell>
+                              <TableCell>{reservedBatches && reservedBatches.length > 0 ? (cost.toFixed(2) + ' €') : ('—')}</TableCell>
+                              <TableCell>{reservedBatches && reservedBatches.length > 0 ? (<Box>{reservedBatches.map((batch, index) => (<Chip key={index} size="small" label={`${batch.batchNumber} (${batch.quantity} ${material.unit})`} color="info" variant="outlined" sx={{ mr: 0.5, mb: 0.5, cursor: 'pointer' }} onClick={() => navigate(`/inventory/${materialId}/batches`)} />))}</Box>) : (<Typography variant="body2" color="text.secondary">Brak zarezerwowanych partii</Typography>)}</TableCell>
+                              <TableCell><Checkbox checked={includeInCosts[material.id] || false} onChange={(e) => handleIncludeInCostsChange(material.id, e.target.checked)} color="primary" /></TableCell>
+                              <TableCell>{editMode ? (<Box sx={{ display: 'flex' }}><IconButton color="primary" onClick={handleSaveChanges} title="Zapisz zmiany"><SaveIcon /></IconButton><IconButton color="error" onClick={() => setEditMode(false)} title="Anuluj edycję"><CancelIcon /></IconButton></Box>) : (<Box sx={{ display: 'flex' }}><IconButton color="primary" onClick={() => { setEditMode(true); setMaterialQuantities(prev => ({ ...prev, [material.id]: materialQuantities[material.id] || 0 })); }} title="Edytuj ilość"><EditIcon /></IconButton><IconButton color="error" onClick={() => handleDeleteMaterial(material)} title="Usuń materiał"><DeleteIcon /></IconButton></Box>)}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                  {renderMaterialCostsSummary()}
+                </Paper>
+              </Grid>
               {/* Sekcja skonsumowanych materiałów */}
               {task.consumedMaterials && task.consumedMaterials.length > 0 && (
                 <Grid item xs={12}>
@@ -5164,47 +5304,6 @@ const TaskDetailsPage = () => {
                   </Paper>
                 </Grid>
               )}
-              {/* Sekcja materiałów */}
-              <Grid item xs={12}>
-                <Paper sx={{ p: 3 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6" component="h2">Materiały</Typography>
-                    <Box>
-                      <Button variant="outlined" color="primary" startIcon={<PackagingIcon />} onClick={handleOpenPackagingDialog} sx={{ mt: 2, mb: 2, mr: 2 }}>Dodaj opakowania</Button>
-                      <Button variant="outlined" color="secondary" startIcon={<RawMaterialsIcon />} onClick={handleOpenRawMaterialsDialog} sx={{ mt: 2, mb: 2, mr: 2 }}>Dodaj surowce</Button>
-                      <Button variant="outlined" color="primary" startIcon={<BookmarkAddIcon />} onClick={() => setReserveDialogOpen(true)} sx={{ mt: 2, mb: 2, mr: 2 }}>Rezerwuj surowce</Button>
-                      <Button variant="outlined" color="warning" startIcon={<InventoryIcon />} onClick={handleOpenConsumeMaterialsDialog} sx={{ mt: 2, mb: 2 }} disabled={!materials.some(material => { const materialId = material.inventoryItemId || material.id; const reservedBatches = task.materialBatches && task.materialBatches[materialId]; return reservedBatches && reservedBatches.length > 0; })}>Konsumuj materiały</Button>
-                    </Box>
-                  </Box>
-                  <TableContainer>
-                    <Table>
-                      <TableHead><TableRow><TableCell>Nazwa</TableCell><TableCell>Ilość</TableCell><TableCell>Jednostka</TableCell><TableCell>Rzeczywista ilość</TableCell><TableCell>Ilość skonsumowana</TableCell><TableCell>Cena jedn.</TableCell><TableCell>Koszt</TableCell><TableCell>Zarezerwowane partie (LOT)</TableCell><TableCell>Wliczaj</TableCell><TableCell>Akcje</TableCell></TableRow></TableHead>
-                      <TableBody>
-                        {materials.map((material) => {
-                          const materialId = material.inventoryItemId || material.id;
-                          const reservedBatches = task.materialBatches && task.materialBatches[materialId];
-                          const quantity = materialQuantities[material.id] || material.quantity || 0;
-                          const unitPrice = material.unitPrice || 0;
-                          const cost = quantity * unitPrice;
-                          return (
-                            <TableRow key={material.id}>
-                              <TableCell>{material.name}</TableCell><TableCell>{material.quantity}</TableCell><TableCell>{material.unit}</TableCell>
-                              <TableCell>{editMode ? (<TextField type="number" value={materialQuantities[material.id] || 0} onChange={(e) => handleQuantityChange(material.id, e.target.value)} error={Boolean(errors[material.id])} helperText={errors[material.id]} inputProps={{ min: 0, step: 'any' }} size="small" sx={{ width: '100px' }} />) : (materialQuantities[material.id] || 0)}</TableCell>
-                              <TableCell>{(() => { const consumedQuantity = getConsumedQuantityForMaterial(materialId); return consumedQuantity > 0 ? `${consumedQuantity} ${material.unit}` : '—'; })()}</TableCell>
-                              <TableCell>{reservedBatches && reservedBatches.length > 0 ? (unitPrice.toFixed(4) + ' €') : ('—')}</TableCell>
-                              <TableCell>{reservedBatches && reservedBatches.length > 0 ? (cost.toFixed(2) + ' €') : ('—')}</TableCell>
-                              <TableCell>{reservedBatches && reservedBatches.length > 0 ? (<Box>{reservedBatches.map((batch, index) => (<Chip key={index} size="small" label={`${batch.batchNumber} (${batch.quantity} ${material.unit})`} color="info" variant="outlined" sx={{ mr: 0.5, mb: 0.5, cursor: 'pointer' }} onClick={() => navigate(`/inventory/${materialId}/batches`)} />))}</Box>) : (<Typography variant="body2" color="text.secondary">Brak zarezerwowanych partii</Typography>)}</TableCell>
-                              <TableCell><Checkbox checked={includeInCosts[material.id] || false} onChange={(e) => handleIncludeInCostsChange(material.id, e.target.checked)} color="primary" /></TableCell>
-                              <TableCell>{editMode ? (<Box sx={{ display: 'flex' }}><IconButton color="primary" onClick={handleSaveChanges} title="Zapisz zmiany"><SaveIcon /></IconButton><IconButton color="error" onClick={() => setEditMode(false)} title="Anuluj edycję"><CancelIcon /></IconButton></Box>) : (<Box sx={{ display: 'flex' }}><IconButton color="primary" onClick={() => { setEditMode(true); setMaterialQuantities(prev => ({ ...prev, [material.id]: materialQuantities[material.id] || 0 })); }} title="Edytuj ilość"><EditIcon /></IconButton><IconButton color="error" onClick={() => handleDeleteMaterial(material)} title="Usuń materiał"><DeleteIcon /></IconButton></Box>)}</TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                  {renderMaterialCostsSummary()}
-                </Paper>
-              </Grid>
             </Grid>
           )}
 
@@ -6918,6 +7017,108 @@ const TaskDetailsPage = () => {
                       </Paper>
                     )}
                   </Paper>
+                  
+                  {/* 7. Allergens */}
+                  <Paper sx={{ p: 4, mb: 4, backgroundColor: '#fff8e1', border: '2px solid #ffc107', borderRadius: 2 }} elevation={2}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, pb: 2, borderBottom: '1px solid #e0e0e0' }}>
+                      <Box sx={{ 
+                        backgroundColor: '#ffc107', 
+                        color: 'black', 
+                        borderRadius: '50%', 
+                        width: 32, 
+                        height: 32, 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        fontWeight: 'bold',
+                        mr: 2 
+                      }}>
+                        7
+                      </Box>
+                      <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#f57c00' }}>
+                        Allergens
+                      </Typography>
+                    </Box>
+                    
+                    <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                      Zaznacz wszystkie alergeny obecne w produkcie:
+                    </Typography>
+                    
+                    <Grid container spacing={2}>
+                      {availableAllergens.map((allergen, index) => (
+                        <Grid item xs={12} sm={6} md={4} key={index}>
+                          <FormControlLabel
+                            control={
+                              <Checkbox
+                                checked={selectedAllergens.includes(allergen)}
+                                onChange={(e) => handleAllergenChange(allergen, e.target.checked)}
+                                color="warning"
+                                sx={{
+                                  '&.Mui-checked': {
+                                    color: '#ffc107',
+                                  },
+                                }}
+                              />
+                            }
+                            label={
+                              <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                                {allergen}
+                              </Typography>
+                            }
+                            sx={{
+                              border: '1px solid #ffe0b2',
+                              borderRadius: 1,
+                              p: 1,
+                              m: 0,
+                              width: '100%',
+                              backgroundColor: selectedAllergens.includes(allergen) 
+                                ? '#fff3e0' 
+                                : 'white',
+                              '&:hover': {
+                                backgroundColor: '#fff8e1',
+                                borderColor: '#ffb74d'
+                              },
+                              transition: 'all 0.2s ease'
+                            }}
+                          />
+                        </Grid>
+                      ))}
+                    </Grid>
+                    
+                    {/* Podsumowanie wybranych alergenów */}
+                    <Box sx={{ mt: 3, p: 2, backgroundColor: '#fff3e0', borderRadius: 1, border: '1px solid #ffcc02' }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#f57c00', mb: 1 }}>
+                        Wybrane alergeny ({selectedAllergens.length}):
+                      </Typography>
+                      {selectedAllergens.length > 0 ? (
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                          {selectedAllergens.map((allergen, index) => (
+                            <Chip 
+                              key={index}
+                              label={allergen}
+                              color="warning"
+                              variant="outlined"
+                              size="small"
+                              onDelete={() => handleAllergenChange(allergen, false)}
+                              sx={{
+                                backgroundColor: '#fff8e1',
+                                '& .MuiChip-deleteIcon': {
+                                  color: '#f57c00',
+                                  '&:hover': {
+                                    color: '#e65100'
+                                  }
+                                }
+                              }}
+                            />
+                          ))}
+                        </Box>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                          Brak wybranych alergenów
+                        </Typography>
+                      )}
+                    </Box>
+                  </Paper>
                 </Paper>
               </Grid>
             </Grid>
@@ -7081,6 +7282,7 @@ const TaskDetailsPage = () => {
                                 type="number"
                                 value={item.batchQuantity || ''}
                                 onChange={(e) => handlePackagingBatchQuantityChange(item.id, e.target.value)}
+                                onWheel={(e) => e.target.blur()} // Wyłącza reakcję na scroll
                                 disabled={!item.selected || !item.selectedBatch}
                                 inputProps={{ 
                                   min: 0, 
@@ -7088,7 +7290,7 @@ const TaskDetailsPage = () => {
                                   step: 'any' 
                                 }}
                                 size="small"
-                                sx={{ width: '100px' }}
+                                sx={{ width: '130px' }} // Poszerzony z 100px do 130px
                                 placeholder={item.selectedBatch ? `Max: ${item.selectedBatch.quantity}` : '0'}
                               />
                             </TableCell>
@@ -7536,12 +7738,13 @@ const TaskDetailsPage = () => {
                                       type="number"
                                       value={consumeQuantities[batchKey] || 0}
                                       onChange={(e) => handleConsumeQuantityChange(materialId, batch.batchId, e.target.value)}
+                                      onWheel={(e) => e.target.blur()} // Wyłącza reakcję na scroll
                                       disabled={!isSelected}
                                       error={Boolean(consumeErrors[batchKey])}
                                       helperText={consumeErrors[batchKey]}
                                       inputProps={{ min: 0, max: batch.quantity, step: 'any' }}
                                       size="small"
-                                      sx={{ width: '120px' }}
+                                      sx={{ width: '140px' }} // Poszerzony z 120px do 140px
                                       InputProps={{
                                         endAdornment: <Typography variant="caption">{material.unit}</Typography>
                                       }}
@@ -7646,6 +7849,7 @@ const TaskDetailsPage = () => {
                 type="number"
                 value={editedQuantity}
                 onChange={(e) => setEditedQuantity(e.target.value)}
+                onWheel={(e) => e.target.blur()} // Wyłącza reakcję na scroll
                 fullWidth
                 InputProps={{
                   endAdornment: <Typography variant="body2">{task?.unit || 'szt.'}</Typography>

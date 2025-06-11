@@ -123,19 +123,15 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       }
     };
 
-    // Helper function to add table
+    // Helper function to add table with dynamic row heights
     const addTable = (headers, data, options = {}) => {
       const {
         headerColor = [25, 118, 210],
         alternateRowColor = [245, 245, 245],
-        fontSize = 8
+        fontSize = 8,
+        minRowHeight = 6,
+        padding = 2
       } = options;
-
-      // Calculate required height for table
-      const rowHeight = 6;
-      const tableHeight = (headers.length ? rowHeight : 0) + (data.length * rowHeight);
-      
-      checkPageBreak(tableHeight + 10);
 
       if (data.length === 0) {
         doc.setTextColor(150, 150, 150);
@@ -146,23 +142,70 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
         return;
       }
 
-      const startY = currentY;
       const colWidth = contentWidth / headers.length;
+      const availableWidth = colWidth - (padding * 2);
+      
+      // Set font for calculations
+      doc.setFontSize(fontSize);
+      doc.setFont('helvetica', 'normal');
+
+      // Calculate row heights based on content
+      const rowHeights = [];
+      
+      // Calculate header height
+      if (headers.length > 0) {
+        let headerHeight = minRowHeight;
+        headers.forEach(header => {
+          const lines = doc.splitTextToSize(header, availableWidth);
+          const requiredHeight = Math.max(minRowHeight, lines.length * 4 + padding);
+          headerHeight = Math.max(headerHeight, requiredHeight);
+        });
+        rowHeights.push(headerHeight);
+      }
+
+      // Calculate data row heights
+      data.forEach(row => {
+        let maxRowHeight = minRowHeight;
+        row.forEach(cell => {
+          const cellText = cell ? cell.toString() : '';
+          if (cellText.length > 0) {
+            const lines = doc.splitTextToSize(cellText, availableWidth);
+            const requiredHeight = Math.max(minRowHeight, lines.length * 4 + padding);
+            maxRowHeight = Math.max(maxRowHeight, requiredHeight);
+          }
+        });
+        rowHeights.push(maxRowHeight);
+      });
+
+      // Calculate total table height
+      const totalTableHeight = rowHeights.reduce((sum, height) => sum + height, 0);
+      checkPageBreak(totalTableHeight + 10);
+
+      const startY = currentY;
+      let rowStartY = currentY;
 
       // Draw headers
       if (headers.length > 0) {
+        const headerHeight = rowHeights[0];
+        
         doc.setFillColor(...headerColor);
-        doc.rect(margin, currentY, contentWidth, rowHeight, 'F');
+        doc.rect(margin, rowStartY, contentWidth, headerHeight, 'F');
         
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(fontSize);
         doc.setFont('helvetica', 'bold');
         
         headers.forEach((header, index) => {
-          doc.text(header, margin + (index * colWidth) + 2, currentY + 4);
+          const lines = doc.splitTextToSize(header, availableWidth);
+          const startX = margin + (index * colWidth) + padding;
+          const startTextY = rowStartY + padding + 3;
+          
+          lines.forEach((line, lineIndex) => {
+            doc.text(line, startX, startTextY + (lineIndex * 4));
+          });
         });
         
-        currentY += rowHeight;
+        rowStartY += headerHeight;
       }
 
       // Draw data rows
@@ -170,27 +213,54 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       doc.setFont('helvetica', 'normal');
       
       data.forEach((row, rowIndex) => {
+        const dataRowIndex = headers.length > 0 ? rowIndex + 1 : rowIndex;
+        const rowHeight = rowHeights[dataRowIndex];
+        
+        // Alternate row background
         if (rowIndex % 2 === 1) {
           doc.setFillColor(...alternateRowColor);
-          doc.rect(margin, currentY, contentWidth, rowHeight, 'F');
+          doc.rect(margin, rowStartY, contentWidth, rowHeight, 'F');
         }
         
+        // Draw cell content
         row.forEach((cell, colIndex) => {
           const cellText = cell ? cell.toString() : '';
-          const truncatedText = cellText.length > 25 ? cellText.substring(0, 22) + '...' : cellText;
-          doc.text(truncatedText, margin + (colIndex * colWidth) + 2, currentY + 4);
+          if (cellText.length > 0) {
+            const lines = doc.splitTextToSize(cellText, availableWidth);
+            const startX = margin + (colIndex * colWidth) + padding;
+            const startTextY = rowStartY + padding + 3;
+            
+            lines.forEach((line, lineIndex) => {
+              doc.text(line, startX, startTextY + (lineIndex * 4));
+            });
+          }
         });
         
-        currentY += rowHeight;
+        rowStartY += rowHeight;
       });
+
+      currentY = rowStartY;
 
       // Draw table borders
       doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.1);
+      
+      // Outer border
       doc.rect(margin, startY, contentWidth, currentY - startY);
       
-      // Draw column lines
+      // Horizontal lines between rows
+      let lineY = startY;
+      rowHeights.forEach(height => {
+        lineY += height;
+        if (lineY < currentY) {
+          doc.line(margin, lineY, margin + contentWidth, lineY);
+        }
+      });
+      
+      // Vertical column lines
       for (let i = 1; i < headers.length; i++) {
-        doc.line(margin + (i * colWidth), startY, margin + (i * colWidth), currentY);
+        const lineX = margin + (i * colWidth);
+        doc.line(lineX, startY, lineX, currentY);
       }
 
       currentY += 5;
@@ -643,6 +713,49 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       doc.setFontSize(9);
       doc.setFont('helvetica', 'italic');
       doc.text('No quality control reports for this task', margin, currentY);
+      currentY += 8;
+    }
+
+    currentY += 10;
+
+    // 7. Allergens
+    addSectionHeader(7, 'Allergens', '#ff5722');
+    
+    if (additionalData.selectedAllergens && additionalData.selectedAllergens.length > 0) {
+      // Add section description
+      doc.setTextColor(85, 85, 85);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text('The following allergens are present in this product:', margin, currentY);
+      currentY += 8;
+
+      // Create allergen table
+      const allergenHeaders = ['Allergen name', 'Status'];
+      const allergenData = additionalData.selectedAllergens.map(allergen => [
+        allergen,
+        'PRESENT'
+      ]);
+
+      addTable(allergenHeaders, allergenData, { 
+        headerColor: [255, 87, 34],
+        fontSize: 9 
+      });
+
+      // Add regulatory notice
+      doc.setTextColor(255, 87, 34);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.text('ALLERGEN WARNING:', margin, currentY);
+      doc.setTextColor(85, 85, 85);
+      doc.setFont('helvetica', 'normal');
+      doc.text('This product contains or may contain the allergens listed above.', margin, currentY + 4);
+      doc.text('Please refer to product labeling for complete allergen information.', margin, currentY + 8);
+      currentY += 16;
+    } else {
+      doc.setTextColor(150, 150, 150);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'italic');
+      doc.text('No allergen information provided for this product', margin, currentY);
       currentY += 8;
     }
 

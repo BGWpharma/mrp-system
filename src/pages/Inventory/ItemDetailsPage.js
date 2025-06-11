@@ -710,7 +710,7 @@ const ItemDetailsPage = () => {
             <Typography>
               W magazynie znajduje się <strong>{expiredBatches.length}</strong> {expiredBatches.length === 1 ? 'przeterminowana partia' : 
               expiredBatches.length < 5 ? 'przeterminowane partie' : 'przeterminowanych partii'} tego produktu.
-              Łącznie <strong>{formatQuantity(expiredBatches.reduce((sum, batch) => sum + batch.quantity, 0))} {item?.unit}</strong>.
+              Łącznie <strong>{formatQuantity(expiredBatches.reduce((sum, batch) => sum + parseFloat(batch.quantity || 0), 0))} {item?.unit}</strong>.
             </Typography>
           </Alert>
         </Paper>
@@ -723,7 +723,7 @@ const ItemDetailsPage = () => {
             <Typography>
               W magazynie znajduje się <strong>{expiringBatches.length}</strong> {expiringBatches.length === 1 ? 'partia' : 
               expiringBatches.length < 5 ? 'partie' : 'partii'} tego produktu z terminem ważności krótszym niż 30 dni.
-              Łącznie <strong>{formatQuantity(expiringBatches.reduce((sum, batch) => sum + batch.quantity, 0))} {item?.unit}</strong>.
+              Łącznie <strong>{formatQuantity(expiringBatches.reduce((sum, batch) => sum + parseFloat(batch.quantity || 0), 0))} {item?.unit}</strong>.
             </Typography>
           </Alert>
         </Paper>
