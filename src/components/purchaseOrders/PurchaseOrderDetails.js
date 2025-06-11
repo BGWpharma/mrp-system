@@ -37,11 +37,14 @@ import {
   getPurchaseOrderById,
   deletePurchaseOrder,
   updatePurchaseOrderStatus,
+  updatePurchaseOrderPaymentStatus,
   updatePurchaseOrder,
   updateBatchesForPurchaseOrder,
   updateBatchBasePricesForPurchaseOrder,
   PURCHASE_ORDER_STATUSES,
-  translateStatus
+  PURCHASE_ORDER_PAYMENT_STATUSES,
+  translateStatus,
+  translatePaymentStatus
 } from '../../services/purchaseOrderService';
 import { getBatchesByPurchaseOrderId, getInventoryBatch, getWarehouseById } from '../../services/inventoryService';
 import { useAuth } from '../../contexts/AuthContext';
@@ -72,6 +75,8 @@ const PurchaseOrderDetails = ({ orderId }) => {
   const [expandedItems, setExpandedItems] = useState({});
   const [tempInvoiceLinks, setTempInvoiceLinks] = useState([]);
   const [warehouseNames, setWarehouseNames] = useState({});
+  const [paymentStatusDialogOpen, setPaymentStatusDialogOpen] = useState(false);
+  const [newPaymentStatus, setNewPaymentStatus] = useState('');
   
   const printRef = useRef(null);
   
@@ -282,36 +287,20 @@ const PurchaseOrderDetails = ({ orderId }) => {
   };
   
   const handleStatusUpdate = async () => {
-    if (newStatus === purchaseOrder.status) {
-      setStatusDialogOpen(false);
-      return;
-    }
-    
     try {
-      await updatePurchaseOrderStatus(orderId, newStatus, currentUser?.uid);
-      
-      const updatedData = await getPurchaseOrderById(orderId);
-      setPurchaseOrder(updatedData);
-      
-      if (updatedData.statusHistory && updatedData.statusHistory.length > 0) {
-        const userIds = updatedData.statusHistory.map(change => change.changedBy).filter(id => id);
-        const uniqueUserIds = [...new Set(userIds)];
-        const missingUserIds = uniqueUserIds.filter(id => !userNames[id]);
-        
-        if (missingUserIds.length > 0) {
-          const newNames = await getUsersDisplayNames(missingUserIds);
-          setUserNames(prevNames => ({
-            ...prevNames,
-            ...newNames
-          }));
-        }
-      }
-      
+      await updatePurchaseOrderStatus(orderId, newStatus, currentUser.uid);
       setStatusDialogOpen(false);
+      
+      // Odśwież dane zamówienia
+      const updatedOrder = await getPurchaseOrderById(orderId);
+      setPurchaseOrder(updatedOrder);
+      
       showSuccess('Status zamówienia został zaktualizowany');
     } catch (error) {
       console.error('Błąd podczas aktualizacji statusu:', error);
       showError('Nie udało się zaktualizować statusu zamówienia');
+    } finally {
+      setNewStatus('');
       setStatusDialogOpen(false);
     }
   };
@@ -424,23 +413,57 @@ const PurchaseOrderDetails = ({ orderId }) => {
   
   const getStatusChip = (status) => {
     const statusConfig = {
-      [PURCHASE_ORDER_STATUSES.DRAFT]: { color: 'default', label: translateStatus(status) },
-      [PURCHASE_ORDER_STATUSES.PENDING]: { color: 'warning', label: translateStatus(status) },
-      [PURCHASE_ORDER_STATUSES.CONFIRMED]: { color: 'info', label: translateStatus(status) },
-      [PURCHASE_ORDER_STATUSES.SHIPPED]: { color: 'primary', label: translateStatus(status) },
-      [PURCHASE_ORDER_STATUSES.DELIVERED]: { color: 'success', label: translateStatus(status) },
-      [PURCHASE_ORDER_STATUSES.CANCELLED]: { color: 'error', label: translateStatus(status) },
-      [PURCHASE_ORDER_STATUSES.COMPLETED]: { color: 'success', label: translateStatus(status) }
+      [PURCHASE_ORDER_STATUSES.DRAFT]: { color: '#757575', label: translateStatus(status) }, // oryginalny szary
+      [PURCHASE_ORDER_STATUSES.PENDING]: { color: '#757575', label: translateStatus(status) }, // szary - oczekujące
+      [PURCHASE_ORDER_STATUSES.APPROVED]: { color: '#ffeb3b', label: translateStatus(status) }, // żółty - zatwierdzone
+      [PURCHASE_ORDER_STATUSES.ORDERED]: { color: '#1976d2', label: translateStatus(status) }, // niebieski - zamówione
+      [PURCHASE_ORDER_STATUSES.PARTIAL]: { color: '#81c784', label: translateStatus(status) }, // jasno zielony - częściowo dostarczone
+      [PURCHASE_ORDER_STATUSES.CONFIRMED]: { color: '#2196f3', label: translateStatus(status) }, // oryginalny jasnoniebieski
+      [PURCHASE_ORDER_STATUSES.SHIPPED]: { color: '#1976d2', label: translateStatus(status) }, // oryginalny niebieski
+      [PURCHASE_ORDER_STATUSES.DELIVERED]: { color: '#4caf50', label: translateStatus(status) }, // oryginalny zielony
+      [PURCHASE_ORDER_STATUSES.CANCELLED]: { color: '#f44336', label: translateStatus(status) }, // oryginalny czerwony
+      [PURCHASE_ORDER_STATUSES.COMPLETED]: { color: '#4caf50', label: translateStatus(status) } // oryginalny zielony
     };
     
-    const config = statusConfig[status] || { color: 'default', label: status };
+    const config = statusConfig[status] || { color: '#757575', label: status }; // oryginalny szary
     
     return (
       <Chip 
         label={config.label} 
-        color={config.color}
         size="small"
         onClick={handleStatusClick}
+        sx={{
+          backgroundColor: config.color,
+          color: status === PURCHASE_ORDER_STATUSES.APPROVED ? 'black' : 'white' // czarny tekst na żółtym tle
+        }}
+      />
+    );
+  };
+  
+  const getPaymentStatusChip = (paymentStatus) => {
+    const status = paymentStatus || PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID;
+    const label = translatePaymentStatus(status);
+    let color = '#f44336'; // czerwony domyślny dla nie opłacone
+    
+    switch (status) {
+      case PURCHASE_ORDER_PAYMENT_STATUSES.PAID:
+        color = '#4caf50'; // zielony - opłacone
+        break;
+      case PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID:
+      default:
+        color = '#f44336'; // czerwony - nie opłacone
+        break;
+    }
+    
+    return (
+      <Chip 
+        label={label} 
+        size="small"
+        onClick={handlePaymentStatusClick}
+        sx={{
+          backgroundColor: color,
+          color: 'white'
+        }}
       />
     );
   };
@@ -718,6 +741,30 @@ const PurchaseOrderDetails = ({ orderId }) => {
   const hasDynamicFields = purchaseOrder?.additionalCostsItems?.length > 0 || 
                           (purchaseOrder?.additionalCosts && parseFloat(purchaseOrder.additionalCosts) > 0);
   
+  const handlePaymentStatusClick = () => {
+    setNewPaymentStatus(purchaseOrder?.paymentStatus || PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID);
+    setPaymentStatusDialogOpen(true);
+  };
+
+  const handlePaymentStatusUpdate = async () => {
+    try {
+      await updatePurchaseOrderPaymentStatus(orderId, newPaymentStatus, currentUser.uid);
+      setPaymentStatusDialogOpen(false);
+      
+      // Odśwież dane zamówienia
+      const updatedOrder = await getPurchaseOrderById(orderId);
+      setPurchaseOrder(updatedOrder);
+      
+      showSuccess('Status płatności został zaktualizowany');
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji statusu płatności:', error);
+      showError('Nie udało się zaktualizować statusu płatności');
+    } finally {
+      setNewPaymentStatus('');
+      setPaymentStatusDialogOpen(false);
+    }
+  };
+  
   return (
     <Container maxWidth="lg" sx={{ my: 4 }}>
       {loading ? (
@@ -812,6 +859,9 @@ const PurchaseOrderDetails = ({ orderId }) => {
                       Zamówienie {purchaseOrder.number}
                       <Box component="span" sx={{ ml: 2 }}>
                         {getStatusChip(purchaseOrder.status)}
+                      </Box>
+                      <Box component="span" sx={{ ml: 1 }}>
+                        {getPaymentStatusChip(purchaseOrder.paymentStatus)}
                       </Box>
                     </Typography>
                   </Box>
@@ -1466,6 +1516,38 @@ const PurchaseOrderDetails = ({ orderId }) => {
         <DialogActions>
           <Button onClick={() => setStatusDialogOpen(false)}>Anuluj</Button>
           <Button onClick={handleStatusUpdate} color="primary">Zapisz</Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Dialog zmiany statusu płatności */}
+      <Dialog
+        open={paymentStatusDialogOpen}
+        onClose={() => setPaymentStatusDialogOpen(false)}
+      >
+        <DialogTitle>Zmień status płatności</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Wybierz nowy status płatności zamówienia:
+          </DialogContentText>
+          <FormControl fullWidth>
+            <InputLabel>Status płatności</InputLabel>
+            <Select
+              value={newPaymentStatus}
+              onChange={(e) => setNewPaymentStatus(e.target.value)}
+              label="Status płatności"
+            >
+              <MenuItem value={PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID}>
+                {translatePaymentStatus(PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID)}
+              </MenuItem>
+              <MenuItem value={PURCHASE_ORDER_PAYMENT_STATUSES.PAID}>
+                {translatePaymentStatus(PURCHASE_ORDER_PAYMENT_STATUSES.PAID)}
+              </MenuItem>
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPaymentStatusDialogOpen(false)}>Anuluj</Button>
+          <Button onClick={handlePaymentStatusUpdate} color="primary">Zapisz</Button>
         </DialogActions>
       </Dialog>
       

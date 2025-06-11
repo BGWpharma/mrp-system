@@ -8,10 +8,9 @@ import {
   Fade, Skeleton
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, Description as DescriptionIcon, ViewColumn as ViewColumnIcon, Clear as ClearIcon } from '@mui/icons-material';
-import { getAllPurchaseOrders, deletePurchaseOrder, updatePurchaseOrderStatus, getPurchaseOrdersWithPagination, clearSearchCache } from '../../services/purchaseOrderService';
+import { getAllPurchaseOrders, deletePurchaseOrder, updatePurchaseOrderStatus, getPurchaseOrdersWithPagination, clearSearchCache, PURCHASE_ORDER_STATUSES, PURCHASE_ORDER_PAYMENT_STATUSES, translateStatus, translatePaymentStatus } from '../../services/purchaseOrderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import { STATUS_TRANSLATIONS, PURCHASE_ORDER_STATUSES } from '../../config';
 import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
 import { usePurchaseOrderListState } from '../../contexts/PurchaseOrderListStateContext';
 
@@ -227,39 +226,83 @@ const PurchaseOrderList = () => {
   };
   
   const getStatusChip = (status) => {
-    let label = STATUS_TRANSLATIONS[status] || status;
-    let color = 'default';
+    let label = translateStatus(status);
+    let color = '#757575'; // oryginalny szary domyślny
     
     switch (status) {
       case PURCHASE_ORDER_STATUSES.DRAFT:
-        color = 'default';
+        color = '#757575'; // szary - projekt
         break;
-      case PURCHASE_ORDER_STATUSES.SENT:
-        color = 'primary';
+      case PURCHASE_ORDER_STATUSES.PENDING:
+        color = '#757575'; // szary - oczekujące
+        break;
+      case PURCHASE_ORDER_STATUSES.APPROVED:
+        color = '#ffeb3b'; // żółty - zatwierdzone
+        break;
+      case PURCHASE_ORDER_STATUSES.ORDERED:
+        color = '#1976d2'; // niebieski - zamówione
+        break;
+      case PURCHASE_ORDER_STATUSES.PARTIAL:
+        color = '#81c784'; // jasno zielony - częściowo dostarczone
         break;
       case PURCHASE_ORDER_STATUSES.CONFIRMED:
-        color = 'info';
+        color = '#2196f3'; // jasnoniebieski - potwierdzone
         break;
-      case PURCHASE_ORDER_STATUSES.PARTIALLY_RECEIVED:
-        color = 'warning';
+      case PURCHASE_ORDER_STATUSES.SHIPPED:
+        color = '#9c27b0'; // fioletowy - wysłane
         break;
-      case PURCHASE_ORDER_STATUSES.RECEIVED:
-        color = 'success';
+      case PURCHASE_ORDER_STATUSES.DELIVERED:
+        color = '#4caf50'; // zielony - dostarczone
+        break;
+      case PURCHASE_ORDER_STATUSES.COMPLETED:
+        color = '#4caf50'; // zielony - zakończone
         break;
       case PURCHASE_ORDER_STATUSES.CANCELLED:
-        color = 'error';
+        color = '#f44336'; // czerwony - anulowane
         break;
       default:
-        color = 'default';
+        color = '#757575'; // szary domyślny
     }
     
     return (
       <Chip 
         label={label} 
-        color={color} 
         size="small" 
         variant="filled"
-        sx={{ fontWeight: 'medium' }}
+        sx={{ 
+          fontWeight: 'medium',
+          backgroundColor: color,
+          color: status === PURCHASE_ORDER_STATUSES.APPROVED ? 'black' : 'white' // czarny tekst na żółtym tle
+        }}
+      />
+    );
+  };
+  
+  const getPaymentStatusChip = (paymentStatus) => {
+    const status = paymentStatus || PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID;
+    const label = translatePaymentStatus(status);
+    let color = '#f44336'; // czerwony domyślny dla nie opłacone
+    
+    switch (status) {
+      case PURCHASE_ORDER_PAYMENT_STATUSES.PAID:
+        color = '#4caf50'; // zielony - opłacone
+        break;
+      case PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID:
+      default:
+        color = '#f44336'; // czerwony - nie opłacone
+        break;
+    }
+    
+    return (
+      <Chip 
+        label={label} 
+        size="small" 
+        variant="filled"
+        sx={{ 
+          fontWeight: 'medium',
+          backgroundColor: color,
+          color: 'white'
+        }}
       />
     );
   };
@@ -331,7 +374,7 @@ const PurchaseOrderList = () => {
               <MenuItem value="all">Wszystkie statusy</MenuItem>
               {Object.values(PURCHASE_ORDER_STATUSES).map((status) => (
                 <MenuItem key={status} value={status}>
-                  {STATUS_TRANSLATIONS[status] || status}
+                  {translateStatus(status)}
                 </MenuItem>
               ))}
             </Select>
@@ -391,6 +434,10 @@ const PurchaseOrderList = () => {
             <Checkbox checked={!!visibleColumns['status']} />
             <ListItemText primary="Status" />
           </MenuItem>
+          <MenuItem onClick={() => toggleColumnVisibility('paymentStatus')}>
+            <Checkbox checked={!!visibleColumns['paymentStatus']} />
+            <ListItemText primary="Status płatności" />
+          </MenuItem>
         </Menu>
       </Paper>
       
@@ -406,6 +453,7 @@ const PurchaseOrderList = () => {
                   {visibleColumns['expectedDeliveryDate'] && <SortableTableCell id="expectedDeliveryDate" label="Oczekiwana dostawa" />}
                   {visibleColumns['value'] && <SortableTableCell id="value" label="Wartość" />}
                   {visibleColumns['status'] && <SortableTableCell id="status" label="Status" />}
+                  {visibleColumns['paymentStatus'] && <SortableTableCell id="paymentStatus" label="Status płatności" />}
                   <TableCell align="right">Akcje</TableCell>
                 </TableRow>
               </TableHead>
@@ -443,6 +491,11 @@ const PurchaseOrderList = () => {
                           <Skeleton variant="rectangular" width={80} height={24} />
                         </TableCell>
                       )}
+                      {visibleColumns['paymentStatus'] && (
+                        <TableCell>
+                          <Skeleton variant="rectangular" width={100} height={24} />
+                        </TableCell>
+                      )}
                       <TableCell align="right">
                         <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
                           <Skeleton variant="circular" width={24} height={24} />
@@ -455,7 +508,7 @@ const PurchaseOrderList = () => {
                   ))
                 ) : filteredPOs.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
+                    <TableCell colSpan={8} align="center">
                       <Typography variant="body1">Brak zamówień zakupowych</Typography>
                     </TableCell>
                   </TableRow>
@@ -507,6 +560,12 @@ const PurchaseOrderList = () => {
                         </TableCell>
                       )}
                       
+                      {visibleColumns['paymentStatus'] && (
+                        <TableCell>
+                          {getPaymentStatusChip(po.paymentStatus)}
+                        </TableCell>
+                      )}
+                      
                       <TableCell align="right">
                         <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
                           <Tooltip title="Podgląd">
@@ -555,7 +614,7 @@ const PurchaseOrderList = () => {
               </TableBody>
               <TableFooter>
                 <TableRow>
-                  <TableCell colSpan={7}>
+                  <TableCell colSpan={8}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2 }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                         <Typography variant="body2">
@@ -644,7 +703,7 @@ const PurchaseOrderList = () => {
             >
               {Object.values(PURCHASE_ORDER_STATUSES).map((status) => (
                 <MenuItem key={status} value={status}>
-                  {STATUS_TRANSLATIONS[status] || status}
+                  {translateStatus(status)}
                 </MenuItem>
               ))}
             </Select>

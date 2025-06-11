@@ -835,15 +835,19 @@ const TaskDetailsPage = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'Zaplanowane':
-        return 'primary';
+        return '#1976d2'; // oryginalny niebieski
       case 'W trakcie':
-        return 'warning';
+        return '#ff9800'; // oryginalny pomarańczowy
+      case 'Potwierdzenie zużycia':
+        return '#2196f3'; // oryginalny jasnoniebieski
       case 'Zakończone':
-        return 'success';
+        return '#4caf50'; // oryginalny zielony
       case 'Anulowane':
-        return 'error';
+        return '#f44336'; // oryginalny czerwony
+      case 'Wstrzymane':
+        return '#757575'; // oryginalny szary
       default:
-        return 'default';
+        return '#757575'; // oryginalny szary
     }
   };
 
@@ -1348,12 +1352,13 @@ const TaskDetailsPage = () => {
       const materialBatches = selectedBatches[materialId] || [];
       const totalSelectedQuantity = materialBatches.reduce((sum, batch) => sum + parseFloat(batch.quantity || 0), 0);
       
-      if (totalSelectedQuantity < requiredQuantity) {
-        return { 
-          valid: false, 
-          error: `Niewystarczająca ilość partii wybrana dla materiału ${material.name}. Wybrano: ${totalSelectedQuantity}, wymagane: ${requiredQuantity}`
-        };
-      }
+      // Usuń walidację wymagającą pełnej ilości - umożliw rezerwację mniejszej ilości
+      // if (totalSelectedQuantity < requiredQuantity) {
+      //   return { 
+      //     valid: false, 
+      //     error: `Niewystarczająca ilość partii wybrana dla materiału ${material.name}. Wybrano: ${totalSelectedQuantity}, wymagane: ${requiredQuantity}`
+      //   };
+      // }
     }
     
     return { valid: true };
@@ -1365,7 +1370,7 @@ const TaskDetailsPage = () => {
     const material = task.materials.find(m => (m.inventoryItemId || m.id) === materialId);
     
     if (!material) {
-      return { valid: false, error: 'Nie znaleziono materiału' };
+      return { valid: false, error: `Nie znaleziono materiału dla ID: ${materialId}. Sprawdź czy materiał istnieje w zadaniu.` };
     }
     
     // Użyj funkcji uwzględniającej konsumpcję
@@ -1378,16 +1383,18 @@ const TaskDetailsPage = () => {
     
     const totalSelectedQuantity = materialBatches.reduce((sum, batch) => sum + parseFloat(batch.quantity || 0), 0);
     
-    if (totalSelectedQuantity === 0) {
-      return { valid: false, error: `Nie wybrano żadnych partii dla materiału ${material.name}` };
-    }
+    // Pozwól na rezerwację zerowej ilości - użytkownik może nie chcieć rezerwować tego materiału teraz
+    // if (totalSelectedQuantity === 0) {
+    //   return { valid: false, error: `Nie wybrano żadnych partii dla materiału ${material.name}` };
+    // }
     
-    if (totalSelectedQuantity < requiredQuantity) {
-      return {
-        valid: false,
-        error: `Wybrana ilość (${totalSelectedQuantity}) jest mniejsza niż wymagana (${requiredQuantity}) dla materiału ${material.name}` 
-      };
-    }
+    // Usuń walidację wymagającą pełnej ilości - umożliw rezerwację mniejszej ilości
+    // if (totalSelectedQuantity < requiredQuantity) {
+    //   return {
+    //     valid: false,
+    //     error: `Wybrana ilość (${totalSelectedQuantity}) jest mniejsza niż wymagana (${requiredQuantity}) dla materiału ${material.name}` 
+    //   };
+    // }
     
     return { valid: true };
   };
@@ -1420,6 +1427,10 @@ const TaskDetailsPage = () => {
 
   // Zmodyfikowana funkcja do rezerwacji materiałów z obsługą ręcznego wyboru partii
   const handleReserveMaterials = async (singleMaterialId = null) => {
+    // Sprawdź czy pierwszy argument to event object (gdy kliknięty jest przycisk bez argumentów)
+    if (singleMaterialId && typeof singleMaterialId === 'object' && singleMaterialId.target) {
+      singleMaterialId = null; // Reset do null jeśli to event object
+    }
     try {
       setReservingMaterials(true);
       
@@ -1441,9 +1452,18 @@ const TaskDetailsPage = () => {
       // Dla ręcznej rezerwacji
       if (reservationMethod === 'manual') {
         // Walidacja tylko dla pojedynczego materiału lub dla wszystkich materiałów
-        const validationResult = singleMaterialId 
-          ? validateManualBatchSelectionForMaterial(singleMaterialId)
-          : validateManualBatchSelection();
+        let validationResult;
+        if (singleMaterialId) {
+          // Sprawdź czy materiał istnieje przed walidacją
+          const materialExists = task.materials.some(m => (m.inventoryItemId || m.id) === singleMaterialId);
+          if (!materialExists) {
+            showError(`Materiał o ID ${singleMaterialId} nie został znaleziony w zadaniu`);
+            return;
+          }
+          validationResult = validateManualBatchSelectionForMaterial(singleMaterialId);
+        } else {
+          validationResult = validateManualBatchSelection();
+        }
           
         if (!validationResult.valid) {
           showError(validationResult.error);
@@ -1563,6 +1583,9 @@ const TaskDetailsPage = () => {
         <Typography variant="subtitle1" gutterBottom>
           Wybierz partie dla każdego materiału:
         </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          💡 Możesz zarezerwować mniejszą ilość niż wymagana. Niezarezerwowane materiały można uzupełnić później.
+        </Typography>
         
         {task.materials.map((material) => {
           const materialId = material.inventoryItemId || material.id;
@@ -1578,7 +1601,8 @@ const TaskDetailsPage = () => {
           let materialBatches = batches[materialId] || [];
           const selectedMaterialBatches = selectedBatches[materialId] || [];
           const totalSelectedQuantity = selectedMaterialBatches.reduce((sum, batch) => sum + parseFloat(batch.quantity || 0), 0);
-          const isComplete = totalSelectedQuantity >= requiredQuantity;
+          // Umożliwi rezerwację częściową - przycisk będzie aktywny nawet gdy nie wszystko jest zarezerwowane
+          const isComplete = true; // Zawsze pozwól na rezerwację (użytkownik może zarezerwować mniej niż wymagane)
           
           // Sprawdź, czy materiał jest już zarezerwowany
           const isAlreadyReserved = task.materialBatches && task.materialBatches[materialId] && task.materialBatches[materialId].length > 0;
@@ -1635,6 +1659,15 @@ const TaskDetailsPage = () => {
                         color="success"
                         size="small"
                         sx={{ mr: 1 }}
+                      />
+                    )}
+                    {totalSelectedQuantity > 0 && totalSelectedQuantity < requiredQuantity && requiredQuantity > 0 && (
+                      <Chip
+                        label="Częściowa rezerwacja"
+                        color="warning"
+                        size="small"
+                        sx={{ mr: 1 }}
+                        variant="outlined"
                       />
                     )}
                     {isAlreadyReserved && (
@@ -1787,21 +1820,25 @@ const TaskDetailsPage = () => {
                                 order.items ? order.items.map(item => ({ ...item, orderData: order })) : []
                               ).map((item, index) => {
                                 const order = item.orderData;
-                                const statusText = (() => {
-                                  switch(order.status) {
-                                    case 'ordered': return 'Zamówione';
-                                    case 'confirmed': return 'Potwierdzone';
-                                    case 'partial': return 'Częściowo dostarczone';
-                                    default: return order.status;
-                                  }
-                                })();
+                                                    const statusText = (() => {
+                      switch(order.status) {
+                        case 'pending': return 'Oczekujące';
+                        case 'approved': return 'Zatwierdzone';
+                        case 'ordered': return 'Zamówione';
+                        case 'partial': return 'Częściowo dostarczone';
+                        case 'confirmed': return 'Potwierdzone';
+                        default: return order.status;
+                      }
+                    })();
                                 
                                 const statusColor = (() => {
                                   switch(order.status) {
-                                    case 'ordered': return 'primary';
-                                    case 'confirmed': return 'success';
-                                    case 'partial': return 'warning';
-                                    default: return 'default';
+                                    case 'pending': return '#757575'; // szary - oczekujące
+                                    case 'approved': return '#ffeb3b'; // żółty - zatwierdzone
+                                    case 'ordered': return '#1976d2'; // niebieski - zamówione
+                                    case 'partial': return '#81c784'; // jasno zielony - częściowo dostarczone
+                                    case 'confirmed': return '#4caf50'; // oryginalny zielony
+                                    default: return '#757575'; // oryginalny szary
                                   }
                                 })();
                                 
@@ -1843,8 +1880,11 @@ const TaskDetailsPage = () => {
                                     <TableCell>
                                       <Chip 
                                         label={statusText} 
-                                        color={statusColor} 
-                                        size="small" 
+                                        size="small"
+                                        sx={{
+                                          backgroundColor: statusColor,
+                                          color: order.status === 'approved' ? 'black' : 'white'
+                                        }}
                                       />
                                     </TableCell>
                                     <TableCell align="right">
@@ -5174,7 +5214,15 @@ const TaskDetailsPage = () => {
                     <Typography variant="h5" component="h1" sx={{ mb: isMobile ? 2 : 0 }}>
                       {task.name}
                       <Chip label={task.moNumber || 'MO'} color="primary" size="small" sx={{ ml: 2 }} />
-                      <Chip label={task.status} color={getStatusColor(task.status)} size="small" sx={{ ml: 1 }} />
+                      <Chip 
+              label={task.status} 
+              size="small" 
+              sx={{ 
+                ml: 1,
+                backgroundColor: getStatusColor(task.status),
+                color: 'white'
+              }} 
+            />
                       <Chip label={task.priority} color={task.priority === 'Wysoki' ? 'error' : task.priority === 'Normalny' ? 'primary' : 'default'} variant="outlined" size="small" sx={{ ml: 1 }} />
                     </Typography>
                     <Box sx={{ width: isMobile ? '100%' : 'auto' }}>
@@ -5184,6 +5232,39 @@ const TaskDetailsPage = () => {
                   <Grid container spacing={2}>
                     <Grid item xs={12} md={6}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Produkt:</Typography><Typography variant="body1">{task.productName}</Typography></Grid>
                     <Grid item xs={12} md={6}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Ilość:</Typography><Typography variant="body1">{task.quantity} {task.unit}</Typography></Grid>
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Wyprodukowano:</Typography>
+                      <Typography variant="body1">
+                        {task.totalCompletedQuantity || 0} {task.unit}
+                        {task.totalCompletedQuantity > 0 && (
+                          <Typography component="span" variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
+                            ({((task.totalCompletedQuantity / task.quantity) * 100).toFixed(1)}%)
+                          </Typography>
+                        )}
+                      </Typography>
+                    </Grid>
+                    {task.inventoryProductId && (
+                      <Grid item xs={12} md={6}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Pozycja magazynowa:</Typography>
+                        <Box sx={{ mt: 1 }}>
+                          <Chip 
+                            label={task.productName}
+                            color="primary"
+                            variant="outlined"
+                            clickable
+                            onClick={() => navigate(`/inventory/${task.inventoryProductId}`)}
+                            icon={<InventoryIcon />}
+                            sx={{ 
+                              cursor: 'pointer',
+                              '&:hover': {
+                                backgroundColor: 'primary.light',
+                                color: 'white'
+                              }
+                            }}
+                          />
+                        </Box>
+                      </Grid>
+                    )}
                     {task.estimatedDuration > 0 && (<Grid item xs={12} md={6}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Szacowany czas produkcji:</Typography><Typography variant="body1">{(task.estimatedDuration / 60).toFixed(1)} godz.</Typography></Grid>)}
                     {(task.recipe && task.recipe.recipeName) || (task.recipeId && task.recipeName) ? (
                       <Grid item xs={12} md={6}>

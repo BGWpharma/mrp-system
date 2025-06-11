@@ -608,22 +608,22 @@ const TaskList = () => {
     switch (status) {
       case 'Zaplanowane':
       case 'planned':
-        return 'primary';
+        return '#1976d2'; // oryginalny niebieski
       case 'W trakcie':
       case 'in_progress':
-        return 'warning';
+        return '#ff9800'; // oryginalny pomarańczowy
       case 'Potwierdzenie zużycia':
-        return 'info';
+        return '#2196f3'; // oryginalny jasnoniebieski
       case 'Zakończone':
       case 'completed':
-        return 'success';
+        return '#4caf50'; // oryginalny zielony
       case 'Anulowane':
       case 'cancelled':
-        return 'error';
+        return '#f44336'; // oryginalny czerwony
       case 'Wstrzymane':
-        return 'default';
+        return '#757575'; // oryginalny szary
       default:
-        return 'default';
+        return '#757575'; // oryginalny szary
     }
   };
 
@@ -954,9 +954,13 @@ const TaskList = () => {
               </Typography>
               <Chip 
                 label={task.status} 
-                color={getStatusColor(task.status)}
                 size="small" 
-                sx={{ fontSize: '0.7rem', height: '24px' }}
+                sx={{ 
+                  fontSize: '0.7rem', 
+                  height: '24px',
+                  backgroundColor: getStatusColor(task.status),
+                  color: 'white'
+                }}
               />
             </Box>
             
@@ -1400,8 +1404,11 @@ const TaskList = () => {
                         <TableCell>
                           <Chip 
                             label={task.status} 
-                            color={getStatusColor(task.status)}
-                            size="small" 
+                            size="small"
+                            sx={{
+                              backgroundColor: getStatusColor(task.status),
+                              color: 'white'
+                            }}
                           />
                         </TableCell>
                       )}

@@ -3499,12 +3499,14 @@ const OrderForm = ({ orderId }) => {
                         <TableCell>
                           <Chip 
                             label={po.status || "Robocze"} 
-                            color={
-                              po.status === 'completed' ? 'success' : 
-                              po.status === 'in_progress' ? 'warning' : 
-                              'default'
-                            }
                             size="small"
+                            sx={{
+                              backgroundColor: 
+                                po.status === 'completed' ? '#4caf50' : 
+                                po.status === 'in_progress' ? '#ff9800' : 
+                                '#757575',
+                              color: 'white'
+                            }}
                           />
                         </TableCell>
                         <TableCell>

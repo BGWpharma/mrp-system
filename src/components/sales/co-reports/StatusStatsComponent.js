@@ -23,15 +23,21 @@ const StatusStatsComponent = ({ statusStats, totalValue, loading, title }) => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'Zrealizowane':
-        return 'success';
+        return '#4caf50'; // oryginalny zielony
+      case 'Dostarczone':
+        return '#4caf50'; // oryginalny zielony
       case 'Nowe':
-        return 'info';
+        return '#1976d2'; // oryginalny niebieski
       case 'W realizacji':
-        return 'warning';
+        return '#2196f3'; // oryginalny jasnoniebieski
+      case 'Gotowe do wysyłki':
+        return '#ff9800'; // oryginalny pomarańczowy
+      case 'Wysłane':
+        return '#9c27b0'; // oryginalny fioletowy
       case 'Anulowane':
-        return 'error';
+        return '#f44336'; // oryginalny czerwony
       default:
-        return 'default';
+        return '#757575'; // oryginalny szary
     }
   };
   
@@ -69,8 +75,11 @@ const StatusStatsComponent = ({ statusStats, totalValue, loading, title }) => {
                     <TableCell>
                       <Chip 
                         label={status} 
-                        color={getStatusColor(status)} 
-                        size="small" 
+                        size="small"
+                        sx={{
+                          backgroundColor: getStatusColor(status),
+                          color: 'white'
+                        }}
                       />
                     </TableCell>
                     <TableCell align="right">{statusStat.count}</TableCell>

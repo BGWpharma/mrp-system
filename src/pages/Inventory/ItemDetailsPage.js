@@ -1238,6 +1238,7 @@ const ItemDetailsPage = () => {
                     <TableCell>Status</TableCell>
                     <TableCell>Zamówione</TableCell>
                     <TableCell>Otrzymane</TableCell>
+                    <TableCell>Pozostało</TableCell>
                     <TableCell>Cena jednostkowa</TableCell>
                     <TableCell>Data zamówienia</TableCell>
                     <TableCell>Oczekiwana dostawa</TableCell>
@@ -1249,6 +1250,8 @@ const ItemDetailsPage = () => {
                   {awaitingOrders.map(order => {
                     const statusText = (() => {
                       switch(order.status) {
+                        case 'pending': return 'Oczekujące';
+                        case 'approved': return 'Zatwierdzone';
                         case 'ordered': return 'Zamówione';
                         case 'confirmed': return 'Potwierdzone';
                         case 'partial': return 'Częściowo dostarczone';
@@ -1258,74 +1261,87 @@ const ItemDetailsPage = () => {
                     
                     const statusColor = (() => {
                       switch(order.status) {
-                        case 'ordered': return 'primary';
-                        case 'confirmed': return 'success';
-                        case 'partial': return 'warning';
-                        default: return 'default';
+                        case 'pending': return '#757575'; // szary - oczekujące
+                        case 'approved': return '#ffeb3b'; // żółty - zatwierdzone
+                        case 'ordered': return '#1976d2'; // niebieski - zamówione
+                        case 'partial': return '#81c784'; // jasno zielony - częściowo dostarczone
+                        case 'confirmed': return '#4caf50'; // oryginalny zielony
+                        default: return '#757575'; // oryginalny szary
                       }
                     })();
                     
-                    // Sprawdź, czy zamówienie jest opóźnione
-                    const isOverdue = order.expectedDeliveryDate && new Date(order.expectedDeliveryDate) < new Date();
-                    
-                    return (
-                      <TableRow key={order.id} hover>
-                        <TableCell>
-                          <Link to={`/purchase-orders/${order.poId}`} style={{ textDecoration: 'none', color: 'inherit', fontWeight: 'bold' }}>
-                            {order.poNumber}
-                          </Link>
-                        </TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={statusText} 
-                            color={statusColor} 
-                            size="small" 
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          {order.orderedQuantity} {order.unit}
-                        </TableCell>
-                        <TableCell align="right">
-                          {order.receivedQuantity} {order.unit}
-                        </TableCell>
-                        <TableCell align="right">
-                          {order.unitPrice ? `${Number(order.unitPrice).toFixed(2)} EUR` : '-'}
-                        </TableCell>
-                        <TableCell>
-                          {order.orderDate ? new Date(order.orderDate).toLocaleDateString('pl-PL') : '-'}
-                        </TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            {order.expectedDeliveryDate ? (
-                              <>
-                                {new Date(order.expectedDeliveryDate).toLocaleDateString('pl-PL')}
-                                {isOverdue && (
-                                  <Chip 
-                                    size="small" 
-                                    label="Opóźnione" 
-                                    color="error" 
-                                    sx={{ ml: 1 }} 
-                                  />
-                                )}
-                              </>
-                            ) : '-'}
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          {order.id ? `temp-${order.id.substring(0, 8)}` : '-'}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="outlined"
-                            size="small"
-                            component={Link}
-                            to={`/purchase-orders/${order.poId}/items/${order.itemId}`}
-                          >
-                            Szczegóły
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
+                    // Iteruj przez wszystkie pozycje w zamówieniu
+                    return order.items.map((orderItem, itemIndex) => {
+                      // Sprawdź, czy zamówienie jest opóźnione
+                      const isOverdue = orderItem.expectedDeliveryDate && new Date(orderItem.expectedDeliveryDate) < new Date();
+                      
+                      return (
+                        <TableRow key={`${order.id}-${itemIndex}`} hover>
+                          <TableCell>
+                            <Link to={`/purchase-orders/${order.id}`} style={{ textDecoration: 'none', color: 'inherit', fontWeight: 'bold' }}>
+                              {order.number || orderItem.poNumber}
+                            </Link>
+                          </TableCell>
+                          <TableCell>
+                            <Chip 
+                              label={statusText} 
+                              size="small"
+                              sx={{
+                                backgroundColor: statusColor,
+                                color: order.status === 'approved' ? 'black' : 'white'
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            {orderItem.quantityOrdered} {orderItem.unit}
+                          </TableCell>
+                          <TableCell align="right">
+                            {orderItem.quantityReceived} {orderItem.unit}
+                          </TableCell>
+                          <TableCell align="right">
+                            <Typography fontWeight="bold" color={orderItem.quantityRemaining > 0 ? 'primary' : 'success'}>
+                              {orderItem.quantityRemaining} {orderItem.unit}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">
+                            {orderItem.unitPrice ? `${Number(orderItem.unitPrice).toFixed(2)} ${orderItem.currency || 'EUR'}` : '-'}
+                          </TableCell>
+                          <TableCell>
+                            {order.orderDate ? new Date(order.orderDate).toLocaleDateString('pl-PL') : '-'}
+                          </TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              {orderItem.expectedDeliveryDate ? (
+                                <>
+                                  {new Date(orderItem.expectedDeliveryDate).toLocaleDateString('pl-PL')}
+                                  {isOverdue && (
+                                    <Chip 
+                                      size="small" 
+                                      label="Opóźnione" 
+                                      color="error" 
+                                      sx={{ ml: 1 }} 
+                                    />
+                                  )}
+                                </>
+                              ) : '-'}
+                            </Box>
+                          </TableCell>
+                          <TableCell>
+                            {order.id ? `temp-${order.id.substring(0, 8)}` : '-'}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              component={Link}
+                              to={`/purchase-orders/${order.id}`}
+                            >
+                              Szczegóły
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    });
                   })}
                 </TableBody>
               </Table>

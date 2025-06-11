@@ -54,6 +54,9 @@ export const ORDER_STATUSES = {
 export const PURCHASE_ORDER_STATUSES = {
   DRAFT: 'draft',
   PENDING: 'pending',
+  APPROVED: 'approved',
+  ORDERED: 'ordered',
+  PARTIAL: 'partial',
   CONFIRMED: 'confirmed',
   SHIPPED: 'shipped',
   DELIVERED: 'delivered',
@@ -88,8 +91,11 @@ export const STATUS_TRANSLATIONS = {
   [ORDER_STATUSES.CANCELLED]: 'Anulowane',
   
   // Zamówienia zakupowe
-  [PURCHASE_ORDER_STATUSES.DRAFT]: 'Szkic',
+  [PURCHASE_ORDER_STATUSES.DRAFT]: 'Projekt',
   [PURCHASE_ORDER_STATUSES.PENDING]: 'Oczekujące',
+  [PURCHASE_ORDER_STATUSES.APPROVED]: 'Zatwierdzone',
+  [PURCHASE_ORDER_STATUSES.ORDERED]: 'Zamówione',
+  [PURCHASE_ORDER_STATUSES.PARTIAL]: 'Częściowo dostarczone',
   [PURCHASE_ORDER_STATUSES.CONFIRMED]: 'Potwierdzone',
   [PURCHASE_ORDER_STATUSES.SHIPPED]: 'Wysłane',
   [PURCHASE_ORDER_STATUSES.DELIVERED]: 'Dostarczone',

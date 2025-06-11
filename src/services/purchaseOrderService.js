@@ -1169,6 +1169,12 @@ export const PURCHASE_ORDER_STATUSES = {
   CONFIRMED: 'confirmed'
 };
 
+// Stałe dla statusów płatności zamówień zakupowych
+export const PURCHASE_ORDER_PAYMENT_STATUSES = {
+  UNPAID: 'unpaid',
+  PAID: 'paid'
+};
+
 // Funkcja do tłumaczenia statusów na język polski
 export const translateStatus = (status) => {
   switch (status) {
@@ -1182,6 +1188,15 @@ export const translateStatus = (status) => {
     case 'completed': return 'Zakończone';
     case 'cancelled': return 'Anulowane';
     case 'confirmed': return 'Potwierdzone';
+    default: return status;
+  }
+};
+
+// Funkcja do tłumaczenia statusów płatności na język polski
+export const translatePaymentStatus = (status) => {
+  switch (status) {
+    case 'unpaid': return 'Nie opłacone';
+    case 'paid': return 'Opłacone';
     default: return status;
   }
 };
@@ -2167,6 +2182,81 @@ export const getLimitedPurchaseOrdersForBatchEdit = async () => {
     return purchaseOrders;
   } catch (error) {
     console.error('Błąd podczas pobierania ograniczonej listy zamówień zakupowych:', error);
+    throw error;
+  }
+};
+
+/**
+ * Aktualizacja statusu płatności zamówienia zakupowego
+ * @param {string} purchaseOrderId - ID zamówienia zakupowego
+ * @param {string} newPaymentStatus - Nowy status płatności ('paid' lub 'unpaid')
+ * @param {string} userId - ID użytkownika dokonującego zmiany
+ * @returns {Promise<object>} - Wynik operacji
+ */
+export const updatePurchaseOrderPaymentStatus = async (purchaseOrderId, newPaymentStatus, userId) => {
+  try {
+    if (!purchaseOrderId) {
+      throw new Error('ID zamówienia zakupowego jest wymagane');
+    }
+
+    if (!newPaymentStatus) {
+      throw new Error('Nowy status płatności jest wymagany');
+    }
+
+    if (!Object.values(PURCHASE_ORDER_PAYMENT_STATUSES).includes(newPaymentStatus)) {
+      throw new Error(`Nieprawidłowy status płatności: ${newPaymentStatus}`);
+    }
+
+    // Pobierz aktualne dane zamówienia
+    const poRef = doc(db, PURCHASE_ORDERS_COLLECTION, purchaseOrderId);
+    const poDoc = await getDoc(poRef);
+    
+    if (!poDoc.exists()) {
+      throw new Error(`Nie znaleziono zamówienia zakupowego o ID ${purchaseOrderId}`);
+    }
+
+    const poData = poDoc.data();
+    const oldPaymentStatus = poData.paymentStatus || PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID;
+    
+    // Jeśli status się nie zmienił, nie rób nic
+    if (oldPaymentStatus === newPaymentStatus) {
+      return { success: true, paymentStatus: newPaymentStatus, message: 'Status płatności nie zmienił się' };
+    }
+
+    const updateFields = {
+      paymentStatus: newPaymentStatus,
+      updatedAt: serverTimestamp(),
+      updatedBy: userId
+    };
+
+    // Dodaj wpis do historii zmian statusu płatności
+    const paymentStatusHistory = poData.paymentStatusHistory || [];
+    paymentStatusHistory.push({
+      from: oldPaymentStatus,
+      to: newPaymentStatus,
+      changedBy: userId,
+      changedAt: serverTimestamp(),
+      timestamp: new Date().toISOString()
+    });
+
+    updateFields.paymentStatusHistory = paymentStatusHistory;
+
+    // Aktualizuj dokument
+    await updateDoc(poRef, updateFields);
+
+    console.log(`Zaktualizowano status płatności zamówienia ${purchaseOrderId} z "${oldPaymentStatus}" na "${newPaymentStatus}"`);
+
+    // Wyczyść cache dotyczące tego zamówienia
+    searchCache.invalidateForOrder(purchaseOrderId);
+
+    return { 
+      success: true, 
+      paymentStatus: newPaymentStatus,
+      oldPaymentStatus,
+      message: 'Status płatności został zaktualizowany'
+    };
+  } catch (error) {
+    console.error('Błąd podczas aktualizacji statusu płatności zamówienia zakupowego:', error);
     throw error;
   }
 };

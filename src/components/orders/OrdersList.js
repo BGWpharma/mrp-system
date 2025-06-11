@@ -359,13 +359,13 @@ const OrdersList = () => {
 
   const getStatusChipColor = (status) => {
     switch (status) {
-      case 'Nowe': return 'primary';
-      case 'W realizacji': return 'info';
-      case 'Gotowe do wysyłki': return 'warning';
-      case 'Wysłane': return 'secondary';
-      case 'Dostarczone': return 'success';
-      case 'Anulowane': return 'error';
-      default: return 'default';
+      case 'Nowe': return '#1976d2'; // oryginalny niebieski
+      case 'W realizacji': return '#2196f3'; // oryginalny jasnoniebieski
+      case 'Gotowe do wysyłki': return '#ff9800'; // oryginalny pomarańczowy
+      case 'Wysłane': return '#9c27b0'; // oryginalny fioletowy
+      case 'Dostarczone': return '#4caf50'; // oryginalny zielony
+      case 'Anulowane': return '#f44336'; // oryginalny czerwony
+      default: return '#757575'; // oryginalny szary
     }
   };
 
@@ -1646,8 +1646,11 @@ const OrdersList = () => {
                           <TableCell>
                             <Chip 
                               label={order.status} 
-                              color={getStatusChipColor(order.status)}
                               size="small"
+                              sx={{
+                                backgroundColor: getStatusChipColor(order.status),
+                                color: 'white'
+                              }}
                             />
                           </TableCell>
                           <TableCell align="right">
@@ -2064,7 +2067,14 @@ const OrdersList = () => {
                                             variant="outlined"
                                             size="small"
                                             onClick={() => handleStatusChangeClick(order, status.value)}
-                                            color={getStatusChipColor(status.value)}
+                                            sx={{
+                                              borderColor: getStatusChipColor(status.value),
+                                              color: getStatusChipColor(status.value),
+                                              '&:hover': {
+                                                backgroundColor: getStatusChipColor(status.value) + '20',
+                                                borderColor: getStatusChipColor(status.value)
+                                              }
+                                            }}
                                           >
                                             {status.label}
                                           </Button>

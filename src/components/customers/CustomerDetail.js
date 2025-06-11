@@ -191,20 +191,23 @@ const CustomerDetail = () => {
   // Renderowanie statusu zamówienia
   const renderOrderStatus = (status) => {
     const statusConfig = {
-      'draft': { color: 'default', label: 'Szkic' },
-      'pending': { color: 'warning', label: 'Oczekujące' },
-      'in_progress': { color: 'info', label: 'W realizacji' },
-      'completed': { color: 'success', label: 'Zrealizowane' },
-      'cancelled': { color: 'error', label: 'Anulowane' }
+      'draft': { color: '#757575', label: 'Szkic' },
+      'pending': { color: '#ff9800', label: 'Oczekujące' },
+      'in_progress': { color: '#2196f3', label: 'W realizacji' },
+      'completed': { color: '#4caf50', label: 'Zrealizowane' },
+      'cancelled': { color: '#f44336', label: 'Anulowane' }
     };
     
-    const config = statusConfig[status] || { color: 'default', label: status };
+    const config = statusConfig[status] || { color: '#757575', label: status };
     
     return (
       <Chip 
         label={config.label} 
-        color={config.color}
         size="small"
+        sx={{
+          backgroundColor: config.color,
+          color: 'white'
+        }}
       />
     );
   };
@@ -212,21 +215,24 @@ const CustomerDetail = () => {
   // Renderowanie statusu faktury
   const renderInvoiceStatus = (status) => {
     const statusConfig = {
-      'draft': { color: 'default', label: 'Szkic' },
-      'sent': { color: 'info', label: 'Wysłana' },
-      'paid': { color: 'success', label: 'Opłacona' },
-      'overdue': { color: 'error', label: 'Przeterminowana' },
-      'unpaid': { color: 'warning', label: 'Nieopłacona' },
-      'cancelled': { color: 'error', label: 'Anulowana' }
+      'draft': { color: '#757575', label: 'Szkic' },
+      'sent': { color: '#2196f3', label: 'Wysłana' },
+      'paid': { color: '#4caf50', label: 'Opłacona' },
+      'overdue': { color: '#f44336', label: 'Przeterminowana' },
+      'unpaid': { color: '#ff9800', label: 'Nieopłacona' },
+      'cancelled': { color: '#f44336', label: 'Anulowana' }
     };
     
-    const config = statusConfig[status] || { color: 'default', label: status };
+    const config = statusConfig[status] || { color: '#757575', label: status };
     
     return (
       <Chip 
         label={config.label} 
-        color={config.color}
         size="small"
+        sx={{
+          backgroundColor: config.color,
+          color: 'white'
+        }}
       />
     );
   };
