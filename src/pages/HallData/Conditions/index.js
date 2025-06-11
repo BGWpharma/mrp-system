@@ -72,7 +72,7 @@ const TIME_RANGES = [
 
 const HallDataConditionsPage = () => {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [permissionError, setPermissionError] = useState(false);

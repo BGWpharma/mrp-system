@@ -118,7 +118,7 @@ const RecipeList = () => {
   const [inventoryProducts, setInventoryProducts] = useState({});
   
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const mode = theme.palette.mode;
   
   // Funkcja do pobierania stanowisk produkcyjnych

@@ -104,7 +104,7 @@ const ItemDetailsPage = () => {
   
   // Dodajemy wykrywanie urządzeń mobilnych
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   // Funkcja pobierająca dane użytkowników
   const fetchUserNames = async (transactions) => {
@@ -546,7 +546,11 @@ const ItemDetailsPage = () => {
             variant="outlined"
             onClick={handleOpenLabelDialog}
             startIcon={<QrCodeIcon />}
-            sx={{ width: isMobile ? '100%' : 'auto' }}
+            sx={{ 
+              width: isMobile ? '100%' : 'auto',
+              minWidth: isMobile ? 'auto' : '150px',
+              whiteSpace: 'nowrap'
+            }}
           >
             Drukuj etykietę
           </Button>

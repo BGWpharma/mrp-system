@@ -112,7 +112,7 @@ const Navbar = () => {
   const { currentUser, logout } = useAuth();
   const { mode, toggleTheme } = useTheme();
   const muiTheme = useMuiTheme();
-  const isMobile = useMediaQuery(muiTheme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(muiTheme.breakpoints.down('md'));
   const [anchorEl, setAnchorEl] = useState(null);
   const [isTranslateVisible, setIsTranslateVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');

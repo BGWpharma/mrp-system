@@ -753,7 +753,7 @@ const ProductionCalendar = () => {
   const { currentUser } = useAuth();
   const [eventResizableFromStart, setEventResizableFromStart] = useState(true);
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [optionsExpanded, setOptionsExpanded] = useState(false);
   const [legendExpanded, setLegendExpanded] = useState(false);
   // Dodaję nowy stan do kontrolowania widoczności legendy

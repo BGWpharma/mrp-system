@@ -100,7 +100,7 @@ const BatchesPage = () => {
 
   // Dodaję wykrywanie urządzeń mobilnych
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   useEffect(() => {
     // Aktualizuj lokalny stan użytkownika, gdy currentUser się zmieni

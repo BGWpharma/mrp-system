@@ -119,7 +119,7 @@ const TaskList = () => {
 
   // Dodajemy wykrywanie urządzeń mobilnych
   const theme = useMuiTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   // Stany do obsługi paginacji
   const [page, setPage] = useState(1);

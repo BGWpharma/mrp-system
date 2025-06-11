@@ -253,7 +253,7 @@ const TaskDetailsPage = () => {
   const [selectedAllergens, setSelectedAllergens] = useState([]);
 
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   // Funkcja pomocnicza do formatowania wartości liczbowych z precyzją
   const formatQuantityPrecision = (value, precision = 3) => {

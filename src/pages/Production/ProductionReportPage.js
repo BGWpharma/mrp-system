@@ -80,7 +80,7 @@ const ProductionReportPage = () => {
   
   // Dodajemy wykrywanie urządzeń mobilnych
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   // Kolory dla wykresów
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];

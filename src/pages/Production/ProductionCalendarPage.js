@@ -4,7 +4,7 @@ import ProductionCalendar from '../../components/production/ProductionCalendar';
 
 const ProductionCalendarPage = () => {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   return (
     <Container 

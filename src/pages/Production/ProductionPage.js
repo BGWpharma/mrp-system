@@ -38,7 +38,7 @@ const ProductionPage = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);

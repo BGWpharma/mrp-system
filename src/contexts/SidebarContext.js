@@ -11,7 +11,7 @@ export const useSidebar = () => useContext(SidebarContext);
 
 export const SidebarProvider = ({ children }) => {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   // Ustaw domyślną wartość na true dla wszystkich urządzeń
   const [isOpen, setIsOpen] = useState(true);
 

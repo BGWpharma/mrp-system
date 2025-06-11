@@ -71,7 +71,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 
 const HallDataMachinesPage = () => {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { currentUser } = useAuth();
   const rtdb = getDatabase();
   const [loading, setLoading] = useState(true);
