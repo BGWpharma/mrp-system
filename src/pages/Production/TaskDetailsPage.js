@@ -92,7 +92,7 @@ import {
 } from '@mui/icons-material';
 import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession, addProductionSession, deleteProductionSession } from '../../services/productionService';
 import { getRecipeVersion } from '../../services/recipeService';
-import { getItemBatches, bookInventoryForTask, cancelBooking, getBatchReservations, getAllInventoryItems, getInventoryItemById, getInventoryBatch } from '../../services/inventoryService';
+import { getItemBatches, bookInventoryForTask, cancelBooking, getBatchReservations, getAllInventoryItems, getInventoryItemById, getInventoryBatch, updateBatch } from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate, formatCurrency, formatDateTime } from '../../utils/formatters';
@@ -145,6 +145,7 @@ const TaskDetailsPage = () => {
   const [selectedPackaging, setSelectedPackaging] = useState({});
   const [packagingQuantities, setPackagingQuantities] = useState({});
   const [searchPackaging, setSearchPackaging] = useState('');
+  const [consumePackagingImmediately, setConsumePackagingImmediately] = useState(true);
   const [userNames, setUserNames] = useState({});
   const [productionHistory, setProductionHistory] = useState([]);
   const [editingHistoryItem, setEditingHistoryItem] = useState(null);
@@ -2082,23 +2083,48 @@ const TaskDetailsPage = () => {
       // Upewniamy się, że mamy dostęp do właściwych danych
       const allItems = Array.isArray(result) ? result : result.items || [];
       
-      // Filtrujemy tylko opakowania (zarówno zbiorcze jak i jednostkowe)
+      // Filtrujemy tylko opakowania zbiorcze
       const packagingItems = allItems.filter(item => 
-        item.category === 'Opakowania zbiorcze' || 
-        item.category === 'Opakowania jednostkowe' || 
-        item.category === 'Opakowania'
+        item.category === 'Opakowania zbiorcze'
       );
       
       console.log('Pobrane opakowania:', packagingItems);
       
-      setPackagingItems(packagingItems.map(item => ({
-        ...item,
-        selected: false,
-        quantity: 0,
-        // Używamy aktualnej ilości dostępnej w magazynie, a nie pierwotnej wartości
-        availableQuantity: item.currentQuantity || item.quantity || 0,
-        unitPrice: item.unitPrice || item.price || 0
-      })));
+      // Pobierz partie dla każdego opakowania
+      const packagingWithBatches = await Promise.all(
+        packagingItems.map(async (item) => {
+          try {
+            const batches = await getItemBatches(item.id);
+            // Filtruj tylko partie z dostępną ilością > 0
+            const availableBatches = batches.filter(batch => batch.quantity > 0);
+            
+            return {
+              ...item,
+              selected: false,
+              quantity: 0,
+              availableQuantity: item.currentQuantity || item.quantity || 0,
+              unitPrice: item.unitPrice || item.price || 0,
+              batches: availableBatches,
+              selectedBatch: null,
+              batchQuantity: 0
+            };
+          } catch (error) {
+            console.error(`Błąd podczas pobierania partii dla opakowania ${item.name}:`, error);
+            return {
+              ...item,
+              selected: false,
+              quantity: 0,
+              availableQuantity: item.currentQuantity || item.quantity || 0,
+              unitPrice: item.unitPrice || item.price || 0,
+              batches: [],
+              selectedBatch: null,
+              batchQuantity: 0
+            };
+          }
+        })
+      );
+      
+      setPackagingItems(packagingWithBatches);
     } catch (error) {
       console.error('Błąd podczas pobierania opakowań:', error);
       showError('Nie udało się pobrać listy opakowań: ' + error.message);
@@ -2113,29 +2139,45 @@ const TaskDetailsPage = () => {
     setPackagingDialogOpen(true);
   };
   
-  // Obsługa zmiany ilości wybranego opakowania
-  const handlePackagingQuantityChange = (id, value) => {
+
+  
+  // Obsługa wyboru/odznaczenia opakowania
+  const handlePackagingSelection = (id, selected) => {
+    setPackagingItems(prev => prev.map(item => 
+      item.id === id ? { ...item, selected, selectedBatch: null, batchQuantity: 0 } : item
+    ));
+  };
+
+  // Obsługa wyboru partii dla opakowania
+  const handlePackagingBatchSelection = (itemId, batchId) => {
     setPackagingItems(prev => prev.map(item => {
-      if (item.id === id) {
-        // Ograniczamy wartość do dostępnej ilości
-        const parsedValue = parseFloat(value) || 0;
-        const limitedValue = Math.min(parsedValue, item.availableQuantity);
-        
+      if (item.id === itemId) {
+        const selectedBatch = item.batches.find(batch => batch.id === batchId);
         return { 
           ...item, 
-          quantity: limitedValue, 
-          selected: limitedValue > 0 
+          selectedBatch: selectedBatch,
+          batchQuantity: 0 
         };
       }
       return item;
     }));
   };
-  
-  // Obsługa wyboru/odznaczenia opakowania
-  const handlePackagingSelection = (id, selected) => {
-    setPackagingItems(prev => prev.map(item => 
-      item.id === id ? { ...item, selected } : item
-    ));
+
+  // Obsługa zmiany ilości dla wybranej partii
+  const handlePackagingBatchQuantityChange = (itemId, value) => {
+    setPackagingItems(prev => prev.map(item => {
+      if (item.id === itemId && item.selectedBatch) {
+        const parsedValue = parseFloat(value) || 0;
+        const limitedValue = Math.min(parsedValue, item.selectedBatch.quantity);
+        
+        return { 
+          ...item, 
+          batchQuantity: limitedValue,
+          quantity: limitedValue // synchronizuj z główną ilością
+        };
+      }
+      return item;
+    }));
   };
   
   // Dodanie wybranych opakowań do materiałów zadania
@@ -2143,11 +2185,13 @@ const TaskDetailsPage = () => {
     try {
       setLoadingPackaging(true);
       
-      // Filtrujemy wybrane opakowania
-      const packagingToAdd = packagingItems.filter(item => item.selected && item.quantity > 0);
+      // Filtrujemy wybrane opakowania z partią i ilością > 0
+      const packagingToAdd = packagingItems.filter(item => 
+        item.selected && item.selectedBatch && item.batchQuantity > 0
+      );
       
       if (packagingToAdd.length === 0) {
-        showError('Nie wybrano żadnych opakowań do dodania');
+        showError('Nie wybrano żadnych opakowań z partiami do dodania');
         return;
       }
       
@@ -2155,45 +2199,133 @@ const TaskDetailsPage = () => {
       const updatedTask = await getTaskById(id);
       const currentMaterials = updatedTask.materials || [];
       
-      // Przygotuj nowe materiały do dodania
-      const newMaterials = packagingToAdd.map(item => ({
-        id: item.id,
-        name: item.name,
-        quantity: item.quantity,
-        unit: item.unit,
-        inventoryItemId: item.id,
-        isPackaging: true,
-        category: item.category || 'Opakowania zbiorcze', // Zachowaj oryginalną kategorię lub ustaw domyślną
-        unitPrice: item.unitPrice || 0
-      }));
+      // Przygotuj nowe materiały do dodania z informacjami o partii
+      const newMaterials = packagingToAdd.map(item => {
+        const material = {
+          id: item.id,
+          name: item.name || '',
+          quantity: item.batchQuantity || 0,
+          unit: item.unit || '',
+          inventoryItemId: item.id,
+          isPackaging: true,
+          category: item.category || 'Opakowania zbiorcze',
+          unitPrice: item.unitPrice || 0,
+          // Dodaj informacje o wybranej partii
+          selectedBatch: {
+            id: item.selectedBatch.id,
+            quantity: item.batchQuantity || 0
+          }
+        };
+
+        // Dodaj opcjonalne pola tylko jeśli nie są undefined
+        if (item.selectedBatch.lotNumber || item.selectedBatch.batchNumber) {
+          material.selectedBatch.lotNumber = item.selectedBatch.lotNumber || item.selectedBatch.batchNumber;
+        }
+
+        if (item.selectedBatch.expiryDate) {
+          material.selectedBatch.expiryDate = item.selectedBatch.expiryDate;
+        }
+
+        return material;
+      });
       
       // Połącz istniejące materiały z nowymi opakowaniami
       const updatedMaterials = [...currentMaterials];
       
       // Sprawdź czy dane opakowanie już istnieje i aktualizuj ilość lub dodaj nowe
       newMaterials.forEach(newMaterial => {
-        const existingIndex = updatedMaterials.findIndex(m => m.id === newMaterial.id);
+        const existingIndex = updatedMaterials.findIndex(m => 
+          m.id === newMaterial.id && 
+          m.selectedBatch?.id === newMaterial.selectedBatch?.id
+        );
+        
         if (existingIndex >= 0) {
-          // Aktualizuj istniejące opakowanie
+          // Aktualizuj istniejące opakowanie z tą samą partią
           updatedMaterials[existingIndex].quantity = 
             (parseFloat(updatedMaterials[existingIndex].quantity) || 0) + 
             (parseFloat(newMaterial.quantity) || 0);
+          
+          if (updatedMaterials[existingIndex].selectedBatch && newMaterial.selectedBatch) {
+            updatedMaterials[existingIndex].selectedBatch.quantity = 
+              (parseFloat(updatedMaterials[existingIndex].selectedBatch.quantity) || 0) + 
+              (parseFloat(newMaterial.selectedBatch.quantity) || 0);
+          }
         } else {
           // Dodaj nowe opakowanie
           updatedMaterials.push(newMaterial);
         }
       });
       
-      // Zaktualizuj zadanie w bazie danych
-      await updateDoc(doc(db, 'productionTasks', id), {
+      let consumptionData = [];
+      let successMessage = 'Opakowania zostały dodane do zadania';
+      
+      // Konsumuj ilości z wybranych partii tylko jeśli opcja jest włączona
+      if (consumePackagingImmediately) {
+        for (const item of packagingToAdd) {
+          try {
+            // Pobierz aktualne dane partii
+            const currentBatch = await getInventoryBatch(item.selectedBatch.id);
+            
+            if (currentBatch) {
+              const currentQuantity = Number(currentBatch.quantity) || 0;
+              const consumeQuantity = Number(item.batchQuantity) || 0;
+              const newQuantity = Math.max(0, currentQuantity - consumeQuantity);
+              
+              console.log('Konsumpcja opakowania:', {
+                itemName: item.name,
+                batchId: item.selectedBatch.id,
+                currentQuantity,
+                consumeQuantity,
+                newQuantity
+              });
+              
+              // Aktualizuj ilość w partii
+              await updateBatch(item.selectedBatch.id, {
+                quantity: newQuantity
+              }, currentUser.uid);
+              
+              // Zapisz informacje o konsumpcji
+              consumptionData.push({
+                materialId: item.id,
+                batchId: item.selectedBatch.id,
+                batchNumber: item.selectedBatch.lotNumber || item.selectedBatch.batchNumber || 'Brak numeru',
+                quantity: consumeQuantity,
+                unitPrice: item.unitPrice || 0,
+                timestamp: new Date().toISOString(),
+                userId: currentUser.uid,
+                userName: currentUser.displayName || currentUser.email,
+                includeInCosts: true
+              });
+            }
+          } catch (error) {
+            console.error(`Błąd podczas konsumpcji partii ${item.selectedBatch.id}:`, error);
+            showError(`Nie udało się skonsumować partii ${item.selectedBatch.lotNumber || item.selectedBatch.batchNumber}: ${error.message}`);
+          }
+        }
+        successMessage = 'Opakowania zostały dodane do zadania i skonsumowane z wybranych partii';
+      }
+
+      // Pobierz aktualne skonsumowane materiały
+      const currentConsumedMaterials = updatedTask.consumedMaterials || [];
+      const newConsumedMaterials = [...currentConsumedMaterials, ...consumptionData];
+
+      // Zaktualizuj zadanie w bazie danych - dodaj materiały i informacje o konsumpcji
+      const updateData = {
         materials: updatedMaterials,
         updatedAt: serverTimestamp()
-      });
+      };
+      
+      // Dodaj consumedMaterials tylko jeśli konsumujemy natychmiast
+      if (consumePackagingImmediately) {
+        updateData.consumedMaterials = newConsumedMaterials;
+      }
+      
+      await updateDoc(doc(db, 'productionTasks', id), updateData);
       
       // Odśwież dane zadania
       fetchTask();
       
-      showSuccess('Opakowania zostały dodane do zadania produkcyjnego');
+      showSuccess(successMessage);
       setPackagingDialogOpen(false);
     } catch (error) {
       console.error('Błąd podczas dodawania opakowań:', error);
@@ -6873,6 +7005,19 @@ const TaskDetailsPage = () => {
                 sx={{ mb: 2 }}
               />
               
+              {/* Opcja natychmiastowej konsumpcji */}
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={consumePackagingImmediately}
+                    onChange={(e) => setConsumePackagingImmediately(e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label="Konsumuj opakowania natychmiast z wybranych partii"
+                sx={{ mb: 2 }}
+              />
+              
               {loadingPackaging ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
                   <CircularProgress />
@@ -6885,14 +7030,15 @@ const TaskDetailsPage = () => {
                         <TableCell padding="checkbox">Wybierz</TableCell>
                         <TableCell>Nazwa</TableCell>
                         <TableCell>Kategoria</TableCell>
-                        <TableCell>Dostępna ilość</TableCell>
+                        <TableCell>Dostępne partie</TableCell>
+                        <TableCell>Wybrana partia</TableCell>
                         <TableCell>Ilość do dodania</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {filteredPackagingItems.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={5} align="center">
+                          <TableCell colSpan={6} align="center">
                             {packagingItems.length === 0 
                               ? "Brak dostępnych opakowań"
                               : "Brak wyników dla podanego wyszukiwania"}
@@ -6909,16 +7055,41 @@ const TaskDetailsPage = () => {
                             </TableCell>
                             <TableCell>{item.name}</TableCell>
                             <TableCell>{item.category}</TableCell>
-                            <TableCell>{item.availableQuantity} {item.unit}</TableCell>
+                            <TableCell>
+                              {item.batches && item.batches.length > 0 
+                                ? `${item.batches.length} partii dostępnych`
+                                : 'Brak dostępnych partii'}
+                            </TableCell>
+                            <TableCell>
+                              <FormControl fullWidth size="small" disabled={!item.selected}>
+                                <InputLabel>Wybierz partię</InputLabel>
+                                <Select
+                                  value={item.selectedBatch?.id || ''}
+                                  onChange={(e) => handlePackagingBatchSelection(item.id, e.target.value)}
+                                  label="Wybierz partię"
+                                >
+                                  {item.batches && item.batches.map((batch) => (
+                                    <MenuItem key={batch.id} value={batch.id}>
+                                      {`LOT: ${batch.lotNumber || batch.batchNumber || 'Brak numeru'} - ${batch.quantity} ${item.unit}${batch.expiryDate ? ` (Ważne do: ${new Date(batch.expiryDate.seconds ? batch.expiryDate.toDate() : batch.expiryDate).toLocaleDateString()})` : ''}`}
+                                    </MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                            </TableCell>
                             <TableCell>
                               <TextField
                                 type="number"
-                                value={item.quantity || ''}
-                                onChange={(e) => handlePackagingQuantityChange(item.id, e.target.value)}
-                                disabled={!item.selected}
-                                inputProps={{ min: 0, max: item.availableQuantity, step: 'any' }}
+                                value={item.batchQuantity || ''}
+                                onChange={(e) => handlePackagingBatchQuantityChange(item.id, e.target.value)}
+                                disabled={!item.selected || !item.selectedBatch}
+                                inputProps={{ 
+                                  min: 0, 
+                                  max: item.selectedBatch ? item.selectedBatch.quantity : 0, 
+                                  step: 'any' 
+                                }}
                                 size="small"
                                 sx={{ width: '100px' }}
+                                placeholder={item.selectedBatch ? `Max: ${item.selectedBatch.quantity}` : '0'}
                               />
                             </TableCell>
                           </TableRow>
@@ -6937,7 +7108,7 @@ const TaskDetailsPage = () => {
                 onClick={handleAddPackagingToTask} 
                 variant="contained" 
                 color="primary"
-                disabled={loadingPackaging || packagingItems.filter(item => item.selected && item.quantity > 0).length === 0}
+                disabled={loadingPackaging || packagingItems.filter(item => item.selected && item.selectedBatch && item.batchQuantity > 0).length === 0}
               >
                 {loadingPackaging ? <CircularProgress size={24} /> : 'Dodaj wybrane opakowania'}
               </Button>
@@ -7186,10 +7357,10 @@ const TaskDetailsPage = () => {
             maxWidth="md"
             fullWidth
           >
-            <DialogTitle>Dodaj surowce do zadania</DialogTitle>
+            <DialogTitle>Dodaj surowiec do zadania</DialogTitle>
             <DialogContent>
               <DialogContentText sx={{ mb: 2 }}>
-                Wybierz surowce, które chcesz dodać do zadania produkcyjnego.
+                Wybierz surowiec, który chcesz dodać do zadania produkcyjnego.
               </DialogContentText>
               
               {/* Pasek wyszukiwania surowców */}
