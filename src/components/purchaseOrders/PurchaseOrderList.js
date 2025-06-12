@@ -8,7 +8,7 @@ import {
   Fade, Skeleton
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, Description as DescriptionIcon, ViewColumn as ViewColumnIcon, Clear as ClearIcon } from '@mui/icons-material';
-import { getAllPurchaseOrders, deletePurchaseOrder, updatePurchaseOrderStatus, getPurchaseOrdersWithPagination, clearSearchCache, PURCHASE_ORDER_STATUSES, PURCHASE_ORDER_PAYMENT_STATUSES, translateStatus, translatePaymentStatus } from '../../services/purchaseOrderService';
+import { getAllPurchaseOrders, deletePurchaseOrder, updatePurchaseOrderStatus, updatePurchaseOrderPaymentStatus, getPurchaseOrdersWithPagination, clearSearchCache, PURCHASE_ORDER_STATUSES, PURCHASE_ORDER_PAYMENT_STATUSES, translateStatus, translatePaymentStatus } from '../../services/purchaseOrderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
@@ -27,6 +27,9 @@ const PurchaseOrderList = () => {
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [poToUpdateStatus, setPoToUpdateStatus] = useState(null);
   const [newStatus, setNewStatus] = useState('');
+  const [paymentStatusDialogOpen, setPaymentStatusDialogOpen] = useState(false);
+  const [poToUpdatePaymentStatus, setPoToUpdatePaymentStatus] = useState(null);
+  const [newPaymentStatus, setNewPaymentStatus] = useState('');
   const [columnMenuAnchor, setColumnMenuAnchor] = useState(null);
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -224,8 +227,30 @@ const PurchaseOrderList = () => {
       showError('Nie udało się zaktualizować statusu zamówienia');
     }
   };
+
+  const handlePaymentStatusClick = (po) => {
+    setPoToUpdatePaymentStatus(po);
+    setNewPaymentStatus(po.paymentStatus || PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID);
+    setPaymentStatusDialogOpen(true);
+  };
+
+  const handlePaymentStatusUpdate = async () => {
+    try {
+      await updatePurchaseOrderPaymentStatus(poToUpdatePaymentStatus.id, newPaymentStatus, currentUser.uid);
+      
+      // Po aktualizacji odświeżamy listę
+      fetchPurchaseOrders();
+      
+      showSuccess('Status płatności został zaktualizowany');
+      setPaymentStatusDialogOpen(false);
+      setPoToUpdatePaymentStatus(null);
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji statusu płatności:', error);
+      showError('Nie udało się zaktualizować statusu płatności');
+    }
+  };
   
-  const getStatusChip = (status) => {
+  const getStatusChip = (status, po) => {
     let label = translateStatus(status);
     let color = '#757575'; // oryginalny szary domyślny
     
@@ -269,16 +294,22 @@ const PurchaseOrderList = () => {
         label={label} 
         size="small" 
         variant="filled"
+        clickable
+        onClick={() => handleStatusClick(po)}
         sx={{ 
           fontWeight: 'medium',
           backgroundColor: color,
-          color: status === PURCHASE_ORDER_STATUSES.APPROVED ? 'black' : 'white' // czarny tekst na żółtym tle
+          color: status === PURCHASE_ORDER_STATUSES.APPROVED ? 'black' : 'white', // czarny tekst na żółtym tle
+          cursor: 'pointer',
+          '&:hover': {
+            opacity: 0.8
+          }
         }}
       />
     );
   };
   
-  const getPaymentStatusChip = (paymentStatus) => {
+  const getPaymentStatusChip = (paymentStatus, po) => {
     const status = paymentStatus || PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID;
     const label = translatePaymentStatus(status);
     let color = '#f44336'; // czerwony domyślny dla nie opłacone
@@ -298,10 +329,16 @@ const PurchaseOrderList = () => {
         label={label} 
         size="small" 
         variant="filled"
+        clickable
+        onClick={() => handlePaymentStatusClick(po)}
         sx={{ 
           fontWeight: 'medium',
           backgroundColor: color,
-          color: 'white'
+          color: 'white',
+          cursor: 'pointer',
+          '&:hover': {
+            opacity: 0.8
+          }
         }}
       />
     );
@@ -316,7 +353,7 @@ const PurchaseOrderList = () => {
   };
   
   const toggleColumnVisibility = (columnName) => {
-    updateColumnPreferences('purchaseOrders', columnName);
+    updateColumnPreferences('purchaseOrders', columnName, !visibleColumns[columnName]);
   };
   
   // Komponent dla nagłówka kolumny z sortowaniem
@@ -556,13 +593,13 @@ const PurchaseOrderList = () => {
                       
                       {visibleColumns['status'] && (
                         <TableCell>
-                          {getStatusChip(po.status)}
+                          {getStatusChip(po.status, po)}
                         </TableCell>
                       )}
                       
                       {visibleColumns['paymentStatus'] && (
                         <TableCell>
-                          {getPaymentStatusChip(po.paymentStatus)}
+                          {getPaymentStatusChip(po.paymentStatus, po)}
                         </TableCell>
                       )}
                       
@@ -712,6 +749,45 @@ const PurchaseOrderList = () => {
         <DialogActions>
           <Button onClick={() => setStatusDialogOpen(false)}>Anuluj</Button>
           <Button color="primary" onClick={handleStatusUpdate}>Zaktualizuj</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog zmiany statusu płatności */}
+      <Dialog
+        open={paymentStatusDialogOpen}
+        onClose={() => setPaymentStatusDialogOpen(false)}
+      >
+        <DialogTitle>Zmiana statusu płatności</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Wybierz nowy status płatności dla zamówienia:
+            {poToUpdatePaymentStatus && (
+              <>
+                <br />
+                Numer: {poToUpdatePaymentStatus.number || `#${poToUpdatePaymentStatus.id.substring(0, 8).toUpperCase()}`}
+              </>
+            )}
+          </DialogContentText>
+          <FormControl fullWidth>
+            <InputLabel id="new-payment-status-label">Status płatności</InputLabel>
+            <Select
+              labelId="new-payment-status-label"
+              value={newPaymentStatus}
+              onChange={(e) => setNewPaymentStatus(e.target.value)}
+              label="Status płatności"
+            >
+              <MenuItem value={PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID}>
+                {translatePaymentStatus(PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID)}
+              </MenuItem>
+              <MenuItem value={PURCHASE_ORDER_PAYMENT_STATUSES.PAID}>
+                {translatePaymentStatus(PURCHASE_ORDER_PAYMENT_STATUSES.PAID)}
+              </MenuItem>
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPaymentStatusDialogOpen(false)}>Anuluj</Button>
+          <Button color="primary" onClick={handlePaymentStatusUpdate}>Zaktualizuj</Button>
         </DialogActions>
       </Dialog>
     </Container>

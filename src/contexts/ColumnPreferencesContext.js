@@ -27,6 +27,7 @@ const defaultColumnPreferences = {
     expectedDeliveryDate: true,
     value: true,
     status: true,
+    paymentStatus: false,
     actions: true
   },
   // Zadania produkcyjne
