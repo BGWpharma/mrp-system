@@ -977,11 +977,12 @@ export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, user
     if (oldStatus !== newStatus) {
       // Dodanie historii zmian statusu
       const statusHistory = poData.statusHistory || [];
+      const now = new Date();
       const statusChange = {
         oldStatus: oldStatus || 'Szkic',
         newStatus: newStatus,
         changedBy: userId,
-        changedAt: new Date().toISOString()
+        changedAt: now.toISOString()
       };
       
       const updateFields = {
@@ -2231,12 +2232,13 @@ export const updatePurchaseOrderPaymentStatus = async (purchaseOrderId, newPayme
 
     // Dodaj wpis do historii zmian statusu płatności
     const paymentStatusHistory = poData.paymentStatusHistory || [];
+    const now = new Date();
     paymentStatusHistory.push({
       from: oldPaymentStatus,
       to: newPaymentStatus,
       changedBy: userId,
-      changedAt: serverTimestamp(),
-      timestamp: new Date().toISOString()
+      changedAt: now,
+      timestamp: now.toISOString()
     });
 
     updateFields.paymentStatusHistory = paymentStatusHistory;

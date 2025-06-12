@@ -7819,6 +7819,18 @@ const TaskDetailsPage = () => {
                                       type="number"
                                       value={consumeQuantities[batchKey] || 0}
                                       onChange={(e) => handleConsumeQuantityChange(materialId, batch.batchId, e.target.value)}
+                                      onFocus={(e) => {
+                                        // Jeśli wartość to 0, wyczyść pole przy focusie
+                                        if ((consumeQuantities[batchKey] || 0) === 0) {
+                                          e.target.select();
+                                        }
+                                      }}
+                                      onBlur={(e) => {
+                                        // Jeśli pole jest puste po utracie focusu, ustaw 0
+                                        if (e.target.value === '' || e.target.value === null) {
+                                          handleConsumeQuantityChange(materialId, batch.batchId, 0);
+                                        }
+                                      }}
                                       onWheel={(e) => e.target.blur()} // Wyłącza reakcję na scroll
                                       disabled={!isSelected}
                                       error={Boolean(consumeErrors[batchKey])}

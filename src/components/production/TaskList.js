@@ -80,6 +80,43 @@ import { exportToCSV } from '../../utils/exportUtils';
 import { getUsersDisplayNames } from '../../services/userService';
 
 const TaskList = () => {
+  // Funkcja formatowania daty i godziny w formacie liczbowym
+  const formatDateTimeNumeric = (date) => {
+    if (!date) return '—';
+    
+    // Obsługa timestampu Firestore
+    if (date && typeof date === 'object' && typeof date.toDate === 'function') {
+      date = date.toDate();
+    }
+    
+    try {
+      // Obsługa stringa
+      if (typeof date === 'string') {
+        date = new Date(date);
+      }
+      
+      const dateObj = new Date(date);
+      
+      // Sprawdź czy data jest prawidłowa
+      if (isNaN(dateObj.getTime())) {
+        console.warn('Nieprawidłowy format daty:', date);
+        return String(date);
+      }
+      
+      // Formatuj datę w formacie DD.MM.YYYY HH:mm
+      return new Intl.DateTimeFormat('pl-PL', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(dateObj);
+    } catch (error) {
+      console.error('Error formatting date:', error, date);
+      return String(date);
+    }
+  };
+
   const [tasks, setTasks] = useState([]);
   const [filteredTasks, setFilteredTasks] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -986,23 +1023,20 @@ const TaskList = () => {
               
               <Box>
                 <Typography variant="caption" color="text.secondary">
-                  Ilość:
+                  Ilość / Pozostało:
                 </Typography>
-                <Typography variant="body2">
-                  {task.quantity} {task.unit || 'szt.'}
-                </Typography>
-              </Box>
-              
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  Pozostało:
-                </Typography>
-                <Typography 
-                  variant="body2" 
-                  color={remainingQuantity === 0 ? 'success.main' : (remainingQuantity < task.quantity * 0.2 ? 'warning.main' : 'inherit')}
-                >
-                  {remainingQuantity} {task.unit || 'szt.'}
-                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                    {task.quantity} {task.unit || 'szt.'}
+                  </Typography>
+                  <Typography 
+                    variant="caption" 
+                    color={remainingQuantity === 0 ? 'success.main' : (remainingQuantity < task.quantity * 0.2 ? 'warning.main' : 'text.secondary')}
+                    sx={{ fontSize: '0.7rem' }}
+                  >
+                    pozostało: {remainingQuantity} {task.unit || 'szt.'}
+                  </Typography>
+                </Box>
               </Box>
             </Box>
             
@@ -1252,13 +1286,13 @@ const TaskList = () => {
                       </Box>
                     </TableCell>
                   )}
-                  {visibleColumns.quantity && (
+                  {visibleColumns.quantityProgress && (
                     <TableCell
                       onClick={() => handleSort('quantity')}
                       sx={{ cursor: 'pointer', userSelect: 'none' }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        Ilość
+                        Ilość / Pozostało
                         {sortField === 'quantity' && (
                           <ArrowDropDownIcon 
                             sx={{ 
@@ -1271,7 +1305,6 @@ const TaskList = () => {
                       </Box>
                     </TableCell>
                   )}
-                  {visibleColumns.remainingQuantity && <TableCell>Pozostało do produkcji</TableCell>}
                   {visibleColumns.workstation && <TableCell>Stanowisko</TableCell>}
                   {visibleColumns.status && (
                     <TableCell
@@ -1380,19 +1413,23 @@ const TaskList = () => {
                           <Typography variant="body2">{task.productName}</Typography>
                         </TableCell>
                       )}
-                      {visibleColumns.quantity && (
+                      {visibleColumns.quantityProgress && (
                         <TableCell>
-                          {task.quantity} {task.unit || 'szt.'}
-                        </TableCell>
-                      )}
-                      {visibleColumns.remainingQuantity && (
-                        <TableCell>
-                          <Typography 
-                            variant="body1" 
-                            color={remainingQuantity === 0 ? 'success.main' : (remainingQuantity < task.quantity * 0.2 ? 'warning.main' : 'inherit')}
-                          >
-                            {remainingQuantity} {task.unit || 'szt.'}
-                          </Typography>
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                              {task.quantity} {task.unit || 'szt.'}
+                            </Typography>
+                            <Typography 
+                              variant="caption" 
+                              color={remainingQuantity === 0 ? 'success.main' : (remainingQuantity < task.quantity * 0.2 ? 'warning.main' : 'text.secondary')}
+                              sx={{ 
+                                fontSize: '0.75rem',
+                                fontWeight: remainingQuantity === 0 ? 'medium' : 'normal'
+                              }}
+                            >
+                              / {remainingQuantity} {task.unit || 'szt.'}
+                            </Typography>
+                          </Box>
                         </TableCell>
                       )}
                       {visibleColumns.workstation && (
@@ -1442,12 +1479,12 @@ const TaskList = () => {
                       )}
                       {visibleColumns.plannedStart && (
                         <TableCell>
-                          {task.scheduledDate ? formatDateTime(task.scheduledDate) : '-'}
+                          {task.scheduledDate ? formatDateTimeNumeric(task.scheduledDate) : '-'}
                         </TableCell>
                       )}
                       {visibleColumns.plannedEnd && (
                         <TableCell>
-                          {task.endDate ? formatDateTime(task.endDate) : '-'}
+                          {task.endDate ? formatDateTimeNumeric(task.endDate) : '-'}
                         </TableCell>
                       )}
                       {visibleColumns.cost && (
@@ -1528,13 +1565,9 @@ const TaskList = () => {
           <Checkbox checked={visibleColumns.productName} />
           <ListItemText primary="Produkt" />
         </MenuItem>
-        <MenuItem onClick={() => toggleColumnVisibility('quantity')}>
-          <Checkbox checked={visibleColumns.quantity} />
-          <ListItemText primary="Ilość" />
-        </MenuItem>
-        <MenuItem onClick={() => toggleColumnVisibility('remainingQuantity')}>
-          <Checkbox checked={visibleColumns.remainingQuantity} />
-          <ListItemText primary="Pozostało do produkcji" />
+        <MenuItem onClick={() => toggleColumnVisibility('quantityProgress')}>
+          <Checkbox checked={visibleColumns.quantityProgress} />
+          <ListItemText primary="Ilość / Pozostało" />
         </MenuItem>
         <MenuItem onClick={() => toggleColumnVisibility('workstation')}>
           <Checkbox checked={visibleColumns.workstation} />

@@ -876,7 +876,7 @@ const CreateFromOrderPage = () => {
           const orderItemDate = productDates[itemId] || new Date();
           
           // Tworzenie nazwy zadania
-          const taskName = `${orderItem.name} (zam. ${selectedOrder.orderNumber || selectedOrder.id.substring(0, 8)})`;
+          const taskName = `${orderItem.name} (${selectedOrder.orderNumber || selectedOrder.id.substring(0, 8)})`;
           
           // Utworzenie listy materiałów na podstawie receptury
           const materials = recipeData ? createMaterialsFromRecipe(recipeData, orderItem.quantity) : [];

@@ -34,8 +34,7 @@ const defaultColumnPreferences = {
   productionTasks: {
     name: true,
     productName: true,
-    quantity: true,
-    remainingQuantity: true,
+    quantityProgress: true,
     workstation: true,
     status: true,
     plannedStart: true,

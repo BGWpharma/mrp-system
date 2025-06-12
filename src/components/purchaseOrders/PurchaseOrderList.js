@@ -7,7 +7,7 @@ import {
   Tooltip, Menu, Checkbox, ListItemText, TableSortLabel, Pagination, TableFooter, CircularProgress,
   Fade, Skeleton
 } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, Description as DescriptionIcon, ViewColumn as ViewColumnIcon, Clear as ClearIcon } from '@mui/icons-material';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, ViewColumn as ViewColumnIcon, Clear as ClearIcon } from '@mui/icons-material';
 import { getAllPurchaseOrders, deletePurchaseOrder, updatePurchaseOrderStatus, updatePurchaseOrderPaymentStatus, getPurchaseOrdersWithPagination, clearSearchCache, PURCHASE_ORDER_STATUSES, PURCHASE_ORDER_PAYMENT_STATUSES, translateStatus, translatePaymentStatus } from '../../services/purchaseOrderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -250,8 +250,25 @@ const PurchaseOrderList = () => {
     }
   };
   
+  // Funkcja do tłumaczenia statusów na skrócone wersje dla listy
+  const translateStatusShort = (status) => {
+    switch (status) {
+      case 'draft': return 'Projekt';
+      case 'pending': return 'Oczekujące';
+      case 'approved': return 'Zatwierdzone';
+      case 'ordered': return 'Zamówione';
+      case 'partial': return 'Cz. dostarczone';
+      case 'shipped': return 'Wysłane';
+      case 'delivered': return 'Dostarczone';
+      case 'completed': return 'Zakończone';
+      case 'cancelled': return 'Anulowane';
+      case 'confirmed': return 'Potwierdzone';
+      default: return status;
+    }
+  };
+
   const getStatusChip = (status, po) => {
-    let label = translateStatus(status);
+    let label = translateStatusShort(status);
     let color = '#757575'; // oryginalny szary domyślny
     
     switch (status) {
@@ -356,10 +373,21 @@ const PurchaseOrderList = () => {
     updateColumnPreferences('purchaseOrders', columnName, !visibleColumns[columnName]);
   };
   
+  // Funkcja do formatowania symboli walut
+  const formatCurrencySymbol = (currencyCode) => {
+    const currencySymbols = {
+      'EUR': '€',
+      'USD': '$',
+      'PLN': 'zł',
+      'GBP': '£'
+    };
+    return currencySymbols[currencyCode] || currencyCode;
+  };
+  
   // Komponent dla nagłówka kolumny z sortowaniem
-  const SortableTableCell = ({ id, label, disableSorting = false }) => {
+  const SortableTableCell = ({ id, label, disableSorting = false, sx }) => {
     return (
-      <TableCell>
+      <TableCell sx={sx}>
         {disableSorting ? (
           label
         ) : (
@@ -377,7 +405,7 @@ const PurchaseOrderList = () => {
   
   return (
     <Container>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
         <Typography variant="h5">Zamówienia Zakupu</Typography>
         <Button
           variant="contained"
@@ -389,7 +417,7 @@ const PurchaseOrderList = () => {
         </Button>
       </Box>
       
-      <Paper sx={{ mb: 3, p: 2 }}>
+      <Paper sx={{ mb: 1, p: 1 }}>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2 }}>
           <TextField
             label="Szukaj"
@@ -449,7 +477,7 @@ const PurchaseOrderList = () => {
           </MenuItem>
           <MenuItem onClick={() => toggleColumnVisibility('number')}>
             <Checkbox checked={!!visibleColumns['number']} />
-            <ListItemText primary="Numer zamówienia" />
+            <ListItemText primary="Numer PO" />
           </MenuItem>
           <MenuItem onClick={() => toggleColumnVisibility('supplier')}>
             <Checkbox checked={!!visibleColumns['supplier']} />
@@ -484,10 +512,10 @@ const PurchaseOrderList = () => {
             <Table>
               <TableHead>
                 <TableRow>
-                  {visibleColumns['number'] && <SortableTableCell id="number" label="Numer zamówienia" />}
+                  {visibleColumns['number'] && <SortableTableCell id="number" label="Numer PO" sx={{ width: '120px', minWidth: '100px' }} />}
                   {visibleColumns['supplier'] && <SortableTableCell id="supplier" label="Dostawca" />}
-                  {visibleColumns['orderDate'] && <SortableTableCell id="orderDate" label="Data zamówienia" />}
-                  {visibleColumns['expectedDeliveryDate'] && <SortableTableCell id="expectedDeliveryDate" label="Oczekiwana dostawa" />}
+                  {visibleColumns['orderDate'] && <SortableTableCell id="orderDate" label="Data zamówienia" sx={{ width: '130px', minWidth: '120px' }} />}
+                  {visibleColumns['expectedDeliveryDate'] && <SortableTableCell id="expectedDeliveryDate" label="Oczekiwana dostawa" sx={{ width: '140px', minWidth: '130px' }} />}
                   {visibleColumns['value'] && <SortableTableCell id="value" label="Wartość" />}
                   {visibleColumns['status'] && <SortableTableCell id="status" label="Status" />}
                   {visibleColumns['paymentStatus'] && <SortableTableCell id="paymentStatus" label="Status płatności" />}
@@ -586,7 +614,7 @@ const PurchaseOrderList = () => {
                       {visibleColumns['value'] && (
                         <TableCell>
                           {po.totalGross !== undefined ? 
-                            `${Number(po.totalGross).toFixed(2)} ${po.currency || 'PLN'}` : 
+                            `${Number(po.totalGross).toFixed(2)} ${formatCurrencySymbol(po.currency || 'PLN')}` : 
                             '-'}
                         </TableCell>
                       )}
@@ -622,15 +650,6 @@ const PurchaseOrderList = () => {
                               to={`/purchase-orders/${po.id}/edit`}
                             >
                               <EditIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          
-                          <Tooltip title="Zmień status">
-                            <IconButton 
-                              size="small" 
-                              onClick={() => handleStatusClick(po)}
-                            >
-                              <DescriptionIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
                           
