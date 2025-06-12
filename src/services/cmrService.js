@@ -31,6 +31,21 @@ export const CMR_STATUSES = {
   CANCELED: 'Anulowany'
 };
 
+// Stałe dla statusów płatności CMR
+export const CMR_PAYMENT_STATUSES = {
+  UNPAID: 'unpaid',
+  PAID: 'paid'
+};
+
+// Funkcja do tłumaczenia statusów płatności na język polski
+export const translatePaymentStatus = (status) => {
+  switch (status) {
+    case 'unpaid': return 'Nie opłacone';
+    case 'paid': return 'Opłacone';
+    default: return status;
+  }
+};
+
 // Typy transportu
 export const TRANSPORT_TYPES = {
   ROAD: 'Drogowy',
@@ -241,6 +256,7 @@ export const createCmrDocument = async (cmrData, userId) => {
       deliveryDate: convertToTimestamp(cmrData.deliveryDate),
       loadingDate: convertToTimestamp(cmrData.loadingDate),
       status: cmrData.status || CMR_STATUSES.DRAFT,
+      paymentStatus: cmrData.paymentStatus || CMR_PAYMENT_STATUSES.UNPAID,
       cmrNumber: cmrData.cmrNumber || generateCmrNumber(),
       createdAt: serverTimestamp(),
       createdBy: userId,
@@ -1090,5 +1106,78 @@ const cancelLinkedOrderShippedQuantities = async (orderId, cmrItems, cmrNumber, 
   } catch (error) {
     console.error('Błąd podczas anulowania ilości wysłanych w zamówieniu:', error);
     // Nie rzucamy błędu, aby nie przerywać procesu zmiany statusu CMR
+  }
+};
+
+/**
+ * Aktualizacja statusu płatności dokumentu CMR
+ * @param {string} cmrId - ID dokumentu CMR
+ * @param {string} newPaymentStatus - Nowy status płatności ('paid' lub 'unpaid')
+ * @param {string} userId - ID użytkownika dokonującego zmiany
+ * @returns {Promise<object>} - Wynik operacji
+ */
+export const updateCmrPaymentStatus = async (cmrId, newPaymentStatus, userId) => {
+  try {
+    if (!cmrId) {
+      throw new Error('ID dokumentu CMR jest wymagane');
+    }
+
+    if (!newPaymentStatus) {
+      throw new Error('Nowy status płatności jest wymagany');
+    }
+
+    if (!Object.values(CMR_PAYMENT_STATUSES).includes(newPaymentStatus)) {
+      throw new Error(`Nieprawidłowy status płatności: ${newPaymentStatus}`);
+    }
+
+    // Pobierz aktualne dane dokumentu CMR
+    const cmrRef = doc(db, CMR_COLLECTION, cmrId);
+    const cmrDoc = await getDoc(cmrRef);
+    
+    if (!cmrDoc.exists()) {
+      throw new Error(`Nie znaleziono dokumentu CMR o ID ${cmrId}`);
+    }
+
+    const cmrData = cmrDoc.data();
+    const oldPaymentStatus = cmrData.paymentStatus || CMR_PAYMENT_STATUSES.UNPAID;
+    
+    // Jeśli status się nie zmienił, nie rób nic
+    if (oldPaymentStatus === newPaymentStatus) {
+      return { success: true, paymentStatus: newPaymentStatus, message: 'Status płatności nie zmienił się' };
+    }
+
+    const updateFields = {
+      paymentStatus: newPaymentStatus,
+      updatedAt: serverTimestamp(),
+      updatedBy: userId
+    };
+
+    // Dodaj wpis do historii zmian statusu płatności
+    const paymentStatusHistory = cmrData.paymentStatusHistory || [];
+    const now = new Date();
+    paymentStatusHistory.push({
+      from: oldPaymentStatus,
+      to: newPaymentStatus,
+      changedBy: userId,
+      changedAt: now,
+      timestamp: now.toISOString()
+    });
+
+    updateFields.paymentStatusHistory = paymentStatusHistory;
+
+    // Aktualizuj dokument
+    await updateDoc(cmrRef, updateFields);
+
+    console.log(`Zaktualizowano status płatności dokumentu CMR ${cmrId} z "${oldPaymentStatus}" na "${newPaymentStatus}"`);
+
+    return { 
+      success: true, 
+      paymentStatus: newPaymentStatus,
+      oldPaymentStatus,
+      message: 'Status płatności został zaktualizowany'
+    };
+  } catch (error) {
+    console.error('Błąd podczas aktualizacji statusu płatności dokumentu CMR:', error);
+    throw error;
   }
 };

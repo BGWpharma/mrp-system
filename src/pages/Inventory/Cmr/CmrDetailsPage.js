@@ -19,7 +19,16 @@ import {
   TableHead,
   TableRow,
   Alert,
-  styled
+  styled,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -29,7 +38,10 @@ import { useNotification } from '../../../hooks/useNotification';
 import { 
   getCmrDocumentById, 
   updateCmrStatus, 
-  CMR_STATUSES 
+  CMR_STATUSES,
+  CMR_PAYMENT_STATUSES,
+  translatePaymentStatus,
+  updateCmrPaymentStatus
 } from '../../../services/cmrService';
 import { getOrderById } from '../../../services/orderService';
 
@@ -140,6 +152,8 @@ const CmrDetailsPage = () => {
   const [loading, setLoading] = useState(true);
   const [cmrData, setCmrData] = useState(null);
   const [linkedOrder, setLinkedOrder] = useState(null);
+  const [paymentStatusDialogOpen, setPaymentStatusDialogOpen] = useState(false);
+  const [newPaymentStatus, setNewPaymentStatus] = useState('');
   
   useEffect(() => {
     fetchCmrDocument();
@@ -677,28 +691,93 @@ const CmrDetailsPage = () => {
     let color;
     switch (status) {
       case CMR_STATUSES.DRAFT:
-        color = 'default';
+        color = '#757575'; // szary
         break;
       case CMR_STATUSES.ISSUED:
-        color = 'primary';
+        color = '#2196f3'; // niebieski
         break;
       case CMR_STATUSES.IN_TRANSIT:
-        color = 'warning';
+        color = '#ff9800'; // pomarańczowy
         break;
       case CMR_STATUSES.DELIVERED:
-        color = 'success';
+        color = '#4caf50'; // zielony
         break;
       case CMR_STATUSES.COMPLETED:
-        color = 'info';
+        color = '#9c27b0'; // fioletowy
         break;
       case CMR_STATUSES.CANCELED:
-        color = 'error';
+        color = '#f44336'; // czerwony
         break;
       default:
-        color = 'default';
+        color = '#757575'; // szary
     }
     
-    return <Chip label={status} color={color} />;
+    return (
+      <Chip 
+        label={status} 
+        sx={{
+          backgroundColor: color,
+          color: 'white',
+          fontWeight: 'medium'
+        }}
+      />
+    );
+  };
+
+  const getPaymentStatusChip = (paymentStatus) => {
+    const status = paymentStatus || CMR_PAYMENT_STATUSES.UNPAID;
+    const label = translatePaymentStatus(status);
+    let color = '#f44336'; // czerwony domyślny dla nie opłacone
+    
+    switch (status) {
+      case CMR_PAYMENT_STATUSES.PAID:
+        color = '#4caf50'; // zielony - opłacone
+        break;
+      case CMR_PAYMENT_STATUSES.UNPAID:
+      default:
+        color = '#f44336'; // czerwony - nie opłacone
+        break;
+    }
+    
+    return (
+      <Chip 
+        label={label} 
+        size="small"
+        clickable
+        onClick={handlePaymentStatusClick}
+        sx={{
+          backgroundColor: color,
+          color: 'white',
+          cursor: 'pointer',
+          '&:hover': {
+            opacity: 0.8
+          }
+        }}
+      />
+    );
+  };
+
+  const handlePaymentStatusClick = () => {
+    setNewPaymentStatus(cmrData?.paymentStatus || CMR_PAYMENT_STATUSES.UNPAID);
+    setPaymentStatusDialogOpen(true);
+  };
+
+  const handlePaymentStatusUpdate = async () => {
+    try {
+      await updateCmrPaymentStatus(id, newPaymentStatus, currentUser.uid);
+      setPaymentStatusDialogOpen(false);
+      
+      // Odśwież dane dokumentu CMR
+      await fetchCmrDocument();
+      
+      showSuccess('Status płatności został zaktualizowany');
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji statusu płatności:', error);
+      showError('Nie udało się zaktualizować statusu płatności');
+    } finally {
+      setNewPaymentStatus('');
+      setPaymentStatusDialogOpen(false);
+    }
   };
   
   if (loading) {
@@ -741,8 +820,11 @@ const CmrDetailsPage = () => {
           <Typography variant="h5">
             Dokument CMR: {cmrData.cmrNumber}
           </Typography>
-          <Typography variant="subtitle1" color="text.secondary">
+          <Typography variant="subtitle1" color="text.secondary" sx={{ mb: 1 }}>
             Status: {renderStatusChip(cmrData.status)}
+          </Typography>
+          <Typography variant="subtitle1" color="text.secondary">
+            Status płatności: {getPaymentStatusChip(cmrData.paymentStatus)}
           </Typography>
         </Box>
         <Box sx={{ 
@@ -1535,6 +1617,38 @@ const CmrDetailsPage = () => {
           </Box>
         </Box>
       </Box>
+
+      {/* Dialog zmiany statusu płatności */}
+      <Dialog
+        open={paymentStatusDialogOpen}
+        onClose={() => setPaymentStatusDialogOpen(false)}
+      >
+        <DialogTitle>Zmień status płatności</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Wybierz nowy status płatności dokumentu CMR:
+          </DialogContentText>
+          <FormControl fullWidth>
+            <InputLabel>Status płatności</InputLabel>
+            <Select
+              value={newPaymentStatus}
+              onChange={(e) => setNewPaymentStatus(e.target.value)}
+              label="Status płatności"
+            >
+              <MenuItem value={CMR_PAYMENT_STATUSES.UNPAID}>
+                {translatePaymentStatus(CMR_PAYMENT_STATUSES.UNPAID)}
+              </MenuItem>
+              <MenuItem value={CMR_PAYMENT_STATUSES.PAID}>
+                {translatePaymentStatus(CMR_PAYMENT_STATUSES.PAID)}
+              </MenuItem>
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPaymentStatusDialogOpen(false)}>Anuluj</Button>
+          <Button onClick={handlePaymentStatusUpdate} color="primary">Zapisz</Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

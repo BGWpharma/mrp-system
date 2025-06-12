@@ -806,22 +806,26 @@ const OrderDetails = () => {
   // Funkcja renderująca status dokumentu CMR
   const renderCmrStatus = (status) => {
     const statusConfig = {
-      [CMR_STATUSES.DRAFT]: { color: 'default', label: 'Szkic' },
-      [CMR_STATUSES.ISSUED]: { color: 'info', label: 'Wystawiony' },
-      [CMR_STATUSES.IN_TRANSIT]: { color: 'warning', label: 'W transporcie' },
-      [CMR_STATUSES.DELIVERED]: { color: 'success', label: 'Dostarczone' },
-      [CMR_STATUSES.COMPLETED]: { color: 'primary', label: 'Zakończony' },
-      [CMR_STATUSES.CANCELED]: { color: 'error', label: 'Anulowany' }
+      [CMR_STATUSES.DRAFT]: { color: '#757575', label: 'Szkic' }, // szary
+      [CMR_STATUSES.ISSUED]: { color: '#2196f3', label: 'Wystawiony' }, // niebieski
+      [CMR_STATUSES.IN_TRANSIT]: { color: '#ff9800', label: 'W transporcie' }, // pomarańczowy
+      [CMR_STATUSES.DELIVERED]: { color: '#4caf50', label: 'Dostarczone' }, // zielony
+      [CMR_STATUSES.COMPLETED]: { color: '#9c27b0', label: 'Zakończony' }, // fioletowy
+      [CMR_STATUSES.CANCELED]: { color: '#f44336', label: 'Anulowany' } // czerwony
     };
     
-    const config = statusConfig[status] || { color: 'default', label: status || 'Nieznany' };
+    const config = statusConfig[status] || { color: '#757575', label: status || 'Nieznany' };
     
     return (
       <Chip 
         label={config.label}
-        color={config.color}
         size="small"
         variant="outlined"
+        sx={{
+          borderColor: config.color,
+          color: config.color,
+          fontWeight: 'medium'
+        }}
       />
     );
   };

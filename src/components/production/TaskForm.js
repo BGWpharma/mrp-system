@@ -781,6 +781,15 @@ const TaskForm = ({ taskId }) => {
           {taskId && taskId !== 'new' ? 'Edytuj zadanie produkcyjne' : 'Nowe zadanie produkcyjne'}
         </Typography>
         
+        {/* Wyświetlanie numeru MO w trybie edycji */}
+        {taskId && taskId !== 'new' && taskData.moNumber && (
+          <Alert severity="info" sx={{ mb: 3 }}>
+            <Typography variant="h6" component="span" sx={{ fontWeight: 'bold' }}>
+              Numer MO: {taskData.moNumber}
+            </Typography>
+          </Alert>
+        )}
+        
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
             <CircularProgress />

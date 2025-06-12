@@ -623,7 +623,7 @@ const RecipeList = () => {
                             style={{ textDecoration: 'none', color: 'inherit' }}
                           >
                             <Chip 
-                              label={`Magazyn: ${inventoryProducts[recipe.id].name} (${inventoryProducts[recipe.id].quantity || 0} ${inventoryProducts[recipe.id].unit || 'szt.'})`}
+                              label={`Magazyn: ${inventoryProducts[recipe.id].quantity || 0} ${inventoryProducts[recipe.id].unit || 'szt.'} - ${inventoryProducts[recipe.id].name}`}
                               size="small"
                               color="secondary"
                               variant="outlined"
@@ -689,7 +689,7 @@ const RecipeList = () => {
     
     // Dla większych ekranów wyświetlamy standardową tabelę
     return (
-      <TableContainer component={Paper} variant="outlined">
+      <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto' }}>
         <Table>
           <TableHead>
             <TableRow>
@@ -732,7 +732,7 @@ const RecipeList = () => {
                   )}
                 </Box>
               </TableCell>
-              <TableCell>Pozycja magazynowa</TableCell>
+              <TableCell sx={{ width: '280px', maxWidth: '280px' }}>Pozycja magazynowa</TableCell>
               <TableCell onClick={() => handleTableSort('updatedAt')} style={{ cursor: 'pointer' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                   Ostatnia aktualizacja
@@ -784,18 +784,28 @@ const RecipeList = () => {
                         <Chip label="Ogólna" size="small" variant="outlined" />
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={{ width: '280px', maxWidth: '280px', overflow: 'hidden' }}>
                       {inventoryProducts[recipe.id] ? (
                         <Link 
                           to={`/inventory/${inventoryProducts[recipe.id].id}`} 
                           style={{ textDecoration: 'none', color: 'inherit' }}
                         >
                           <Chip 
-                            label={`${inventoryProducts[recipe.id].name} (${inventoryProducts[recipe.id].quantity || 0} ${inventoryProducts[recipe.id].unit || 'szt.'})`}
+                            label={`${inventoryProducts[recipe.id].quantity || 0} ${inventoryProducts[recipe.id].unit || 'szt.'} - ${inventoryProducts[recipe.id].name}`}
                             size="small"
                             color="secondary"
                             variant="outlined"
-                            sx={{ cursor: 'pointer' }}
+                            sx={{ 
+                              cursor: 'pointer',
+                              maxWidth: '100%',
+                              '& .MuiChip-label': {
+                                textOverflow: 'ellipsis',
+                                overflow: 'hidden',
+                                whiteSpace: 'nowrap',
+                                maxWidth: '240px'
+                              }
+                            }}
+                            title={`${inventoryProducts[recipe.id].quantity || 0} ${inventoryProducts[recipe.id].unit || 'szt.'} - ${inventoryProducts[recipe.id].name}`}
                           />
                         </Link>
                       ) : (

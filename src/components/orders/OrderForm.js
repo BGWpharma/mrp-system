@@ -2407,7 +2407,7 @@ const OrderForm = ({ orderId }) => {
 
   return (
     <>
-      <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
+      <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2, maxWidth: '1600px', mx: 'auto' }}>
         <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Button 
             startIcon={<ArrowBackIcon />} 

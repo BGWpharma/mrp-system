@@ -2044,6 +2044,15 @@ const PurchaseOrderForm = ({ orderId }) => {
         <Typography variant="h5">
           {currentOrderId && currentOrderId !== 'new' ? 'Edycja Zamówienia Zakupu' : 'Utwórz Zamówienie Zakupu'}
         </Typography>
+        
+        {/* Wyświetlanie numeru PO w trybie edycji */}
+        {currentOrderId && currentOrderId !== 'new' && poData.number && (
+          <Alert severity="info" sx={{ mt: 2 }}>
+            <Typography variant="h6" component="span" sx={{ fontWeight: 'bold' }}>
+              Numer PO: {poData.number}
+            </Typography>
+          </Alert>
+        )}
       </Box>
       
       <Paper sx={{ p: 3 }}>

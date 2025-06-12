@@ -37,7 +37,12 @@ import AddIcon from '@mui/icons-material/Add';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
 import LinkIcon from '@mui/icons-material/Link';
-import { CMR_STATUSES, TRANSPORT_TYPES } from '../../../services/cmrService';
+import { 
+  CMR_STATUSES, 
+  CMR_PAYMENT_STATUSES, 
+  TRANSPORT_TYPES,
+  translatePaymentStatus 
+} from '../../../services/cmrService';
 import { getOrderById, getAllOrders, searchOrdersByNumber } from '../../../services/orderService';
 import { getCustomerById } from '../../../services/customerService';
 import { getCompanyData } from '../../../services/companyService';
@@ -67,6 +72,7 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
     issueDate: new Date(),
     deliveryDate: null,
     status: CMR_STATUSES.DRAFT,
+    paymentStatus: CMR_PAYMENT_STATUSES.UNPAID,
     transportType: TRANSPORT_TYPES.ROAD,
     
     // Dane nadawcy
@@ -1039,6 +1045,25 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                           {Object.entries(CMR_STATUSES).map(([key, value]) => (
                             <MenuItem key={key} value={value}>{value}</MenuItem>
                           ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                    
+                    <Grid item xs={12} sm={6}>
+                      <FormControl fullWidth margin="normal">
+                        <InputLabel>Status płatności</InputLabel>
+                        <Select
+                          name="paymentStatus"
+                          value={formData.paymentStatus}
+                          onChange={handleChange}
+                          label="Status płatności"
+                        >
+                          <MenuItem value={CMR_PAYMENT_STATUSES.UNPAID}>
+                            {translatePaymentStatus(CMR_PAYMENT_STATUSES.UNPAID)}
+                          </MenuItem>
+                          <MenuItem value={CMR_PAYMENT_STATUSES.PAID}>
+                            {translatePaymentStatus(CMR_PAYMENT_STATUSES.PAID)}
+                          </MenuItem>
                         </Select>
                       </FormControl>
                     </Grid>
