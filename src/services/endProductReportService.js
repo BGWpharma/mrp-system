@@ -123,6 +123,50 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       }
     };
 
+    // Helper function to add fields in two columns
+    const addFieldTwoColumns = (leftLabel, leftValue, rightLabel, rightValue, isMultiline = false) => {
+      checkPageBreak(isMultiline ? 15 : 8);
+      
+      const columnWidth = contentWidth / 2;
+      const rightColumnX = margin + columnWidth + 5;
+      
+      // Left column
+      doc.setTextColor(85, 85, 85);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text(leftLabel + ':', margin, currentY);
+      
+      doc.setTextColor(0, 0, 0);
+      doc.setFont('helvetica', 'normal');
+      
+      if (isMultiline && leftValue && leftValue.length > 30) {
+        const lines = doc.splitTextToSize(leftValue, columnWidth - 10);
+        doc.text(lines, margin, currentY + 4);
+      } else {
+        doc.text(leftValue || 'Not specified', margin, currentY + 4);
+      }
+      
+      // Right column
+      if (rightLabel && rightValue !== undefined) {
+        doc.setTextColor(85, 85, 85);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.text(rightLabel + ':', rightColumnX, currentY);
+        
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'normal');
+        
+        if (isMultiline && rightValue && rightValue.length > 30) {
+          const lines = doc.splitTextToSize(rightValue, columnWidth - 10);
+          doc.text(lines, rightColumnX, currentY + 4);
+        } else {
+          doc.text(rightValue || 'Not specified', rightColumnX, currentY + 4);
+        }
+      }
+      
+      currentY += 8;
+    };
+
     // Helper function to add table with dynamic row heights
     const addTable = (headers, data, options = {}) => {
       const {
@@ -269,30 +313,42 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
     // 1. Product identification
     addSectionHeader(1, 'Product identification', '#1976d2');
     
-    addField('SKU', task?.recipeName || task?.productName);
-    addField('Description', task?.recipe?.description || task?.description, true);
-    addField('Version', task?.recipeVersion || '1');
-    addField('Report creation date', new Date().toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }));
-    addField('User', currentUser?.displayName || currentUser?.email || 'Unknown user');
+    // Use two-column layout for product identification
+    addFieldTwoColumns(
+      'SKU of recipe', 
+      task?.recipeName || task?.productName,
+      'Version of recipe', 
+      task?.recipeVersion || '1'
+    );
+    
+    addFieldTwoColumns(
+      'Report creation date', 
+      new Date().toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }),
+      'User', 
+      currentUser?.displayName || currentUser?.email || 'Unknown user'
+    );
+    
+    // Description spans full width due to potentially long content
+    addField('Description of recipe', task?.recipe?.description || task?.description, true);
 
     currentY += 10;
 
     // 2. TDS Specification
     addSectionHeader(2, 'TDS Specification', '#ff9800');
     
-    addField('Date', task?.recipe?.updatedAt 
+    addField('Date of last recipe update', task?.recipe?.updatedAt 
       ? (task.recipe.updatedAt && typeof task.recipe.updatedAt === 'object' && typeof task.recipe.updatedAt.toDate === 'function'
         ? task.recipe.updatedAt.toDate().toLocaleDateString('en-GB')
         : new Date(task.recipe.updatedAt).toLocaleDateString('en-GB'))
       : 'No data');
     
-    addField('Expiration date', task?.expiryDate 
+    addField('Expiration date of end product', task?.expiryDate 
       ? (task.expiryDate instanceof Date 
         ? task.expiryDate.toLocaleDateString('en-GB')
         : typeof task.expiryDate === 'string'
@@ -492,11 +548,11 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
     // 5. Production
     addSectionHeader(5, 'Production', '#e91e63');
     
-    addField('Start date', productionHistory && productionHistory.length > 0
+    addField('Start date of production', productionHistory && productionHistory.length > 0
       ? formatDateTime(productionHistory[0].startTime)
       : 'No production history data');
     
-    addField('End date', productionHistory && productionHistory.length > 0
+    addField('End date of production', productionHistory && productionHistory.length > 0
       ? formatDateTime(productionHistory[productionHistory.length - 1].endTime)
       : 'No production history data');
     
@@ -537,7 +593,7 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       const totalTime = productionHistory.reduce((sum, session) => sum + (session.timeSpent || 0), 0);
       historyData.push([
         'Total:', '',
-        `${totalQuantity.toFixed(3)} ${task?.unit || 'pcs'}`,
+        `${totalQuantity} ${task?.unit || 'pcs'}`,
         `${totalTime} min`
       ]);
 

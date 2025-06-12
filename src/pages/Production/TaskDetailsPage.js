@@ -54,7 +54,8 @@ import {
   InputAdornment,
   useMediaQuery,
   useTheme,
-  Switch
+  Switch,
+  Autocomplete
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -280,14 +281,8 @@ const TaskDetailsPage = () => {
   ];
 
   // Funkcja do obsługi zmiany alergenów
-  const handleAllergenChange = (allergen, checked) => {
-    setSelectedAllergens(prev => {
-      if (checked) {
-        return [...prev, allergen];
-      } else {
-        return prev.filter(item => item !== allergen);
-      }
-    });
+  const handleAllergenChange = (event, newValue) => {
+    setSelectedAllergens(newValue);
   };
 
   // Stan dla głównej zakładki
@@ -5490,12 +5485,12 @@ const TaskDetailsPage = () => {
           {mainTab === 5 && ( // Zakładka "Raport gotowego produktu"
             <Grid container spacing={3}>
               <Grid item xs={12}>
-                <Paper sx={{ p: 4, backgroundColor: '#ffffff', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }}>
-                  <Box sx={{ mb: 4, textAlign: 'center', borderBottom: '3px solid #1976d2', pb: 3 }}>
-                    <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', color: '#1976d2', mb: 1 }}>
+                <Paper sx={{ p: 3 }}>
+                  <Box sx={{ mb: 3, textAlign: 'center' }}>
+                    <Typography variant="h5" component="h1" sx={{ mb: 1 }}>
                       RAPORT GOTOWEGO PRODUKTU
                     </Typography>
-                    <Typography variant="subtitle1" color="text.secondary" sx={{ mb: 2 }}>
+                    <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
                       Szczegółowy raport kontroli jakości i produkcji
                     </Typography>
                     
@@ -5503,48 +5498,19 @@ const TaskDetailsPage = () => {
                     <Button
                       variant="contained"
                       color="primary"
-                      size="large"
                       startIcon={generatingPDF ? <CircularProgress size={20} color="inherit" /> : <PdfIcon />}
                       onClick={handleGenerateEndProductReport}
                       disabled={generatingPDF}
-                      sx={{
-                        fontSize: '1.1rem',
-                        fontWeight: 'bold',
-                        px: 4,
-                        py: 1.5,
-                        mt: 1,
-                        boxShadow: '0 4px 8px rgba(25, 118, 210, 0.3)',
-                        '&:hover': {
-                          boxShadow: '0 6px 12px rgba(25, 118, 210, 0.4)',
-                          transform: 'translateY(-1px)'
-                        }
-                      }}
                     >
                       {generatingPDF ? 'Generating PDF Report...' : 'Generate PDF Report'}
                     </Button>
                   </Box>
                   
                   {/* Product identification */}
-                  <Paper sx={{ p: 4, mb: 4, backgroundColor: '#f8faff', border: '2px solid #e3f2fd', borderRadius: 2 }} elevation={2}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, pb: 2, borderBottom: '1px solid #e0e0e0' }}>
-                      <Box sx={{ 
-                        backgroundColor: '#1976d2', 
-                        color: 'white', 
-                        borderRadius: '50%', 
-                        width: 32, 
-                        height: 32, 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        fontWeight: 'bold',
-                        mr: 2 
-                      }}>
-                        1
-                      </Box>
-                      <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#1976d2' }}>
-                        Product identification
-                      </Typography>
-                    </Box>
+                  <Paper sx={{ p: 3, mb: 3 }}>
+                    <Typography variant="h6" sx={{ mb: 2 }}>
+                      1. Product identification
+                    </Typography>
                     
                     <Grid container spacing={3}>
                       <Grid item xs={12} md={6}>
@@ -5629,26 +5595,10 @@ const TaskDetailsPage = () => {
                   </Paper>
                   
                   {/* TDS Specification */}
-                  <Paper sx={{ p: 4, mb: 4, backgroundColor: '#fff8f0', border: '2px solid #ffe0b2', borderRadius: 2 }} elevation={2}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, pb: 2, borderBottom: '1px solid #e0e0e0' }}>
-                      <Box sx={{ 
-                        backgroundColor: '#ff9800', 
-                        color: 'white', 
-                        borderRadius: '50%', 
-                        width: 32, 
-                        height: 32, 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        fontWeight: 'bold',
-                        mr: 2 
-                      }}>
-                        2
-                      </Box>
-                      <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#ff9800' }}>
-                        TDS Specification
-                      </Typography>
-                    </Box>
+                  <Paper sx={{ p: 3, mb: 3 }}>
+                    <Typography variant="h6" sx={{ mb: 2 }}>
+                      2. TDS Specification
+                    </Typography>
                     
                     <Grid container spacing={3}>
                       {/* Microelements + Nutrition data */}
@@ -5686,18 +5636,9 @@ const TaskDetailsPage = () => {
                                     <TableCell align="right">{micronutrient.quantity}</TableCell>
                                     <TableCell>{micronutrient.unit}</TableCell>
                                     <TableCell>
-                                      <Chip 
-                                        size="small" 
-                                        color={
-                                          micronutrient.category === 'Witaminy' ? 'success' :
-                                          micronutrient.category === 'Minerały' ? 'info' :
-                                          micronutrient.category === 'Makroelementy' ? 'primary' :
-                                          micronutrient.category === 'Energia' ? 'warning' :
-                                          'default'
-                                        } 
-                                        label={micronutrient.category} 
-                                        sx={{ borderRadius: '16px' }}
-                                      />
+                                      <Typography variant="body2">
+                                        {micronutrient.category}
+                                      </Typography>
                                     </TableCell>
                                   </TableRow>
                                 ))}
@@ -5775,26 +5716,10 @@ const TaskDetailsPage = () => {
                   </Paper>
                   
                   {/* Active Ingredients */}
-                  <Paper sx={{ p: 4, mb: 4, backgroundColor: '#f0fff4', border: '2px solid #c8e6c9', borderRadius: 2 }} elevation={2}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, pb: 2, borderBottom: '1px solid #e0e0e0' }}>
-                      <Box sx={{ 
-                        backgroundColor: '#4caf50', 
-                        color: 'white', 
-                        borderRadius: '50%', 
-                        width: 32, 
-                        height: 32, 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        fontWeight: 'bold',
-                        mr: 2 
-                      }}>
-                        3
-                      </Box>
-                      <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#4caf50' }}>
-                        Active Ingredients
-                      </Typography>
-                    </Box>
+                  <Paper sx={{ p: 3, mb: 3 }}>
+                    <Typography variant="h6" sx={{ mb: 2 }}>
+                      3. Active Ingredients
+                    </Typography>
                     
                     <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', mt: 2 }}>
                       3.1 List of materials
@@ -5901,27 +5826,10 @@ const TaskDetailsPage = () => {
                   
                   {/* 3.2 Expiration date of materials */}
                   {task?.consumedMaterials && task.consumedMaterials.length > 0 && (
-                    <Paper sx={{ p: 4, mb: 4, backgroundColor: '#f0fff4', border: '2px solid #c8e6c9', borderRadius: 2 }} elevation={2}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, pb: 2, borderBottom: '1px solid #e0e0e0' }}>
-                        <Box sx={{ 
-                          backgroundColor: '#4caf50', 
-                          color: 'white', 
-                          borderRadius: '20px', 
-                          width: 48, 
-                          height: 24, 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'center',
-                          fontWeight: 'bold',
-                          mr: 2,
-                          fontSize: '0.875rem'
-                        }}>
-                          3.2
-                        </Box>
-                        <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#4caf50' }}>
-                          Expiration date of materials
-                        </Typography>
-                      </Box>
+                    <Paper sx={{ p: 3, mb: 3 }}>
+                      <Typography variant="h6" sx={{ mb: 2 }}>
+                        3.2 Expiration date of materials
+                      </Typography>
                         
                         <TableContainer component={Paper} sx={{ mt: 2 }}>
                           <Table size="small">
@@ -6012,27 +5920,10 @@ const TaskDetailsPage = () => {
                   )}
 
                   {/* 3.3 Clinical and bibliographic research */}
-                  <Paper sx={{ p: 4, mb: 4, backgroundColor: '#f0fff4', border: '2px solid #c8e6c9', borderRadius: 2 }} elevation={2}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, pb: 2, borderBottom: '1px solid #e0e0e0' }}>
-                      <Box sx={{ 
-                        backgroundColor: '#4caf50', 
-                        color: 'white', 
-                        borderRadius: '20px', 
-                        width: 48, 
-                        height: 24, 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        fontWeight: 'bold',
-                        mr: 2,
-                        fontSize: '0.875rem'
-                      }}>
-                        3.3
-                      </Box>
-                      <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#4caf50' }}>
-                        Clinical and bibliographic research
-                      </Typography>
-                    </Box>
+                  <Paper sx={{ p: 3, mb: 3 }}>
+                    <Typography variant="h6" sx={{ mb: 2 }}>
+                      3.3 Clinical and bibliographic research
+                    </Typography>
                     
                     {/* Sekcja przesyłania plików */}
                     <Box sx={{ mb: 3, p: 2, backgroundColor: '#e3f2fd', borderRadius: 1, border: '1px dashed #2196f3' }}>
@@ -6151,26 +6042,10 @@ const TaskDetailsPage = () => {
                   </Paper>
 
                   {/* 4. Physicochemical properties */}
-                  <Paper sx={{ p: 4, mb: 4, backgroundColor: '#fff3e0', border: '2px solid #ffcc02', borderRadius: 2 }} elevation={2}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, pb: 2, borderBottom: '1px solid #e0e0e0' }}>
-                      <Box sx={{ 
-                        backgroundColor: '#ffc107', 
-                        color: 'white', 
-                        borderRadius: '50%', 
-                        width: 32, 
-                        height: 32, 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        fontWeight: 'bold',
-                        mr: 2 
-                      }}>
-                        4
-                      </Box>
-                      <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#ffc107' }}>
-                        Physicochemical properties
-                      </Typography>
-                    </Box>
+                  <Paper sx={{ p: 3, mb: 3 }}>
+                    <Typography variant="h6" sx={{ mb: 2 }}>
+                      4. Physicochemical properties
+                    </Typography>
                     
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
                       Załączniki związane z właściwościami fizykochemicznymi składników z powiązanych zamówień zakupu
@@ -6308,26 +6183,10 @@ const TaskDetailsPage = () => {
                   )}
                   
                   {/* 5. Production */}
-                  <Paper sx={{ p: 4, mb: 4, backgroundColor: '#fce4ec', border: '2px solid #f48fb1', borderRadius: 2 }} elevation={2}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, pb: 2, borderBottom: '1px solid #e0e0e0' }}>
-                      <Box sx={{ 
-                        backgroundColor: '#e91e63', 
-                        color: 'white', 
-                        borderRadius: '50%', 
-                        width: 32, 
-                        height: 32, 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        fontWeight: 'bold',
-                        mr: 2 
-                      }}>
-                        5
-                      </Box>
-                      <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#e91e63' }}>
-                        Production
-                      </Typography>
-                    </Box>
+                  <Paper sx={{ p: 3, mb: 3 }}>
+                    <Typography variant="h6" sx={{ mb: 2 }}>
+                      5. Production
+                    </Typography>
                     
                                         <Grid container spacing={3}>
                       {/* Start date i End date */}
@@ -6682,26 +6541,10 @@ const TaskDetailsPage = () => {
                   </Paper>
                   
                   {/* 6. Quality control */}
-                  <Paper sx={{ p: 4, mb: 4, backgroundColor: '#f3e5f5', border: '2px solid #ce93d8', borderRadius: 2 }} elevation={2}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, pb: 2, borderBottom: '1px solid #e0e0e0' }}>
-                      <Box sx={{ 
-                        backgroundColor: '#9c27b0', 
-                        color: 'white', 
-                        borderRadius: '50%', 
-                        width: 32, 
-                        height: 32, 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        fontWeight: 'bold',
-                        mr: 2 
-                      }}>
-                        6
-                      </Box>
-                      <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#9c27b0' }}>
-                        Quality control
-                      </Typography>
-                    </Box>
+                  <Paper sx={{ p: 3, mb: 3 }}>
+                    <Typography variant="h6" sx={{ mb: 2 }}>
+                      6. Quality control
+                    </Typography>
                     
                     {formResponses?.productionControl && formResponses.productionControl.length > 0 ? (
                       <Grid container spacing={3}>
@@ -7100,101 +6943,53 @@ const TaskDetailsPage = () => {
                   </Paper>
                   
                   {/* 7. Allergens */}
-                  <Paper sx={{ p: 4, mb: 4, backgroundColor: '#fff8e1', border: '2px solid #ffc107', borderRadius: 2 }} elevation={2}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, pb: 2, borderBottom: '1px solid #e0e0e0' }}>
-                      <Box sx={{ 
-                        backgroundColor: '#ffc107', 
-                        color: 'black', 
-                        borderRadius: '50%', 
-                        width: 32, 
-                        height: 32, 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        fontWeight: 'bold',
-                        mr: 2 
-                      }}>
-                        7
-                      </Box>
-                      <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#f57c00' }}>
-                        Allergens
-                      </Typography>
-                    </Box>
-                    
-                    <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-                      Zaznacz wszystkie alergeny obecne w produkcie:
+                  <Paper sx={{ p: 3, mb: 3 }}>
+                    <Typography variant="h6" sx={{ mb: 2 }}>
+                      7. Allergens
                     </Typography>
                     
-                    <Grid container spacing={2}>
-                      {availableAllergens.map((allergen, index) => (
-                        <Grid item xs={12} sm={6} md={4} key={index}>
-                          <FormControlLabel
-                            control={
-                              <Checkbox
-                                checked={selectedAllergens.includes(allergen)}
-                                onChange={(e) => handleAllergenChange(allergen, e.target.checked)}
-                                color="warning"
-                                sx={{
-                                  '&.Mui-checked': {
-                                    color: '#ffc107',
-                                  },
-                                }}
-                              />
-                            }
-                            label={
-                              <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                                {allergen}
-                              </Typography>
-                            }
-                            sx={{
-                              border: '1px solid #ffe0b2',
-                              borderRadius: 1,
-                              p: 1,
-                              m: 0,
-                              width: '100%',
-                              backgroundColor: selectedAllergens.includes(allergen) 
-                                ? '#fff3e0' 
-                                : 'white',
-                              '&:hover': {
-                                backgroundColor: '#fff8e1',
-                                borderColor: '#ffb74d'
-                              },
-                              transition: 'all 0.2s ease'
-                            }}
+                    <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                      Wybierz wszystkie alergeny obecne w produkcie:
+                    </Typography>
+                    
+                    <Autocomplete
+                      multiple
+                      id="allergens-autocomplete"
+                      options={availableAllergens}
+                      value={selectedAllergens}
+                      onChange={handleAllergenChange}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Alergeny"
+                          placeholder="Wybierz alergeny..."
+                          variant="outlined"
+                          fullWidth
+                        />
+                      )}
+                      renderTags={(value, getTagProps) =>
+                        value.map((option, index) => (
+                          <Chip
+                            variant="outlined"
+                            label={option}
+                            {...getTagProps({ index })}
                           />
-                        </Grid>
-                      ))}
-                    </Grid>
+                        ))
+                      }
+                      sx={{ mb: 2 }}
+                    />
                     
                     {/* Podsumowanie wybranych alergenów */}
-                    <Box sx={{ mt: 3, p: 2, backgroundColor: '#fff3e0', borderRadius: 1, border: '1px solid #ffcc02' }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#f57c00', mb: 1 }}>
+                    <Box sx={{ mt: 3, p: 2 }}>
+                      <Typography variant="subtitle2" sx={{ mb: 1 }}>
                         Wybrane alergeny ({selectedAllergens.length}):
                       </Typography>
                       {selectedAllergens.length > 0 ? (
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                          {selectedAllergens.map((allergen, index) => (
-                            <Chip 
-                              key={index}
-                              label={allergen}
-                              color="warning"
-                              variant="outlined"
-                              size="small"
-                              onDelete={() => handleAllergenChange(allergen, false)}
-                              sx={{
-                                backgroundColor: '#fff8e1',
-                                '& .MuiChip-deleteIcon': {
-                                  color: '#f57c00',
-                                  '&:hover': {
-                                    color: '#e65100'
-                                  }
-                                }
-                              }}
-                            />
-                          ))}
-                        </Box>
+                        <Typography variant="body2">
+                          {selectedAllergens.join(', ')}
+                        </Typography>
                       ) : (
-                        <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                        <Typography variant="body2" color="text.secondary">
                           Brak wybranych alergenów
                         </Typography>
                       )}
