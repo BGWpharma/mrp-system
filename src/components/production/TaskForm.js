@@ -859,49 +859,52 @@ const TaskForm = ({ taskId }) => {
                     </Select>
                   </FormControl>
                 </Grid>
-                <Grid item xs={12}>
-                  <Autocomplete
-                    id="inventory-product"
-                    options={inventoryProducts}
-                    getOptionLabel={(option) => option.name}
-                    value={taskData.inventoryProductId ? { id: taskData.inventoryProductId, name: taskData.productName } : null}
-                    onOpen={() => handleDropdownOpen('inventoryProducts')}
-                    loading={!dataLoaded.inventoryProducts}
-                    onChange={(event, newValue) => {
-                      if (newValue) {
-                        setTaskData(prev => ({
-                          ...prev,
-                          productName: newValue.name,
-                          unit: newValue.unit || 'szt.',
-                          inventoryProductId: newValue.id
-                        }));
-                      } else {
-                        setTaskData(prev => {
-                          const updatedData = { ...prev };
-                          delete updatedData.inventoryProductId;
-                          return updatedData;
-                        });
-                      }
-                    }}
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        label="Produkt z magazynu (opcjonalnie)"
-                        variant="outlined"
-                        helperText="Wybierz istniejący produkt z magazynu lub pozostaw puste, aby utworzyć nowy"
-                        InputProps={{
-                          ...params.InputProps,
-                          endAdornment: (
-                            <>
-                              {!dataLoaded.inventoryProducts ? <CircularProgress color="inherit" size={20} /> : null}
-                              {params.InputProps.endAdornment}
-                            </>
-                          ),
-                        }}
-                      />
-                    )}
-                  />
-                </Grid>
+                {/* Pole "Produkt z magazynu" ukryte w trybie edycji */}
+                {!taskId && (
+                  <Grid item xs={12}>
+                    <Autocomplete
+                      id="inventory-product"
+                      options={inventoryProducts}
+                      getOptionLabel={(option) => option.name}
+                      value={taskData.inventoryProductId ? { id: taskData.inventoryProductId, name: taskData.productName } : null}
+                      onOpen={() => handleDropdownOpen('inventoryProducts')}
+                      loading={!dataLoaded.inventoryProducts}
+                      onChange={(event, newValue) => {
+                        if (newValue) {
+                          setTaskData(prev => ({
+                            ...prev,
+                            productName: newValue.name,
+                            unit: newValue.unit || 'szt.',
+                            inventoryProductId: newValue.id
+                          }));
+                        } else {
+                          setTaskData(prev => {
+                            const updatedData = { ...prev };
+                            delete updatedData.inventoryProductId;
+                            return updatedData;
+                          });
+                        }
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Produkt z magazynu (opcjonalnie)"
+                          variant="outlined"
+                          helperText="Wybierz istniejący produkt z magazynu lub pozostaw puste, aby utworzyć nowy"
+                          InputProps={{
+                            ...params.InputProps,
+                            endAdornment: (
+                              <>
+                                {!dataLoaded.inventoryProducts ? <CircularProgress color="inherit" size={20} /> : null}
+                                {params.InputProps.endAdornment}
+                              </>
+                            ),
+                          }}
+                        />
+                      )}
+                    />
+                  </Grid>
+                )}
                 <Grid item xs={12} sm={8}>
                   <TextField
                     fullWidth
@@ -1005,7 +1008,7 @@ const TaskForm = ({ taskId }) => {
                 Status i priorytet
               </Typography>
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
+                <Grid item xs={12} sm={taskId ? 12 : 6}>
                   <FormControl fullWidth variant="outlined">
                     <InputLabel>Status</InputLabel>
                     <Select
@@ -1019,19 +1022,22 @@ const TaskForm = ({ taskId }) => {
                     <FormHelperText>Status zadania produkcyjnego</FormHelperText>
                   </FormControl>
                 </Grid>
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth variant="outlined">
-                    <InputLabel>Priorytet</InputLabel>
-                    <Select
-                      name="priority"
-                      value={taskData.priority || 'Normalny'}
-                      onChange={handleChange}
-                      label="Priorytet"
-                    >
-                      {priorityOptions}
-                    </Select>
-                  </FormControl>
-                </Grid>
+                {/* Pole "Priorytet" ukryte w trybie edycji */}
+                {!taskId && (
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth variant="outlined">
+                      <InputLabel>Priorytet</InputLabel>
+                      <Select
+                        name="priority"
+                        value={taskData.priority || 'Normalny'}
+                        onChange={handleChange}
+                        label="Priorytet"
+                      >
+                        {priorityOptions}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                )}
                 <Grid item xs={12}>
                   <FormControl fullWidth variant="outlined">
                     <InputLabel>Stanowisko produkcyjne</InputLabel>

@@ -146,49 +146,6 @@ const generateGanttReport = (tasks, workstations, customers, startDate, endDate,
       const workstation = workstations.find(w => w.id === task.workstationId);
       const customer = customers.find(c => c.id === task.customerId);
       
-      // NOWA LOGIKA: Wyznacz daty na podstawie statusu zadania
-      let reportStartDate = task.scheduledDate;
-      let reportEndDate = task.endDate;
-      
-      // Dla zadań zakończonych używaj dat z historii produkcji
-      if (task.status === 'Zakończone' && task.productionSessions && task.productionSessions.length > 0) {
-        console.log(`[RAPORT] Zadanie ${task.moNumber} ma historię produkcji:`, task.productionSessions);
-        const sessions = task.productionSessions;
-        
-        // Znajdź najwcześniejszą datę rozpoczęcia z wszystkich sesji
-        let earliestStart = null;
-        let latestEnd = null;
-        
-        sessions.forEach(session => {
-          if (session.startDate) {
-            const sessionStart = new Date(session.startDate);
-            if (!earliestStart || sessionStart < earliestStart) {
-              earliestStart = sessionStart;
-            }
-          }
-          
-          if (session.endDate) {
-            const sessionEnd = new Date(session.endDate);
-            if (!latestEnd || sessionEnd > latestEnd) {
-              latestEnd = sessionEnd;
-            }
-          }
-        });
-        
-        console.log(`[RAPORT] Znalezione daty dla ${task.moNumber}:`, {
-          earliestStart,
-          latestEnd
-        });
-        
-        // Użyj rzeczywistych dat z historii produkcji
-        if (earliestStart) {
-          reportStartDate = earliestStart;
-        }
-        if (latestEnd) {
-          reportEndDate = latestEnd;
-        }
-      }
-      
       // Format dates
       const formatDateForReport = (date) => {
         if (!date) return '';
@@ -207,12 +164,12 @@ const generateGanttReport = (tasks, workstations, customers, startDate, endDate,
         }
       };
 
-      // Calculate duration in hours using the determined dates
+      // Calculate duration in hours
       let durationHours = '';
-      if (reportStartDate && reportEndDate) {
+      if (task.scheduledDate && task.endDate) {
         try {
-          const start = reportStartDate instanceof Date ? reportStartDate : new Date(reportStartDate);
-          const end = reportEndDate instanceof Date ? reportEndDate : new Date(reportEndDate);
+          const start = task.scheduledDate instanceof Date ? task.scheduledDate : new Date(task.scheduledDate);
+          const end = task.endDate instanceof Date ? task.endDate : new Date(task.endDate);
           const durationMs = end.getTime() - start.getTime();
           durationHours = Math.round((durationMs / (1000 * 60 * 60)) * 100) / 100; // Round to 2 decimal places
         } catch (error) {
@@ -234,14 +191,14 @@ const generateGanttReport = (tasks, workstations, customers, startDate, endDate,
         status: translateStatus(task.status), // Use translated status
         statusColor: getStatusColorForExcel(task.status), // Add status color
         workstationName: workstation?.name || '',
-        scheduledDate: formatDateForReport(reportStartDate),
-        endDate: formatDateForReport(reportEndDate),
+        scheduledDate: formatDateForReport(task.scheduledDate),
+        endDate: formatDateForReport(task.endDate),
         durationHours: durationHours,
         priority: task.priority || '',
         description: task.description || task.name || '',
-        // Add object with determined dates for comparisons
-        originalScheduledDate: reportStartDate,
-        originalEndDate: reportEndDate
+        // Add object with original date for comparisons
+        originalScheduledDate: task.scheduledDate,
+        originalEndDate: task.endDate
       };
     });
 
@@ -970,8 +927,31 @@ const ProductionCalendar = () => {
       // Generuj klucz cache'u
       const cacheKey = generateCacheKey(rangeStartDate, rangeEndDate);
       
-      // WYŁĄCZ CACHE CZASOWO DO DEBUGOWANIA
-      console.log('🔄 WYŁĄCZAM CACHE DO DEBUGOWANIA');
+      // Sprawdź, czy dane są już w cache'u i czy są nadal ważne
+      if (tasksCache[cacheKey] && isCacheValid(tasksCache[cacheKey])) {
+        console.log('Używam zadań z cache dla zakresu dat:', rangeStartDate, '-', rangeEndDate);
+        setTasks(tasksCache[cacheKey].data);
+        
+        // Aktualizuj widok kalendarza
+        if (calendarRef.current) {
+          try {
+            const calendarApi = calendarRef.current.getApi();
+            calendarApi.updateSize();
+            
+            if (customDateRange) {
+              calendarApi.setOption('visibleRange', {
+                start: startDate,
+                end: endDate
+              });
+            }
+          } catch (error) {
+            console.error("Błąd podczas aktualizacji kalendarza z cache:", error);
+          }
+        }
+        
+        setLoading(false);
+        return;
+      }
       
       console.log('Pobieranie zadań dla zakresu dat:', rangeStartDate, '-', rangeEndDate);
       
@@ -991,21 +971,6 @@ const ProductionCalendar = () => {
           console.log('Pobrano zadania:', fetchedTasks);
           console.log(`Czas ładowania: ${loadTime.toFixed(2)}ms dla ${fetchedTasks.length} zadań`);
           
-          // DODATKOWE LOGOWANIE DLA ZADAŃ ZAKOŃCZONYCH
-          const completedTasks = fetchedTasks.filter(task => task.status === 'Zakończone');
-          console.log('🎯 ZADANIA ZAKOŃCZONE:', completedTasks);
-          completedTasks.forEach(task => {
-            console.log(`📋 Zadanie: ${task.moNumber}`, {
-              status: task.status,
-              hasProductionSessions: !!task.productionSessions,
-              productionSessionsCount: task.productionSessions?.length || 0,
-              productionSessions: task.productionSessions,
-              scheduledDate: task.scheduledDate,
-              endDate: task.endDate,
-              fullTaskObject: task
-            });
-          });
-          
           // Aktualizuj statystyki wydajności
           setLoadingStats({
             lastLoadTime: loadTime,
@@ -1024,12 +989,13 @@ const ProductionCalendar = () => {
           
           setTasks(fetchedTasks);
           
-          // Automatyczna aktualizacja widoku kalendarza po załadowaniu
+          // Dodatkowe wymuszenie przerysowania
           if (calendarRef.current) {
             try {
               const calendarApi = calendarRef.current.getApi();
               calendarApi.updateSize();
               
+              // Upewnij się, że kalendarz jest w odpowiednim widoku i z właściwym zakresem dat
               if (customDateRange) {
                 calendarApi.setOption('visibleRange', {
                   start: startDate,
@@ -1037,19 +1003,19 @@ const ProductionCalendar = () => {
                 });
               }
             } catch (error) {
-              console.error("Błąd podczas aktualizacji kalendarza:", error);
+              console.error("Błąd podczas aktualizacji kalendarza po pobraniu zadań:", error);
             }
           }
         } catch (error) {
-          console.error('Błąd podczas pobierania zadań:', error);
-          showError('Błąd podczas ładowania zadań: ' + error.message);
+          showError('Błąd podczas pobierania zadań: ' + error.message);
+          console.error('Error fetching tasks:', error);
         } finally {
           setLoading(false);
         }
-      }, 50);
+      }, 100);
     } catch (error) {
-      console.error('Błąd podczas pobierania zadań:', error);
-      showError('Błąd podczas ładowania zadań: ' + error.message);
+      showError('Błąd podczas przygotowania zapytania o zadania: ' + error.message);
+      console.error('Error in fetchTasks:', error);
       setLoading(false);
     }
   };
@@ -1498,89 +1464,29 @@ const ProductionCalendar = () => {
       let startDate = task.scheduledDate;
       let endDate = task.endDate || task.estimatedEndDate;
       
-      // NOWA LOGIKA: Dla zadań zakończonych używaj dat z historii produkcji
-      console.log(`Sprawdzanie zadania ${task.moNumber}:`, {
-        status: task.status,
-        hasProductionSessions: !!task.productionSessions,
-        productionSessionsLength: task.productionSessions?.length || 0,
-        productionSessions: task.productionSessions
-      });
+      // Konwersja dat do formatu ISO String (jeśli są to obiekty date)
+      if (startDate && typeof startDate !== 'string') {
+        if (startDate.toDate) {
+          startDate = startDate.toDate().toISOString();
+        } else if (startDate instanceof Date) {
+          startDate = startDate.toISOString();
+        }
+      }
       
-      if (task.status === 'Zakończone' && task.productionSessions && task.productionSessions.length > 0) {
-        console.log(`✅ Zadanie ${task.moNumber} spełnia warunki dla historii produkcji`);
-        const sessions = task.productionSessions;
-        
-        // Znajdź najwcześniejszą datę rozpoczęcia z wszystkich sesji
-        let earliestStart = null;
-        let latestEnd = null;
-        
-        sessions.forEach((session, index) => {
-          console.log(`Sesja ${index + 1}:`, {
-            startDate: session.startDate,
-            endDate: session.endDate
-          });
-          
-          if (session.startDate) {
-            const sessionStart = new Date(session.startDate);
-            if (!earliestStart || sessionStart < earliestStart) {
-              earliestStart = sessionStart;
-            }
-          }
-          
-          if (session.endDate) {
-            const sessionEnd = new Date(session.endDate);
-            if (!latestEnd || sessionEnd > latestEnd) {
-              latestEnd = sessionEnd;
-            }
-          }
-        });
-        
-        console.log(`Znalezione daty dla ${task.moNumber}:`, {
-          earliestStart: earliestStart?.toISOString(),
-          latestEnd: latestEnd?.toISOString(),
-          originalStart: startDate,
-          originalEnd: endDate
-        });
-        
-        // Użyj rzeczywistych dat z historii produkcji
-        if (earliestStart) {
-          startDate = earliestStart.toISOString();
+      if (endDate && typeof endDate !== 'string') {
+        if (endDate.toDate) {
+          endDate = endDate.toDate().toISOString();
+        } else if (endDate instanceof Date) {
+          endDate = endDate.toISOString();
         }
-        if (latestEnd) {
-          endDate = latestEnd.toISOString();
-        }
-        
-        console.log(`Zaktualizowane daty dla ${task.moNumber}:`, {
-          newStartDate: startDate,
-          newEndDate: endDate
-        });
-      } else {
-        // Dla zadań niebędących w statusie "Zakończone" - zachowaj oryginalną logikę
-        
-        // Konwersja dat do formatu ISO String (jeśli są to obiekty date)
-        if (startDate && typeof startDate !== 'string') {
-          if (startDate.toDate) {
-            startDate = startDate.toDate().toISOString();
-          } else if (startDate instanceof Date) {
-            startDate = startDate.toISOString();
-          }
-        }
-        
-        if (endDate && typeof endDate !== 'string') {
-          if (endDate.toDate) {
-            endDate = endDate.toDate().toISOString();
-          } else if (endDate instanceof Date) {
-            endDate = endDate.toISOString();
-          }
-        }
-        
-        // Jeśli endDate nie jest ustawione, oblicz go na podstawie scheduledDate i estimatedDuration
-        if (!endDate && startDate && task.estimatedDuration) {
-          const start = new Date(startDate);
-          const durationMs = task.estimatedDuration * 60 * 1000; // konwersja minut na milisekundy
-          const calculatedEnd = new Date(start.getTime() + durationMs);
-          endDate = calculatedEnd.toISOString();
-        }
+      }
+      
+      // Jeśli endDate nie jest ustawione, oblicz go na podstawie scheduledDate i estimatedDuration
+      if (!endDate && startDate && task.estimatedDuration) {
+        const start = new Date(startDate);
+        const durationMs = task.estimatedDuration * 60 * 1000; // konwersja minut na milisekundy
+        const calculatedEnd = new Date(start.getTime() + durationMs);
+        endDate = calculatedEnd.toISOString();
       }
       
       // Określ zasób, do którego przypisane jest zadanie, w zależności od trybu grupowania
@@ -1690,38 +1596,18 @@ const ProductionCalendar = () => {
     
     // Jeśli grupujemy według stanowisk
     if (ganttGroupBy === 'workstation') {
-      const resources = [];
-      
-      // Dodaj stanowiska według zaznaczonych w filtrze
-      workstations
+      // Filtruj stanowiska według zaznaczonych w filtrze
+      return workstations
         .filter(workstation => selectedWorkstations[workstation.id])
-        .forEach(workstation => {
-          resources.push({
-            id: workstation.id,
-            title: workstation.name,
-            businessHours: workstation.businessHours || {
-              daysOfWeek: [0, 1, 2, 3, 4, 5, 6], // Wszystkie dni tygodnia
-              startTime: '00:00',
-              endTime: '23:59'
-            }
-          });
-        });
-      
-      // Sprawdź czy są zadania bez przypisanego stanowiska
-      const hasTasksWithoutWorkstation = tasks.some(task => !task.workstationId);
-      if (hasTasksWithoutWorkstation) {
-        resources.push({
-          id: 'no-workstation',
-          title: 'No workstation assigned',
-          businessHours: {
-            daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+        .map(workstation => ({
+          id: workstation.id,
+          title: workstation.name,
+          businessHours: workstation.businessHours || {
+            daysOfWeek: [0, 1, 2, 3, 4, 5, 6], // Wszystkie dni tygodnia
             startTime: '00:00',
             endTime: '23:59'
           }
-        });
-      }
-      
-      return resources;
+        }));
     } 
     // Jeśli grupujemy według zamówień
     else if (ganttGroupBy === 'order') {
@@ -3921,12 +3807,6 @@ const ProductionCalendar = () => {
                   }
                 });
                 
-                // Określ etykiety na podstawie statusu zadania
-                const isCompleted = taskData.status === 'Zakończone';
-                const startLabel = isCompleted ? 'Start' : 'Planned start';
-                const endLabel = isCompleted ? 'End' : 'Planned end';
-                const timeLabel = isCompleted ? 'Actual time' : 'Estimated time';
-                
                 // Ustaw treść tooltipa
                 tooltipContent.innerHTML = `
                   <div class="mo-tooltip-content" style="border-radius: 4px; padding: 8px; max-width: 300px; z-index: 10000;">
@@ -3936,9 +3816,9 @@ const ProductionCalendar = () => {
                     ${taskData.quantity ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Quantity:</b> ${taskData.quantity} ${taskData.unit || ''}</div>` : ''}
                     ${taskData.workstationName ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Workstation:</b> ${taskData.workstationName}</div>` : ''}
                     ${taskData.status ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Status:</b> ${taskData.status}</div>` : ''}
-                    ${scheduledDateFormatted ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>${startLabel}:</b> ${scheduledDateFormatted}</div>` : ''}
-                    ${endDateFormatted ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>${endLabel}:</b> ${endDateFormatted}</div>` : ''}
-                    ${durationInMinutes ? `<div style="font-size: 12px;"><b>${timeLabel}:</b> ${durationInMinutes} min</div>` : ''}
+                    ${scheduledDateFormatted ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Planned start:</b> ${scheduledDateFormatted}</div>` : ''}
+                    ${endDateFormatted ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Planned end:</b> ${endDateFormatted}</div>` : ''}
+                    ${durationInMinutes ? `<div style="font-size: 12px;"><b>Estimated time:</b> ${durationInMinutes} min</div>` : ''}
                   </div>
                 `;
                 

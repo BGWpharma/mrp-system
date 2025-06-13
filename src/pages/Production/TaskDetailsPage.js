@@ -2850,7 +2850,7 @@ const TaskDetailsPage = () => {
             <tr><th>Produkt:</th><td>${task.productName || 'Nie określono'}</td></tr>
             <tr><th>Ilość:</th><td>${task.quantity || '0'} ${task.unit || 'szt.'}</td></tr>
             <tr><th>Status:</th><td>${task.status || 'Nie określono'}</td></tr>
-            <tr><th>Priorytet:</th><td>${task.priority || 'Normalny'}</td></tr>
+
             ${(task.recipeName || task.recipe?.recipeName) ? `<tr><th>Receptura:</th><td>${task.recipeName || task.recipe?.recipeName}${task.recipeVersion ? ` (wersja ${task.recipeVersion})` : ''}</td></tr>` : ''}
           </table>
         </div>
@@ -5399,7 +5399,7 @@ const TaskDetailsPage = () => {
                 color: 'white'
               }} 
             />
-                      <Chip label={task.priority} color={task.priority === 'Wysoki' ? 'error' : task.priority === 'Normalny' ? 'primary' : 'default'} variant="outlined" size="small" sx={{ ml: 1 }} />
+
                     </Typography>
                     <Box sx={{ width: isMobile ? '100%' : 'auto' }}>
                       {getStatusActions()}
