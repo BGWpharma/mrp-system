@@ -24,7 +24,8 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Divider
+  Divider,
+  TablePagination
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -282,7 +283,7 @@ const InvoicesList = () => {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: { xs: 1, sm: 2 }, maxWidth: 'none', width: '100%' }}>
       {/* Pasek wyszukiwania z przyciskami zarządzania */}
       <Paper sx={{ mb: 3, p: 2 }}>
         <Grid container spacing={2} alignItems="center">
@@ -464,19 +465,20 @@ const InvoicesList = () => {
         </Box>
       ) : (
         <>
-          <TableContainer>
-            <Table sx={{ minWidth: 800 }}>
-              <TableHead>
+          <Paper sx={{ width: '100%', overflow: 'hidden' }}>
+            <TableContainer sx={{ maxHeight: '70vh' }}>
+              <Table sx={{ minWidth: 1000 }} stickyHeader>
+                              <TableHead>
                 <TableRow>
-                  <TableCell>Numer faktury</TableCell>
-                  <TableCell>Klient</TableCell>
-                  <TableCell>Data wystawienia</TableCell>
-                  <TableCell>Termin płatności</TableCell>
-                  <TableCell>Kwota</TableCell>
-                  <TableCell>Do zapłaty</TableCell>
-                  <TableCell>Status faktury</TableCell>
-                  <TableCell>Status płatności</TableCell>
-                  <TableCell align="right">Akcje</TableCell>
+                  <TableCell sx={{ minWidth: 140 }}>Numer faktury</TableCell>
+                  <TableCell sx={{ minWidth: 200 }}>Klient</TableCell>
+                  <TableCell sx={{ minWidth: 130 }}>Data wystawienia</TableCell>
+                  <TableCell sx={{ minWidth: 130 }}>Termin płatności</TableCell>
+                  <TableCell sx={{ minWidth: 120 }}>Kwota</TableCell>
+                  <TableCell sx={{ minWidth: 120 }}>Do zapłaty</TableCell>
+                  <TableCell sx={{ minWidth: 140 }}>Status faktury</TableCell>
+                  <TableCell sx={{ minWidth: 140 }}>Status płatności</TableCell>
+                  <TableCell align="right" sx={{ minWidth: 150 }}>Akcje</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -576,8 +578,25 @@ const InvoicesList = () => {
                     ))
                 )}
               </TableBody>
-            </Table>
-          </TableContainer>
+              </Table>
+            </TableContainer>
+            <TablePagination
+              rowsPerPageOptions={[10, 25, 50, 100]}
+              component="div"
+              count={filteredInvoices.length}
+              rowsPerPage={rowsPerPage}
+              page={page}
+              onPageChange={(event, newPage) => setPage(newPage)}
+              onRowsPerPageChange={(event) => {
+                setRowsPerPage(parseInt(event.target.value, 10));
+                setPage(0);
+              }}
+              labelRowsPerPage="Wierszy na stronę:"
+              labelDisplayedRows={({ from, to, count }) => 
+                `${from}-${to} z ${count !== -1 ? count : `więcej niż ${to}`}`
+              }
+            />
+          </Paper>
         </>
       )}
 

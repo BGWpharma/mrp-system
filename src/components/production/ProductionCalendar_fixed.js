@@ -127,6 +127,43 @@ const generateGanttReport = (tasks, workstations, customers, startDate, endDate,
       const workstation = workstations.find(w => w.id === task.workstationId);
       const customer = customers.find(c => c.id === task.customerId);
       
+      // NOWA LOGIKA: Wyznacz daty na podstawie statusu zadania
+      let reportStartDate = task.scheduledDate;
+      let reportEndDate = task.endDate;
+      
+      // Dla zadań zakończonych używaj dat z historii produkcji
+      if (task.status === 'Zakończone' && task.productionSessions && task.productionSessions.length > 0) {
+        const sessions = task.productionSessions;
+        
+        // Znajdź najwcześniejszą datę rozpoczęcia z wszystkich sesji
+        let earliestStart = null;
+        let latestEnd = null;
+        
+        sessions.forEach(session => {
+          if (session.startDate) {
+            const sessionStart = new Date(session.startDate);
+            if (!earliestStart || sessionStart < earliestStart) {
+              earliestStart = sessionStart;
+            }
+          }
+          
+          if (session.endDate) {
+            const sessionEnd = new Date(session.endDate);
+            if (!latestEnd || sessionEnd > latestEnd) {
+              latestEnd = sessionEnd;
+            }
+          }
+        });
+        
+        // Użyj rzeczywistych dat z historii produkcji
+        if (earliestStart) {
+          reportStartDate = earliestStart;
+        }
+        if (latestEnd) {
+          reportEndDate = latestEnd;
+        }
+      }
+      
       // Formatuj daty
       const formatDateForReport = (date) => {
         if (!date) return '';
@@ -145,12 +182,12 @@ const generateGanttReport = (tasks, workstations, customers, startDate, endDate,
         }
       };
 
-      // Oblicz czas trwania w godzinach
+      // Oblicz czas trwania w godzinach używając wyznaczonych dat
       let durationHours = '';
-      if (task.scheduledDate && task.endDate) {
+      if (reportStartDate && reportEndDate) {
         try {
-          const start = task.scheduledDate instanceof Date ? task.scheduledDate : new Date(task.scheduledDate);
-          const end = task.endDate instanceof Date ? task.endDate : new Date(task.endDate);
+          const start = reportStartDate instanceof Date ? reportStartDate : new Date(reportStartDate);
+          const end = reportEndDate instanceof Date ? reportEndDate : new Date(reportEndDate);
           const durationMs = end.getTime() - start.getTime();
           durationHours = Math.round((durationMs / (1000 * 60 * 60)) * 100) / 100; // Zaokrąglenie do 2 miejsc po przecinku
         } catch (error) {
@@ -172,8 +209,8 @@ const generateGanttReport = (tasks, workstations, customers, startDate, endDate,
         status: task.status || '',
         workstationName: workstation?.name || '',
         workstationId: task.workstationId,
-        scheduledDate: formatDateForReport(task.scheduledDate),
-        endDate: formatDateForReport(task.endDate),
+        scheduledDate: formatDateForReport(reportStartDate),
+        endDate: formatDateForReport(reportEndDate),
         durationHours: durationHours,
         priority: task.priority || '',
         description: task.description || task.name || '',
@@ -1299,29 +1336,64 @@ const ProductionCalendar = () => {
       let startDate = task.scheduledDate;
       let endDate = task.endDate || task.estimatedEndDate;
       
-      // Konwersja dat do formatu ISO String (jeśli są to obiekty date)
-      if (startDate && typeof startDate !== 'string') {
-        if (startDate.toDate) {
-          startDate = startDate.toDate().toISOString();
-        } else if (startDate instanceof Date) {
-          startDate = startDate.toISOString();
+      // NOWA LOGIKA: Dla zadań zakończonych używaj dat z historii produkcji
+      if (task.status === 'Zakończone' && task.productionSessions && task.productionSessions.length > 0) {
+        const sessions = task.productionSessions;
+        
+        // Znajdź najwcześniejszą datę rozpoczęcia z wszystkich sesji
+        let earliestStart = null;
+        let latestEnd = null;
+        
+        sessions.forEach(session => {
+          if (session.startDate) {
+            const sessionStart = new Date(session.startDate);
+            if (!earliestStart || sessionStart < earliestStart) {
+              earliestStart = sessionStart;
+            }
+          }
+          
+          if (session.endDate) {
+            const sessionEnd = new Date(session.endDate);
+            if (!latestEnd || sessionEnd > latestEnd) {
+              latestEnd = sessionEnd;
+            }
+          }
+        });
+        
+        // Użyj rzeczywistych dat z historii produkcji
+        if (earliestStart) {
+          startDate = earliestStart.toISOString();
         }
-      }
-      
-      if (endDate && typeof endDate !== 'string') {
-        if (endDate.toDate) {
-          endDate = endDate.toDate().toISOString();
-        } else if (endDate instanceof Date) {
-          endDate = endDate.toISOString();
+        if (latestEnd) {
+          endDate = latestEnd.toISOString();
         }
-      }
-      
-      // Jeśli endDate nie jest ustawione, oblicz go na podstawie scheduledDate i estimatedDuration
-      if (!endDate && startDate && task.estimatedDuration) {
-        const start = new Date(startDate);
-        const durationMs = task.estimatedDuration * 60 * 1000; // konwersja minut na milisekundy
-        const calculatedEnd = new Date(start.getTime() + durationMs);
-        endDate = calculatedEnd.toISOString();
+      } else {
+        // Dla zadań niebędących w statusie "Zakończone" - zachowaj oryginalną logikę
+        
+        // Konwersja dat do formatu ISO String (jeśli są to obiekty date)
+        if (startDate && typeof startDate !== 'string') {
+          if (startDate.toDate) {
+            startDate = startDate.toDate().toISOString();
+          } else if (startDate instanceof Date) {
+            startDate = startDate.toISOString();
+          }
+        }
+        
+        if (endDate && typeof endDate !== 'string') {
+          if (endDate.toDate) {
+            endDate = endDate.toDate().toISOString();
+          } else if (endDate instanceof Date) {
+            endDate = endDate.toISOString();
+          }
+        }
+        
+        // Jeśli endDate nie jest ustawione, oblicz go na podstawie scheduledDate i estimatedDuration
+        if (!endDate && startDate && task.estimatedDuration) {
+          const start = new Date(startDate);
+          const durationMs = task.estimatedDuration * 60 * 1000; // konwersja minut na milisekundy
+          const calculatedEnd = new Date(start.getTime() + durationMs);
+          endDate = calculatedEnd.toISOString();
+        }
       }
       
       // Określ zasób, do którego przypisane jest zadanie, w zależności od trybu grupowania
@@ -3627,6 +3699,12 @@ const ProductionCalendar = () => {
                   }
                 });
                 
+                // Określ etykiety na podstawie statusu zadania
+                const isCompleted = taskData.status === 'Zakończone';
+                const startLabel = isCompleted ? 'Start' : 'Planowany start';
+                const endLabel = isCompleted ? 'Koniec' : 'Planowany koniec';
+                const timeLabel = isCompleted ? 'Rzeczywisty czas' : 'Szacowany czas';
+                
                 // Ustaw treść tooltipa
                 tooltipContent.innerHTML = `
                   <div class="mo-tooltip-content" style="border-radius: 4px; padding: 8px; max-width: 300px; z-index: 10000;">
@@ -3636,9 +3714,9 @@ const ProductionCalendar = () => {
                     ${taskData.quantity ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Ilość:</b> ${taskData.quantity} ${taskData.unit || ''}</div>` : ''}
                     ${taskData.workstationName ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Stanowisko:</b> ${taskData.workstationName}</div>` : ''}
                     ${taskData.status ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Status:</b> ${taskData.status}</div>` : ''}
-                    ${scheduledDateFormatted ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Planowany start:</b> ${scheduledDateFormatted}</div>` : ''}
-                    ${endDateFormatted ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>Planowany koniec:</b> ${endDateFormatted}</div>` : ''}
-                    ${durationInMinutes ? `<div style="font-size: 12px;"><b>Szacowany czas:</b> ${durationInMinutes} min</div>` : ''}
+                    ${scheduledDateFormatted ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>${startLabel}:</b> ${scheduledDateFormatted}</div>` : ''}
+                    ${endDateFormatted ? `<div style="font-size: 12px; margin-bottom: 2px;"><b>${endLabel}:</b> ${endDateFormatted}</div>` : ''}
+                    ${durationInMinutes ? `<div style="font-size: 12px;"><b>${timeLabel}:</b> ${durationInMinutes} min</div>` : ''}
                   </div>
                 `;
                 

@@ -3632,47 +3632,107 @@ const TaskDetailsPage = () => {
 
   const formatDateTime = (date) => {
     if (!date) return 'Nie określono';
-    return date.toLocaleString('pl-PL', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    
+    try {
+      // Obsługa różnych formatów daty
+      let dateObj;
+      
+      if (date instanceof Date) {
+        dateObj = date;
+      } else if (typeof date === 'string') {
+        // Jeśli to string ISO, konwertuj na datę
+        dateObj = new Date(date);
+      } else if (date.toDate && typeof date.toDate === 'function') {
+        // Firebase timestamp
+        dateObj = date.toDate();
+      } else if (date.seconds) {
+        // Firebase timestamp object
+        dateObj = new Date(date.seconds * 1000);
+      } else {
+        dateObj = new Date(date);
+      }
+      
+      // Sprawdź czy data jest prawidłowa
+      if (isNaN(dateObj.getTime())) {
+        console.warn('Nieprawidłowa data:', date);
+        return 'Nieprawidłowa data';
+      }
+      
+      return dateObj.toLocaleString('pl-PL', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Europe/Warsaw'  // Ustaw polską strefę czasową
+      });
+    } catch (error) {
+      console.error('Błąd formatowania daty:', error, date);
+      return 'Błąd formatowania';
+    }
   };
 
   // Funkcja pomocnicza do formatowania daty/czasu dla pola datetime-local
   const toLocalDateTimeString = (date) => {
-    if (!date || !(date instanceof Date)) return '';
+    if (!date) return '';
     
-    // Tworzymy nową datę z czasem lokalnym
-    const localDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
-    return localDate.toISOString().slice(0, 16);
+    try {
+      let dateObj;
+      
+      if (date instanceof Date) {
+        dateObj = date;
+      } else if (typeof date === 'string') {
+        dateObj = new Date(date);
+      } else if (date.toDate && typeof date.toDate === 'function') {
+        dateObj = date.toDate();
+      } else if (date.seconds) {
+        dateObj = new Date(date.seconds * 1000);
+      } else {
+        dateObj = new Date(date);
+      }
+      
+      if (isNaN(dateObj.getTime())) return '';
+      
+      // Format dla datetime-local (YYYY-MM-DDTHH:MM)
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      const hours = String(dateObj.getHours()).padStart(2, '0');
+      const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+      
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
+    } catch (error) {
+      console.error('Błąd konwersji daty do datetime-local:', error, date);
+      return '';
+    }
   };
 
   // Funkcja pomocnicza do parsowania datetime-local z uwzględnieniem strefy czasowej
   const fromLocalDateTimeString = (dateTimeString) => {
-    // Sprawdź czy wartość nie jest undefined lub null
-    if (!dateTimeString) {
+    if (!dateTimeString) return new Date();
+    
+    try {
+      // Obsługa formatu ISO z datetime-local (YYYY-MM-DDTHH:MM)
+      if (dateTimeString.includes('T')) {
+        // Interpretuj jako lokalny czas (bez konwersji UTC)
+        return new Date(dateTimeString);
+      }
+      
+      // Obsługa starszego formatu z kropkami i spacją (DD.MM.YYYY HH:MM)
+      if (dateTimeString.includes(' ')) {
+        const [datePart, timePart] = dateTimeString.split(' ');
+        const [day, month, year] = datePart.split('.');
+        const [hours, minutes] = timePart.split(':');
+        
+        return new Date(year, month - 1, day, hours, minutes);
+      }
+      
+      // Fallback - spróbuj parsować jako standardową datę
+      return new Date(dateTimeString);
+    } catch (error) {
+      console.error('Błąd parsowania datetime-local:', error, dateTimeString);
       return new Date();
     }
-    
-    // Obsługa formatu ISO z datetime-local (YYYY-MM-DDTHH:MM)
-    if (dateTimeString.includes('T')) {
-      return new Date(dateTimeString);
-    }
-    
-    // Obsługa starszego formatu z kropkami i spacją (DD.MM.YYYY HH:MM)
-    if (dateTimeString.includes(' ')) {
-      const [datePart, timePart] = dateTimeString.split(' ');
-      const [day, month, year] = datePart.split('.');
-      const [hours, minutes] = timePart.split(':');
-      
-      return new Date(year, month - 1, day, hours, minutes);
-    }
-    
-    // Fallback - spróbuj parsować jako standardową datę
-    return new Date(dateTimeString);
   };
 
   // Funkcja do filtrowania surowców na podstawie wyszukiwania
