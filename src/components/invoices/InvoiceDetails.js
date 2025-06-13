@@ -194,8 +194,8 @@ const InvoiceDetails = () => {
           totalPartial: 'Suma częściowa',
           total: 'Suma',
           currency: 'USD',
-          footerLine1: 'Anysphere, Inc.',
-          footerLine2: 'US EIN 87-4436547',
+          footerLine1: '',
+          footerLine2: '',
           payOnline: 'Zapłać online',
           relatedPurchaseOrders: 'Zaliczki/Przedpłaty:',
           poNumber: 'Nr zaliczki',
@@ -235,8 +235,8 @@ const InvoiceDetails = () => {
           totalPartial: 'Subtotal',
           total: 'Total',
           currency: 'USD',
-          footerLine1: 'Anysphere, Inc.',
-          footerLine2: 'US EIN 87-4436547',
+          footerLine1: '',
+          footerLine2: '',
           payOnline: 'Pay online',
           relatedPurchaseOrders: 'Advance Payments:',
           poNumber: 'Payment No.',
@@ -263,19 +263,17 @@ const InvoiceDetails = () => {
       // Tworzenie dokumentu PDF
       const doc = new jsPDF();
       
-      // Dodaj logo BGW Pharma nad tytułem
-      const logoImg = new Image();
-      logoImg.onload = function() {
-        // Logo wyśrodkowane nad tytułem - bardziej rozciągnięte
-        const logoWidth = 140;
-        const logoHeight = 40;
+      // Dodaj szablon faktury jako tło
+      const templateImg = new Image();
+      templateImg.onload = function() {
+        // Dodaj szablon jako tło na całą stronę
         const pageWidth = doc.internal.pageSize.getWidth();
-        const logoX = (pageWidth - logoWidth) / 2; // wyśrodkowanie
-        doc.addImage(logoImg, 'PNG', logoX, 8, logoWidth, logoHeight);
+        const pageHeight = doc.internal.pageSize.getHeight();
+        doc.addImage(templateImg, 'PNG', 0, 0, pageWidth, pageHeight);
         
         generatePdfContent();
       };
-      logoImg.src = '/BGWPharma_Logo_LightTheme.png';
+      templateImg.src = '/templates/invoice_template.png';
       
       const generatePdfContent = () => {
         // Funkcja do konwersji polskich znaków
@@ -290,22 +288,26 @@ const InvoiceDetails = () => {
             .replace(/Ś/g, 'S').replace(/Ź/g, 'Z').replace(/Ż/g, 'Z');
         };
         
-        // Główny tytuł "FAKTURA" lub "FAKTURA PROFORMA" - wyśrodkowany (przesunięty niżej dla logo)
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(24);
-        doc.setTextColor(0, 0, 0);
+        // Szablon ma już tytuł "INVOICE", więc dodajemy tylko numer faktury w odpowiednim miejscu
         const pageWidth = doc.internal.pageSize.getWidth();
-        const invoiceTitle = invoice.isProforma ? t.proformaInvoice.toUpperCase() : t.invoice.toUpperCase();
-        doc.text(invoiceTitle, pageWidth / 2, 45, { align: 'center' });
         
-        // Numer faktury - wyśrodkowany pod tytułem
-        doc.setFont('helvetica', 'normal');
+        // Numer faktury - pozycjonowany w białej części szablonu (przesunięte wyżej)
+        doc.setFont('helvetica', 'bold');
         doc.setFontSize(12);
-        doc.text(`${t.invoiceNumber}: ${invoice.number}`, pageWidth / 2, 55, { align: 'center' });
+        doc.setTextColor(0, 0, 0);
+        doc.text(`${t.invoiceNumber}: ${invoice.number}`, pageWidth - 20, 55, { align: 'right' });
         
-        // Dane faktury w prawej kolumnie (jak tabela)
+        // Typ faktury (proforma) jeśli dotyczy
+        if (invoice.isProforma) {
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(10);
+          doc.setTextColor(255, 0, 0);
+          doc.text('PROFORMA', pageWidth - 20, 65, { align: 'right' });
+        }
+        
+        // Dane faktury w prawej kolumnie (przesunięte wyżej)
         const rightColX = 120;
-        let currentY = 70;
+        let currentY = 75;
         
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(10);
@@ -322,8 +324,8 @@ const InvoiceDetails = () => {
         // Sprawdź czy jest to faktura do zamówienia zakupowego
         const isPurchaseInvoice = invoice.invoiceType === 'purchase' || invoice.originalOrderType === 'purchase';
         
-        // Dane sprzedawcy (lewa kolumna) - z obsługą polskich znaków
-        currentY = 75;
+        // Dane sprzedawcy (lewa kolumna) - przesunięte wyżej
+        currentY = 80;
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(12);
         doc.text(t.seller, 14, currentY);
@@ -394,8 +396,8 @@ const InvoiceDetails = () => {
           }
         }
         
-        // Dane odbiorcy faktury (prawa kolumna) - zaczynamy wyżej
-        let buyerY = 85;
+        // Dane odbiorcy faktury (prawa kolumna) - przesunięte wyżej z uzupełnionymi danymi
+        let buyerY = 90;
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(12);
         doc.text(t.buyer, rightColX, buyerY);
@@ -411,23 +413,33 @@ const InvoiceDetails = () => {
         doc.text(convertPolishChars(buyerInfo.name || 'Brak nazwy klienta'), rightColX, buyerY);
         buyerY += 5;
         
-        // Adres odbiorcy
-        const buyerAddress = invoice.billingAddress || buyerInfo.address || '';
+        // Adres odbiorcy - użyj billingAddress z faktury lub address z klienta
+        const buyerAddress = invoice.billingAddress || buyerInfo.address || buyerInfo.street || '';
         if (buyerAddress) {
           doc.text(convertPolishChars(buyerAddress), rightColX, buyerY);
           buyerY += 5;
         }
         
-        // Kod pocztowy i miasto odbiorcy
-        const buyerCityLine = `${buyerInfo.zipCode || buyerInfo.postalCode || ''} ${buyerInfo.city || ''}`.trim();
+        // Kod pocztowy i miasto odbiorcy - różne źródła danych
+        const buyerPostalCode = invoice.billingPostalCode || buyerInfo.zipCode || buyerInfo.postalCode || '';
+        const buyerCity = invoice.billingCity || buyerInfo.city || '';
+        const buyerCityLine = `${buyerPostalCode} ${buyerCity}`.trim();
         if (buyerCityLine) {
           doc.text(convertPolishChars(buyerCityLine), rightColX, buyerY);
           buyerY += 5;
         }
         
         // Kraj odbiorcy
-        if (buyerInfo.country) {
-          doc.text(convertPolishChars(buyerInfo.country), rightColX, buyerY);
+        const buyerCountry = invoice.billingCountry || buyerInfo.country || '';
+        if (buyerCountry) {
+          doc.text(convertPolishChars(buyerCountry), rightColX, buyerY);
+          buyerY += 5;
+        }
+        
+        // NIP/VAT ID odbiorcy
+        if (buyerInfo.nip || buyerInfo.taxId || buyerInfo.vatId) {
+          const vatNumber = buyerInfo.nip || buyerInfo.taxId || buyerInfo.vatId;
+          doc.text(`NIP/VAT: ${vatNumber}`, rightColX, buyerY);
           buyerY += 5;
         }
         
@@ -448,12 +460,12 @@ const InvoiceDetails = () => {
           buyerY += 5;
         }
         
-        // Tabela pozycji - bezpośrednio po danych klientów
-        const tableStartY = Math.max(currentY, buyerY) + 25;
+        // Tabela pozycji - przesunięta wyżej dla lepszego wykorzystania przestrzeni
+        const tableStartY = Math.max(currentY, buyerY) + 20;
         
         const tableColumns = [
-          { header: t.lp, dataKey: 'description', width: 90 },
-          { header: t.quantity, dataKey: 'quantity', width: 20 },
+          { header: t.lp, dataKey: 'description', width: 85 },
+          { header: t.quantity, dataKey: 'quantity', width: 25 },
           { header: t.unitPrice, dataKey: 'unitPrice', width: 35 },
           { header: t.amount, dataKey: 'amount', width: 35 }
         ];
@@ -495,14 +507,14 @@ const InvoiceDetails = () => {
             halign: 'left'
           },
           columnStyles: {
-            0: { cellWidth: 90 },
-            1: { cellWidth: 20, halign: 'center' },
+            0: { cellWidth: 85 },
+            1: { cellWidth: 25, halign: 'center' },
             2: { cellWidth: 35, halign: 'right' },
             3: { cellWidth: 35, halign: 'right' }
           },
           headStyles: { 
-            fillColor: [240, 240, 240],
-            textColor: [0, 0, 0],
+            fillColor: [139, 69, 255],
+            textColor: [255, 255, 255],
             fontStyle: 'bold',
             halign: 'center'
           }
@@ -625,8 +637,8 @@ const InvoiceDetails = () => {
               5: { cellWidth: 25, halign: 'right' }
             },
             headStyles: { 
-              fillColor: [240, 240, 240],
-              textColor: [0, 0, 0],
+              fillColor: [139, 69, 255],
+              textColor: [255, 255, 255],
               fontStyle: 'bold',
               halign: 'center'
             }
@@ -715,21 +727,31 @@ const InvoiceDetails = () => {
         doc.text(`${t.total}`, summaryX, summaryY);
         doc.text(`${finalAmountCalculated.toFixed(2)} ${invoice.currency}`, summaryX + summaryWidth, summaryY, { align: 'right' });
         
-        // Informacje o płatności - bez nagłówka
+        // Informacje o płatności - rozszerzone o SWIFT
         if (invoice.paymentMethod) {
           summaryY += 20;
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(10);
           doc.text(`${t.paymentMethod} ${invoice.paymentMethod}`, 14, summaryY);
           
-          if (companyInfo.bankName) {
+          // Użyj danych z wybranego konta bankowego lub domyślnych
+          const bankData = invoice.selectedBankAccount && companyInfo?.bankAccounts ? 
+            companyInfo.bankAccounts.find(acc => acc.id === invoice.selectedBankAccount) : 
+            companyInfo;
+          
+          if (bankData?.bankName || companyInfo?.bankName) {
             summaryY += 5;
-            doc.text(`${t.bank} ${companyInfo.bankName}`, 14, summaryY);
+            doc.text(`${t.bank} ${bankData?.bankName || companyInfo?.bankName}`, 14, summaryY);
           }
           
-          if (companyInfo.bankAccount) {
+          if (bankData?.accountNumber || companyInfo?.bankAccount) {
             summaryY += 5;
-            doc.text(`${t.accountNumber} ${companyInfo.bankAccount}`, 14, summaryY);
+            doc.text(`${t.accountNumber} ${bankData?.accountNumber || companyInfo?.bankAccount}`, 14, summaryY);
+          }
+          
+          if (bankData?.swift || companyInfo?.swift) {
+            summaryY += 5;
+            doc.text(`${t.swift} ${bankData?.swift || companyInfo?.swift}`, 14, summaryY);
           }
         }
         
@@ -747,8 +769,12 @@ const InvoiceDetails = () => {
         const pageHeight = doc.internal.pageSize.height;
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(9);
-        doc.text(t.footerLine1, pageWidth / 2, pageHeight - 20, { align: 'center' });
-        doc.text(t.footerLine2, pageWidth / 2, pageHeight - 15, { align: 'center' });
+        if (t.footerLine1) {
+          doc.text(t.footerLine1, pageWidth / 2, pageHeight - 20, { align: 'center' });
+        }
+        if (t.footerLine2) {
+          doc.text(t.footerLine2, pageWidth / 2, pageHeight - 15, { align: 'center' });
+        }
         
         // Pobierz plik PDF
         const filename = invoice.isProforma 
