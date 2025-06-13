@@ -770,6 +770,7 @@ const InvoiceForm = ({ invoiceId }) => {
                     <MenuItem value="issued">Wystawiona</MenuItem>
                     <MenuItem value="sent">Wysłana</MenuItem>
                     <MenuItem value="paid">Opłacona</MenuItem>
+                    <MenuItem value="partially_paid">Częściowo opłacona</MenuItem>
                     <MenuItem value="overdue">Przeterminowana</MenuItem>
                     <MenuItem value="cancelled">Anulowana</MenuItem>
                   </Select>

@@ -245,6 +245,7 @@ const InvoicesList = () => {
       'issued': { color: 'primary', label: 'Wystawiona' },
       'sent': { color: 'info', label: 'Wysłana' },
       'paid': { color: 'success', label: 'Opłacona' },
+      'partially_paid': { color: 'warning', label: 'Częściowo opłacona' },
       'overdue': { color: 'error', label: 'Przeterminowana' },
       'cancelled': { color: 'error', label: 'Anulowana' }
     };
@@ -256,6 +257,26 @@ const InvoicesList = () => {
         label={config.label} 
         color={config.color}
         size="small"
+      />
+    );
+  };
+
+  const renderPaymentStatus = (paymentStatus) => {
+    const statusConfig = {
+      'unpaid': { color: 'error', label: 'Nieopłacona' },
+      'partially_paid': { color: 'warning', label: 'Częściowo opłacona' },
+      'paid': { color: 'success', label: 'Opłacona' }
+    };
+
+    const status = paymentStatus || 'unpaid';
+    const config = statusConfig[status] || { color: 'default', label: status };
+    
+    return (
+      <Chip 
+        label={config.label} 
+        color={config.color}
+        size="small"
+        variant="outlined"
       />
     );
   };
@@ -358,6 +379,7 @@ const InvoicesList = () => {
                       <MenuItem value="issued">Wystawione</MenuItem>
                       <MenuItem value="sent">Wysłane</MenuItem>
                       <MenuItem value="paid">Opłacone</MenuItem>
+                      <MenuItem value="partially_paid">Częściowo opłacone</MenuItem>
                       <MenuItem value="overdue">Przeterminowane</MenuItem>
                       <MenuItem value="cancelled">Anulowane</MenuItem>
                     </Select>
@@ -451,14 +473,16 @@ const InvoicesList = () => {
                   <TableCell>Data wystawienia</TableCell>
                   <TableCell>Termin płatności</TableCell>
                   <TableCell>Kwota</TableCell>
-                  <TableCell>Status</TableCell>
+                  <TableCell>Do zapłaty</TableCell>
+                  <TableCell>Status faktury</TableCell>
+                  <TableCell>Status płatności</TableCell>
                   <TableCell align="right">Akcje</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {filteredInvoices.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
+                    <TableCell colSpan={9} align="center">
                       Brak faktur do wyświetlenia
                     </TableCell>
                   </TableRow>
@@ -492,7 +516,14 @@ const InvoicesList = () => {
                         <TableCell>{formatDate(invoice.issueDate)}</TableCell>
                         <TableCell>{formatDate(invoice.dueDate)}</TableCell>
                         <TableCell>{formatCurrency(invoice.total, invoice.currency)}</TableCell>
+                        <TableCell>
+                          {formatCurrency(
+                            invoice.total - (invoice.totalPaid || 0), 
+                            invoice.currency
+                          )}
+                        </TableCell>
                         <TableCell>{renderInvoiceStatus(invoice.status)}</TableCell>
+                        <TableCell>{renderPaymentStatus(invoice.paymentStatus)}</TableCell>
                         <TableCell align="right">
                           <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
                             <IconButton 
@@ -538,16 +569,7 @@ const InvoicesList = () => {
                                 <SendIcon fontSize="small" />
                               </IconButton>
                             )}
-                            {(invoice.status === 'issued' || invoice.status === 'sent') && (
-                              <IconButton 
-                                size="small" 
-                                onClick={() => handleUpdateStatus(invoice.id, 'paid')}
-                                title="Oznacz jako opłaconą"
-                                color="success"
-                              >
-                                <DownloadIcon fontSize="small" />
-                              </IconButton>
-                            )}
+
                           </Box>
                         </TableCell>
                       </TableRow>

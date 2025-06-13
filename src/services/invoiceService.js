@@ -410,7 +410,7 @@ export const deleteInvoice = async (invoiceId) => {
  */
 export const updateInvoiceStatus = async (invoiceId, status, userId) => {
   try {
-    const validStatuses = ['draft', 'issued', 'sent', 'paid', 'overdue', 'cancelled'];
+    const validStatuses = ['draft', 'issued', 'sent', 'paid', 'partially_paid', 'overdue', 'cancelled'];
     
     if (!validStatuses.includes(status)) {
       throw new Error('Nieprawidłowy status faktury');
@@ -422,7 +422,7 @@ export const updateInvoiceStatus = async (invoiceId, status, userId) => {
       updatedAt: serverTimestamp()
     };
     
-    // Jeśli status to 'paid', ustaw datę płatności
+    // Jeśli status to 'paid', ustaw datę płatności (tylko dla kompatybilności wstecznej)
     if (status === 'paid') {
       updateData.paymentDate = serverTimestamp();
       updateData.paymentStatus = 'paid';
@@ -537,6 +537,8 @@ export const DEFAULT_INVOICE = {
   paymentMethod: 'przelew',
   paymentStatus: 'unpaid',
   paymentDate: null,
+  payments: [], // Lista płatności
+  totalPaid: 0, // Suma wszystkich płatności
   items: [{
     id: '',
     name: '',
@@ -566,4 +568,229 @@ export const DEFAULT_INVOICE = {
   createdBy: null,
   createdAt: null,
   updatedAt: null
+};
+
+/**
+ * Dodaje płatność do faktury
+ */
+export const addPaymentToInvoice = async (invoiceId, paymentData, userId) => {
+  try {
+    if (!invoiceId || !paymentData || !userId) {
+      throw new Error('Brak wymaganych parametrów');
+    }
+
+    // Pobierz aktualne dane faktury
+    const invoiceDoc = await getDoc(doc(db, INVOICES_COLLECTION, invoiceId));
+    if (!invoiceDoc.exists()) {
+      throw new Error('Faktura nie została znaleziona');
+    }
+
+    const currentInvoice = invoiceDoc.data();
+    const currentPayments = currentInvoice.payments || [];
+
+    // Przygotuj nową płatność
+    const newPayment = {
+      id: `payment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      amount: parseFloat(paymentData.amount),
+      date: Timestamp.fromDate(new Date(paymentData.date)),
+      method: paymentData.method || 'przelew',
+      description: paymentData.description || '',
+      reference: paymentData.reference || '',
+      createdAt: Timestamp.now(),
+      createdBy: userId
+    };
+
+    // Dodaj nową płatność do listy
+    const updatedPayments = [...currentPayments, newPayment];
+    
+    // Oblicz całkowitą kwotę płatności
+    const totalPaid = updatedPayments.reduce((sum, payment) => sum + payment.amount, 0);
+    const invoiceTotal = parseFloat(currentInvoice.total || 0);
+    
+    // Zaktualizuj status płatności
+    let paymentStatus = 'unpaid';
+    let paymentDate = null;
+    
+    if (totalPaid >= invoiceTotal) {
+      paymentStatus = 'paid';
+      paymentDate = newPayment.date;
+    } else if (totalPaid > 0) {
+      paymentStatus = 'partially_paid';
+    }
+
+    // Zaktualizuj fakturę
+    await updateDoc(doc(db, INVOICES_COLLECTION, invoiceId), {
+      payments: updatedPayments,
+      paymentStatus: paymentStatus,
+      paymentDate: paymentDate,
+      totalPaid: totalPaid,
+      updatedAt: serverTimestamp(),
+      updatedBy: userId
+    });
+
+    console.log(`Dodano płatność do faktury ${invoiceId}`);
+    return { success: true, paymentId: newPayment.id, totalPaid, paymentStatus };
+  } catch (error) {
+    console.error('Błąd podczas dodawania płatności:', error);
+    throw error;
+  }
+};
+
+/**
+ * Usuwa płatność z faktury
+ */
+export const removePaymentFromInvoice = async (invoiceId, paymentId, userId) => {
+  try {
+    if (!invoiceId || !paymentId || !userId) {
+      throw new Error('Brak wymaganych parametrów');
+    }
+
+    // Pobierz aktualne dane faktury
+    const invoiceDoc = await getDoc(doc(db, INVOICES_COLLECTION, invoiceId));
+    if (!invoiceDoc.exists()) {
+      throw new Error('Faktura nie została znaleziona');
+    }
+
+    const currentInvoice = invoiceDoc.data();
+    const currentPayments = currentInvoice.payments || [];
+
+    // Usuń płatność z listy
+    const updatedPayments = currentPayments.filter(payment => payment.id !== paymentId);
+    
+    // Oblicz całkowitą kwotę płatności
+    const totalPaid = updatedPayments.reduce((sum, payment) => sum + payment.amount, 0);
+    const invoiceTotal = parseFloat(currentInvoice.total || 0);
+    
+    // Zaktualizuj status płatności
+    let paymentStatus = 'unpaid';
+    let paymentDate = null;
+    
+    if (totalPaid >= invoiceTotal) {
+      paymentStatus = 'paid';
+      // Znajdź najnowszą płatność jako datę płatności
+      if (updatedPayments.length > 0) {
+        const latestPayment = updatedPayments.reduce((latest, payment) => 
+          payment.date.toDate() > latest.date.toDate() ? payment : latest
+        );
+        paymentDate = latestPayment.date;
+      }
+    } else if (totalPaid > 0) {
+      paymentStatus = 'partially_paid';
+    }
+
+    // Zaktualizuj fakturę
+    await updateDoc(doc(db, INVOICES_COLLECTION, invoiceId), {
+      payments: updatedPayments,
+      paymentStatus: paymentStatus,
+      paymentDate: paymentDate,
+      totalPaid: totalPaid,
+      updatedAt: serverTimestamp(),
+      updatedBy: userId
+    });
+
+    console.log(`Usunięto płatność ${paymentId} z faktury ${invoiceId}`);
+    return { success: true, totalPaid, paymentStatus };
+  } catch (error) {
+    console.error('Błąd podczas usuwania płatności:', error);
+    throw error;
+  }
+};
+
+/**
+ * Edytuje płatność w fakturze
+ */
+export const updatePaymentInInvoice = async (invoiceId, paymentId, updatedPaymentData, userId) => {
+  try {
+    if (!invoiceId || !paymentId || !updatedPaymentData || !userId) {
+      throw new Error('Brak wymaganych parametrów');
+    }
+
+    // Pobierz aktualne dane faktury
+    const invoiceDoc = await getDoc(doc(db, INVOICES_COLLECTION, invoiceId));
+    if (!invoiceDoc.exists()) {
+      throw new Error('Faktura nie została znaleziona');
+    }
+
+    const currentInvoice = invoiceDoc.data();
+    const currentPayments = currentInvoice.payments || [];
+
+    // Znajdź i zaktualizuj płatność
+    const paymentIndex = currentPayments.findIndex(payment => payment.id === paymentId);
+    if (paymentIndex === -1) {
+      throw new Error('Płatność nie została znaleziona');
+    }
+
+    const updatedPayments = [...currentPayments];
+    updatedPayments[paymentIndex] = {
+      ...updatedPayments[paymentIndex],
+      amount: parseFloat(updatedPaymentData.amount),
+      date: Timestamp.fromDate(new Date(updatedPaymentData.date)),
+      method: updatedPaymentData.method || updatedPayments[paymentIndex].method,
+      description: updatedPaymentData.description || '',
+      reference: updatedPaymentData.reference || '',
+      updatedAt: Timestamp.now(),
+      updatedBy: userId
+    };
+    
+    // Oblicz całkowitą kwotę płatności
+    const totalPaid = updatedPayments.reduce((sum, payment) => sum + payment.amount, 0);
+    const invoiceTotal = parseFloat(currentInvoice.total || 0);
+    
+    // Zaktualizuj status płatności
+    let paymentStatus = 'unpaid';
+    let paymentDate = null;
+    
+    if (totalPaid >= invoiceTotal) {
+      paymentStatus = 'paid';
+      // Znajdź najnowszą płatność jako datę płatności
+      const latestPayment = updatedPayments.reduce((latest, payment) => 
+        payment.date.toDate() > latest.date.toDate() ? payment : latest
+      );
+      paymentDate = latestPayment.date;
+    } else if (totalPaid > 0) {
+      paymentStatus = 'partially_paid';
+    }
+
+    // Zaktualizuj fakturę
+    await updateDoc(doc(db, INVOICES_COLLECTION, invoiceId), {
+      payments: updatedPayments,
+      paymentStatus: paymentStatus,
+      paymentDate: paymentDate,
+      totalPaid: totalPaid,
+      updatedAt: serverTimestamp(),
+      updatedBy: userId
+    });
+
+    console.log(`Zaktualizowano płatność ${paymentId} w fakturze ${invoiceId}`);
+    return { success: true, totalPaid, paymentStatus };
+  } catch (error) {
+    console.error('Błąd podczas edycji płatności:', error);
+    throw error;
+  }
+};
+
+/**
+ * Pobiera płatności dla faktury
+ */
+export const getInvoicePayments = async (invoiceId) => {
+  try {
+    const invoiceDoc = await getDoc(doc(db, INVOICES_COLLECTION, invoiceId));
+    if (!invoiceDoc.exists()) {
+      throw new Error('Faktura nie została znaleziona');
+    }
+
+    const invoiceData = invoiceDoc.data();
+    const payments = invoiceData.payments || [];
+    
+    // Konwertuj daty Timestamp na obiekty Date
+    return payments.map(payment => ({
+      ...payment,
+      date: payment.date?.toDate(),
+      createdAt: payment.createdAt?.toDate(),
+      updatedAt: payment.updatedAt?.toDate()
+    })).sort((a, b) => new Date(b.date) - new Date(a.date)); // Sortuj od najnowszych
+  } catch (error) {
+    console.error('Błąd podczas pobierania płatności faktury:', error);
+    throw error;
+  }
 }; 

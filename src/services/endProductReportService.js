@@ -1,5 +1,221 @@
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import { PDFDocument, rgb } from 'pdf-lib';
+
+// Helper function to translate quality control values to English
+const translateQualityValue = (value) => {
+  if (!value || typeof value !== 'string') return value;
+  
+  const translations = {
+    'Prawidłowa': 'Correct',
+    'Nieprawidłowa': 'Incorrect',
+    'prawidłowa': 'Correct',
+    'nieprawidłowa': 'Incorrect'
+  };
+  
+  return translations[value] || value;
+};
+
+// Helper function to translate shift numbers to English
+const translateShiftNumber = (value) => {
+  if (!value) return value;
+  
+  if (Array.isArray(value)) {
+    return value.map(shift => 
+      typeof shift === 'string' ? shift.replace(/Zmiana/g, 'Shift') : shift
+    ).join(', ');
+  }
+  
+  if (typeof value === 'string') {
+    return value.replace(/Zmiana/g, 'Shift');
+  }
+  
+  return value;
+};
+
+// Helper function to translate position names to English
+const translatePosition = (value) => {
+  if (!value || typeof value !== 'string') return value;
+  
+  const positions = {
+    // Management positions
+    'Mistrz produkcji': 'Production Master',
+    'Kierownik Magazynu': 'Warehouse Manager',
+    'Kierownik produkcji': 'Production Manager',
+    'Kierownik jakości': 'Quality Manager',
+    'Kierownik': 'Manager',
+    
+    // Production positions
+    'Operator': 'Operator',
+    'Operator produkcji': 'Production Operator',
+    'Specjalista produkcji': 'Production Specialist',
+    'Pracownik produkcji': 'Production Worker',
+    'Technolog': 'Technologist',
+    
+    // Quality positions
+    'Kontroler jakości': 'Quality Controller',
+    'Specjalista jakości': 'Quality Specialist',
+    'Inspektor jakości': 'Quality Inspector',
+    
+    // Warehouse positions
+    'Magazynier': 'Warehouse Worker',
+    'Specjalista magazynu': 'Warehouse Specialist',
+    'Operator magazynu': 'Warehouse Operator',
+    
+    // Other positions
+    'Stanowiska': 'Position', // Generic fallback
+    'Administrator': 'Administrator',
+    'Koordynator': 'Coordinator'
+  };
+  
+  return positions[value] || value;
+};
+
+// Helper function to replace Polish characters in address
+const normalizePolishChars = (text) => {
+  if (!text || typeof text !== 'string') return text;
+  
+  return text
+    .replace(/ł/g, 'l')
+    .replace(/Ł/g, 'L')
+    .replace(/ą/g, 'a')
+    .replace(/Ą/g, 'A')
+    .replace(/ć/g, 'c')
+    .replace(/Ć/g, 'C')
+    .replace(/ę/g, 'e')
+    .replace(/Ę/g, 'E')
+    .replace(/ń/g, 'n')
+    .replace(/Ń/g, 'N')
+    .replace(/ó/g, 'o')
+    .replace(/Ó/g, 'O')
+    .replace(/ś/g, 's')
+    .replace(/Ś/g, 'S')
+    .replace(/ź/g, 'z')
+    .replace(/Ź/g, 'Z')
+    .replace(/ż/g, 'z')
+    .replace(/Ż/g, 'Z');
+};
+
+// Function to append attachments to the PDF report
+const appendAttachmentsToReport = async (doc, attachments) => {
+  if (!attachments || attachments.length === 0) {
+    console.log('No attachments provided to append');
+    return null;
+  }
+
+  console.log(`Starting to process ${attachments.length} attachments:`, attachments);
+
+  try {
+    // Get the current PDF as ArrayBuffer
+    const pdfBytes = doc.output('arraybuffer');
+    const existingPdfDoc = await PDFDocument.load(pdfBytes);
+    console.log('Successfully loaded existing PDF document');
+    
+    let successfulAttachments = 0;
+    
+    for (const attachment of attachments) {
+      try {
+        if (!attachment.fileUrl || !attachment.fileType) {
+          console.warn('Invalid attachment (missing fileUrl or fileType):', attachment);
+          continue;
+        }
+
+        console.log(`Processing attachment: ${attachment.fileName} (${attachment.fileType}) from URL: ${attachment.fileUrl}`);
+        
+        // Fetch the file
+        const response = await fetch(attachment.fileUrl, {
+          method: 'GET',
+          mode: 'cors'
+        });
+        
+        if (!response.ok) {
+          console.error(`Failed to fetch attachment: ${attachment.fileName}, Status: ${response.status}, StatusText: ${response.statusText}`);
+          continue;
+        }
+
+        console.log(`Successfully fetched ${attachment.fileName}, size: ${response.headers.get('content-length')} bytes`);
+        
+        const arrayBuffer = await response.arrayBuffer();
+        
+        if (attachment.fileType.toLowerCase() === 'pdf') {
+          // Handle PDF files
+          const attachmentPdfDoc = await PDFDocument.load(arrayBuffer);
+          const pageIndices = attachmentPdfDoc.getPageIndices();
+          
+          // Copy all pages from the attachment PDF
+          const copiedPages = await existingPdfDoc.copyPages(attachmentPdfDoc, pageIndices);
+          copiedPages.forEach((page) => existingPdfDoc.addPage(page));
+          
+        } else if (['png', 'jpg', 'jpeg'].includes(attachment.fileType.toLowerCase())) {
+          // Handle image files
+          let image;
+          if (attachment.fileType.toLowerCase() === 'png') {
+            image = await existingPdfDoc.embedPng(arrayBuffer);
+          } else {
+            image = await existingPdfDoc.embedJpg(arrayBuffer);
+          }
+          
+          // Create a new page for the image (A4 size)
+          const page = existingPdfDoc.addPage([595.28, 841.89]); // A4 in points
+          const { width: pageWidth, height: pageHeight } = page.getSize();
+          
+          // Calculate scaling to fit the image on the page while maintaining aspect ratio
+          const imageAspectRatio = image.width / image.height;
+          const pageAspectRatio = pageWidth / pageHeight;
+          
+          let imageWidth, imageHeight;
+          const margin = 40; // Larger margin for better presentation
+          
+          if (imageAspectRatio > pageAspectRatio) {
+            // Image is wider than page aspect ratio
+            imageWidth = pageWidth - 2 * margin;
+            imageHeight = imageWidth / imageAspectRatio;
+          } else {
+            // Image is taller than page aspect ratio
+            imageHeight = pageHeight - 2 * margin - 60; // Leave space for filename
+            imageWidth = imageHeight * imageAspectRatio;
+          }
+          
+          // Center the image on the page
+          const x = (pageWidth - imageWidth) / 2;
+          const y = (pageHeight - imageHeight) / 2 + 20; // Move up to leave space for text
+          
+          page.drawImage(image, {
+            x,
+            y,
+            width: imageWidth,
+            height: imageHeight,
+          });
+          
+          // Add filename as text at the bottom
+          page.drawText(`Attachment: ${attachment.fileName}`, {
+            x: margin,
+            y: 30,
+            size: 12,
+            color: rgb(0.3, 0.3, 0.3)
+          });
+        }
+        
+        successfulAttachments++;
+        console.log(`Successfully processed attachment: ${attachment.fileName}`);
+        
+      } catch (error) {
+        console.error(`Error processing attachment ${attachment.fileName}:`, error);
+      }
+    }
+    
+    console.log(`Processed ${successfulAttachments} out of ${attachments.length} attachments successfully`);
+    
+    // Return the modified PDF bytes
+    const modifiedPdfBytes = await existingPdfDoc.save();
+    console.log('Successfully generated modified PDF with attachments');
+    return modifiedPdfBytes;
+    
+  } catch (error) {
+    console.error('Error appending attachments to PDF:', error);
+    return null;
+  }
+};
 
 // Service for generating End Product Report PDF
 export const generateEndProductReportPDF = async (task, additionalData = {}) => {
@@ -65,21 +281,38 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
 
     // Helper function to add section header
     const addSectionHeader = (number, title, color = '#1976d2') => {
-      checkPageBreak(15);
+      checkPageBreak(17);
       
-      doc.setFillColor(color);
-      doc.circle(margin + 8, currentY + 4, 4, 'F');
+      // Konwertuj kolor hex na RGB
+      const r = parseInt(color.slice(1, 3), 16);
+      const g = parseInt(color.slice(3, 5), 16);
+      const b = parseInt(color.slice(5, 7), 16);
       
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(12);
+      // Dodaj kolorowe tło dla całego nagłówka (zmniejszona wysokość z 15 na 12)
+      doc.setFillColor(r, g, b);
+      doc.rect(margin, currentY, contentWidth, 12, 'F');
+      
+      // Dodaj numer sekcji w kółku (dostosowana pozycja dla mniejszej wysokości)
+      doc.setFillColor(255, 255, 255);
+      doc.circle(margin + 8, currentY + 6, 3.5, 'F');
+      
+      // Dodaj numer sekcji (dostosowana pozycja Y)
+      doc.setTextColor(r, g, b);
+      doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
-      doc.text(number.toString(), margin + 8, currentY + 6, { align: 'center' });
+      doc.text(number.toString(), margin + 8, currentY + 7.5, { align: 'center' });
       
-      doc.setTextColor(color);
-      doc.setFontSize(16);
-      doc.text(title, margin + 20, currentY + 6);
+      // Dodaj tytuł sekcji (dostosowana pozycja Y i rozmiar fontu)
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(14);
+      doc.text(title, margin + 18, currentY + 8);
       
-      currentY += 15;
+      // Dodaj linię pod nagłówkiem (dostosowana pozycja Y)
+      doc.setDrawColor(r, g, b);
+      doc.setLineWidth(0.5);
+      doc.line(margin, currentY + 12, margin + contentWidth, currentY + 12);
+      
+      currentY += 17; // Zmniejszony odstęp po nagłówku
     };
 
     // Helper function to add subsection header
@@ -106,11 +339,12 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       checkPageBreak(isMultiline ? 15 : 8);
       
       doc.setTextColor(85, 85, 85);
-      doc.setFontSize(9);
+      doc.setFontSize(10); // Powiększono z 9 na 10
       doc.setFont('helvetica', 'bold');
       doc.text(label + ':', margin, currentY);
       
       doc.setTextColor(0, 0, 0);
+      doc.setFontSize(10); // Powiększono z domyślnego na 10
       doc.setFont('helvetica', 'normal');
       
       if (isMultiline && value && value.length > 50) {
@@ -132,11 +366,12 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       
       // Left column
       doc.setTextColor(85, 85, 85);
-      doc.setFontSize(9);
+      doc.setFontSize(10); // Powiększono z 9 na 10
       doc.setFont('helvetica', 'bold');
       doc.text(leftLabel + ':', margin, currentY);
       
       doc.setTextColor(0, 0, 0);
+      doc.setFontSize(10); // Powiększono z domyślnego na 10
       doc.setFont('helvetica', 'normal');
       
       if (isMultiline && leftValue && leftValue.length > 30) {
@@ -149,11 +384,12 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       // Right column
       if (rightLabel && rightValue !== undefined) {
         doc.setTextColor(85, 85, 85);
-        doc.setFontSize(9);
+        doc.setFontSize(10); // Powiększono z 9 na 10
         doc.setFont('helvetica', 'bold');
         doc.text(rightLabel + ':', rightColumnX, currentY);
         
         doc.setTextColor(0, 0, 0);
+        doc.setFontSize(10); // Powiększono z domyślnego na 10
         doc.setFont('helvetica', 'normal');
         
         if (isMultiline && rightValue && rightValue.length > 30) {
@@ -170,7 +406,7 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
     // Helper function to add table with dynamic row heights
     const addTable = (headers, data, options = {}) => {
       const {
-        headerColor = [25, 118, 210],
+        headerColor = [108, 53, 234], // #6C35EA converted to RGB
         alternateRowColor = [245, 245, 245],
         fontSize = 8,
         minRowHeight = 6,
@@ -310,8 +546,60 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       currentY += 5;
     };
 
+    // Introduction text
+    const productName = task?.recipeName || task?.productName || 'the manufactured product';
+    const introductionText = `This report constitutes a comprehensive technical and quality documentation concerning the finished product ${productName}. It has been prepared based on production data, ingredient specifications, quality control records, and bibliographic research documentation. Its purpose is to ensure full transparency and compliance of the manufacturing process with the internal standards of BGW Pharma Sp. z o.o., as well as with the quality standards applicable to dietary supplements.`;
+    
+    checkPageBreak(50); // Zwiększono dla większej zawartości
+    doc.setTextColor(85, 85, 85);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Introduction:', margin, currentY);
+    currentY += 8;
+    doc.setTextColor(85, 85, 85);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    
+    const introLines = doc.splitTextToSize(introductionText, contentWidth);
+    doc.text(introLines, margin, currentY);
+    currentY += Math.max(20, introLines.length * 5);
+    
+    // Add detailed information section
+    currentY += 8;
+    doc.setTextColor(85, 85, 85);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('The report includes detailed information regarding:', margin, currentY);
+    currentY += 8;
+    
+    // Add bullet points
+    doc.setTextColor(85, 85, 85);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    
+    const bulletPoints = [
+      'the raw materials used and their identification,',
+      'the validity (expiration dates) of materials and raw material batches,',
+      'documentation of physicochemical analyses,',
+      'the course of the production process,',
+      'quality control results,',
+      'atmospheric conditions during production,',
+      'packaging closure integrity and cleanliness,',
+      'information on the presence of allergens in the product.'
+    ];
+    
+    bulletPoints.forEach(point => {
+      checkPageBreak(8);
+      doc.text('•', margin, currentY);
+      const pointLines = doc.splitTextToSize(point, contentWidth - 10);
+      doc.text(pointLines, margin + 10, currentY);
+      currentY += Math.max(6, pointLines.length * 4);
+    });
+    
+    currentY += 10;
+
     // 1. Product identification
-    addSectionHeader(1, 'Product identification', '#1976d2');
+    addSectionHeader(1, 'Product identification', '#6C35EA');
     
     // Use two-column layout for product identification
     addFieldTwoColumns(
@@ -340,7 +628,7 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
     currentY += 10;
 
     // 2. TDS Specification
-    addSectionHeader(2, 'TDS Specification', '#ff9800');
+    addSectionHeader(2, 'TDS Specification', '#6C35EA');
     
     addField('Date of last recipe update', task?.recipe?.updatedAt 
       ? (task.recipe.updatedAt && typeof task.recipe.updatedAt === 'object' && typeof task.recipe.updatedAt.toDate === 'function'
@@ -382,10 +670,10 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
     currentY += 10;
 
     // 3. Active Ingredients
-    addSectionHeader(3, 'Active Ingredients', '#4caf50');
+    addSectionHeader(3, 'Active Ingredients', '#6C35EA');
 
     // 3.1 List of materials
-    addSubsectionHeader('3.1', 'List of materials');
+    addSubsectionHeader('3.1', 'List of materials', '#6C35EA');
     
     if (task?.recipe?.ingredients && task.recipe.ingredients.length > 0) {
       const ingredientHeaders = ['Ingredient name', 'Quantity', 'Unit', 'CAS Number', 'Notes'];
@@ -404,15 +692,12 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
       doc.text(`Total ingredients: ${task.recipe.ingredients.length}`, margin, currentY);
-      doc.setTextColor(85, 85, 85);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Ingredients for ${task.recipe.yield?.quantity || 1} ${task.recipe.yield?.unit || 'pcs'} of product`, margin, currentY + 4);
       currentY += 12;
     }
 
     // 3.2 Expiration date of materials
     if (task?.consumedMaterials && task.consumedMaterials.length > 0) {
-      addSubsectionHeader('3.2', 'Expiration date of materials');
+      addSubsectionHeader('3.2', 'Expiration date of materials', '#6C35EA');
       
       const expiryHeaders = ['Material name', 'Batch', 'Quantity', 'Unit', 'Expiration date'];
       const expiryData = task.consumedMaterials.map(consumed => {
@@ -462,7 +747,7 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
     }
 
     // 3.3 Clinical and bibliographic research
-    addSubsectionHeader('3.3', 'Clinical and bibliographic research');
+    addSubsectionHeader('3.3', 'Clinical and bibliographic research', '#6C35EA');
     
     if (clinicalAttachments.length > 0) {
       const clinicalHeaders = ['File type', 'File name', 'Size', 'Upload date'];
@@ -495,7 +780,7 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
     currentY += 10;
 
     // 4. Physicochemical properties
-    addSectionHeader(4, 'Physicochemical properties', '#ffc107');
+    addSectionHeader(4, 'Physicochemical properties', '#6C35EA');
     
     if (Object.keys(ingredientAttachments).length > 0) {
       Object.entries(ingredientAttachments).forEach(([ingredientName, attachments]) => {
@@ -546,30 +831,36 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
     currentY += 10;
 
     // 5. Production
-    addSectionHeader(5, 'Production', '#e91e63');
+    addSectionHeader(5, 'Production', '#6C35EA');
     
-    addField('Start date of production', productionHistory && productionHistory.length > 0
-      ? formatDateTime(productionHistory[0].startTime)
-      : 'No production history data');
+    addFieldTwoColumns(
+      'Start date of production', productionHistory && productionHistory.length > 0
+        ? formatDateTime(productionHistory[0].startTime)
+        : 'No production history data',
+      'End date of production', productionHistory && productionHistory.length > 0
+        ? formatDateTime(productionHistory[productionHistory.length - 1].endTime)
+        : 'No production history data'
+    );
     
-    addField('End date of production', productionHistory && productionHistory.length > 0
-      ? formatDateTime(productionHistory[productionHistory.length - 1].endTime)
-      : 'No production history data');
+    addFieldTwoColumns(
+      'MO number', task?.moNumber || 'Not specified',
+      'Company name', companyData?.name || 'Loading...'
+    );
     
-    addField('MO number', task?.moNumber || 'Not specified');
-    addField('Company name', companyData?.name || 'Loading...');
-    addField('Address', companyData?.address || companyData ? `${companyData.address || ''} ${companyData.city || ''}`.trim() : 'Loading...');
-    addField('Workstation', workstationData === null 
-      ? 'Loading...' 
-      : workstationData?.name 
-        ? workstationData.name 
-        : 'No workstation assigned');
+    addField('Address', companyData?.address || companyData ? normalizePolishChars(`${companyData.address || ''} ${companyData.city || ''}`.trim()) : 'Loading...');
     
-    addField('Time per unit', task?.productionTimePerUnit 
-      ? `${task.productionTimePerUnit} min/pcs`
-      : task?.recipe?.productionTimePerUnit
-        ? `${task.recipe.productionTimePerUnit} min/pcs`
-        : 'Not specified');
+    addFieldTwoColumns(
+      'Workstation', workstationData === null 
+        ? 'Loading...' 
+        : workstationData?.name 
+          ? workstationData.name 
+          : 'No workstation assigned',
+      'Time per unit', task?.productionTimePerUnit 
+        ? `${task.productionTimePerUnit} min/pcs`
+        : task?.recipe?.productionTimePerUnit
+          ? `${task.recipe.productionTimePerUnit} min/pcs`
+          : 'Not specified'
+    );
 
     // History of production
     if (productionHistory && productionHistory.length > 0) {
@@ -612,17 +903,21 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       formResponses.completedMO.forEach((report, index) => {
         checkPageBreak(30);
         
-        doc.setTextColor(25, 118, 210);
+        doc.setTextColor(76, 175, 80);
         doc.setFontSize(9);
         doc.setFont('helvetica', 'bold');
         doc.text(`Report #${index + 1} - ${formatDateTime(report.date)}`, margin, currentY);
         currentY += 6;
 
-        addField('Completion time', report.time || 'Not provided');
-        addField('Responsible person', report.email || 'Not provided');
+        addFieldTwoColumns(
+          'Completion time', report.time || 'Not provided',
+          'Responsible person', report.email || 'Not provided'
+        );
         addField('Final product quantity', report.productQuantity ? `${report.productQuantity} ${task?.unit || 'pcs'}` : 'Not provided');
-        addField('Packaging loss', report.packagingLoss || 'No loss');
-        addField('Lid loss', report.bulkLoss || 'No loss');
+        addFieldTwoColumns(
+          'Packaging loss', report.packagingLoss || 'No loss',
+          'Lid loss', report.bulkLoss || 'No loss'
+        );
         addField('Raw material loss', report.rawMaterialLoss || 'No loss', true);
         
         if (report.mixingPlanReportUrl) {
@@ -636,7 +931,7 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
     currentY += 10;
 
     // 6. Quality control
-    addSectionHeader(6, 'Quality control', '#9c27b0');
+    addSectionHeader(6, 'Quality control', '#6C35EA');
     
     if (formResponses?.productionControl && formResponses.productionControl.length > 0) {
       formResponses.productionControl.forEach((report, index) => {
@@ -655,8 +950,10 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
         doc.text('Identification:', margin, currentY);
         currentY += 8;
 
-        addField('Name and surname', report.name || 'Not provided');
-        addField('Position', report.position || 'Not provided');
+        addFieldTwoColumns(
+          'Name and surname', report.name || 'Not provided',
+          'Position', translatePosition(report.position) || 'Not provided'
+        );
         addField('Completion date', formatDateTime(report.fillDate));
         
         currentY += 5;
@@ -669,12 +966,18 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
         currentY += 8;
 
         addField('Customer Order', report.customerOrder || 'Not provided');
-        addField('Production start date', formatDateTime(report.productionStartDate));
-        addField('Production start time', report.productionStartTime || 'Not provided');
-        addField('Production end date', formatDateTime(report.productionEndDate));
-        addField('Production end time', report.productionEndTime || 'Not provided');
-        addField('Conditions reading date', formatDateTime(report.readingDate));
-        addField('Conditions reading time', report.readingTime || 'Not provided');
+        addFieldTwoColumns(
+          'Production start date', formatDateOnly(report.productionStartDate),
+          'Production start time', report.productionStartTime || 'Not provided'
+        );
+        addFieldTwoColumns(
+          'Production end date', formatDateOnly(report.productionEndDate),
+          'Production end time', report.productionEndTime || 'Not provided'
+        );
+        addFieldTwoColumns(
+          'Conditions reading date', formatDateOnly(report.readingDate),
+          'Conditions reading time', report.readingTime || 'Not provided'
+        );
 
         currentY += 5;
 
@@ -686,10 +989,14 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
         currentY += 8;
 
         addField('Product name', report.productName || task?.productName || 'Not provided');
-        addField('LOT number', report.lotNumber || 'Not provided');
-        addField('Expiration date (EXP)', report.expiryDate || 'Not provided');
-        addField('Quantity (pcs)', report.quantity ? `${report.quantity} pcs` : 'Not provided');
-        addField('Shift number', Array.isArray(report.shiftNumber) ? report.shiftNumber.join(', ') : (report.shiftNumber || 'Not provided'));
+        addFieldTwoColumns(
+          'LOT number', report.lotNumber || 'Not provided',
+          'Expiration date (EXP)', report.expiryDate || 'Not provided'
+        );
+        addFieldTwoColumns(
+          'Quantity (pcs)', report.quantity ? `${report.quantity} pcs` : 'Not provided',
+          'Shift number', translateShiftNumber(report.shiftNumber) || 'Not provided'
+        );
 
         currentY += 5;
 
@@ -700,8 +1007,10 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
         doc.text('Atmospheric conditions:', margin, currentY);
         currentY += 8;
 
-        addField('Air humidity', report.humidity || 'Not provided');
-        addField('Air temperature', report.temperature || 'Not provided');
+        addFieldTwoColumns(
+          'Air humidity', report.humidity || 'Not provided',
+          'Air temperature', report.temperature || 'Not provided'
+        );
 
         currentY += 5;
 
@@ -712,17 +1021,21 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
         doc.text('Quality control:', margin, currentY);
         currentY += 8;
 
-        addField('Raw material purity', report.rawMaterialPurity || 'Not provided');
-        addField('Packaging purity', report.packagingPurity || 'Not provided');
-        addField('Packaging closure', report.packagingClosure || 'Not provided');
-        addField('Quantity on pallet', report.packagingQuantity || 'Not provided');
+        addFieldTwoColumns(
+          'Raw material purity', translateQualityValue(report.rawMaterialPurity) || 'Not provided',
+          'Packaging purity', translateQualityValue(report.packagingPurity) || 'Not provided'
+        );
+        addFieldTwoColumns(
+          'Packaging closure', translateQualityValue(report.packagingClosure) || 'Not provided',
+          'Quantity on pallet', translateQualityValue(report.packagingQuantity) || 'Not provided'
+        );
 
         // Additional quality control fields if available
         if (report.additionalControls && typeof report.additionalControls === 'object') {
           Object.entries(report.additionalControls).forEach(([key, value]) => {
             if (value && typeof value === 'string') {
               const formattedKey = key.replace(/([A-Z])/g, ' $1').toLowerCase().replace(/^./, str => str.toUpperCase());
-              addField(formattedKey, value);
+              addField(formattedKey, translateQualityValue(value));
             }
           });
         }
@@ -775,14 +1088,9 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
     currentY += 10;
 
     // 7. Allergens
-    addSectionHeader(7, 'Allergens', '#ff5722');
+    addSectionHeader(7, 'Allergens', '#6C35EA');
     
     if (additionalData.selectedAllergens && additionalData.selectedAllergens.length > 0) {
-      // Add section description
-      doc.setTextColor(85, 85, 85);
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
-      doc.text('The following allergens are present in this product:', margin, currentY);
       currentY += 8;
 
       // Create allergen table
@@ -793,12 +1101,12 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       ]);
 
       addTable(allergenHeaders, allergenData, { 
-        headerColor: [255, 87, 34],
+        headerColor: [108, 53, 234],
         fontSize: 9 
       });
 
       // Add regulatory notice
-      doc.setTextColor(255, 87, 34);
+      doc.setTextColor(25, 118, 210);
       doc.setFontSize(8);
       doc.setFont('helvetica', 'bold');
       doc.text('ALLERGEN WARNING:', margin, currentY);
@@ -815,7 +1123,38 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       currentY += 8;
     }
 
-    // Add footer to last page
+    // Process attachments if provided
+    if (additionalData.attachments && additionalData.attachments.length > 0) {
+      try {
+        console.log('Processing attachments for PDF report...');
+        const modifiedPdfBytes = await appendAttachmentsToReport(doc, additionalData.attachments);
+        
+        if (modifiedPdfBytes) {
+          // Create a download link for the modified PDF
+          const fileName = `End_Product_Report_MO_${task.moNumber || task.id}_${new Date().toISOString().split('T')[0]}.pdf`;
+          
+          // Create blob from the modified PDF bytes
+          const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
+          
+          // Create download URL
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = fileName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+          
+          return { success: true, fileName, withAttachments: true };
+        }
+      } catch (error) {
+        console.error('Error processing attachments, saving PDF without attachments:', error);
+        // Fall back to saving without attachments
+      }
+    }
+
+    // Add footer to last page (for PDF without attachments or if attachment processing failed)
     const pageCount = doc.internal.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
@@ -830,11 +1169,11 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       );
     }
 
-    // Save the PDF
+    // Save the PDF (without attachments)
     const fileName = `End_Product_Report_MO_${task.moNumber || task.id}_${new Date().toISOString().split('T')[0]}.pdf`;
     doc.save(fileName);
 
-    return { success: true, fileName };
+    return { success: true, fileName, withAttachments: false };
 
   } catch (error) {
     console.error('Error generating End Product Report PDF:', error);
@@ -918,4 +1257,36 @@ const formatDateTime = (dateTime) => {
     console.error('Error formatting date:', error);
     return 'Date error';
   }
-}; 
+};
+
+// Helper function to format date only (without time)
+const formatDateOnly = (dateTime) => {
+  if (!dateTime) return 'Not specified';
+  
+  try {
+    let date;
+    if (dateTime && typeof dateTime === 'object' && typeof dateTime.toDate === 'function') {
+      date = dateTime.toDate();
+    } else if (typeof dateTime === 'string') {
+      date = new Date(dateTime);
+    } else {
+      date = dateTime;
+    }
+    
+    if (isNaN(date.getTime())) {
+      return 'Invalid date';
+    }
+    
+    return date.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return 'Date error';
+  }
+};
+
+// Export the attachment function for external use
+export { appendAttachmentsToReport }; 

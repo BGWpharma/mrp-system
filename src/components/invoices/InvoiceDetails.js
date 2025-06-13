@@ -51,6 +51,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { COMPANY_INFO } from '../../config';
 import { getCompanyInfo } from '../../services/companyService';
+import PaymentsSection from './PaymentsSection';
 
 const InvoiceDetails = () => {
   const { invoiceId } = useParams();
@@ -148,6 +149,7 @@ const InvoiceDetails = () => {
       'issued': { color: 'primary', label: 'Wystawiona' },
       'sent': { color: 'info', label: 'Wysłana' },
       'paid': { color: 'success', label: 'Opłacona' },
+      'partially_paid': { color: 'warning', label: 'Częściowo opłacona' },
       'overdue': { color: 'error', label: 'Przeterminowana' },
       'cancelled': { color: 'error', label: 'Anulowana' }
     };
@@ -944,7 +946,8 @@ const InvoiceDetails = () => {
                     Status płatności
                   </Typography>
                   <Typography variant="body1" gutterBottom>
-                    {invoice.paymentStatus === 'paid' ? 'Opłacona' : 'Nieopłacona'}
+                    {invoice.paymentStatus === 'paid' ? 'Opłacona' : 
+                     invoice.paymentStatus === 'partially_paid' ? 'Częściowo opłacona' : 'Nieopłacona'}
                   </Typography>
                 </Grid>
                 {invoice.paymentDate && (
@@ -1143,18 +1146,7 @@ const InvoiceDetails = () => {
                   </Button>
                 )}
                 
-                {(invoice.status === 'issued' || invoice.status === 'sent') && (
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    color="success"
-                    startIcon={<PaymentIcon />}
-                    onClick={() => handleUpdateStatus('paid')}
-                    sx={{ mb: 1 }}
-                  >
-                    Oznacz jako opłaconą
-                  </Button>
-                )}
+
                 
                 {invoice.status === 'draft' && (
                   <Button
@@ -1435,6 +1427,14 @@ const InvoiceDetails = () => {
           </Grid>
           </Box>
         </Box>
+      </Paper>
+      
+      {/* Sekcja płatności */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <PaymentsSection 
+          invoice={invoice} 
+          onPaymentChange={fetchInvoice}
+        />
       </Paper>
       
       {invoice.notes && (

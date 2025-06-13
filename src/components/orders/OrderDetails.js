@@ -767,17 +767,15 @@ const OrderDetails = () => {
     }
   };
 
-  // Funkcja renderująca status faktury
-  const renderInvoiceStatus = (status) => {
+  // Funkcja renderująca status płatności faktury
+  const renderPaymentStatus = (paymentStatus) => {
     const statusConfig = {
-      'draft': { color: 'default', label: 'Szkic' },
-      'sent': { color: 'info', label: 'Wysłana' },
-      'paid': { color: 'success', label: 'Opłacona' },
-      'overdue': { color: 'error', label: 'Przeterminowana' },
       'unpaid': { color: 'warning', label: 'Nieopłacona' },
-      'cancelled': { color: 'error', label: 'Anulowana' }
+      'partially_paid': { color: 'primary', label: 'Częściowo opłacona' },
+      'paid': { color: 'success', label: 'Opłacona' }
     };
     
+    const status = paymentStatus || 'unpaid';
     const config = statusConfig[status] || { color: 'default', label: status };
     
     return (
@@ -1808,7 +1806,7 @@ const OrderDetails = () => {
                   <TableCell>Numer faktury</TableCell>
                   <TableCell>Data wystawienia</TableCell>
                   <TableCell>Termin płatności</TableCell>
-                  <TableCell>Status</TableCell>
+                  <TableCell>Status płatności</TableCell>
                   <TableCell align="right">Wartość</TableCell>
                   <TableCell align="right">Akcje</TableCell>
                 </TableRow>
@@ -1838,7 +1836,7 @@ const OrderDetails = () => {
                       {invoice.dueDate ? formatDate(invoice.dueDate) : '-'}
                     </TableCell>
                     <TableCell>
-                      {renderInvoiceStatus(invoice.status)}
+                      {renderPaymentStatus(invoice.paymentStatus)}
                     </TableCell>
                     <TableCell align="right">
                       {formatCurrency(invoice.total || 0, invoice.currency || 'EUR')}

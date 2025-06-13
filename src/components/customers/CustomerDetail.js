@@ -213,16 +213,14 @@ const CustomerDetail = () => {
   };
   
   // Renderowanie statusu faktury
-  const renderInvoiceStatus = (status) => {
+  const renderPaymentStatus = (paymentStatus) => {
     const statusConfig = {
-      'draft': { color: '#757575', label: 'Szkic' },
-      'sent': { color: '#2196f3', label: 'Wysłana' },
-      'paid': { color: '#4caf50', label: 'Opłacona' },
-      'overdue': { color: '#f44336', label: 'Przeterminowana' },
       'unpaid': { color: '#ff9800', label: 'Nieopłacona' },
-      'cancelled': { color: '#f44336', label: 'Anulowana' }
+      'partially_paid': { color: '#ff5722', label: 'Częściowo opłacona' },
+      'paid': { color: '#4caf50', label: 'Opłacona' }
     };
     
+    const status = paymentStatus || 'unpaid';
     const config = statusConfig[status] || { color: '#757575', label: status };
     
     return (
@@ -523,7 +521,7 @@ const CustomerDetail = () => {
                         <TableCell>Nr faktury</TableCell>
                         <TableCell>Data wystawienia</TableCell>
                         <TableCell>Termin płatności</TableCell>
-                        <TableCell>Status</TableCell>
+                        <TableCell>Status płatności</TableCell>
                         <TableCell align="right">Kwota</TableCell>
                         <TableCell align="right">Akcje</TableCell>
                       </TableRow>
@@ -534,7 +532,7 @@ const CustomerDetail = () => {
                           <TableCell>{invoice.number}</TableCell>
                           <TableCell>{invoice.issueDate ? formatDate(invoice.issueDate) : '-'}</TableCell>
                           <TableCell>{invoice.dueDate ? formatDate(invoice.dueDate) : '-'}</TableCell>
-                          <TableCell>{renderInvoiceStatus(invoice.status)}</TableCell>
+                          <TableCell>{renderPaymentStatus(invoice.paymentStatus)}</TableCell>
                           <TableCell align="right">{formatCurrency(invoice.total, invoice.currency)}</TableCell>
                           <TableCell align="right">
                             <Button

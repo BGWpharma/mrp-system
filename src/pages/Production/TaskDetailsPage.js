@@ -90,7 +90,12 @@ import {
   Image as ImageIcon,
   PictureAsPdf as PdfIcon,
   Download as DownloadIcon,
-  ArrowForward as ArrowForwardIcon
+  ArrowForward as ArrowForwardIcon,
+  Storage as StorageIcon,
+  Inventory2 as Materials2Icon,
+  Factory as ProductionIcon,
+  Assignment as FormIcon,
+  Timeline as TimelineIcon
 } from '@mui/icons-material';
 import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession, addProductionSession, deleteProductionSession } from '../../services/productionService';
 import { getRecipeVersion } from '../../services/recipeService';
@@ -5054,6 +5059,117 @@ const TaskDetailsPage = () => {
       setGeneratingPDF(true);
       showInfo('Generowanie raportu PDF...');
 
+      // Przygotowanie załączników w formacie oczekiwanym przez funkcję PDF
+      const attachments = [];
+      
+      // Dodaj załączniki badań klinicznych
+      if (clinicalAttachments && clinicalAttachments.length > 0) {
+        clinicalAttachments.forEach(attachment => {
+          if (attachment.downloadURL && attachment.fileName) {
+            const fileExtension = attachment.fileName.split('.').pop().toLowerCase();
+            const fileType = ['pdf', 'png', 'jpg', 'jpeg'].includes(fileExtension) ? fileExtension : 'pdf';
+            
+            attachments.push({
+              fileName: attachment.fileName,
+              fileType: fileType,
+              fileUrl: attachment.downloadURL
+            });
+          }
+        });
+      }
+      
+      // Dodaj załączniki z PO (fizykochemiczne)
+      if (ingredientAttachments && Object.keys(ingredientAttachments).length > 0) {
+        Object.values(ingredientAttachments).flat().forEach(attachment => {
+          if ((attachment.downloadURL || attachment.fileUrl) && attachment.fileName) {
+            const fileExtension = attachment.fileName.split('.').pop().toLowerCase();
+            const fileType = ['pdf', 'png', 'jpg', 'jpeg'].includes(fileExtension) ? fileExtension : 'pdf';
+            
+            attachments.push({
+              fileName: attachment.fileName,
+              fileType: fileType,
+              fileUrl: attachment.downloadURL || attachment.fileUrl
+            });
+          }
+        });
+      }
+      
+      // Dodaj załączniki z partii składników
+      if (ingredientBatchAttachments && Object.keys(ingredientBatchAttachments).length > 0) {
+        Object.values(ingredientBatchAttachments).flat().forEach(attachment => {
+          if ((attachment.downloadURL || attachment.fileUrl) && attachment.fileName) {
+            const fileExtension = attachment.fileName.split('.').pop().toLowerCase();
+            const fileType = ['pdf', 'png', 'jpg', 'jpeg'].includes(fileExtension) ? fileExtension : 'pdf';
+            
+            attachments.push({
+              fileName: attachment.fileName,
+              fileType: fileType,
+              fileUrl: attachment.downloadURL || attachment.fileUrl
+            });
+          }
+        });
+      }
+      
+      // Dodaj załączniki z raportów CompletedMO
+      if (formResponses?.completedMO && formResponses.completedMO.length > 0) {
+        formResponses.completedMO.forEach((report, index) => {
+          if (report.mixingPlanReportUrl && report.mixingPlanReportName) {
+            const fileExtension = report.mixingPlanReportName.split('.').pop().toLowerCase();
+            const fileType = ['pdf', 'png', 'jpg', 'jpeg'].includes(fileExtension) ? fileExtension : 'pdf';
+            
+            attachments.push({
+              fileName: `CompletedMO_Report_${index + 1}_${report.mixingPlanReportName}`,
+              fileType: fileType,
+              fileUrl: report.mixingPlanReportUrl
+            });
+          }
+        });
+      }
+      
+      // Dodaj załączniki z raportów ProductionControl
+      if (formResponses?.productionControl && formResponses.productionControl.length > 0) {
+        formResponses.productionControl.forEach((report, index) => {
+          // Document scans
+          if (report.documentScansUrl && report.documentScansName) {
+            const fileExtension = report.documentScansName.split('.').pop().toLowerCase();
+            const fileType = ['pdf', 'png', 'jpg', 'jpeg'].includes(fileExtension) ? fileExtension : 'pdf';
+            
+            attachments.push({
+              fileName: `ProductionControl_Report_${index + 1}_${report.documentScansName}`,
+              fileType: fileType,
+              fileUrl: report.documentScansUrl
+            });
+          }
+          
+          // Product photos
+          const photoFields = [
+            { url: report.productPhoto1Url, name: report.productPhoto1Name, label: 'Photo1' },
+            { url: report.productPhoto2Url, name: report.productPhoto2Name, label: 'Photo2' },
+            { url: report.productPhoto3Url, name: report.productPhoto3Name, label: 'Photo3' }
+          ];
+          
+          photoFields.forEach(photo => {
+            if (photo.url && photo.name) {
+              const fileExtension = photo.name.split('.').pop().toLowerCase();
+              const fileType = ['pdf', 'png', 'jpg', 'jpeg'].includes(fileExtension) ? fileExtension : 'jpg';
+              
+              attachments.push({
+                fileName: `ProductionControl_Report_${index + 1}_${photo.label}_${photo.name}`,
+                fileType: fileType,
+                fileUrl: photo.url
+              });
+            }
+          });
+        });
+      }
+
+      // Usunięcie duplikatów załączników na podstawie nazwy pliku
+      const uniqueAttachments = attachments.filter((attachment, index, self) => 
+        index === self.findIndex(a => a.fileName === attachment.fileName)
+      );
+
+      console.log('Załączniki do dodania do raportu:', uniqueAttachments);
+
       // Przygotowanie danych dodatkowych dla raportu
       const additionalData = {
         companyData,
@@ -5065,14 +5181,19 @@ const TaskDetailsPage = () => {
         ingredientBatchAttachments,
         materials,
         currentUser,
-        selectedAllergens
+        selectedAllergens,
+        attachments: uniqueAttachments // Dodajemy załączniki w odpowiednim formacie
       };
 
       // Generowanie raportu PDF
       const result = await generateEndProductReportPDF(task, additionalData);
       
       if (result.success) {
-        showSuccess(`Raport PDF został wygenerowany: ${result.fileName}`);
+        if (result.withAttachments) {
+          showSuccess(`Raport PDF został wygenerowany z załącznikami (${uniqueAttachments.length}): ${result.fileName}`);
+        } else {
+          showSuccess(`Raport PDF został wygenerowany: ${result.fileName}${uniqueAttachments.length > 0 ? ' (załączniki nie zostały dodane z powodu błędu)' : ''}`);
+        }
       } else {
         showError('Wystąpił błąd podczas generowania raportu PDF');
       }
@@ -5185,11 +5306,11 @@ const TaskDetailsPage = () => {
           {/* Główne zakładki */}
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
             <Tabs value={mainTab} onChange={handleMainTabChange} aria-label="Główne zakładki szczegółów zadania" variant="scrollable" scrollButtons="auto">
-              <Tab label="Dane podstawowe" />
-              <Tab label="Materiały i Koszty" />
-              <Tab label="Produkcja i Plan" />
-              <Tab label="Formularze" />
-              <Tab label="Historia zmian" />
+              <Tab label="Dane podstawowe" icon={<InfoIcon />} iconPosition="start" />
+              <Tab label="Materiały i Koszty" icon={<Materials2Icon />} iconPosition="start" />
+              <Tab label="Produkcja i Plan" icon={<ProductionIcon />} iconPosition="start" />
+              <Tab label="Formularze" icon={<FormIcon />} iconPosition="start" />
+              <Tab label="Historia zmian" icon={<TimelineIcon />} iconPosition="start" />
               <Tab label="Raport gotowego produktu" icon={<AssessmentIcon />} iconPosition="start" />
             </Tabs>
           </Box>
