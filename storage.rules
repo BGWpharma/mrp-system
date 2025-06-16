@@ -37,6 +37,12 @@ service firebase.storage {
       allow write: if request.auth != null;
     }
     
+    // Reguła dla dodatkowych załączników - pozwala autoryzowanym użytkownikom na przesyłanie i pobieranie
+    match /additional-attachments/{taskId}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
     // Reguła dla formularzy - pozwala autoryzowanym użytkownikom na przesyłanie i pobieranie plików z formularzy
     match /forms/{formType}/{moNumber}/{fileName} {
       allow read: if request.auth != null;

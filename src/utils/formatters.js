@@ -68,10 +68,10 @@ export const formatDate = (date, options = {}) => {
    * 
    * @param {number} amount - Kwota do sformatowania
    * @param {string} currency - Kod waluty (domyślnie EUR)
-   * @param {number} precision - Liczba miejsc po przecinku (domyślnie 4 dla cen jednostkowych)
+   * @param {number} precision - Liczba miejsc po przecinku (domyślnie automatyczna)
    * @returns {string} Sformatowana kwota
    */
-  export const formatCurrency = (amount, currency = 'EUR', precision = 4) => {
+  export const formatCurrency = (amount, currency = 'EUR', precision = null) => {
     if (amount === undefined || amount === null) return '—';
     
     // Upewnij się, że amount jest liczbą
@@ -85,6 +85,20 @@ export const formatDate = (date, options = {}) => {
     }
     
     try {
+      // Jeśli precision nie jest określona, automatycznie wykryj potrzebną precyzję
+      if (precision === null) {
+        // Sprawdź czy liczba jest całkowita
+        if (Number.isInteger(amount)) {
+          precision = 0;
+        } else {
+          // Znajdź minimalną potrzebną precyzję (maksymalnie 4 miejsca)
+          const amountStr = amount.toFixed(4);
+          const trimmed = amountStr.replace(/\.?0+$/, '');
+          const decimalPart = trimmed.split('.')[1];
+          precision = decimalPart ? decimalPart.length : 0;
+        }
+      }
+      
       return new Intl.NumberFormat('pl-PL', {
         style: 'currency',
         currency,

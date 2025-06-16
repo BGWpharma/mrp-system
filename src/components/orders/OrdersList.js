@@ -104,6 +104,11 @@ const OrdersList = () => {
   const [customersLoading, setCustomersLoading] = useState(false);
   // Dodajemy flagę, aby śledzić czy komponent jest już zamontowany
   const [isInitialized, setIsInitialized] = useState(false);
+  
+  // Stan dla dialogu zmiany statusu (podobnie jak w PO)
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [orderToUpdateStatus, setOrderToUpdateStatus] = useState(null);
+  const [newStatus, setNewStatus] = useState('');
 
   const { currentUser } = useAuth();
   const { showSuccess, showError, showInfo } = useNotification();
@@ -348,6 +353,29 @@ const OrdersList = () => {
 
   const handleCancelStatusChange = () => {
     setStatusChangeInfo(null);
+  };
+
+  // Nowe funkcje obsługi zmiany statusu (podobnie jak w PO)
+  const handleStatusClick = (order) => {
+    setOrderToUpdateStatus(order);
+    setNewStatus(order.status || 'Nowe');
+    setStatusDialogOpen(true);
+  };
+
+  const handleStatusUpdate = async () => {
+    try {
+      await updateOrderStatus(orderToUpdateStatus.id, newStatus, currentUser.uid);
+      
+      // Po aktualizacji odświeżamy listę
+      fetchOrders();
+      
+      showSuccess('Status zamówienia został zaktualizowany');
+      setStatusDialogOpen(false);
+      setOrderToUpdateStatus(null);
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji statusu zamówienia:', error);
+      showError('Nie udało się zaktualizować statusu zamówienia');
+    }
   };
 
   const toggleExpand = (orderId) => {
@@ -1531,22 +1559,6 @@ const OrdersList = () => {
                       </Box>
                     </TableCell>
                     <TableCell 
-                      onClick={() => handleSort('orderDate')}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        Data
-                        {orderBy === 'orderDate' && (
-                          <ArrowDropDownIcon 
-                            sx={{ 
-                              transform: orderDirection === 'asc' ? 'rotate(180deg)' : 'none',
-                              transition: 'transform 0.2s'
-                            }} 
-                          />
-                        )}
-                      </Box>
-                    </TableCell>
-                    <TableCell 
                       onClick={() => handleSort('customer.name')}
                       style={{ cursor: 'pointer' }}
                     >
@@ -1564,13 +1576,12 @@ const OrdersList = () => {
                     </TableCell>
                     <TableCell>Status</TableCell>
                     <TableCell 
-                      onClick={() => handleSort('totalValue')}
+                      onClick={() => handleSort('orderDate')}
                       style={{ cursor: 'pointer' }}
-                      align="right"
                     >
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                        Wartość
-                        {orderBy === 'totalValue' && (
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        Data
+                        {orderBy === 'orderDate' && (
                           <ArrowDropDownIcon 
                             sx={{ 
                               transform: orderDirection === 'asc' ? 'rotate(180deg)' : 'none',
@@ -1587,6 +1598,23 @@ const OrdersList = () => {
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         Termin dostawy
                         {orderBy === 'expectedDeliveryDate' && (
+                          <ArrowDropDownIcon 
+                            sx={{ 
+                              transform: orderDirection === 'asc' ? 'rotate(180deg)' : 'none',
+                              transition: 'transform 0.2s'
+                            }} 
+                          />
+                        )}
+                      </Box>
+                    </TableCell>
+                    <TableCell 
+                      onClick={() => handleSort('totalValue')}
+                      style={{ cursor: 'pointer' }}
+                      align="right"
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                        Wartość
+                        {orderBy === 'totalValue' && (
                           <ArrowDropDownIcon 
                             sx={{ 
                               transform: orderDirection === 'asc' ? 'rotate(180deg)' : 'none',
@@ -1629,15 +1657,6 @@ const OrdersList = () => {
                           </TableCell>
                           <TableCell>
                             <Typography variant="body2" fontWeight="medium">
-                            {order.orderDate ? (
-                              typeof order.orderDate === 'object' && typeof order.orderDate.toDate === 'function' 
-                                ? formatDate(order.orderDate.toDate(), false)
-                                : formatDate(order.orderDate, false)
-                            ) : '-'}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" fontWeight="medium">
                               {typeof order.customer === 'object' && order.customer !== null 
                                 ? (order.customer?.name || 'Brak danych klienta') 
                                 : String(order.customer) || 'Brak danych klienta'}
@@ -1647,11 +1666,35 @@ const OrdersList = () => {
                             <Chip 
                               label={order.status} 
                               size="small"
+                              clickable
+                              onClick={() => handleStatusClick(order)}
                               sx={{
                                 backgroundColor: getStatusChipColor(order.status),
-                                color: 'white'
+                                color: 'white',
+                                cursor: 'pointer',
+                                '&:hover': {
+                                  opacity: 0.8
+                                }
                               }}
                             />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight="medium">
+                            {order.orderDate ? (
+                              typeof order.orderDate === 'object' && typeof order.orderDate.toDate === 'function' 
+                                ? formatDate(order.orderDate.toDate(), false)
+                                : formatDate(order.orderDate, false)
+                            ) : '-'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight="medium">
+                            {order.deadline ? (
+                              typeof order.deadline === 'object' && typeof order.deadline.toDate === 'function' 
+                                ? formatDate(order.deadline.toDate(), false)
+                                : formatDate(order.deadline, false)
+                            ) : '-'}
+                            </Typography>
                           </TableCell>
                           <TableCell align="right">
                             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
@@ -1664,15 +1707,6 @@ const OrdersList = () => {
                                 </Typography>
                               )}
                             </Box>
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" fontWeight="medium">
-                            {order.deadline ? (
-                              typeof order.deadline === 'object' && typeof order.deadline.toDate === 'function' 
-                                ? formatDate(order.deadline.toDate(), false)
-                                : formatDate(order.deadline, false)
-                            ) : '-'}
-                            </Typography>
                           </TableCell>
                           <TableCell align="right">
                             <Tooltip title="Edytuj">
@@ -2159,6 +2193,44 @@ const OrdersList = () => {
           <Button onClick={handleConfirmStatusChange} color="primary" variant="contained">
             Zmień status
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Nowy dialog zmiany statusu (podobnie jak w PO) */}
+      <Dialog
+        open={statusDialogOpen}
+        onClose={() => setStatusDialogOpen(false)}
+      >
+        <DialogTitle>Zmiana statusu zamówienia</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Wybierz nowy status dla zamówienia:
+            {orderToUpdateStatus && (
+              <>
+                <br />
+                Numer: {orderToUpdateStatus.orderNumber || `#${orderToUpdateStatus.id.substring(0, 8).toUpperCase()}`}
+              </>
+            )}
+          </DialogContentText>
+          <FormControl fullWidth>
+            <InputLabel id="new-status-label">Status</InputLabel>
+            <Select
+              labelId="new-status-label"
+              value={newStatus}
+              onChange={(e) => setNewStatus(e.target.value)}
+              label="Status"
+            >
+              {ORDER_STATUSES.map((status) => (
+                <MenuItem key={status.value} value={status.value}>
+                  {status.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStatusDialogOpen(false)}>Anuluj</Button>
+          <Button color="primary" onClick={handleStatusUpdate}>Zaktualizuj</Button>
         </DialogActions>
       </Dialog>
     </Box>

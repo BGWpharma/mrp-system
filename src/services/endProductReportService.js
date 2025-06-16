@@ -1123,6 +1123,39 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       currentY += 8;
     }
 
+    currentY += 10;
+
+    // 8. Additional Attachments
+    addSectionHeader(8, 'Additional Attachments', '#6C35EA');
+    
+    if (additionalData.additionalAttachments && additionalData.additionalAttachments.length > 0) {
+      const additionalAttHeaders = ['File type', 'File name', 'Size', 'Upload date'];
+      const additionalAttData = additionalData.additionalAttachments.map(attachment => [
+        getFileTypeFromExtension(attachment.fileName),
+        attachment.fileName,
+        formatFileSize(attachment.size),
+        new Date(attachment.uploadedAt).toLocaleDateString('en-GB')
+      ]);
+
+      addTable(additionalAttHeaders, additionalAttData);
+
+      // Summary
+      doc.setTextColor(25, 118, 210);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Total additional attachments: ${additionalData.additionalAttachments.length}`, margin, currentY);
+      doc.setTextColor(85, 85, 85);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Total size: ${formatFileSize(additionalData.additionalAttachments.reduce((sum, attachment) => sum + attachment.size, 0))}`, margin, currentY + 4);
+      currentY += 12;
+    } else {
+      doc.setTextColor(150, 150, 150);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'italic');
+      doc.text('No additional attachments provided for this product', margin, currentY);
+      currentY += 8;
+    }
+
     // Process attachments if provided
     if (additionalData.attachments && additionalData.attachments.length > 0) {
       try {

@@ -914,25 +914,21 @@ const InvoiceDetails = () => {
           {invoice.isProforma ? 'Faktura proforma' : 'Faktura'} {invoice.number}
         </Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
-          {invoice.status === 'draft' && (
-            <>
-              <Button
-                variant="outlined"
-                startIcon={<EditIcon />}
-                onClick={handleEditClick}
-              >
-                Edytuj
-              </Button>
-              <Button
-                variant="outlined"
-                color="error"
-                startIcon={<DeleteIcon />}
-                onClick={handleDeleteClick}
-              >
-                Usuń
-              </Button>
-            </>
-          )}
+          <Button
+            variant="outlined"
+            startIcon={<EditIcon />}
+            onClick={handleEditClick}
+          >
+            Edytuj
+          </Button>
+          <Button
+            variant="outlined"
+            color="error"
+            startIcon={<DeleteIcon />}
+            onClick={handleDeleteClick}
+          >
+            Usuń
+          </Button>
           <Button
             variant="outlined"
             startIcon={<DownloadIcon />}
@@ -1276,18 +1272,16 @@ const InvoiceDetails = () => {
                 
 
                 
-                {invoice.status === 'draft' && (
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    color="error"
-                    startIcon={<DeleteIcon />}
-                    onClick={handleDeleteClick}
-                    sx={{ mb: 1 }}
-                  >
-                    Usuń fakturę
-                  </Button>
-                )}
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  color="error"
+                  startIcon={<DeleteIcon />}
+                  onClick={handleDeleteClick}
+                  sx={{ mb: 1 }}
+                >
+                  Usuń fakturę
+                </Button>
               </CardContent>
             </Card>
           </Grid>

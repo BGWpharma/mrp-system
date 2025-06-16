@@ -252,6 +252,10 @@ const TaskDetailsPage = () => {
   const [clinicalAttachments, setClinicalAttachments] = useState([]);
   const [uploadingClinical, setUploadingClinical] = useState(false);
 
+  // Stan dla dodatkowych załączników
+  const [additionalAttachments, setAdditionalAttachments] = useState([]);
+  const [uploadingAdditional, setUploadingAdditional] = useState(false);
+
   // Stan dla generowania raportu PDF
   const [generatingPDF, setGeneratingPDF] = useState(false);
 
@@ -631,6 +635,7 @@ const TaskDetailsPage = () => {
   useEffect(() => {
     if (task?.id) {
       fetchClinicalAttachments();
+      fetchAdditionalAttachments();
     }
   }, [task?.id]);
 
@@ -4922,6 +4927,127 @@ const TaskDetailsPage = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  // Funkcje dla dodatkowych załączników
+  const fetchAdditionalAttachments = async () => {
+    if (!task?.id) return;
+    
+    try {
+      const taskRef = doc(db, 'productionTasks', task.id);
+      const taskDoc = await getDoc(taskRef);
+      
+      if (taskDoc.exists()) {
+        const taskData = taskDoc.data();
+        setAdditionalAttachments(taskData.additionalAttachments || []);
+      }
+    } catch (error) {
+      console.warn('Błąd podczas pobierania dodatkowych załączników:', error);
+    }
+  };
+
+  const uploadAdditionalFile = async (file) => {
+    try {
+      const maxSize = 20 * 1024 * 1024; // 20MB dla dodatkowych załączników
+      if (file.size > maxSize) {
+        throw new Error('Plik jest za duży. Maksymalny rozmiar to 20MB.');
+      }
+
+      const allowedTypes = [
+        'application/pdf',
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'text/plain',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      ];
+      
+      if (!allowedTypes.includes(file.type)) {
+        throw new Error('Nieobsługiwany typ pliku. Dozwolone: PDF, JPG, PNG, GIF, DOC, DOCX, TXT, XLS, XLSX');
+      }
+
+      const timestamp = new Date().getTime();
+      const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const fileName = `${timestamp}_${sanitizedFileName}`;
+      const storagePath = `additional-attachments/${task.id}/${fileName}`;
+
+      const fileRef = ref(storage, storagePath);
+      await uploadBytes(fileRef, file);
+      const downloadURL = await getDownloadURL(fileRef);
+
+      return {
+        id: `${timestamp}_${Math.random().toString(36).substr(2, 9)}`,
+        fileName: file.name,
+        storagePath,
+        downloadURL,
+        contentType: file.type,
+        size: file.size,
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: currentUser?.uid
+      };
+    } catch (error) {
+      console.error('Błąd podczas przesyłania pliku:', error);
+      throw error;
+    }
+  };
+
+  const handleAdditionalFileSelect = async (files) => {
+    if (!files || files.length === 0) return;
+
+    setUploadingAdditional(true);
+    const newAttachments = [...additionalAttachments];
+
+    try {
+      for (const file of files) {
+        try {
+          const uploadedFile = await uploadAdditionalFile(file);
+          newAttachments.push(uploadedFile);
+          showSuccess(`Plik "${file.name}" został przesłany pomyślnie`);
+        } catch (error) {
+          showError(`Błąd podczas przesyłania pliku "${file.name}": ${error.message}`);
+        }
+      }
+
+      const taskRef = doc(db, 'productionTasks', task.id);
+      await updateDoc(taskRef, {
+        additionalAttachments: newAttachments,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      });
+
+      setAdditionalAttachments(newAttachments);
+    } finally {
+      setUploadingAdditional(false);
+    }
+  };
+
+  const handleDeleteAdditionalFile = async (attachment) => {
+    try {
+      const fileRef = ref(storage, attachment.storagePath);
+      await deleteObject(fileRef);
+
+      const updatedAttachments = additionalAttachments.filter(a => a.id !== attachment.id);
+      
+      const taskRef = doc(db, 'productionTasks', task.id);
+      await updateDoc(taskRef, {
+        additionalAttachments: updatedAttachments,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      });
+
+      setAdditionalAttachments(updatedAttachments);
+      showSuccess(`Plik "${attachment.fileName}" został usunięty`);
+    } catch (error) {
+      console.error('Błąd podczas usuwania pliku:', error);
+      showError(`Błąd podczas usuwania pliku: ${error.message}`);
+    }
+  };
+
+  const handleDownloadAdditionalFile = (attachment) => {
+    window.open(attachment.downloadURL, '_blank');
+  };
+
   // Funkcja do pobierania załączników z partii składników
   const fetchIngredientBatchAttachments = async () => {
     if (!task?.recipe?.ingredients || !task?.consumedMaterials || materials.length === 0) {
@@ -5154,6 +5280,22 @@ const TaskDetailsPage = () => {
         });
       }
       
+      // Dodaj dodatkowe załączniki
+      if (additionalAttachments && additionalAttachments.length > 0) {
+        additionalAttachments.forEach(attachment => {
+          if (attachment.downloadURL && attachment.fileName) {
+            const fileExtension = attachment.fileName.split('.').pop().toLowerCase();
+            const fileType = ['pdf', 'png', 'jpg', 'jpeg'].includes(fileExtension) ? fileExtension : 'pdf';
+            
+            attachments.push({
+              fileName: attachment.fileName,
+              fileType: fileType,
+              fileUrl: attachment.downloadURL
+            });
+          }
+        });
+      }
+      
       // Dodaj załączniki z partii składników
       if (ingredientBatchAttachments && Object.keys(ingredientBatchAttachments).length > 0) {
         Object.values(ingredientBatchAttachments).flat().forEach(attachment => {
@@ -5237,6 +5379,7 @@ const TaskDetailsPage = () => {
         productionHistory,
         formResponses,
         clinicalAttachments,
+        additionalAttachments,
         ingredientAttachments,
         ingredientBatchAttachments,
         materials,
@@ -5696,7 +5839,7 @@ const TaskDetailsPage = () => {
                     <Grid container spacing={3}>
                       <Grid item xs={12} md={6}>
                         <Box sx={{ mb: 1 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#555', mb: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 1 }}>
                             SKU
                           </Typography>
                           <TextField
@@ -5706,7 +5849,7 @@ const TaskDetailsPage = () => {
                             size="small"
                             InputProps={{
                               readOnly: true,
-                              sx: { backgroundColor: '#f9f9f9' }
+                              sx: { backgroundColor: 'action.hover' }
                             }}
                             helperText="Nazwa receptury"
                           />
@@ -5792,7 +5935,7 @@ const TaskDetailsPage = () => {
                           <TableContainer component={Paper} sx={{ mt: 2 }}>
                             <Table size="small">
                               <TableHead>
-                                <TableRow sx={{ backgroundColor: '#e3f2fd' }}>
+                                <TableRow sx={{ backgroundColor: 'action.hover' }}>
                                   <TableCell sx={{ fontWeight: 'bold' }}>Kod</TableCell>
                                   <TableCell sx={{ fontWeight: 'bold' }}>Nazwa</TableCell>
                                   <TableCell align="right" sx={{ fontWeight: 'bold' }}>Ilość</TableCell>
@@ -5827,7 +5970,7 @@ const TaskDetailsPage = () => {
                             </Table>
                           </TableContainer>
                         ) : (
-                          <Paper sx={{ p: 2, backgroundColor: '#fff3e0', border: '1px dashed #ffb74d' }}>
+                          <Paper sx={{ p: 2, backgroundColor: 'warning.light', border: 1, borderColor: 'warning.main', borderStyle: 'dashed', opacity: 0.7 }}>
                             <Typography variant="body2" color="text.secondary" align="center">
                               Brak danych o mikroelementach w recepturze
                             </Typography>
@@ -5914,7 +6057,7 @@ const TaskDetailsPage = () => {
                       <TableContainer component={Paper} sx={{ mt: 2 }}>
                         <Table size="small">
                           <TableHead>
-                            <TableRow sx={{ backgroundColor: '#e8f5e8' }}>
+                            <TableRow sx={{ backgroundColor: 'action.hover' }}>
                               <TableCell sx={{ fontWeight: 'bold' }}>Nazwa składnika</TableCell>
                               <TableCell align="right" sx={{ fontWeight: 'bold' }}>Ilość</TableCell>
                               <TableCell sx={{ fontWeight: 'bold' }}>Jednostka</TableCell>
@@ -5925,7 +6068,7 @@ const TaskDetailsPage = () => {
                           </TableHead>
                           <TableBody>
                             {task.recipe.ingredients.map((ingredient, index) => (
-                              <TableRow key={index} sx={{ '&:nth-of-type(even)': { backgroundColor: '#f9f9f9' } }}>
+                              <TableRow key={index} sx={{ '&:nth-of-type(even)': { backgroundColor: 'action.hover' } }}>
                                 <TableCell sx={{ fontWeight: 'medium' }}>
                                   {ingredient.name}
                                 </TableCell>
@@ -5985,7 +6128,7 @@ const TaskDetailsPage = () => {
                         </Table>
                         
                         {/* Podsumowanie składników */}
-                        <Box sx={{ p: 2, backgroundColor: '#f0f8f0', borderTop: '1px solid #e0e0e0' }}>
+                        <Box sx={{ p: 2, backgroundColor: 'action.hover', borderTop: 1, borderColor: 'divider' }}>
                           <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                             Łączna liczba składników: {task.recipe.ingredients.length}
                           </Typography>
@@ -5995,7 +6138,7 @@ const TaskDetailsPage = () => {
                         </Box>
                       </TableContainer>
                     ) : (
-                      <Paper sx={{ p: 2, backgroundColor: '#fff3e0', border: '1px dashed #ffb74d' }}>
+                      <Paper sx={{ p: 2, backgroundColor: 'warning.light', border: 1, borderColor: 'warning.main', borderStyle: 'dashed', opacity: 0.7 }}>
                         <Typography variant="body2" color="text.secondary" align="center">
                           Brak składników w recepturze
                         </Typography>
@@ -6015,7 +6158,7 @@ const TaskDetailsPage = () => {
                         <TableContainer component={Paper} sx={{ mt: 2 }}>
                           <Table size="small">
                             <TableHead>
-                              <TableRow sx={{ backgroundColor: '#fff3e0' }}>
+                              <TableRow sx={{ backgroundColor: 'action.hover' }}>
                                 <TableCell sx={{ fontWeight: 'bold' }}>Nazwa materiału</TableCell>
                                 <TableCell sx={{ fontWeight: 'bold' }}>Partia</TableCell>
                                 <TableCell align="right" sx={{ fontWeight: 'bold' }}>Ilość</TableCell>
@@ -6064,7 +6207,7 @@ const TaskDetailsPage = () => {
                                 }
                                 
                                 return (
-                                  <TableRow key={index} sx={{ '&:nth-of-type(even)': { backgroundColor: '#fafafa' } }}>
+                                  <TableRow key={index} sx={{ '&:nth-of-type(even)': { backgroundColor: 'action.hover' } }}>
                                     <TableCell sx={{ fontWeight: 'medium' }}>
                                       {materialName}
                                     </TableCell>
@@ -6087,7 +6230,7 @@ const TaskDetailsPage = () => {
                           </Table>
                           
                           {/* Podsumowanie dat ważności */}
-                          <Box sx={{ p: 2, backgroundColor: '#f5f5f5', borderTop: '1px solid #e0e0e0' }}>
+                          <Box sx={{ p: 2, backgroundColor: 'action.hover', borderTop: 1, borderColor: 'divider' }}>
                             <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                               Podsumowanie: {task.consumedMaterials.length} skonsumowanych materiałów
                             </Typography>
@@ -6107,7 +6250,7 @@ const TaskDetailsPage = () => {
                     </Typography>
                     
                     {/* Sekcja przesyłania plików */}
-                    <Box sx={{ mb: 3, p: 2, backgroundColor: '#e3f2fd', borderRadius: 1, border: '1px dashed #2196f3' }}>
+                    <Box sx={{ mb: 3, p: 2, backgroundColor: 'info.light', borderRadius: 1, border: 1, borderColor: 'info.main', borderStyle: 'dashed', opacity: 0.8 }}>
                       <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
                         <CloudUploadIcon sx={{ mr: 1 }} />
                         Dodaj dokumenty badań klinicznych i bibliograficznych
@@ -6150,7 +6293,7 @@ const TaskDetailsPage = () => {
                         <TableContainer component={Paper} sx={{ mt: 2 }}>
                           <Table size="small">
                             <TableHead>
-                              <TableRow sx={{ backgroundColor: '#fff3e0' }}>
+                              <TableRow sx={{ backgroundColor: 'action.hover' }}>
                                 <TableCell sx={{ fontWeight: 'bold', width: 60 }}>Typ</TableCell>
                                 <TableCell sx={{ fontWeight: 'bold' }}>Nazwa pliku</TableCell>
                                 <TableCell sx={{ fontWeight: 'bold', width: 100 }}>Rozmiar</TableCell>
@@ -6160,7 +6303,7 @@ const TaskDetailsPage = () => {
                             </TableHead>
                             <TableBody>
                               {clinicalAttachments.map((attachment, index) => (
-                                <TableRow key={attachment.id} sx={{ '&:nth-of-type(even)': { backgroundColor: '#fafafa' } }}>
+                                <TableRow key={attachment.id} sx={{ '&:nth-of-type(even)': { backgroundColor: 'action.hover' } }}>
                                   <TableCell>
                                     {getClinicalFileIcon(attachment.contentType)}
                                   </TableCell>
@@ -6203,7 +6346,7 @@ const TaskDetailsPage = () => {
                           </Table>
                           
                           {/* Podsumowanie załączników */}
-                          <Box sx={{ p: 2, backgroundColor: '#f0f8f0', borderTop: '1px solid #e0e0e0' }}>
+                          <Box sx={{ p: 2, backgroundColor: 'action.hover', borderTop: 1, borderColor: 'divider' }}>
                             <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                               Łączna liczba dokumentów: {clinicalAttachments.length}
                             </Typography>
@@ -6214,7 +6357,7 @@ const TaskDetailsPage = () => {
                         </TableContainer>
                       </Box>
                     ) : (
-                      <Paper sx={{ p: 2, backgroundColor: '#fff3e0', border: '1px dashed #ffb74d' }}>
+                      <Paper sx={{ p: 2, backgroundColor: 'warning.light', border: 1, borderColor: 'warning.main', borderStyle: 'dashed', opacity: 0.7 }}>
                         <Typography variant="body2" color="text.secondary" align="center">
                           Brak załączonych dokumentów badań klinicznych
                         </Typography>
@@ -6236,7 +6379,7 @@ const TaskDetailsPage = () => {
                     {Object.keys(ingredientAttachments).length > 0 ? (
                       <Box>
                         {Object.entries(ingredientAttachments).map(([ingredientName, attachments]) => (
-                          <Paper key={ingredientName} sx={{ p: 2, mb: 2, backgroundColor: '#ffffff', border: '1px solid #e0e0e0' }} elevation={0}>
+                          <Paper key={ingredientName} sx={{ p: 2, mb: 2, backgroundColor: 'background.paper', border: 1, borderColor: 'divider' }} elevation={0}>
                             <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                               {ingredientName}
                             </Typography>
@@ -6248,9 +6391,10 @@ const TaskDetailsPage = () => {
                                   alignItems: 'center', 
                                   gap: 2,
                                   p: 1.5,
-                                  backgroundColor: '#f9f9f9',
+                                  backgroundColor: 'action.hover',
                                   borderRadius: 1,
-                                  border: '1px solid #e0e0e0'
+                                  border: 1,
+                                  borderColor: 'divider'
                                 }}>
                                   <Box sx={{ minWidth: 40 }}>
                                     {getClinicalFileIcon(attachment.contentType)}
@@ -6290,7 +6434,7 @@ const TaskDetailsPage = () => {
                             </Box>
                             
                             {/* Podsumowanie dla składnika */}
-                            <Box sx={{ mt: 1, p: 1, backgroundColor: '#e8f5e8', borderRadius: 1 }}>
+                            <Box sx={{ mt: 1, p: 1, backgroundColor: 'success.light', borderRadius: 1, opacity: 0.6 }}>
                               <Typography variant="caption" color="text.secondary">
                                 Załączników: {attachments.length} • 
                                 Zamówienia: {[...new Set(attachments.map(a => a.poNumber))].length} • 
@@ -6301,7 +6445,7 @@ const TaskDetailsPage = () => {
                         ))}
                         
                         {/* Globalne podsumowanie */}
-                        <Box sx={{ p: 2, backgroundColor: '#f0f8f0', borderRadius: 1, border: '1px solid #e0e0e0' }}>
+                        <Box sx={{ p: 2, backgroundColor: 'action.hover', borderRadius: 1, border: 1, borderColor: 'divider' }}>
                           <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                             Podsumowanie załączników fizykochemicznych:
                           </Typography>
@@ -6316,7 +6460,7 @@ const TaskDetailsPage = () => {
                         </Box>
                       </Box>
                     ) : (
-                      <Paper sx={{ p: 3, backgroundColor: '#fff3e0', border: '1px dashed #ffb74d' }}>
+                      <Paper sx={{ p: 3, backgroundColor: 'warning.light', border: 1, borderColor: 'warning.main', borderStyle: 'dashed', opacity: 0.7 }}>
                         <Typography variant="body2" color="text.secondary" align="center">
                           Brak załączników fizykochemicznych z powiązanych zamówień zakupu
                         </Typography>
@@ -6329,7 +6473,7 @@ const TaskDetailsPage = () => {
                   
                   {/* Diagnoza problemu dla starych zadań bez pełnych danych receptury */}
                   {task && task.recipeId && !task.recipe?.ingredients && (
-                    <Paper sx={{ p: 3, mb: 3, backgroundColor: '#fff3e0', border: '2px solid #ff9800' }} elevation={2}>
+                    <Paper sx={{ p: 3, mb: 3, backgroundColor: 'warning.light', border: 2, borderColor: 'warning.main', opacity: 0.9 }} elevation={2}>
                       <Typography variant="h6" gutterBottom sx={{ color: 'warning.main', fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
                         ⚠️ Wykryto problem z danymi receptury
                       </Typography>
@@ -6373,7 +6517,7 @@ const TaskDetailsPage = () => {
                       {/* Start date i End date */}
                       <Grid item xs={12} md={6}>
                         <Box sx={{ mb: 1 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#555', mb: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 1 }}>
                             Start date
                           </Typography>
                           <TextField
@@ -6387,7 +6531,7 @@ const TaskDetailsPage = () => {
                             size="small"
                             InputProps={{
                               readOnly: true,
-                              sx: { backgroundColor: '#f9f9f9' }
+                              sx: { backgroundColor: 'action.hover' }
                             }}
                             helperText="Data rozpoczęcia produkcji z pierwszego wpisu w historii"
                           />
@@ -6396,7 +6540,7 @@ const TaskDetailsPage = () => {
                       
                       <Grid item xs={12} md={6}>
                         <Box sx={{ mb: 1 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#555', mb: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 1 }}>
                             End date
                           </Typography>
                           <TextField
@@ -6410,7 +6554,7 @@ const TaskDetailsPage = () => {
                             size="small"
                             InputProps={{
                               readOnly: true,
-                              sx: { backgroundColor: '#f9f9f9' }
+                              sx: { backgroundColor: 'action.hover' }
                             }}
                             helperText="Data zakończenia produkcji z ostatniego wpisu w historii"
                           />
@@ -6420,7 +6564,7 @@ const TaskDetailsPage = () => {
                       {/* MO number */}
                       <Grid item xs={12} md={6}>
                         <Box sx={{ mb: 1 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#555', mb: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 1 }}>
                             MO number
                           </Typography>
                           <TextField
@@ -6430,7 +6574,7 @@ const TaskDetailsPage = () => {
                             size="small"
                             InputProps={{
                               readOnly: true,
-                              sx: { backgroundColor: '#f9f9f9' }
+                              sx: { backgroundColor: 'action.hover' }
                             }}
                             helperText="Numer zamówienia produkcyjnego"
                           />
@@ -6440,7 +6584,7 @@ const TaskDetailsPage = () => {
                       {/* Company name */}
                       <Grid item xs={12} md={6}>
                         <Box sx={{ mb: 1 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#555', mb: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 1 }}>
                             Company name
                           </Typography>
                           <TextField
@@ -6450,7 +6594,7 @@ const TaskDetailsPage = () => {
                             size="small"
                             InputProps={{
                               readOnly: true,
-                              sx: { backgroundColor: '#f9f9f9' }
+                              sx: { backgroundColor: 'action.hover' }
                             }}
                             helperText="Nazwa firmy"
                           />
@@ -6460,7 +6604,7 @@ const TaskDetailsPage = () => {
                       {/* Company address */}
                       <Grid item xs={12} md={6}>
                         <Box sx={{ mb: 1 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#555', mb: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 1 }}>
                             Address
                           </Typography>
                           <TextField
@@ -6472,7 +6616,7 @@ const TaskDetailsPage = () => {
                             maxRows={2}
                             InputProps={{
                               readOnly: true,
-                              sx: { backgroundColor: '#f9f9f9' }
+                              sx: { backgroundColor: 'action.hover' }
                             }}
                             helperText="Adres firmy"
                           />
@@ -6482,7 +6626,7 @@ const TaskDetailsPage = () => {
                       {/* Workstation */}
                       <Grid item xs={12} md={6}>
                         <Box sx={{ mb: 1 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#555', mb: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 1 }}>
                             Workstation
                           </Typography>
                           <TextField
@@ -6498,7 +6642,7 @@ const TaskDetailsPage = () => {
                             size="small"
                             InputProps={{
                               readOnly: true,
-                              sx: { backgroundColor: '#f9f9f9' }
+                              sx: { backgroundColor: 'action.hover' }
                             }}
                             helperText="Stanowisko produkcyjne"
                           />
@@ -6508,7 +6652,7 @@ const TaskDetailsPage = () => {
                       {/* Time per unit */}
                       <Grid item xs={12} md={6}>
                         <Box sx={{ mb: 1 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#555', mb: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 1 }}>
                             Time per unit
                           </Typography>
                           <TextField
@@ -6524,7 +6668,7 @@ const TaskDetailsPage = () => {
                             size="small"
                             InputProps={{
                               readOnly: true,
-                              sx: { backgroundColor: '#f9f9f9' }
+                              sx: { backgroundColor: 'action.hover' }
                             }}
                             helperText="Czas produkcji na jedną sztukę z receptury"
                           />
@@ -6541,7 +6685,7 @@ const TaskDetailsPage = () => {
                       <TableContainer component={Paper} sx={{ mt: 2 }}>
                         <Table size="small">
                           <TableHead>
-                            <TableRow sx={{ backgroundColor: '#e3f2fd' }}>
+                            <TableRow sx={{ backgroundColor: 'action.hover' }}>
                               <TableCell sx={{ fontWeight: 'bold' }}>Start date</TableCell>
                               <TableCell sx={{ fontWeight: 'bold' }}>End date</TableCell>
                               <TableCell align="right" sx={{ fontWeight: 'bold' }}>Quantity</TableCell>
@@ -6578,7 +6722,7 @@ const TaskDetailsPage = () => {
                         </Table>
                       </TableContainer>
                     ) : (
-                      <Paper sx={{ p: 3, backgroundColor: '#fff3e0', border: '1px dashed #ffb74d' }}>
+                      <Paper sx={{ p: 3, backgroundColor: 'warning.light', border: 1, borderColor: 'warning.main', borderStyle: 'dashed', opacity: 0.7 }}>
                         <Typography variant="body2" color="text.secondary" align="center">
                           Brak historii produkcji dla tego zadania
                         </Typography>
@@ -6597,7 +6741,7 @@ const TaskDetailsPage = () => {
                       <Grid container spacing={3}>
                         {formResponses.completedMO.map((report, index) => (
                           <Grid item xs={12} key={index}>
-                            <Paper sx={{ p: 3, backgroundColor: '#f0f7ff', border: '1px solid #1976d2' }}>
+                            <Paper sx={{ p: 3, backgroundColor: 'info.light', border: 1, borderColor: 'info.main', opacity: 0.8 }}>
                               <Typography variant="subtitle2" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
                                 Raport #{index + 1} - {formatDateTime(report.date)}
                               </Typography>
@@ -6710,7 +6854,7 @@ const TaskDetailsPage = () => {
                         ))}
                       </Grid>
                     ) : (
-                      <Paper sx={{ p: 3, backgroundColor: '#fff3e0', border: '1px dashed #ffb74d' }}>
+                      <Paper sx={{ p: 3, backgroundColor: 'warning.light', border: 1, borderColor: 'warning.main', borderStyle: 'dashed', opacity: 0.7 }}>
                         <Typography variant="body2" color="text.secondary" align="center">
                           Brak raportów zakończonych MO dla tego zadania
                         </Typography>
@@ -6731,7 +6875,7 @@ const TaskDetailsPage = () => {
                       <Grid container spacing={3}>
                         {formResponses.productionControl.map((report, index) => (
                           <Grid item xs={12} key={index}>
-                            <Paper sx={{ p: 3, backgroundColor: '#f0fff0', border: '1px solid #4caf50' }}>
+                            <Paper sx={{ p: 3, backgroundColor: 'success.light', border: 1, borderColor: 'success.main', opacity: 0.8 }}>
                               <Typography variant="subtitle2" gutterBottom sx={{ color: 'success.main', fontWeight: 'bold' }}>
                                 Raport kontroli #{index + 1} - {formatDateTime(report.fillDate)}
                               </Typography>
@@ -7112,7 +7256,7 @@ const TaskDetailsPage = () => {
                         ))}
                       </Grid>
                     ) : (
-                      <Paper sx={{ p: 3, backgroundColor: '#fff3e0', border: '1px dashed #ffb74d' }}>
+                      <Paper sx={{ p: 3, backgroundColor: 'warning.light', border: 1, borderColor: 'warning.main', borderStyle: 'dashed', opacity: 0.7 }}>
                         <Typography variant="body2" color="text.secondary" align="center">
                           Brak raportów kontroli produkcji dla tego zadania
                         </Typography>
@@ -7175,6 +7319,135 @@ const TaskDetailsPage = () => {
                         </Typography>
                       )}
                     </Box>
+                  </Paper>
+                  
+                  {/* 8. Additional Attachments */}
+                  <Paper sx={{ p: 3, mb: 3 }}>
+                    <Typography variant="h6" sx={{ mb: 2 }}>
+                      8. Additional Attachments
+                    </Typography>
+                    
+                    <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                      Dodaj dodatkowe załączniki związane z tym produktem lub procesem produkcyjnym:
+                    </Typography>
+                    
+                    {/* Sekcja przesyłania plików */}
+                    <Box sx={{ mb: 3, p: 2, backgroundColor: 'secondary.light', borderRadius: 1, border: 1, borderColor: 'secondary.main', borderStyle: 'dashed', opacity: 0.8 }}>
+                      <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
+                        <CloudUploadIcon sx={{ mr: 1 }} />
+                        Dodaj dodatkowe załączniki
+                      </Typography>
+                      
+                      <input
+                        accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.txt,.xls,.xlsx"
+                        style={{ display: 'none' }}
+                        id="additional-file-upload"
+                        multiple
+                        type="file"
+                        onChange={(e) => handleAdditionalFileSelect(Array.from(e.target.files))}
+                        disabled={uploadingAdditional}
+                      />
+                      <label htmlFor="additional-file-upload">
+                        <Button
+                          variant="contained"
+                          component="span"
+                          startIcon={uploadingAdditional ? <CircularProgress size={20} color="inherit" /> : <CloudUploadIcon />}
+                          disabled={uploadingAdditional}
+                          sx={{ mt: 1 }}
+                        >
+                          {uploadingAdditional ? 'Przesyłanie...' : 'Wybierz pliki'}
+                        </Button>
+                      </label>
+                      
+                      <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
+                        Dozwolone formaty: PDF, JPG, PNG, GIF, DOC, DOCX, TXT, XLS, XLSX (max 20MB na plik)
+                      </Typography>
+                    </Box>
+
+                    {/* Lista załączników */}
+                    {additionalAttachments.length > 0 ? (
+                      <Box>
+                        <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold' }}>
+                          <AttachFileIcon sx={{ mr: 1 }} />
+                          Dodatkowe załączniki ({additionalAttachments.length})
+                        </Typography>
+                        
+                        <TableContainer component={Paper} sx={{ mt: 2 }}>
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow sx={{ backgroundColor: 'action.hover' }}>
+                                <TableCell sx={{ fontWeight: 'bold', width: 60 }}>Typ</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold' }}>Nazwa pliku</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold', width: 100 }}>Rozmiar</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold', width: 120 }}>Data dodania</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold', width: 120 }} align="center">Akcje</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {additionalAttachments.map((attachment, index) => (
+                                <TableRow key={attachment.id} sx={{ '&:nth-of-type(even)': { backgroundColor: 'action.hover' } }}>
+                                  <TableCell>
+                                    {getClinicalFileIcon(attachment.contentType)}
+                                  </TableCell>
+                                  <TableCell sx={{ fontWeight: 'medium' }}>
+                                    {attachment.fileName}
+                                  </TableCell>
+                                  <TableCell sx={{ fontSize: '0.875rem' }}>
+                                    {formatClinicalFileSize(attachment.size)}
+                                  </TableCell>
+                                  <TableCell sx={{ fontSize: '0.875rem' }}>
+                                    {new Date(attachment.uploadedAt).toLocaleDateString('pl-PL', {
+                                      day: '2-digit',
+                                      month: '2-digit',
+                                      year: 'numeric'
+                                    })}
+                                  </TableCell>
+                                  <TableCell align="center">
+                                    <Tooltip title="Pobierz">
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => handleDownloadAdditionalFile(attachment)}
+                                        sx={{ mr: 0.5 }}
+                                      >
+                                        <DownloadIcon fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                    <Tooltip title="Usuń">
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => handleDeleteAdditionalFile(attachment)}
+                                        color="error"
+                                      >
+                                        <DeleteIcon fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                          
+                          {/* Podsumowanie załączników */}
+                          <Box sx={{ p: 2, backgroundColor: 'action.hover', borderTop: 1, borderColor: 'divider' }}>
+                            <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                              Łączna liczba załączników: {additionalAttachments.length}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                              Łączny rozmiar: {formatClinicalFileSize(additionalAttachments.reduce((sum, attachment) => sum + attachment.size, 0))}
+                            </Typography>
+                          </Box>
+                        </TableContainer>
+                      </Box>
+                    ) : (
+                      <Paper sx={{ p: 2, backgroundColor: 'warning.light', border: 1, borderColor: 'warning.main', borderStyle: 'dashed', opacity: 0.7 }}>
+                        <Typography variant="body2" color="text.secondary" align="center">
+                          Brak dodatkowych załączników
+                        </Typography>
+                        <Typography variant="caption" display="block" align="center" sx={{ mt: 1, color: 'text.secondary' }}>
+                          Możesz dodać dokumenty, zdjęcia lub inne pliki związane z tym produktem
+                        </Typography>
+                      </Paper>
+                    )}
                   </Paper>
                 </Paper>
               </Grid>

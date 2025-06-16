@@ -554,29 +554,46 @@ export const calculateInvoiceTotal = (items) => {
 
 /**
  * Generuje numer faktury
- * Format: FV/ROK/MIESIĄC/NUMER lub PROFORMA/ROK/MIESIĄC/NUMER
+ * Format: FPF/kolejny numer/MM/RRRR lub FS/kolejny numer/MM/RRRR
+ * Numeracja odnawia się co miesiąc
  */
 export const generateInvoiceNumber = async (isProforma = false) => {
   try {
     const today = new Date();
     const year = today.getFullYear();
     const month = (today.getMonth() + 1).toString().padStart(2, '0');
-    const prefix = isProforma ? 'PROFORMA' : 'FV';
+    const prefix = isProforma ? 'FPF' : 'FS';
     
     // Pobierz wszystkie faktury z bieżącego miesiąca i roku o danym typie
     const invoicesQuery = query(
       collection(db, INVOICES_COLLECTION),
-      where('number', '>=', `${prefix}/${year}/${month}/`),
-      where('number', '<', `${prefix}/${year}/${month}/\uf8ff`)
+      where('number', '>=', `${prefix}/`),
+      where('number', '<', `${prefix}/\uf8ff`)
     );
     
     const querySnapshot = await getDocs(invoicesQuery);
-    const invoiceCount = querySnapshot.size;
     
-    // Numer faktury to liczba istniejących faktur + 1, sformatowana jako 3-cyfrowa liczba
-    const invoiceNumber = (invoiceCount + 1).toString().padStart(3, '0');
+    // Filtruj faktury z bieżącego miesiąca i roku
+    const currentMonthInvoices = [];
+    querySnapshot.forEach((doc) => {
+      const invoiceNumber = doc.data().number;
+      if (invoiceNumber) {
+        // Sprawdź format: PREFIX/NUMER/MM/RRRR
+        const parts = invoiceNumber.split('/');
+        if (parts.length === 4 && parts[0] === prefix) {
+          const invoiceMonth = parts[2];
+          const invoiceYear = parts[3];
+          if (invoiceMonth === month && invoiceYear === year.toString()) {
+            currentMonthInvoices.push(invoiceNumber);
+          }
+        }
+      }
+    });
     
-    return `${prefix}/${year}/${month}/${invoiceNumber}`;
+    // Numer faktury to liczba istniejących faktur + 1
+    const invoiceNumber = (currentMonthInvoices.length + 1).toString();
+    
+    return `${prefix}/${invoiceNumber}/${month}/${year}`;
   } catch (error) {
     console.error('Błąd podczas generowania numeru faktury:', error);
     throw error;
@@ -585,7 +602,7 @@ export const generateInvoiceNumber = async (isProforma = false) => {
 
 /**
  * Generuje numer faktury proforma
- * Format: PROFORMA/ROK/MIESIĄC/NUMER
+ * Format: FPF/kolejny numer/MM/RRRR
  */
 export const generateProformaNumber = async () => {
   return await generateInvoiceNumber(true);

@@ -347,50 +347,54 @@ const InvoicesList = () => {
   };
 
   return (
-    <Box sx={{ p: { xs: 1, sm: 2 }, maxWidth: 'none', width: '100%' }}>
+    <Box sx={{ p: { xs: 0.5, sm: 0.5, md: 1 }, maxWidth: 'none', width: '100%' }}>
       {/* Pasek wyszukiwania z przyciskami zarządzania */}
-      <Paper sx={{ mb: 3, p: 2 }}>
+      <Paper sx={{ mb: 2, p: { xs: 1.5, sm: 2 } }}>
         <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={6} md={4}>
-            <TextField
-              fullWidth
-              variant="outlined"
-              placeholder="Szukaj faktur..."
-              value={searchTerm}
-              onChange={handleSearchChange}
-              onKeyPress={handleSearchKeyPress}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon />
-                  </InputAdornment>
-                ),
-                endAdornment: searchTerm && (
-                  <InputAdornment position="end">
-                    <IconButton size="small" onClick={clearSearch}>
-                      <ClearIcon />
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6} md={8}>
-            <Grid container spacing={1} justifyContent="flex-end">
-              <Grid item>
-                <Button variant="outlined" onClick={handleSearch}>
-                  Szukaj
-                </Button>
-              </Grid>
-              <Grid item>
-                <Button
+          <Grid item xs={12} md={7}>
+            <Grid container spacing={1} alignItems="center">
+              <Grid item xs={12} sm={8}>
+                <TextField
+                  fullWidth
                   variant="outlined"
-                  startIcon={<FilterListIcon />}
-                  onClick={toggleFilters}
-                >
-                  Filtry
-                </Button>
+                  placeholder="Szukaj faktur..."
+                  value={searchTerm}
+                  onChange={handleSearchChange}
+                  onKeyPress={handleSearchKeyPress}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon />
+                      </InputAdornment>
+                    ),
+                    endAdornment: searchTerm && (
+                      <InputAdornment position="end">
+                        <IconButton size="small" onClick={clearSearch}>
+                          <ClearIcon />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                />
               </Grid>
+              <Grid item xs={12} sm={4}>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button variant="outlined" onClick={handleSearch}>
+                    Szukaj
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={<FilterListIcon />}
+                    onClick={toggleFilters}
+                  >
+                    Filtry
+                  </Button>
+                </Box>
+              </Grid>
+            </Grid>
+          </Grid>
+          <Grid item xs={12} md={5}>
+            <Grid container spacing={{ xs: 0.5, sm: 1 }} justifyContent="flex-end">
               <Grid item>
                 <Button
                   variant="outlined"
@@ -551,20 +555,20 @@ const InvoicesList = () => {
         </Box>
       ) : (
         <>
-          <Paper sx={{ width: '100%' }}>
-            <TableContainer>
-              <Table sx={{ minWidth: 1000 }} stickyHeader>
+          <Paper sx={{ width: '100%', overflow: 'hidden' }}>
+            <TableContainer sx={{ overflowX: 'auto', maxHeight: 'calc(100vh - 300px)' }}>
+              <Table stickyHeader>
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ minWidth: 140 }}>Numer faktury</TableCell>
-                    <TableCell sx={{ minWidth: 200 }}>Klient</TableCell>
-                    <TableCell sx={{ minWidth: 130 }}>Data wystawienia</TableCell>
-                    <TableCell sx={{ minWidth: 130 }}>Termin płatności</TableCell>
-                    <TableCell sx={{ minWidth: 120 }}>Kwota</TableCell>
-                    <TableCell sx={{ minWidth: 120 }}>Do zapłaty/Dostępne</TableCell>
-                    <TableCell sx={{ minWidth: 140 }}>Status faktury</TableCell>
-                    <TableCell sx={{ minWidth: 140 }}>Status płatności</TableCell>
-                    <TableCell align="right" sx={{ minWidth: 150 }}>Akcje</TableCell>
+                    <TableCell sx={{ minWidth: 120, width: '14%' }}>Numer faktury</TableCell>
+                    <TableCell sx={{ minWidth: 150, width: '18%' }}>Klient</TableCell>
+                    <TableCell sx={{ minWidth: 100, width: '12%' }}>Data wystawienia</TableCell>
+                    <TableCell sx={{ minWidth: 100, width: '12%' }}>Termin płatności</TableCell>
+                    <TableCell sx={{ minWidth: 90, width: '10%' }}>Kwota</TableCell>
+                    <TableCell sx={{ minWidth: 90, width: '10%' }}>Do zapłaty/Dostępne</TableCell>
+                    <TableCell sx={{ minWidth: 100, width: '10%' }}>Status faktury</TableCell>
+                    <TableCell sx={{ minWidth: 100, width: '10%' }}>Status płatności</TableCell>
+                    <TableCell align="right" sx={{ minWidth: 100, width: '14%' }}>Akcje</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -580,14 +584,17 @@ const InvoicesList = () => {
                       .map((invoice) => (
                         <TableRow key={invoice.id}>
                           <TableCell>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              {invoice.number}
+                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5 }}>
+                              <Typography variant="body2" sx={{ lineHeight: 1.2 }}>
+                                {invoice.number}
+                              </Typography>
                               {invoice.isProforma && (
                                 <Chip 
                                   label="Proforma" 
                                   size="small" 
                                   color="primary" 
                                   variant="outlined"
+                                  sx={{ height: 'auto', fontSize: '0.7rem', py: 0.25 }}
                                 />
                               )}
                             </Box>
@@ -631,58 +638,53 @@ const InvoicesList = () => {
                           <TableCell align="right">
                             <Box sx={{ 
                               display: 'flex', 
-                              flexDirection: 'column',
-                              gap: 0.5,
-                              alignItems: 'flex-end',
+                              flexWrap: 'wrap',
+                              gap: 0.25,
+                              alignItems: 'center',
+                              justifyContent: 'flex-end',
                               minWidth: 100
                             }}>
-                              <Box sx={{ display: 'flex', gap: 0.5 }}>
+                              <IconButton 
+                                size="small" 
+                                onClick={() => handleViewInvoice(invoice.id)}
+                                title="Podgląd faktury"
+                              >
+                                <ViewIcon fontSize="small" />
+                              </IconButton>
+                              <IconButton 
+                                size="small" 
+                                onClick={() => handleEditInvoice(invoice.id)}
+                                title="Edytuj fakturę"
+                              >
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                              <IconButton 
+                                size="small" 
+                                onClick={() => handleDeleteClick(invoice)}
+                                title="Usuń fakturę"
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                              {invoice.status === 'draft' && (
                                 <IconButton 
                                   size="small" 
-                                  onClick={() => handleViewInvoice(invoice.id)}
-                                  title="Podgląd faktury"
+                                  onClick={() => handleUpdateStatus(invoice.id, 'issued')}
+                                  title="Oznacz jako wystawioną"
+                                  color="primary"
                                 >
-                                  <ViewIcon fontSize="small" />
+                                  <ReceiptIcon fontSize="small" />
                                 </IconButton>
+                              )}
+                              {invoice.status === 'issued' && (
                                 <IconButton 
                                   size="small" 
-                                  onClick={() => handleEditInvoice(invoice.id)}
-                                  title="Edytuj fakturę"
-                                  disabled={invoice.status === 'paid'}
+                                  onClick={() => handleUpdateStatus(invoice.id, 'sent')}
+                                  title="Oznacz jako wysłaną"
+                                  color="info"
                                 >
-                                  <EditIcon fontSize="small" />
+                                  <SendIcon fontSize="small" />
                                 </IconButton>
-                                <IconButton 
-                                  size="small" 
-                                  onClick={() => handleDeleteClick(invoice)}
-                                  title="Usuń fakturę"
-                                  disabled={invoice.status !== 'draft'}
-                                >
-                                  <DeleteIcon fontSize="small" />
-                                </IconButton>
-                              </Box>
-                              <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                {invoice.status === 'draft' && (
-                                  <IconButton 
-                                    size="small" 
-                                    onClick={() => handleUpdateStatus(invoice.id, 'issued')}
-                                    title="Oznacz jako wystawioną"
-                                    color="primary"
-                                  >
-                                    <ReceiptIcon fontSize="small" />
-                                  </IconButton>
-                                )}
-                                {invoice.status === 'issued' && (
-                                  <IconButton 
-                                    size="small" 
-                                    onClick={() => handleUpdateStatus(invoice.id, 'sent')}
-                                    title="Oznacz jako wysłaną"
-                                    color="info"
-                                  >
-                                    <SendIcon fontSize="small" />
-                                  </IconButton>
-                                )}
-                              </Box>
+                              )}
                             </Box>
                           </TableCell>
                         </TableRow>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTheme } from '@mui/material/styles';
 import {
   Container,
   Typography,
@@ -97,6 +98,7 @@ const TIME_PERIODS = {
 const COReportsPage = () => {
   const { currentUser } = useAuth();
   const { showSuccess, showError, showInfo } = useNotification();
+  const theme = useTheme();
   
   // Stan komponentu
   const [loading, setLoading] = useState(true);
@@ -1296,13 +1298,15 @@ const COReportsPage = () => {
                     <Grid item xs={12}>
                       <Paper sx={{ 
                         p: 3, 
-                        background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+                        background: theme.palette.mode === 'dark' 
+                          ? 'linear-gradient(135deg, #1e293b 0%, #334155 100%)'
+                          : 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
                         boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
                         borderRadius: 2
                       }}>
                         <Typography variant="h6" component="h3" sx={{ 
                           mb: 2, 
-                          color: '#2c3e50',
+                          color: theme.palette.text.primary,
                           fontWeight: 'bold',
                           textAlign: 'center'
                         }}>
@@ -1311,10 +1315,12 @@ const COReportsPage = () => {
                         <Box sx={{ 
                           height: 450, 
                           mt: 2,
-                          background: 'white',
+                          background: theme.palette.background.paper,
                           borderRadius: 2,
                           p: 2,
-                          boxShadow: 'inset 0 2px 8px rgba(0, 0, 0, 0.05)'
+                          boxShadow: theme.palette.mode === 'dark' 
+                            ? 'inset 0 2px 8px rgba(0, 0, 0, 0.25)' 
+                            : 'inset 0 2px 8px rgba(0, 0, 0, 0.05)'
                         }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <LineChart 
@@ -1327,34 +1333,57 @@ const COReportsPage = () => {
                                   <stop offset="95%" stopColor="#82ca9d" stopOpacity={0.1}/>
                                 </linearGradient>
                               </defs>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#e8e8e8" />
+                              <CartesianGrid 
+                                strokeDasharray="3 3" 
+                                stroke={theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#e8e8e8'} 
+                              />
                               <XAxis
                                 dataKey="date"
                                 tickFormatter={(date) => formatDateDisplay(date)}
-                                tick={{ fontSize: 12, fill: '#666' }}
-                                axisLine={{ stroke: '#ddd' }}
-                                tickLine={{ stroke: '#ddd' }}
+                                tick={{ 
+                                  fontSize: 12, 
+                                  fill: theme.palette.text.secondary 
+                                }}
+                                axisLine={{ 
+                                  stroke: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : '#ddd' 
+                                }}
+                                tickLine={{ 
+                                  stroke: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : '#ddd' 
+                                }}
                               />
                               <YAxis
                                 tickFormatter={(value) => value.toFixed(2) + ' €'}
-                                tick={{ fontSize: 12, fill: '#666' }}
-                                axisLine={{ stroke: '#ddd' }}
-                                tickLine={{ stroke: '#ddd' }}
+                                tick={{ 
+                                  fontSize: 12, 
+                                  fill: theme.palette.text.secondary 
+                                }}
+                                axisLine={{ 
+                                  stroke: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : '#ddd' 
+                                }}
+                                tickLine={{ 
+                                  stroke: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : '#ddd' 
+                                }}
                                 label={{ 
                                   value: 'Koszt na sztukę (€)', 
                                   angle: -90, 
                                   position: 'insideLeft',
-                                  style: { textAnchor: 'middle', fill: '#666' }
+                                  style: { 
+                                    textAnchor: 'middle', 
+                                    fill: theme.palette.text.secondary 
+                                  }
                                 }}
                               />
                               <RechartsTooltip
                                 formatter={(value) => [value.toFixed(2) + ' €', 'Pełny koszt na sztukę']}
                                 labelFormatter={(date) => formatDateDisplay(date)}
                                 contentStyle={{
-                                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                                  backgroundColor: theme.palette.mode === 'dark' 
+                                    ? 'rgba(30, 41, 59, 0.95)' 
+                                    : 'rgba(255, 255, 255, 0.95)',
                                   border: '1px solid #82ca9d',
                                   borderRadius: '8px',
-                                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
+                                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                                  color: theme.palette.text.primary
                                 }}
                               />
                               <Line
@@ -1367,13 +1396,13 @@ const COReportsPage = () => {
                                   r: 5, 
                                   fill: '#82ca9d',
                                   strokeWidth: 2,
-                                  stroke: '#fff'
+                                  stroke: theme.palette.background.paper
                                 }}
                                 activeDot={{ 
                                   r: 8,
                                   fill: '#82ca9d',
                                   strokeWidth: 3,
-                                  stroke: '#fff',
+                                  stroke: theme.palette.background.paper,
                                   boxShadow: '0 0 10px rgba(130, 202, 157, 0.5)'
                                 }}
                               />
@@ -1383,7 +1412,10 @@ const COReportsPage = () => {
                                   label={{ 
                                     value: "Średnia", 
                                     position: "topRight",
-                                    style: { fill: '#666', fontWeight: 'bold' }
+                                    style: { 
+                                      fill: theme.palette.text.secondary, 
+                                      fontWeight: 'bold' 
+                                    }
                                   }}
                                   stroke="#ff7c7c"
                                   strokeDasharray="5 5"

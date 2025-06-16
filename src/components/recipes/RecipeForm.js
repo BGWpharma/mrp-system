@@ -1542,8 +1542,8 @@ const RecipeForm = ({ recipeId }) => {
               <Table>
                 <TableHead sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.6)' : 'rgba(240, 245, 250, 0.8)' }}>
                   <TableRow>
-                    <TableCell width="30%"><Typography variant="subtitle2">Kod</Typography></TableCell>
-                    <TableCell width="20%"><Typography variant="subtitle2">Nazwa</Typography></TableCell>
+                    <TableCell width="35%"><Typography variant="subtitle2">Kod</Typography></TableCell>
+                    <TableCell width="15%"><Typography variant="subtitle2">Nazwa</Typography></TableCell>
                     <TableCell width="10%"><Typography variant="subtitle2">Ilość</Typography></TableCell>
                     <TableCell width="10%"><Typography variant="subtitle2">Jednostka</Typography></TableCell>
                     <TableCell width="15%"><Typography variant="subtitle2">Kategoria</Typography></TableCell>
