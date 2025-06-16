@@ -230,7 +230,25 @@ export const createInvoice = async (invoiceData, userId) => {
     };
     
     const docRef = await addDoc(collection(db, INVOICES_COLLECTION), newInvoice);
-    return docRef.id;
+    const newInvoiceId = docRef.id;
+    
+    // Jeśli faktura wykorzystuje proformę jako zaliczkę, zaktualizuj proformę
+    if (!invoiceData.isProforma && settledAdvancePayments > 0 && invoiceData.orderId) {
+      try {
+        // Znajdź proformę dla tego zamówienia
+        const relatedInvoices = await getInvoicesByOrderId(invoiceData.orderId);
+        const proforma = relatedInvoices.find(inv => inv.isProforma && inv.id !== newInvoiceId);
+        
+        if (proforma) {
+          await updateProformaUsage(proforma.id, settledAdvancePayments, newInvoiceId, userId);
+        }
+      } catch (proformaError) {
+        console.warn('Błąd podczas aktualizacji wykorzystania proformy:', proformaError);
+        // Nie przerywamy procesu tworzenia faktury z powodu błędu proformy
+      }
+    }
+    
+    return newInvoiceId;
   } catch (error) {
     console.error('Błąd podczas tworzenia faktury:', error);
     throw error;
@@ -364,6 +382,11 @@ const calculatePurchaseOrderTotal = (orderData) => {
  */
 export const updateInvoice = async (invoiceId, invoiceData, userId) => {
   try {
+    // Pobierz poprzednią wersję faktury dla porównania
+    const oldInvoiceDoc = await getDoc(doc(db, INVOICES_COLLECTION, invoiceId));
+    const oldInvoiceData = oldInvoiceDoc.exists() ? oldInvoiceDoc.data() : null;
+    const oldSettledAdvancePayments = parseFloat(oldInvoiceData?.settledAdvancePayments || 0);
+    
     // Walidacja danych faktury
     validateInvoiceData(invoiceData);
     
@@ -385,6 +408,29 @@ export const updateInvoice = async (invoiceId, invoiceData, userId) => {
     };
     
     await updateDoc(doc(db, INVOICES_COLLECTION, invoiceId), updatedInvoice);
+    
+    // Jeśli zmieniono wykorzystanie proformy, zaktualizuj proformę
+    if (!invoiceData.isProforma && invoiceData.orderId && oldSettledAdvancePayments !== settledAdvancePayments) {
+      try {
+        // Znajdź proformę dla tego zamówienia
+        const relatedInvoices = await getInvoicesByOrderId(invoiceData.orderId);
+        const proforma = relatedInvoices.find(inv => inv.isProforma && inv.id !== invoiceId);
+        
+        if (proforma) {
+          // Usuń starą kwotę i dodaj nową
+          if (oldSettledAdvancePayments > 0) {
+            await removeProformaUsage(proforma.id, oldSettledAdvancePayments, invoiceId, userId);
+          }
+          if (settledAdvancePayments > 0) {
+            await updateProformaUsage(proforma.id, settledAdvancePayments, invoiceId, userId);
+          }
+        }
+      } catch (proformaError) {
+        console.warn('Błąd podczas aktualizacji wykorzystania proformy:', proformaError);
+        // Nie przerywamy procesu aktualizacji faktury z powodu błędu proformy
+      }
+    }
+    
     return true;
   } catch (error) {
     console.error('Błąd podczas aktualizacji faktury:', error);
@@ -397,6 +443,26 @@ export const updateInvoice = async (invoiceId, invoiceData, userId) => {
  */
 export const deleteInvoice = async (invoiceId) => {
   try {
+    // Pobierz dane faktury przed usunięciem
+    const invoiceDoc = await getDoc(doc(db, INVOICES_COLLECTION, invoiceId));
+    const invoiceData = invoiceDoc.exists() ? invoiceDoc.data() : null;
+    
+    // Jeśli faktura wykorzystywała proformę, usuń to wykorzystanie
+    if (invoiceData && !invoiceData.isProforma && invoiceData.orderId && invoiceData.settledAdvancePayments > 0) {
+      try {
+        // Znajdź proformę dla tego zamówienia
+        const relatedInvoices = await getInvoicesByOrderId(invoiceData.orderId);
+        const proforma = relatedInvoices.find(inv => inv.isProforma && inv.id !== invoiceId);
+        
+        if (proforma) {
+          await removeProformaUsage(proforma.id, invoiceData.settledAdvancePayments, invoiceId, 'system');
+        }
+      } catch (proformaError) {
+        console.warn('Błąd podczas usuwania wykorzystania proformy:', proformaError);
+        // Nie przerywamy procesu usuwania faktury z powodu błędu proformy
+      }
+    }
+    
     await deleteDoc(doc(db, INVOICES_COLLECTION, invoiceId));
     return true;
   } catch (error) {
@@ -564,6 +630,9 @@ export const DEFAULT_INVOICE = {
   shippingInfo: null,
   additionalCostsItems: [],
   settledAdvancePayments: 0,
+  // Nowe pola dla śledzenia wykorzystania proform
+  usedAsAdvancePayment: 0, // Kwota wykorzystana z tej proformy jako zaliczka w innych fakturach
+  linkedAdvanceInvoices: [], // ID faktur które wykorzystały tę proformę jako zaliczkę
   statusHistory: [],
   createdBy: null,
   createdAt: null,
@@ -765,6 +834,111 @@ export const updatePaymentInInvoice = async (invoiceId, paymentId, updatedPaymen
     return { success: true, totalPaid, paymentStatus };
   } catch (error) {
     console.error('Błąd podczas edycji płatności:', error);
+    throw error;
+  }
+};
+
+/**
+ * Aktualizuje wykorzystanie kwoty z proformy
+ */
+export const updateProformaUsage = async (proformaId, usedAmount, targetInvoiceId, userId) => {
+  try {
+    const proformaRef = doc(db, INVOICES_COLLECTION, proformaId);
+    const proformaDoc = await getDoc(proformaRef);
+    
+    if (!proformaDoc.exists()) {
+      throw new Error('Proforma nie została znaleziona');
+    }
+    
+    const proformaData = proformaDoc.data();
+    
+    if (!proformaData.isProforma) {
+      throw new Error('Podana faktura nie jest proformą');
+    }
+    
+    const currentUsed = parseFloat(proformaData.usedAsAdvancePayment || 0);
+    const newUsed = currentUsed + parseFloat(usedAmount);
+    const proformaTotal = parseFloat(proformaData.total || 0);
+    
+    // Sprawdź czy nie przekraczamy kwoty proformy
+    if (newUsed > proformaTotal) {
+      throw new Error(`Nie można rozliczyć ${usedAmount}. Dostępna kwota do rozliczenia: ${(proformaTotal - currentUsed).toFixed(2)}`);
+    }
+    
+    const linkedInvoices = proformaData.linkedAdvanceInvoices || [];
+    
+    await updateDoc(proformaRef, {
+      usedAsAdvancePayment: newUsed,
+      linkedAdvanceInvoices: [...linkedInvoices, targetInvoiceId],
+      updatedAt: serverTimestamp(),
+      updatedBy: userId
+    });
+    
+    return { success: true, remainingAmount: proformaTotal - newUsed };
+  } catch (error) {
+    console.error('Błąd podczas aktualizacji wykorzystania proformy:', error);
+    throw error;
+  }
+};
+
+/**
+ * Usuwa wykorzystanie kwoty z proformy (np. przy edycji/usunięciu faktury)
+ */
+export const removeProformaUsage = async (proformaId, usedAmount, targetInvoiceId, userId) => {
+  try {
+    const proformaRef = doc(db, INVOICES_COLLECTION, proformaId);
+    const proformaDoc = await getDoc(proformaRef);
+    
+    if (!proformaDoc.exists()) {
+      throw new Error('Proforma nie została znaleziona');
+    }
+    
+    const proformaData = proformaDoc.data();
+    const currentUsed = parseFloat(proformaData.usedAsAdvancePayment || 0);
+    const newUsed = Math.max(0, currentUsed - parseFloat(usedAmount));
+    const linkedInvoices = (proformaData.linkedAdvanceInvoices || []).filter(id => id !== targetInvoiceId);
+    
+    await updateDoc(proformaRef, {
+      usedAsAdvancePayment: newUsed,
+      linkedAdvanceInvoices: linkedInvoices,
+      updatedAt: serverTimestamp(),
+      updatedBy: userId
+    });
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Błąd podczas usuwania wykorzystania proformy:', error);
+    throw error;
+  }
+};
+
+/**
+ * Pobiera dostępną kwotę do rozliczenia z proformy
+ */
+export const getAvailableProformaAmount = async (proformaId) => {
+  try {
+    const proformaDoc = await getDoc(doc(db, INVOICES_COLLECTION, proformaId));
+    
+    if (!proformaDoc.exists()) {
+      throw new Error('Proforma nie została znaleziona');
+    }
+    
+    const proformaData = proformaDoc.data();
+    
+    if (!proformaData.isProforma) {
+      throw new Error('Podana faktura nie jest proformą');
+    }
+    
+    const total = parseFloat(proformaData.total || 0);
+    const used = parseFloat(proformaData.usedAsAdvancePayment || 0);
+    
+    return {
+      total,
+      used,
+      available: total - used
+    };
+  } catch (error) {
+    console.error('Błąd podczas pobierania dostępnej kwoty proformy:', error);
     throw error;
   }
 };

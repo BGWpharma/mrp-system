@@ -40,12 +40,14 @@ import {
   Send as SendIcon,
   Receipt as ReceiptIcon,
   People as CustomersIcon,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { 
   getAllInvoices, 
   updateInvoiceStatus, 
-  deleteInvoice 
+  deleteInvoice,
+  getAvailableProformaAmount
 } from '../../services/invoiceService';
 import { getAllCustomers } from '../../services/customerService';
 import { useAuth } from '../../hooks/useAuth';
@@ -69,6 +71,7 @@ const InvoicesList = () => {
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [customers, setCustomers] = useState([]);
   const [customersLoading, setCustomersLoading] = useState(false);
+  const [proformaAmounts, setProformaAmounts] = useState({});
 
   // Filtry
   const [filters, setFilters] = useState({
@@ -87,18 +90,67 @@ const InvoicesList = () => {
     fetchCustomers();
   }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Nasłuchuj powrotu do karty/okna aby odświeżyć dane
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        // Odśwież dostępne kwoty proform gdy użytkownik powróci do karty
+        if (invoices.length > 0) {
+          fetchProformaAmounts(invoices);
+        }
+      }
+    };
+
+    const handleFocus = () => {
+      // Odśwież dostępne kwoty proform gdy okno otrzyma focus
+      if (invoices.length > 0) {
+        fetchProformaAmounts(invoices);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [invoices]);
+
   const fetchInvoices = async () => {
     setLoading(true);
     try {
       const fetchedInvoices = await getAllInvoices();
       setInvoices(fetchedInvoices);
       setFilteredInvoices(fetchedInvoices);
+      
+      // Pobierz dostępne kwoty dla proform
+      await fetchProformaAmounts(fetchedInvoices);
     } catch (error) {
       showError('Błąd podczas pobierania listy faktur: ' + error.message);
       console.error('Error fetching invoices:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchProformaAmounts = async (invoices) => {
+    const amounts = {};
+    const proformaInvoices = invoices.filter(inv => inv.isProforma);
+    
+    await Promise.all(
+      proformaInvoices.map(async (invoice) => {
+        try {
+          const amountInfo = await getAvailableProformaAmount(invoice.id);
+          amounts[invoice.id] = amountInfo;
+        } catch (error) {
+          console.error(`Błąd podczas pobierania kwoty proformy ${invoice.id}:`, error);
+          amounts[invoice.id] = null;
+        }
+      })
+    );
+    
+    setProformaAmounts(amounts);
   };
 
   const fetchCustomers = async () => {
@@ -187,6 +239,18 @@ const InvoicesList = () => {
       showSuccess('Status faktury został zaktualizowany');
     } catch (error) {
       showError('Błąd podczas aktualizacji statusu faktury: ' + error.message);
+    }
+  };
+
+  const handleRefreshList = async () => {
+    await fetchInvoices();
+    showSuccess('Lista została odświeżona');
+  };
+
+  const handleRefreshProformaAmounts = async () => {
+    if (invoices.length > 0) {
+      await fetchProformaAmounts(invoices);
+      showSuccess('Kwoty proform zostały odświeżone');
     }
   };
 
@@ -311,52 +375,74 @@ const InvoicesList = () => {
               }}
             />
           </Grid>
-          <Grid item>
-            <Button variant="outlined" onClick={handleSearch}>
-              Szukaj
-            </Button>
-          </Grid>
-          <Grid item>
-            <Button
-              variant="outlined"
-              startIcon={<FilterListIcon />}
-              onClick={toggleFilters}
-            >
-              Filtry {filtersExpanded ? <ExpandMoreIcon style={{ transform: 'rotate(180deg)' }} /> : <ExpandMoreIcon />}
-            </Button>
-          </Grid>
-          
-          {/* Przyciski zarządzania po prawej stronie */}
-          <Grid item xs={12} md="auto" sx={{ ml: 'auto' }}>
-            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1 }}>
-              <Button
-                variant="outlined"
-                color="primary"
-                startIcon={<CustomersIcon />}
-                onClick={() => navigate('/customers')}
-                size="small"
-              >
-                Zarządzaj klientami
-              </Button>
-              <Button
-                variant="outlined"
-                color="primary"
-                startIcon={<SettingsIcon />}
-                onClick={() => navigate('/invoices/company-settings')}
-                size="small"
-              >
-                Dane firmy
-              </Button>
-              <Button
-                variant="contained"
-                color="primary"
-                startIcon={<AddIcon />}
-                onClick={handleAddInvoice}
-                size="small"
-              >
-                Nowa faktura
-              </Button>
-            </Box>
+          <Grid item xs={12} sm={6} md={8}>
+            <Grid container spacing={1} justifyContent="flex-end">
+              <Grid item>
+                <Button variant="outlined" onClick={handleSearch}>
+                  Szukaj
+                </Button>
+              </Grid>
+              <Grid item>
+                <Button
+                  variant="outlined"
+                  startIcon={<FilterListIcon />}
+                  onClick={toggleFilters}
+                >
+                  Filtry
+                </Button>
+              </Grid>
+              <Grid item>
+                <Button
+                  variant="outlined"
+                  startIcon={<RefreshIcon />}
+                  onClick={handleRefreshList}
+                  disabled={loading}
+                >
+                  Odśwież
+                </Button>
+              </Grid>
+              <Grid item>
+                <Button
+                  variant="outlined"
+                  color="warning"
+                  onClick={handleRefreshProformaAmounts}
+                  disabled={loading}
+                  title="Odśwież dostępne kwoty proform"
+                >
+                  📋
+                </Button>
+              </Grid>
+              <Grid item>
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  startIcon={<CustomersIcon />}
+                  onClick={() => navigate('/customers')}
+                >
+                  Klienci
+                </Button>
+              </Grid>
+              <Grid item>
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  startIcon={<SettingsIcon />}
+                  onClick={() => navigate('/invoices/company-settings')}
+                >
+                  Dane firmy
+                </Button>
+              </Grid>
+              <Grid item>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<AddIcon />}
+                  onClick={handleAddInvoice}
+                >
+                  Nowa faktura
+                </Button>
+              </Grid>
+            </Grid>
           </Grid>
         </Grid>
 
@@ -465,119 +551,144 @@ const InvoicesList = () => {
         </Box>
       ) : (
         <>
-          <Paper sx={{ width: '100%', overflow: 'hidden' }}>
-            <TableContainer sx={{ maxHeight: '70vh' }}>
+          <Paper sx={{ width: '100%' }}>
+            <TableContainer>
               <Table sx={{ minWidth: 1000 }} stickyHeader>
-                              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ minWidth: 140 }}>Numer faktury</TableCell>
-                  <TableCell sx={{ minWidth: 200 }}>Klient</TableCell>
-                  <TableCell sx={{ minWidth: 130 }}>Data wystawienia</TableCell>
-                  <TableCell sx={{ minWidth: 130 }}>Termin płatności</TableCell>
-                  <TableCell sx={{ minWidth: 120 }}>Kwota</TableCell>
-                  <TableCell sx={{ minWidth: 120 }}>Do zapłaty</TableCell>
-                  <TableCell sx={{ minWidth: 140 }}>Status faktury</TableCell>
-                  <TableCell sx={{ minWidth: 140 }}>Status płatności</TableCell>
-                  <TableCell align="right" sx={{ minWidth: 150 }}>Akcje</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredInvoices.length === 0 ? (
+                <TableHead>
                   <TableRow>
-                    <TableCell colSpan={9} align="center">
-                      Brak faktur do wyświetlenia
-                    </TableCell>
+                    <TableCell sx={{ minWidth: 140 }}>Numer faktury</TableCell>
+                    <TableCell sx={{ minWidth: 200 }}>Klient</TableCell>
+                    <TableCell sx={{ minWidth: 130 }}>Data wystawienia</TableCell>
+                    <TableCell sx={{ minWidth: 130 }}>Termin płatności</TableCell>
+                    <TableCell sx={{ minWidth: 120 }}>Kwota</TableCell>
+                    <TableCell sx={{ minWidth: 120 }}>Do zapłaty/Dostępne</TableCell>
+                    <TableCell sx={{ minWidth: 140 }}>Status faktury</TableCell>
+                    <TableCell sx={{ minWidth: 140 }}>Status płatności</TableCell>
+                    <TableCell align="right" sx={{ minWidth: 150 }}>Akcje</TableCell>
                   </TableRow>
-                ) : (
-                  filteredInvoices
-                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                    .map((invoice) => (
-                      <TableRow key={invoice.id}>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            {invoice.number}
-                            {invoice.isProforma && (
-                              <Chip 
-                                label="Proforma" 
-                                size="small" 
-                                color="primary" 
-                                variant="outlined"
-                              />
-                            )}
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            size="small"
-                            sx={{ textTransform: 'none' }}
-                            onClick={() => handleViewCustomer(invoice.customer.id)}
-                          >
-                            {invoice.customer.name}
-                          </Button>
-                        </TableCell>
-                        <TableCell>{formatDate(invoice.issueDate)}</TableCell>
-                        <TableCell>{formatDate(invoice.dueDate)}</TableCell>
-                        <TableCell>{formatCurrency(invoice.total, invoice.currency)}</TableCell>
-                        <TableCell>
-                          {formatCurrency(
-                            invoice.total - (invoice.totalPaid || 0), 
-                            invoice.currency
-                          )}
-                        </TableCell>
-                        <TableCell>{renderInvoiceStatus(invoice.status)}</TableCell>
-                        <TableCell>{renderPaymentStatus(invoice.paymentStatus)}</TableCell>
-                        <TableCell align="right">
-                          <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                            <IconButton 
-                              size="small" 
-                              onClick={() => handleViewInvoice(invoice.id)}
-                              title="Podgląd faktury"
+                </TableHead>
+                <TableBody>
+                  {filteredInvoices.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={9} align="center">
+                        Brak faktur do wyświetlenia
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredInvoices
+                      .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                      .map((invoice) => (
+                        <TableRow key={invoice.id}>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              {invoice.number}
+                              {invoice.isProforma && (
+                                <Chip 
+                                  label="Proforma" 
+                                  size="small" 
+                                  color="primary" 
+                                  variant="outlined"
+                                />
+                              )}
+                            </Box>
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              size="small"
+                              sx={{ textTransform: 'none' }}
+                              onClick={() => handleViewCustomer(invoice.customer.id)}
                             >
-                              <ViewIcon fontSize="small" />
-                            </IconButton>
-                            <IconButton 
-                              size="small" 
-                              onClick={() => handleEditInvoice(invoice.id)}
-                              title="Edytuj fakturę"
-                              disabled={invoice.status === 'paid'}
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                            <IconButton 
-                              size="small" 
-                              onClick={() => handleDeleteClick(invoice)}
-                              title="Usuń fakturę"
-                              disabled={invoice.status !== 'draft'}
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                            {invoice.status === 'draft' && (
-                              <IconButton 
-                                size="small" 
-                                onClick={() => handleUpdateStatus(invoice.id, 'issued')}
-                                title="Oznacz jako wystawioną"
-                                color="primary"
-                              >
-                                <ReceiptIcon fontSize="small" />
-                              </IconButton>
+                              {invoice.customer.name}
+                            </Button>
+                          </TableCell>
+                          <TableCell>{formatDate(invoice.issueDate)}</TableCell>
+                          <TableCell>{formatDate(invoice.dueDate)}</TableCell>
+                          <TableCell>{formatCurrency(invoice.total, invoice.currency)}</TableCell>
+                          <TableCell>
+                            {invoice.isProforma ? (
+                              // Dla proform wyświetl dostępną kwotę
+                              <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                                <Typography variant="body2" color="success.main" fontWeight="bold">
+                                  {proformaAmounts[invoice.id] 
+                                    ? formatCurrency(proformaAmounts[invoice.id].available, invoice.currency)
+                                    : formatCurrency(invoice.total, invoice.currency)
+                                  }
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  dostępne z {formatCurrency(invoice.total, invoice.currency)}
+                                </Typography>
+                              </Box>
+                            ) : (
+                              // Dla zwykłych faktur wyświetl kwotę do zapłaty
+                              formatCurrency(
+                                invoice.total - (invoice.totalPaid || 0), 
+                                invoice.currency
+                              )
                             )}
-                            {invoice.status === 'issued' && (
-                              <IconButton 
-                                size="small" 
-                                onClick={() => handleUpdateStatus(invoice.id, 'sent')}
-                                title="Oznacz jako wysłaną"
-                                color="info"
-                              >
-                                <SendIcon fontSize="small" />
-                              </IconButton>
-                            )}
-
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                )}
-              </TableBody>
+                          </TableCell>
+                          <TableCell>{renderInvoiceStatus(invoice.status)}</TableCell>
+                          <TableCell>{renderPaymentStatus(invoice.paymentStatus)}</TableCell>
+                          <TableCell align="right">
+                            <Box sx={{ 
+                              display: 'flex', 
+                              flexDirection: 'column',
+                              gap: 0.5,
+                              alignItems: 'flex-end',
+                              minWidth: 100
+                            }}>
+                              <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                <IconButton 
+                                  size="small" 
+                                  onClick={() => handleViewInvoice(invoice.id)}
+                                  title="Podgląd faktury"
+                                >
+                                  <ViewIcon fontSize="small" />
+                                </IconButton>
+                                <IconButton 
+                                  size="small" 
+                                  onClick={() => handleEditInvoice(invoice.id)}
+                                  title="Edytuj fakturę"
+                                  disabled={invoice.status === 'paid'}
+                                >
+                                  <EditIcon fontSize="small" />
+                                </IconButton>
+                                <IconButton 
+                                  size="small" 
+                                  onClick={() => handleDeleteClick(invoice)}
+                                  title="Usuń fakturę"
+                                  disabled={invoice.status !== 'draft'}
+                                >
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              </Box>
+                              <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                {invoice.status === 'draft' && (
+                                  <IconButton 
+                                    size="small" 
+                                    onClick={() => handleUpdateStatus(invoice.id, 'issued')}
+                                    title="Oznacz jako wystawioną"
+                                    color="primary"
+                                  >
+                                    <ReceiptIcon fontSize="small" />
+                                  </IconButton>
+                                )}
+                                {invoice.status === 'issued' && (
+                                  <IconButton 
+                                    size="small" 
+                                    onClick={() => handleUpdateStatus(invoice.id, 'sent')}
+                                    title="Oznacz jako wysłaną"
+                                    color="info"
+                                  >
+                                    <SendIcon fontSize="small" />
+                                  </IconButton>
+                                )}
+                              </Box>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                  )}
+                </TableBody>
               </Table>
             </TableContainer>
             <TablePagination

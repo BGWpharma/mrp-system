@@ -22,7 +22,10 @@ import {
   DialogActions,
   Autocomplete,
   FormControlLabel,
-  Checkbox
+  Checkbox,
+  Switch,
+  ToggleButton,
+  ToggleButtonGroup
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -38,7 +41,9 @@ import {
   createInvoiceFromOrder,
   DEFAULT_INVOICE,
   calculateInvoiceTotal,
-  generateProformaNumber
+  generateProformaNumber,
+  getInvoicesByOrderId,
+  getAvailableProformaAmount
 } from '../../services/invoiceService';
 import { getAllCustomers, getCustomerById } from '../../services/customerService';
 import { getAllOrders } from '../../services/orderService';
@@ -74,6 +79,9 @@ const InvoiceForm = ({ invoiceId }) => {
   const [purchaseOrdersLoading, setPurchaseOrdersLoading] = useState(false);
   const [selectedOrderType, setSelectedOrderType] = useState('customer');
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [relatedInvoices, setRelatedInvoices] = useState([]);
+  const [loadingRelatedInvoices, setLoadingRelatedInvoices] = useState(false);
+  const [availableProformaAmount, setAvailableProformaAmount] = useState(null);
 
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -130,6 +138,8 @@ const InvoiceForm = ({ invoiceId }) => {
       
       if (fetchedInvoice.orderId) {
         setSelectedOrderId(fetchedInvoice.orderId);
+        // Pobierz powiązane faktury dla tego zamówienia
+        await fetchRelatedInvoices(fetchedInvoice.orderId);
       }
     } catch (error) {
       showError('Błąd podczas pobierania danych faktury: ' + error.message);
@@ -248,6 +258,42 @@ const InvoiceForm = ({ invoiceId }) => {
     setFilteredOrders(customerOrders);
   };
 
+  const fetchRelatedInvoices = async (orderId) => {
+    if (!orderId) {
+      setRelatedInvoices([]);
+      setAvailableProformaAmount(null);
+      return;
+    }
+    
+    setLoadingRelatedInvoices(true);
+    try {
+      const invoices = await getInvoicesByOrderId(orderId);
+      // Filtruj tylko faktury inne niż obecna (jeśli edytujemy istniejącą)
+      const filteredInvoices = invoices.filter(inv => inv.id !== invoiceId);
+      setRelatedInvoices(filteredInvoices);
+      
+      // Znajdź proformę i pobierz dostępną kwotę
+      const proforma = filteredInvoices.find(inv => inv.isProforma);
+      if (proforma) {
+        try {
+          const amountInfo = await getAvailableProformaAmount(proforma.id);
+          setAvailableProformaAmount(amountInfo);
+        } catch (error) {
+          console.error('Błąd podczas pobierania dostępnej kwoty proformy:', error);
+          setAvailableProformaAmount(null);
+        }
+      } else {
+        setAvailableProformaAmount(null);
+      }
+    } catch (error) {
+      console.error('Błąd podczas pobierania powiązanych faktur:', error);
+      setRelatedInvoices([]);
+      setAvailableProformaAmount(null);
+    } finally {
+      setLoadingRelatedInvoices(false);
+    }
+  };
+
   const handleChange = (e) => {
     const { name, value, checked, type } = e.target;
     
@@ -259,10 +305,19 @@ const InvoiceForm = ({ invoiceId }) => {
       }));
     } else if (type === 'checkbox') {
       // Obsługa checkboxów (np. isProforma)
-      setInvoice(prev => ({
-        ...prev,
-        [name]: checked
-      }));
+      if (name === 'isProforma' && checked) {
+        // Jeśli zaznaczamy proforma, resetuj zaliczki/przedpłaty
+        setInvoice(prev => ({
+          ...prev,
+          [name]: checked,
+          settledAdvancePayments: 0
+        }));
+      } else {
+        setInvoice(prev => ({
+          ...prev,
+          [name]: checked
+        }));
+      }
     } else {
       // Dla pozostałych pól, standardowa obsługa
       setInvoice(prev => ({
@@ -559,6 +614,9 @@ const InvoiceForm = ({ invoiceId }) => {
       }
       
       setSelectedOrder(selectedOrder);
+      
+      // Pobierz powiązane faktury dla tego zamówienia
+      await fetchRelatedInvoices(orderId);
     } catch (error) {
       showError('Błąd podczas wczytywania danych zamówienia: ' + error.message);
       console.error('Error loading order data:', error);
@@ -600,6 +658,12 @@ const InvoiceForm = ({ invoiceId }) => {
     
     if (!invoice.dueDate) {
       showError('Uzupełnij termin płatności');
+      return false;
+    }
+    
+    // Sprawdź czy kwota zaliczek nie przekracza dostępnej kwoty z proformy
+    if (!invoice.isProforma && availableProformaAmount && invoice.settledAdvancePayments > availableProformaAmount.available) {
+      showError(`Kwota zaliczek (${invoice.settledAdvancePayments}) przekracza dostępną kwotę z proformy (${availableProformaAmount.available.toFixed(2)})`);
       return false;
     }
     
@@ -693,9 +757,51 @@ const InvoiceForm = ({ invoiceId }) => {
         >
           Powrót do listy faktur
         </Button>
-        <Typography variant="h4" component="h1">
-          {invoiceId ? 'Edycja faktury' : 'Nowa faktura'}
-        </Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+          <Typography variant="h4" component="h1">
+            {invoiceId ? 'Edycja faktury' : 'Nowa faktura'}
+          </Typography>
+          <ToggleButtonGroup
+            value={invoice.isProforma ? 'proforma' : 'faktura'}
+            exclusive
+            onChange={(event, newValue) => {
+              if (newValue !== null) {
+                const isProforma = newValue === 'proforma';
+                handleChange({
+                  target: {
+                    name: 'isProforma',
+                    type: 'checkbox',
+                    checked: isProforma
+                  }
+                });
+              }
+            }}
+            aria-label="typ dokumentu"
+            size="small"
+            sx={{
+              '& .MuiToggleButton-root': {
+                px: 3,
+                py: 1,
+                fontWeight: 'bold',
+                border: '2px solid',
+                '&.Mui-selected': {
+                  backgroundColor: 'primary.main',
+                  color: 'primary.contrastText',
+                  '&:hover': {
+                    backgroundColor: 'primary.dark',
+                  }
+                }
+              }
+            }}
+          >
+            <ToggleButton value="faktura" aria-label="faktura">
+              📄 Faktura
+            </ToggleButton>
+            <ToggleButton value="proforma" aria-label="proforma">
+              📋 Proforma
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
         <Button
           variant="contained"
           color="primary"
@@ -725,18 +831,7 @@ const InvoiceForm = ({ invoiceId }) => {
                   helperText={invoiceId ? 'Numer faktury nie może być zmieniony' : 'Zostanie wygenerowany automatycznie jeśli pozostawisz to pole puste'}
                 />
               </Grid>
-              <Grid item xs={12}>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      name="isProforma"
-                      checked={invoice.isProforma || false}
-                      onChange={handleChange}
-                    />
-                  }
-                  label="Faktura proforma"
-                />
-              </Grid>
+
               <Grid item xs={12} sm={6}>
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
                   <DatePicker
@@ -1193,22 +1288,42 @@ const InvoiceForm = ({ invoiceId }) => {
               }, 0).toFixed(2)} {invoice.currency || 'zł'}
             </Typography>
             
-            {/* Dodanie pola dla rozliczonych zaliczek/przedpłat */}
-            <Box sx={{ mt: 2, mb: 2 }}>
-              <TextField
-                fullWidth
-                label="Rozliczone zaliczki/przedpłaty"
-                type="number"
-                name="settledAdvancePayments"
-                value={invoice.settledAdvancePayments || 0}
-                onChange={handleChange}
-                InputProps={{
-                  endAdornment: <Typography>{invoice.currency || 'zł'}</Typography>,
-                  inputProps: { min: 0, step: 0.01 }
-                }}
-                helperText="Kwota zostanie odliczona od wartości brutto"
-              />
-            </Box>
+            {/* Dodanie pola dla rozliczonych zaliczek/przedpłat - ukryte dla proform */}
+            {!invoice.isProforma && (
+              <Box sx={{ mt: 2, mb: 2 }}>
+                <TextField
+                  fullWidth
+                  label="Rozliczone zaliczki/przedpłaty"
+                  type="number"
+                  name="settledAdvancePayments"
+                  value={invoice.settledAdvancePayments || 0}
+                  onChange={handleChange}
+                  InputProps={{
+                    endAdornment: <Typography>{invoice.currency || 'zł'}</Typography>,
+                    inputProps: { 
+                      min: 0, 
+                      step: 0.01,
+                      max: availableProformaAmount?.available || undefined
+                    }
+                  }}
+                  helperText={
+                    availableProformaAmount 
+                      ? `Kwota zostanie odliczona od wartości brutto. Dostępne z proformy: ${availableProformaAmount.available.toFixed(2)} ${invoice.currency || 'EUR'}`
+                      : "Kwota zostanie odliczona od wartości brutto"
+                  }
+                  error={availableProformaAmount && invoice.settledAdvancePayments > availableProformaAmount.available}
+                />
+                {availableProformaAmount && (
+                  <Box sx={{ mt: 1, p: 1, bgcolor: 'info.light', borderRadius: 1 }}>
+                    <Typography variant="caption">
+                      📋 Proforma: {availableProformaAmount.total.toFixed(2)} {invoice.currency || 'EUR'} | 
+                      Wykorzystane: {availableProformaAmount.used.toFixed(2)} {invoice.currency || 'EUR'} | 
+                      <strong>Dostępne: {availableProformaAmount.available.toFixed(2)} {invoice.currency || 'EUR'}</strong>
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+            )}
             
             {/* Wyświetl dodatkowe koszty, jeśli istnieją */}
             {invoice.shippingInfo && invoice.shippingInfo.cost > 0 && (
@@ -1222,6 +1337,41 @@ const InvoiceForm = ({ invoiceId }) => {
               <Typography variant="body1" fontWeight="bold">
                 Wartość zaliczek/przedpłat: {selectedOrder.linkedPurchaseOrders.reduce((sum, po) => sum + (parseFloat(po.totalGross || po.value) || 0), 0).toFixed(2)} {invoice.currency || 'zł'}
               </Typography>
+            )}
+
+            {/* Wyświetl kwotę proformy dla tego zamówienia */}
+            {relatedInvoices.length > 0 && (
+              <Box sx={{ mt: 2, mb: 2, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Powiązane faktury z tym zamówieniem:
+                </Typography>
+                {loadingRelatedInvoices ? (
+                  <CircularProgress size={20} />
+                ) : (
+                  relatedInvoices.map((relInvoice) => (
+                    <Box key={relInvoice.id} sx={{ mb: 1 }}>
+                      <Typography variant="body2">
+                        {relInvoice.isProforma ? '📋 Proforma' : '📄 Faktura'} {relInvoice.number}
+                        {relInvoice.isProforma && (
+                          <Typography component="span" sx={{ fontWeight: 'bold', color: 'warning.main', ml: 1 }}>
+                            - Kwota: {parseFloat(relInvoice.total || 0).toFixed(2)} {relInvoice.currency || 'EUR'}
+                            {availableProformaAmount && relInvoice.id === relatedInvoices.find(inv => inv.isProforma)?.id && (
+                              <Typography component="span" sx={{ color: 'success.main', ml: 1 }}>
+                                (Dostępne: {availableProformaAmount.available.toFixed(2)} {relInvoice.currency || 'EUR'})
+                              </Typography>
+                            )}
+                          </Typography>
+                        )}
+                      </Typography>
+                      {relInvoice.issueDate && (
+                        <Typography variant="caption" color="text.secondary">
+                          Data wystawienia: {new Date(relInvoice.issueDate).toLocaleDateString()}
+                        </Typography>
+                      )}
+                    </Box>
+                  ))
+                )}
+              </Box>
             )}
             
             <Typography variant="h6" fontWeight="bold" color="primary">
@@ -1247,8 +1397,8 @@ const InvoiceForm = ({ invoiceId }) => {
                   
                   return sum + (quantity * price * (vatRate / 100));
                 }, 0)) - 
-                // Odejmowanie zaliczek/przedpłat
-                parseFloat(invoice.settledAdvancePayments || 0)
+                // Odejmowanie zaliczek/przedpłat - tylko dla zwykłych faktur, nie dla proform
+                (invoice.isProforma ? 0 : parseFloat(invoice.settledAdvancePayments || 0))
               ).toFixed(2)} {invoice.currency || 'zł'}
             </Typography>
           </Grid>

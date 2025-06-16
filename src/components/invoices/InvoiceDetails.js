@@ -41,7 +41,9 @@ import {
 import { 
   getInvoiceById, 
   updateInvoiceStatus, 
-  deleteInvoice 
+  deleteInvoice,
+  getInvoicesByOrderId,
+  getAvailableProformaAmount
 } from '../../services/invoiceService';
 import { formatCurrency } from '../../utils/formatters';
 import { useAuth } from '../../hooks/useAuth';
@@ -60,6 +62,9 @@ const InvoiceDetails = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [companyInfo, setCompanyInfo] = useState(COMPANY_INFO);
+  const [relatedInvoices, setRelatedInvoices] = useState([]);
+  const [loadingRelatedInvoices, setLoadingRelatedInvoices] = useState(false);
+  const [proformaUsageInfo, setProformaUsageInfo] = useState(null);
   
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -78,11 +83,51 @@ const InvoiceDetails = () => {
       const fetchedInvoice = await getInvoiceById(invoiceId);
       console.log('Pobrano fakturę:', fetchedInvoice);
       setInvoice(fetchedInvoice);
+      
+      // Pobierz powiązane faktury dla tego zamówienia
+      if (fetchedInvoice.orderId) {
+        await fetchRelatedInvoices(fetchedInvoice.orderId);
+      }
     } catch (error) {
       showError('Błąd podczas pobierania danych faktury: ' + error.message);
       navigate('/invoices');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchRelatedInvoices = async (orderId) => {
+    if (!orderId) {
+      setRelatedInvoices([]);
+      setProformaUsageInfo(null);
+      return;
+    }
+    
+    setLoadingRelatedInvoices(true);
+    try {
+      const invoices = await getInvoicesByOrderId(orderId);
+      // Filtruj tylko faktury inne niż obecna
+      const filteredInvoices = invoices.filter(inv => inv.id !== invoiceId);
+      setRelatedInvoices(filteredInvoices);
+      
+      // Jeśli obecna faktura to proforma, pobierz informacje o jej wykorzystaniu
+      if (invoice?.isProforma) {
+        try {
+          const usageInfo = await getAvailableProformaAmount(invoiceId);
+          setProformaUsageInfo(usageInfo);
+        } catch (error) {
+          console.error('Błąd podczas pobierania informacji o wykorzystaniu proformy:', error);
+          setProformaUsageInfo(null);
+        }
+      } else {
+        setProformaUsageInfo(null);
+      }
+    } catch (error) {
+      console.error('Błąd podczas pobierania powiązanych faktur:', error);
+      setRelatedInvoices([]);
+      setProformaUsageInfo(null);
+    } finally {
+      setLoadingRelatedInvoices(false);
     }
   };
   
@@ -1101,6 +1146,63 @@ const InvoiceDetails = () => {
                     <Typography variant="body2">
                       {invoice.orderNumber || invoice.orderId}
                     </Typography>
+                  </>
+                )}
+
+                {/* Wyświetl informacje o wykorzystaniu proformy */}
+                {invoice?.isProforma && proformaUsageInfo && (
+                  <>
+                    <Divider sx={{ my: 2 }} />
+                    <Typography variant="subtitle2" gutterBottom>
+                      Wykorzystanie proformy:
+                    </Typography>
+                    <Box sx={{ p: 2, bgcolor: 'warning.light', borderRadius: 1 }}>
+                      <Typography variant="body2">
+                        <strong>Kwota proformy:</strong> {proformaUsageInfo.total.toFixed(2)} {invoice.currency || 'EUR'}
+                      </Typography>
+                      <Typography variant="body2" color="error.main">
+                        <strong>Wykorzystane:</strong> {proformaUsageInfo.used.toFixed(2)} {invoice.currency || 'EUR'}
+                      </Typography>
+                      <Typography variant="body2" color="success.main">
+                        <strong>Dostępne:</strong> {proformaUsageInfo.available.toFixed(2)} {invoice.currency || 'EUR'}
+                      </Typography>
+                      {proformaUsageInfo.used > 0 && (
+                        <Typography variant="caption" color="text.secondary">
+                          Proforma została częściowo wykorzystana jako zaliczka w innych fakturach
+                        </Typography>
+                      )}
+                    </Box>
+                  </>
+                )}
+
+                {/* Wyświetl powiązane faktury */}
+                {relatedInvoices.length > 0 && (
+                  <>
+                    <Divider sx={{ my: 2 }} />
+                    <Typography variant="subtitle2" gutterBottom>
+                      Inne faktury dla tego zamówienia:
+                    </Typography>
+                    {loadingRelatedInvoices ? (
+                      <CircularProgress size={20} />
+                    ) : (
+                      relatedInvoices.map((relInvoice) => (
+                        <Box key={relInvoice.id} sx={{ mb: 1, p: 1, bgcolor: relInvoice.isProforma ? 'warning.light' : 'info.light', borderRadius: 1 }}>
+                          <Typography variant="body2" fontWeight="bold">
+                            {relInvoice.isProforma ? '📋 Proforma' : '📄 Faktura'} {relInvoice.number}
+                          </Typography>
+                          {relInvoice.isProforma && (
+                            <Typography variant="body2" color="warning.dark" fontWeight="bold">
+                              Kwota: {parseFloat(relInvoice.total || 0).toFixed(2)} {relInvoice.currency || 'EUR'}
+                            </Typography>
+                          )}
+                          {relInvoice.issueDate && (
+                            <Typography variant="caption" color="text.secondary">
+                              Data: {new Date(relInvoice.issueDate).toLocaleDateString()}
+                            </Typography>
+                          )}
+                        </Box>
+                      ))
+                    )}
                   </>
                 )}
               </CardContent>

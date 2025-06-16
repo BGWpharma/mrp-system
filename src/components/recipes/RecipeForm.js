@@ -1612,7 +1612,12 @@ const RecipeForm = ({ recipeId }) => {
                                   px: 2,
                                   py: 1,
                                   display: 'block',
-                                  bgcolor: 'grey.100',
+                                  bgcolor: theme => theme.palette.mode === 'dark' 
+                                    ? 'rgba(255, 255, 255, 0.08)' 
+                                    : 'grey.100',
+                                  color: theme => theme.palette.mode === 'dark'
+                                    ? 'rgba(255, 255, 255, 0.9)'
+                                    : 'rgba(0, 0, 0, 0.87)',
                                   fontWeight: 'bold',
                                   fontSize: '0.75rem'
                                 }}
