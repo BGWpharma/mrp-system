@@ -393,18 +393,83 @@ export const ENERGY_VALUES = [
   { code: 'KJ', name: 'Energia (kJ)', unit: 'kJ' }
 ];
 
+// Składniki aktywne suplementów
+export const SUPPLEMENT_ACTIVES = [
+  // Aminokwasy
+  { code: 'TAURINE', name: 'Tauryna', unit: 'mg' },
+  { code: 'L-CARNITINE', name: 'L-karnityna', unit: 'mg' },
+  { code: 'L-ARGININE', name: 'L-arginina', unit: 'mg' },
+  { code: 'L-LYSINE', name: 'L-lizyna', unit: 'mg' },
+  { code: 'L-THEANINE', name: 'L-teanina', unit: 'mg' },
+  { code: 'GLYCINE', name: 'Glicyna', unit: 'mg' },
+  { code: 'CREATINE', name: 'Kreatyna', unit: 'g' },
+  { code: 'GLUTAMINE', name: 'Glutamina', unit: 'g' },
+  { code: 'BCAA', name: 'BCAA (aminokwasy rozgałęzione)', unit: 'g' },
+  
+  // Związki roślinne i ekstrakty
+  { code: 'CAFFEINE', name: 'Kofeina', unit: 'mg' },
+  { code: 'CURCUMIN', name: 'Kurkumina', unit: 'mg' },
+  { code: 'QUERCETIN', name: 'Kwercetyna', unit: 'mg' },
+  { code: 'RESVERATROL', name: 'Resweratrol', unit: 'mg' },
+  { code: 'GREEN_TEA_EXTRACT', name: 'Ekstrakt z zielonej herbaty', unit: 'mg' },
+  { code: 'GINKGO_BILOBA', name: 'Miłorząb japoński (Ginkgo biloba)', unit: 'mg' },
+  { code: 'GINSENG', name: 'Żeń-szeń', unit: 'mg' },
+  { code: 'ASHWAGANDHA', name: 'Ashwagandha', unit: 'mg' },
+  { code: 'RHODIOLA', name: 'Różeniec górski (Rhodiola)', unit: 'mg' },
+  { code: 'MILK_THISTLE', name: 'Ostropest plamisty', unit: 'mg' },
+  { code: 'TURMERIC', name: 'Kurkuma', unit: 'mg' },
+  
+  // Probiotyki i prebiotyki
+  { code: 'LACTOBACILLUS', name: 'Lactobacillus', unit: 'CFU' },
+  { code: 'BIFIDOBACTERIUM', name: 'Bifidobacterium', unit: 'CFU' },
+  { code: 'INULIN', name: 'Inulina', unit: 'g' },
+  { code: 'FOS', name: 'Frukto-oligosacharydy (FOS)', unit: 'mg' },
+  
+  // Kwasy tłuszczowe
+  { code: 'OMEGA3', name: 'Kwasy Omega-3', unit: 'mg' },
+  { code: 'EPA', name: 'EPA (kwas eikozapentaenowy)', unit: 'mg' },
+  { code: 'DHA', name: 'DHA (kwas dokozaheksaenowy)', unit: 'mg' },
+  { code: 'ALA', name: 'ALA (kwas alfa-linolenowy)', unit: 'mg' },
+  { code: 'GLA', name: 'GLA (kwas gamma-linolenowy)', unit: 'mg' },
+  { code: 'CLA', name: 'CLA (sprzężony kwas linolowy)', unit: 'mg' },
+  
+  // Koenzymy i koenzymy
+  { code: 'COQ10', name: 'Koenzym Q10', unit: 'mg' },
+  { code: 'ALPHA_LIPOIC_ACID', name: 'Kwas alfa-liponowy', unit: 'mg' },
+  { code: 'DIGESTIVE_ENZYMES', name: 'Enzymy trawienne', unit: 'mg' },
+  { code: 'BROMELAIN', name: 'Bromelaina', unit: 'mg' },
+  { code: 'PAPAIN', name: 'Papaina', unit: 'mg' },
+  
+  // Inne związki bioaktywne
+  { code: 'GLUCOSAMINE', name: 'Glukozamina', unit: 'mg' },
+  { code: 'CHONDROITIN', name: 'Chondroityna', unit: 'mg' },
+  { code: 'MSM', name: 'MSM (Metylsulfonylometan)', unit: 'mg' },
+  { code: 'HYALURONIC_ACID', name: 'Kwas hialuronowy', unit: 'mg' },
+  { code: 'COLLAGEN', name: 'Kolagen', unit: 'g' },
+  { code: 'LUTEIN', name: 'Luteina', unit: 'mg' },
+  { code: 'ZEAXANTHIN', name: 'Zeaksantyna', unit: 'mg' },
+  { code: 'LYCOPENE', name: 'Likopen', unit: 'mg' },
+  { code: 'BETA_CAROTENE', name: 'Beta-karoten', unit: 'mg' },
+  { code: 'SPIRULINA', name: 'Spirulina', unit: 'g' },
+  { code: 'CHLORELLA', name: 'Chlorella', unit: 'g' },
+  { code: 'MELATONIN', name: 'Melatonina', unit: 'mg' },
+  { code: 'CHOLINE', name: 'Cholina', unit: 'mg' },
+  { code: 'INOSITOL', name: 'Inozytol', unit: 'mg' }
+];
+
 // Łączna lista wszystkich mikroelementów i składników odżywczych
 export const MICRONUTRIENTS = [
   ...VITAMINS.map(vitamin => ({ ...vitamin, category: 'Witaminy' })),
   ...MINERALS.map(mineral => ({ ...mineral, category: 'Minerały' }))
 ];
 
-// Łączna lista wszystkich składników odżywczych (makro + mikro + energia)
+// Łączna lista wszystkich składników odżywczych (makro + mikro + energia + składniki aktywne)
 export const ALL_NUTRITIONAL_COMPONENTS = [
   ...MACRONUTRIENTS.map(macro => ({ ...macro, category: 'Makroelementy' })),
   ...ENERGY_VALUES.map(energy => ({ ...energy, category: 'Energia' })),
   ...VITAMINS.map(vitamin => ({ ...vitamin, category: 'Witaminy' })),
-  ...MINERALS.map(mineral => ({ ...mineral, category: 'Minerały' }))
+  ...MINERALS.map(mineral => ({ ...mineral, category: 'Minerały' })),
+  ...SUPPLEMENT_ACTIVES.map(active => ({ ...active, category: 'Składniki aktywne' }))
 ];
 
 // Kategorie składników odżywczych
@@ -412,7 +477,8 @@ export const NUTRITIONAL_CATEGORIES = {
   MACRONUTRIENTS: 'Makroelementy',
   ENERGY: 'Energia',
   VITAMINS: 'Witaminy',
-  MINERALS: 'Minerały'
+  MINERALS: 'Minerały',
+  SUPPLEMENT_ACTIVES: 'Składniki aktywne'
 };
 
 // Kategorie mikroelementów (zachowuję dla kompatybilności)

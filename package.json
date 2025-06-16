@@ -1,6 +1,6 @@
 {
   "name": "mrp-system",
-  "version": "0.1.49",
+  "version": "0.1.50",
   "private": true,
   "dependencies": {
     "@emotion/react": "^11.14.0",

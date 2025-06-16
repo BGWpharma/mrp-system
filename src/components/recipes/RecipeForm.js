@@ -81,7 +81,8 @@ const RecipeForm = ({ recipeId }) => {
     customerId: '',
     processingCostPerUnit: 0,
     productionTimePerUnit: 0,
-    defaultWorkstationId: ''
+    defaultWorkstationId: '',
+    nutritionalBasis: '1 caps' // Nowe pole dla podstawy składników odżywczych
   });
 
   // Dodajemy stan dla składników z magazynu
@@ -903,6 +904,13 @@ const RecipeForm = ({ recipeId }) => {
     }));
   };
 
+  const handleNutritionalBasisChange = (e) => {
+    setRecipeData(prev => ({
+      ...prev,
+      nutritionalBasis: e.target.value
+    }));
+  };
+
   if (loading) {
     return <div>Ładowanie receptury...</div>;
   }
@@ -1317,8 +1325,8 @@ const RecipeForm = ({ recipeId }) => {
                 <TableHead sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.6)' : 'rgba(240, 245, 250, 0.8)' }}>
                   <TableRow>
                     <TableCell width="25%"><Typography variant="subtitle2">SKU składnika</Typography></TableCell>
-                    <TableCell width="12%"><Typography variant="subtitle2">Ilość</Typography></TableCell>
-                    <TableCell width="12%"><Typography variant="subtitle2">Jednostka</Typography></TableCell>
+                    <TableCell width="19%"><Typography variant="subtitle2">Ilość</Typography></TableCell>
+                    <TableCell width="10%"><Typography variant="subtitle2">Jednostka</Typography></TableCell>
                     <TableCell width="15%">
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <Typography variant="subtitle2">Numer CAS</Typography>
@@ -1337,7 +1345,7 @@ const RecipeForm = ({ recipeId }) => {
                     </TableCell>
                     <TableCell width="16%"><Typography variant="subtitle2">Uwagi</Typography></TableCell>
                     <TableCell width="10%"><Typography variant="subtitle2">Źródło</Typography></TableCell>
-                    <TableCell width="10%"><Typography variant="subtitle2">Akcje</Typography></TableCell>
+                    <TableCell width="5%"><Typography variant="subtitle2">Akcje</Typography></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1512,14 +1520,31 @@ const RecipeForm = ({ recipeId }) => {
         </Box>
         
         <Box sx={{ p: 3 }}>
+          {/* Opcja wyboru podstawy składników odżywczych */}
+          <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography variant="body2" color="text.secondary">
+              Wartości składników odżywczych podane na:
+            </Typography>
+            <FormControl size="small" sx={{ minWidth: 120 }}>
+              <Select
+                value={recipeData.nutritionalBasis || '1 caps'}
+                onChange={handleNutritionalBasisChange}
+                variant="outlined"
+              >
+                <MenuItem value="1 caps">1 caps</MenuItem>
+                <MenuItem value="100g">100g</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+
           {recipeData.micronutrients && recipeData.micronutrients.length > 0 ? (
             <TableContainer sx={{ borderRadius: '8px', border: '1px solid', borderColor: 'divider' }}>
               <Table>
                 <TableHead sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.6)' : 'rgba(240, 245, 250, 0.8)' }}>
                   <TableRow>
-                    <TableCell width="15%"><Typography variant="subtitle2">Kod</Typography></TableCell>
-                    <TableCell width="30%"><Typography variant="subtitle2">Nazwa</Typography></TableCell>
-                    <TableCell width="15%"><Typography variant="subtitle2">Ilość</Typography></TableCell>
+                    <TableCell width="30%"><Typography variant="subtitle2">Kod</Typography></TableCell>
+                    <TableCell width="20%"><Typography variant="subtitle2">Nazwa</Typography></TableCell>
+                    <TableCell width="10%"><Typography variant="subtitle2">Ilość</Typography></TableCell>
                     <TableCell width="10%"><Typography variant="subtitle2">Jednostka</Typography></TableCell>
                     <TableCell width="15%"><Typography variant="subtitle2">Kategoria</Typography></TableCell>
                     <TableCell width="10%"><Typography variant="subtitle2">Uwagi</Typography></TableCell>
@@ -1530,22 +1555,74 @@ const RecipeForm = ({ recipeId }) => {
                   {(recipeData.micronutrients || []).map((micronutrient, index) => (
                     <TableRow key={index} hover sx={{ '&:nth-of-type(even)': { bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.2)' : 'rgba(245, 247, 250, 0.5)' } }}>
                       <TableCell>
-                        <FormControl fullWidth variant="standard">
-                          <Select
-                            value={micronutrient.code}
-                            onChange={(e) => handleMicronutrientChange(index, 'code', e.target.value)}
-                            displayEmpty
-                          >
-                            <MenuItem value="">
-                              <em>Wybierz...</em>
-                            </MenuItem>
-                            {ALL_NUTRITIONAL_COMPONENTS.map((micro) => (
-                              <MenuItem key={micro.code} value={micro.code}>
-                                {micro.code} - {micro.name}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
+                        <Autocomplete
+                          fullWidth
+                          size="small"
+                          options={ALL_NUTRITIONAL_COMPONENTS}
+                          getOptionLabel={(option) => `${option.code} - ${option.name}`}
+                          groupBy={(option) => option.category}
+                          value={ALL_NUTRITIONAL_COMPONENTS.find(comp => comp.code === micronutrient.code) || null}
+                          onChange={(event, newValue) => {
+                            handleMicronutrientChange(index, 'code', newValue ? newValue.code : '');
+                          }}
+                          isOptionEqualToValue={(option, value) => option.code === value.code}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              variant="standard"
+                              placeholder="Wyszukaj składnik..."
+                              InputProps={{
+                                ...params.InputProps,
+                                style: { fontSize: '0.875rem' }
+                              }}
+                            />
+                          )}
+                          renderOption={(props, option) => (
+                            <Box component="li" {...props}>
+                              <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                    {option.code}
+                                  </Typography>
+                                  <Chip 
+                                    size="small" 
+                                    label={option.category}
+                                    color={
+                                      option.category === 'Witaminy' ? 'success' :
+                                      option.category === 'Minerały' ? 'info' :
+                                      option.category === 'Makroelementy' ? 'primary' :
+                                      option.category === 'Energia' ? 'warning' :
+                                      option.category === 'Składniki aktywne' ? 'secondary' :
+                                      'default'
+                                    }
+                                    sx={{ ml: 'auto' }}
+                                  />
+                                </Box>
+                                <Typography variant="body2" color="text.secondary">
+                                  {option.name} ({option.unit})
+                                </Typography>
+                              </Box>
+                            </Box>
+                          )}
+                          renderGroup={(params) => (
+                            <Box key={params.key}>
+                              <Typography
+                                variant="overline"
+                                sx={{
+                                  px: 2,
+                                  py: 1,
+                                  display: 'block',
+                                  bgcolor: 'grey.100',
+                                  fontWeight: 'bold',
+                                  fontSize: '0.75rem'
+                                }}
+                              >
+                                {params.group}
+                              </Typography>
+                              {params.children}
+                            </Box>
+                          )}
+                        />
                       </TableCell>
                       <TableCell>
                         <TextField
@@ -1595,6 +1672,7 @@ const RecipeForm = ({ recipeId }) => {
                             micronutrient.category === 'Minerały' ? 'info' :
                             micronutrient.category === 'Makroelementy' ? 'primary' :
                             micronutrient.category === 'Energia' ? 'warning' :
+                            micronutrient.category === 'Składniki aktywne' ? 'secondary' :
                             'default'
                           } 
                           label={micronutrient.category} 
