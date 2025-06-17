@@ -408,6 +408,9 @@ export const SUPPLEMENT_ACTIVES = [
   { code: 'CREATINE', name: 'Kreatyna', unit: 'g' },
   { code: 'GLUTAMINE', name: 'Glutamina', unit: 'g' },
   { code: 'BCAA', name: 'BCAA (aminokwasy rozgałęzione)', unit: 'g' },
+  { code: 'L-LEUCINE', name: 'L-leucyna', unit: 'mg' },
+  { code: 'L-ISOLEUCINE', name: 'L-izoleucyna', unit: 'mg' },
+  { code: 'L-VALINE', name: 'L-walina', unit: 'mg' },
   
   // Związki roślinne i ekstrakty
   { code: 'CAFFEINE', name: 'Kofeina', unit: 'mg' },
@@ -457,6 +460,7 @@ export const SUPPLEMENT_ACTIVES = [
   { code: 'BETA_CAROTENE', name: 'Beta-karoten', unit: 'mg' },
   { code: 'SPIRULINA', name: 'Spirulina', unit: 'g' },
   { code: 'CHLORELLA', name: 'Chlorella', unit: 'g' },
+  { code: 'PHYCOCYANIN', name: 'Fikocyjanina', unit: 'mg' },
   { code: 'MELATONIN', name: 'Melatonina', unit: 'mg' },
   { code: 'CHOLINE', name: 'Cholina', unit: 'mg' },
   { code: 'INOSITOL', name: 'Inozytol', unit: 'mg' }
