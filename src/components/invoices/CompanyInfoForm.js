@@ -216,6 +216,17 @@ const CompanyInfoForm = forwardRef((props, ref) => {
                 onChange={handleChange}
               />
             </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="VAT-UE"
+                name="vatEu"
+                value={companyData.vatEu || ''}
+                onChange={handleChange}
+                placeholder="PL1234567890"
+                helperText="Numer VAT-UE (dla transakcji wewnątrzwspólnotowych)"
+              />
+            </Grid>
             
             <Grid item xs={12}>
               <Divider sx={{ my: 1 }} />

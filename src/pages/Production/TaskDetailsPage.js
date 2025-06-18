@@ -95,7 +95,8 @@ import {
   Inventory2 as Materials2Icon,
   Factory as ProductionIcon,
   Assignment as FormIcon,
-  Timeline as TimelineIcon
+  Timeline as TimelineIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession, addProductionSession, deleteProductionSession } from '../../services/productionService';
 import { getRecipeVersion } from '../../services/recipeService';
@@ -5150,6 +5151,7 @@ const TaskDetailsPage = () => {
 
     try {
       setFixingRecipeData(true);
+      showInfo('Pobieranie aktualnych danych receptury...');
       
       // Pobierz pełne dane receptury
       let recipeData = null;
@@ -5178,6 +5180,12 @@ const TaskDetailsPage = () => {
         throw new Error('Nie udało się pobrać danych receptury');
       }
 
+      // Sprawdź czy są nowe dane do zaktualizowania
+      const hasNewMicronutrients = recipeData.micronutrients && recipeData.micronutrients.length > 0;
+      const hasNewIngredients = recipeData.ingredients && recipeData.ingredients.length > 0;
+      const currentMicronutrients = task.recipe?.micronutrients || [];
+      const currentIngredients = task.recipe?.ingredients || [];
+
       // Zaktualizuj zadanie w bazie danych z pełnymi danymi receptury
       const taskRef = doc(db, 'productionTasks', id);
       await updateDoc(taskRef, {
@@ -5192,12 +5200,26 @@ const TaskDetailsPage = () => {
         recipe: recipeData
       }));
 
-      showSuccess('Dane receptury zostały pomyślnie naprawione! Sekcje składników i mikroelementów będą teraz dostępne.');
-      console.log('Naprawiono dane receptury dla zadania:', id);
+      // Pokaż szczegółową informację o tym co zostało zaktualizowane
+      let updateDetails = [];
+      if (hasNewMicronutrients && currentMicronutrients.length === 0) {
+        updateDetails.push(`${recipeData.micronutrients.length} mikroelementów`);
+      }
+      if (hasNewIngredients && currentIngredients.length === 0) {
+        updateDetails.push(`${recipeData.ingredients.length} składników`);
+      }
+
+      if (updateDetails.length > 0) {
+        showSuccess(`Dane receptury zostały zaktualizowane! Dodano: ${updateDetails.join(', ')}`);
+      } else {
+        showSuccess('Dane receptury zostały odświeżone!');
+      }
+      
+      console.log('Odświeżono dane receptury dla zadania:', id);
 
     } catch (error) {
-      console.error('Błąd podczas naprawy danych receptury:', error);
-      showError('Nie udało się naprawić danych receptury: ' + error.message);
+      console.error('Błąd podczas odświeżania danych receptury:', error);
+      showError('Nie udało się odświeżyć danych receptury: ' + error.message);
     } finally {
       setFixingRecipeData(false);
     }
@@ -5920,16 +5942,30 @@ const TaskDetailsPage = () => {
                   
                   {/* TDS Specification */}
                   <Paper sx={{ p: 3, mb: 3 }}>
-                    <Typography variant="h6" sx={{ mb: 2 }}>
-                      2. TDS Specification
-                    </Typography>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                      <Typography variant="h6">
+                        2. TDS Specification
+                      </Typography>
+                      <Button
+                        variant="outlined"
+                        color="primary"
+                        size="small"
+                        startIcon={fixingRecipeData ? <CircularProgress size={16} color="inherit" /> : <RefreshIcon />}
+                        onClick={handleFixRecipeData}
+                        disabled={fixingRecipeData || !task?.recipeId}
+                      >
+                        {fixingRecipeData ? 'Odświeżanie...' : 'Odśwież składniki'}
+                      </Button>
+                    </Box>
                     
                     <Grid container spacing={3}>
                       {/* Microelements + Nutrition data */}
                       <Grid item xs={12}>
-                        <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>
-                          Mikroelementy + Dane żywieniowe:
-                        </Typography>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                          <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>
+                            Mikroelementy + Dane żywieniowe:
+                          </Typography>
+                        </Box>
                         
                         {task?.recipe?.micronutrients && task.recipe.micronutrients.length > 0 ? (
                           <TableContainer component={Paper} sx={{ mt: 2 }}>
@@ -5938,7 +5974,9 @@ const TaskDetailsPage = () => {
                                 <TableRow sx={{ backgroundColor: 'action.hover' }}>
                                   <TableCell sx={{ fontWeight: 'bold' }}>Kod</TableCell>
                                   <TableCell sx={{ fontWeight: 'bold' }}>Nazwa</TableCell>
-                                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>Ilość</TableCell>
+                                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                                    Ilość per {task?.recipe?.nutritionalBasis || '1 caps'}
+                                  </TableCell>
                                   <TableCell sx={{ fontWeight: 'bold' }}>Jednostka</TableCell>
                                   <TableCell sx={{ fontWeight: 'bold' }}>Kategoria</TableCell>
                                 </TableRow>
@@ -5971,8 +6009,11 @@ const TaskDetailsPage = () => {
                           </TableContainer>
                         ) : (
                           <Paper sx={{ p: 2, backgroundColor: 'warning.light', border: 1, borderColor: 'warning.main', borderStyle: 'dashed', opacity: 0.7 }}>
-                            <Typography variant="body2" color="text.secondary" align="center">
+                            <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 1 }}>
                               Brak danych o mikroelementach w recepturze
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" align="center" display="block">
+                              Kliknij przycisk "Odśwież składniki" aby zaktualizować dane receptury i pobrać aktualne składniki odżywcze
                             </Typography>
                           </Paper>
                         )}
@@ -6041,9 +6082,21 @@ const TaskDetailsPage = () => {
                   
                   {/* Active Ingredients */}
                   <Paper sx={{ p: 3, mb: 3 }}>
-                    <Typography variant="h6" sx={{ mb: 2 }}>
-                      3. Active Ingredients
-                    </Typography>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                      <Typography variant="h6">
+                        3. Active Ingredients
+                      </Typography>
+                      <Button
+                        variant="outlined"
+                        color="secondary"
+                        size="small"
+                        startIcon={fixingRecipeData ? <CircularProgress size={16} color="inherit" /> : <RefreshIcon />}
+                        onClick={handleFixRecipeData}
+                        disabled={fixingRecipeData || !task?.recipeId}
+                      >
+                        {fixingRecipeData ? 'Odświeżanie...' : 'Odśwież składniki'}
+                      </Button>
+                    </Box>
                     
                     <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', mt: 2 }}>
                       3.1 List of materials
@@ -6139,10 +6192,13 @@ const TaskDetailsPage = () => {
                       </TableContainer>
                     ) : (
                       <Paper sx={{ p: 2, backgroundColor: 'warning.light', border: 1, borderColor: 'warning.main', borderStyle: 'dashed', opacity: 0.7 }}>
-                        <Typography variant="body2" color="text.secondary" align="center">
+                        <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 1 }}>
                           Brak składników w recepturze
                         </Typography>
-                </Paper>
+                        <Typography variant="caption" color="text.secondary" align="center" display="block">
+                          Kliknij przycisk "Odśwież składniki" aby zaktualizować dane receptury i pobrać aktualną listę składników
+                        </Typography>
+                      </Paper>
                     )}
                     
                     {/* Daty ważności skonsumowanych materiałów */}

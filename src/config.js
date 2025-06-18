@@ -17,6 +17,7 @@ export const COMPANY_INFO = {
   country: '',
   nip: '',
   vatId: '',
+  vatEu: '', // Numer VAT-UE dla transakcji wewnątrzwspólnotowych
   regon: '',
   krs: '',
   email: '',

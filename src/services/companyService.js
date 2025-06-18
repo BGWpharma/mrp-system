@@ -212,6 +212,7 @@ export const DEFAULT_COMPANY = {
   address: '',
   city: '',
   nip: '',
+  vatEu: '', // Numer VAT-UE dla transakcji wewnątrzwspólnotowych
   regon: '',
   krs: '',
   email: '',

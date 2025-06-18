@@ -279,6 +279,59 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       }
     };
 
+    // Helper function to ensure entire section stays on one page
+    const checkSectionPageBreak = (estimatedSectionHeight) => {
+      if (currentY + estimatedSectionHeight > pageHeight - margin) {
+        addPageWithTemplate();
+      }
+    };
+
+    // Helper function to calculate estimated height of table
+    const estimateTableHeight = (headers, data, options = {}) => {
+      const { fontSize = 8, minRowHeight = 6, padding = 2 } = options;
+      const colWidth = contentWidth / headers.length;
+      const availableWidth = colWidth - (padding * 2);
+      
+      // Ensure data is an array and not empty
+      if (!Array.isArray(data) || data.length === 0) return 8; // Height for "No data available" message
+      
+      // Set font temporarily for calculations
+      doc.setFontSize(fontSize);
+      doc.setFont('helvetica', 'normal');
+      
+      let totalHeight = 0;
+      
+      // Calculate header height
+      if (headers.length > 0) {
+        let headerHeight = minRowHeight;
+        headers.forEach(header => {
+          const lines = doc.splitTextToSize(header, availableWidth);
+          const requiredHeight = Math.max(minRowHeight, lines.length * 4 + padding);
+          headerHeight = Math.max(headerHeight, requiredHeight);
+        });
+        totalHeight += headerHeight;
+      }
+
+      // Calculate data rows height
+      data.forEach(row => {
+        // Ensure row is an array
+        const rowArray = Array.isArray(row) ? row : [row];
+        let maxRowHeight = minRowHeight;
+        
+        rowArray.forEach(cell => {
+          const cellText = cell ? cell.toString() : '';
+          if (cellText.length > 0) {
+            const lines = doc.splitTextToSize(cellText, availableWidth);
+            const requiredHeight = Math.max(minRowHeight, lines.length * 4 + padding);
+            maxRowHeight = Math.max(maxRowHeight, requiredHeight);
+          }
+        });
+        totalHeight += maxRowHeight;
+      });
+
+      return totalHeight + 10; // Add some padding
+    };
+
     // Helper function to add section header
     const addSectionHeader = (number, title, color = '#1976d2') => {
       checkPageBreak(17);
@@ -315,6 +368,15 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       currentY += 17; // Zmniejszony odstęp po nagłówku
     };
 
+    // Helper function to add section header with page break consideration
+    const addSectionHeaderWithPageBreak = (number, title, estimatedContentHeight, color = '#1976d2') => {
+      const headerHeight = 17;
+      const totalSectionHeight = headerHeight + estimatedContentHeight;
+      
+      checkSectionPageBreak(totalSectionHeight);
+      addSectionHeader(number, title, color);
+    };
+
     // Helper function to add subsection header
     const addSubsectionHeader = (number, title, color = '#4caf50') => {
       checkPageBreak(10);
@@ -332,6 +394,15 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       doc.text(title, margin + 25, currentY + 4);
       
       currentY += 12;
+    };
+
+    // Helper function to add subsection header with page break consideration
+    const addSubsectionHeaderWithPageBreak = (number, title, estimatedContentHeight, color = '#4caf50') => {
+      const headerHeight = 12;
+      const totalSubsectionHeight = headerHeight + estimatedContentHeight;
+      
+      checkSectionPageBreak(totalSubsectionHeight);
+      addSubsectionHeader(number, title, color);
     };
 
     // Helper function to add field
@@ -628,7 +699,36 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
     currentY += 10;
 
     // 2. TDS Specification
-    addSectionHeader(2, 'TDS Specification', '#6C35EA');
+    // Calculate estimated content height for this section
+    let tdsEstimatedHeight = 16 + 16; // Two fields (Date fields)
+    
+    // Add micronutrients table height if present
+    if (task?.recipe?.micronutrients && task.recipe.micronutrients.length > 0) {
+      const nutritionalBasis = task?.recipe?.nutritionalBasis || '1 caps';
+      
+      // Function to translate categories to English
+      const translateCategory = (category) => {
+        const categoryTranslations = {
+          'Witaminy': 'Vitamins',
+          'Minerały': 'Minerals', 
+          'Makroelementy': 'Macronutrients',
+          'Energia': 'Energy',
+          'Składniki aktywne': 'Active compounds'
+        };
+        return categoryTranslations[category] || category;
+      };
+
+      const microHeaders = ['Code', `Quantity per ${nutritionalBasis}`, 'Category'];
+      const microData = task.recipe.micronutrients.map(micro => [
+        micro.code || '',
+        `${micro.quantity || ''} ${micro.unit || ''}`.trim(),
+        translateCategory(micro.category || '')
+      ]);
+      
+      tdsEstimatedHeight += 13 + estimateTableHeight(microHeaders, microData); // Label + table
+    }
+    
+    addSectionHeaderWithPageBreak(2, 'TDS Specification', tdsEstimatedHeight, '#6C35EA');
     
     addField('Date of last recipe update', task?.recipe?.updatedAt 
       ? (task.recipe.updatedAt && typeof task.recipe.updatedAt === 'object' && typeof task.recipe.updatedAt.toDate === 'function'
@@ -649,19 +749,30 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
     // Microelements + Nutrition data
     if (task?.recipe?.micronutrients && task.recipe.micronutrients.length > 0) {
       currentY += 5;
+      const nutritionalBasis = task?.recipe?.nutritionalBasis || '1 caps';
       doc.setTextColor(85, 85, 85);
       doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');
-      doc.text('Microelements + Nutrition data:', margin, currentY);
+      doc.text(`Microelements + Nutrition data (per ${nutritionalBasis}):`, margin, currentY);
       currentY += 8;
 
-      const microHeaders = ['Code', 'Name', 'Quantity', 'Unit', 'Category'];
+      // Function to translate categories to English (defined above for height calculation)
+      const translateCategory = (category) => {
+        const categoryTranslations = {
+          'Witaminy': 'Vitamins',
+          'Minerały': 'Minerals', 
+          'Makroelementy': 'Macronutrients',
+          'Energia': 'Energy',
+          'Składniki aktywne': 'Active compounds'
+        };
+        return categoryTranslations[category] || category;
+      };
+
+      const microHeaders = ['Code', `Quantity per ${nutritionalBasis}`, 'Category'];
       const microData = task.recipe.micronutrients.map(micro => [
         micro.code || '',
-        micro.name || '',
-        micro.quantity?.toString() || '',
-        micro.unit || '',
-        micro.category || ''
+        `${micro.quantity || ''} ${micro.unit || ''}`.trim(),
+        translateCategory(micro.category || '')
       ]);
 
       addTable(microHeaders, microData);
@@ -670,10 +781,58 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
     currentY += 10;
 
     // 3. Active Ingredients
-    addSectionHeader(3, 'Active Ingredients', '#6C35EA');
+    // Calculate estimated content height for entire section
+    let activeIngredientsEstimatedHeight = 0;
+    
+    // 3.1 List of materials height
+    let materialsSubsectionHeight = 12; // Subsection header
+    if (task?.recipe?.ingredients && task.recipe.ingredients.length > 0) {
+      const ingredientHeaders = ['Ingredient name', 'Quantity', 'Unit', 'CAS Number', 'Notes'];
+      const ingredientData = task.recipe.ingredients.map(ingredient => [
+        ingredient.name || '',
+        ingredient.quantity?.toString() || '',
+        ingredient.unit || '',
+        ingredient.casNumber || '-',
+        ingredient.notes || '-'
+      ]);
+      materialsSubsectionHeight += estimateTableHeight(ingredientHeaders, ingredientData) + 21; // table + summary
+    }
+    activeIngredientsEstimatedHeight += materialsSubsectionHeight;
+    
+    // Check if we have expiration data for 3.2 subsection
+    if (task?.consumedMaterials && task.consumedMaterials.length > 0) {
+      const expiryHeaders = ['Material name', 'Batch', 'Quantity', 'Unit', 'Expiration date'];
+      // Create proper data array for estimation
+      const expiryDataSample = task.consumedMaterials.slice(0, 5).map(consumed => [
+        consumed.materialName || 'Material',
+        consumed.batchNumber || consumed.lotNumber || '-',
+        (consumed.quantity || consumed.consumedQuantity || '-').toString(),
+        consumed.unit || '-',
+        consumed.expiryDate ? 'DD/MM/YYYY' : 'Not specified'
+      ]);
+      activeIngredientsEstimatedHeight += 12 + estimateTableHeight(expiryHeaders, expiryDataSample) + 20;
+    }
+    
+    // Check if we have clinical attachments for 3.3 subsection
+    if (clinicalAttachments.length > 0) {
+      const clinicalHeaders = ['File type', 'File name', 'Size', 'Upload date'];
+      // Create proper data array for estimation
+      const clinicalDataSample = clinicalAttachments.slice(0, 3).map(attachment => [
+        getFileTypeFromExtension(attachment.fileName),
+        attachment.fileName,
+        formatFileSize(attachment.size),
+        new Date(attachment.uploadedAt).toLocaleDateString('en-GB')
+      ]);
+      activeIngredientsEstimatedHeight += 12 + estimateTableHeight(clinicalHeaders, clinicalDataSample) + 16;
+    } else {
+      activeIngredientsEstimatedHeight += 12 + 8; // Subsection header + "no data" message
+    }
+    
+    addSectionHeaderWithPageBreak(3, 'Active Ingredients', activeIngredientsEstimatedHeight, '#6C35EA');
 
-    // 3.1 List of materials
-    addSubsectionHeader('3.1', 'List of materials', '#6C35EA');
+    // 3.1 List of materials - estimate subsection height and use page break check
+    const materialsSubsectionEstimatedHeight = materialsSubsectionHeight - 12; // Exclude header height
+    addSubsectionHeaderWithPageBreak('3.1', 'List of materials', materialsSubsectionEstimatedHeight, '#6C35EA');
     
     if (task?.recipe?.ingredients && task.recipe.ingredients.length > 0) {
       const ingredientHeaders = ['Ingredient name', 'Quantity', 'Unit', 'CAS Number', 'Notes'];
@@ -697,7 +856,19 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
 
     // 3.2 Expiration date of materials
     if (task?.consumedMaterials && task.consumedMaterials.length > 0) {
-      addSubsectionHeader('3.2', 'Expiration date of materials', '#6C35EA');
+      // Calculate estimated height for this subsection
+      const expiryHeadersForEstimation = ['Material name', 'Batch', 'Quantity', 'Unit', 'Expiration date'];
+      // Create proper data array for estimation
+      const expiryDataSample = task.consumedMaterials.slice(0, 5).map(consumed => [
+        consumed.materialName || 'Material',
+        consumed.batchNumber || consumed.lotNumber || '-',
+        (consumed.quantity || consumed.consumedQuantity || '-').toString(),
+        consumed.unit || '-',
+        consumed.expiryDate ? 'DD/MM/YYYY' : 'Not specified'
+      ]);
+      const expirySubsectionHeight = estimateTableHeight(expiryHeadersForEstimation, expiryDataSample) + 20; // table + summary
+      
+      addSubsectionHeaderWithPageBreak('3.2', 'Expiration date of materials', expirySubsectionHeight, '#6C35EA');
       
       const expiryHeaders = ['Material name', 'Batch', 'Quantity', 'Unit', 'Expiration date'];
       const expiryData = task.consumedMaterials.map(consumed => {
@@ -747,7 +918,23 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
     }
 
     // 3.3 Clinical and bibliographic research
-    addSubsectionHeader('3.3', 'Clinical and bibliographic research', '#6C35EA');
+    // Calculate estimated height for this subsection  
+    let clinicalSubsectionHeight = 0;
+    if (clinicalAttachments.length > 0) {
+      const clinicalHeaders = ['File type', 'File name', 'Size', 'Upload date'];
+      // Create proper data array for estimation
+      const clinicalDataSample = clinicalAttachments.slice(0, 3).map(attachment => [
+        getFileTypeFromExtension(attachment.fileName),
+        attachment.fileName,
+        formatFileSize(attachment.size),
+        new Date(attachment.uploadedAt).toLocaleDateString('en-GB')
+      ]);
+      clinicalSubsectionHeight = estimateTableHeight(clinicalHeaders, clinicalDataSample) + 16; // table + summary
+    } else {
+      clinicalSubsectionHeight = 8; // "No data" message
+    }
+    
+    addSubsectionHeaderWithPageBreak('3.3', 'Clinical and bibliographic research', clinicalSubsectionHeight, '#6C35EA');
     
     if (clinicalAttachments.length > 0) {
       const clinicalHeaders = ['File type', 'File name', 'Size', 'Upload date'];
@@ -1088,7 +1275,20 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
     currentY += 10;
 
     // 7. Allergens
-    addSectionHeader(7, 'Allergens', '#6C35EA');
+    // Calculate estimated height for allergens section
+    let allergensEstimatedHeight = 0;
+    if (additionalData.selectedAllergens && additionalData.selectedAllergens.length > 0) {
+      const allergenHeaders = ['Allergen name', 'Status'];
+      const allergenData = additionalData.selectedAllergens.map(allergen => [
+        allergen,
+        'PRESENT'
+      ]);
+      allergensEstimatedHeight = 8 + estimateTableHeight(allergenHeaders, allergenData, { fontSize: 9 }) + 20; // spacing + table + warning
+    } else {
+      allergensEstimatedHeight = 8; // "No data" message
+    }
+    
+    addSectionHeaderWithPageBreak(7, 'Allergens', allergensEstimatedHeight, '#6C35EA');
     
     if (additionalData.selectedAllergens && additionalData.selectedAllergens.length > 0) {
       currentY += 8;
@@ -1126,7 +1326,22 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
     currentY += 10;
 
     // 8. Additional Attachments
-    addSectionHeader(8, 'Additional Attachments', '#6C35EA');
+    // Calculate estimated height for attachments section
+    let attachmentsEstimatedHeight = 0;
+    if (additionalData.additionalAttachments && additionalData.additionalAttachments.length > 0) {
+      const additionalAttHeaders = ['File type', 'File name', 'Size', 'Upload date'];
+      const additionalAttData = additionalData.additionalAttachments.map(attachment => [
+        getFileTypeFromExtension(attachment.fileName),
+        attachment.fileName,
+        formatFileSize(attachment.size),
+        new Date(attachment.uploadedAt).toLocaleDateString('en-GB')
+      ]);
+      attachmentsEstimatedHeight = estimateTableHeight(additionalAttHeaders, additionalAttData) + 16; // table + summary
+    } else {
+      attachmentsEstimatedHeight = 8; // "No data" message
+    }
+    
+    addSectionHeaderWithPageBreak(8, 'Additional Attachments', attachmentsEstimatedHeight, '#6C35EA');
     
     if (additionalData.additionalAttachments && additionalData.additionalAttachments.length > 0) {
       const additionalAttHeaders = ['File type', 'File name', 'Size', 'Upload date'];
