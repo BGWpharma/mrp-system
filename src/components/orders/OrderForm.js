@@ -806,24 +806,14 @@ const OrderForm = ({ orderId }) => {
             }
             
             if (recipe) {
-              // Jeśli receptura ma koszt/sztuka (processingCostPerUnit), użyj go bezpośrednio
-              if (recipe.processingCostPerUnit !== undefined && recipe.processingCostPerUnit !== null) {
-                basePrice = recipe.processingCostPerUnit;
-                console.log(`Użyto kosztu/sztuka z receptury: ${basePrice}`);
-                
-                // Dla receptury spoza listy cenowej użyj bezpośrednio kosztu/sztuka bez marży
-                price = parseFloat(basePrice.toFixed(2));
-                margin = 0;
-              } else {
-                // W przeciwnym razie oblicz koszt produkcji
-                const cost = await calculateProductionCost(recipe);
-                basePrice = cost.totalCost;
-                console.log(`Obliczono koszt produkcji receptury: ${basePrice}`);
-                
-                // Zastosuj marżę do kosztu produkcji
-                const calculatedPrice = basePrice * (1 + margin / 100);
-                price = parseFloat(calculatedPrice.toFixed(2));
-              }
+              // Oblicz koszt produkcji z uwzględnieniem składników, pracy i maszyn
+              const cost = await calculateProductionCost(recipe);
+              basePrice = cost.totalCost;
+              console.log(`Obliczono koszt produkcji receptury: ${basePrice}`);
+              
+              // Zastosuj marżę do kosztu produkcji
+              const calculatedPrice = basePrice * (1 + margin / 100);
+              price = parseFloat(calculatedPrice.toFixed(2));
               
               // Pobierz informacje o ostatnim użyciu receptury w zamówieniach
               try {

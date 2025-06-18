@@ -411,6 +411,8 @@ export const SUPPLEMENT_ACTIVES = [
   { code: 'L-LEUCINE', name: 'L-leucyna', unit: 'mg' },
   { code: 'L-ISOLEUCINE', name: 'L-izoleucyna', unit: 'mg' },
   { code: 'L-VALINE', name: 'L-walina', unit: 'mg' },
+  { code: 'PROLINE', name: 'Prolina', unit: 'g' },
+  { code: 'HYDROXYPROLINE', name: 'Hydroksyprolina', unit: 'mg' },
   
   // Związki roślinne i ekstrakty
   { code: 'CAFFEINE', name: 'Kofeina', unit: 'mg' },
@@ -426,10 +428,13 @@ export const SUPPLEMENT_ACTIVES = [
   { code: 'RHODIOLA', name: 'Różeniec górski (Rhodiola)', unit: 'mg' },
   { code: 'MILK_THISTLE', name: 'Ostropest plamisty', unit: 'mg' },
   { code: 'TURMERIC', name: 'Kurkuma', unit: 'mg' },
+  { code: 'VALERIAN_EXTRACT', name: 'Ekstrakt z kozłka lekarskiego', unit: 'mg' },
+  { code: 'CHAMOMILE_EXTRACT', name: 'Ekstrakt z rumianku', unit: 'mg' },
   
   // Probiotyki i prebiotyki
   { code: 'LACTOBACILLUS', name: 'Lactobacillus', unit: 'CFU' },
   { code: 'BIFIDOBACTERIUM', name: 'Bifidobacterium', unit: 'CFU' },
+  { code: 'PROBIOTIC_ACTIVES', name: 'Aktywne składniki probiotyczne', unit: 'mg' },
   { code: 'INULIN', name: 'Inulina', unit: 'g' },
   { code: 'FOS', name: 'Frukto-oligosacharydy (FOS)', unit: 'mg' },
   
