@@ -593,7 +593,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
       // Data zamówienia
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(10);
-      doc.text(`Date: ${purchaseOrder.orderDate ? new Date(purchaseOrder.orderDate).toLocaleDateString('en-US') : ''}`, leftMargin, 42, { align: 'left' });
+      doc.text(`Date: ${purchaseOrder.orderDate ? new Date(purchaseOrder.orderDate).toLocaleDateString('en-GB') : ''}`, leftMargin, 42, { align: 'left' });
 
       // Dane dostawcy (lewa strona)
       currentY = 60;
@@ -647,11 +647,10 @@ const PurchaseOrderDetails = ({ orderId }) => {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(10);
       
-      doc.text(`Status: ${purchaseOrder.status || ''}`, leftMargin, currentY);
-      currentY += 6;
+
       
       if (purchaseOrder.expectedDeliveryDate) {
-        doc.text(`Expected delivery: ${new Date(purchaseOrder.expectedDeliveryDate).toLocaleDateString('en-US')}`, leftMargin, currentY);
+        doc.text(`Expected delivery: ${new Date(purchaseOrder.expectedDeliveryDate).toLocaleDateString('en-GB')}`, leftMargin, currentY);
         currentY += 6;
       }
       
@@ -811,7 +810,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
           
           // Expected Date (plannedDeliveryDate)
           const expectedDate = item.plannedDeliveryDate ? 
-            new Date(item.plannedDeliveryDate).toLocaleDateString('en-US') : '-';
+            new Date(item.plannedDeliveryDate).toLocaleDateString('en-GB') : '-';
           doc.text(expectedDate, currentX + 2, currentY + 4);
           
           currentY += lineHeight;
@@ -868,7 +867,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
         doc.setFontSize(8);
         doc.setTextColor(150, 150, 150);
         doc.text(
-          `Generated: ${new Date().toLocaleString('en-US')} | Page ${i} of ${pageCount}`,
+          `Generated: ${new Date().toLocaleString('en-GB')} | Page ${i} of ${pageCount}`,
           pageWidth / 2,
           pageHeight - 10,
           { align: 'center' }
