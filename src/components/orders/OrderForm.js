@@ -821,6 +821,52 @@ const OrderForm = ({ orderId }) => {
                 if (lastUsageInfo) {
                   console.log('Znaleziono informacje o ostatnim użyciu receptury:', lastUsageInfo);
                 }
+                
+                // Jeśli nie ma informacji o ostatnim użyciu lub koszt wynosi 0, 
+                // oblicz szacowany koszt na podstawie materiałów
+                if (!lastUsageInfo || !lastUsageInfo.cost || lastUsageInfo.cost === 0) {
+                  console.log('Brak ostatniego kosztu - obliczam szacowany koszt materiałów');
+                  
+                  const { calculateEstimatedMaterialsCost } = await import('../../utils/costCalculator');
+                  const estimatedCost = await calculateEstimatedMaterialsCost(recipe);
+                  
+                  if (estimatedCost.totalCost > 0) {
+                    // Jeśli mamy lastUsageInfo ale bez kosztu, aktualizuj koszt
+                    if (lastUsageInfo) {
+                      lastUsageInfo.cost = estimatedCost.totalCost;
+                      lastUsageInfo.estimatedCost = true;
+                      lastUsageInfo.costDetails = estimatedCost.details;
+                    } else {
+                      // Stwórz nowe lastUsageInfo z szacowanym kosztem
+                      lastUsageInfo = {
+                        orderId: null,
+                        orderNumber: 'Szacowany',
+                        orderDate: new Date(),
+                        customerName: 'Kalkulacja kosztów',
+                        quantity: 1,
+                        price: estimatedCost.totalCost,
+                        cost: estimatedCost.totalCost,
+                        unit: recipe.unit || 'szt.',
+                        totalValue: estimatedCost.totalCost,
+                        estimatedCost: true,
+                        costDetails: estimatedCost.details
+                      };
+                    }
+                    
+                                         console.log(`Obliczono szacowany koszt materiałów: ${estimatedCost.totalCost}€`, estimatedCost.details);
+                     
+                     // Zapisz szacowany koszt w bazie danych jeśli jesteśmy w trybie edycji
+                     if (orderId && currentUser) {
+                       try {
+                         const { saveEstimatedCost } = await import('../../services/orderService');
+                         await saveEstimatedCost(orderId, index, estimatedCost, currentUser.uid);
+                         console.log('Zapisano szacowany koszt w bazie danych');
+                       } catch (error) {
+                         console.error('Błąd podczas zapisywania szacowanego kosztu:', error);
+                       }
+                     }
+                   }
+                 }
               } catch (error) {
                 console.error('Błąd podczas pobierania informacji o ostatnim użyciu receptury:', error);
               }
@@ -906,12 +952,12 @@ const OrderForm = ({ orderId }) => {
     // Podstawowa wartość pozycji
     const itemValue = (parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0);
     
-    // Jeśli produkt jest z listy cenowej, zwracamy tylko wartość pozycji
-    if (item.fromPriceList) {
+    // Jeśli produkt jest z listy cenowej I ma cenę większą od 0, zwracamy tylko wartość pozycji
+    if (item.fromPriceList && parseFloat(item.price || 0) > 0) {
       return itemValue;
     }
     
-    // Jeśli produkt nie jest z listy cenowej i ma koszt produkcji, dodajemy go
+    // Jeśli produkt nie jest z listy cenowej LUB ma cenę 0, i ma koszt produkcji, dodajemy go
     if (item.productionTaskId && item.productionCost !== undefined) {
       return itemValue + parseFloat(item.productionCost || 0);
     }
@@ -2310,19 +2356,14 @@ const OrderForm = ({ orderId }) => {
             }
             
             if (recipe) {
-              // Jeśli receptura ma koszt/sztuka, użyj go bezpośrednio
-              if (recipe.processingCostPerUnit !== undefined && recipe.processingCostPerUnit !== null) {
-                price = parseFloat(recipe.processingCostPerUnit.toFixed(2));
-              } else {
-                // W przeciwnym razie oblicz koszt produkcji
-                const cost = await calculateProductionCost(recipe);
-                const basePrice = cost.totalCost;
-                const margin = item.margin || 0;
-                
-                // Zastosuj marżę do kosztu produkcji
-                const calculatedPrice = basePrice * (1 + margin / 100);
-                price = parseFloat(calculatedPrice.toFixed(2));
-              }
+              // Oblicz koszt produkcji z receptury (ignoruj processingCostPerUnit dla CO)
+              const cost = await calculateProductionCost(recipe);
+              const basePrice = cost.totalCost;
+              const margin = item.margin || 0;
+              
+              // Zastosuj marżę do kosztu produkcji
+              const calculatedPrice = basePrice * (1 + margin / 100);
+              price = parseFloat(calculatedPrice.toFixed(2));
               
               // Odśwież również informacje o ostatnim użyciu receptury
               try {
@@ -2367,6 +2408,93 @@ const OrderForm = ({ orderId }) => {
     } catch (error) {
       console.error('Błąd podczas odświeżania ceny:', error);
       showError(`Wystąpił błąd: ${error.message}`);
+    }
+  };
+
+  // Funkcja do obliczania szacowanych kosztów dla wszystkich pozycji
+  const calculateEstimatedCostsForAllItems = async () => {
+    if (!orderId || !currentUser) {
+      showError('Musisz najpierw zapisać zamówienie, aby obliczyć szacowane koszty');
+      return;
+    }
+    
+    setCalculatingCosts(true);
+    let processedItems = 0;
+    let updatedItems = 0;
+    
+    try {
+      const { getRecipeById } = await import('../../services/recipeService');
+      const { calculateEstimatedMaterialsCost } = await import('../../utils/costCalculator');
+      const { saveEstimatedCost } = await import('../../services/orderService');
+      
+      for (let index = 0; index < orderData.items.length; index++) {
+        const item = orderData.items[index];
+        processedItems++;
+        
+        // Sprawdź czy pozycja to receptura
+        const isRecipe = item.itemType === 'recipe' || item.isRecipe;
+        if (!isRecipe || !item.id) continue;
+        
+        // Sprawdź czy pozycja ma już ostatni koszt
+        if (item.lastUsageInfo && item.lastUsageInfo.cost && item.lastUsageInfo.cost > 0 && !item.lastUsageInfo.estimatedCost) {
+          console.log(`Pozycja ${index} ma już ostatni koszt: ${item.lastUsageInfo.cost}€ - pomijam`);
+          continue;
+        }
+        
+        try {
+          console.log(`Obliczam szacowany koszt dla pozycji ${index}: ${item.name}`);
+          
+          const recipe = await getRecipeById(item.id);
+          if (!recipe) {
+            console.warn(`Nie znaleziono receptury dla pozycji ${index}`);
+            continue;
+          }
+          
+          const estimatedCost = await calculateEstimatedMaterialsCost(recipe);
+          
+          if (estimatedCost.totalCost > 0) {
+            // Aktualizuj stan lokalny
+            const updatedItemsArray = [...orderData.items];
+            updatedItemsArray[index] = {
+              ...updatedItemsArray[index],
+              lastUsageInfo: {
+                orderId: null,
+                orderNumber: 'Szacowany',
+                orderDate: new Date(),
+                customerName: 'Kalkulacja kosztów',
+                quantity: 1,
+                price: estimatedCost.totalCost,
+                cost: estimatedCost.totalCost,
+                unit: recipe.unit || 'szt.',
+                totalValue: estimatedCost.totalCost,
+                estimatedCost: true,
+                costDetails: estimatedCost.details
+              }
+            };
+            
+            setOrderData(prev => ({
+              ...prev,
+              items: updatedItemsArray
+            }));
+            
+            // Zapisz w bazie danych
+            await saveEstimatedCost(orderId, index, estimatedCost, currentUser.uid);
+            updatedItems++;
+            
+            console.log(`Obliczono i zapisano szacowany koszt dla pozycji ${index}: ${estimatedCost.totalCost}€`);
+          }
+        } catch (error) {
+          console.error(`Błąd podczas obliczania kosztu dla pozycji ${index}:`, error);
+        }
+      }
+      
+      showSuccess(`Przetworzono ${processedItems} pozycji, zaktualizowano ${updatedItems} szacowanych kosztów`);
+      
+    } catch (error) {
+      console.error('Błąd podczas obliczania szacowanych kosztów:', error);
+      showError('Wystąpił błąd podczas obliczania szacowanych kosztów');
+    } finally {
+      setCalculatingCosts(false);
     }
   };
 
@@ -2568,15 +2696,27 @@ const OrderForm = ({ orderId }) => {
             <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main', display: 'flex', alignItems: 'center' }}>
               <ShoppingCartIcon sx={{ mr: 1 }} /> Produkty
             </Typography>
-            <Button 
-              variant="contained" 
-              startIcon={<AddIcon />} 
-              onClick={addItem}
-              color="secondary"
-              sx={{ borderRadius: 2 }}
-            >
-              Dodaj produkt
-            </Button>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button 
+                variant="contained" 
+                startIcon={<AddIcon />} 
+                onClick={addItem}
+                color="secondary"
+                sx={{ borderRadius: 2 }}
+              >
+                Dodaj produkt
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={calculatingCosts ? <CircularProgress size={16} /> : <CalculateIcon />}
+                onClick={calculateEstimatedCostsForAllItems}
+                disabled={calculatingCosts || !orderId}
+                color="info"
+                sx={{ borderRadius: 2 }}
+              >
+                {calculatingCosts ? 'Obliczam...' : 'Oblicz szacowane koszty'}
+              </Button>
+            </Box>
           </Box>
           
           <Divider sx={{ mb: 3 }} />
@@ -2781,7 +2921,7 @@ const OrderForm = ({ orderId }) => {
                               item.productionStatus === 'Anulowane' ? 'error' :
                               item.productionStatus === 'Zaplanowane' ? 'primary' : 'default'
                             }
-                            onClick={() => navigate(`/production/${item.productionTaskId}`)}
+                            onClick={() => navigate(`/production/tasks/${item.productionTaskId}`)}
                             sx={{ cursor: 'pointer', borderRadius: 1 }}
                             icon={<EventNoteIcon />}
                           />
@@ -2800,7 +2940,7 @@ const OrderForm = ({ orderId }) => {
                       )}
                     </TableCell>
                     <TableCell align="right">
-                      {item.fromPriceList && item.productionCost !== undefined ? (
+                      {item.fromPriceList && parseFloat(item.price || 0) > 0 && item.productionCost !== undefined ? (
                         <Box sx={{ 
                           fontWeight: 'medium', 
                           color: (item.quantity * item.price - item.productionCost) > 0 ? 'success.main' : 'error.main' 
@@ -2813,13 +2953,28 @@ const OrderForm = ({ orderId }) => {
                     </TableCell>
                     <TableCell>
                       {item.lastUsageInfo ? (
-                        <Tooltip title={`Data: ${formatDateToDisplay(item.lastUsageInfo.date)}, Ostatni koszt: ${formatCurrency(item.lastUsageInfo.cost)}`}>
+                        <Tooltip title={
+                          item.lastUsageInfo.estimatedCost 
+                            ? `Szacowany koszt materiałów: ${formatCurrency(item.lastUsageInfo.cost)} (na podstawie ${item.lastUsageInfo.costDetails?.length || 0} materiałów)`
+                            : `Data: ${formatDateToDisplay(item.lastUsageInfo.date)}, Ostatni koszt: ${formatCurrency(item.lastUsageInfo.cost)}`
+                        }>
                           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                             <Typography variant="caption" color="text.secondary">
-                              {formatDateToDisplay(item.lastUsageInfo.date)}
+                              {item.lastUsageInfo.estimatedCost ? 'Szacowany' : formatDateToDisplay(item.lastUsageInfo.date)}
                             </Typography>
-                            <Typography variant="body2" fontWeight="medium" sx={{ color: 'purple' }}>
+                            <Typography 
+                              variant="body2" 
+                              fontWeight="medium" 
+                              sx={{ 
+                                color: item.lastUsageInfo.estimatedCost ? 'info.main' : 'purple' 
+                              }}
+                            >
                               {formatCurrency(item.lastUsageInfo.cost)}
+                              {item.lastUsageInfo.estimatedCost && (
+                                <Typography component="span" variant="caption" sx={{ ml: 0.5, color: 'text.secondary' }}>
+                                  (est.)
+                                </Typography>
+                              )}
                             </Typography>
                           </Box>
                         </Tooltip>
@@ -2876,8 +3031,8 @@ const OrderForm = ({ orderId }) => {
                           const quantity = parseFloat(item.quantity) || 1;
                           const price = parseFloat(item.price) || 0;
                           
-                          // Jeśli pozycja jest z listy cenowej, nie dodawaj ceny jednostkowej do pełnego kosztu
-                          const unitFullProductionCost = item.fromPriceList 
+                          // Jeśli pozycja jest z listy cenowej I ma cenę większą od 0, nie dodawaj ceny jednostkowej do pełnego kosztu
+                          const unitFullProductionCost = (item.fromPriceList && parseFloat(item.price || 0) > 0)
                             ? parseFloat(item.fullProductionCost) / quantity
                             : (parseFloat(item.fullProductionCost) / quantity) + price;
                           

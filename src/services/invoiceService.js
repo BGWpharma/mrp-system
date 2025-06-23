@@ -282,10 +282,41 @@ export const createInvoiceFromOrder = async (orderId, invoiceData, userId) => {
     };
     
     // Dodatkowe dane zależnie od typu zamówienia
+    // Funkcja mapująca pozycje z uwzględnieniem kosztów z produkcji
+    const mapItemsWithProductionCosts = (items, isProformaInvoice = false) => {
+      return (items || []).map(item => {
+        let finalPrice;
+        
+        // Dla faktur PROFORMA - używaj "ostatniego kosztu" jeśli dostępny
+        if (isProformaInvoice && item.lastUsageInfo && item.lastUsageInfo.cost && parseFloat(item.lastUsageInfo.cost) > 0) {
+          finalPrice = parseFloat(item.lastUsageInfo.cost);
+          console.log(`PROFORMA: Używam ostatniego kosztu ${finalPrice} dla ${item.name}`);
+        } else {
+          // Dla zwykłych faktur - sprawdź czy produkt nie jest z listy cenowej lub ma cenę 0
+          const shouldUseProductionCost = !item.fromPriceList || parseFloat(item.price || 0) === 0;
+          
+          // Użyj kosztu całkowitego jeśli warunki są spełnione i koszt istnieje
+          finalPrice = shouldUseProductionCost && item.fullProductionUnitCost !== undefined && item.fullProductionUnitCost !== null
+            ? parseFloat(item.fullProductionUnitCost)
+            : parseFloat(item.price || 0);
+        }
+
+        return {
+          ...item,
+          price: finalPrice,
+          netValue: parseFloat(item.quantity || 0) * finalPrice,
+          totalPrice: parseFloat(item.quantity || 0) * finalPrice
+        };
+      });
+    };
+
+    // Sprawdź czy to faktura PROFORMA
+    const isProformaInvoice = invoiceData.isProforma === true;
+
     if (isCustomerOrder) {
       // Zwykłe zamówienie klienta
       basicInvoiceData.customer = orderData.customer;
-      basicInvoiceData.items = orderData.items;
+      basicInvoiceData.items = mapItemsWithProductionCosts(orderData.items, isProformaInvoice);
       basicInvoiceData.shippingAddress = orderData.shippingAddress || orderData.customer.address;
       basicInvoiceData.billingAddress = orderData.customer.billingAddress || orderData.customer.address;
       
@@ -305,7 +336,7 @@ export const createInvoiceFromOrder = async (orderId, invoiceData, userId) => {
       };
       
       // Zamówienia zakupowe mają format items zgodny z fakturami
-      basicInvoiceData.items = orderData.items || [];
+      basicInvoiceData.items = mapItemsWithProductionCosts(orderData.items, isProformaInvoice);
       
       // Dane adresowe
       basicInvoiceData.shippingAddress = orderData.deliveryAddress || '';
@@ -617,7 +648,7 @@ export const DEFAULT_INVOICE = {
   seller: null,
   issueDate: formatDateForInput(new Date()),
   dueDate: formatDateForInput(new Date(new Date().setDate(new Date().getDate() + 14))), // +14 dni
-  paymentMethod: 'przelew',
+  paymentMethod: 'Przelew',
   paymentStatus: 'unpaid',
   paymentDate: null,
   payments: [], // Lista płatności
@@ -633,7 +664,7 @@ export const DEFAULT_INVOICE = {
     vat: 0
   }],
   total: 0,
-  currency: 'zł',
+  currency: 'EUR',
   selectedBankAccount: '',
   notes: '',
   status: 'draft',

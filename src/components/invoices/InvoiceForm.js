@@ -171,15 +171,29 @@ const InvoiceForm = ({ invoiceId }) => {
         let formattedDate = null;
         if (order.orderDate) {
           try {
-            formattedDate = new Date(order.orderDate);
-            // Jeśli data jest nieprawidłowa (Invalid Date), ustawiam na null
-            if (isNaN(formattedDate.getTime())) {
+            // Sprawdź czy data jest już obiektem Date
+            if (order.orderDate instanceof Date) {
+              formattedDate = order.orderDate;
+            } else if (order.orderDate.toDate && typeof order.orderDate.toDate === 'function') {
+              // Obsługa Firestore Timestamp
+              formattedDate = order.orderDate.toDate();
+            } else if (typeof order.orderDate === 'string' || typeof order.orderDate === 'number') {
+              formattedDate = new Date(order.orderDate);
+            }
+            
+            // Sprawdź czy wynikowa data jest prawidłowa
+            if (!formattedDate || isNaN(formattedDate.getTime())) {
               formattedDate = null;
-              console.warn(`Nieprawidłowa data w zamówieniu ${order.orderNumber || order.id}`);
+              // Loguj tylko raz dla każdego zamówienia i tylko w trybie deweloperskim
+              if (process.env.NODE_ENV === 'development') {
+                console.warn(`Nieprawidłowa data w zamówieniu ${order.orderNumber || order.id}`);
+              }
             }
           } catch (e) {
             formattedDate = null;
-            console.error(`Błąd parsowania daty dla zamówienia ${order.orderNumber || order.id}`, e);
+            if (process.env.NODE_ENV === 'development') {
+              console.error(`Błąd parsowania daty dla zamówienia ${order.orderNumber || order.id}`, e);
+            }
           }
         }
         
@@ -523,6 +537,31 @@ const InvoiceForm = ({ invoiceId }) => {
           finalGrossValue
         });
         
+        // Mapowanie pozycji z uwzględnieniem kosztów z produkcji i ostatniego kosztu dla PROFORMA (PO)
+        const mappedPOItems = (selectedOrder.items || []).map(item => {
+          let finalPrice;
+          
+          // Dla faktur PROFORMA - używaj "ostatniego kosztu" jeśli dostępny
+          if (invoice.isProforma && item.lastUsageInfo && item.lastUsageInfo.cost && parseFloat(item.lastUsageInfo.cost) > 0) {
+            finalPrice = parseFloat(item.lastUsageInfo.cost);
+            console.log(`PROFORMA PO: Używam ostatniego kosztu ${finalPrice} dla ${item.name}`);
+          } else {
+            // Dla zwykłych faktur - sprawdź czy produkt nie jest z listy cenowej lub ma cenę 0
+            const shouldUseProductionCost = !item.fromPriceList || parseFloat(item.price || 0) === 0;
+            
+            // Użyj kosztu całkowitego jeśli warunki są spełnione i koszt istnieje
+            finalPrice = shouldUseProductionCost && item.fullProductionUnitCost !== undefined && item.fullProductionUnitCost !== null
+              ? parseFloat(item.fullProductionUnitCost)
+              : parseFloat(item.price || 0);
+          }
+
+          return {
+            ...item,
+            price: finalPrice,
+            totalPrice: parseFloat(item.quantity || 0) * finalPrice
+          };
+        });
+
         const invoiceData = {
           customer: {
             id: selectedOrder.supplier?.id || '',
@@ -532,7 +571,7 @@ const InvoiceForm = ({ invoiceId }) => {
             address: selectedOrder.supplier?.address || '',
             vatEu: selectedOrder.supplier?.vatEu || ''
           },
-          items: selectedOrder.items || [],
+          items: mappedPOItems,
           orderNumber: selectedOrder.number,
           billingAddress: selectedOrder.supplier?.address || '',
           shippingAddress: selectedOrder.deliveryAddress || '',
@@ -591,10 +630,35 @@ const InvoiceForm = ({ invoiceId }) => {
           console.error('Nieprawidłowa wartość zamówienia:', finalTotal);
         }
         
+        // Mapowanie pozycji z uwzględnieniem kosztów z produkcji i ostatniego kosztu dla PROFORMA
+        const mappedItems = (selectedOrder.items || []).map(item => {
+          let finalPrice;
+          
+          // Dla faktur PROFORMA - używaj "ostatniego kosztu" jeśli dostępny
+          if (invoice.isProforma && item.lastUsageInfo && item.lastUsageInfo.cost && parseFloat(item.lastUsageInfo.cost) > 0) {
+            finalPrice = parseFloat(item.lastUsageInfo.cost);
+            console.log(`PROFORMA: Używam ostatniego kosztu ${finalPrice} dla ${item.name}`);
+          } else {
+            // Dla zwykłych faktur - sprawdź czy produkt nie jest z listy cenowej lub ma cenę 0
+            const shouldUseProductionCost = !item.fromPriceList || parseFloat(item.price || 0) === 0;
+            
+            // Użyj kosztu całkowitego jeśli warunki są spełnione i koszt istnieje
+            finalPrice = shouldUseProductionCost && item.fullProductionUnitCost !== undefined && item.fullProductionUnitCost !== null
+              ? parseFloat(item.fullProductionUnitCost)
+              : parseFloat(item.price || 0);
+          }
+
+          return {
+            ...item,
+            price: finalPrice,
+            netValue: parseFloat(item.quantity || 0) * finalPrice
+          };
+        });
+
         setInvoice(prev => ({
           ...prev,
           customer: selectedOrder.customer,
-          items: selectedOrder.items || [],
+          items: mappedItems,
           orderNumber: selectedOrder.orderNumber,
           billingAddress: selectedOrder.customer?.billingAddress || selectedOrder.customer?.address || '',
           shippingAddress: selectedOrder.shippingAddress || selectedOrder.customer?.address || '',
@@ -1132,13 +1196,13 @@ const InvoiceForm = ({ invoiceId }) => {
                   onChange={(e) => handleItemChange(index, 'netValue', parseFloat(e.target.value))}
                   inputProps={{ min: 0, step: 0.01 }}
                   InputProps={{
-                    endAdornment: invoice.currency || 'zł'
+                    endAdornment: invoice.currency || 'EUR'
                   }}
                 />
               </Grid>
               <Grid item xs={6} sm={3}>
                 <Typography variant="body1" fontWeight="bold">
-                  Wartość brutto: {((item.netValue || (item.quantity * item.price)) * (1 + (typeof item.vat === 'number' || item.vat === 0 ? item.vat : 0) / 100)).toFixed(2)} {invoice.currency || 'zł'}
+                  Wartość brutto: {((item.netValue || (item.quantity * item.price)) * (1 + (typeof item.vat === 'number' || item.vat === 0 ? item.vat : 0) / 100)).toFixed(2)} {invoice.currency || 'EUR'}
                 </Typography>
               </Grid>
               <Grid item xs={12} sm={6} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -1166,7 +1230,7 @@ const InvoiceForm = ({ invoiceId }) => {
               </Grid>
               <Grid item xs={6} sm={3}>
                 <Typography variant="body1">
-                  Wartość netto: {parseFloat(invoice.shippingInfo.cost).toFixed(2)} {invoice.currency || 'zł'}
+                  Wartość netto: {parseFloat(invoice.shippingInfo.cost).toFixed(2)} {invoice.currency || 'EUR'}
                 </Typography>
               </Grid>
             </Grid>
@@ -1268,7 +1332,7 @@ const InvoiceForm = ({ invoiceId }) => {
                 const quantity = Number(item.quantity) || 0;
                 const price = Number(item.price) || 0;
                 return sum + (quantity * price);
-              }, 0).toFixed(2)} {invoice.currency || 'zł'}
+              }, 0).toFixed(2)} {invoice.currency || 'EUR'}
             </Typography>
             <Typography variant="body1" fontWeight="bold">
               Razem VAT: {invoice.items.reduce((sum, item) => {
@@ -1285,7 +1349,7 @@ const InvoiceForm = ({ invoiceId }) => {
                 // Dla "ZW" i "NP" vatRate pozostaje 0
                 
                 return sum + (quantity * price * (vatRate / 100));
-              }, 0).toFixed(2)} {invoice.currency || 'zł'}
+              }, 0).toFixed(2)} {invoice.currency || 'EUR'}
             </Typography>
             
             {/* Dodanie pola dla rozliczonych zaliczek/przedpłat - ukryte dla proform */}
@@ -1299,7 +1363,7 @@ const InvoiceForm = ({ invoiceId }) => {
                   value={invoice.settledAdvancePayments || 0}
                   onChange={handleChange}
                   InputProps={{
-                    endAdornment: <Typography>{invoice.currency || 'zł'}</Typography>,
+                    endAdornment: <Typography>{invoice.currency || 'EUR'}</Typography>,
                     inputProps: { 
                       min: 0, 
                       step: 0.01,
@@ -1328,14 +1392,14 @@ const InvoiceForm = ({ invoiceId }) => {
             {/* Wyświetl dodatkowe koszty, jeśli istnieją */}
             {invoice.shippingInfo && invoice.shippingInfo.cost > 0 && (
               <Typography variant="body1" fontWeight="bold">
-                Koszt wysyłki: {parseFloat(invoice.shippingInfo.cost).toFixed(2)} {invoice.currency || 'zł'}
+                Koszt wysyłki: {parseFloat(invoice.shippingInfo.cost).toFixed(2)} {invoice.currency || 'EUR'}
               </Typography>
             )}
             
             {/* Wyświetl sumę z powiązanych PO */}
             {selectedOrder && selectedOrder.linkedPurchaseOrders && selectedOrder.linkedPurchaseOrders.length > 0 && (
               <Typography variant="body1" fontWeight="bold">
-                Wartość zaliczek/przedpłat: {selectedOrder.linkedPurchaseOrders.reduce((sum, po) => sum + (parseFloat(po.totalGross || po.value) || 0), 0).toFixed(2)} {invoice.currency || 'zł'}
+                Wartość zaliczek/przedpłat: {selectedOrder.linkedPurchaseOrders.reduce((sum, po) => sum + (parseFloat(po.totalGross || po.value) || 0), 0).toFixed(2)} {invoice.currency || 'EUR'}
               </Typography>
             )}
 
@@ -1399,7 +1463,7 @@ const InvoiceForm = ({ invoiceId }) => {
                 }, 0)) - 
                 // Odejmowanie zaliczek/przedpłat - tylko dla zwykłych faktur, nie dla proform
                 (invoice.isProforma ? 0 : parseFloat(invoice.settledAdvancePayments || 0))
-              ).toFixed(2)} {invoice.currency || 'zł'}
+              ).toFixed(2)} {invoice.currency || 'EUR'}
             </Typography>
           </Grid>
         </Grid>

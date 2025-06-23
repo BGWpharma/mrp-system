@@ -389,12 +389,12 @@ export const calculateFullProductionUnitCost = (item, fullProductionCost) => {
   const quantity = parseFloat(item.quantity) || 1;
   const price = parseFloat(item.price) || 0;
   
-  // Jeśli pozycja jest z listy cenowej, nie dodawaj ceny jednostkowej do pełnego kosztu
-  if (item.fromPriceList) {
+  // Jeśli pozycja jest z listy cenowej I ma cenę większą od 0, nie dodawaj ceny jednostkowej do pełnego kosztu
+  if (item.fromPriceList && parseFloat(item.price || 0) > 0) {
     return fullProductionCost / quantity;
   }
   
-  // Jeśli pozycja nie jest z listy cenowej, dodaj cenę jednostkową
+  // Jeśli pozycja nie jest z listy cenowej LUB ma cenę 0, dodaj cenę jednostkową
   return (fullProductionCost / quantity) + price;
 };
 
@@ -411,4 +411,120 @@ export const calculateProductionUnitCost = (item, productionCost) => {
 
   const quantity = parseFloat(item.quantity) || 1;
   return productionCost / quantity;
+};
+
+/**
+ * Oblicza szacowany koszt na podstawie materiałów receptury (podobnie jak w prognozie zapotrzebowania)
+ * @param {Object} recipe - Obiekt receptury
+ * @param {Object} inventoryItems - Mapa pozycji magazynowych z cenami
+ * @returns {Promise<Object>} - Szacowany koszt materiałów
+ */
+export const calculateEstimatedMaterialsCost = async (recipe, inventoryItems = null) => {
+  try {
+    if (!recipe || (!recipe.ingredients && !recipe.components)) {
+      return { 
+        totalCost: 0, 
+        materials: 0, 
+        details: [],
+        source: 'empty'
+      };
+    }
+
+    let totalCost = 0;
+    const details = [];
+    
+    // Pobierz pozycje magazynowe jeśli nie zostały przekazane
+    if (!inventoryItems) {
+      const { getAllInventoryItems } = await import('../services/inventoryService');
+      const items = await getAllInventoryItems();
+      inventoryItems = new Map();
+      items.forEach(item => {
+        inventoryItems.set(item.id, item);
+      });
+    } else if (Array.isArray(inventoryItems)) {
+      // Konwertuj tablicę na mapę jeśli potrzeba
+      const itemsMap = new Map();
+      inventoryItems.forEach(item => {
+        itemsMap.set(item.id, item);
+      });
+      inventoryItems = itemsMap;
+    }
+
+    // Pobierz najlepsze ceny od dostawców
+    const { getBestSupplierPricesForItems } = await import('../services/inventoryService');
+    
+    // Przygotuj listę materiałów do sprawdzenia cen
+    const materials = recipe.ingredients || recipe.components || [];
+    const materialsToCheck = materials.map(material => ({
+      itemId: material.id || material.materialId,
+      quantity: parseFloat(material.quantity) || 0
+    })).filter(item => item.itemId && item.quantity > 0);
+
+    let bestPrices = {};
+    if (materialsToCheck.length > 0) {
+      try {
+        bestPrices = await getBestSupplierPricesForItems(materialsToCheck);
+      } catch (error) {
+        console.warn('Nie można pobrać cen od dostawców, używam cen magazynowych:', error);
+      }
+    }
+    
+    // Oblicz koszt każdego materiału
+    for (const material of materials) {
+      const materialId = material.id || material.materialId;
+      const quantity = parseFloat(material.quantity) || 0;
+      
+      if (!materialId || quantity <= 0) continue;
+      
+      let unitPrice = 0;
+      let priceSource = 'brak';
+      
+      // Sprawdź ceny w kolejności priorytetów
+      if (bestPrices[materialId]) {
+        const bestPrice = bestPrices[materialId];
+        if (bestPrice.price > 0) {
+          unitPrice = bestPrice.price;
+          priceSource = bestPrice.isDefault ? 'dostawca domyślny' : 'dostawca';
+        }
+      }
+      
+      // Jeśli nie ma ceny od dostawcy, użyj ceny magazynowej
+      if (unitPrice === 0 && inventoryItems.has(materialId)) {
+        const inventoryItem = inventoryItems.get(materialId);
+        if (inventoryItem.price > 0) {
+          unitPrice = parseFloat(inventoryItem.price);
+          priceSource = 'magazyn';
+        }
+      }
+      
+      const materialCost = quantity * unitPrice;
+      totalCost += materialCost;
+      
+      details.push({
+        id: materialId,
+        name: material.name || material.materialName || 'Nieznany materiał',
+        quantity,
+        unit: material.unit || 'szt.',
+        unitPrice,
+        totalCost: materialCost,
+        priceSource
+      });
+    }
+    
+    return {
+      totalCost: parseFloat(totalCost.toFixed(2)),
+      materials: parseFloat(totalCost.toFixed(2)),
+      details,
+      source: 'estimated',
+      materialsCount: details.length
+    };
+  } catch (error) {
+    console.error('Błąd podczas obliczania szacowanego kosztu materiałów:', error);
+    return { 
+      totalCost: 0, 
+      materials: 0, 
+      details: [],
+      source: 'error'
+    };
+  }
 }; 

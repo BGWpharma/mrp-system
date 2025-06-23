@@ -486,12 +486,12 @@ const OrdersList = () => {
         // Podstawowa wartość pozycji
         const itemValue = (parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0);
         
-        // Jeśli produkt jest z listy cenowej, zwracamy tylko wartość pozycji
-        if (item.fromPriceList) {
+        // Jeśli produkt jest z listy cenowej I ma cenę większą od 0, zwracamy tylko wartość pozycji
+        if (item.fromPriceList && parseFloat(item.price || 0) > 0) {
           return itemValue;
         }
         
-        // Jeśli produkt nie jest z listy cenowej i ma koszt produkcji, dodajemy go
+        // Jeśli produkt nie jest z listy cenowej LUB ma cenę 0, i ma koszt produkcji, dodajemy go
         if (item.productionTaskId && item.productionCost !== undefined) {
           return itemValue + parseFloat(item.productionCost || 0);
         }
@@ -751,12 +751,12 @@ const OrdersList = () => {
           // Podstawowa wartość pozycji
           const itemValue = (parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0);
           
-          // Jeśli produkt jest z listy cenowej, zwracamy tylko wartość pozycji
-          if (item.fromPriceList) {
+          // Jeśli produkt jest z listy cenowej I ma cenę większą od 0, zwracamy tylko wartość pozycji
+          if (item.fromPriceList && parseFloat(item.price || 0) > 0) {
             return itemValue;
           }
           
-          // Jeśli produkt nie jest z listy cenowej i ma koszt produkcji, dodajemy go
+          // Jeśli produkt nie jest z listy cenowej LUB ma cenę 0, i ma koszt produkcji, dodajemy go
           if (item.productionTaskId && item.productionCost !== undefined) {
             return itemValue + parseFloat(item.productionCost || 0);
           }
@@ -981,7 +981,7 @@ const OrdersList = () => {
         // Oblicz wartość produktów z uwzględnieniem kosztów produkcji
         const calculateItemTotalValue = (item) => {
           const itemValue = (parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0);
-          if (item.fromPriceList) {
+          if (item.fromPriceList && parseFloat(item.price || 0) > 0) {
             return itemValue;
           }
           if (item.productionTaskId && item.productionCost !== undefined) {
@@ -1222,8 +1222,8 @@ const OrdersList = () => {
             const itemValue = (parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0);
             let totalItemValue = itemValue;
             
-            // Jeśli produkt nie jest z listy cenowej i ma koszt produkcji, dodaj go
-            if (!item.fromPriceList && (associatedTask || item.productionTaskId) && item.productionCost !== undefined) {
+            // Jeśli produkt nie jest z listy cenowej LUB ma cenę 0, i ma koszt produkcji, dodaj go
+            if ((!item.fromPriceList || parseFloat(item.price || 0) === 0) && (associatedTask || item.productionTaskId) && item.productionCost !== undefined) {
               totalItemValue += parseFloat(item.productionCost || 0);
             }
 

@@ -22,10 +22,11 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../hooks/useNotification';
-import { migrateAIMessageLimits } from '../../services/migrationService';
+import { migrateAIMessageLimits, migrateNutritionalComponents } from '../../services/migrationService';
 import APIKeySettings from '../../components/common/APIKeySettings';
 import CounterEditor from '../../components/admin/CounterEditor';
 import FormOptionsManager from '../../components/admin/FormOptionsManager';
+import NutritionalComponentsManager from '../../components/admin/NutritionalComponentsManager';
 
 /**
  * Strona dla administratorów z narzędziami do zarządzania systemem
@@ -35,6 +36,8 @@ const SystemManagementPage = () => {
   const { showSuccess, showError } = useNotification();
   const [isLoading, setIsLoading] = useState(false);
   const [migrationResults, setMigrationResults] = useState(null);
+  const [isLoadingComponents, setIsLoadingComponents] = useState(false);
+  const [componentsMigrationResults, setComponentsMigrationResults] = useState(null);
   
   // Funkcja do uruchomienia migracji limitów wiadomości AI
   const handleRunAILimitsMigration = async () => {
@@ -53,6 +56,26 @@ const SystemManagementPage = () => {
       showError('Wystąpił błąd podczas migracji. Sprawdź konsolę.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Funkcja do uruchomienia migracji składników odżywczych
+  const handleRunComponentsMigration = async () => {
+    try {
+      setIsLoadingComponents(true);
+      const results = await migrateNutritionalComponents();
+      
+      if (results.success) {
+        showSuccess(`Migracja składników zakończona. Dodano ${results.added} składników, pominięto ${results.skipped}.`);
+        setComponentsMigrationResults(results);
+      } else {
+        showError(`Błąd podczas migracji składników: ${results.error}`);
+      }
+    } catch (error) {
+      console.error('Błąd podczas uruchamiania migracji składników:', error);
+      showError('Wystąpił błąd podczas migracji składników. Sprawdź konsolę.');
+    } finally {
+      setIsLoadingComponents(false);
     }
   };
 
@@ -78,6 +101,9 @@ const SystemManagementPage = () => {
         
         {/* Zarządzanie opcjami formularzy */}
         <FormOptionsManager />
+        
+        {/* Zarządzanie składnikami odżywczymi */}
+        <NutritionalComponentsManager />
         
         <Card sx={{ mb: 3 }}>
           <CardContent>
@@ -120,6 +146,61 @@ const SystemManagementPage = () => {
               disabled={isLoading}
             >
               {isLoading ? 'Przetwarzanie...' : 'Uruchom migrację'}
+            </Button>
+          </CardActions>
+        </Card>
+
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Migracja składników odżywczych
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              To narzędzie przeniesie wszystkie składniki odżywcze z kodu do bazy danych. 
+              Obejmuje to makroelementy, witaminy, minerały, składniki aktywne i wartości energetyczne.
+              Po migracji składniki będą pobierane z bazy danych zamiast z pliku constants.js.
+            </Typography>
+            
+            {componentsMigrationResults && (
+              <Box sx={{ mt: 2 }}>
+                <Alert severity={componentsMigrationResults.errors > 0 ? "warning" : "success"}>
+                  Migracja składników odżywczych zakończona. Wyniki:
+                </Alert>
+                <List dense>
+                  <ListItem>
+                    <ListItemText 
+                      primary={`Łącznie składników: ${componentsMigrationResults.total}`} 
+                    />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemText 
+                      primary={`Dodano: ${componentsMigrationResults.added} składników`} 
+                    />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemText 
+                      primary={`Pominięto (już istniały): ${componentsMigrationResults.skipped}`} 
+                    />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemText 
+                      primary={`Błędy: ${componentsMigrationResults.errors}`} 
+                      secondary={componentsMigrationResults.error || ''} 
+                    />
+                  </ListItem>
+                </List>
+              </Box>
+            )}
+          </CardContent>
+          <CardActions>
+            <Button 
+              startIcon={isLoadingComponents ? <CircularProgress size={20} /> : <RefreshIcon />}
+              variant="contained" 
+              color="secondary"
+              onClick={handleRunComponentsMigration}
+              disabled={isLoadingComponents}
+            >
+              {isLoadingComponents ? 'Przetwarzanie...' : 'Migruj składniki odżywcze'}
             </Button>
           </CardActions>
         </Card>

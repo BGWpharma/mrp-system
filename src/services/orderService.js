@@ -80,10 +80,40 @@ export const getAllOrders = async (filters = null) => {
     
     const querySnapshot = await getDocs(ordersQuery);
     
-    const orders = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    // Funkcja pomocnicza do bezpiecznej konwersji dat
+    const safeConvertDate = (dateValue, fieldName, docId) => {
+      if (!dateValue) return null;
+      
+      try {
+        if (dateValue instanceof Timestamp) {
+          return dateValue.toDate();
+        } else if (dateValue instanceof Date) {
+          return isNaN(dateValue.getTime()) ? null : dateValue;
+        } else if (typeof dateValue === 'string' || typeof dateValue === 'number') {
+          const converted = new Date(dateValue);
+          if (isNaN(converted.getTime())) {
+            // Nie logujemy w getAllOrders, aby nie zapychać konsoli
+            return null;
+          }
+          return converted;
+        }
+        return null;
+      } catch (error) {
+        return null;
+      }
+    };
+
+    const orders = querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        orderDate: safeConvertDate(data.orderDate, 'orderDate', doc.id),
+        expectedDeliveryDate: safeConvertDate(data.expectedDeliveryDate, 'expectedDeliveryDate', doc.id),
+        deadline: safeConvertDate(data.deadline, 'deadline', doc.id),
+        deliveryDate: safeConvertDate(data.deliveryDate, 'deliveryDate', doc.id),
+      };
+    });
     
     // Zbierz wszystkie ID klientów
     const customerIds = new Set();
@@ -147,19 +177,41 @@ export const getOrderById = async (id) => {
     const orderData = orderDoc.data();
     
     // Konwertuj timestamp na obiekty Date
+    // Funkcja pomocnicza do bezpiecznej konwersji dat
+    const safeConvertDate = (dateValue, fieldName) => {
+      if (!dateValue) return null;
+      
+      try {
+        if (dateValue instanceof Timestamp) {
+          return dateValue.toDate();
+        } else if (dateValue instanceof Date) {
+          return isNaN(dateValue.getTime()) ? null : dateValue;
+        } else if (typeof dateValue === 'string' || typeof dateValue === 'number') {
+          const converted = new Date(dateValue);
+          if (isNaN(converted.getTime())) {
+            if (process.env.NODE_ENV === 'development') {
+              console.warn(`Nieprawidłowa data ${fieldName} w zamówieniu ${orderData.orderNumber || orderDoc.id}: ${dateValue}`);
+            }
+            return null;
+          }
+          return converted;
+        }
+        return null;
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(`Błąd konwersji daty ${fieldName} w zamówieniu ${orderData.orderNumber || orderDoc.id}:`, error);
+        }
+        return null;
+      }
+    };
+
     const processedOrder = {
       id: orderDoc.id,
       ...orderData,
-      orderDate: orderData.orderDate instanceof Timestamp ? orderData.orderDate.toDate() : new Date(orderData.orderDate),
-      expectedDeliveryDate: orderData.expectedDeliveryDate instanceof Timestamp 
-        ? orderData.expectedDeliveryDate.toDate() 
-        : orderData.expectedDeliveryDate ? new Date(orderData.expectedDeliveryDate) : null,
-      deadline: orderData.deadline instanceof Timestamp 
-        ? orderData.deadline.toDate() 
-        : orderData.deadline ? new Date(orderData.deadline) : null,
-      deliveryDate: orderData.deliveryDate instanceof Timestamp 
-        ? orderData.deliveryDate.toDate() 
-        : orderData.deliveryDate ? new Date(orderData.deliveryDate) : null,
+      orderDate: safeConvertDate(orderData.orderDate, 'orderDate'),
+      expectedDeliveryDate: safeConvertDate(orderData.expectedDeliveryDate, 'expectedDeliveryDate'),
+      deadline: safeConvertDate(orderData.deadline, 'deadline'),
+      deliveryDate: safeConvertDate(orderData.deliveryDate, 'deliveryDate'),
     };
     
     // Przetwarzanie zamówień zakupu powiązanych
@@ -221,8 +273,8 @@ export const getOrderById = async (id) => {
         const price = parseFloat(item.price) || 0;
         const itemValue = quantity * price;
         
-        // Jeśli produkt nie jest z listy cenowej i ma koszt produkcji, dodajemy go do wartości
-        if (item.fromPriceList !== true && item.productionTaskId && item.productionCost !== undefined) {
+        // Jeśli produkt nie jest z listy cenowej LUB ma cenę 0, i ma koszt produkcji, dodajemy go do wartości
+        if ((item.fromPriceList !== true || parseFloat(item.price || 0) === 0) && item.productionTaskId && item.productionCost !== undefined) {
           const productionCost = parseFloat(item.productionCost || 0);
           return sum + itemValue + productionCost;
         }
@@ -922,8 +974,8 @@ export const calculateOrderTotal = (items, shippingCost = 0, additionalCostsItem
     const quantity = parseFloat(item.quantity) || 0;
     const itemValue = price * quantity;
     
-    // Jeśli produkt nie jest z listy cenowej i ma koszt produkcji, dodajemy go do wartości
-    if (item.fromPriceList !== true && item.productionTaskId && item.productionCost !== undefined) {
+    // Jeśli produkt nie jest z listy cenowej LUB ma cenę 0, i ma koszt produkcji, dodajemy go do wartości
+    if ((item.fromPriceList !== true || parseFloat(item.price || 0) === 0) && item.productionTaskId && item.productionCost !== undefined) {
       const productionCost = parseFloat(item.productionCost || 0);
       return sum + itemValue + productionCost;
     }
@@ -1582,6 +1634,63 @@ export const getOrdersWithPagination = async (page = 1, limit = 10, sortField = 
     };
   } catch (error) {
     console.error('Błąd podczas pobierania zamówień z paginacją:', error);
+    throw error;
+  }
+};
+
+/**
+ * Zapisuje szacowany koszt w pozycji zamówienia
+ * @param {string} orderId - ID zamówienia
+ * @param {number} itemIndex - Indeks pozycji w tablicy items
+ * @param {Object} estimatedCostData - Dane szacowanego kosztu
+ * @param {string} userId - ID użytkownika
+ * @returns {Promise<void>}
+ */
+export const saveEstimatedCost = async (orderId, itemIndex, estimatedCostData, userId) => {
+  try {
+    if (!orderId || itemIndex === undefined || !estimatedCostData) {
+      throw new Error('Brakujące parametry do zapisania szacowanego kosztu');
+    }
+
+    // Pobierz aktualne zamówienie
+    const orderRef = doc(db, ORDERS_COLLECTION, orderId);
+    const orderDoc = await getDoc(orderRef);
+    
+    if (!orderDoc.exists()) {
+      throw new Error('Zamówienie nie zostało znalezione');
+    }
+
+    const orderData = orderDoc.data();
+    const items = [...(orderData.items || [])];
+    
+    if (itemIndex >= items.length) {
+      throw new Error('Nieprawidłowy indeks pozycji');
+    }
+
+    // Aktualizuj pozycję z szacowanym kosztem
+    items[itemIndex] = {
+      ...items[itemIndex],
+      lastUsageInfo: {
+        ...items[itemIndex].lastUsageInfo,
+        cost: estimatedCostData.totalCost,
+        estimatedCost: true,
+        costDetails: estimatedCostData.details,
+        estimatedAt: new Date(),
+        estimatedBy: userId
+      }
+    };
+
+    // Zapisz zaktualizowane zamówienie
+    await updateDoc(orderRef, {
+      items: items,
+      updatedAt: serverTimestamp(),
+      updatedBy: userId
+    });
+
+    console.log(`Zapisano szacowany koszt ${estimatedCostData.totalCost}€ dla pozycji ${itemIndex} w zamówieniu ${orderId}`);
+    
+  } catch (error) {
+    console.error('Błąd podczas zapisywania szacowanego kosztu:', error);
     throw error;
   }
 }; 

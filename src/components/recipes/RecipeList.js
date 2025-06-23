@@ -33,7 +33,12 @@ import {
   useMediaQuery,
   Card,
   CardContent,
-  CardActions
+  CardActions,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  LinearProgress
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -48,9 +53,10 @@ import {
   ArrowDropUp as ArrowDropUpIcon,
   ExpandMore as ExpandMoreIcon,
   Cached as CachedIcon,
-  Download as DownloadIcon
+  Download as DownloadIcon,
+  Sync as SyncIcon
 } from '@mui/icons-material';
-import { getAllRecipes, deleteRecipe, getRecipesByCustomer, getRecipesWithPagination } from '../../services/recipeService';
+import { getAllRecipes, deleteRecipe, getRecipesByCustomer, getRecipesWithPagination, syncAllRecipesCAS } from '../../services/recipeService';
 import { getInventoryItemByRecipeId } from '../../services/inventoryService';
 import { useCustomersCache } from '../../hooks/useCustomersCache';
 import { useNotification } from '../../hooks/useNotification';
@@ -116,6 +122,10 @@ const RecipeList = () => {
   
   // Stan do przechowywania pozycji magazynowych powiązanych z recepturami
   const [inventoryProducts, setInventoryProducts] = useState({});
+  
+  // Stan dla synchronizacji CAS
+  const [syncingCAS, setSyncingCAS] = useState(false);
+  const [syncProgress, setSyncProgress] = useState(null);
   
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -555,6 +565,36 @@ const RecipeList = () => {
     } catch (error) {
       console.error('Błąd podczas eksportu CSV:', error);
       showError('Nie udało się wyeksportować receptur do CSV');
+    }
+  };
+
+  // Funkcja do synchronizacji numerów CAS dla wszystkich receptur
+  const handleSyncAllCAS = async () => {
+    setSyncingCAS(true);
+    setSyncProgress(null);
+    
+    try {
+      const results = await syncAllRecipesCAS((progress) => {
+        setSyncProgress(progress);
+      });
+      
+      if (results.success) {
+        showSuccess(
+          `Synchronizacja zakończona! Zaktualizowano ${results.syncedRecipes} receptur ` +
+          `(pominięto ${results.skippedRecipes}, błędy: ${results.errorRecipes})`
+        );
+        
+        // Odśwież listę receptur
+        await fetchRecipes();
+      } else {
+        showError(`Błąd synchronizacji: ${results.error}`);
+      }
+    } catch (error) {
+      console.error('Błąd podczas synchronizacji CAS:', error);
+      showError('Błąd podczas synchronizacji numerów CAS: ' + error.message);
+    } finally {
+      setSyncingCAS(false);
+      setSyncProgress(null);
     }
   };
 
@@ -1025,6 +1065,20 @@ const RecipeList = () => {
               {isMobile ? 'CSV' : 'Eksportuj CSV'}
             </Button>
           </Tooltip>
+
+          {/* Przycisk synchronizacji numerów CAS */}
+          <Tooltip title="Aktualizuj numery CAS we wszystkich recepturach">
+            <Button
+              variant="outlined"
+              startIcon={syncingCAS ? <CircularProgress size={16} /> : <SyncIcon />}
+              onClick={handleSyncAllCAS}
+              disabled={loading || syncingCAS}
+              size={isMobile ? "small" : "medium"}
+              color="warning"
+            >
+              {isMobile ? 'CAS' : 'Aktualizuj CAS'}
+            </Button>
+          </Tooltip>
           
           <Button
             variant="contained"
@@ -1217,6 +1271,50 @@ const RecipeList = () => {
           renderGroupedRecipes()
         )
       )}
+
+      {/* Dialog postępu synchronizacji CAS */}
+      <Dialog 
+        open={syncingCAS} 
+        disableEscapeKeyDown 
+        maxWidth="sm" 
+        fullWidth
+      >
+        <DialogTitle>
+          Synchronizacja numerów CAS
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ width: '100%' }}>
+            {syncProgress && (
+              <>
+                <Typography variant="body2" gutterBottom>
+                  Przetwarzanie: {syncProgress.recipeName}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  {syncProgress.current} z {syncProgress.total} receptur
+                </Typography>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={(syncProgress.current / syncProgress.total) * 100} 
+                  sx={{ mt: 2 }}
+                />
+              </>
+            )}
+            {!syncProgress && (
+              <>
+                <Typography variant="body2" gutterBottom>
+                  Przygotowywanie synchronizacji...
+                </Typography>
+                <LinearProgress sx={{ mt: 2 }} />
+              </>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Typography variant="body2" color="text.secondary">
+            Proszę czekać, trwa aktualizacja numerów CAS
+          </Typography>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

@@ -77,12 +77,12 @@ const calculateItemTotalValue = (item) => {
   // Podstawowa wartość pozycji
   const itemValue = (parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0);
   
-  // Jeśli produkt jest z listy cenowej, zwracamy tylko wartość pozycji
-  if (item.fromPriceList) {
+  // Jeśli produkt jest z listy cenowej I ma cenę większą od 0, zwracamy tylko wartość pozycji
+  if (item.fromPriceList && parseFloat(item.price || 0) > 0) {
     return itemValue;
   }
   
-  // Jeśli produkt nie jest z listy cenowej i ma koszt produkcji, dodajemy go
+  // Jeśli produkt nie jest z listy cenowej LUB ma cenę 0, i ma koszt produkcji, dodajemy go
   if (item.productionTaskId && item.productionCost !== undefined) {
     return itemValue + parseFloat(item.productionCost || 0);
   }
@@ -1231,7 +1231,7 @@ const OrderDetails = () => {
                     )}
                   </TableCell>
                   <TableCell align="right">
-                    {item.fromPriceList && item.productionCost !== undefined ? (
+                    {item.fromPriceList && parseFloat(item.price || 0) > 0 && item.productionCost !== undefined ? (
                       <Typography sx={{ 
                         fontWeight: 'medium', 
                         color: (item.quantity * item.price - item.productionCost) > 0 ? 'success.main' : 'error.main' 
@@ -1301,8 +1301,8 @@ const OrderDetails = () => {
                         const quantity = parseFloat(item.quantity) || 1;
                         const price = parseFloat(item.price) || 0;
                         
-                        // Jeśli pozycja jest z listy cenowej, nie dodawaj ceny jednostkowej do pełnego kosztu
-                        const unitFullProductionCost = item.fromPriceList 
+                        // Jeśli pozycja jest z listy cenowej I ma cenę większą od 0, nie dodawaj ceny jednostkowej do pełnego kosztu
+                        const unitFullProductionCost = (item.fromPriceList && parseFloat(item.price || 0) > 0)
                           ? parseFloat(item.fullProductionCost) / quantity
                           : (parseFloat(item.fullProductionCost) / quantity) + price;
                         

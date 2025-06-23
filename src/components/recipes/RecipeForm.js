@@ -7,7 +7,6 @@ import {
   TextField,
   Typography,
   Paper,
-  Grid,
   Divider,
   FormControl,
   InputLabel,
@@ -32,7 +31,9 @@ import {
   DialogContentText,
   DialogActions,
   FormHelperText,
-  Tooltip
+  Tooltip,
+  Alert,
+  Grid
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -58,7 +59,9 @@ import { db } from '../../services/firebase/config';
 import { getAllCustomers } from '../../services/customerService';
 import { getAllWorkstations } from '../../services/workstationService';
 import { UNIT_GROUPS, UNIT_CONVERSION_FACTORS } from '../../utils/constants';
-import { ALL_NUTRITIONAL_COMPONENTS, NUTRITIONAL_CATEGORIES, DEFAULT_NUTRITIONAL_COMPONENT } from '../../utils/constants';
+import { NUTRITIONAL_CATEGORIES, DEFAULT_NUTRITIONAL_COMPONENT } from '../../utils/constants';
+import { useNutritionalComponents } from '../../hooks/useNutritionalComponents';
+import { addNutritionalComponent } from '../../services/nutritionalComponentsService';
 
 const RecipeForm = ({ recipeId }) => {
   const { currentUser } = useAuth();
@@ -67,6 +70,9 @@ const RecipeForm = ({ recipeId }) => {
   const location = useLocation();
   const [loading, setLoading] = useState(!!recipeId);
   const [saving, setSaving] = useState(false);
+  
+  // Hook do pobierania składników odżywczych z bazy danych
+  const { components: nutritionalComponents, loading: loadingComponents, usingFallback, refreshComponents } = useNutritionalComponents();
   
   const [recipeData, setRecipeData] = useState({
     name: '',
@@ -118,6 +124,15 @@ const RecipeForm = ({ recipeId }) => {
   const [showDisplayUnits, setShowDisplayUnits] = useState(false);
   const [costUnitDisplay, setCostUnitDisplay] = useState(null);
   const [timeUnitDisplay, setTimeUnitDisplay] = useState(null);
+  
+  // Stany dla dialogu dodawania nowego składnika odżywczego
+  const [addNutrientDialogOpen, setAddNutrientDialogOpen] = useState(false);
+  const [newNutrientData, setNewNutrientData] = useState({
+    code: '',
+    name: '',
+    unit: '',
+    category: ''
+  });
   
   // Funkcje pomocnicze do konwersji jednostek
   const getUnitGroup = (unit) => {
@@ -865,7 +880,7 @@ const RecipeForm = ({ recipeId }) => {
     
     if (field === 'code') {
       // Znajdź składnik odżywczy na podstawie kodu
-      const selectedMicronutrient = ALL_NUTRITIONAL_COMPONENTS.find(m => m.code === value);
+      const selectedMicronutrient = nutritionalComponents.find(m => m.code === value);
       if (selectedMicronutrient) {
         newMicronutrients[index] = {
           ...newMicronutrients[index],
@@ -909,6 +924,67 @@ const RecipeForm = ({ recipeId }) => {
       ...prev,
       nutritionalBasis: e.target.value
     }));
+  };
+
+  // Funkcje obsługujące dodawanie nowego składnika odżywczego
+  const handleOpenAddNutrientDialog = () => {
+    setNewNutrientData({
+      code: '',
+      name: '',
+      unit: '',
+      category: ''
+    });
+    setAddNutrientDialogOpen(true);
+  };
+
+  const handleCloseAddNutrientDialog = () => {
+    setAddNutrientDialogOpen(false);
+    setNewNutrientData({
+      code: '',
+      name: '',
+      unit: '',
+      category: ''
+    });
+  };
+
+  const handleSaveNewNutrient = async () => {
+    try {
+      if (!newNutrientData.code || !newNutrientData.name || !newNutrientData.unit || !newNutrientData.category) {
+        showError('Wszystkie pola są wymagane');
+        return;
+      }
+
+      // Dodaj składnik do bazy danych
+      await addNutritionalComponent({
+        ...newNutrientData,
+        isActive: true
+      });
+      
+      showSuccess('Nowy składnik odżywczy został dodany');
+      
+      // Odśwież listę składników
+      await refreshComponents();
+      
+      // Automatycznie dodaj nowy składnik do receptury
+      const newMicronutrient = {
+        code: newNutrientData.code,
+        name: newNutrientData.name,
+        unit: newNutrientData.unit,
+        category: newNutrientData.category,
+        quantity: '',
+        notes: ''
+      };
+      
+      setRecipeData(prev => ({
+        ...prev,
+        micronutrients: [...prev.micronutrients, newMicronutrient]
+      }));
+      
+      handleCloseAddNutrientDialog();
+    } catch (error) {
+      console.error('Błąd przy dodawaniu składnika:', error);
+      showError('Wystąpił błąd podczas dodawania składnika');
+    }
   };
 
   if (loading) {
@@ -1520,6 +1596,24 @@ const RecipeForm = ({ recipeId }) => {
         </Box>
         
         <Box sx={{ p: 3 }}>
+          {/* Status składników odżywczych */}
+          {usingFallback && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              Składniki odżywcze są pobierane z kodu (fallback). 
+              Aby używać składników z bazy danych, wykonaj migrację w narzędziach systemowych.
+            </Alert>
+          )}
+          
+          
+          {loadingComponents && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+              <CircularProgress size={16} />
+              <Typography variant="body2" color="text.secondary">
+                Ładowanie składników odżywczych...
+              </Typography>
+            </Box>
+          )}
+          
           {/* Opcja wyboru podstawy składników odżywczych */}
           <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
             <Typography variant="body2" color="text.secondary">
@@ -1558,14 +1652,39 @@ const RecipeForm = ({ recipeId }) => {
                         <Autocomplete
                           fullWidth
                           size="small"
-                          options={ALL_NUTRITIONAL_COMPONENTS}
-                          getOptionLabel={(option) => `${option.code} - ${option.name}`}
+                          options={[
+                            ...nutritionalComponents,
+                            ...(usingFallback ? [] : [{
+                              code: '__ADD_NEW__',
+                              name: 'Dodaj nowy składnik odżywczy...',
+                              category: '⚡ Akcje',
+                              unit: '',
+                              isAddNewOption: true
+                            }])
+                          ]}
+                          getOptionLabel={(option) => 
+                            option.isAddNewOption 
+                              ? option.name 
+                              : `${option.code} - ${option.name}`
+                          }
                           groupBy={(option) => option.category}
-                          value={ALL_NUTRITIONAL_COMPONENTS.find(comp => comp.code === micronutrient.code) || null}
+                          value={nutritionalComponents.find(comp => comp.code === micronutrient.code) || null}
                           onChange={(event, newValue) => {
-                            handleMicronutrientChange(index, 'code', newValue ? newValue.code : '');
+                            if (newValue?.isAddNewOption) {
+                              handleOpenAddNutrientDialog();
+                            } else {
+                              handleMicronutrientChange(index, 'code', newValue ? newValue.code : '');
+                            }
                           }}
                           isOptionEqualToValue={(option, value) => option.code === value.code}
+                          filterOptions={(options, params) => {
+                            const filtered = options.filter(option => {
+                              if (option.isAddNewOption) return true;
+                              return option.code.toLowerCase().includes(params.inputValue.toLowerCase()) ||
+                                     option.name.toLowerCase().includes(params.inputValue.toLowerCase());
+                            });
+                            return filtered;
+                          }}
                           renderInput={(params) => (
                             <TextField
                               {...params}
@@ -1578,30 +1697,72 @@ const RecipeForm = ({ recipeId }) => {
                             />
                           )}
                           renderOption={(props, option) => (
-                            <Box component="li" {...props}>
-                              <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                  <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                                    {option.code}
-                                  </Typography>
-                                  <Chip 
-                                    size="small" 
-                                    label={option.category}
-                                    color={
-                                      option.category === 'Witaminy' ? 'success' :
-                                      option.category === 'Minerały' ? 'info' :
-                                      option.category === 'Makroelementy' ? 'primary' :
-                                      option.category === 'Energia' ? 'warning' :
-                                      option.category === 'Składniki aktywne' ? 'secondary' :
-                                      'default'
-                                    }
-                                    sx={{ ml: 'auto' }}
+                            <Box 
+                              component="li" 
+                              {...props}
+                              sx={option.isAddNewOption ? {
+                                ...props.sx,
+                                bgcolor: theme => theme.palette.mode === 'dark' 
+                                  ? 'rgba(156, 39, 176, 0.1)' 
+                                  : 'rgba(156, 39, 176, 0.05)',
+                                borderTop: '1px solid',
+                                borderColor: 'divider',
+                                '&:hover': {
+                                  bgcolor: theme => theme.palette.mode === 'dark' 
+                                    ? 'rgba(156, 39, 176, 0.2)' 
+                                    : 'rgba(156, 39, 176, 0.1)'
+                                }
+                              } : props.sx}
+                            >
+                              {option.isAddNewOption ? (
+                                <Box sx={{ 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  gap: 1, 
+                                  width: '100%',
+                                  py: 0.5
+                                }}>
+                                  <ScienceIcon 
+                                    sx={{ 
+                                      color: 'secondary.main',
+                                      fontSize: '1.2rem'
+                                    }} 
                                   />
+                                  <Typography 
+                                    variant="body2" 
+                                    sx={{ 
+                                      fontWeight: 'bold',
+                                      color: 'secondary.main'
+                                    }}
+                                  >
+                                    {option.name}
+                                  </Typography>
                                 </Box>
-                                <Typography variant="body2" color="text.secondary">
-                                  {option.name} ({option.unit})
-                                </Typography>
-                              </Box>
+                              ) : (
+                                <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                      {option.code}
+                                    </Typography>
+                                    <Chip 
+                                      size="small" 
+                                      label={option.category}
+                                      color={
+                                        option.category === 'Witaminy' ? 'success' :
+                                        option.category === 'Minerały' ? 'info' :
+                                        option.category === 'Makroelementy' ? 'primary' :
+                                        option.category === 'Energia' ? 'warning' :
+                                        option.category === 'Składniki aktywne' ? 'secondary' :
+                                        'default'
+                                      }
+                                      sx={{ ml: 'auto' }}
+                                    />
+                                  </Box>
+                                  <Typography variant="body2" color="text.secondary">
+                                    {option.name} ({option.unit})
+                                  </Typography>
+                                </Box>
+                              )}
                             </Box>
                           )}
                           renderGroup={(params) => (
@@ -1918,6 +2079,148 @@ const RecipeForm = ({ recipeId }) => {
             }}
           >
             {creatingProduct ? 'Zapisywanie...' : 'Dodaj do stanów'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog dodawania nowego składnika odżywczego */}
+      <Dialog 
+        open={addNutrientDialogOpen} 
+        onClose={handleCloseAddNutrientDialog}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: '12px',
+            overflow: 'hidden'
+          }
+        }}
+      >
+        <Box sx={{ 
+          p: 2, 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 1,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          bgcolor: theme => theme.palette.mode === 'dark' 
+            ? 'rgba(25, 35, 55, 0.5)' 
+            : 'rgba(245, 247, 250, 0.8)'
+        }}>
+          <ScienceIcon color="primary" />
+          <DialogTitle sx={{ p: 0 }}>Dodaj nowy składnik odżywczy</DialogTitle>
+        </Box>
+        
+        <DialogContent sx={{ mt: 2 }}>
+          <DialogContentText sx={{ mb: 2 }}>
+            Dodaj nowy składnik odżywczy do bazy danych. Po dodaniu będzie automatycznie dodany do receptury.
+          </DialogContentText>
+          
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12} md={6}>
+              <TextField
+                label="Kod składnika"
+                value={newNutrientData.code}
+                onChange={(e) => setNewNutrientData(prev => ({ ...prev, code: e.target.value }))}
+                fullWidth
+                required
+                error={!newNutrientData.code}
+                helperText={!newNutrientData.code ? 'Kod jest wymagany' : 'Krótki kod składnika (np. B12, Ca, OMEGA3)'}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                InputProps={{
+                  startAdornment: (
+                    <Box sx={{ color: 'text.secondary', mr: 1, display: 'flex', alignItems: 'center' }}>
+                      <ScienceIcon fontSize="small" />
+                    </Box>
+                  )
+                }}
+              />
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
+              <TextField
+                label="Jednostka"
+                value={newNutrientData.unit}
+                onChange={(e) => setNewNutrientData(prev => ({ ...prev, unit: e.target.value }))}
+                fullWidth
+                required
+                error={!newNutrientData.unit}
+                helperText={!newNutrientData.unit ? 'Jednostka jest wymagana' : 'np. mg, µg, g, ml'}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+              />
+            </Grid>
+            
+            <Grid item xs={12}>
+              <TextField
+                label="Nazwa składnika"
+                value={newNutrientData.name}
+                onChange={(e) => setNewNutrientData(prev => ({ ...prev, name: e.target.value }))}
+                fullWidth
+                required
+                error={!newNutrientData.name}
+                helperText={!newNutrientData.name ? 'Nazwa jest wymagana' : 'Pełna nazwa składnika'}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+              />
+            </Grid>
+            
+            <Grid item xs={12}>
+              <FormControl fullWidth required sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
+                <InputLabel id="category-select-label">Kategoria</InputLabel>
+                <Select
+                  labelId="category-select-label"
+                  value={newNutrientData.category}
+                  onChange={(e) => setNewNutrientData(prev => ({ ...prev, category: e.target.value }))}
+                  label="Kategoria"
+                  error={!newNutrientData.category}
+                >
+                  {Object.values(NUTRITIONAL_CATEGORIES).map((category) => (
+                    <MenuItem key={category} value={category}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Chip 
+                          size="small" 
+                          label={category}
+                          color={
+                            category === 'Witaminy' ? 'success' :
+                            category === 'Minerały' ? 'info' :
+                            category === 'Makroelementy' ? 'primary' :
+                            category === 'Energia' ? 'warning' :
+                            category === 'Składniki aktywne' ? 'secondary' :
+                            'default'
+                          }
+                        />
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+                <FormHelperText>
+                  {!newNutrientData.category ? 'Kategoria jest wymagana' : ''}
+                </FormHelperText>
+              </FormControl>
+            </Grid>
+          </Grid>
+        </DialogContent>
+        
+        <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+          <Button 
+            onClick={handleCloseAddNutrientDialog}
+            variant="outlined"
+            sx={{ borderRadius: '8px' }}
+          >
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleSaveNewNutrient} 
+            variant="contained" 
+            color="secondary"
+            disabled={!newNutrientData.code || !newNutrientData.name || !newNutrientData.unit || !newNutrientData.category}
+            startIcon={<ScienceIcon />}
+            sx={{ 
+              borderRadius: '8px', 
+              boxShadow: '0 4px 6px rgba(0,0,0,0.15)',
+              px: 3
+            }}
+          >
+            Dodaj składnik
           </Button>
         </DialogActions>
       </Dialog>

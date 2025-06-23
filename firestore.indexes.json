@@ -444,6 +444,23 @@
         { "fieldPath": "type", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "nutritionalComponents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "code", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "nutritionalComponents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "code", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

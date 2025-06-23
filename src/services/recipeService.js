@@ -534,3 +534,124 @@ import {
       throw error;
     }
   };
+  
+  /**
+   * Synchronizuje numery CAS dla wszystkich receptur
+   * Pobiera numery CAS z pozycji magazynowych i aktualizuje receptury
+   * @param {Function} onProgress - Funkcja callback do śledzenia postępu (opcjonalna)
+   * @returns {Promise<Object>} - Wyniki synchronizacji
+   */
+  export const syncAllRecipesCAS = async (onProgress = null) => {
+    try {
+      console.log('Rozpoczynam masową synchronizację numerów CAS...');
+      
+      // Pobierz wszystkie receptury
+      const recipes = await getAllRecipes();
+      let syncedRecipes = 0;
+      let skippedRecipes = 0;
+      let errorRecipes = 0;
+      const updatedRecipes = [];
+      
+      console.log(`Znaleziono ${recipes.length} receptur do sprawdzenia`);
+      
+      // Pobierz wszystkie pozycje magazynowe raz dla optymalizacji
+      const inventoryRef = collection(db, 'inventory');
+      const inventorySnapshot = await getDocs(inventoryRef);
+      const inventoryMap = new Map();
+      
+      inventorySnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.casNumber) {
+          inventoryMap.set(doc.id, data.casNumber);
+        }
+      });
+      
+      console.log(`Załadowano ${inventoryMap.size} pozycji magazynowych z numerami CAS`);
+      
+      // Przejdź przez każdą recepturę
+      for (let i = 0; i < recipes.length; i++) {
+        const recipe = recipes[i];
+        
+        if (onProgress) {
+          onProgress({
+            current: i + 1,
+            total: recipes.length,
+            recipeName: recipe.name,
+            status: 'processing'
+          });
+        }
+        
+        try {
+          let recipeUpdated = false;
+          const updatedIngredients = [...(recipe.ingredients || [])];
+          let ingredientsCASUpdated = 0;
+          
+          // Sprawdź każdy składnik w recepturze
+          for (let j = 0; j < updatedIngredients.length; j++) {
+            const ingredient = updatedIngredients[j];
+            
+            // Jeśli składnik ma ID (powiązany z magazynem) i nie ma CAS lub ma pusty CAS
+            if (ingredient.id && (!ingredient.casNumber || ingredient.casNumber.trim() === '')) {
+              const casNumber = inventoryMap.get(ingredient.id);
+              
+              if (casNumber) {
+                updatedIngredients[j] = {
+                  ...ingredient,
+                  casNumber: casNumber
+                };
+                ingredientsCASUpdated++;
+                recipeUpdated = true;
+              }
+            }
+          }
+          
+          // Jeśli receptura została zaktualizowana, zapisz zmiany
+          if (recipeUpdated) {
+            await updateDoc(doc(db, RECIPES_COLLECTION, recipe.id), {
+              ingredients: updatedIngredients,
+              updatedAt: serverTimestamp()
+            });
+            
+            syncedRecipes++;
+            updatedRecipes.push({
+              id: recipe.id,
+              name: recipe.name,
+              casUpdated: ingredientsCASUpdated
+            });
+            
+            console.log(`Zaktualizowano recepturę "${recipe.name}" - dodano ${ingredientsCASUpdated} numerów CAS`);
+          } else {
+            skippedRecipes++;
+          }
+          
+        } catch (error) {
+          console.error(`Błąd podczas aktualizacji receptury "${recipe.name}":`, error);
+          errorRecipes++;
+        }
+      }
+      
+      const results = {
+        success: true,
+        totalRecipes: recipes.length,
+        syncedRecipes,
+        skippedRecipes,
+        errorRecipes,
+        updatedRecipes
+      };
+      
+      console.log('Synchronizacja CAS zakończona:', results);
+      return results;
+      
+    } catch (error) {
+      console.error('Błąd podczas masowej synchronizacji CAS:', error);
+      return {
+        success: false,
+        error: error.message,
+        totalRecipes: 0,
+        syncedRecipes: 0,
+        skippedRecipes: 0,
+        errorRecipes: 0,
+        updatedRecipes: []
+      };
+    }
+  };
