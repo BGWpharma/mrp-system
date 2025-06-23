@@ -494,10 +494,16 @@ const CreateFromOrderPage = () => {
     
     // Zaznacz/odznacz wszystkie produkty z recepturami
     productsWithRecipes.forEach(item => {
-      // Sprawdź, czy element ma już utworzone zadanie
-      const hasTask = existingTasks.some(task => 
-        task.productName === item.name && 
-        task.quantity === item.quantity);
+      // Sprawdź, czy element ma już utworzone zadanie (używając tej samej logiki co w renderProductsTable)
+      const hasTask = existingTasks.some(task => {
+        // Jeśli mamy orderItemId w zadaniu, użyj go do porównania
+        if (task.orderItemId && item.id) {
+          return task.orderItemId === item.id;
+        }
+        // Alternatywnie sprawdź po nazwie produktu i ilości (mniej precyzyjne)
+        return task.productName === item.name && 
+               task.quantity === item.quantity;
+      });
       
       // Aktualizuj wybór tylko dla elementów, które nie mają jeszcze zadań
       if (!hasTask) {
@@ -951,11 +957,9 @@ const CreateFromOrderPage = () => {
       if (createdTasks.length > 0) {
         showSuccess(`Utworzono ${createdTasks.length} zadań produkcyjnych`);
         
-        // Dodaj nowo utworzone zadania do listy istniejących zadań
-        setExistingTasks(prev => [...prev, ...createdTasks]);
-        
         // Odśwież szczegóły zamówienia, aby pokazać nowo utworzone zadania
-        fetchOrderDetails(selectedOrder.id);
+        // Nie dodawaj ręcznie do existingTasks - fetchOrderDetails pobierze aktualne dane
+        await fetchOrderDetails(selectedOrder.id);
       }
     } catch (error) {
       console.error('Błąd podczas tworzenia zadań produkcyjnych:', error);
@@ -1212,9 +1216,29 @@ const CreateFromOrderPage = () => {
               const totalProductionTime = totalProductionTimeMinutes / 60;
               
               // Sprawdź, czy element ma już utworzone zadanie
-              const hasTask = existingTasks.some(task => 
-                task.productName === item.name && 
-                task.quantity === item.quantity);
+              // Preferuj sprawdzanie po orderItemId, potem po kombinacji productName i quantity
+              const hasTask = existingTasks.some(task => {
+                // Jeśli mamy orderItemId w zadaniu, użyj go do porównania
+                if (task.orderItemId && item.id) {
+                  const matches = task.orderItemId === item.id;
+                  if (matches) {
+                    console.log(`[DEBUG-TASK-STATUS] Zadanie ${task.id} (${task.moNumber || 'brak MO'}) powiązane z pozycją ${item.id} przez orderItemId`);
+                  }
+                  return matches;
+                }
+                // Alternatywnie sprawdź po nazwie produktu i ilości (mniej precyzyjne)
+                const matches = task.productName === item.name && task.quantity === item.quantity;
+                if (matches) {
+                  console.log(`[DEBUG-TASK-STATUS] Zadanie ${task.id} (${task.moNumber || 'brak MO'}) powiązane z pozycją ${item.id} przez nazwę i ilość`);
+                }
+                return matches;
+              });
+              
+              if (hasTask) {
+                console.log(`[DEBUG-TASK-STATUS] Pozycja "${item.name}" (ID: ${item.id}) ma już utworzone zadanie`);
+              } else {
+                console.log(`[DEBUG-TASK-STATUS] Pozycja "${item.name}" (ID: ${item.id}) oczekuje na utworzenie zadania`);
+              }
                     
               // Utwórz domyślną datę produkcji, jeśli nie została jeszcze ustawiona
               if (!productDates[item.id]) {
@@ -1467,8 +1491,8 @@ const CreateFromOrderPage = () => {
                   >
                     Uwaga: Dla tego zamówienia utworzono już {existingTasks.length} zadań produkcyjnych:
                     <Box component="ul" sx={{ mt: 1, pl: 2 }}>
-                      {existingTasks.map((task, index) => (
-                        <Box component="li" key={index}>
+                      {existingTasks.map((task) => (
+                        <Box component="li" key={task.id || `${task.moNumber}-${task.productName}-${task.quantity}`}>
                           {task.moNumber || 'Zadanie'}: {task.productName || 'Produkt'} - {task.quantity} {task.unit || 'szt.'} ({task.status || 'brak statusu'})
                         </Box>
                       ))}
