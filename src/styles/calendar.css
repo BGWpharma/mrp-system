@@ -875,3 +875,87 @@ body.dark-mode .fc-timeline-event {
   pointer-events: auto !important;
   cursor: move !important;
 }
+
+/* ===== STYLE DLA REACT-CALENDAR-TIMELINE NAGŁÓWKÓW ===== */
+
+/* Style dla nagłówków timeline */
+.react-calendar-timeline .rct-header-root {
+  background: linear-gradient(185deg, #1976d2 0%, #1e88e5 50%, #42a5f5 100%) !important;
+  border-bottom: 2px solid #1976d2 !important;
+  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.2) !important;
+}
+
+/* Style dla głównego nagłówka (primaryHeader) */
+.react-calendar-timeline .rct-header-row:first-child {
+  background: linear-gradient(185deg, #0d47a1 0%, #1565c0 50%, #1976d2 100%) !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  border-bottom: 1px solid #0d47a1 !important;
+}
+
+.react-calendar-timeline .rct-header-row:first-child .rct-header-cell {
+  color: #ffffff !important;
+  border-right: 1px solid rgba(255,255,255,0.2) !important;
+  font-weight: 600 !important;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.3) !important;
+}
+
+/* Style dla drugiego nagłówka */
+.react-calendar-timeline .rct-header-row:last-child {
+  background: linear-gradient(135deg, #1565c0 0%, #1976d2 50%, #1e88e5 100%) !important;
+  color: #ffffff !important;
+  font-weight: 500 !important;
+  border-bottom: 1px solid #1565c0 !important;
+}
+
+.react-calendar-timeline .rct-header-row:last-child .rct-header-cell {
+  color: #ffffff !important;
+  border-right: 1px solid rgba(255,255,255,0.2) !important;
+  font-weight: 500 !important;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.2) !important;
+}
+
+/* Style dla sidebar nagłówka */
+.react-calendar-timeline .rct-sidebar-header {
+  background: linear-gradient(135deg, #1976d2 0%, #1e88e5 50%, #42a5f5 100%) !important;
+  color: #ffffff !important;
+  border-bottom: 2px solid #1976d2 !important;
+  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.2) !important;
+  font-weight: 600 !important;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.3) !important;
+}
+
+/* Hover efekty dla nagłówków */
+.react-calendar-timeline .rct-header-cell:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  transition: background-color 0.2s ease !important;
+}
+
+/* Style dla trybu ciemnego */
+body.dark-mode .react-calendar-timeline .rct-header-root {
+  background: linear-gradient(135deg, #1a237e 0%, #283593 50%, #3949ab 100%) !important;
+  border-bottom: 2px solid #3949ab !important;
+}
+
+body.dark-mode .react-calendar-timeline .rct-header-row:first-child {
+  background: linear-gradient(135deg, #0d47a1 0%, #1565c0 50%, #1976d2 100%) !important;
+}
+
+body.dark-mode .react-calendar-timeline .rct-header-row:last-child {
+  background: linear-gradient(135deg, #1565c0 0%, #1976d2 50%, #1e88e5 100%) !important;
+}
+
+body.dark-mode .react-calendar-timeline .rct-sidebar-header {
+  background: linear-gradient(135deg, #1a237e 0%, #283593 50%, #3949ab 100%) !important;
+  border-bottom: 2px solid #3949ab !important;
+}
+
+/* Animacje dla nagłówków */
+.react-calendar-timeline .rct-header-cell {
+  transition: all 0.2s ease !important;
+}
+
+.react-calendar-timeline .rct-header-cell:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+}

@@ -264,6 +264,7 @@ const Sidebar = ({ onToggle }) => {
         { text: 'Kalkulator', icon: <CalculateIcon />, path: '/production/calculator' },
         { text: 'Lista zadań produkcyjnych', icon: <ListIcon />, path: '/production' },
         { text: 'Receptury', icon: <RecipesIcon />, path: '/recipes' },
+        { text: 'Timeline (WIP)', icon: <AnalyticsIcon />, path: '/production/timeline' },
       ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
     },
     { text: 'Stany', 

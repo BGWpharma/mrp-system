@@ -29,6 +29,7 @@ import EditRecipePage from './pages/Recipes/EditRecipePage';
 import ProductionPage from './pages/Production/ProductionPage';
 import NewTaskPage from './pages/Production/NewTaskPage';
 import ProductionCalendarPage from './pages/Production/ProductionCalendarPage';
+import ProductionTimelinePage from './pages/Production/ProductionTimelinePage';
 import TaskDetailsPage from './pages/Production/TaskDetailsPage';
 import EditTaskPage from './pages/Production/EditTaskPage';
 import ConsumptionPage from './pages/Production/ConsumptionPage';
@@ -214,6 +215,7 @@ function App() {
                     <Route path="/production" element={<PrivateLayout><ProductionPage /></PrivateLayout>} />
                     <Route path="/production/new-task" element={<PrivateLayout><NewTaskPage /></PrivateLayout>} />
                     <Route path="/production/calendar" element={<PrivateLayout><ProductionCalendarPage /></PrivateLayout>} />
+                    <Route path="/production/timeline" element={<PrivateLayout><ProductionTimelinePage /></PrivateLayout>} />
                     <Route path="/production/calculator" element={<PrivateLayout><CalculatorPage /></PrivateLayout>} />
                     <Route path="/production/forms" element={<PrivateLayout><FormsPage /></PrivateLayout>} />
                     <Route path="/production/forms/completed-mo" element={<PrivateLayout><CompletedMOFormPage /></PrivateLayout>} />
