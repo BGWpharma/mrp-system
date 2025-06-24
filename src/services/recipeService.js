@@ -18,6 +18,50 @@ import {
   const RECIPES_COLLECTION = 'recipes';
   const RECIPE_VERSIONS_COLLECTION = 'recipeVersions';
   
+  // Funkcja sortująca składniki według ilości w ramach grup jednostek
+  export const sortIngredientsByQuantity = (ingredients) => {
+    if (!ingredients || !Array.isArray(ingredients)) {
+      return [];
+    }
+    
+    // Grupuj składniki według jednostek
+    const unitGroups = {};
+    
+    ingredients.forEach((ingredient, index) => {
+      const unit = ingredient.unit || 'brak';
+      if (!unitGroups[unit]) {
+        unitGroups[unit] = [];
+      }
+      unitGroups[unit].push({ ...ingredient, originalIndex: index });
+    });
+    
+    // Sortuj składniki w każdej grupie według ilości (malejąco)
+    const sortedIngredients = [];
+    
+    // Sortuj grupy jednostek alfabetycznie dla konsystentności
+    const sortedUnits = Object.keys(unitGroups).sort();
+    
+    sortedUnits.forEach(unit => {
+      const group = unitGroups[unit];
+      
+      // Sortuj składniki w grupie według ilości (malejąco)
+      group.sort((a, b) => {
+        const quantityA = parseFloat(a.quantity) || 0;
+        const quantityB = parseFloat(b.quantity) || 0;
+        return quantityB - quantityA; // Malejąco
+      });
+      
+      // Dodaj posortowane składniki do wynikowej tablicy
+      group.forEach(ingredient => {
+        // Usuń pomocnicze pole originalIndex
+        const { originalIndex, ...cleanIngredient } = ingredient;
+        sortedIngredients.push(cleanIngredient);
+      });
+    });
+    
+    return sortedIngredients;
+  };
+  
   // Pobieranie wszystkich receptur
   export const getAllRecipes = async () => {
     const recipesRef = collection(db, RECIPES_COLLECTION);
@@ -212,7 +256,9 @@ import {
       ...recipeData,
       yield: { quantity: 1, unit: 'szt.' },
       processingCostPerUnit: parseFloat(recipeData.processingCostPerUnit) || 0,
-      productionTimePerUnit: parseFloat(recipeData.productionTimePerUnit) || 0
+      productionTimePerUnit: parseFloat(recipeData.productionTimePerUnit) || 0,
+      // Sortuj składniki według ilości w ramach grup jednostek
+      ingredients: sortIngredientsByQuantity(recipeData.ingredients)
     };
     
     const recipeWithMeta = {
@@ -280,7 +326,9 @@ import {
         ...recipeData,
         yield: { quantity: 1, unit: 'szt.' },
         processingCostPerUnit: parseFloat(recipeData.processingCostPerUnit) || 0,
-        productionTimePerUnit: parseFloat(recipeData.productionTimePerUnit) || 0
+        productionTimePerUnit: parseFloat(recipeData.productionTimePerUnit) || 0,
+        // Sortuj składniki według ilości w ramach grup jednostek
+        ingredients: sortIngredientsByQuantity(recipeData.ingredients)
       };
       
       // Przygotuj dane do aktualizacji

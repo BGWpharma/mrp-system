@@ -99,7 +99,7 @@ import {
   Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession, addProductionSession, deleteProductionSession } from '../../services/productionService';
-import { getRecipeVersion } from '../../services/recipeService';
+import { getRecipeVersion, sortIngredientsByQuantity } from '../../services/recipeService';
 import { getItemBatches, bookInventoryForTask, cancelBooking, getBatchReservations, getAllInventoryItems, getInventoryItemById, getInventoryBatch, updateBatch } from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -6120,7 +6120,7 @@ const TaskDetailsPage = () => {
                             </TableRow>
                           </TableHead>
                           <TableBody>
-                            {task.recipe.ingredients.map((ingredient, index) => (
+                            {sortIngredientsByQuantity(task.recipe.ingredients).map((ingredient, index) => (
                               <TableRow key={index} sx={{ '&:nth-of-type(even)': { backgroundColor: 'action.hover' } }}>
                                 <TableCell sx={{ fontWeight: 'medium' }}>
                                   {ingredient.name}

@@ -48,7 +48,9 @@ import {
   AccessTime as AccessTimeIcon,
   SwapHoriz as SwapIcon,
   Science as ScienceIcon,
-  Sync as SyncIcon
+  Sync as SyncIcon,
+  KeyboardArrowUp as ArrowUpIcon,
+  KeyboardArrowDown as ArrowDownIcon
 } from '@mui/icons-material';
 import { createRecipe, updateRecipe, getRecipeById, fixRecipeYield } from '../../services/recipeService';
 import { getAllInventoryItems, getIngredientPrices, createInventoryItem, getAllWarehouses } from '../../services/inventoryService';
@@ -919,6 +921,35 @@ const RecipeForm = ({ recipeId }) => {
     }));
   };
 
+  // Funkcje do ręcznego sortowania składników odżywczych
+  const moveMicronutrientUp = (index) => {
+    if (index === 0) return; // Nie można przesunąć pierwszego elementu w górę
+    
+    const newMicronutrients = [...recipeData.micronutrients];
+    const temp = newMicronutrients[index];
+    newMicronutrients[index] = newMicronutrients[index - 1];
+    newMicronutrients[index - 1] = temp;
+    
+    setRecipeData(prev => ({
+      ...prev,
+      micronutrients: newMicronutrients
+    }));
+  };
+
+  const moveMicronutrientDown = (index) => {
+    if (index === recipeData.micronutrients.length - 1) return; // Nie można przesunąć ostatniego elementu w dół
+    
+    const newMicronutrients = [...recipeData.micronutrients];
+    const temp = newMicronutrients[index];
+    newMicronutrients[index] = newMicronutrients[index + 1];
+    newMicronutrients[index + 1] = temp;
+    
+    setRecipeData(prev => ({
+      ...prev,
+      micronutrients: newMicronutrients
+    }));
+  };
+
   const handleNutritionalBasisChange = (e) => {
     setRecipeData(prev => ({
       ...prev,
@@ -1577,9 +1608,14 @@ const RecipeForm = ({ recipeId }) => {
             justifyContent: 'space-between'
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <ScienceIcon color="primary" sx={{ mr: 1 }} />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <ScienceIcon color="primary" />
             <Typography variant="h6" fontWeight="500">Składniki odżywcze</Typography>
+            <Tooltip title="Użyj strzałek ↑ ↓ w kolumnie 'Kolejność', aby zmienić porządek składników">
+              <IconButton size="small" color="info">
+                <ArrowUpIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
           </Box>
           
           <Box sx={{ display: 'flex', gap: 1 }}>
@@ -1636,18 +1672,58 @@ const RecipeForm = ({ recipeId }) => {
               <Table>
                 <TableHead sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.6)' : 'rgba(240, 245, 250, 0.8)' }}>
                   <TableRow>
-                    <TableCell width="35%"><Typography variant="subtitle2">Kod</Typography></TableCell>
+                    <TableCell width="1%"><Typography variant="subtitle2">Kolejność</Typography></TableCell>
+                    <TableCell width="37%"><Typography variant="subtitle2">Kod</Typography></TableCell>
                     <TableCell width="15%"><Typography variant="subtitle2">Nazwa</Typography></TableCell>
                     <TableCell width="10%"><Typography variant="subtitle2">Ilość</Typography></TableCell>
-                    <TableCell width="10%"><Typography variant="subtitle2">Jednostka</Typography></TableCell>
-                    <TableCell width="15%"><Typography variant="subtitle2">Kategoria</Typography></TableCell>
-                    <TableCell width="10%"><Typography variant="subtitle2">Uwagi</Typography></TableCell>
+                    <TableCell width="8%"><Typography variant="subtitle2">Jednostka</Typography></TableCell>
+                    <TableCell width="12%"><Typography variant="subtitle2">Kategoria</Typography></TableCell>
+                    <TableCell width="12%"><Typography variant="subtitle2">Uwagi</Typography></TableCell>
                     <TableCell width="5%"><Typography variant="subtitle2">Akcje</Typography></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {(recipeData.micronutrients || []).map((micronutrient, index) => (
                     <TableRow key={index} hover sx={{ '&:nth-of-type(even)': { bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.2)' : 'rgba(245, 247, 250, 0.5)' } }}>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
+                          <Tooltip title="Przesuń w górę">
+                            <span>
+                              <IconButton 
+                                size="small" 
+                                onClick={() => moveMicronutrientUp(index)}
+                                disabled={index === 0}
+                                sx={{ 
+                                  minHeight: '24px', 
+                                  minWidth: '24px',
+                                  opacity: index === 0 ? 0.3 : 1
+                                }}
+                              >
+                                <ArrowUpIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Typography variant="caption" color="text.secondary">
+                            {index + 1}
+                          </Typography>
+                          <Tooltip title="Przesuń w dół">
+                            <span>
+                              <IconButton 
+                                size="small" 
+                                onClick={() => moveMicronutrientDown(index)}
+                                disabled={index === recipeData.micronutrients.length - 1}
+                                sx={{ 
+                                  minHeight: '24px', 
+                                  minWidth: '24px',
+                                  opacity: index === recipeData.micronutrients.length - 1 ? 0.3 : 1
+                                }}
+                              >
+                                <ArrowDownIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        </Box>
+                      </TableCell>
                       <TableCell>
                         <Autocomplete
                           fullWidth
@@ -1696,24 +1772,27 @@ const RecipeForm = ({ recipeId }) => {
                               }}
                             />
                           )}
-                          renderOption={(props, option) => (
-                            <Box 
-                              component="li" 
-                              {...props}
-                              sx={option.isAddNewOption ? {
-                                ...props.sx,
-                                bgcolor: theme => theme.palette.mode === 'dark' 
-                                  ? 'rgba(156, 39, 176, 0.1)' 
-                                  : 'rgba(156, 39, 176, 0.05)',
-                                borderTop: '1px solid',
-                                borderColor: 'divider',
-                                '&:hover': {
+                          renderOption={(props, option) => {
+                            const { key, ...otherProps } = props;
+                            return (
+                              <Box 
+                                key={key}
+                                component="li" 
+                                {...otherProps}
+                                sx={option.isAddNewOption ? {
+                                  ...props.sx,
                                   bgcolor: theme => theme.palette.mode === 'dark' 
-                                    ? 'rgba(156, 39, 176, 0.2)' 
-                                    : 'rgba(156, 39, 176, 0.1)'
-                                }
-                              } : props.sx}
-                            >
+                                    ? 'rgba(156, 39, 176, 0.1)' 
+                                    : 'rgba(156, 39, 176, 0.05)',
+                                  borderTop: '1px solid',
+                                  borderColor: 'divider',
+                                  '&:hover': {
+                                    bgcolor: theme => theme.palette.mode === 'dark' 
+                                      ? 'rgba(156, 39, 176, 0.2)' 
+                                      : 'rgba(156, 39, 176, 0.1)'
+                                  }
+                                } : props.sx}
+                              >
                               {option.isAddNewOption ? (
                                 <Box sx={{ 
                                   display: 'flex', 
@@ -1763,8 +1842,9 @@ const RecipeForm = ({ recipeId }) => {
                                   </Typography>
                                 </Box>
                               )}
-                            </Box>
-                          )}
+                              </Box>
+                            );
+                          }}
                           renderGroup={(params) => (
                             <Box key={params.key}>
                               <Typography

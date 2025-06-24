@@ -42,7 +42,7 @@ import {
   Add as AddIcon,
   Download as DownloadIcon
 } from '@mui/icons-material';
-import { getRecipeById, getRecipeVersions, getRecipeVersion, restoreRecipeVersion, deleteRecipe, updateRecipe } from '../../services/recipeService';
+import { getRecipeById, getRecipeVersions, getRecipeVersion, restoreRecipeVersion, deleteRecipe, updateRecipe, sortIngredientsByQuantity } from '../../services/recipeService';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
 import { useAuth } from '../../hooks/useAuth';
@@ -542,7 +542,7 @@ const RecipeDetailsPage = () => {
 
         <TabPanel value={tabValue} index={0}>
           <Grid container spacing={4}>
-            <Grid item xs={12} md={5}>
+            <Grid item xs={12} md={12}>
               <Typography variant="h6" gutterBottom>Składniki</Typography>
               <TableContainer>
                 <Table size="small">
@@ -555,7 +555,7 @@ const RecipeDetailsPage = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {recipe.ingredients.map((ingredient, index) => (
+                    {sortIngredientsByQuantity(recipe.ingredients).map((ingredient, index) => (
                       <TableRow key={index}>
                         <TableCell component="th" scope="row" sx={{ wordBreak: 'break-word' }}>
                           {ingredient.name}
