@@ -19,7 +19,8 @@ import {
   TextField,
   CircularProgress,
   useMediaQuery,
-  useTheme as useMuiTheme
+  useTheme as useMuiTheme,
+  Slider
 } from '@mui/material';
 import {
   CalendarMonth as CalendarIcon,
@@ -35,7 +36,8 @@ import {
   Schedule as HourlyIcon,
   ViewDay as DailyIcon,
   ViewWeek as WeeklyIcon,
-  DateRange as MonthlyIcon
+  DateRange as MonthlyIcon,
+  Search as SearchIcon
 } from '@mui/icons-material';
 import Timeline, {
   DateHeader,
@@ -64,9 +66,216 @@ import { useTheme } from '../../contexts/ThemeContext';
 // Import stylów dla react-calendar-timeline
 import 'react-calendar-timeline/dist/style.css';
 
-const ProductionTimeline = () => {
-  console.log('[ProductionTimeline] Komponent się ładuje');
-  
+// Zoptymalizowany komponent Tooltip
+const CustomTooltip = React.memo(({ task, position, visible, themeMode }) => {
+  if (!visible || !task) return null;
+
+  const getStatusText = (status) => {
+    const statusMap = {
+      'Zaplanowane': 'Zaplanowane',
+      'W trakcie': 'W trakcie',
+      'Zakończone': 'Zakończone',
+      'Anulowane': 'Anulowane',
+      'Wstrzymane': 'Wstrzymane'
+    };
+    return statusMap[status] || status;
+  };
+
+  const formatDate = (date) => {
+    if (!date) return 'Nie ustawiono';
+    const d = date instanceof Date ? date : 
+             date.toDate ? date.toDate() : 
+             new Date(date);
+    return format(d, 'dd.MM.yyyy HH:mm', { locale: pl });
+  };
+
+  const getWorkstationName = () => {
+    if (!task.workstationId) return 'Bez stanowiska';
+    const workstation = task.workstation || (task.workstationName ? { name: task.workstationName } : null);
+    return workstation?.name || 'Nieznane stanowisko';
+  };
+
+  const getCustomerName = () => {
+    const customerId = task.customer?.id || task.customerId;
+    if (!customerId) return 'Bez klienta';
+    const customer = task.customer || (task.customerName ? { name: task.customerName } : null);
+    return customer?.name || task.customerName || 'Nieznany klient';
+  };
+
+  const getDuration = () => {
+    if (task.estimatedDuration) {
+      const hours = Math.floor(task.estimatedDuration / 60);
+      const minutes = task.estimatedDuration % 60;
+      return hours > 0 ? `${hours}h ${minutes}min` : `${minutes}min`;
+    }
+    
+    if (task.scheduledDate && task.endDate) {
+      const start = task.scheduledDate instanceof Date ? task.scheduledDate : 
+                   task.scheduledDate.toDate ? task.scheduledDate.toDate() : 
+                   new Date(task.scheduledDate);
+      const end = task.endDate instanceof Date ? task.endDate : 
+                 task.endDate.toDate ? task.endDate.toDate() : 
+                 new Date(task.endDate);
+      const diffMs = end.getTime() - start.getTime();
+      const diffMinutes = Math.round(diffMs / (1000 * 60));
+      const hours = Math.floor(diffMinutes / 60);
+      const minutes = diffMinutes % 60;
+      return hours > 0 ? `${hours}h ${minutes}min` : `${minutes}min`;
+    }
+    
+    return 'Nie określono';
+  };
+
+  const tooltipStyle = {
+    position: 'fixed',
+    left: position.x,
+    top: position.y,
+    backgroundColor: themeMode === 'dark' ? '#1e293b' : '#ffffff',
+    color: themeMode === 'dark' ? '#ffffff' : 'rgba(0, 0, 0, 0.87)',
+    border: themeMode === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(0, 0, 0, 0.1)',
+    borderRadius: '8px',
+    padding: '12px',
+    boxShadow: themeMode === 'dark' 
+      ? '0px 8px 24px rgba(0, 0, 0, 0.4)' 
+      : '0px 8px 24px rgba(0, 0, 0, 0.15)',
+    fontSize: '0.875rem',
+    lineHeight: '1.4',
+    maxWidth: '320px',
+    minWidth: '240px',
+    zIndex: 10000,
+    pointerEvents: 'none',
+    backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)'
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'Zaplanowane':
+        return '#3788d8';
+      case 'W trakcie':
+        return '#f39c12';
+      case 'Zakończone':
+        return '#2ecc71';
+      case 'Anulowane':
+        return '#e74c3c';
+      case 'Wstrzymane':
+        return '#757575';
+      default:
+        return '#95a5a6';
+    }
+  };
+
+  const statusColor = getStatusColor(task.status);
+
+  return (
+    <div style={tooltipStyle}>
+      {/* Nagłówek z nazwą zadania */}
+      <div style={{ 
+        fontWeight: 600, 
+        fontSize: '0.95rem', 
+        marginBottom: '8px',
+        color: themeMode === 'dark' ? '#ffffff' : 'rgba(0, 0, 0, 0.9)'
+      }}>
+        {task.name || task.productName}
+      </div>
+
+      {/* Status */}
+      <div style={{ marginBottom: '6px', display: 'flex', alignItems: 'center' }}>
+        <span style={{ marginRight: '8px', color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }}>
+          Status:
+        </span>
+        <span style={{ 
+          color: statusColor, 
+          fontWeight: 500,
+          backgroundColor: `${statusColor}20`,
+          padding: '2px 6px',
+          borderRadius: '4px',
+          fontSize: '0.8rem'
+        }}>
+          {getStatusText(task.status)}
+        </span>
+      </div>
+
+      {/* Numer MO */}
+      {task.moNumber && (
+        <div style={{ marginBottom: '6px' }}>
+          <span style={{ color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }}>
+            MO: 
+          </span>
+          <span style={{ marginLeft: '8px', fontWeight: 500 }}>
+            {task.moNumber}
+          </span>
+        </div>
+      )}
+
+      {/* Ilość */}
+      <div style={{ marginBottom: '6px' }}>
+        <span style={{ color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }}>
+          Ilość: 
+        </span>
+        <span style={{ marginLeft: '8px', fontWeight: 500 }}>
+          {task.quantity} {task.unit || 'szt.'}
+        </span>
+      </div>
+
+      {/* Stanowisko */}
+      <div style={{ marginBottom: '6px' }}>
+        <span style={{ color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }}>
+          Stanowisko: 
+        </span>
+        <span style={{ marginLeft: '8px', fontWeight: 500 }}>
+          {getWorkstationName()}
+        </span>
+      </div>
+
+      {/* Klient */}
+      <div style={{ marginBottom: '6px' }}>
+        <span style={{ color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }}>
+          Klient: 
+        </span>
+        <span style={{ marginLeft: '8px', fontWeight: 500 }}>
+          {getCustomerName()}
+        </span>
+      </div>
+
+      {/* Czas trwania */}
+      <div style={{ marginBottom: '8px' }}>
+        <span style={{ color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }}>
+          Czas trwania: 
+        </span>
+        <span style={{ marginLeft: '8px', fontWeight: 500 }}>
+          {getDuration()}
+        </span>
+      </div>
+
+      {/* Daty */}
+      <div style={{ 
+        fontSize: '0.8rem',
+        borderTop: themeMode === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(0, 0, 0, 0.1)',
+        paddingTop: '8px',
+        color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.5)'
+      }}>
+        <div style={{ marginBottom: '4px' }}>
+          <strong>Start:</strong> {formatDate(task.scheduledDate)}
+        </div>
+        <div>
+          <strong>Koniec:</strong> {formatDate(task.endDate)}
+        </div>
+      </div>
+    </div>
+  );
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.visible === nextProps.visible &&
+    prevProps.themeMode === nextProps.themeMode &&
+    prevProps.position.x === nextProps.position.x &&
+    prevProps.position.y === nextProps.position.y &&
+    prevProps.task?.id === nextProps.task?.id
+  );
+});
+
+// Zoptymalizowany główny komponent z debouncing
+const ProductionTimeline = React.memo(() => {
   const [tasks, setTasks] = useState([]);
   const [workstations, setWorkstations] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -110,6 +319,17 @@ const ProductionTimeline = () => {
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const [tooltipVisible, setTooltipVisible] = useState(false);
   
+  // Stan dla suwaka poziomego
+  const [sliderValue, setSliderValue] = useState(0);
+  
+  // Stany dla zaawansowanego filtrowania
+  const [advancedFilterDialog, setAdvancedFilterDialog] = useState(false);
+  const [advancedFilters, setAdvancedFilters] = useState({
+    productName: '',
+    moNumber: '',
+    orderNumber: ''
+  });
+  
 
   
   // Ref do funkcji updateScrollCanvas z Timeline
@@ -123,7 +343,6 @@ const ProductionTimeline = () => {
 
   // Pobranie danych
   useEffect(() => {
-    console.log('[ProductionTimeline] useEffect - rozpoczęcie pobierania danych');
     fetchWorkstations();
     fetchCustomers();
     fetchTasks();
@@ -163,13 +382,11 @@ const ProductionTimeline = () => {
     }
   };
 
-  const fetchTasks = async () => {
+  const fetchTasks = useCallback(async () => {
     try {
       setLoading(true);
       const startDate = new Date(canvasTimeStart);
       const endDate = new Date(canvasTimeEnd);
-      
-      console.log('[ProductionTimeline] Pobieranie zadań dla okresu:', startDate, '-', endDate);
       
       let data;
       try {
@@ -177,32 +394,22 @@ const ProductionTimeline = () => {
         data = await getTasksByDateRangeOptimizedNew(
           startDate.toISOString(),
           endDate.toISOString(),
-          5000 // Zwiększam limit do 5000 zadań
+          5000
         );
       } catch (error) {
-        console.warn('[ProductionTimeline] Błąd z getTasksByDateRangeOptimizedNew, próbuję getAllTasks:', error);
         // Fallback - pobierz wszystkie zadania
         data = await getAllTasks();
         
         // Filtruj zadania według zakresu dat po stronie klienta
         data = data.filter(task => {
           const taskDate = task.scheduledDate;
-          if (!taskDate) return true; // Pokaż zadania bez daty
+          if (!taskDate) return true;
           
           const taskTime = taskDate instanceof Date ? taskDate.getTime() : 
                           taskDate.toDate ? taskDate.toDate().getTime() : 
                           new Date(taskDate).getTime();
           
           return taskTime >= canvasTimeStart && taskTime <= canvasTimeEnd;
-        });
-      }
-      
-      console.log('[ProductionTimeline] Pobrano zadań:', data.length);
-      if (data.length > 0) {
-        console.log('[ProductionTimeline] Przykładowe zadanie (ID, nazwa):', {
-          id: data[0].id,
-          name: data[0].name || data[0].productName,
-          scheduledDate: data[0].scheduledDate
         });
       }
       
@@ -213,7 +420,7 @@ const ProductionTimeline = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [canvasTimeStart, canvasTimeEnd, showError]);
 
   // Funkcje pomocnicze dla kolorów
   const getStatusColor = (status) => {
@@ -259,15 +466,9 @@ const ProductionTimeline = () => {
 
   // Przygotowanie grup dla timeline
   const groups = useMemo(() => {
-    console.log('[ProductionTimeline] Przygotowywanie grup, groupBy:', groupBy);
-    console.log('[ProductionTimeline] Liczba stanowisk:', workstations.length);
-    console.log('[ProductionTimeline] Liczba wybranych stanowisk:', Object.keys(selectedWorkstations).filter(k => selectedWorkstations[k]).length);
-    
     if (groupBy === 'workstation') {
       const filteredWorkstations = workstations
         .filter(workstation => selectedWorkstations[workstation.id]);
-      
-      console.log('[ProductionTimeline] Przefiltrowane stanowiska:', filteredWorkstations.length);
       
       const workstationGroups = filteredWorkstations.map(workstation => ({
         id: workstation.id,
@@ -311,53 +512,60 @@ const ProductionTimeline = () => {
         });
       }
       
-      console.log('[ProductionTimeline] Liczba grup zamówień:', uniqueOrders.size);
-      
       return Array.from(uniqueOrders.values());
     }
-  }, [workstations, selectedWorkstations, groupBy, tasks, useWorkstationColors]);
+  }, [workstations, selectedWorkstations, groupBy, tasks, useWorkstationColors, getWorkstationColor]);
 
   // Przygotowanie elementów dla timeline
   const items = useMemo(() => {
-    console.log('[ProductionTimeline] Przygotowywanie items z', tasks.length, 'zadań');
-    console.log('[ProductionTimeline] Liczba wybranych klientów:', Object.keys(selectedCustomers).filter(k => selectedCustomers[k]).length);
-    
     // Filtruj według klientów
     const filteredByCustomers = tasks.filter(task => {
       const customerId = task.customer?.id || task.customerId;
-      const result = customerId ? selectedCustomers[customerId] === true : selectedCustomers['no-customer'] === true;
-      
-      if (!result) {
-        console.log('[ProductionTimeline] Zadanie odrzucone przez filtr klientów:', task.id, 'customerId:', customerId);
-      }
-      
-      return result;
+      return customerId ? selectedCustomers[customerId] === true : selectedCustomers['no-customer'] === true;
     });
-    
-    console.log('[ProductionTimeline] Po filtracji klientów:', filteredByCustomers.length, 'z', tasks.length);
     
     // Filtruj według wybranego grupowania
     const filteredByGroup = filteredByCustomers.filter(task => {
-      let result = true;
-      
       if (groupBy === 'workstation') {
         if (task.workstationId) {
-          result = selectedWorkstations[task.workstationId];
+          return selectedWorkstations[task.workstationId];
         } else {
-          result = selectedWorkstations['no-workstation']; // Zadania bez stanowiska
-        }
-        
-        if (!result) {
-          console.log('[ProductionTimeline] Zadanie odrzucone przez filtr stanowisk:', task.id, 'workstationId:', task.workstationId);
+          return selectedWorkstations['no-workstation'];
         }
       }
-      
-      return result;
+      return true;
     });
-    
-    console.log('[ProductionTimeline] Po filtracji grup:', filteredByGroup.length, 'z', filteredByCustomers.length);
-    
-         const finalItems = filteredByGroup.map(task => {
+
+    // Filtruj według zaawansowanych filtrów
+    const filteredByAdvanced = filteredByGroup.filter(task => {
+      // Filtr według nazwy produktu
+      if (advancedFilters.productName) {
+        const productName = (task.productName || task.name || '').toLowerCase();
+        if (!productName.includes(advancedFilters.productName.toLowerCase())) {
+          return false;
+        }
+      }
+
+      // Filtr według numeru MO
+      if (advancedFilters.moNumber) {
+        const moNumber = (task.moNumber || '').toLowerCase();
+        if (!moNumber.includes(advancedFilters.moNumber.toLowerCase())) {
+          return false;
+        }
+      }
+
+      // Filtr według numeru zamówienia
+      if (advancedFilters.orderNumber) {
+        const orderNumber = (task.orderNumber || '').toLowerCase();
+        if (!orderNumber.includes(advancedFilters.orderNumber.toLowerCase())) {
+          return false;
+        }
+      }
+
+             return true;
+     });
+     
+          const finalItems = filteredByAdvanced.map(task => {
        // Obsługa Firestore Timestamp
        const convertToDate = (date) => {
          if (!date) return new Date();
@@ -377,8 +585,6 @@ const ProductionTimeline = () => {
        const endTime = task.endDate ? roundToMinute(convertToDate(task.endDate)) : 
          task.estimatedDuration ? new Date(startTime.getTime() + task.estimatedDuration * 60 * 1000) :
          new Date(startTime.getTime() + 8 * 60 * 60 * 1000); // Domyślnie 8 godzin
-       
-       console.log(`[ProductionTimeline] Task ${task.id} - originalScheduledDate:`, task.scheduledDate, 'convertedStartTime:', startTime);
 
              let groupId;
        if (groupBy === 'workstation') {
@@ -402,29 +608,19 @@ const ProductionTimeline = () => {
       };
     });
     
-    console.log('[ProductionTimeline] Finalne items:', finalItems.length);
-    
     return finalItems;
-  }, [tasks, selectedCustomers, selectedWorkstations, groupBy, useWorkstationColors, workstations]);
+  }, [tasks, selectedCustomers, selectedWorkstations, groupBy, useWorkstationColors, workstations, getItemColor, advancedFilters]);
 
   // Funkcja pomocnicza do zaokrąglania do pełnych minut
-  const roundToMinute = (date) => {
-    if (!date) {
-      console.warn('[roundToMinute] Otrzymano pustą datę, używam obecnej daty');
+  const roundToMinute = useCallback((date) => {
+    if (!date || isNaN(new Date(date).getTime())) {
       return new Date();
     }
     
     const rounded = new Date(date);
-    
-    // Sprawdź czy data jest poprawna
-    if (isNaN(rounded.getTime())) {
-      console.warn('[roundToMinute] Niepoprawna data:', date, 'używam obecnej daty');
-      return new Date();
-    }
-    
-    rounded.setSeconds(0, 0); // Ustaw sekundy i milisekundy na 0
+    rounded.setSeconds(0, 0);
     return rounded;
-  };
+  }, []);
 
   // Funkcja do znajdowania poprzedzającego zadania na tym samym stanowisku
   const findPreviousTask = (movedTask, allTasks, targetGroup) => {
@@ -477,8 +673,6 @@ const ProductionTimeline = () => {
   const snapToTask = (movedTask, targetGroup, newStartTime, newEndTime) => {
     if (!snapToPrevious) return { newStartTime, newEndTime };
 
-    console.log('[snapToTask] Szukam poprzedniego zadania dla grupy:', targetGroup);
-
     const previousTask = findPreviousTask(
       { 
         ...movedTask, 
@@ -488,8 +682,6 @@ const ProductionTimeline = () => {
       tasks, 
       targetGroup
     );
-
-    console.log('[snapToTask] Znalezione poprzednie zadanie:', previousTask);
 
     if (previousTask && previousTask.endDate) {
       const duration = newEndTime - newStartTime;
@@ -506,18 +698,11 @@ const ProductionTimeline = () => {
       
       // Sprawdź czy data jest poprawna
       if (isNaN(previousEndDate.getTime())) {
-        console.warn('[snapToTask] Niepoprawna data endDate w poprzednim zadaniu:', previousTask.endDate);
         return { newStartTime, newEndTime };
       }
       
       const snappedStartTime = roundToMinute(previousEndDate);
       const snappedEndTime = new Date(snappedStartTime.getTime() + duration);
-      
-      console.log('[snapToTask] Wyniki dociągania:', { 
-        snappedStartTime, 
-        snappedEndTime: roundToMinute(snappedEndTime),
-        duration 
-      });
       
       return { 
         newStartTime: snappedStartTime, 
@@ -525,24 +710,18 @@ const ProductionTimeline = () => {
       };
     }
 
-    console.log('[snapToTask] Brak poprzedniego zadania, używam oryginalnych czasów');
     return { newStartTime, newEndTime };
   };
 
   // Obsługa zmian w timeline
-  const handleItemMove = async (itemId, dragTime, newGroupId) => {
+  const handleItemMove = useCallback(async (itemId, dragTime, newGroupId) => {
     try {
       const item = items.find(i => i.id === itemId);
       if (!item) return;
 
-      console.log('[handleItemMove] Rozpoczęcie:', { itemId, dragTime, newGroupId });
-      console.log('[handleItemMove] Item:', item);
-
       let newStartTime = roundToMinute(new Date(dragTime));
       const duration = item.end_time - item.start_time;
       let newEndTime = roundToMinute(new Date(dragTime + duration));
-
-      console.log('[handleItemMove] Podstawowe czasy:', { newStartTime, newEndTime, duration });
 
       // Zastosuj logikę dociągania jeśli tryb jest włączony
       const task = item.task; // Obiekt zadania z pełnymi danymi
@@ -552,11 +731,8 @@ const ProductionTimeline = () => {
       newStartTime = snappedTimes.newStartTime;
       newEndTime = snappedTimes.newEndTime;
 
-      console.log('[handleItemMove] Po dociąganiu:', { newStartTime, newEndTime });
-
       // Sprawdź czy daty są poprawne przed wysłaniem do bazy
       if (isNaN(newStartTime.getTime()) || isNaN(newEndTime.getTime())) {
-        console.error('[handleItemMove] Niepoprawne daty:', { newStartTime, newEndTime });
         showError('Błąd podczas przetwarzania dat zadania');
         return;
       }
@@ -581,7 +757,7 @@ const ProductionTimeline = () => {
       console.error('Błąd podczas aktualizacji zadania:', error);
       showError('Błąd podczas aktualizacji zadania: ' + error.message);
     }
-  };
+  }, [items, roundToMinute, snapToTask, snapToPrevious, showError, showSuccess, fetchTasks, currentUser.uid]);
 
   const handleItemResize = async (itemId, time, edge) => {
     try {
@@ -686,6 +862,65 @@ const ProductionTimeline = () => {
     setFilterMenuAnchor(null);
   };
 
+  // Obsługa zaawansowanych filtrów
+  const handleAdvancedFilterOpen = () => {
+    setAdvancedFilterDialog(true);
+    setFilterMenuAnchor(null);
+  };
+
+  const handleAdvancedFilterClose = () => {
+    setAdvancedFilterDialog(false);
+  };
+
+  const handleAdvancedFilterChange = (field, value) => {
+    setAdvancedFilters(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleAdvancedFilterApply = () => {
+    setAdvancedFilterDialog(false);
+  };
+
+  const handleAdvancedFilterReset = () => {
+    setAdvancedFilters({
+      productName: '',
+      moNumber: '',
+      orderNumber: ''
+    });
+  };
+
+  // Obliczanie wartości dla suwaka poziomego
+  const calculateSliderValue = useCallback(() => {
+    const totalRange = canvasTimeEnd - canvasTimeStart;
+    const currentPosition = visibleTimeStart - canvasTimeStart;
+    return totalRange > 0 ? (currentPosition / totalRange) * 100 : 0;
+  }, [canvasTimeStart, canvasTimeEnd, visibleTimeStart]);
+
+  // Obsługa suwaka poziomego
+  const handleSliderChange = useCallback((event, newValue) => {
+    const totalRange = canvasTimeEnd - canvasTimeStart;
+    const viewRange = visibleTimeEnd - visibleTimeStart;
+    const newStart = canvasTimeStart + (totalRange * newValue / 100);
+    const newEnd = Math.min(newStart + viewRange, canvasTimeEnd);
+    
+    setVisibleTimeStart(newStart);
+    setVisibleTimeEnd(newEnd);
+    setSliderValue(newValue);
+    
+    // Synchronizuj canvas
+    if (updateScrollCanvasRef.current) {
+      updateScrollCanvasRef.current(newStart, newEnd);
+      
+      setTimeout(() => {
+        if (updateScrollCanvasRef.current) {
+          updateScrollCanvasRef.current(newStart, newEnd);
+        }
+      }, 50);
+    }
+  }, [canvasTimeStart, canvasTimeEnd, visibleTimeEnd, visibleTimeStart]);
+
   // Obsługa zmiany widoku czasowego
   const handleTimeChange = (visibleTimeStart, visibleTimeEnd, updateScrollCanvas) => {
     // Zachowaj referencję do funkcji updateScrollCanvas
@@ -707,6 +942,10 @@ const ProductionTimeline = () => {
     
     setVisibleTimeStart(visibleTimeStart);
     setVisibleTimeEnd(visibleTimeEnd);
+    
+    // Aktualizuj suwak
+    const newSliderValue = calculateSliderValue();
+    setSliderValue(newSliderValue);
   };
 
   // Funkcje zoom
@@ -944,7 +1183,11 @@ const ProductionTimeline = () => {
       
       return () => timeouts.forEach(clearTimeout);
     }
-  }, [visibleTimeStart, visibleTimeEnd]);
+    
+    // Aktualizuj wartość suwaka
+    const newSliderValue = calculateSliderValue();
+    setSliderValue(newSliderValue);
+  }, [visibleTimeStart, visibleTimeEnd, calculateSliderValue]);
 
   // Dodatkowa synchronizacja z obserwatorami dla jeszcze lepszej stabilności
   useEffect(() => {
@@ -983,188 +1226,7 @@ const ProductionTimeline = () => {
     };
   }, [visibleTimeStart, visibleTimeEnd]);
 
-  // Komponent Tooltip
-  const CustomTooltip = ({ task, position, visible, themeMode }) => {
-    if (!visible || !task) return null;
 
-    const getStatusText = (status) => {
-      const statusMap = {
-        'Zaplanowane': 'Zaplanowane',
-        'W trakcie': 'W trakcie',
-        'Zakończone': 'Zakończone',
-        'Anulowane': 'Anulowane',
-        'Wstrzymane': 'Wstrzymane'
-      };
-      return statusMap[status] || status;
-    };
-
-    const formatDate = (date) => {
-      if (!date) return 'Nie ustawiono';
-      const d = date instanceof Date ? date : 
-               date.toDate ? date.toDate() : 
-               new Date(date);
-      return format(d, 'dd.MM.yyyy HH:mm', { locale: pl });
-    };
-
-    const getWorkstationName = () => {
-      if (!task.workstationId) return 'Bez stanowiska';
-      const workstation = workstations.find(w => w.id === task.workstationId);
-      return workstation?.name || 'Nieznane stanowisko';
-    };
-
-    const getCustomerName = () => {
-      const customerId = task.customer?.id || task.customerId;
-      if (!customerId) return 'Bez klienta';
-      const customer = customers.find(c => c.id === customerId);
-      return customer?.name || 'Nieznany klient';
-    };
-
-    const getDuration = () => {
-      if (task.estimatedDuration) {
-        const hours = Math.floor(task.estimatedDuration / 60);
-        const minutes = task.estimatedDuration % 60;
-        return hours > 0 ? `${hours}h ${minutes}min` : `${minutes}min`;
-      }
-      
-      if (task.scheduledDate && task.endDate) {
-        const start = task.scheduledDate instanceof Date ? task.scheduledDate : 
-                     task.scheduledDate.toDate ? task.scheduledDate.toDate() : 
-                     new Date(task.scheduledDate);
-        const end = task.endDate instanceof Date ? task.endDate : 
-                   task.endDate.toDate ? task.endDate.toDate() : 
-                   new Date(task.endDate);
-        const diffMs = end.getTime() - start.getTime();
-        const diffMinutes = Math.round(diffMs / (1000 * 60));
-        const hours = Math.floor(diffMinutes / 60);
-        const minutes = diffMinutes % 60;
-        return hours > 0 ? `${hours}h ${minutes}min` : `${minutes}min`;
-      }
-      
-      return 'Nie określono';
-    };
-
-    const tooltipStyle = {
-      position: 'fixed',
-      left: position.x,
-      top: position.y,
-      backgroundColor: themeMode === 'dark' ? '#1e293b' : '#ffffff',
-      color: themeMode === 'dark' ? '#ffffff' : 'rgba(0, 0, 0, 0.87)',
-      border: themeMode === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(0, 0, 0, 0.1)',
-      borderRadius: '8px',
-      padding: '12px',
-      boxShadow: themeMode === 'dark' 
-        ? '0px 8px 24px rgba(0, 0, 0, 0.4)' 
-        : '0px 8px 24px rgba(0, 0, 0, 0.15)',
-      fontSize: '0.875rem',
-      lineHeight: '1.4',
-      maxWidth: '320px',
-      minWidth: '240px',
-      zIndex: 10000,
-      pointerEvents: 'none',
-      backdropFilter: 'blur(10px)',
-      WebkitBackdropFilter: 'blur(10px)'
-    };
-
-    const statusColor = getStatusColor(task.status);
-
-    return (
-      <div style={tooltipStyle}>
-        {/* Nagłówek z nazwą zadania */}
-        <div style={{ 
-          fontWeight: 600, 
-          fontSize: '0.95rem', 
-          marginBottom: '8px',
-          color: themeMode === 'dark' ? '#ffffff' : 'rgba(0, 0, 0, 0.9)'
-        }}>
-          {task.name || task.productName}
-        </div>
-
-        {/* Status */}
-        <div style={{ marginBottom: '6px', display: 'flex', alignItems: 'center' }}>
-          <span style={{ marginRight: '8px', color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }}>
-            Status:
-          </span>
-          <span style={{ 
-            color: statusColor, 
-            fontWeight: 500,
-            backgroundColor: `${statusColor}20`,
-            padding: '2px 6px',
-            borderRadius: '4px',
-            fontSize: '0.8rem'
-          }}>
-            {getStatusText(task.status)}
-          </span>
-        </div>
-
-        {/* Numer MO */}
-        {task.moNumber && (
-          <div style={{ marginBottom: '6px' }}>
-            <span style={{ color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }}>
-              MO: 
-            </span>
-            <span style={{ marginLeft: '8px', fontWeight: 500 }}>
-              {task.moNumber}
-            </span>
-          </div>
-        )}
-
-        {/* Ilość */}
-        <div style={{ marginBottom: '6px' }}>
-          <span style={{ color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }}>
-            Ilość: 
-          </span>
-          <span style={{ marginLeft: '8px', fontWeight: 500 }}>
-            {task.quantity} {task.unit || 'szt.'}
-          </span>
-        </div>
-
-        {/* Stanowisko */}
-        <div style={{ marginBottom: '6px' }}>
-          <span style={{ color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }}>
-            Stanowisko: 
-          </span>
-          <span style={{ marginLeft: '8px', fontWeight: 500 }}>
-            {getWorkstationName()}
-          </span>
-        </div>
-
-        {/* Klient */}
-        <div style={{ marginBottom: '6px' }}>
-          <span style={{ color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }}>
-            Klient: 
-          </span>
-          <span style={{ marginLeft: '8px', fontWeight: 500 }}>
-            {getCustomerName()}
-          </span>
-        </div>
-
-        {/* Czas trwania */}
-        <div style={{ marginBottom: '8px' }}>
-          <span style={{ color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }}>
-            Czas trwania: 
-          </span>
-          <span style={{ marginLeft: '8px', fontWeight: 500 }}>
-            {getDuration()}
-          </span>
-        </div>
-
-        {/* Daty */}
-        <div style={{ 
-          fontSize: '0.8rem',
-          borderTop: themeMode === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(0, 0, 0, 0.1)',
-          paddingTop: '8px',
-          color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.5)'
-        }}>
-          <div style={{ marginBottom: '4px' }}>
-            <strong>Start:</strong> {formatDate(task.scheduledDate)}
-          </div>
-          <div>
-            <strong>Koniec:</strong> {formatDate(task.endDate)}
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <Box sx={{ position: 'relative' }}>
@@ -1292,29 +1354,16 @@ const ProductionTimeline = () => {
             size="small"
             onClick={handleFilterMenuClick}
             startIcon={<FilterListIcon />}
+            color={(advancedFilters.productName || advancedFilters.moNumber || advancedFilters.orderNumber) ? 'primary' : 'inherit'}
           >
-            Filtry
+            Filtry {(advancedFilters.productName || advancedFilters.moNumber || advancedFilters.orderNumber) && '✓'}
           </Button>
           
           <IconButton size="small" onClick={fetchTasks}>
             <RefreshIcon />
           </IconButton>
           
-          <Button 
-            size="small" 
-            variant="outlined" 
-            color="warning"
-            onClick={() => {
-              console.log('[DEBUG] Zadania:', tasks.length);
-              console.log('[DEBUG] Stanowiska:', Object.keys(selectedWorkstations).filter(k => selectedWorkstations[k]).length);
-              console.log('[DEBUG] Klienci:', Object.keys(selectedCustomers).filter(k => selectedCustomers[k]).length);
-              console.log('[DEBUG] Grupy:', groups.length);
-              console.log('[DEBUG] Items:', items.length);
-              console.log('[DEBUG] Zoom:', zoomLevel, 'Skala:', timeScale);
-            }}
-          >
-            Debug
-          </Button>
+
         </Box>
       </Box>
 
@@ -1370,7 +1419,7 @@ const ProductionTimeline = () => {
 
       {/* Timeline */}
       <Box sx={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-        {console.log('[ProductionTimeline] Renderowanie Timeline - groups:', groups.length, 'items:', items.length)}
+
         {loading && (
           <Box sx={{ 
             position: 'absolute', 
@@ -1545,6 +1594,87 @@ const ProductionTimeline = () => {
         </Timeline>
       </Box>
 
+      {/* Suwak poziomy do przewijania timeline */}
+      <Box sx={{ 
+        mt: 1, 
+        px: 2, 
+        pb: 1,
+        borderTop: '1px solid #e0e0e0'
+      }}>
+        <Box sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 2 
+        }}>
+          <Typography variant="caption" sx={{ 
+            minWidth: '120px',
+            fontSize: '0.75rem',
+            color: 'text.secondary'
+          }}>
+            Przewijanie poziome:
+          </Typography>
+          
+          <Slider
+            value={sliderValue}
+            onChange={handleSliderChange}
+            min={0}
+            max={100}
+            step={0.1}
+            sx={{
+              flex: 1,
+              height: 4,
+              '& .MuiSlider-thumb': {
+                width: 16,
+                height: 16,
+                '&:hover, &.Mui-focusVisible': {
+                  boxShadow: '0 3px 1px rgba(0,0,0,0.1), 0 4px 8px rgba(0,0,0,0.3)',
+                },
+                '&.Mui-active': {
+                  boxShadow: '0 3px 1px rgba(0,0,0,0.1), 0 4px 8px rgba(0,0,0,0.3)',
+                },
+              },
+              '& .MuiSlider-track': {
+                height: 4,
+                border: 'none',
+              },
+              '& .MuiSlider-rail': {
+                height: 4,
+                opacity: 0.3,
+                backgroundColor: '#bfbfbf',
+              },
+            }}
+          />
+          
+          <Typography variant="caption" sx={{ 
+            minWidth: '40px',
+            fontSize: '0.75rem',
+            color: 'text.secondary',
+            textAlign: 'right'
+          }}>
+            {Math.round(sliderValue)}%
+          </Typography>
+        </Box>
+        
+        {/* Dodatkowe informacje */}
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between',
+          mt: 0.5,
+          fontSize: '0.7rem',
+          color: 'text.disabled'
+        }}>
+          <span>
+            {format(new Date(canvasTimeStart), 'dd.MM.yyyy', { locale: pl })}
+          </span>
+          <span>
+            Widoczny zakres: {format(new Date(visibleTimeStart), 'dd.MM HH:mm', { locale: pl })} - {format(new Date(visibleTimeEnd), 'dd.MM HH:mm', { locale: pl })}
+          </span>
+          <span>
+            {format(new Date(canvasTimeEnd), 'dd.MM.yyyy', { locale: pl })}
+          </span>
+        </Box>
+      </Box>
+
       {/* Menu filtrów */}
       <Menu
         anchorEl={filterMenuAnchor}
@@ -1561,6 +1691,17 @@ const ProductionTimeline = () => {
           <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
             Filtry
           </Typography>
+          
+          {/* Przycisk do zaawansowanych filtrów */}
+          <Button
+            fullWidth
+            variant="outlined"
+            startIcon={<SearchIcon />}
+            onClick={handleAdvancedFilterOpen}
+            sx={{ mb: 2 }}
+          >
+            Zaawansowane filtrowanie
+          </Button>
           
           <Typography variant="body2" sx={{ mb: 1 }}>
             Stanowiska:
@@ -1670,6 +1811,98 @@ const ProductionTimeline = () => {
         </DialogActions>
       </Dialog>
 
+      {/* Dialog zaawansowanych filtrów */}
+      <Dialog
+        open={advancedFilterDialog}
+        onClose={handleAdvancedFilterClose}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Zaawansowane filtrowanie zadań</DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 1 }}>
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Nazwa produktu"
+                  placeholder="Wpisz nazwę produktu..."
+                  value={advancedFilters.productName}
+                  onChange={(e) => handleAdvancedFilterChange('productName', e.target.value)}
+                  variant="outlined"
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Numer MO"
+                  placeholder="Wpisz numer zlecenia produkcyjnego..."
+                  value={advancedFilters.moNumber}
+                  onChange={(e) => handleAdvancedFilterChange('moNumber', e.target.value)}
+                  variant="outlined"
+                  size="small"
+                />
+              </Grid>
+              
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Numer zamówienia"
+                  placeholder="Wpisz numer zamówienia..."
+                  value={advancedFilters.orderNumber}
+                  onChange={(e) => handleAdvancedFilterChange('orderNumber', e.target.value)}
+                  variant="outlined"
+                  size="small"
+                />
+              </Grid>
+            </Grid>
+            
+            {/* Podgląd aktywnych filtrów */}
+            {(advancedFilters.productName || advancedFilters.moNumber || advancedFilters.orderNumber) && (
+              <Box sx={{ mt: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                  Aktywne filtry:
+                </Typography>
+                {advancedFilters.productName && (
+                  <Chip 
+                    label={`Produkt: ${advancedFilters.productName}`} 
+                    size="small" 
+                    sx={{ mr: 1, mb: 1 }} 
+                  />
+                )}
+                {advancedFilters.moNumber && (
+                  <Chip 
+                    label={`MO: ${advancedFilters.moNumber}`} 
+                    size="small" 
+                    sx={{ mr: 1, mb: 1 }} 
+                  />
+                )}
+                {advancedFilters.orderNumber && (
+                  <Chip 
+                    label={`Zamówienie: ${advancedFilters.orderNumber}`} 
+                    size="small" 
+                    sx={{ mr: 1, mb: 1 }} 
+                  />
+                )}
+              </Box>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleAdvancedFilterReset} color="warning">
+            Wyczyść
+          </Button>
+          <Button onClick={handleAdvancedFilterClose}>
+            Anuluj
+          </Button>
+          <Button onClick={handleAdvancedFilterApply} variant="contained">
+            Zastosuj
+          </Button>
+        </DialogActions>
+      </Dialog>
+
             </Paper>
 
       {/* Custom Tooltip */}
@@ -1681,6 +1914,15 @@ const ProductionTimeline = () => {
       />
     </Box>
   );
-};
+});
+
+// Helper function dla debounce
+function debounce(func, delay) {
+  let timeoutId;
+  return function (...args) {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => func.apply(this, args), delay);
+  };
+}
 
 export default ProductionTimeline; 
