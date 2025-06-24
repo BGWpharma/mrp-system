@@ -37,7 +37,9 @@ import {
   ViewDay as DailyIcon,
   ViewWeek as WeeklyIcon,
   DateRange as MonthlyIcon,
-  Search as SearchIcon
+  Search as SearchIcon,
+  Edit as EditIcon,
+  Lock as LockIcon
 } from '@mui/icons-material';
 import Timeline, {
   DateHeader,
@@ -62,6 +64,7 @@ import { getAllCustomers } from '../../services/customerService';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../contexts/ThemeContext';
+import TimelineExport from './TimelineExport';
 
 // Import stylów dla react-calendar-timeline
 import 'react-calendar-timeline/dist/style.css';
@@ -329,6 +332,9 @@ const ProductionTimeline = React.memo(() => {
     moNumber: '',
     orderNumber: ''
   });
+  
+  // Stan dla trybu edycji
+  const [editMode, setEditMode] = useState(false);
   
 
   
@@ -599,8 +605,8 @@ const ProductionTimeline = React.memo(() => {
         title: task.name || `${task.productName} (${task.moNumber})`,
         start_time: startTime.getTime(),
         end_time: endTime.getTime(),
-        canMove: true,
-        canResize: true,
+        canMove: editMode,
+        canResize: editMode,
         canChangeGroup: false,
         // Dodatkowe dane
         task: task,
@@ -609,7 +615,7 @@ const ProductionTimeline = React.memo(() => {
     });
     
     return finalItems;
-  }, [tasks, selectedCustomers, selectedWorkstations, groupBy, useWorkstationColors, workstations, getItemColor, advancedFilters]);
+  }, [tasks, selectedCustomers, selectedWorkstations, groupBy, useWorkstationColors, workstations, getItemColor, advancedFilters, editMode]);
 
   // Funkcja pomocnicza do zaokrąglania do pełnych minut
   const roundToMinute = useCallback((date) => {
@@ -716,6 +722,8 @@ const ProductionTimeline = React.memo(() => {
   // Obsługa zmian w timeline
   const handleItemMove = useCallback(async (itemId, dragTime, newGroupId) => {
     try {
+      setIsDragging(false); // Resetuj stan po zakończeniu przeciągania
+      
       const item = items.find(i => i.id === itemId);
       if (!item) return;
 
@@ -761,6 +769,8 @@ const ProductionTimeline = React.memo(() => {
 
   const handleItemResize = async (itemId, time, edge) => {
     try {
+      setIsDragging(false); // Resetuj stan po zakończeniu zmiany rozmiaru
+      
       const item = items.find(i => i.id === itemId);
       if (!item) return;
 
@@ -810,8 +820,14 @@ const ProductionTimeline = React.memo(() => {
     }
   }, [tooltipVisible]);
 
+  // Stan do śledzenia czy jest w trakcie przeciągania
+  const [isDragging, setIsDragging] = useState(false);
+
   // Obsługa kliknięcia w element
   const handleItemSelect = (itemId) => {
+    // Nie otwieraj dialogu jeśli jest w trakcie przeciągania lub tryb edycji jest wyłączony
+    if (isDragging || !editMode) return;
+    
     const item = items.find(i => i.id === itemId);
     if (item) {
       setSelectedItem(item);
@@ -889,6 +905,11 @@ const ProductionTimeline = React.memo(() => {
       moNumber: '',
       orderNumber: ''
     });
+  };
+
+  // Obsługa trybu edycji
+  const handleEditModeToggle = () => {
+    setEditMode(prev => !prev);
   };
 
   // Obliczanie wartości dla suwaka poziomego
@@ -1258,18 +1279,39 @@ const ProductionTimeline = React.memo(() => {
             label="Kolory stanowisk"
           />
           
-          <Tooltip title="Automatycznie dociąga przesuwane zadania do końca poprzedniego zadania na tym samym stanowisku" arrow>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={snapToPrevious}
-                  onChange={(e) => setSnapToPrevious(e.target.checked)}
-                  size="small"
-                  color="secondary"
-                />
-              }
-              label="Dociąganie"
-            />
+          {editMode && (
+            <Tooltip title="Automatycznie dociąga przesuwane zadania do końca poprzedniego zadania na tym samym stanowisku" arrow>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={snapToPrevious}
+                    onChange={(e) => setSnapToPrevious(e.target.checked)}
+                    size="small"
+                    color="secondary"
+                  />
+                }
+                label="Dociąganie"
+              />
+            </Tooltip>
+          )}
+          
+          <Tooltip title="Włącz tryb edycji aby móc przesuwać i zmieniać rozmiar zadań. W trybie wyłączonym możesz bezpiecznie przewijać timeline." arrow>
+            <Button
+              variant={editMode ? "contained" : "outlined"}
+              size="small"
+              onClick={handleEditModeToggle}
+              startIcon={editMode ? <EditIcon /> : <LockIcon />}
+              color={editMode ? "primary" : "default"}
+              sx={{ 
+                minWidth: '120px',
+                backgroundColor: editMode ? 'primary.main' : 'transparent',
+                '&:hover': {
+                  backgroundColor: editMode ? 'primary.dark' : 'rgba(0, 0, 0, 0.04)'
+                }
+              }}
+            >
+              {editMode ? 'Edycja ON' : 'Edycja OFF'}
+            </Button>
           </Tooltip>
           
           <Button
@@ -1359,6 +1401,18 @@ const ProductionTimeline = React.memo(() => {
             Filtry {(advancedFilters.productName || advancedFilters.moNumber || advancedFilters.orderNumber) && '✓'}
           </Button>
           
+          <TimelineExport 
+            tasks={tasks}
+            workstations={workstations}
+            customers={customers}
+            startDate={visibleTimeStart}
+            endDate={visibleTimeEnd}
+            groupBy={groupBy}
+            filteredTasks={items.map(item => item.task)}
+            showSuccess={showSuccess}
+            showError={showError}
+          />
+          
           <IconButton size="small" onClick={fetchTasks}>
             <RefreshIcon />
           </IconButton>
@@ -1366,6 +1420,7 @@ const ProductionTimeline = React.memo(() => {
 
         </Box>
       </Box>
+
 
       {/* Legenda */}
       <Box sx={{ 
@@ -1413,7 +1468,7 @@ const ProductionTimeline = React.memo(() => {
         color: '#666'
       }}>
         <Typography variant="caption">
-          💡 <strong>Wskazówki:</strong> Użyj Ctrl + scroll aby zoomować myszką | Przeciągnij zadania aby zmienić czas | Zmień rozmiar zadań przeciągając krawędzie | Włącz "Dociąganie" aby automatycznie ustawiać zadania po kolei
+          💡 <strong>Wskazówki:</strong> Użyj Ctrl + scroll aby zoomować myszką | Włącz "Edycja ON" aby móc przesuwać zadania{editMode ? ' | Przeciągnij zadania aby zmienić czas, zmień rozmiar przeciągając krawędzie | Włącz "Dociąganie" aby automatycznie ustawiać zadania po kolei' : ' | W trybie wyłączonym możesz bezpiecznie przewijać timeline bez przypadkowego przesuwania zadań'}
         </Typography>
       </Box>
 
@@ -1448,6 +1503,9 @@ const ProductionTimeline = React.memo(() => {
           onItemMove={handleItemMove}
           onItemResize={handleItemResize}
           onItemSelect={handleItemSelect}
+          onItemDrag={({ itemId, time, edge }) => {
+            setIsDragging(true);
+          }}
           itemRenderer={({ item, itemContext, getItemProps }) => {
             return (
               <div 
