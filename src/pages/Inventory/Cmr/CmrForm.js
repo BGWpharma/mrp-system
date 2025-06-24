@@ -1124,19 +1124,11 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                       <Box sx={{ display: 'flex', gap: 1 }}>
                     <Button 
                       variant="outlined" 
-                      size="small" 
+                      size="medium" 
                           onClick={handleOpenOrderDialog}
                         >
-                          Użyj danych z CO
+                          Powiąż z CO
                         </Button>
-                        
-                        <Button 
-                          variant="outlined" 
-                          size="small"
-                          onClick={handleOpenSenderDialog}
-                    >
-                          Użyj danych firmy
-                    </Button>
                   </Box>
                     </Grid>
                   </Grid>

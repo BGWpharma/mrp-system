@@ -26,7 +26,8 @@ import {
   Container,
   InputAdornment,
   Badge,
-  FormHelperText
+  FormHelperText,
+  alpha
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -373,7 +374,7 @@ const PurchaseOrderForm = ({ orderId }) => {
         unit: 'szt',
         unitPrice: 0,
         totalPrice: 0,
-        vatRate: 23, // Domyślna stawka VAT 23%
+        vatRate: 0, // Domyślna stawka VAT 0%
         currency: poData.currency, // Domyślna waluta zgodna z zamówieniem
         originalUnitPrice: 0, // Wartość w oryginalnej walucie
         exchangeRate: 1, // Kurs wymiany
@@ -640,7 +641,7 @@ const PurchaseOrderForm = ({ orderId }) => {
     
     // Dla pola vatRate upewnij się, że nie jest undefined
     if (field === 'vatRate' && value === undefined) {
-      value = 23; // Domyślna wartość VAT
+      value = 0; // Domyślna wartość VAT
     }
     
     updatedItems[index][field] = value;
@@ -689,7 +690,7 @@ const PurchaseOrderForm = ({ orderId }) => {
               // Zachowujemy istniejącą ilość, jeśli jest, lub używamy minQuantity, jeśli jest większe od 1
               quantity: updatedItems[index].quantity || Math.max(1, supplierPrice.minQuantity || 1),
               totalPrice: (updatedItems[index].quantity || 1) * (supplierPrice.price || 0),
-              vatRate: updatedItems[index].vatRate || 23, // Zachowujemy stawkę VAT lub ustawiamy domyślną 23%
+              vatRate: updatedItems[index].vatRate || 0, // Zachowujemy stawkę VAT lub ustawiamy domyślną 0%
               minOrderQuantity: supplierPrice.minQuantity || selectedItem.minOrderQuantity || 0,
               // Zachowujemy istniejące wartości dla nowych pól lub ustawiamy domyślne
               currency: updatedItems[index].currency || poData.currency,
@@ -727,7 +728,7 @@ const PurchaseOrderForm = ({ orderId }) => {
       quantity: updatedItems[index].quantity || 1,
       unitPrice: updatedItems[index].unitPrice || 0,
       totalPrice: (updatedItems[index].quantity || 1) * (updatedItems[index].unitPrice || 0),
-      vatRate: updatedItems[index].vatRate || 23, // Zachowujemy stawkę VAT lub ustawiamy domyślną 23%
+      vatRate: updatedItems[index].vatRate || 0, // Zachowujemy stawkę VAT lub ustawiamy domyślną 0%
       minOrderQuantity: selectedItem.minOrderQuantity || 0,
       // Zachowujemy istniejące wartości dla nowych pól lub ustawiamy domyślne
       currency: updatedItems[index].currency || poData.currency,
@@ -1266,7 +1267,7 @@ const PurchaseOrderForm = ({ orderId }) => {
           id: newCostId,
           description: '',
           value: '',
-          vatRate: 23, // Domyślna stawka VAT 23%
+          vatRate: 0, // Domyślna stawka VAT 0%
           currency: poData.currency, // Domyślna waluta zgodna z zamówieniem
           originalValue: '', // Wartość w oryginalnej walucie
           exchangeRate: 1, // Kurs wymiany
@@ -1692,7 +1693,7 @@ const PurchaseOrderForm = ({ orderId }) => {
       if (item.id === id) {
         // Dla pola vatRate upewnij się, że nie jest undefined
         if (field === 'vatRate' && value === undefined) {
-          value = 23; // Domyślna wartość VAT
+          value = 0; // Domyślna wartość VAT
         }
         
         // Dla wartości, jeśli waluta jest taka sama jak waluta zamówienia
@@ -1861,20 +1862,20 @@ const PurchaseOrderForm = ({ orderId }) => {
             id: `cost-${Date.now()}`,
             value: poDetails.additionalCosts || 0,
             description: poDetails.additionalCostsDescription || 'Dodatkowe koszty',
-            vatRate: 23 // Domyślna stawka VAT
+            vatRate: 0 // Domyślna stawka VAT
           }];
         }
         
         // Upewnij się, że wszystkie pozycje mają ustawione pole vatRate
         const itemsWithVatRate = poDetails.items ? poDetails.items.map(item => ({
           ...item,
-          vatRate: typeof item.vatRate === 'number' ? item.vatRate : 23 // Domyślna stawka VAT 23%
+          vatRate: typeof item.vatRate === 'number' ? item.vatRate : 0 // Domyślna stawka VAT 0%
         })) : [];
         
         // Upewnij się, że wszystkie dodatkowe koszty mają ustawione pole vatRate
         const costsWithVatRate = additionalCostsItems.map(cost => ({
           ...cost,
-          vatRate: typeof cost.vatRate === 'number' ? cost.vatRate : 23 // Domyślna stawka VAT 23%
+          vatRate: typeof cost.vatRate === 'number' ? cost.vatRate : 0 // Domyślna stawka VAT 0%
         }));
         
         setPoData({
@@ -2371,7 +2372,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                             <TableCell align="right">
                               <FormControl size="small" sx={{ width: 100 }}>
                                 <Select
-                                  value={cost.vatRate !== undefined ? cost.vatRate : 23}
+                                  value={cost.vatRate !== undefined ? cost.vatRate : 0}
                                   onChange={(e) => handleAdditionalCostChange(cost.id, 'vatRate', e.target.value)}
                                   size="small"
                                 >
@@ -2746,7 +2747,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                       <TableCell>
                         <FormControl size="small" sx={{ width: '100%' }}>
                           <Select
-                            value={item.vatRate !== undefined ? item.vatRate : 23}
+                            value={item.vatRate !== undefined ? item.vatRate : 0}
                             onChange={(e) => handleItemChange(index, 'vatRate', e.target.value)}
                             size="small"
                           >
@@ -2929,7 +2930,12 @@ const PurchaseOrderForm = ({ orderId }) => {
           <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
             <Grid container spacing={2} justifyContent="flex-end">
               <Grid item xs={12} md={5}>
-                <Paper sx={{ p: 3, backgroundColor: 'grey.50' }}>
+                <Paper sx={{ 
+                  p: 3, 
+                  backgroundColor: (theme) => theme.palette.mode === 'dark' 
+                    ? alpha(theme.palette.background.paper, 0.9)
+                    : 'grey.50' 
+                }}>
                   <Typography variant="h6" gutterBottom sx={{ mb: 2, fontWeight: 'bold' }}>
                     Podsumowanie kosztów
                   </Typography>
@@ -2993,8 +2999,20 @@ const PurchaseOrderForm = ({ orderId }) => {
                       
                       {/* Informacja o kursach walut przy dodatkowych kosztach */}
                       {poData.additionalCostsItems.some(cost => cost.currency !== poData.currency) && (
-                        <Box sx={{ mt: 1, p: 1, backgroundColor: 'info.light', borderRadius: 1 }}>
-                          <Typography variant="caption" sx={{ fontStyle: 'italic', color: 'info.dark' }} className="exchange-rate-info">
+                        <Box sx={{ 
+                          mt: 1, 
+                          p: 1, 
+                          backgroundColor: (theme) => theme.palette.mode === 'dark' 
+                            ? alpha(theme.palette.info.main, 0.15)
+                            : 'info.light', 
+                          borderRadius: 1 
+                        }}>
+                          <Typography variant="caption" sx={{ 
+                            fontStyle: 'italic', 
+                            color: (theme) => theme.palette.mode === 'dark' 
+                              ? theme.palette.info.light 
+                              : 'info.dark' 
+                          }} className="exchange-rate-info">
                             Wartości w walutach obcych zostały przeliczone według kursów z dnia poprzedzającego datę faktury lub z dnia utworzenia PO (jeśli brak daty faktury).
                           </Typography>
                         </Box>
@@ -3017,8 +3035,19 @@ const PurchaseOrderForm = ({ orderId }) => {
                     </Typography>
                   </Box>
                   
-                  <Box sx={{ p: 2, backgroundColor: 'primary.light', borderRadius: 1 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.dark' }}>
+                  <Box sx={{ 
+                    p: 2, 
+                    backgroundColor: (theme) => theme.palette.mode === 'dark' 
+                      ? alpha(theme.palette.primary.main, 0.2)
+                      : 'primary.light', 
+                    borderRadius: 1 
+                  }}>
+                    <Typography variant="h6" sx={{ 
+                      fontWeight: 'bold', 
+                      color: (theme) => theme.palette.mode === 'dark' 
+                        ? theme.palette.primary.light 
+                        : 'primary.dark' 
+                    }}>
                       Wartość brutto: <strong>{parseFloat(poData.totalGross || 0).toFixed(2)} {poData.currency}</strong>
                     </Typography>
                   </Box>
