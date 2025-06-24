@@ -190,7 +190,7 @@ const PurchaseOrderForm = ({ orderId }) => {
         return; // Funkcja zostanie ponownie wywołana przez useEffect po zmianie currency
       }
       
-      // Ustaw puste kursy - wszystkie kursy będą pobierane na podstawie daty faktury
+      // Ustaw puste kursy - wszystkie kursy będą pobierane na podstawie daty faktury lub daty utworzenia PO
       const emptyRates = {};
       emptyRates[baseCurrency] = 1;
       
@@ -200,7 +200,7 @@ const PurchaseOrderForm = ({ orderId }) => {
         }
       }
       
-      console.log('Ustawiam puste kursy walut - będą pobierane na podstawie daty faktury');
+      console.log('Ustawiam puste kursy walut - będą pobierane na podstawie daty faktury lub daty utworzenia PO');
       setExchangeRates(emptyRates);
     } catch (error) {
       console.error('Błąd podczas inicjalizacji kursów walut:', error);
@@ -526,14 +526,37 @@ const PurchaseOrderForm = ({ orderId }) => {
               };
             }
           } else {
-            // Jeśli nie mamy daty faktury, poproś użytkownika o jej wprowadzenie
-            showError(`Aby przeliczać wartości z waluty ${newCurrency} na ${poData.currency}, wprowadź datę faktury.`);
+            // Jeśli nie mamy daty faktury, użyj daty utworzenia PO
+            const orderDate = new Date(poData.orderDate);
+            console.log(`Brak daty faktury. Używam daty utworzenia PO: ${orderDate.toISOString().split('T')[0]}`);
             
-            // Ustaw kurs na 0 jeśli nie ma daty faktury
-            updatedItems[index] = {
-              ...updatedItems[index],
-              exchangeRate: 0
-            };
+            let rate = 0;
+            try {
+              rate = await getExchangeRate(newCurrency, poData.currency, orderDate);
+              console.log(`Pobrany kurs dla ${newCurrency}/${poData.currency} z dnia utworzenia PO ${orderDate.toISOString().split('T')[0]}: ${rate}`);
+              
+              // Przelicz wartość
+              const convertedPrice = originalPrice * rate;
+              
+              // Aktualizuj pozycję z nowym kursem i przeliczoną wartością
+              updatedItems[index] = {
+                ...updatedItems[index],
+                exchangeRate: rate,
+                unitPrice: convertedPrice.toFixed(6),
+                totalPrice: (convertedPrice * currentItem.quantity).toFixed(2)
+              };
+              
+              showSuccess(`Zastosowano kurs z dnia utworzenia PO (${orderDate.toISOString().split('T')[0]}) dla waluty ${newCurrency}: ${rate}`);
+            } catch (error) {
+              console.error(`Błąd podczas pobierania kursu dla ${newCurrency}/${poData.currency} z dnia ${orderDate.toISOString().split('T')[0]}:`, error);
+              showError(`Nie udało się pobrać kursu dla ${newCurrency}/${poData.currency} z dnia ${orderDate.toISOString().split('T')[0]}.`);
+              
+              // Ustaw kurs na 0 w przypadku błędu
+              updatedItems[index] = {
+                ...updatedItems[index],
+                exchangeRate: 0
+              };
+            }
           }
           
           setPoData(prev => ({ ...prev, items: updatedItems }));
@@ -1494,14 +1517,37 @@ const PurchaseOrderForm = ({ orderId }) => {
                 };
               }
             } else {
-              // Jeśli nie mamy daty faktury, poproś użytkownika o jej wprowadzenie
-              showError(`Aby przeliczać wartości z waluty ${newCurrency} na ${poData.currency}, wprowadź datę faktury.`);
+              // Jeśli nie mamy daty faktury, użyj daty utworzenia PO
+              const orderDate = new Date(poData.orderDate);
+              console.log(`Brak daty faktury dla kosztu. Używam daty utworzenia PO: ${orderDate.toISOString().split('T')[0]}`);
               
-              // Ustaw kurs na 0 jeśli nie ma daty faktury
-              updatedCosts[costIndex] = {
-                ...updatedCosts[costIndex],
-                exchangeRate: 0
-              };
+              let rate = 0;
+              try {
+                rate = await getExchangeRate(newCurrency, poData.currency, orderDate);
+                console.log(`Pobrany kurs dla ${newCurrency}/${poData.currency} z dnia utworzenia PO ${orderDate.toISOString().split('T')[0]}: ${rate}`);
+                
+                // Przelicz wartość
+                const convertedValue = originalValue * rate;
+                
+                // Aktualizuj pozycję z nowym kursem i przeliczoną wartością
+                updatedCosts[costIndex] = {
+                  ...updatedCosts[costIndex],
+                  exchangeRate: rate,
+                  originalValue: originalValue,
+                  value: convertedValue.toFixed(6)
+                };
+                
+                showSuccess(`Zastosowano kurs z dnia utworzenia PO (${orderDate.toISOString().split('T')[0]}) dla waluty ${newCurrency}: ${rate}`);
+              } catch (error) {
+                console.error(`Błąd podczas pobierania kursu dla ${newCurrency}/${poData.currency} z dnia ${orderDate.toISOString().split('T')[0]}:`, error);
+                showError(`Nie udało się pobrać kursu dla ${newCurrency}/${poData.currency} z dnia ${orderDate.toISOString().split('T')[0]}.`);
+                
+                // Ustaw kurs na 0 w przypadku błędu
+                updatedCosts[costIndex] = {
+                  ...updatedCosts[costIndex],
+                  exchangeRate: 0
+                };
+              }
             }
             
             setPoData(prev => ({ ...prev, additionalCostsItems: updatedCosts }));
@@ -1561,7 +1607,7 @@ const PurchaseOrderForm = ({ orderId }) => {
               originalValue: newValue
             };
             
-            // Pobierz kurs na podstawie daty faktury
+            // Pobierz kurs na podstawie daty faktury lub daty utworzenia PO
             if (currentCost.invoiceDate) {
               const rate = parseFloat(currentCost.exchangeRate) || 0;
               if (rate > 0) {
@@ -1605,8 +1651,30 @@ const PurchaseOrderForm = ({ orderId }) => {
                 }
               }
           } else {
-              // Jeśli nie mamy daty faktury, poproś użytkownika o jej wprowadzenie
-              showError(`Aby przeliczać wartości z waluty ${currentCost.currency} na ${poData.currency}, wprowadź datę faktury.`);
+              // Jeśli nie mamy daty faktury, użyj daty utworzenia PO
+              const orderDate = new Date(poData.orderDate);
+              console.log(`Brak daty faktury dla kosztu wartości. Używam daty utworzenia PO: ${orderDate.toISOString().split('T')[0]}`);
+              
+              try {
+                const rate = await getExchangeRate(currentCost.currency, poData.currency, orderDate);
+                console.log(`Pobrany kurs dla ${currentCost.currency}/${poData.currency} z dnia utworzenia PO ${orderDate.toISOString().split('T')[0]}: ${rate}`);
+                
+                // Przelicz wartość na walutę bazową zamówienia
+                const convertedValue = newValue * rate;
+                
+                // Aktualizuj pozycję z nowym kursem i przeliczoną wartością
+                updatedCosts[costIndex] = {
+                  ...updatedCosts[costIndex],
+                  exchangeRate: rate,
+                  originalValue: newValue,
+                  value: convertedValue.toFixed(6)
+                };
+                
+                showSuccess(`Zastosowano kurs z dnia utworzenia PO (${orderDate.toISOString().split('T')[0]}) dla waluty ${currentCost.currency}: ${rate}`);
+              } catch (error) {
+                console.error(`Błąd podczas pobierania kursu dla ${currentCost.currency}/${poData.currency} z dnia ${orderDate.toISOString().split('T')[0]}:`, error);
+                showError(`Nie udało się pobrać kursu dla ${currentCost.currency}/${poData.currency} z dnia ${orderDate.toISOString().split('T')[0]}.`);
+              }
             }
             
             setPoData(prev => ({ ...prev, additionalCostsItems: updatedCosts }));
@@ -1656,8 +1724,8 @@ const PurchaseOrderForm = ({ orderId }) => {
   
   // Funkcja do aktualizacji informacji o kursach walut w informacjach
   const updateExchangeRatesInfo = () => {
-    // Aktualizuj komunikaty, aby odzwierciedlały że kursy są pobierane z dnia poprzedzającego datę faktury
-    const infoText = "Wartości w walutach obcych zostały przeliczone według kursów z dnia poprzedzającego datę faktury.";
+    // Aktualizuj komunikaty, aby odzwierciedlały nową logikę kursów
+    const infoText = "Wartości w walutach obcych zostały przeliczone według kursów z dnia poprzedzającego datę faktury lub z dnia utworzenia PO (jeśli brak daty faktury).";
     
     const exchangeRateInfoElements = document.querySelectorAll('.exchange-rate-info');
     exchangeRateInfoElements.forEach(element => {
@@ -2056,6 +2124,26 @@ const PurchaseOrderForm = ({ orderId }) => {
       </Box>
       
       <Paper sx={{ p: 3 }}>
+        {/* Przyciski akcji na samej górze formularza */}
+        <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+          <Button
+            variant="outlined"
+            onClick={handleCancel}
+            disabled={saving}
+          >
+            Anuluj
+          </Button>
+          <Button
+            type="submit"
+            variant="contained"
+            color="primary"
+            disabled={saving}
+            onClick={handleSubmit}
+          >
+            {saving ? 'Zapisywanie...' : 'Zapisz'}
+          </Button>
+        </Box>
+        
         <form onSubmit={handleSubmit}>
           <Grid container spacing={3}>
             {/* Dostawca */}
@@ -2188,7 +2276,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                 onChange={handleChange}
                 fullWidth
                 multiline
-                rows={4}
+                rows={2}
               />
             </Grid>
             
@@ -2483,7 +2571,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                   {poData.additionalCostsItems.some(cost => cost.currency !== poData.currency) && (
                     <Box sx={{ py: 1, px: 2 }}>
                       <Typography variant="caption" sx={{ fontStyle: 'italic' }} className="exchange-rate-info">
-                        Wartości w walutach obcych zostały przeliczone według kursów z dnia poprzedzającego datę faktury.
+                        Wartości w walutach obcych zostały przeliczone według kursów z dnia poprzedzającego datę faktury lub z dnia utworzenia PO (jeśli brak daty faktury).
                       </Typography>
                     </Box>
                   )}
@@ -2840,81 +2928,101 @@ const PurchaseOrderForm = ({ orderId }) => {
           
           <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
             <Grid container spacing={2} justifyContent="flex-end">
-              <Grid item xs={12} md={4}>
-                <Typography variant="subtitle1" gutterBottom>
-                  Wartość produktów netto: <strong>{parseFloat(poData.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0)).toFixed(2)} {poData.currency}</strong>
-                </Typography>
-                
-                {/* Sekcja VAT dla produktów */}
-                {poData.items.length > 0 && (
-                  <>
-                    <Typography variant="subtitle2" gutterBottom>
-                      VAT od produktów:
-                    </Typography>
-                    {/* Grupowanie pozycji według stawki VAT */}
-                    {Array.from(new Set(poData.items.map(item => item.vatRate))).sort((a, b) => a - b).map(vatRate => {
-                      if (vatRate === undefined) return null;
-                      
-                      const itemsWithSameVat = poData.items.filter(item => item.vatRate === vatRate);
-                      const sumNet = itemsWithSameVat.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0);
-                      const vatValue = typeof vatRate === 'number' ? (sumNet * vatRate) / 100 : 0;
-                      
-                      return (
-                        <Typography key={vatRate} variant="body2" gutterBottom sx={{ pl: 2 }}>
-                          Stawka {vatRate}%: <strong>{parseFloat(vatValue).toFixed(2)} {poData.currency}</strong> (od {parseFloat(sumNet).toFixed(2)} {poData.currency})
-                        </Typography>
-                      );
-                    })}
-                  </>
-                )}
-                
-                {/* Sekcja VAT dla dodatkowych kosztów */}
-                {poData.additionalCostsItems.length > 0 && (
-                  <>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Suma dodatkowych kosztów: <strong>{parseFloat(poData.additionalCostsNetTotal || 0).toFixed(2)} {poData.currency}</strong>
+              <Grid item xs={12} md={5}>
+                <Paper sx={{ p: 3, backgroundColor: 'grey.50' }}>
+                  <Typography variant="h6" gutterBottom sx={{ mb: 2, fontWeight: 'bold' }}>
+                    Podsumowanie kosztów
+                  </Typography>
+                  
+                  {/* Sekcja produktów */}
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'medium', color: 'text.primary' }}>
+                      Wartość produktów netto: <strong>{parseFloat(poData.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0)).toFixed(2)} {poData.currency}</strong>
                     </Typography>
                     
-                    <Typography variant="subtitle2" gutterBottom>
-                      VAT od dodatkowych kosztów: <strong>{parseFloat(poData.additionalCostsVatTotal || 0).toFixed(2)} {poData.currency}</strong>
-                    </Typography>
-                    {/* Grupowanie kosztów według stawki VAT */}
-                    {Array.from(new Set(poData.additionalCostsItems.map(cost => cost.vatRate))).sort((a, b) => a - b).map(vatRate => {
-                      if (vatRate === undefined) return null;
-                      
-                      const costsWithSameVat = poData.additionalCostsItems.filter(cost => cost.vatRate === vatRate);
-                      const sumNet = costsWithSameVat.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
-                      const vatValue = typeof vatRate === 'number' ? (sumNet * vatRate) / 100 : 0;
-                      
-                      return (
-                        <Typography key={vatRate} variant="body2" gutterBottom sx={{ pl: 2 }}>
-                          Stawka {vatRate}%: <strong>{parseFloat(vatValue).toFixed(2)} {poData.currency}</strong> (od {parseFloat(sumNet).toFixed(2)} {poData.currency})
+                    {/* Sekcja VAT dla produktów */}
+                    {poData.items.length > 0 && (
+                      <Box sx={{ ml: 2, mt: 1 }}>
+                        <Typography variant="body2" color="text.secondary" gutterBottom>
+                          VAT od produktów:
                         </Typography>
-                      );
-                    })}
-                    
-                    {/* Informacja o kursach walut przy dodatkowych kosztach */}
-                    {poData.additionalCostsItems.some(cost => cost.currency !== poData.currency) && (
-                      <Box sx={{ py: 1, px: 2 }}>
-                        <Typography variant="caption" sx={{ fontStyle: 'italic' }} className="exchange-rate-info">
-                          Wartości w walutach obcych zostały przeliczone według kursów z dnia poprzedzającego datę faktury.
-                        </Typography>
+                        {/* Grupowanie pozycji według stawki VAT */}
+                        {Array.from(new Set(poData.items.map(item => item.vatRate))).sort((a, b) => a - b).map(vatRate => {
+                          if (vatRate === undefined) return null;
+                          
+                          const itemsWithSameVat = poData.items.filter(item => item.vatRate === vatRate);
+                          const sumNet = itemsWithSameVat.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0);
+                          const vatValue = typeof vatRate === 'number' ? (sumNet * vatRate) / 100 : 0;
+                          
+                          return (
+                            <Typography key={vatRate} variant="body2" sx={{ pl: 1, color: 'text.secondary' }}>
+                              Stawka {vatRate}%: <strong>{parseFloat(vatValue).toFixed(2)} {poData.currency}</strong> <span style={{ fontSize: '0.85em' }}>(od {parseFloat(sumNet).toFixed(2)} {poData.currency})</span>
+                            </Typography>
+                          );
+                        })}
                       </Box>
                     )}
-                  </>
-                )}
-                
-                <Typography variant="subtitle1" gutterBottom>
-                  Wartość netto razem: <strong>{parseFloat(poData.totalValue || 0).toFixed(2)} {poData.currency}</strong>
-                </Typography>
-                
-                    <Typography variant="subtitle1" gutterBottom>
-                  Suma podatku VAT: <strong>{parseFloat(poData.totalVat || 0).toFixed(2)} {poData.currency}</strong>
+                  </Box>
+                  
+                  {/* Sekcja dodatkowych kosztów */}
+                  {poData.additionalCostsItems.length > 0 && (
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 'medium', color: 'text.primary' }}>
+                        Suma dodatkowych kosztów: <strong>{parseFloat(poData.additionalCostsNetTotal || 0).toFixed(2)} {poData.currency}</strong>
+                      </Typography>
+                      
+                      <Box sx={{ ml: 2, mt: 1 }}>
+                        <Typography variant="body2" color="text.secondary" gutterBottom>
+                          VAT od dodatkowych kosztów: <strong>{parseFloat(poData.additionalCostsVatTotal || 0).toFixed(2)} {poData.currency}</strong>
+                        </Typography>
+                        {/* Grupowanie kosztów według stawki VAT */}
+                        {Array.from(new Set(poData.additionalCostsItems.map(cost => cost.vatRate))).sort((a, b) => a - b).map(vatRate => {
+                          if (vatRate === undefined) return null;
+                          
+                          const costsWithSameVat = poData.additionalCostsItems.filter(cost => cost.vatRate === vatRate);
+                          const sumNet = costsWithSameVat.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
+                          const vatValue = typeof vatRate === 'number' ? (sumNet * vatRate) / 100 : 0;
+                          
+                          return (
+                            <Typography key={vatRate} variant="body2" sx={{ pl: 1, color: 'text.secondary' }}>
+                              Stawka {vatRate}%: <strong>{parseFloat(vatValue).toFixed(2)} {poData.currency}</strong> <span style={{ fontSize: '0.85em' }}>(od {parseFloat(sumNet).toFixed(2)} {poData.currency})</span>
+                            </Typography>
+                          );
+                        })}
+                      </Box>
+                      
+                      {/* Informacja o kursach walut przy dodatkowych kosztach */}
+                      {poData.additionalCostsItems.some(cost => cost.currency !== poData.currency) && (
+                        <Box sx={{ mt: 1, p: 1, backgroundColor: 'info.light', borderRadius: 1 }}>
+                          <Typography variant="caption" sx={{ fontStyle: 'italic', color: 'info.dark' }} className="exchange-rate-info">
+                            Wartości w walutach obcych zostały przeliczone według kursów z dnia poprzedzającego datę faktury lub z dnia utworzenia PO (jeśli brak daty faktury).
+                          </Typography>
+                        </Box>
+                      )}
+                    </Box>
+                  )}
+                  
+                  <Divider sx={{ my: 2 }} />
+                  
+                  {/* Podsumowanie końcowe */}
+                  <Box sx={{ mb: 1 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'medium' }}>
+                      Wartość netto razem: <strong>{parseFloat(poData.totalValue || 0).toFixed(2)} {poData.currency}</strong>
                     </Typography>
-                
-                <Typography variant="h6" color="primary" gutterBottom>
-                  Wartość brutto: <strong>{parseFloat(poData.totalGross || 0).toFixed(2)} {poData.currency}</strong>
-                </Typography>
+                  </Box>
+                  
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'medium' }}>
+                      Suma podatku VAT: <strong>{parseFloat(poData.totalVat || 0).toFixed(2)} {poData.currency}</strong>
+                    </Typography>
+                  </Box>
+                  
+                  <Box sx={{ p: 2, backgroundColor: 'primary.light', borderRadius: 1 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.dark' }}>
+                      Wartość brutto: <strong>{parseFloat(poData.totalGross || 0).toFixed(2)} {poData.currency}</strong>
+                    </Typography>
+                  </Box>
+                </Paper>
               </Grid>
             </Grid>
           </Box>
@@ -3009,7 +3117,7 @@ const PurchaseOrderForm = ({ orderId }) => {
             </Grid>
           </Grid>
 
-          <Box sx={{ mb: 3, mt: 3 }}>
+          <Box sx={{ mb: 3, mt: 1, display: 'flex', justifyContent: 'flex-end'}}>
             <Button
               variant="outlined"
               onClick={handleCancel}
