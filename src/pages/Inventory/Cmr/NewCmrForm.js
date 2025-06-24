@@ -32,7 +32,8 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper
+  Paper,
+  Chip
 } from '@mui/material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -43,9 +44,11 @@ import AddIcon from '@mui/icons-material/Add';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import LinkIcon from '@mui/icons-material/Link';
 import { getOrderById, searchOrdersByNumber } from '../../../services/orderService';
 import { getCustomerById } from '../../../services/customerService';
 import { getCompanyData } from '../../../services/companyService';
+import BatchSelector from '../../../components/cmr/BatchSelector';
 
 /**
  * Nowy komponent formularza CMR oparty na oficjalnym dokumencie.
@@ -62,7 +65,8 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
     packagingMethod: '',     // Pole 8 - Sposób pakowania 
     description: '',         // Pole 9 - Rodzaj towaru
     weight: '',              // Pole 11 - Waga brutto w kg
-    volume: ''               // Pole 12 - Objętość w m³
+    volume: '',              // Pole 12 - Objętość w m³
+    linkedBatches: []        // Powiązane partie magazynowe
   };
   
   const emptyFormData = {
@@ -141,6 +145,10 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [snackbarSeverity, setSnackbarSeverity] = useState('info');
   
+  // Stany dla wyboru partii magazynowych
+  const [batchSelectorOpen, setBatchSelectorOpen] = useState(false);
+  const [currentItemIndex, setCurrentItemIndex] = useState(null);
+  
   // Funkcja do wyświetlania komunikatów
   const showMessage = (message, severity = 'info') => {
     setSnackbarMessage(message);
@@ -151,6 +159,42 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
   // Funkcja do zamykania komunikatu
   const handleCloseSnackbar = () => {
     setSnackbarOpen(false);
+  };
+  
+  // Funkcje do obsługi wyboru partii magazynowych
+  const handleOpenBatchSelector = (itemIndex) => {
+    setCurrentItemIndex(itemIndex);
+    setBatchSelectorOpen(true);
+  };
+  
+  const handleCloseBatchSelector = () => {
+    setBatchSelectorOpen(false);
+    setCurrentItemIndex(null);
+  };
+  
+  const handleSelectBatches = (selectedBatches) => {
+    if (currentItemIndex !== null) {
+      setFormData(prev => {
+        const updatedItems = [...prev.items];
+        updatedItems[currentItemIndex] = {
+          ...updatedItems[currentItemIndex],
+          linkedBatches: selectedBatches
+        };
+        return { ...prev, items: updatedItems };
+      });
+      handleCloseBatchSelector();
+    }
+  };
+  
+  const handleRemoveBatch = (itemIndex, batchId) => {
+    setFormData(prev => {
+      const updatedItems = [...prev.items];
+      updatedItems[itemIndex] = {
+        ...updatedItems[itemIndex],
+        linkedBatches: updatedItems[itemIndex].linkedBatches.filter(batch => batch.id !== batchId)
+      };
+      return { ...prev, items: updatedItems };
+    });
   };
   
   useEffect(() => {
@@ -253,6 +297,11 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
   const validateForm = () => {
     const errors = {};
     
+    // Walidacja powiązania z CO
+    if (!formData.linkedOrderId) {
+      errors.linkedOrderId = 'CMR musi być powiązany z zamówieniem klienta (CO)';
+    }
+    
     // Wymagane pola podstawowe zgodnie z dokumentem CMR
     if (!formData.sender) errors.sender = 'Nadawca jest wymagany';
     if (!formData.senderAddress) errors.senderAddress = 'Adres nadawcy jest wymagany';
@@ -272,6 +321,11 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
       if (!item.description) itemError.description = 'Opis towaru jest wymagany';
       if (!item.numberOfPackages) itemError.numberOfPackages = 'Ilość sztuk jest wymagana';
       if (!item.packagingMethod) itemError.packagingMethod = 'Sposób pakowania jest wymagany';
+      
+      // Walidacja powiązania z partiami magazynowymi
+      if (!item.linkedBatches || item.linkedBatches.length === 0) {
+        itemError.linkedBatches = 'Każda pozycja musi być powiązana z przynajmniej jedną partią magazynową';
+      }
       
       if (Object.keys(itemError).length > 0) {
         itemErrors[index] = itemError;
@@ -667,6 +721,38 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
   return (
     <form onSubmit={(e) => e.preventDefault()}>
       <Grid container spacing={3}>
+        {/* Przyciski akcji - na górze */}
+        <Grid item xs={12}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, mb: 2 }}>
+            <Box>
+              <Button 
+                variant="outlined" 
+                color="secondary"
+                onClick={handleOpenPreview}
+                startIcon={<VisibilityIcon />}
+              >
+                Podgląd
+              </Button>
+            </Box>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <Button 
+                variant="outlined" 
+                onClick={onCancel}
+              >
+                Anuluj
+              </Button>
+              <Button 
+                variant="contained" 
+                color="primary" 
+                type="submit"
+                onClick={(e) => handleSubmit(e)}
+              >
+                Zapisz
+              </Button>
+            </Box>
+          </Box>
+        </Grid>
+        
         {/* Informacje podstawowe */}
         <Grid item xs={12}>
           <Card>
@@ -701,30 +787,34 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                   </LocalizationProvider>
                 </Grid>
                 
-                <Grid item xs={12} sm={4}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel id="status-label">Status</InputLabel>
-                    <Select
-                      labelId="status-label"
-                      id="status"
-                      value="roboczy"
-                      label="Status"
-                      disabled
-                    >
-                      <MenuItem value="roboczy">Roboczy</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
+                {/* Status ukryty - automatycznie ustawiony na roboczy */}
                 
                 <Grid item xs={12}>
-                  <Button
-                    variant="outlined"
-                    color="primary"
-                    onClick={handleOpenOrderDialog}
-                    size="small"
-                  >
-                    Powiąż z CO
-                  </Button>
+                  <Box sx={{ mb: 2 }}>
+                    <Button
+                      variant={formData.linkedOrderId ? "contained" : "outlined"}
+                      color={formData.linkedOrderId ? "success" : "primary"}
+                      onClick={handleOpenOrderDialog}
+                      size="large"
+                      fullWidth
+                      sx={{ 
+                        py: 1.5,
+                        fontSize: '16px',
+                        fontWeight: 'bold',
+                        border: formErrors.linkedOrderId ? '2px solid #f44336' : undefined
+                      }}
+                    >
+                      {formData.linkedOrderId 
+                        ? `✓ Powiązane z CO: ${formData.linkedOrderNumber || formData.linkedOrderId}` 
+                        : 'Powiąż z CO (wymagane)'
+                      }
+                    </Button>
+                    {formErrors.linkedOrderId && (
+                      <FormHelperText error sx={{ mt: 1 }}>
+                        {formErrors.linkedOrderId}
+                      </FormHelperText>
+                    )}
+                  </Box>
                 </Grid>
               </Grid>
             </CardContent>
@@ -1051,14 +1141,15 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell width="5%">LP</TableCell>
-                      <TableCell width="15%">Znaki i numery (6)</TableCell>
-                      <TableCell width="10%">Ilość sztuk (7)</TableCell>
-                      <TableCell width="15%">Sposób pakowania (8)</TableCell>
-                      <TableCell width="25%">Rodzaj towaru (9)</TableCell>
-                      <TableCell width="10%">Waga brutto kg (11)</TableCell>
-                      <TableCell width="10%">Objętość m³ (12)</TableCell>
-                      <TableCell width="10%">Akcje</TableCell>
+                      <TableCell width="4%">LP</TableCell>
+                      <TableCell width="12%">Znaki i numery (6)</TableCell>
+                      <TableCell width="8%">Ilość sztuk (7)</TableCell>
+                      <TableCell width="12%">Sposób pakowania (8)</TableCell>
+                      <TableCell width="20%">Rodzaj towaru (9)</TableCell>
+                      <TableCell width="8%">Waga brutto kg (11)</TableCell>
+                      <TableCell width="8%">Objętość m³ (12)</TableCell>
+                      <TableCell width="20%">Partie magazynowe</TableCell>
+                      <TableCell width="8%">Akcje</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -1124,6 +1215,48 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                             size="small"
                             variant="outlined"
                           />
+                        </TableCell>
+                        <TableCell>
+                          {/* Powiązanie z partiami magazynowymi */}
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<LinkIcon />}
+                              onClick={() => handleOpenBatchSelector(index)}
+                              sx={{ fontSize: '10px', py: 0.5 }}
+                            >
+                              Partie
+                            </Button>
+                            
+                            {/* Wyświetlanie powiązanych partii */}
+                            {item.linkedBatches && item.linkedBatches.length > 0 ? (
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                {item.linkedBatches.map((batch) => (
+                                  <Chip
+                                    key={batch.id}
+                                    label={`${batch.batchNumber || batch.lotNumber || 'Bez numeru'}`}
+                                    variant="outlined"
+                                    size="small"
+                                    onDelete={() => handleRemoveBatch(index, batch.id)}
+                                    color="primary"
+                                    sx={{ fontSize: '9px', height: '20px' }}
+                                  />
+                                ))}
+                              </Box>
+                            ) : (
+                              <Typography 
+                                variant="caption" 
+                                color={formErrors.items && formErrors.items[index]?.linkedBatches ? "error" : "text.secondary"} 
+                                sx={{ fontStyle: 'italic', fontSize: '9px' }}
+                              >
+                                {formErrors.items && formErrors.items[index]?.linkedBatches 
+                                  ? 'Wymagane!' 
+                                  : 'Brak partii'
+                                }
+                              </Typography>
+                            )}
+                          </Box>
                         </TableCell>
                         <TableCell>
                           {formData.items.length > 1 && (
@@ -1459,6 +1592,14 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
             </Button>
           </DialogActions>
         </Dialog>
+        
+        {/* Dialog wyboru partii magazynowych */}
+        <BatchSelector
+          open={batchSelectorOpen}
+          onClose={handleCloseBatchSelector}
+          onSelectBatches={handleSelectBatches}
+          selectedBatches={currentItemIndex !== null ? formData.items[currentItemIndex]?.linkedBatches || [] : []}
+        />
         
         {/* Snackbar do wyświetlania komunikatów */}
         <Snackbar 

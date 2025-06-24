@@ -358,6 +358,11 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
   const validateForm = () => {
     const errors = {};
     
+    // Walidacja powiązania z CO
+    if (!formData.linkedOrderId) {
+      errors.linkedOrderId = 'CMR musi być powiązany z zamówieniem klienta (CO)';
+    }
+    
     // Wymagane pola podstawowe
     if (!formData.sender) errors.sender = 'Nadawca jest wymagany';
     if (!formData.senderAddress) errors.senderAddress = 'Adres nadawcy jest wymagany';
@@ -393,6 +398,11 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
       if (!item.description) itemError.description = 'Opis jest wymagany';
       if (!item.quantity) itemError.quantity = 'Ilość jest wymagana';
       if (!item.unit) itemError.unit = 'Jednostka jest wymagana';
+      
+      // Walidacja powiązania z partiami magazynowymi
+      if (!item.linkedBatches || item.linkedBatches.length === 0) {
+        itemError.linkedBatches = 'Każda pozycja musi być powiązana z przynajmniej jedną partią magazynową';
+      }
       
       if (Object.keys(itemError).length > 0) {
         itemErrors[index] = itemError;
@@ -1010,6 +1020,29 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
         <form onSubmit={handleSubmit} style={{ width: '100%' }}>
           <Grid container spacing={3}>
         
+            {/* Przyciski akcji - na górze */}
+            <Grid item xs={12}>
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mb: 2 }}>
+                <Button 
+                  variant="outlined" 
+                  onClick={onCancel}
+                >
+                  Anuluj
+                </Button>
+                <Button 
+                  variant="contained" 
+                  color="primary" 
+                  type="submit"
+                  onClick={(e) => {
+                    console.log('Przycisk Zapisz kliknięty');
+                    handleSubmit(e);
+                  }}
+                >
+                  Zapisz
+                </Button>
+              </Box>
+            </Grid>
+        
             {/* Status i podstawowe informacje */}
         <Grid item xs={12}>
           <Card>
@@ -1033,21 +1066,7 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                       />
                     </Grid>
                     
-                    <Grid item xs={12} sm={6}>
-                      <FormControl fullWidth margin="normal">
-                        <InputLabel>Status</InputLabel>
-                        <Select
-                          name="status"
-                          value={formData.status}
-                          onChange={handleChange}
-                          label="Status"
-                        >
-                          {Object.entries(CMR_STATUSES).map(([key, value]) => (
-                            <MenuItem key={key} value={value}>{value}</MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
+                    {/* Status ukryty - automatycznie ustawiony na DRAFT */}
                     
                     <Grid item xs={12} sm={6}>
                       <FormControl fullWidth margin="normal">
@@ -1120,16 +1139,32 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                       </FormControl>
                     </Grid>
                     
-                    <Grid item xs={12} sm={6}>
-                      <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Button 
-                      variant="outlined" 
-                      size="medium" 
+                    <Grid item xs={12}>
+                      <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+                        <Button 
+                          variant={formData.linkedOrderId ? "contained" : "outlined"}
+                          color={formData.linkedOrderId ? "success" : "primary"}
+                          size="large" 
                           onClick={handleOpenOrderDialog}
+                          fullWidth
+                          sx={{ 
+                            py: 1.5,
+                            fontSize: '16px',
+                            fontWeight: 'bold',
+                            border: formErrors.linkedOrderId ? '2px solid #f44336' : undefined
+                          }}
                         >
-                          Powiąż z CO
+                          {formData.linkedOrderId 
+                            ? `✓ Powiązane z CO: ${formData.linkedOrderNumber || formData.linkedOrderId}` 
+                            : 'Powiąż z CO (wymagane)'
+                          }
                         </Button>
-                  </Box>
+                      </Box>
+                      {formErrors.linkedOrderId && (
+                        <FormHelperText error sx={{ mt: 0, mb: 1 }}>
+                          {formErrors.linkedOrderId}
+                        </FormHelperText>
+                      )}
                     </Grid>
                   </Grid>
                 </CardContent>
@@ -1627,9 +1662,23 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                                 ))}
                               </Box>
                             ) : (
-                              <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                                Brak powiązanych partii
+                              <Typography 
+                                variant="body2" 
+                                color={formErrors.items && formErrors.items[index]?.linkedBatches ? "error" : "text.secondary"} 
+                                sx={{ fontStyle: 'italic' }}
+                              >
+                                {formErrors.items && formErrors.items[index]?.linkedBatches 
+                                  ? formErrors.items[index].linkedBatches 
+                                  : 'Brak powiązanych partii'
+                                }
                               </Typography>
+                            )}
+                            
+                            {/* Komunikat błędu dla partii */}
+                            {formErrors.items && formErrors.items[index]?.linkedBatches && (
+                              <FormHelperText error sx={{ mt: 1 }}>
+                                {formErrors.items[index].linkedBatches}
+                              </FormHelperText>
                             )}
                           </Box>
                     </Grid>
