@@ -422,6 +422,15 @@ import {
     
     await updateDoc(itemRef, updatedItem);
     
+    // Wyczyść cache dla pozycji magazynowych jeśli był to import aiDataService
+    try {
+      const { clearCache } = await import('./aiDataService');
+      clearCache('inventory');
+    } catch (error) {
+      console.error('Błąd podczas czyszczenia cache inventory:', error);
+      // Nie przerywaj operacji jeśli nie udało się wyczyścić cache
+    }
+    
     return {
       id: itemId,
       ...updatedItem
@@ -1606,15 +1615,12 @@ import {
   // Bookowanie produktu na zadanie produkcyjne
   export const bookInventoryForTask = async (itemId, quantity, taskId, userId, reservationMethod = 'expiry', batchId = null) => {
     try {
-      console.log(`[DEBUG] Rozpoczynam rezerwację dla itemId=${itemId}, quantity=${quantity}, taskId=${taskId}, method=${reservationMethod}, batchId=${batchId}`);
-      
       // Sprawdź, czy ta partia jest już zarezerwowana dla tego zadania
       if (batchId) {
         const existingReservations = await getBatchReservations(batchId);
         const alreadyReservedForTask = existingReservations.find(r => r.taskId === taskId);
         
         if (alreadyReservedForTask) {
-          console.log(`[DEBUG] Partia ${batchId} jest już zarezerwowana dla zadania ${taskId}. Pomijam ponowną rezerwację.`);
           return {
             success: true,
             message: `Partia jest już zarezerwowana dla tego zadania`,
@@ -1869,8 +1875,7 @@ import {
         const taskRef = doc(db, 'productionTasks', taskId);
         const materialBatches = taskData.materialBatches || {};
         
-        console.log(`[DEBUG] Stan materialBatches przed aktualizacją:`, JSON.stringify(materialBatches));
-        console.log(`[DEBUG] Zarezerwowane partie:`, JSON.stringify(reservedBatches));
+
         
         // Jeśli jest to ręczna rezerwacja pojedynczej partii, dodajemy do istniejących
         if (batchId && materialBatches[itemId]) {
@@ -1889,16 +1894,10 @@ import {
           materialBatches[itemId] = reservedBatches;
         }
         
-        console.log(`[DEBUG] Stan materialBatches po aktualizacji:`, JSON.stringify(materialBatches));
-        
         await updateDoc(taskRef, {
           materialBatches,
           updatedAt: serverTimestamp()
         });
-        
-        console.log(`[DEBUG] Zaktualizowano zadanie produkcyjne z nowymi partiami`);
-      } else if (isCmrReservation) {
-        console.log(`[DEBUG] Pomijam aktualizację zadania produkcyjnego - to rezerwacja dla CMR`);
       }
       
       // Upewnij się, że wszystkie zarezerwowane partie mają numery
@@ -1969,11 +1968,8 @@ import {
       // UWAGA: Ta funkcja jest wywoływana w confirmMaterialConsumption (po potwierdzeniu zużycia), 
       // a nie automatycznie przy zmianie statusu zadania na 'Zakończone'
       
-      console.log(`[DEBUG REZERWACJE] Rozpoczynam anulowanie rezerwacji: itemId=${itemId}, quantity=${quantity}, taskId=${taskId}`);
-      
       // Pobierz aktualny stan produktu
       const item = await getInventoryItemById(itemId);
-      console.log(`[DEBUG REZERWACJE] Stan produktu ${item.name}: ilość=${item.quantity}, zarezerwowano=${item.bookedQuantity || 0}`);
       
       // Pobierz oryginalne rezerwacje dla tego zadania
       const originalBookingRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
@@ -1987,31 +1983,20 @@ import {
       const originalBookingSnapshot = await getDocs(originalBookingQuery);
       let originalBookedQuantity = 0;
       
-      console.log(`[DEBUG REZERWACJE] Znaleziono ${originalBookingSnapshot.size} rezerwacji dla zadania ${taskId}`);
-      
       originalBookingSnapshot.forEach((bookingDoc) => {
         const bookingData = bookingDoc.data();
         if (bookingData.quantity) {
           originalBookedQuantity += parseFloat(bookingData.quantity);
-          console.log(`[DEBUG REZERWACJE] Rezerwacja ID=${bookingDoc.id}, ilość=${bookingData.quantity}, data=${bookingData.createdAt}`);
         }
       });
-      
-      console.log(`[DEBUG REZERWACJE] Anulowanie rezerwacji: itemId=${itemId}, taskId=${taskId}, zużycie=${quantity}, oryginalna rezerwacja=${originalBookedQuantity}`);
       
       // Po potwierdzeniu zużycia materiałów, cała rezerwacja powinna być anulowana
       // niezależnie od tego, ile faktycznie zużyto (nawet jeśli zużycie < rezerwacja)
       const shouldCancelAllBooking = true; // Zawsze anuluj całą rezerwację
       const quantityToCancel = formatQuantityPrecision(item.bookedQuantity || 0, 3); // Zawsze anuluj całą zarezerwowaną ilość
       
-      console.log(`[DEBUG REZERWACJE] Anulujemy całą rezerwację niezależnie od zużycia, bookedQuantity=${item.bookedQuantity}`); 
-      
-      console.log(`[DEBUG REZERWACJE] shouldCancelAllBooking=${shouldCancelAllBooking}, quantityToCancel=${quantityToCancel}`);
-      
       // Sprawdź, czy jest wystarczająca ilość zarezerwowana
       if (!item.bookedQuantity || item.bookedQuantity < quantityToCancel) {
-        console.log(`[DEBUG REZERWACJE] Niewystarczająca ilość zarezerwowana: bookedQuantity=${item.bookedQuantity}, quantityToCancel=${quantityToCancel}`);
-        
         // Jeśli różnica jest bardzo mała (błąd zaokrąglenia), wyzeruj bookedQuantity
         if (item.bookedQuantity > 0 && (Math.abs(item.bookedQuantity - quantityToCancel) < 0.00001 || shouldCancelAllBooking)) {
           // Aktualizuj pole bookedQuantity w produkcie - całkowite wyzerowanie
@@ -2021,11 +2006,9 @@ import {
             updatedAt: serverTimestamp(),
             updatedBy: userId
           });
-          
-          console.log(`[DEBUG REZERWACJE] Zerowanie rezerwacji dla ${item.name} z powodu ${shouldCancelAllBooking ? 'zużycia większego niż rezerwacja' : 'minimalnej różnicy zaokrąglenia'}: ${item.bookedQuantity} vs ${quantityToCancel}`);
         } else {
           // Zamiast rzucać błąd, zwracamy sukces i logujemy informację
-          console.warn(`[DEBUG REZERWACJE] Anulowanie rezerwacji dla ${item.name}: zarezerwowano tylko ${item.bookedQuantity || 0} ${item.unit}, próbowano anulować ${quantityToCancel} ${item.unit}`);
+          console.warn(`Anulowanie rezerwacji dla ${item.name}: zarezerwowano tylko ${item.bookedQuantity || 0} ${item.unit}, próbowano anulować ${quantityToCancel} ${item.unit}`);
           // Jeśli zużycie jest znacząco większe, anulujemy wszystko co jest zarezerwowane
           if (shouldCancelAllBooking && item.bookedQuantity > 0) {
             const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
@@ -2034,7 +2017,6 @@ import {
               updatedAt: serverTimestamp(),
               updatedBy: userId
             });
-            console.log(`[DEBUG REZERWACJE] Zerowanie rezerwacji dla ${item.name} z powodu zużycia większego niż rezerwacja`);
           } else {
             // W przeciwnym razie anuluj tylko dostępną ilość
             if (item.bookedQuantity > 0) {
@@ -2044,7 +2026,6 @@ import {
                 updatedAt: serverTimestamp(),
                 updatedBy: userId
               });
-              console.log(`[DEBUG REZERWACJE] Zerowanie dostępnej rezerwacji dla ${item.name} (${item.bookedQuantity})`);
             }
             }
           }
@@ -2064,7 +2045,6 @@ import {
             updatedAt: serverTimestamp(),
             updatedBy: userId
           });
-          console.log(`[DEBUG REZERWACJE] Zerowanie całej rezerwacji dla ${item.name} z powodu zużycia większego niż rezerwacja`);
         } else {
           // Oblicz nową wartość bookedQuantity z formatowaniem precyzji
           const currentBookedQuantity = item.bookedQuantity || 0;
@@ -2074,7 +2054,6 @@ import {
             updatedAt: serverTimestamp(),
             updatedBy: userId
           });
-          console.log(`[DEBUG REZERWACJE] Zmniejszenie rezerwacji dla ${item.name} o ${quantityToCancel} (z ${currentBookedQuantity} do ${newBookedQuantity})`);
         }
       }
       
@@ -2096,7 +2075,7 @@ import {
           clientId = taskData.clientId || taskData.customer?.id || '';
         }
       } catch (error) {
-        console.warn(`[DEBUG REZERWACJE] Nie udało się pobrać danych zadania ${taskId}:`, error);
+        console.warn(`Nie udało się pobrać danych zadania ${taskId}:`, error);
         // Kontynuuj mimo błędu
       }
       
@@ -2119,7 +2098,6 @@ import {
       };
       
       const newTransactionRef = await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
-      console.log(`[DEBUG REZERWACJE] Utworzono transakcję anulowania rezerwacji ID=${newTransactionRef.id}`);
       
       // Znajdź i zaktualizuj status wszystkich rezerwacji dla tego zadania na "completed"
       const reservationRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
@@ -2139,11 +2117,9 @@ import {
           updatedAt: serverTimestamp(),
           completedAt: serverTimestamp()
         });
-        console.log(`[DEBUG REZERWACJE] Oznaczono rezerwację ${bookingDoc.id} jako "completed"`);
       });
       
       await batch.commit();
-      console.log(`[DEBUG REZERWACJE] Zaktualizowano status wszystkich rezerwacji dla zadania ${taskId} na "completed"`);
       
       // Emituj zdarzenie o zmianie stanu magazynu
       const event = new CustomEvent('inventory-updated', { 
@@ -2153,14 +2129,13 @@ import {
       
       // Pobierz aktualny stan produktu po anulowaniu rezerwacji
       const updatedItem = await getInventoryItemById(itemId);
-      console.log(`[DEBUG REZERWACJE] Stan produktu po anulowaniu: ${updatedItem.name}, ilość=${updatedItem.quantity}, zarezerwowano=${updatedItem.bookedQuantity || 0}`);
       
       return {
         success: true,
         message: `Anulowano rezerwację ${quantity} ${item.unit} produktu ${item.name}`
       };
     } catch (error) {
-      console.error('[DEBUG REZERWACJE] Błąd podczas anulowania rezerwacji:', error);
+      console.error('Błąd podczas anulowania rezerwacji:', error);
       throw error;
     }
   };
@@ -4045,8 +4020,6 @@ import {
    */
   export const getSupplierPriceForItem = async (itemId, supplierId) => {
     try {
-      console.log(`[DEBUG] Szukam ceny dla produktu ${itemId} od dostawcy ${supplierId}`);
-      
       const supplierPricesRef = collection(db, INVENTORY_SUPPLIER_PRICES_COLLECTION);
       const q = query(
         supplierPricesRef,
@@ -4057,16 +4030,11 @@ import {
       const querySnapshot = await getDocs(q);
       
       if (querySnapshot.empty) {
-        console.log(`[DEBUG] Nie znaleziono ceny dla produktu ${itemId} od dostawcy ${supplierId}`);
         return null;
       }
       
       const priceDoc = querySnapshot.docs[0];
       const priceData = priceDoc.data();
-      
-      console.log(`[DEBUG] Znaleziona cena:`, priceData);
-      console.log(`[DEBUG] minQuantity:`, priceData.minQuantity);
-      console.log(`[DEBUG] leadTime:`, priceData.leadTime);
       
       return {
         id: priceDoc.id,
@@ -4086,15 +4054,12 @@ import {
    */
   export const getBestSupplierPriceForItem = async (itemId, quantity = 1) => {
     try {
-      console.log(`[DEBUG] Szukam najlepszej ceny dla produktu ${itemId}, ilość: ${quantity}`);
-      
       // Pobierz wszystkie ceny dostawców dla produktu
       const pricesRef = collection(db, 'inventorySupplierPrices');
       const q = query(pricesRef, where('itemId', '==', itemId));
       const querySnapshot = await getDocs(q);
       
       if (querySnapshot.empty) {
-        console.log(`[DEBUG] Brak cen dostawców dla produktu ${itemId}`);
         return null;
       }
       
@@ -4102,8 +4067,6 @@ import {
       const prices = [];
       querySnapshot.forEach(doc => {
         const priceData = doc.data();
-        console.log(`[DEBUG] Znaleziona cena dostawcy:`, priceData);
-        console.log(`[DEBUG] minQuantity:`, priceData.minQuantity);
         
         prices.push({
           id: doc.id,
@@ -4116,18 +4079,15 @@ import {
       const validPrices = prices.filter(price => {
         const minQ = price.minQuantity || 0;
         const isValid = minQ <= quantity;
-        console.log(`[DEBUG] Cena ${price.id}, dostawca ${price.supplierId}, minQuantity: ${minQ}, czy ważna: ${isValid}`);
         return isValid;
       });
       
       if (validPrices.length === 0) {
-        console.log(`[DEBUG] Brak ważnych cen dla ilości ${quantity}`);
         return prices[0]; // Zwróć pierwszą cenę, jeśli nie znaleziono spełniających kryterium
       }
       
       // Znajdź najniższą cenę
       validPrices.sort((a, b) => (a.price || 0) - (b.price || 0));
-      console.log(`[DEBUG] Najlepsza cena: ${validPrices[0].price}, dostawca: ${validPrices[0].supplierId}, minQuantity: ${validPrices[0].minQuantity}`);
       
       return validPrices[0];
     } catch (error) {

@@ -638,17 +638,26 @@ import {
           for (let j = 0; j < updatedIngredients.length; j++) {
             const ingredient = updatedIngredients[j];
             
-            // Jeśli składnik ma ID (powiązany z magazynem) i nie ma CAS lub ma pusty CAS
-            if (ingredient.id && (!ingredient.casNumber || ingredient.casNumber.trim() === '')) {
+            // Jeśli składnik ma ID (powiązany z magazynem)
+            if (ingredient.id) {
               const casNumber = inventoryMap.get(ingredient.id);
               
-              if (casNumber) {
+              // Aktualizuj numer CAS jeśli:
+              // 1. Składnik nie ma numeru CAS lub ma pusty
+              // 2. Numer CAS w pozycji magazynowej różni się od tego w składniku
+              if (casNumber && 
+                  (!ingredient.casNumber || 
+                   ingredient.casNumber.trim() === '' || 
+                   ingredient.casNumber.trim() !== casNumber.trim())) {
+                
                 updatedIngredients[j] = {
                   ...ingredient,
                   casNumber: casNumber
                 };
                 ingredientsCASUpdated++;
                 recipeUpdated = true;
+                
+                console.log(`Składnik "${ingredient.name}" - aktualizuję CAS z "${ingredient.casNumber || 'brak'}" na "${casNumber}"`);
               }
             }
           }
@@ -676,6 +685,20 @@ import {
           console.error(`Błąd podczas aktualizacji receptury "${recipe.name}":`, error);
           errorRecipes++;
         }
+      }
+      
+      // Wyczyść cache receptur po synchronizacji CAS
+      clearCache('recipes');
+      
+      // Odśwież indeks wyszukiwania receptur
+      try {
+        const searchService = (await import('./searchService')).default;
+        if (searchService && typeof searchService.refreshIndex === 'function') {
+          await searchService.refreshIndex(RECIPES_COLLECTION);
+        }
+      } catch (error) {
+        console.error('Błąd podczas odświeżania indeksu wyszukiwania receptur po synchronizacji CAS:', error);
+        // Błąd odświeżania indeksu nie powinien przerwać całej operacji
       }
       
       const results = {
