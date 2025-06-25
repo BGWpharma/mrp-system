@@ -830,13 +830,21 @@ const RecipeForm = ({ recipeId }) => {
                 ...querySnapshot.docs[0].data()
               };
               
-              // Jeśli pozycja magazynowa ma numer CAS i składnik go nie ma lub jest pusty
-              if (inventoryItem.casNumber && (!ingredient.casNumber || ingredient.casNumber.trim() === '')) {
+              // Aktualizuj numer CAS jeśli:
+              // 1. Składnik nie ma numeru CAS lub ma pusty
+              // 2. Numer CAS w pozycji magazynowej różni się od tego w składniku
+              if (inventoryItem.casNumber && 
+                  (!ingredient.casNumber || 
+                   ingredient.casNumber.trim() === '' || 
+                   ingredient.casNumber.trim() !== inventoryItem.casNumber.trim())) {
+                
                 updatedIngredients[index] = {
                   ...ingredient,
                   casNumber: inventoryItem.casNumber
                 };
                 syncedCount++;
+                
+                console.log(`Składnik "${ingredient.name}" - aktualizuję CAS z "${ingredient.casNumber || 'brak'}" na "${inventoryItem.casNumber}"`);
               } else {
                 skippedCount++;
               }
@@ -862,11 +870,11 @@ const RecipeForm = ({ recipeId }) => {
       }
       
       if (skippedCount > 0) {
-        showInfo(`Pominięto ${skippedCount} składników (brak powiązania z magazynem lub CAS już wypełniony)`);
+        showInfo(`Pominięto ${skippedCount} składników (brak powiązania z magazynem lub CAS już aktualny)`);
       }
       
       if (syncedCount === 0) {
-        showInfo('Brak nowych numerów CAS do pobrania. Wszystkie składniki mają już wypełnione numery CAS lub nie są powiązane z magazynem.');
+        showInfo('Brak numerów CAS do aktualizacji. Wszystkie składniki mają już aktualne numery CAS lub nie są powiązane z magazynem.');
       }
     } catch (error) {
       showError('Błąd podczas pobierania numerów CAS: ' + error.message);
