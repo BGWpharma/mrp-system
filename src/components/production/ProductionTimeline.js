@@ -69,8 +69,80 @@ import TimelineExport from './TimelineExport';
 // Import stylów dla react-calendar-timeline
 import 'react-calendar-timeline/dist/style.css';
 
+// Komponent okienka z czasem podczas przeciągania
+const DragTimeDisplay = React.memo(({ dragInfo, themeMode }) => {
+  if (!dragInfo.isDragging || !dragInfo.startTime || !dragInfo.endTime) return null;
+
+  const formatTime = (date) => {
+    return format(date, 'dd.MM.yyyy HH:mm', { locale: pl });
+  };
+
+  const getDuration = () => {
+    const diffMs = dragInfo.endTime.getTime() - dragInfo.startTime.getTime();
+    const diffMinutes = Math.round(diffMs / (1000 * 60));
+    const hours = Math.floor(diffMinutes / 60);
+    const minutes = diffMinutes % 60;
+    return hours > 0 ? `${hours}h ${minutes}min` : `${minutes}min`;
+  };
+
+  const style = {
+    position: 'fixed',
+    left: dragInfo.position.x + 15,
+    top: dragInfo.position.y - 10,
+    backgroundColor: themeMode === 'dark' ? '#2c3e50' : '#ffffff',
+    color: themeMode === 'dark' ? '#ffffff' : 'rgba(0, 0, 0, 0.87)',
+    border: themeMode === 'dark' ? '2px solid #3498db' : '2px solid #1976d2',
+    borderRadius: '8px',
+    padding: '12px 16px',
+    fontSize: '0.875rem',
+    lineHeight: '1.4',
+    zIndex: 10001,
+    pointerEvents: 'none',
+    boxShadow: themeMode === 'dark' 
+      ? '0px 8px 24px rgba(0, 0, 0, 0.4)' 
+      : '0px 8px 24px rgba(0, 0, 0, 0.15)',
+    backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)',
+    fontFamily: 'Roboto, sans-serif'
+  };
+
+  return (
+    <div style={style}>
+      <div style={{ 
+        fontWeight: 600, 
+        fontSize: '0.9rem', 
+        marginBottom: '8px',
+        color: themeMode === 'dark' ? '#3498db' : '#1976d2'
+      }}>
+        📅 Nowy przedział czasowy
+      </div>
+      
+      <div style={{ marginBottom: '4px' }}>
+        <span style={{ fontWeight: 500 }}>Start: </span>
+        <span>{formatTime(dragInfo.startTime)}</span>
+      </div>
+      
+      <div style={{ marginBottom: '4px' }}>
+        <span style={{ fontWeight: 500 }}>Koniec: </span>
+        <span>{formatTime(dragInfo.endTime)}</span>
+      </div>
+      
+      <div style={{ 
+        marginTop: '8px', 
+        paddingTop: '8px',
+        borderTop: `1px solid ${themeMode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+        fontSize: '0.8rem',
+        color: themeMode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)'
+      }}>
+        <span style={{ fontWeight: 500 }}>Czas trwania: </span>
+        <span>{getDuration()}</span>
+      </div>
+    </div>
+  );
+});
+
 // Zoptymalizowany komponent Tooltip
-const CustomTooltip = React.memo(({ task, position, visible, themeMode }) => {
+const CustomTooltip = React.memo(({ task, position, visible, themeMode, workstations }) => {
   if (!visible || !task) return null;
 
   const getStatusText = (status) => {
@@ -94,8 +166,19 @@ const CustomTooltip = React.memo(({ task, position, visible, themeMode }) => {
 
   const getWorkstationName = () => {
     if (!task.workstationId) return 'Bez stanowiska';
-    const workstation = task.workstation || (task.workstationName ? { name: task.workstationName } : null);
-    return workstation?.name || 'Nieznane stanowisko';
+    
+    // Znajdź stanowisko w tablicy workstations na podstawie workstationId
+    const workstation = workstations?.find(w => w.id === task.workstationId);
+    if (workstation) {
+      return workstation.name;
+    }
+    
+    // Fallback - sprawdź czy zadanie ma bezpośrednio nazwę stanowiska
+    if (task.workstationName) {
+      return task.workstationName;
+    }
+    
+    return 'Nieznane stanowisko';
   };
 
   const getCustomerName = () => {
@@ -723,6 +806,14 @@ const ProductionTimeline = React.memo(() => {
   const handleItemMove = useCallback(async (itemId, dragTime, newGroupId) => {
     try {
       setIsDragging(false); // Resetuj stan po zakończeniu przeciągania
+      setDragInfo({ // Resetuj informacje o przeciąganiu
+        isDragging: false,
+        itemId: null,
+        currentTime: null,
+        startTime: null,
+        endTime: null,
+        position: { x: 0, y: 0 }
+      });
       
       const item = items.find(i => i.id === itemId);
       if (!item) return;
@@ -770,6 +861,14 @@ const ProductionTimeline = React.memo(() => {
   const handleItemResize = async (itemId, time, edge) => {
     try {
       setIsDragging(false); // Resetuj stan po zakończeniu zmiany rozmiaru
+      setDragInfo({ // Resetuj informacje o przeciąganiu
+        isDragging: false,
+        itemId: null,
+        currentTime: null,
+        startTime: null,
+        endTime: null,
+        position: { x: 0, y: 0 }
+      });
       
       const item = items.find(i => i.id === itemId);
       if (!item) return;
@@ -803,7 +902,20 @@ const ProductionTimeline = React.memo(() => {
     }
   };
 
-  // Globalny listener dla ruchu myszy dla tooltip
+  // Stan do śledzenia czy jest w trakcie przeciągania
+  const [isDragging, setIsDragging] = useState(false);
+  
+  // Stan do śledzenia informacji o przeciąganym elemencie
+  const [dragInfo, setDragInfo] = useState({
+    isDragging: false,
+    itemId: null,
+    currentTime: null,
+    startTime: null,
+    endTime: null,
+    position: { x: 0, y: 0 }
+  });
+
+  // Globalny listener dla ruchu myszy dla tooltip i przeciągania
   useEffect(() => {
     const handleGlobalMouseMove = (e) => {
       if (tooltipVisible) {
@@ -812,30 +924,44 @@ const ProductionTimeline = React.memo(() => {
           y: e.clientY - 10
         });
       }
+      
+      if (dragInfo.isDragging) {
+        setDragInfo(prev => ({
+          ...prev,
+          position: {
+            x: e.clientX,
+            y: e.clientY
+          }
+        }));
+      }
     };
 
-    if (tooltipVisible) {
+    if (tooltipVisible || dragInfo.isDragging) {
       document.addEventListener('mousemove', handleGlobalMouseMove);
       return () => document.removeEventListener('mousemove', handleGlobalMouseMove);
     }
-  }, [tooltipVisible]);
-
-  // Stan do śledzenia czy jest w trakcie przeciągania
-  const [isDragging, setIsDragging] = useState(false);
+  }, [tooltipVisible, dragInfo.isDragging]);
 
   // Obsługa kliknięcia w element
   const handleItemSelect = (itemId) => {
-    // Nie otwieraj dialogu jeśli jest w trakcie przeciągania lub tryb edycji jest wyłączony
-    if (isDragging || !editMode) return;
+    // Nie rób nic jeśli jest w trakcie przeciągania
+    if (isDragging) return;
     
     const item = items.find(i => i.id === itemId);
-    if (item) {
+    if (!item) return;
+    
+    if (editMode) {
+      // W trybie edycji otwórz dialog edycji
       setSelectedItem(item);
       setEditForm({
         start: new Date(item.start_time),
         end: new Date(item.end_time)
       });
       setEditDialog(true);
+    } else {
+      // Gdy tryb edycji jest wyłączony, otwórz szczegóły zadania w nowej karcie
+      const taskId = item.task?.id || itemId;
+      window.open(`/production/tasks/${taskId}`, '_blank');
     }
   };
 
@@ -1505,6 +1631,22 @@ const ProductionTimeline = React.memo(() => {
           onItemSelect={handleItemSelect}
           onItemDrag={({ itemId, time, edge }) => {
             setIsDragging(true);
+            
+            const item = items.find(i => i.id === itemId);
+            if (item) {
+              const duration = item.end_time - item.start_time;
+              const newStartTime = roundToMinute(new Date(time));
+              const newEndTime = roundToMinute(new Date(time + duration));
+              
+              setDragInfo({
+                isDragging: true,
+                itemId: itemId,
+                currentTime: newStartTime,
+                startTime: newStartTime,
+                endTime: newEndTime,
+                position: { x: 0, y: 0 } // Will be updated by mouse move
+              });
+            }
           }}
           itemRenderer={({ item, itemContext, getItemProps }) => {
             return (
@@ -1968,6 +2110,13 @@ const ProductionTimeline = React.memo(() => {
         task={tooltipData}
         position={tooltipPosition}
         visible={tooltipVisible}
+        themeMode={themeMode}
+        workstations={workstations}
+      />
+
+      {/* Okienko z czasem podczas przeciągania */}
+      <DragTimeDisplay 
+        dragInfo={dragInfo}
         themeMode={themeMode}
       />
     </Box>

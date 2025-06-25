@@ -32,7 +32,9 @@ const BatchSelector = ({
   onClose, 
   onSelectBatches, 
   selectedBatches = [],
-  itemDescription = ''
+  itemDescription = '',
+  itemMarks = '',
+  itemCode = ''
 }) => {
   const [inventoryItems, setInventoryItems] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
@@ -48,12 +50,10 @@ const BatchSelector = ({
       loadInventoryItems();
       // Ustawienie wybranych partii
       setSelectedBatchIds(selectedBatches.map(batch => batch.id) || []);
-      // Jeśli mamy opis pozycji, spróbuj znaleźć odpowiadający produkt
-      if (itemDescription) {
-        setSearchTerm(itemDescription);
-      }
+      // Automatyczne wyszukiwanie na podstawie dostępnych danych
+      autoSearchItem();
     }
-  }, [open, selectedBatches, itemDescription]);
+  }, [open, selectedBatches, itemDescription, itemMarks, itemCode]);
 
   // Ładowanie partii po wyborze pozycji magazynowej
   useEffect(() => {
@@ -69,11 +69,86 @@ const BatchSelector = ({
       setLoading(true);
       const items = await getAllInventoryItems();
       setInventoryItems(items);
+      
+      // Po załadowaniu pozycji spróbuj automatycznie znaleźć dopasowanie
+      if (items.length > 0) {
+        const matchedItem = findBestMatch(items);
+        if (matchedItem) {
+          setSelectedItem(matchedItem);
+          setSearchTerm(matchedItem.name);
+        }
+      }
     } catch (error) {
       console.error('Błąd podczas ładowania pozycji magazynowych:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Funkcja automatycznego wyszukiwania pozycji
+  const autoSearchItem = () => {
+    if (inventoryItems.length > 0) {
+      const matchedItem = findBestMatch(inventoryItems);
+      if (matchedItem) {
+        setSelectedItem(matchedItem);
+        setSearchTerm(matchedItem.name);
+      } else {
+        // Ustaw wyszukiwanie na podstawie dostępnych danych
+        const searchTerms = [itemDescription, itemMarks, itemCode].filter(Boolean);
+        if (searchTerms.length > 0) {
+          setSearchTerm(searchTerms[0]);
+        }
+      }
+    }
+  };
+
+  // Funkcja znajdowania najlepszego dopasowania
+  const findBestMatch = (items) => {
+    if (!items || items.length === 0) return null;
+
+    const searchTerms = [
+      itemCode,           // Kod produktu ma najwyższy priorytet
+      itemMarks,          // Znaki i numery
+      itemDescription     // Opis
+    ].filter(Boolean);
+
+    if (searchTerms.length === 0) return null;
+
+    // Szukaj dokładnego dopasowania
+    for (const term of searchTerms) {
+      const exactMatch = items.find(item => 
+        item.productCode?.toLowerCase() === term.toLowerCase() ||
+        item.name?.toLowerCase() === term.toLowerCase() ||
+        item.sku?.toLowerCase() === term.toLowerCase()
+      );
+      if (exactMatch) return exactMatch;
+    }
+
+    // Szukaj częściowego dopasowania
+    for (const term of searchTerms) {
+      const partialMatch = items.find(item => {
+        const searchTerm = term.toLowerCase();
+        return (
+          item.name?.toLowerCase().includes(searchTerm) ||
+          item.productCode?.toLowerCase().includes(searchTerm) ||
+          item.sku?.toLowerCase().includes(searchTerm) ||
+          item.description?.toLowerCase().includes(searchTerm)
+        );
+      });
+      if (partialMatch) return partialMatch;
+    }
+
+    // Szukaj dopasowania słów kluczowych
+    for (const term of searchTerms) {
+      const words = term.toLowerCase().split(' ').filter(word => word.length > 2);
+      const keywordMatch = items.find(item => {
+        const itemText = `${item.name || ''} ${item.productCode || ''} ${item.description || ''}`.toLowerCase();
+        return words.some(word => itemText.includes(word));
+      });
+      if (keywordMatch) return keywordMatch;
+    }
+
+    return null;
   };
 
   const loadBatches = async (itemId) => {
@@ -189,6 +264,16 @@ const BatchSelector = ({
             Produkt: {selectedItem.name}
           </Typography>
         )}
+        {(itemDescription || itemMarks || itemCode) && (
+          <Box sx={{ mt: 1, p: 1, bgcolor: 'info.main', color: 'info.contrastText', borderRadius: 1 }}>
+            <Typography variant="caption">
+              🔍 Automatyczne wyszukiwanie dla pozycji CMR:
+              {itemCode && ` Kod: "${itemCode}"`}
+              {itemMarks && ` Znaki: "${itemMarks}"`}
+              {itemDescription && ` Opis: "${itemDescription}"`}
+            </Typography>
+          </Box>
+        )}
       </DialogTitle>
       
       <DialogContent>
@@ -223,8 +308,29 @@ const BatchSelector = ({
           </Grid>
         </Box>
 
+        {/* Informacja gdy nie znaleziono automatycznego dopasowania */}
+        {(itemDescription || itemMarks || itemCode) && !selectedItem && !loading && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            ⚠️ Nie znaleziono automatycznego dopasowania dla pozycji CMR. Wybierz produkt ręcznie z listy powyżej.
+            <br />
+            <Typography variant="caption">
+              Szukano dla: 
+              {itemCode && ` Kod: "${itemCode}"`}
+              {itemMarks && ` Znaki: "${itemMarks}"`}
+              {itemDescription && ` Opis: "${itemDescription}"`}
+            </Typography>
+          </Alert>
+        )}
+
         {selectedItem && (
           <Box>
+            {/* Informacja o automatycznym dopasowaniu */}
+            {(itemDescription || itemMarks || itemCode) && (
+              <Alert severity="success" sx={{ mb: 2 }}>
+                ✅ Automatycznie dopasowano produkt "{selectedItem.name}" na podstawie danych z pozycji CMR
+              </Alert>
+            )}
+            
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h6">
                 Dostępne partie ({batches.length})

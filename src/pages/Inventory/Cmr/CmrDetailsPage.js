@@ -242,7 +242,7 @@ const CmrDetailsPage = () => {
       }
       
       // Funkcja do dodawania tekstu do pola formularza
-      const addTextToField = (fieldId, text, fontSize = '8px', fontWeight = 'normal') => {
+      const addTextToField = (fieldId, text, fontSize = '7px', fontWeight = 'normal') => {
         if (!text) return;
         
         // Znajdź pole formularza po ID
@@ -368,7 +368,7 @@ const CmrDetailsPage = () => {
         `${cmrData.senderPostalCode || ''} ${cmrData.senderCity || ''}`,
         cmrData.senderCountry
       ].filter(Boolean).join('\n');
-      addTextToField('field-sender', senderText, '8px');
+      addTextToField('field-sender', senderText, '7px');
       
       // Dane odbiorcy
       const recipientText = [
@@ -377,22 +377,25 @@ const CmrDetailsPage = () => {
         `${cmrData.recipientPostalCode || ''} ${cmrData.recipientCity || ''}`,
         cmrData.recipientCountry
       ].filter(Boolean).join('\n');
-      addTextToField('field-recipient', recipientText, '8px');
+      addTextToField('field-recipient', recipientText, '7px');
       
       // Miejsce przeznaczenia
-      addTextToField('field-destination', cmrData.deliveryPlace, '8px');
+      addTextToField('field-destination', cmrData.deliveryPlace, '7px');
       
       // Miejsce i data załadowania
       const loadingText = `${cmrData.loadingPlace || ''}\n${formatDateSimple(cmrData.loadingDate) || ''}`;
-      addTextToField('field-loading-place-date', loadingText, '8px');
+      addTextToField('field-loading-place-date', loadingText, '7px');
+      
+      // Miejsce wystawienia (adres z miejsca załadowania)
+      addTextToField('field-issue-place-address', cmrData.loadingPlace || '', '7px');
       
       // Załączone dokumenty
-      addTextToField('field-documents', cmrData.attachedDocuments, '8px');
+      addTextToField('field-documents', cmrData.attachedDocuments, '7px');
       
       // Numery rejestracyjne (dodane w dwóch miejscach)
       const vehicleRegText = `${cmrData.vehicleInfo?.vehicleRegistration || ''} / ${cmrData.vehicleInfo?.trailerRegistration || ''}`;
-      addTextToField('field-vehicle-registration', vehicleRegText, '8px');
-      addTextToField('field-vehicle-registration-2', vehicleRegText, '8px');
+      addTextToField('field-vehicle-registration', vehicleRegText, '7px');
+      addTextToField('field-vehicle-registration-2', vehicleRegText, '7px');
       
       // Dane o towarach
       if (cmrData.items && cmrData.items.length > 0) {
@@ -402,37 +405,37 @@ const CmrDetailsPage = () => {
         let marksText = items.map((item, index) => 
           index === 0 ? item.id || '' : '\n\n\n' + (item.id || '') // Trzy znaki nowej linii dla większego odstępu
         ).join('');
-        addTextToField('field-marks', marksText, '8px');
+        addTextToField('field-marks', marksText, '7px');
         
         // Ilość sztuk (pole 7)
         let packagesText = items.map((item, index) => 
           index === 0 ? item.quantity?.toString() || '' : '\n\n\n' + (item.quantity?.toString() || '')
         ).join('');
-        addTextToField('field-packages', packagesText, '8px');
+        addTextToField('field-packages', packagesText, '7px');
         
         // Sposób opakowania (pole 8)
         let packingText = items.map((item, index) => 
           index === 0 ? item.unit || '' : '\n\n' + (item.unit || '') // Przywrócone do dwóch znaków nowej linii
         ).join('');
-        addTextToField('field-packing', packingText, '8px');
+        addTextToField('field-packing', packingText, '7px');
         
         // Rodzaj towaru (pole 9)
         let goodsText = items.map((item, index) => 
           index === 0 ? item.description || '' : '\n\n' + (item.description || '') // Przywrócone do dwóch znaków nowej linii
         ).join('');
-        addTextToField('field-goods', goodsText, '8px');
+        addTextToField('field-goods', goodsText, '7px');
         
         // Waga brutto (pole 11)
         let weightsText = items.map((item, index) => 
           index === 0 ? item.weight?.toString() || '' : '\n\n\n' + (item.weight?.toString() || '')
         ).join('');
-        addTextToField('field-weight', weightsText, '8px');
+        addTextToField('field-weight', weightsText, '7px');
         
         // Objętość (pole 12)
         let volumesText = items.map((item, index) => 
           index === 0 ? item.volume?.toString() || '' : '\n\n\n' + (item.volume?.toString() || '')
         ).join('');
-        addTextToField('field-volume', volumesText, '8px');
+        addTextToField('field-volume', volumesText, '7px');
       }
       
       // Dane przewoźnika
@@ -442,32 +445,32 @@ const CmrDetailsPage = () => {
         `${cmrData.carrierPostalCode || ''} ${cmrData.carrierCity || ''}`,
         cmrData.carrierCountry
       ].filter(Boolean).join('\n');
-      addTextToField('field-carrier', carrierText, '8px');
+      addTextToField('field-carrier', carrierText, '7px');
       
       // Zastrzeżenia i uwagi
-      addTextToField('field-reservations', cmrData.reservations, '8px');
+      addTextToField('field-reservations', cmrData.reservations, '7px');
       
       // Instrukcje nadawcy
-      addTextToField('field-instructions', cmrData.instructionsFromSender, '8px');
+      addTextToField('field-instructions', cmrData.instructionsFromSender, '7px');
       
       // Postanowienia specjalne
-      addTextToField('field-special-agreements', cmrData.specialAgreements, '8px');
+      addTextToField('field-special-agreements', cmrData.specialAgreements, '7px');
       
       // Numer CMR w środkowej części dokumentu
-      addTextToField('field-cmr-number-middle', `${cmrData.cmrNumber || ''}`, '8px', 'bold');
+      addTextToField('field-cmr-number-middle', `${cmrData.cmrNumber || ''}`, '7px', 'bold');
       
       // Informacje do zapłaty (pole payment)
       const paymentText = cmrData.paymentMethod === 'sender' ? 'Płaci nadawca' : 
                          cmrData.paymentMethod === 'recipient' ? 'Płaci odbiorca' : '';
-      addTextToField('field-payment', paymentText, '8px');
-      addTextToField('field-payer-bottom', paymentText, '8px');
+      addTextToField('field-payment', paymentText, '7px');
+      addTextToField('field-payer-bottom', paymentText, '7px');
       
       // Pełny numer CMR w dolnej części
-      addTextToField('field-full-cmr-number', `CMR-${cmrData.cmrNumber}`, '8px', 'bold');
+      addTextToField('field-full-cmr-number', `${cmrData.cmrNumber}`, '7px', 'bold');
       
       // Miejsce i data wystawienia
       const issuePlaceDate = `${cmrData.issuePlace || ''} ${formatDateSimple(cmrData.issueDate) || ''}`;
-      addTextToField('field-issue-place-date', issuePlaceDate, '8px');
+      addTextToField('field-issue-place-date', issuePlaceDate, '7px');
       
       // Przekształć dokument z powrotem do tekstu
       const serializer = new XMLSerializer();

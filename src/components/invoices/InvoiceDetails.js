@@ -332,6 +332,29 @@ const InvoiceDetails = () => {
             .replace(/Ł/g, 'L').replace(/Ń/g, 'N').replace(/Ó/g, 'O')
             .replace(/Ś/g, 'S').replace(/Ź/g, 'Z').replace(/Ż/g, 'Z');
         };
+
+        // Funkcja do tłumaczenia metod płatności na język angielski
+        const translatePaymentMethod = (paymentMethod) => {
+          if (!paymentMethod) return '';
+          
+          const paymentTranslations = {
+            'Przelew': 'Bank Transfer',
+            'Przelew bankowy': 'Bank Transfer',
+            'Gotówka': 'Cash',
+            'Karta': 'Card',
+            'Karta kredytowa': 'Credit Card',
+            'Karta debetowa': 'Debit Card',
+            'PayPal': 'PayPal',
+            'Czek': 'Cheque',
+            'Online': 'Online Payment',
+            'Zaliczka': 'Advance Payment',
+            'Przedpłata': 'Prepayment',
+            'Za pobraniem': 'Cash on Delivery',
+            'Inne': 'Other'
+          };
+          
+          return paymentTranslations[paymentMethod] || paymentMethod;
+        };
         
         // Szablon ma już tytuł "INVOICE", więc dodajemy tylko numer faktury w odpowiednim miejscu
         const pageWidth = doc.internal.pageSize.getWidth();
@@ -346,7 +369,7 @@ const InvoiceDetails = () => {
         if (invoice.isProforma) {
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(10);
-          doc.setTextColor(255, 0, 0);
+          doc.setTextColor(0, 0, 0);
           doc.text('PROFORMA', pageWidth - 20, 65, { align: 'right' });
         }
         
@@ -436,6 +459,22 @@ const InvoiceDetails = () => {
             }
             if (selectedAccount.swift) {
               doc.text(`${t.swift} ${selectedAccount.swift}`, 14, currentY);
+              currentY += 5;
+            }
+          }
+        } else {
+          // Fallback - spróbuj użyć starych danych bankowych z companyInfo
+          if (companyInfo?.bankName || companyInfo?.bankAccount || companyInfo?.swift) {
+            if (companyInfo.bankName) {
+              doc.text(`${t.bank} ${companyInfo.bankName}`, 14, currentY);
+              currentY += 5;
+            }
+            if (companyInfo.bankAccount) {
+              doc.text(`${t.accountNumber} ${companyInfo.bankAccount}`, 14, currentY);
+              currentY += 5;
+            }
+            if (companyInfo.swift) {
+              doc.text(`${t.swift} ${companyInfo.swift}`, 14, currentY);
               currentY += 5;
             }
           }
@@ -777,7 +816,7 @@ const InvoiceDetails = () => {
           summaryY += 20;
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(10);
-          doc.text(`${t.paymentMethod} ${invoice.paymentMethod}`, 14, summaryY);
+          doc.text(`${t.paymentMethod} ${translatePaymentMethod(invoice.paymentMethod)}`, 14, summaryY);
           
           // Użyj danych z wybranego konta bankowego lub domyślnych
           const bankData = invoice.selectedBankAccount && companyInfo?.bankAccounts ? 

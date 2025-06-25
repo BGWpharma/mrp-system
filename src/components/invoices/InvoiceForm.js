@@ -125,6 +125,29 @@ const InvoiceForm = ({ invoiceId }) => {
     }
   }, [invoice.customer?.id, orders]);
 
+  // Efekt do ustawiania domyślnego rachunku bankowego gdy dane firmy są załadowane
+  useEffect(() => {
+    // Ustaw domyślny rachunek bankowy tylko dla nowych faktur (bez ID)
+    if (!invoiceId && companyInfo?.bankAccounts && companyInfo.bankAccounts.length > 0 && !invoice.selectedBankAccount) {
+      const defaultAccount = companyInfo.bankAccounts.find(account => account.isDefault);
+      
+      if (defaultAccount) {
+        console.log('Ustawiam domyślny rachunek bankowy:', defaultAccount);
+        setInvoice(prev => ({
+          ...prev,
+          selectedBankAccount: defaultAccount.id
+        }));
+      } else if (companyInfo.bankAccounts.length > 0) {
+        // Jeśli nie ma rachunku oznaczonego jako domyślny, wybierz pierwszy
+        console.log('Brak domyślnego rachunku - wybieranie pierwszego z listy:', companyInfo.bankAccounts[0]);
+        setInvoice(prev => ({
+          ...prev,
+          selectedBankAccount: companyInfo.bankAccounts[0].id
+        }));
+      }
+    }
+  }, [companyInfo, invoiceId, invoice.selectedBankAccount]);
+
   const fetchInvoice = async (id) => {
     setLoading(true);
     try {

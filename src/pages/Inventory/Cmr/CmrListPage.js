@@ -587,16 +587,14 @@ const CmrListPage = () => {
                       </IconButton>
                     )}
                     
-                    {cmr.status === CMR_STATUSES.DRAFT && (
-                      <IconButton
-                        size="small"
-                        onClick={() => handleDeleteClick(cmr)}
-                        title="Usuń"
-                        color="error"
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    )}
+                    <IconButton
+                      size="small"
+                      onClick={() => handleDeleteClick(cmr)}
+                      title="Usuń"
+                      color="error"
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
                   </TableCell>
                 </TableRow>
               ))}

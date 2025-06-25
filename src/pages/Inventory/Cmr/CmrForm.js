@@ -26,7 +26,8 @@ import {
   Checkbox,
   FormControlLabel,
   FormGroup,
-  Chip
+  Chip,
+  Collapse
 } from '@mui/material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -37,6 +38,8 @@ import AddIcon from '@mui/icons-material/Add';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
 import LinkIcon from '@mui/icons-material/Link';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { 
   CMR_STATUSES, 
   CMR_PAYMENT_STATUSES, 
@@ -124,7 +127,7 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
     // Rezerwacje
     reservations: '',
     
-    items: [{ ...emptyItem }],
+    items: [],
     notes: ''
   };
   
@@ -143,9 +146,11 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
     recipientData: true,
     deliveryPlace: true,
     deliveryDate: true,
-    items: true,
     documents: true
   });
+  
+  // Stan do zwijania/rozwijania opcji importu
+  const [isImportOptionsExpanded, setIsImportOptionsExpanded] = useState(false);
   
   // Dodane stany dla dialogu wyboru pól nadawcy
   const [isSenderDialogOpen, setIsSenderDialogOpen] = useState(false);
@@ -166,6 +171,11 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
   // Stany dla wyboru partii magazynowych
   const [batchSelectorOpen, setBatchSelectorOpen] = useState(false);
   const [currentItemIndex, setCurrentItemIndex] = useState(null);
+  
+  // Stany dla powiązanych zamówień i ich pozycji
+  const [linkedOrders, setLinkedOrders] = useState([]);
+  const [availableOrderItems, setAvailableOrderItems] = useState([]);
+  const [orderItemsSelectorOpen, setOrderItemsSelectorOpen] = useState(false);
   
   // Funkcja do wyświetlania komunikatów
   const showMessage = (message, severity = 'info') => {
@@ -287,9 +297,7 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
         issueDate: convertDate(initialData.issueDate) || new Date(),
         deliveryDate: convertDate(initialData.deliveryDate),
         loadingDate: convertDate(initialData.loadingDate),
-        items: initialData.items && initialData.items.length > 0 
-          ? initialData.items 
-          : [{ ...emptyItem }]
+        items: initialData.items || []
       };
       
       console.log('CmrForm - processedData po konwersji dat:', processedData);
@@ -303,6 +311,48 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
     // Załaduj dane firmy i uzupełnij pole nadawcy
     loadCompanyData();
   }, [initialData]);
+  
+  // Załaduj powiązane zamówienia gdy są dostępne linkedOrderIds
+  useEffect(() => {
+    const loadLinkedOrders = async () => {
+      if (formData.linkedOrderIds && formData.linkedOrderIds.length > 0) {
+        try {
+          const ordersToLoad = formData.linkedOrderIds.filter(orderId => 
+            !linkedOrders.some(order => order.id === orderId)
+          );
+          
+          if (ordersToLoad.length > 0) {
+            const orders = await Promise.all(
+              ordersToLoad.map(orderId => getOrderById(orderId))
+            );
+            
+            const validOrders = orders.filter(order => order !== null);
+            setLinkedOrders(prev => [...prev, ...validOrders]);
+            
+            // Dodaj pozycje z wszystkich zamówień
+            const allOrderItems = [];
+            validOrders.forEach(order => {
+              if (order.items && order.items.length > 0) {
+                const itemsWithOrderInfo = order.items.map(item => ({
+                  ...item,
+                  orderId: order.id,
+                  orderNumber: order.orderNumber
+                }));
+                allOrderItems.push(...itemsWithOrderInfo);
+              }
+            });
+            
+            setAvailableOrderItems(prev => [...prev, ...allOrderItems]);
+          }
+        } catch (error) {
+          console.error('Błąd podczas ładowania powiązanych zamówień:', error);
+          showMessage('Błąd podczas ładowania powiązanych zamówień', 'error');
+        }
+      }
+    };
+    
+    loadLinkedOrders();
+  }, [formData.linkedOrderIds]);
   
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -345,9 +395,52 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
     }));
   };
   
-  const removeItem = (index) => {
-    if (formData.items.length <= 1) return;
+  // Nowa funkcja do dodawania pozycji z zamówienia
+  const addItemFromOrder = (orderItem) => {
+    const newItem = {
+      description: orderItem.name || '',
+      quantity: orderItem.quantity || '',
+      unit: orderItem.unit || 'szt.',
+      weight: orderItem.weight || '',
+      volume: orderItem.volume || '',
+      notes: `Importowano z zamówienia ${orderItem.orderNumber}`,
+      linkedBatches: []
+    };
     
+    setFormData(prev => ({
+      ...prev,
+      items: [...prev.items, newItem]
+    }));
+    
+    showMessage(`Dodano pozycję "${orderItem.name}" z zamówienia`, 'success');
+  };
+  
+  // Funkcja do usuwania powiązanego zamówienia
+  const removeLinkedOrder = (orderId) => {
+    setLinkedOrders(prev => prev.filter(order => order.id !== orderId));
+    setAvailableOrderItems(prev => prev.filter(item => item.orderId !== orderId));
+    
+    // Zaktualizuj formData
+    setFormData(prev => {
+      const updatedForm = { ...prev };
+      if (updatedForm.linkedOrderIds) {
+        updatedForm.linkedOrderIds = updatedForm.linkedOrderIds.filter(id => id !== orderId);
+      }
+      if (updatedForm.linkedOrderNumbers) {
+        const orderToRemove = linkedOrders.find(order => order.id === orderId);
+        if (orderToRemove) {
+          updatedForm.linkedOrderNumbers = updatedForm.linkedOrderNumbers.filter(
+            num => num !== orderToRemove.orderNumber
+          );
+        }
+      }
+      return updatedForm;
+    });
+    
+    showMessage('Usunięto powiązanie z zamówieniem', 'info');
+  };
+  
+  const removeItem = (index) => {
     setFormData(prev => {
       const updatedItems = [...prev.items];
       updatedItems.splice(index, 1);
@@ -359,8 +452,8 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
     const errors = {};
     
     // Walidacja powiązania z CO
-    if (!formData.linkedOrderId) {
-      errors.linkedOrderId = 'CMR musi być powiązany z zamówieniem klienta (CO)';
+    if (linkedOrders.length === 0 && !formData.linkedOrderId) {
+      errors.linkedOrderId = 'CMR musi być powiązany z co najmniej jednym zamówieniem klienta (CO)';
     }
     
     // Wymagane pola podstawowe
@@ -482,7 +575,6 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
       recipientData: true,
       deliveryPlace: true,
       deliveryDate: true,
-      items: true,
       documents: true
     });
     setIsOrderDialogOpen(true);
@@ -538,7 +630,16 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
         // Zachowujemy istniejące elementy formularza i nadpisujemy tylko te, które chcemy zaktualizować
         const updatedForm = { ...prev };
         
-        // Zapisz powiązanie z zamówieniem
+        // Zapisz powiązanie z zamówieniem (dodaj do istniejących)
+        if (!updatedForm.linkedOrderIds) updatedForm.linkedOrderIds = [];
+        if (!updatedForm.linkedOrderNumbers) updatedForm.linkedOrderNumbers = [];
+        
+        if (!updatedForm.linkedOrderIds.includes(orderId)) {
+          updatedForm.linkedOrderIds.push(orderId);
+          updatedForm.linkedOrderNumbers.push(order.orderNumber);
+        }
+        
+        // Zachowaj kompatybilność z poprzednim formatem
         updatedForm.linkedOrderId = orderId;
         updatedForm.linkedOrderNumber = order.orderNumber;
         
@@ -580,26 +681,36 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
           importedDataSummary.push('Dokumenty');
         }
         
-        // Produkty z zamówienia
-        if (importOptions.items && order.items && order.items.length > 0) {
-          updatedForm.items = order.items.map(item => ({
-            description: item.name || '',
-            quantity: item.quantity || '',
-            unit: item.unit || 'szt.',
-            weight: '', // Tych informacji może nie być w zamówieniu, więc zostawiamy puste
-            volume: '', // Tych informacji może nie być w zamówieniu, więc zostawiamy puste
-            notes: ''
-          }));
-          importedDataSummary.push(`${order.items.length} pozycji`);
-        }
+        // Usunęliśmy automatyczne dodawanie pozycji - użytkownik będzie mógł je dodać ręcznie
         
         return updatedForm;
+      });
+      
+      // Zapisz dane zamówienia i jego pozycje dla późniejszego użycia
+      setLinkedOrders(prev => {
+        const existing = prev.find(o => o.id === order.id);
+        if (existing) {
+          return prev; // Zamówienie już jest na liście
+        }
+        return [...prev, order];
+      });
+      
+      // Zaktualizuj listę dostępnych pozycji ze wszystkich zamówień
+      setAvailableOrderItems(prev => {
+        const existingItems = prev.filter(item => item.orderId !== order.id);
+        const newItems = (order.items || []).map(item => ({
+          ...item,
+          orderId: order.id,
+          orderNumber: order.orderNumber
+        }));
+        return [...existingItems, ...newItems];
       });
       
       // Wyświetl podsumowanie pobranych danych
       const summaryMessage = `Pomyślnie powiązano CMR z zamówieniem ${order.orderNumber}. 
 Zaimportowano: ${importedDataSummary.join(', ')}.
-${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}.` : ''}`;
+${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}.` : ''}
+Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu CMR".`;
       
       showMessage(summaryMessage, 'success');
       setIsOrderDialogOpen(false);
@@ -830,113 +941,182 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
           <DialogTitle>Wybierz zamówienie klienta (CO)</DialogTitle>
           <DialogContent>
             <Box sx={{ mb: 2 }}>
-                <TextField
+              <TextField
                 label="Szukaj po numerze zamówienia"
-                  value={orderSearchQuery}
-                  onChange={(e) => setOrderSearchQuery(e.target.value)}
+                value={orderSearchQuery}
+                onChange={(e) => setOrderSearchQuery(e.target.value)}
                 fullWidth
-                  InputProps={{
-                    endAdornment: (
-                    <Box>
-                      <IconButton onClick={handleFindOrderByNumber}>
-                        <SearchIcon />
-                      </IconButton>
-                      <IconButton onClick={handleRefreshOrders}>
-                        <RefreshIcon />
-                      </IconButton>
-                    </Box>
-                    )
-                  }}
-                />
-                  </Box>
+                variant="outlined"
+                sx={{ mb: 1 }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleFindOrderByNumber();
+                  }
+                }}
+              />
+              
+              {/* Przyciski ułożone w poziomie */}
+              <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<SearchIcon />}
+                  onClick={handleFindOrderByNumber}
+                  disabled={isLoadingOrder}
+                >
+                  Szukaj
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<RefreshIcon />}
+                  onClick={handleRefreshOrders}
+                  disabled={isLoadingOrder}
+                >
+                  Odśwież
+                </Button>
+              </Box>
+            </Box>
             
-            {/* Opcje importu */}
-                  <FormGroup>
-              <Typography variant="h6" sx={{ mb: 1 }}>
-                Wybierz dane do importu:
-              </Typography>
-                        <FormControlLabel 
-                          control={
-                            <Checkbox 
-                              checked={importOptions.recipientData} 
-                              onChange={handleImportOptionChange} 
-                              name="recipientData" 
-                            />
-                          } 
-                          label="Dane odbiorcy" 
-                        />
-                        <FormControlLabel 
-                          control={
-                            <Checkbox 
-                              checked={importOptions.deliveryPlace} 
-                              onChange={handleImportOptionChange} 
-                              name="deliveryPlace" 
-                            />
-                          } 
-                          label="Miejsce dostawy" 
-                        />
-                        <FormControlLabel 
-                          control={
-                            <Checkbox 
-                              checked={importOptions.deliveryDate} 
-                              onChange={handleImportOptionChange} 
-                              name="deliveryDate" 
-                            />
-                          } 
-                          label="Data dostawy" 
-                        />
-                        <FormControlLabel 
-                          control={
-                            <Checkbox 
-                              checked={importOptions.items} 
-                              onChange={handleImportOptionChange} 
-                              name="items" 
-                            />
-                          } 
-                label="Pozycje zamówienia"
-                        />
-                        <FormControlLabel 
-                          control={
-                            <Checkbox 
-                              checked={importOptions.documents} 
-                              onChange={handleImportOptionChange} 
-                              name="documents" 
-                            />
-                          } 
-                label="Informacje o dokumentach"
-                        />
-                  </FormGroup>
+            {/* Opcje importu - zwijane/rozwijane */}
+            <Box sx={{ mb: 2 }}>
+              <Button
+                variant="text"
+                onClick={() => setIsImportOptionsExpanded(!isImportOptionsExpanded)}
+                sx={{ 
+                  textTransform: 'none', 
+                  p: 1,
+                  justifyContent: 'flex-start',
+                  width: '100%'
+                }}
+                endIcon={isImportOptionsExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+              >
+                <Typography variant="h6">
+                  Wybierz dane do importu:
+                </Typography>
+              </Button>
+              
+              <Collapse in={isImportOptionsExpanded}>
+                <FormGroup sx={{ ml: 2 }}>
+                  <FormControlLabel 
+                    control={
+                      <Checkbox 
+                        checked={importOptions.recipientData} 
+                        onChange={handleImportOptionChange} 
+                        name="recipientData" 
+                      />
+                    } 
+                    label="Dane odbiorcy" 
+                  />
+                  <FormControlLabel 
+                    control={
+                      <Checkbox 
+                        checked={importOptions.deliveryPlace} 
+                        onChange={handleImportOptionChange} 
+                        name="deliveryPlace" 
+                      />
+                    } 
+                    label="Miejsce dostawy" 
+                  />
+                  <FormControlLabel 
+                    control={
+                      <Checkbox 
+                        checked={importOptions.deliveryDate} 
+                        onChange={handleImportOptionChange} 
+                        name="deliveryDate" 
+                      />
+                    } 
+                    label="Data dostawy" 
+                  />
+                  <FormControlLabel 
+                    control={
+                      <Checkbox 
+                        checked={importOptions.documents} 
+                        onChange={handleImportOptionChange} 
+                        name="documents" 
+                      />
+                    } 
+                    label="Informacje o dokumentach"
+                  />
+                </FormGroup>
+              </Collapse>
+            </Box>
             
             {isLoadingOrder ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
                 <CircularProgress />
               </Box>
+            ) : availableOrders.length === 0 ? (
+              <Box sx={{ textAlign: 'center', py: 4 }}>
+                <Typography variant="body1" color="text.secondary">
+                  Brak dostępnych zamówień klienta
+                </Typography>
+              </Box>
             ) : (
               <Box sx={{ maxHeight: 300, overflow: 'auto', mt: 2 }}>
-                {availableOrders.map(order => (
-                  <Box 
-                    key={order.id}
-                    sx={{ 
-                      p: 2, 
-                      border: '1px solid #ddd', 
-                      borderRadius: 1, 
-                      mb: 1,
-                      cursor: 'pointer',
-                      '&:hover': { bgcolor: 'grey.100' }
-                    }}
-                    onClick={() => handleOrderSelect(order.id)}
-                  >
-                    <Typography variant="subtitle2">
-                      Zamówienie: {order.orderNumber}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Klient: {order.customerName}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Data: {order.orderDate?.toDate?.()?.toLocaleDateString?.('pl-PL') || 'Brak daty'}
-                    </Typography>
-                  </Box>
-                ))}
+                {availableOrders.map(order => {
+                  // Bezpieczne pobieranie nazwy klienta
+                  const customerName = order.customer?.name || order.customerName || 'Nieznany klient';
+                  
+                  // Bezpieczne formatowanie daty
+                  let formattedDate = 'Brak daty';
+                  if (order.orderDate) {
+                    try {
+                      let dateObj;
+                      if (order.orderDate instanceof Date) {
+                        dateObj = order.orderDate;
+                      } else if (order.orderDate.toDate && typeof order.orderDate.toDate === 'function') {
+                        dateObj = order.orderDate.toDate();
+                      } else if (typeof order.orderDate === 'string' || typeof order.orderDate === 'number') {
+                        dateObj = new Date(order.orderDate);
+                      }
+                      
+                      if (dateObj && !isNaN(dateObj.getTime())) {
+                        formattedDate = dateObj.toLocaleDateString('pl-PL');
+                      }
+                    } catch (error) {
+                      console.warn('Błąd formatowania daty zamówienia:', error);
+                    }
+                  }
+                  
+                  return (
+                    <Box 
+                      key={order.id}
+                      sx={{ 
+                        p: 2, 
+                        border: (theme) => `1px solid ${theme.palette.divider}`, 
+                        borderRadius: 1, 
+                        mb: 1,
+                        cursor: 'pointer',
+                        bgcolor: 'background.paper',
+                        '&:hover': { 
+                          bgcolor: (theme) => theme.palette.mode === 'dark' 
+                            ? 'rgba(255, 255, 255, 0.08)' 
+                            : 'rgba(0, 0, 0, 0.04)',
+                          borderColor: (theme) => theme.palette.mode === 'dark'
+                            ? 'rgba(255, 255, 255, 0.2)'
+                            : 'rgba(0, 0, 0, 0.2)'
+                        },
+                        transition: 'all 0.2s ease-in-out'
+                      }}
+                      onClick={() => handleOrderSelect(order.id)}
+                    >
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                        Zamówienie: {order.orderNumber || `#${order.id.substring(0, 8)}`}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Klient: {customerName}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Data: {formattedDate}
+                      </Typography>
+                      {order.status && (
+                        <Typography variant="caption" color="primary">
+                          Status: {order.status}
+                        </Typography>
+                      )}
+                    </Box>
+                  );
+                })}
               </Box>
             )}
           </DialogContent>
@@ -1154,12 +1334,35 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                             border: formErrors.linkedOrderId ? '2px solid #f44336' : undefined
                           }}
                         >
-                          {formData.linkedOrderId 
-                            ? `✓ Powiązane z CO: ${formData.linkedOrderNumber || formData.linkedOrderId}` 
+                          {linkedOrders.length > 0 
+                            ? `✓ Powiązano z ${linkedOrders.length} CO` 
                             : 'Powiąż z CO (wymagane)'
                           }
                         </Button>
                       </Box>
+                      
+                      {/* Sekcja z powiązanymi zamówieniami */}
+                      {linkedOrders.length > 0 && (
+                        <Box sx={{ mt: 2 }}>
+                          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                            Powiązane zamówienia klienta:
+                          </Typography>
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                            {linkedOrders.map((order) => (
+                              <Chip
+                                key={order.id}
+                                label={`CO ${order.orderNumber} - ${order.customer?.name || 'Nieznany klient'}`}
+                                variant="outlined"
+                                color="primary"
+                                onDelete={() => removeLinkedOrder(order.id)}
+                                deleteIcon={<DeleteIcon />}
+                                sx={{ mb: 1 }}
+                              />
+                            ))}
+                          </Box>
+                        </Box>
+                      )}
+                      
                       {formErrors.linkedOrderId && (
                         <FormHelperText error sx={{ mt: 0, mb: 1 }}>
                           {formErrors.linkedOrderId}
@@ -1273,6 +1476,8 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                     onChange={handleChange}
                     fullWidth
                     margin="normal"
+                    error={formErrors.recipientAddress}
+                    helperText={formErrors.recipientAddress}
                   />
                     </Grid>
                     
@@ -1331,6 +1536,8 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                     onChange={handleChange}
                     fullWidth
                     margin="normal"
+                    error={formErrors.carrier}
+                    helperText={formErrors.carrier}
                   />
                     </Grid>
                     
@@ -1342,6 +1549,8 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                     onChange={handleChange}
                     fullWidth
                     margin="normal"
+                    error={formErrors.carrierAddress}
+                    helperText={formErrors.carrierAddress}
                   />
                     </Grid>
                     
@@ -1400,6 +1609,8 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                     onChange={handleChange}
                     fullWidth
                     margin="normal"
+                    error={formErrors.loadingPlace}
+                    helperText={formErrors.loadingPlace}
                   />
                     </Grid>
                     
@@ -1428,6 +1639,8 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
                     onChange={handleChange}
                     fullWidth
                     margin="normal"
+                    error={formErrors.deliveryPlace}
+                    helperText={formErrors.deliveryPlace}
                   />
                 </Grid>
               </Grid>
@@ -1534,13 +1747,25 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
               title="Elementy dokumentu CMR" 
               titleTypographyProps={{ variant: 'h6' }}
               action={
-                <Button
-                  startIcon={<AddIcon />}
-                  onClick={addItem}
-                  color="primary"
-                >
-                  Dodaj pozycję
-                </Button>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  {linkedOrders.length > 0 && availableOrderItems.length > 0 && (
+                    <Button
+                      startIcon={<LinkIcon />}
+                      onClick={() => setOrderItemsSelectorOpen(true)}
+                      color="secondary"
+                      variant="outlined"
+                    >
+                      Dodaj z zamówienia
+                    </Button>
+                  )}
+                  <Button
+                    startIcon={<AddIcon />}
+                    onClick={addItem}
+                    color="primary"
+                  >
+                    Dodaj pozycję
+                  </Button>
+                </Box>
               }
             />
             <Divider />
@@ -1836,6 +2061,80 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
       </Grid>
     </form>
         
+        {/* Dialog wyboru pozycji z zamówienia */}
+        <Dialog open={orderItemsSelectorOpen} onClose={() => setOrderItemsSelectorOpen(false)} maxWidth="md" fullWidth>
+          <DialogTitle>
+            Dodaj pozycje z powiązanych zamówień
+            {linkedOrders.length > 0 && (
+              <Typography variant="subtitle2" color="text.secondary">
+                Powiązane CO: {linkedOrders.map(order => order.orderNumber).join(', ')}
+              </Typography>
+            )}
+          </DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Wybierz pozycje z zamówień klienta, które chcesz dodać do dokumentu CMR:
+            </Typography>
+            
+            <Box sx={{ maxHeight: 400, overflow: 'auto' }}>
+              {availableOrderItems.map((orderItem, index) => (
+                <Box 
+                  key={index}
+                  sx={{ 
+                    p: 2, 
+                    border: (theme) => `1px solid ${theme.palette.divider}`, 
+                    borderRadius: 1, 
+                    mb: 1,
+                    bgcolor: 'background.paper'
+                  }}
+                >
+                                     <Grid container spacing={2} alignItems="center">
+                     <Grid item xs={12} sm={5}>
+                       <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                         {orderItem.name || 'Bez nazwy'}
+                       </Typography>
+                       <Typography variant="body2" color="text.secondary">
+                         Ilość: {orderItem.quantity} {orderItem.unit || 'szt.'}
+                       </Typography>
+                       <Typography variant="caption" color="primary" sx={{ fontWeight: 500 }}>
+                         CO: {orderItem.orderNumber}
+                       </Typography>
+                     </Grid>
+                     <Grid item xs={12} sm={5}>
+                       {orderItem.description && (
+                         <Typography variant="caption" color="text.secondary">
+                           {orderItem.description}
+                         </Typography>
+                       )}
+                     </Grid>
+                    <Grid item xs={12} sm={2}>
+                      <Button
+                        variant="contained"
+                        size="small"
+                        onClick={() => addItemFromOrder(orderItem)}
+                        sx={{ width: '100%' }}
+                      >
+                        Dodaj
+                      </Button>
+                    </Grid>
+                  </Grid>
+                </Box>
+              ))}
+              
+              {availableOrderItems.length === 0 && (
+                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+                  Brak dostępnych pozycji w zamówieniu
+                </Typography>
+              )}
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOrderItemsSelectorOpen(false)}>
+              Zamknij
+            </Button>
+          </DialogActions>
+        </Dialog>
+
         {/* Dialog wyboru partii magazynowych */}
         <BatchSelector
           open={batchSelectorOpen}
@@ -1843,6 +2142,8 @@ ${importOptions.recipientData ? `Źródło danych klienta: ${customerDataSource}
           onSelectBatches={handleSelectBatches}
           selectedBatches={currentItemIndex !== null ? formData.items[currentItemIndex]?.linkedBatches || [] : []}
           itemDescription={currentItemIndex !== null ? formData.items[currentItemIndex]?.description || '' : ''}
+          itemMarks={currentItemIndex !== null ? formData.items[currentItemIndex]?.marks || '' : ''}
+          itemCode={currentItemIndex !== null ? formData.items[currentItemIndex]?.productCode || formData.items[currentItemIndex]?.marks || '' : ''}
         />
         
         {/* Snackbar dla komunikatów */}
