@@ -27,7 +27,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useNotification } from '../../../hooks/useNotification';
 
 const AddPriceListItemDialog = ({ open, onClose, priceListId, onItemAdded }) => {
-  const [formData, setFormData] = useState({ ...DEFAULT_PRICE_LIST_ITEM });
+  const [formData, setFormData] = useState({ ...DEFAULT_PRICE_LIST_ITEM, isRecipe: true });
   const [products, setProducts] = useState([]);
   const [recipes, setRecipes] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -35,7 +35,7 @@ const AddPriceListItemDialog = ({ open, onClose, priceListId, onItemAdded }) => 
   const [loading, setLoading] = useState(false);
   const [fetchingProducts, setFetchingProducts] = useState(false);
   const [fetchingRecipes, setFetchingRecipes] = useState(false);
-  const [itemType, setItemType] = useState('product'); // 'product' lub 'recipe'
+  const [itemType, setItemType] = useState('recipe'); // 'product' lub 'recipe'
   
   const { currentUser } = useAuth();
   const { showNotification } = useNotification();
@@ -75,10 +75,10 @@ const AddPriceListItemDialog = ({ open, onClose, priceListId, onItemAdded }) => 
   };
   
   const resetForm = () => {
-    setFormData({ ...DEFAULT_PRICE_LIST_ITEM });
+    setFormData({ ...DEFAULT_PRICE_LIST_ITEM, isRecipe: true });
     setSelectedProduct(null);
     setSelectedRecipe(null);
-    setItemType('product');
+    setItemType('recipe');
   };
   
   const handleInputChange = (e) => {
