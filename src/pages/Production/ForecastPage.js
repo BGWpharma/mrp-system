@@ -451,18 +451,28 @@ const ForecastPage = () => {
     try {
       if (!date) return '';
       
+      // Jeśli data jest stringiem i jest pusty lub składa się tylko z białych znaków
+      if (typeof date === 'string' && !date.trim()) {
+        return '';
+      }
+      
+      // Sprawdź czy data nie jest obiektem z nullem lub undefined
+      if (date === null || date === undefined) {
+        return '';
+      }
+      
       // Upewnij się, że data jest obiektem Date
       const dateObj = date instanceof Date ? date : new Date(date);
       
       // Sprawdź, czy data jest prawidłowa
       if (isNaN(dateObj.getTime())) {
-        console.warn('Nieprawidłowa data:', date);
+        // Nie loguj warning-u dla pustych lub nieprawidłowych dat
         return '';
       }
       
       return format(dateObj, 'dd.MM.yyyy', { locale: pl });
     } catch (error) {
-      console.error('Błąd podczas formatowania daty:', error, date);
+      // Tylko loguj błędy rzeczywiste, nie warning-i
       return '';
     }
   };
@@ -1227,9 +1237,12 @@ const ForecastPage = () => {
                                 <TableCell align="right">
                                   {item.futureDeliveriesTotal > 0 ? (
                                     <Tooltip title={
-                                      item.futureDeliveries ? item.futureDeliveries.map(delivery => 
-                                        `${delivery.poNumber}: ${formatNumber(delivery.quantity)} ${item.unit} (${delivery.expectedDeliveryDate ? formatDateDisplay(new Date(delivery.expectedDeliveryDate)) : 'brak daty'})`
-                                      ).join('\n') : 'Brak szczegółów'
+                                      item.futureDeliveries ? item.futureDeliveries.map(delivery => {
+                                        const formattedDate = delivery.expectedDeliveryDate && delivery.expectedDeliveryDate !== '' 
+                                          ? formatDateDisplay(new Date(delivery.expectedDeliveryDate))
+                                          : 'brak daty';
+                                        return `${delivery.poNumber}: ${formatNumber(delivery.quantity)} ${item.unit} (${formattedDate || 'brak daty'})`;
+                                      }).join('\n') : 'Brak szczegółów'
                                     }>
                                       <Typography sx={{ cursor: 'pointer', fontWeight: 'medium', color: 'primary.main' }}>
                                         {formatNumber(item.futureDeliveriesTotal)} {item.unit}
@@ -1513,8 +1526,11 @@ const ForecastPage = () => {
                             <TableCell>{delivery.status}</TableCell>
                             <TableCell align="right">{formatNumber(delivery.quantity)} {selectedMaterial.unit}</TableCell>
                             <TableCell align="right">
-                              {delivery.expectedDeliveryDate 
-                                ? formatDateDisplay(new Date(delivery.expectedDeliveryDate))
+                              {delivery.expectedDeliveryDate && delivery.expectedDeliveryDate !== ''
+                                ? (() => {
+                                    const formatted = formatDateDisplay(new Date(delivery.expectedDeliveryDate));
+                                    return formatted || 'Brak daty';
+                                  })()
                                 : 'Brak daty'
                               }
                             </TableCell>
@@ -1573,8 +1589,11 @@ const ForecastPage = () => {
                               <TableCell align="right">{formatNumber(task.quantity || 0)}</TableCell>
                               <TableCell align="right">{formatNumber(quantityPerUnit)} {selectedMaterial.unit}</TableCell>
                               <TableCell align="right">
-                                {task.scheduledDate 
-                                  ? formatDateDisplay(new Date(task.scheduledDate))
+                                {task.scheduledDate && task.scheduledDate !== ''
+                                  ? (() => {
+                                      const formatted = formatDateDisplay(new Date(task.scheduledDate));
+                                      return formatted || 'Brak daty';
+                                    })()
                                   : 'Brak daty'
                                 }
                               </TableCell>

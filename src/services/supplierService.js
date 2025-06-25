@@ -212,8 +212,6 @@ export const getBestSupplierPricesForItems = async (items) => {
  */
 export const getSupplierPriceForItem = async (itemId, supplierId) => {
   try {
-    console.log(`[DEBUG] Szukam ceny dla produktu ${itemId} od dostawcy ${supplierId}`);
-    
     const supplierPricesRef = collection(db, 'inventorySupplierPrices');
     const q = query(
       supplierPricesRef,
@@ -224,16 +222,11 @@ export const getSupplierPriceForItem = async (itemId, supplierId) => {
     const querySnapshot = await getDocs(q);
     
     if (querySnapshot.empty) {
-      console.log(`[DEBUG] Nie znaleziono ceny dla produktu ${itemId} od dostawcy ${supplierId}`);
       return null;
     }
     
     const priceDoc = querySnapshot.docs[0];
     const priceData = priceDoc.data();
-    
-    console.log(`[DEBUG] Znaleziona cena:`, priceData);
-    console.log(`[DEBUG] minQuantity:`, priceData.minQuantity);
-    console.log(`[DEBUG] leadTime:`, priceData.leadTime);
     
     return {
       id: priceDoc.id,

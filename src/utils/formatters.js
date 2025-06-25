@@ -46,8 +46,8 @@ export const formatDate = (date, options = {}) => {
       
       // Sprawdź czy data jest prawidłowa
       if (isNaN(dateObj.getTime())) {
-        console.warn('Nieprawidłowy format daty:', date);
-        return String(date);
+        // Nie loguj warning-u dla pustych lub nieprawidłowych dat
+        return '—';
       }
       
       const defaultOptions = {
@@ -196,6 +196,16 @@ export const formatDate = (date, options = {}) => {
   export const formatDateTime = (date) => {
     if (!date) return '—';
     
+    // Jeśli data jest stringiem i jest pusty lub składa się tylko z białych znaków
+    if (typeof date === 'string' && !date.trim()) {
+      return '—';
+    }
+    
+    // Sprawdź czy data nie jest obiektem z nullem lub undefined
+    if (date === null || date === undefined) {
+      return '—';
+    }
+    
     // Obsługa timestampu Firestore
     if (date && typeof date === 'object' && typeof date.toDate === 'function') {
       date = date.toDate();
@@ -211,8 +221,8 @@ export const formatDate = (date, options = {}) => {
       
       // Sprawdź czy data jest prawidłowa
       if (isNaN(dateObj.getTime())) {
-        console.warn('Nieprawidłowy format daty:', date);
-        return String(date);
+        // Nie loguj warning-u dla pustych lub nieprawidłowych dat
+        return '—';
       }
       
       // Formatuj datę i godzinę
@@ -221,7 +231,7 @@ export const formatDate = (date, options = {}) => {
         timeStyle: 'short'
       }).format(dateObj);
     } catch (error) {
-      console.error('Error formatting date:', error, date);
-      return String(date);
+      // Tylko loguj błędy rzeczywiste, nie warning-i
+      return '—';
     }
   };
