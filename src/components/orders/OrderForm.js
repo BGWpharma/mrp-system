@@ -207,8 +207,17 @@ const OrderForm = ({ orderId }) => {
           console.log("- deadline format:", formatDateForInput(deadline));
           console.log("- deliveryDate format:", deliveryDate ? formatDateForInput(deliveryDate) : "");
           
+          console.log("DEBUG - Sprawdzanie pozycji zamówienia:");
+          console.log("- fetchedOrder.items:", fetchedOrder.items);
+          console.log("- Array.isArray(fetchedOrder.items):", Array.isArray(fetchedOrder.items));
+          console.log("- fetchedOrder.items.length:", fetchedOrder.items?.length);
+          console.log("- Warunek (!fetchedOrder.items || fetchedOrder.items.length === 0):", !fetchedOrder.items || fetchedOrder.items.length === 0);
+          
           if (!fetchedOrder.items || fetchedOrder.items.length === 0) {
+            console.log("DEBUG - Zastępuję pozycje zamówienia domyślną pozycją");
             fetchedOrder.items = [{ ...DEFAULT_ORDER.items[0] }];
+          } else {
+            console.log("DEBUG - Pozycje zamówienia zostały zachowane:", fetchedOrder.items.length, "pozycji");
           }
           
           // Przypisz informacje o zadaniach produkcyjnych do pozycji zamówienia

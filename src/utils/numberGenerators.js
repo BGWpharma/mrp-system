@@ -1,4 +1,4 @@
-import { collection, getDocs, query, orderBy, limit, addDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit, addDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../services/firebase/config';
 
 const COUNTERS_COLLECTION = 'counters';
@@ -23,6 +23,7 @@ const getNextNumber = async (counterType, customerId = null) => {
     
     let counter;
     let currentNumber;
+    let counterDocRef;
     
     // Jeśli nie ma liczników, utwórz nowy
     if (querySnapshot.empty) {
@@ -49,6 +50,7 @@ const getNextNumber = async (counterType, customerId = null) => {
     } else {
       // Pobierz istniejący licznik
       const counterDoc = querySnapshot.docs[0];
+      counterDocRef = counterDoc.ref;
       counter = counterDoc.data();
       
       // Upewnij się, że istnieje obiekt customerCounters
@@ -63,25 +65,23 @@ const getNextNumber = async (counterType, customerId = null) => {
           counter.customerCounters[customerId] = 1;
           currentNumber = 1;
         } else {
-          // Zapisz bieżącą wartość przed inkrementacją
-          currentNumber = counter.customerCounters[customerId];
+          // Inkrementuj licznik PRZED pobraniem wartości (zgodnie z portalem)
           counter.customerCounters[customerId]++;
+          currentNumber = counter.customerCounters[customerId];
         }
         
-        // Aktualizuj dokument
-        await addDoc(countersRef, {
+        // POPRAWKA: Aktualizuj istniejący dokument zamiast tworzyć nowy
+        await updateDoc(counterDocRef, {
           ...counter,
           lastUpdated: new Date()
         });
       } else {
-        // Zapisz bieżącą wartość przed inkrementacją
+        // Inkrementuj odpowiedni licznik globalny PRZED pobraniem wartości
+        counter[counterType]++;
         currentNumber = counter[counterType];
         
-        // Inkrementuj odpowiedni licznik globalny
-        counter[counterType]++;
-        
-        // Aktualizuj dokument
-        await addDoc(countersRef, {
+        // POPRAWKA: Aktualizuj istniejący dokument zamiast tworzyć nowy
+        await updateDoc(counterDocRef, {
           ...counter,
           lastUpdated: new Date()
         });

@@ -176,6 +176,15 @@ export const getOrderById = async (id) => {
     
     const orderData = orderDoc.data();
     
+    console.log(`DEBUG - getOrderById(${id}) - Raw data from database:`, {
+      orderNumber: orderData.orderNumber,
+      orderSource: orderData.orderSource,
+      items: orderData.items,
+      itemsLength: orderData.items?.length,
+      itemsType: typeof orderData.items,
+      itemsIsArray: Array.isArray(orderData.items)
+    });
+    
     // Konwertuj timestamp na obiekty Date
     // Funkcja pomocnicza do bezpiecznej konwersji dat
     const safeConvertDate = (dateValue, fieldName) => {

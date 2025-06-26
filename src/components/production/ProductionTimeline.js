@@ -427,7 +427,7 @@ const ProductionTimeline = React.memo(() => {
   
   // Ref do funkcji updateScrollCanvas z Timeline
   const updateScrollCanvasRef = useRef(null);
-
+  
   const { showError, showSuccess } = useNotification();
   const { currentUser } = useAuth();
   const { mode: themeMode } = useTheme(); // Motyw aplikacji
