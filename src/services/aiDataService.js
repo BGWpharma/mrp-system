@@ -318,7 +318,7 @@ export const getCustomerOrders = async (options = {}) => {
 /**
  * Pobiera zadania produkcyjne z bazy danych
  * @param {Object} options - Opcje pobierania
- * @returns {Promise<Array>} - Lista zadań produkcyjnych
+ * @returns {Promise<Array>} - Lista zadań
  */
 export const getProductionTasks = async (options = {}) => {
   const result = await getCollectionData('productionTasks', options);
@@ -467,7 +467,7 @@ export const analyzeOrders = (orders) => {
 
 /**
  * Analizuje zadania produkcyjne i oblicza różne statystyki
- * @param {Array} tasks - Lista zadań produkcyjnych
+ * @param {Array} tasks - Lista zadań
  * @returns {Object} - Statystyki dotyczące zadań produkcyjnych
  */
 export const analyzeProductionTasks = (tasks) => {

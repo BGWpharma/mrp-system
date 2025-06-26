@@ -409,6 +409,9 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
     const addField = (label, value, isMultiline = false) => {
       checkPageBreak(isMultiline ? 15 : 8);
       
+      // Convert value to string to ensure compatibility with jsPDF
+      const valueStr = value !== null && value !== undefined ? String(value) : 'Not specified';
+      
       doc.setTextColor(85, 85, 85);
       doc.setFontSize(10); // Powiększono z 9 na 10
       doc.setFont('helvetica', 'bold');
@@ -418,12 +421,12 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       doc.setFontSize(10); // Powiększono z domyślnego na 10
       doc.setFont('helvetica', 'normal');
       
-      if (isMultiline && value && value.length > 50) {
-        const lines = doc.splitTextToSize(value, contentWidth - 30);
+      if (isMultiline && valueStr && valueStr.length > 50) {
+        const lines = doc.splitTextToSize(valueStr, contentWidth - 30);
         doc.text(lines, margin, currentY + 4);
         currentY += Math.max(8, lines.length * 4);
       } else {
-        doc.text(value || 'Not specified', margin, currentY + 4);
+        doc.text(valueStr, margin, currentY + 4);
         currentY += 8;
       }
     };
@@ -435,6 +438,10 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       const columnWidth = contentWidth / 2;
       const rightColumnX = margin + columnWidth + 5;
       
+      // Convert values to strings to ensure compatibility with jsPDF
+      const leftValueStr = leftValue !== null && leftValue !== undefined ? String(leftValue) : 'Not specified';
+      const rightValueStr = rightValue !== null && rightValue !== undefined ? String(rightValue) : 'Not specified';
+      
       // Left column
       doc.setTextColor(85, 85, 85);
       doc.setFontSize(10); // Powiększono z 9 na 10
@@ -445,11 +452,11 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       doc.setFontSize(10); // Powiększono z domyślnego na 10
       doc.setFont('helvetica', 'normal');
       
-      if (isMultiline && leftValue && leftValue.length > 30) {
-        const lines = doc.splitTextToSize(leftValue, columnWidth - 10);
+      if (isMultiline && leftValueStr && leftValueStr.length > 30) {
+        const lines = doc.splitTextToSize(leftValueStr, columnWidth - 10);
         doc.text(lines, margin, currentY + 4);
       } else {
-        doc.text(leftValue || 'Not specified', margin, currentY + 4);
+        doc.text(leftValueStr, margin, currentY + 4);
       }
       
       // Right column
@@ -463,11 +470,11 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
         doc.setFontSize(10); // Powiększono z domyślnego na 10
         doc.setFont('helvetica', 'normal');
         
-        if (isMultiline && rightValue && rightValue.length > 30) {
-          const lines = doc.splitTextToSize(rightValue, columnWidth - 10);
+        if (isMultiline && rightValueStr && rightValueStr.length > 30) {
+          const lines = doc.splitTextToSize(rightValueStr, columnWidth - 10);
           doc.text(lines, rightColumnX, currentY + 4);
         } else {
-          doc.text(rightValue || 'Not specified', rightColumnX, currentY + 4);
+          doc.text(rightValueStr, rightColumnX, currentY + 4);
         }
       }
       
@@ -694,7 +701,7 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
     );
     
     // Description spans full width due to potentially long content
-    addField('Description of recipe', task?.recipe?.description || task?.description, true);
+    addField('Description of recipe', task?.recipe?.description || 'No recipe description available', true);
 
     currentY += 10;
 
@@ -776,6 +783,16 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       ]);
 
       addTable(microHeaders, microData);
+      
+      // Add note about natural variation
+      currentY += 5;
+      doc.setTextColor(85, 85, 85);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'italic');
+      const noteText = 'Note: Natural products may show differences in the values of micro/macronutrients up to 5% because they are not standardized.';
+      const noteLines = doc.splitTextToSize(noteText, contentWidth);
+      doc.text(noteLines, margin, currentY);
+      currentY += Math.max(8, noteLines.length * 4);
     }
 
     currentY += 10;

@@ -262,7 +262,7 @@ const Sidebar = ({ onToggle }) => {
         { text: 'Formularze', icon: <ListAltIcon />, path: '/production/forms' },
         { text: 'Kalendarz', icon: <CalendarIcon />, path: '/production/calendar' },
         { text: 'Kalkulator', icon: <CalculateIcon />, path: '/production/calculator' },
-        { text: 'Lista zadań produkcyjnych', icon: <ListIcon />, path: '/production' },
+        { text: 'Lista zadań', icon: <ListIcon />, path: '/production' },
         { text: 'Receptury', icon: <RecipesIcon />, path: '/recipes' },
         { text: 'Timeline (WIP)', icon: <AnalyticsIcon />, path: '/production/timeline' },
       ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))

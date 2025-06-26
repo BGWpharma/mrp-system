@@ -81,7 +81,7 @@ const ProductionPage = () => {
   const isAdmin = currentUser && (currentUser.role === 'admin' || currentUser.isAdmin);
   
   const tabData = [
-    { icon: <ListIcon />, label: "Lista zadań produkcyjnych", value: 0 },
+          { icon: <ListIcon />, label: "Lista zadań", value: 0 },
     { icon: <CalendarIcon />, label: "Kalendarz", value: 1 },
     { icon: <ReportIcon />, label: "Raport MO", value: 2 },
     { icon: <FormsIcon />, label: "Formularze", value: 3 },
