@@ -732,7 +732,7 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
         translateCategory(micro.category || '')
       ]);
       
-      tdsEstimatedHeight += 13 + estimateTableHeight(microHeaders, microData); // Label + table
+      tdsEstimatedHeight += 13 + estimateTableHeight(microHeaders, microData) + 20; // Label + table + two notes
     }
     
     addSectionHeaderWithPageBreak(2, 'TDS Specification', tdsEstimatedHeight, '#6C35EA');
@@ -793,6 +793,13 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       const noteLines = doc.splitTextToSize(noteText, contentWidth);
       doc.text(noteLines, margin, currentY);
       currentY += Math.max(8, noteLines.length * 4);
+      
+      // Add note about active weight of components
+      currentY += 5;
+      const activeWeightNoteText = 'The values given refer to the active weight of the components (components), i.e. the elemental content of active substances.';
+      const activeWeightNoteLines = doc.splitTextToSize(activeWeightNoteText, contentWidth);
+      doc.text(activeWeightNoteLines, margin, currentY);
+      currentY += Math.max(8, activeWeightNoteLines.length * 4);
     }
 
     currentY += 10;

@@ -552,6 +552,7 @@ const RecipeDetailsPage = () => {
                       <TableCell align="right">Ilość</TableCell>
                       <TableCell>Jednostka</TableCell>
                       <TableCell>Numer CAS</TableCell>
+                      <TableCell>Uwagi</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -563,6 +564,9 @@ const RecipeDetailsPage = () => {
                         <TableCell align="right">{ingredient.quantity}</TableCell>
                         <TableCell>{ingredient.unit}</TableCell>
                         <TableCell>{ingredient.casNumber || '-'}</TableCell>
+                        <TableCell sx={{ wordBreak: 'break-word' }}>
+                          {ingredient.notes || '-'}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -582,6 +586,7 @@ const RecipeDetailsPage = () => {
                           <TableCell align="right">Ilość</TableCell>
                           <TableCell>Jednostka</TableCell>
                           <TableCell>Kategoria</TableCell>
+                          <TableCell>Uwagi</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -615,6 +620,9 @@ const RecipeDetailsPage = () => {
                                 label={micronutrient.category} 
                                 sx={{ borderRadius: '16px' }}
                               />
+                            </TableCell>
+                            <TableCell sx={{ wordBreak: 'break-word' }}>
+                              {micronutrient.notes || '-'}
                             </TableCell>
                           </TableRow>
                         ))}

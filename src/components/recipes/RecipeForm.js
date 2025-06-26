@@ -1672,11 +1672,11 @@ const RecipeForm = ({ recipeId }) => {
                   <TableRow>
                     <TableCell width="20%"><Typography variant="subtitle2">Składnik</Typography></TableCell>
                     <TableCell width="20%"><Typography variant="subtitle2">Nazwa</Typography></TableCell>
-                    <TableCell width="15%"><Typography variant="subtitle2">Ilość</Typography></TableCell>
-                    <TableCell width="10%"><Typography variant="subtitle2">Jednostka</Typography></TableCell>
+                    <TableCell width="14%"><Typography variant="subtitle2">Ilość</Typography></TableCell>
+                    <TableCell width="8%"><Typography variant="subtitle2">Jednostka</Typography></TableCell>
                     <TableCell width="15%"><Typography variant="subtitle2">Kategoria</Typography></TableCell>
-                    <TableCell width="15%"><Typography variant="subtitle2">Uwagi</Typography></TableCell>
-                    <TableCell width="5%"><Typography variant="subtitle2">Akcje</Typography></TableCell>
+                    <TableCell width="19%"><Typography variant="subtitle2">Uwagi</Typography></TableCell>
+                    <TableCell width="4%"><Typography variant="subtitle2">Akcje</Typography></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
