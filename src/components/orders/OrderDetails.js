@@ -1921,10 +1921,10 @@ const OrderDetails = () => {
                       </Link>
                     </TableCell>
                     <TableCell>
-                      {cmr.issueDate ? formatDate(cmr.issueDate) : '-'}
+                      {cmr.issueDate ? formatDate(cmr.issueDate, false) : (cmr.status === 'Szkic' ? 'Nie ustawiono' : '-')}
                     </TableCell>
                     <TableCell>
-                      {cmr.deliveryDate ? formatDate(cmr.deliveryDate) : '-'}
+                      {cmr.deliveryDate ? formatDate(cmr.deliveryDate, false) : (cmr.status === 'Szkic' ? 'Nie ustawiono' : '-')}
                     </TableCell>
                     <TableCell>
                       {cmr.recipient || '-'}

@@ -16,6 +16,7 @@ import {
 import { format } from 'date-fns';
 import { updateOrderItemShippedQuantity } from './orderService';
 import { createRealtimeStatusChangeNotification } from './notificationService';
+import { safeParseDate } from '../utils/dateUtils';
 
 // Kolekcje
 const CMR_COLLECTION = 'cmrDocuments';
@@ -249,6 +250,21 @@ export const createCmrDocument = async (cmrData, userId) => {
       }
     };
     
+    // Pobierz afiks klienta z powiązanego zamówienia (jeśli istnieje)
+    let customerAffix = '';
+    if (!cmrData.cmrNumber && (cmrData.linkedOrderId || (cmrData.linkedOrderIds && cmrData.linkedOrderIds.length > 0))) {
+      try {
+        const { getOrderById } = await import('./orderService');
+        const orderId = cmrData.linkedOrderId || cmrData.linkedOrderIds[0];
+        const order = await getOrderById(orderId);
+        if (order && order.customer && order.customer.orderAffix) {
+          customerAffix = order.customer.orderAffix;
+        }
+      } catch (error) {
+        console.warn('Nie udało się pobrać afiksu klienta z zamówienia:', error);
+      }
+    }
+
     // Formatowanie dat
     const formattedData = {
       ...cmrData,
@@ -257,7 +273,7 @@ export const createCmrDocument = async (cmrData, userId) => {
       loadingDate: convertToTimestamp(cmrData.loadingDate),
       status: cmrData.status || CMR_STATUSES.DRAFT,
       paymentStatus: cmrData.paymentStatus || CMR_PAYMENT_STATUSES.UNPAID,
-      cmrNumber: cmrData.cmrNumber || generateCmrNumber(),
+      cmrNumber: cmrData.cmrNumber || generateCmrNumber(cmrData.issueDate, customerAffix),
       createdAt: serverTimestamp(),
       createdBy: userId,
       updatedAt: serverTimestamp(),
@@ -529,16 +545,32 @@ export const updateCmrStatus = async (cmrId, newStatus, userId) => {
         };
       }
       
-      // Aktualizuj ilości wysłane w powiązanym zamówieniu klienta
+      // Aktualizuj ilości wysłane w powiązanych zamówieniach klienta
       try {
         const cmrData = await getCmrDocumentById(cmrId);
-        if (cmrData.linkedOrderId && cmrData.items && cmrData.items.length > 0) {
-          console.log('Aktualizacja ilości wysłanych w zamówieniu przy zmianie statusu na "W transporcie"...');
-          await updateLinkedOrderShippedQuantities(cmrData.linkedOrderId, cmrData.items, cmrData.cmrNumber, userId);
-          console.log(`Zaktualizowano ilości wysłane w zamówieniu ${cmrData.linkedOrderId} na podstawie CMR ${cmrData.cmrNumber}`);
+        if (cmrData.items && cmrData.items.length > 0) {
+          const ordersToUpdate = [];
+          
+          // Sprawdź nowy format (wiele zamówień)
+          if (cmrData.linkedOrderIds && Array.isArray(cmrData.linkedOrderIds) && cmrData.linkedOrderIds.length > 0) {
+            ordersToUpdate.push(...cmrData.linkedOrderIds);
+          }
+          
+          // Sprawdź stary format (pojedyncze zamówienie) - dla kompatybilności wstecznej
+          if (cmrData.linkedOrderId && !ordersToUpdate.includes(cmrData.linkedOrderId)) {
+            ordersToUpdate.push(cmrData.linkedOrderId);
+          }
+          
+          if (ordersToUpdate.length > 0) {
+            console.log('Aktualizacja ilości wysłanych w zamówieniach przy zmianie statusu na "W transporcie"...');
+            for (const orderId of ordersToUpdate) {
+              await updateLinkedOrderShippedQuantities(orderId, cmrData.items, cmrData.cmrNumber, userId);
+              console.log(`Zaktualizowano ilości wysłane w zamówieniu ${orderId} na podstawie CMR ${cmrData.cmrNumber}`);
+            }
+          }
         }
       } catch (orderUpdateError) {
-        console.error('Błąd podczas aktualizacji ilości wysłanych w zamówieniu:', orderUpdateError);
+        console.error('Błąd podczas aktualizacji ilości wysłanych w zamówieniach:', orderUpdateError);
         // Nie przerywamy procesu zmiany statusu - tylko logujemy błąd
       }
     }
@@ -548,13 +580,29 @@ export const updateCmrStatus = async (cmrId, newStatus, userId) => {
       console.log('Cofanie ze statusu "W transporcie" - anulowanie ilości wysłanych...');
       try {
         const cmrData = await getCmrDocumentById(cmrId);
-        if (cmrData.linkedOrderId && cmrData.items && cmrData.items.length > 0) {
-          console.log('Anulowanie ilości wysłanych w zamówieniu przy cofnięciu ze statusu "W transporcie"...');
-          await cancelLinkedOrderShippedQuantities(cmrData.linkedOrderId, cmrData.items, cmrData.cmrNumber, userId);
-          console.log(`Anulowano ilości wysłane w zamówieniu ${cmrData.linkedOrderId} na podstawie CMR ${cmrData.cmrNumber}`);
+        if (cmrData.items && cmrData.items.length > 0) {
+          const ordersToUpdate = [];
+          
+          // Sprawdź nowy format (wiele zamówień)
+          if (cmrData.linkedOrderIds && Array.isArray(cmrData.linkedOrderIds) && cmrData.linkedOrderIds.length > 0) {
+            ordersToUpdate.push(...cmrData.linkedOrderIds);
+          }
+          
+          // Sprawdź stary format (pojedyncze zamówienie) - dla kompatybilności wstecznej
+          if (cmrData.linkedOrderId && !ordersToUpdate.includes(cmrData.linkedOrderId)) {
+            ordersToUpdate.push(cmrData.linkedOrderId);
+          }
+          
+          if (ordersToUpdate.length > 0) {
+            console.log('Anulowanie ilości wysłanych w zamówieniach przy cofnięciu ze statusu "W transporcie"...');
+            for (const orderId of ordersToUpdate) {
+              await cancelLinkedOrderShippedQuantities(orderId, cmrData.items, cmrData.cmrNumber, userId);
+              console.log(`Anulowano ilości wysłane w zamówieniu ${orderId} na podstawie CMR ${cmrData.cmrNumber}`);
+            }
+          }
         }
       } catch (orderUpdateError) {
-        console.error('Błąd podczas anulowania ilości wysłanych w zamówieniu:', orderUpdateError);
+        console.error('Błąd podczas anulowania ilości wysłanych w zamówieniach:', orderUpdateError);
         // Nie przerywamy procesu zmiany statusu - tylko logujemy błąd
       }
     }
@@ -915,14 +963,21 @@ export const processCmrDelivery = async (cmrId, userId) => {
 };
 
 // Wygenerowanie numeru dokumentu CMR
-export const generateCmrNumber = () => {
-  const date = new Date();
-  const year = date.getFullYear();
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+export const generateCmrNumber = (issueDate = null, customerAffix = '') => {
+  const date = issueDate ? new Date(issueDate) : new Date();
   const day = date.getDate().toString().padStart(2, '0');
-  const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const year = date.getFullYear();
   
-  return `CMR-${year}${month}${day}-${random}`;
+  // Format: CMR DD-MM-YYYY XX (gdzie XX to afiks klienta)
+  let cmrNumber = `CMR ${day}-${month}-${year}`;
+  
+  // Dodaj afiks klienta jeśli został podany
+  if (customerAffix && typeof customerAffix === 'string' && customerAffix.trim() !== '') {
+    cmrNumber += ` ${customerAffix.trim()}`;
+  }
+  
+  return cmrNumber;
 };
 
 /**
@@ -930,26 +985,59 @@ export const generateCmrNumber = () => {
  */
 export const getCmrDocumentsByOrderId = async (orderId) => {
   try {
-    const cmrQuery = query(
+    // Zapytanie dla starego formatu (linkedOrderId)
+    const cmrQueryOld = query(
       collection(db, CMR_COLLECTION),
       where('linkedOrderId', '==', orderId),
       orderBy('issueDate', 'desc')
     );
     
-    const querySnapshot = await getDocs(cmrQuery);
+    // Zapytanie dla nowego formatu (linkedOrderIds array)
+    const cmrQueryNew = query(
+      collection(db, CMR_COLLECTION),
+      where('linkedOrderIds', 'array-contains', orderId),
+      orderBy('issueDate', 'desc')
+    );
+    
+    // Wykonaj oba zapytania równolegle
+    const [oldFormatSnapshot, newFormatSnapshot] = await Promise.all([
+      getDocs(cmrQueryOld),
+      getDocs(cmrQueryNew)
+    ]);
     
     const cmrDocuments = [];
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
-      cmrDocuments.push({
-        id: doc.id,
-        ...data,
-        issueDate: data.issueDate && typeof data.issueDate.toDate === 'function' ? data.issueDate.toDate() : data.issueDate,
-        deliveryDate: data.deliveryDate && typeof data.deliveryDate.toDate === 'function' ? data.deliveryDate.toDate() : data.deliveryDate,
-        loadingDate: data.loadingDate && typeof data.loadingDate.toDate === 'function' ? data.loadingDate.toDate() : data.loadingDate,
-        createdAt: data.createdAt && typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate() : data.createdAt,
-        updatedAt: data.updatedAt && typeof data.updatedAt.toDate === 'function' ? data.updatedAt.toDate() : data.updatedAt
+    const seenDocumentIds = new Set(); // Aby uniknąć duplikatów
+    
+    // Przetwórz wyniki z obu zapytań
+    const processSnapshot = (snapshot) => {
+      snapshot.forEach((doc) => {
+        if (!seenDocumentIds.has(doc.id)) {
+          seenDocumentIds.add(doc.id);
+          const data = doc.data();
+          
+          const processedDocument = {
+            id: doc.id,
+            ...data,
+            issueDate: safeParseDate(data.issueDate),
+            deliveryDate: safeParseDate(data.deliveryDate),
+            loadingDate: safeParseDate(data.loadingDate),
+            createdAt: safeParseDate(data.createdAt),
+            updatedAt: safeParseDate(data.updatedAt)
+          };
+          
+          cmrDocuments.push(processedDocument);
+        }
       });
+    };
+    
+    processSnapshot(oldFormatSnapshot);
+    processSnapshot(newFormatSnapshot);
+    
+    // Sortuj po dacie wystawienia (najnowsze najpierw)
+    cmrDocuments.sort((a, b) => {
+      const dateA = a.issueDate || new Date(0);
+      const dateB = b.issueDate || new Date(0);
+      return dateB - dateA;
     });
     
     return cmrDocuments;
@@ -1178,6 +1266,108 @@ export const updateCmrPaymentStatus = async (cmrId, newPaymentStatus, userId) =>
     };
   } catch (error) {
     console.error('Błąd podczas aktualizacji statusu płatności dokumentu CMR:', error);
+    throw error;
+  }
+};
+
+/**
+ * Migruje istniejące dokumenty CMR ze starego formatu (linkedOrderId) do nowego (linkedOrderIds)
+ */
+export const migrateCmrToNewFormat = async (cmrId) => {
+  try {
+    console.log(`Rozpoczęcie migracji CMR ${cmrId} do nowego formatu...`);
+    
+    const cmrRef = doc(db, CMR_COLLECTION, cmrId);
+    const cmrDoc = await getDoc(cmrRef);
+    
+    if (!cmrDoc.exists()) {
+      throw new Error('Dokument CMR nie istnieje');
+    }
+    
+    const cmrData = cmrDoc.data();
+    
+    // Sprawdź, czy CMR już ma nowy format
+    if (cmrData.linkedOrderIds && Array.isArray(cmrData.linkedOrderIds)) {
+      console.log(`CMR ${cmrId} już ma nowy format`);
+      return { success: true, message: 'CMR już ma nowy format', alreadyMigrated: true };
+    }
+    
+    // Sprawdź, czy ma stary format
+    if (!cmrData.linkedOrderId) {
+      console.log(`CMR ${cmrId} nie ma powiązanych zamówień`);
+      return { success: true, message: 'CMR nie ma powiązanych zamówień', noLinkedOrders: true };
+    }
+    
+    // Migruj ze starego formatu do nowego
+    const updateData = {
+      linkedOrderIds: [cmrData.linkedOrderId],
+      linkedOrderNumbers: cmrData.linkedOrderNumber ? [cmrData.linkedOrderNumber] : [],
+      updatedAt: serverTimestamp(),
+      migratedAt: serverTimestamp()
+    };
+    
+    await updateDoc(cmrRef, updateData);
+    
+    console.log(`Zmigrowano CMR ${cmrId} do nowego formatu`);
+    return { 
+      success: true, 
+      message: 'CMR został zmigrowany do nowego formatu',
+      oldFormat: { linkedOrderId: cmrData.linkedOrderId },
+      newFormat: { linkedOrderIds: updateData.linkedOrderIds }
+    };
+  } catch (error) {
+    console.error(`Błąd podczas migracji CMR ${cmrId}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Migruje wszystkie dokumenty CMR do nowego formatu
+ */
+export const migrateAllCmrToNewFormat = async () => {
+  try {
+    console.log('Rozpoczęcie masowej migracji wszystkich CMR do nowego formatu...');
+    
+    const cmrQuery = query(
+      collection(db, CMR_COLLECTION),
+      orderBy('createdAt', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(cmrQuery);
+    let migratedCount = 0;
+    let alreadyMigratedCount = 0;
+    let noLinkedOrdersCount = 0;
+    const errors = [];
+    
+    for (const cmrDoc of querySnapshot.docs) {
+      try {
+        const result = await migrateCmrToNewFormat(cmrDoc.id);
+        
+        if (result.alreadyMigrated) {
+          alreadyMigratedCount++;
+        } else if (result.noLinkedOrders) {
+          noLinkedOrdersCount++;
+        } else {
+          migratedCount++;
+        }
+      } catch (error) {
+        console.error(`Błąd podczas migracji CMR ${cmrDoc.id}:`, error);
+        errors.push({ cmrId: cmrDoc.id, error: error.message });
+      }
+    }
+    
+    console.log(`Migracja zakończona. Zmigrowano: ${migratedCount}, już zmigrowane: ${alreadyMigratedCount}, bez zamówień: ${noLinkedOrdersCount}, błędy: ${errors.length}`);
+    
+    return { 
+      success: true, 
+      migratedCount, 
+      alreadyMigratedCount, 
+      noLinkedOrdersCount, 
+      errorsCount: errors.length,
+      errors 
+    };
+  } catch (error) {
+    console.error('Błąd podczas masowej migracji CMR:', error);
     throw error;
   }
 };

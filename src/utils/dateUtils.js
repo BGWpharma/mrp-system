@@ -146,6 +146,11 @@ export const safeParseDate = (dateValue) => {
       return dateValue;
     }
     
+    // Sprawdź czy to serverTimestamp placeholder - nie próbuj konwertować
+    if (dateValue && typeof dateValue === 'object' && dateValue._methodName === 'serverTimestamp') {
+      return null; // serverTimestamp jeszcze nie został zapisany w bazie
+    }
+    
     // Jeśli to Timestamp z Firestore
     if (dateValue && typeof dateValue.toDate === 'function') {
       return dateValue.toDate();
@@ -157,11 +162,14 @@ export const safeParseDate = (dateValue) => {
     }
     
     // Jeśli to string lub liczba - próba konwersji
-    const parsedDate = new Date(dateValue);
-    if (!isNaN(parsedDate.getTime())) {
-      return parsedDate;
+    if (typeof dateValue === 'string' || typeof dateValue === 'number') {
+      const parsedDate = new Date(dateValue);
+      if (!isNaN(parsedDate.getTime())) {
+        return parsedDate;
+      }
     }
     
+    // Jeśli dotarliśmy tutaj, to nieobsługiwany format
     console.warn('safeParseDate - nieprawidłowy format daty:', dateValue);
     return null;
   } catch (error) {

@@ -86,10 +86,7 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
     
     // Pole 2 - Odbiorca
     recipient: '',           // Nazwa odbiorcy
-    recipientAddress: '',    // Adres odbiorcy
-    recipientPostalCode: '', // Kod pocztowy odbiorcy
-    recipientCity: '',       // Miasto odbiorcy
-    recipientCountry: '',    // Kraj odbiorcy
+    recipientAddress: '',    // Pełny adres odbiorcy
     
     // Pole 3 - Miejsce przeznaczenia
     deliveryPlace: '',       // Miejsce dostawy
@@ -357,7 +354,7 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
     if (!formData.sender) errors.sender = 'Nadawca jest wymagany';
     if (!formData.senderAddress) errors.senderAddress = 'Adres nadawcy jest wymagany';
     if (!formData.recipient) errors.recipient = 'Odbiorca jest wymagany';
-    if (!formData.recipientAddress) errors.recipientAddress = 'Adres odbiorcy jest wymagany';
+    if (!formData.recipientAddress) errors.recipientAddress = 'Pełny adres odbiorcy jest wymagany';
     if (!formData.deliveryPlace) errors.deliveryPlace = 'Miejsce dostawy jest wymagane';
     if (!formData.loadingPlace) errors.loadingPlace = 'Miejsce załadunku jest wymagane';
     
@@ -499,17 +496,13 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
         // Dane odbiorcy (klient z zamówienia)
         if (importOptions.recipientData) {
           updatedForm.recipient = customerData.name || '';
-          updatedForm.recipientAddress = customerData.address || '';
-          updatedForm.recipientPostalCode = customerData.postalCode || '';
-          updatedForm.recipientCity = customerData.city || '';
-          updatedForm.recipientCountry = customerData.country || '';
           
-          // Alternatywnie, jeśli dane adresowe są w innym formacie, możemy próbować je wyodrębnić
-          if (!customerData.postalCode && !customerData.city && customerData.address) {
-            const extractedData = extractAddressDetails(customerData.address);
-            if (extractedData.postalCode) updatedForm.recipientPostalCode = extractedData.postalCode;
-            if (extractedData.city) updatedForm.recipientCity = extractedData.city;
-          }
+          // Użyj adresu do wysyłki jeśli dostępny, w przeciwnym razie adres do faktury, lub stary format adresu
+          const recipientAddress = customerData.shippingAddress || 
+                                  customerData.billingAddress || 
+                                  customerData.address || '';
+          
+          updatedForm.recipientAddress = recipientAddress;
           
           importedDataSummary.push('Dane odbiorcy');
         }
@@ -1039,42 +1032,12 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                     onChange={handleChange}
                     fullWidth
                     margin="dense"
+                    multiline
+                    rows={4}
                     error={!!formErrors.recipientAddress}
-                    helperText={formErrors.recipientAddress}
+                    helperText={formErrors.recipientAddress || "Pełny adres odbiorcy (ulica, kod pocztowy, miasto, kraj)"}
                     size="small"
-                  />
-                  <Grid container spacing={2}>
-                    <Grid item xs={6}>
-                      <TextField
-                        label="Kod pocztowy"
-                        name="recipientPostalCode"
-                        value={formData.recipientPostalCode}
-                        onChange={handleChange}
-                        fullWidth
-                        margin="dense"
-                        size="small"
-                      />
-                    </Grid>
-                    <Grid item xs={6}>
-                      <TextField
-                        label="Miasto"
-                        name="recipientCity"
-                        value={formData.recipientCity}
-                        onChange={handleChange}
-                        fullWidth
-                        margin="dense"
-                        size="small"
-                      />
-                    </Grid>
-                  </Grid>
-                  <TextField
-                    label="Kraj"
-                    name="recipientCountry"
-                    value={formData.recipientCountry}
-                    onChange={handleChange}
-                    fullWidth
-                    margin="dense"
-                    size="small"
+                    placeholder="np. ul. Przykładowa 123, 00-000 Warszawa, Polska"
                   />
                 </Grid>
               </Grid>

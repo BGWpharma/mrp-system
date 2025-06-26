@@ -41,7 +41,8 @@ import {
   CMR_STATUSES,
   CMR_PAYMENT_STATUSES,
   translatePaymentStatus,
-  updateCmrPaymentStatus
+  updateCmrPaymentStatus,
+  migrateCmrToNewFormat
 } from '../../../services/cmrService';
 import { getOrderById } from '../../../services/orderService';
 
@@ -55,6 +56,7 @@ import PersonIcon from '@mui/icons-material/Person';
 import InventoryIcon from '@mui/icons-material/Inventory';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import FileCopyIcon from '@mui/icons-material/FileCopy';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
 // Globalne style CSS dla drukowania
 const GlobalStyles = styled('style')({});
@@ -151,7 +153,7 @@ const CmrDetailsPage = () => {
   
   const [loading, setLoading] = useState(true);
   const [cmrData, setCmrData] = useState(null);
-  const [linkedOrder, setLinkedOrder] = useState(null);
+  const [linkedOrders, setLinkedOrders] = useState([]);
   const [paymentStatusDialogOpen, setPaymentStatusDialogOpen] = useState(false);
   const [newPaymentStatus, setNewPaymentStatus] = useState('');
   
@@ -165,14 +167,46 @@ const CmrDetailsPage = () => {
       const data = await getCmrDocumentById(id);
       setCmrData(data);
       
-      // Pobierz dane powiązanego zamówienia klienta, jeśli istnieje
-      if (data.linkedOrderId) {
+      // Debug: Wyświetl strukturę danych CMR (można usunąć po testach)
+      console.log('CMR data:', data);
+      console.log('linkedOrderId:', data.linkedOrderId);
+      console.log('linkedOrderIds:', data.linkedOrderIds);
+      console.log('linkedOrderNumbers:', data.linkedOrderNumbers);
+      
+      // Pobierz dane powiązanych zamówień klienta
+      const ordersToFetch = [];
+      
+      // Sprawdź nowy format (wiele zamówień)
+      if (data.linkedOrderIds && Array.isArray(data.linkedOrderIds) && data.linkedOrderIds.length > 0) {
+        ordersToFetch.push(...data.linkedOrderIds);
+      }
+      
+      // Sprawdź stary format (pojedyncze zamówienie) - dla kompatybilności wstecznej
+      if (data.linkedOrderId && !ordersToFetch.includes(data.linkedOrderId)) {
+        ordersToFetch.push(data.linkedOrderId);
+      }
+      
+      // Pobierz dane wszystkich powiązanych zamówień
+      if (ordersToFetch.length > 0) {
         try {
-          const orderData = await getOrderById(data.linkedOrderId);
-          setLinkedOrder(orderData);
+          const orderPromises = ordersToFetch.map(orderId => getOrderById(orderId));
+          const orderResults = await Promise.allSettled(orderPromises);
+          
+          const validOrders = orderResults
+            .filter(result => result.status === 'fulfilled' && result.value !== null)
+            .map(result => result.value);
+          
+          setLinkedOrders(validOrders);
+          
+          // Loguj błędy dla zamówień, których nie udało się pobrać
+          orderResults.forEach((result, index) => {
+            if (result.status === 'rejected') {
+              console.error(`Błąd podczas pobierania zamówienia ${ordersToFetch[index]}:`, result.reason);
+            }
+          });
         } catch (orderError) {
-          console.error('Błąd podczas pobierania powiązanego zamówienia:', orderError);
-          // Nie przerywamy procesu - CMR może istnieć bez powiązanego zamówienia
+          console.error('Błąd podczas pobierania powiązanych zamówień:', orderError);
+          // Nie przerywamy procesu - CMR może istnieć bez powiązanych zamówień
         }
       }
     } catch (error) {
@@ -373,9 +407,7 @@ const CmrDetailsPage = () => {
       // Dane odbiorcy
       const recipientText = [
         cmrData.recipient,
-        cmrData.recipientAddress,
-        `${cmrData.recipientPostalCode || ''} ${cmrData.recipientCity || ''}`,
-        cmrData.recipientCountry
+        cmrData.recipientAddress
       ].filter(Boolean).join('\n');
       addTextToField('field-recipient', recipientText, '7px');
       
@@ -782,6 +814,20 @@ const CmrDetailsPage = () => {
       setPaymentStatusDialogOpen(false);
     }
   };
+
+  const handleMigrateCmr = async () => {
+    try {
+      const result = await migrateCmrToNewFormat(id);
+      if (result.success) {
+        showSuccess(result.message);
+        // Odśwież dane CMR po migracji
+        fetchCmrDocument();
+      }
+    } catch (error) {
+      console.error('Błąd podczas migracji CMR:', error);
+      showError('Nie udało się zmigrować CMR do nowego formatu');
+    }
+  };
   
   if (loading) {
     return (
@@ -868,6 +914,17 @@ const CmrDetailsPage = () => {
             sx={{ mb: { xs: 1, sm: 0 } }}
           >
             Generuj oficjalny CMR
+          </Button>
+          
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon />}
+            onClick={handleMigrateCmr}
+            color="secondary"
+            size="small"
+            sx={{ mb: { xs: 1, sm: 0 } }}
+          >
+            Migruj CMR
           </Button>
         </Box>
       </Box>
@@ -982,61 +1039,75 @@ const CmrDetailsPage = () => {
                   </Typography>
                 </Grid>
                 
-                {/* Informacje o powiązanym zamówieniu klienta */}
-                {linkedOrder && (
+                {/* Informacje o powiązanych zamówieniach klienta */}
+                {linkedOrders.length > 0 && (
                   <>
                     <Grid item xs={12}>
                       <Divider sx={{ my: 1 }} />
                       <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold' }}>
-                        Powiązane zamówienie klienta
+                        Powiązane zamówienia klienta ({linkedOrders.length})
                       </Typography>
                     </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="body2" color="text.secondary">
-                        Numer zamówienia
-                      </Typography>
-                      <Typography 
-                        variant="body1" 
-                        sx={{ 
-                          color: 'primary.main', 
-                          cursor: 'pointer',
-                          textDecoration: 'underline'
-                        }}
-                        onClick={() => navigate(`/orders/${linkedOrder.id}`)}
-                      >
-                        {linkedOrder.orderNumber}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="body2" color="text.secondary">
-                        Klient
-                      </Typography>
-                      <Typography variant="body1">
-                        {linkedOrder.customer?.name || '-'}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="body2" color="text.secondary">
-                        Data zamówienia
-                      </Typography>
-                      <Typography variant="body1">
-                        {formatDate(linkedOrder.orderDate)}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="body2" color="text.secondary">
-                        Status zamówienia
-                      </Typography>
-                      <Chip 
-                        label={linkedOrder.status} 
-                        size="small"
-                        color={
-                          linkedOrder.status === 'Dostarczone' ? 'success' :
-                          linkedOrder.status === 'W realizacji' ? 'warning' :
-                          linkedOrder.status === 'Anulowane' ? 'error' : 'default'
-                        }
-                      />
-                    </Grid>
+                    {linkedOrders.map((order, index) => (
+                      <Grid item xs={12} key={order.id} sx={{ mb: 1 }}>
+                        <Box sx={{ 
+                          border: '1px solid #e0e0e0', 
+                          borderRadius: 1, 
+                          p: 2, 
+                          backgroundColor: '#f9f9f9' 
+                        }}>
+                          <Grid container spacing={2} alignItems="center">
+                            <Grid item xs={12} sm={6}>
+                              <Typography variant="body2" color="text.secondary">
+                                Numer zamówienia
+                              </Typography>
+                              <Typography 
+                                variant="body1" 
+                                sx={{ 
+                                  color: 'primary.main', 
+                                  cursor: 'pointer',
+                                  textDecoration: 'underline',
+                                  fontWeight: 'medium'
+                                }}
+                                onClick={() => navigate(`/orders/${order.id}`)}
+                              >
+                                {order.orderNumber}
+                              </Typography>
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                              <Typography variant="body2" color="text.secondary">
+                                Klient
+                              </Typography>
+                              <Typography variant="body1">
+                                {order.customer?.name || '-'}
+                              </Typography>
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                              <Typography variant="body2" color="text.secondary">
+                                Data zamówienia
+                              </Typography>
+                              <Typography variant="body1">
+                                {formatDate(order.orderDate)}
+                              </Typography>
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                              <Typography variant="body2" color="text.secondary">
+                                Status zamówienia
+                              </Typography>
+                              <Chip 
+                                label={order.status} 
+                                size="small"
+                                color={
+                                  order.status === 'Dostarczone' ? 'success' :
+                                  order.status === 'W realizacji' ? 'warning' :
+                                  order.status === 'Anulowane' ? 'error' : 'default'
+                                }
+                              />
+                            </Grid>
+                          </Grid>
+                        </Box>
+                      </Grid>
+                    ))}
                   </>
                 )}
               </Grid>
@@ -1078,14 +1149,8 @@ const CmrDetailsPage = () => {
                   <Typography variant="body1">
                     {cmrData.recipient}
                   </Typography>
-                  <Typography variant="body2">
+                  <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
                     {cmrData.recipientAddress}
-                    {cmrData.recipientPostalCode && cmrData.recipientCity && (
-                      <>, {cmrData.recipientPostalCode} {cmrData.recipientCity}</>
-                    )}
-                    {cmrData.recipientCountry && (
-                      <>, {cmrData.recipientCountry}</>
-                    )}
                   </Typography>
                 </Grid>
                 <Grid item xs={12}>
@@ -1434,9 +1499,8 @@ const CmrDetailsPage = () => {
             <Box className="print-grid-item">
               <Typography className="print-label">Odbiorca</Typography>
               <Typography className="print-value" sx={{ fontWeight: 'bold' }}>{cmrData.recipient}</Typography>
-              <Typography className="print-value">{cmrData.recipientAddress}</Typography>
-              <Typography className="print-value">
-                {cmrData.recipientPostalCode} {cmrData.recipientCity}, {cmrData.recipientCountry}
+              <Typography className="print-value" sx={{ whiteSpace: 'pre-line' }}>
+                {cmrData.recipientAddress}
               </Typography>
             </Box>
           </Box>
