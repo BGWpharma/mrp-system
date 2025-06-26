@@ -419,11 +419,15 @@ const ProductionTimeline = React.memo(() => {
   // Stan dla trybu edycji
   const [editMode, setEditMode] = useState(false);
   
-
+  // Nowe stany dla ulepszenia obsługi touchpada
+  const [isTouchpadScrolling, setIsTouchpadScrolling] = useState(false);
+  const [touchpadScrollTimeout, setTouchpadScrollTimeout] = useState(null);
+  const [lastWheelEvent, setLastWheelEvent] = useState(null);
+  const [wheelEventCount, setWheelEventCount] = useState(0);
   
   // Ref do funkcji updateScrollCanvas z Timeline
   const updateScrollCanvasRef = useRef(null);
-  
+
   const { showError, showSuccess } = useNotification();
   const { currentUser } = useAuth();
   const { mode: themeMode } = useTheme(); // Motyw aplikacji
@@ -1225,8 +1229,62 @@ const ProductionTimeline = React.memo(() => {
     }
   };
 
-  // Zoom wheel handler
+  // Ulepszona funkcja do wykrywania czy to touchpad czy mysz
+  const detectTouchpad = useCallback((event) => {
+    // Touchpad charakteryzuje się:
+    // 1. Małymi wartościami deltaY (zazwyczaj < 100)
+    // 2. Częstymi eventami (wysoka częstotliwość)
+    // 3. Płynnymi wartościami deltaY (nie tylko 1, -1, 100, -100)
+    // 4. Obecnością deltaX podczas przewijania
+    
+    const now = performance.now();
+    const timeDiff = lastWheelEvent ? now - lastWheelEvent.timestamp : 0;
+    
+    // Zwiększ licznik eventów
+    setWheelEventCount(prev => prev + 1);
+    
+    // Aktualizuj ostatni event
+    setLastWheelEvent({ 
+      timestamp: now, 
+      deltaY: event.deltaY, 
+      deltaX: event.deltaX 
+    });
+    
+    // Różne wskaźniki touchpada
+    const isSmallDelta = Math.abs(event.deltaY) < 50;
+    const isVerySmallDelta = Math.abs(event.deltaY) < 20;
+    const isFrequent = timeDiff < 50; // mniej niż 50ms między eventami
+    const isVeryFrequent = timeDiff < 16; // ~60fps
+    const isFloatValue = event.deltaY % 1 !== 0; // nie jest liczbą całkowitą
+    const hasHorizontalComponent = Math.abs(event.deltaX) > 0; // touchpad często ma deltaX
+    const isDeltaMode0 = event.deltaMode === 0; // piksel mode (touchpad), 1 = line mode (mysz)
+    
+    // Touchpad scoring - im więcej kryteriów spełnione, tym pewniej touchpad
+    let touchpadScore = 0;
+    if (isVerySmallDelta) touchpadScore += 3;
+    else if (isSmallDelta) touchpadScore += 2;
+    if (isVeryFrequent) touchpadScore += 3;
+    else if (isFrequent) touchpadScore += 2;
+    if (isFloatValue) touchpadScore += 2;
+    if (hasHorizontalComponent) touchpadScore += 1;
+    if (isDeltaMode0) touchpadScore += 1;
+    
+    // Jeśli event count jest wysoki w krótkim czasie, prawdopodobnie touchpad
+    if (wheelEventCount > 10 && timeDiff < 100) touchpadScore += 2;
+    
+    // Reset countera okresowo
+    if (timeDiff > 1000) {
+      setWheelEventCount(0);
+    }
+    
+    return touchpadScore >= 3; // próg dla touchpada
+  }, [lastWheelEvent, wheelEventCount]);
+
+  // Ulepszony zoom wheel handler z obsługą touchpada
   const handleWheel = useCallback((event) => {
+    const isTouchpad = detectTouchpad(event);
+    
+    // Dla Ctrl/Cmd + scroll - zoom (zarówno mysz jak i touchpad)
     if (event.ctrlKey || event.metaKey) {
       event.preventDefault();
       
@@ -1234,11 +1292,15 @@ const ProductionTimeline = React.memo(() => {
       const center = (visibleTimeStart + visibleTimeEnd) / 2;
       const range = (visibleTimeEnd - visibleTimeStart) / 2;
       
-      const zoomFactor = delta > 0 ? 0.4 : 2.5; // Zoom 2.5x in/out
+      // Dostosuj czułość zoom dla touchpada vs mysz
+      const zoomFactor = isTouchpad 
+        ? (delta > 0 ? 0.8 : 1.25)  // Łagodniejszy zoom dla touchpada
+        : (delta > 0 ? 0.4 : 2.5);   // Standardowy zoom dla myszki
+        
       const newRange = range * zoomFactor;
-      const newZoomLevel = delta > 0 ? 
-        Math.min(zoomLevel * 2.5, 25) : 
-        Math.max(zoomLevel / 2.5, 0.04);
+      const newZoomLevel = isTouchpad
+        ? (delta > 0 ? Math.min(zoomLevel * 1.25, 25) : Math.max(zoomLevel / 1.25, 0.04))
+        : (delta > 0 ? Math.min(zoomLevel * 2.5, 25) : Math.max(zoomLevel / 2.5, 0.04));
       
       // Nie pozwól na zoom out poza canvas
       if (delta < 0) {
@@ -1253,20 +1315,101 @@ const ProductionTimeline = React.memo(() => {
       setVisibleTimeStart(newStart);
       setVisibleTimeEnd(newEnd);
       
-      // Synchronizuj canvas z dodatkowym wymuszeniem
+      // Synchronizuj canvas
       if (updateScrollCanvasRef.current) {
-        // Pierwsze wywołanie natychmiast
         updateScrollCanvasRef.current(newStart, newEnd);
-        
-        // Drugie wywołanie z małym opóźnieniem dla pewności synchronizacji
         setTimeout(() => {
           if (updateScrollCanvasRef.current) {
             updateScrollCanvasRef.current(newStart, newEnd);
           }
         }, 50);
       }
+      
+      return;
     }
-  }, [visibleTimeStart, visibleTimeEnd, canvasTimeStart, canvasTimeEnd, zoomLevel]);
+
+          // Dla zwykłego przewijania touchpada (bez Ctrl)
+      if (isTouchpad && !event.ctrlKey && !event.metaKey) {
+        // Oznacz jako touchpad scrolling
+        setIsTouchpadScrolling(true);
+        
+        // Opcjonalnie dodaj klasę CSS - obecnie wyłączona aby nie mylić użytkowników
+        // const timelineElement = document.querySelector('.react-calendar-timeline');
+        // if (timelineElement) {
+        //   timelineElement.classList.add('touchpad-scrolling');
+        // }
+        
+        // Wyczyść poprzedni timeout
+        if (touchpadScrollTimeout) {
+          clearTimeout(touchpadScrollTimeout);
+        }
+        
+        // Ustaw timeout aby zakończyć touchpad scrolling
+        const newTimeout = setTimeout(() => {
+          setIsTouchpadScrolling(false);
+          // if (timelineElement) {
+          //   timelineElement.classList.remove('touchpad-scrolling');
+          // }
+        }, 150);
+        setTouchpadScrollTimeout(newTimeout);
+      
+      // Poziome przewijanie touchpadem
+      if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+        event.preventDefault();
+        
+        // Przewijanie poziome
+        const range = visibleTimeEnd - visibleTimeStart;
+        const scrollSensitivity = isTouchpad ? 0.02 : 0.05; // Mniejsza czułość dla touchpada
+        const scrollAmount = event.deltaX * range * scrollSensitivity;
+        
+        const newStart = Math.max(
+          Math.min(visibleTimeStart + scrollAmount, canvasTimeEnd - range),
+          canvasTimeStart
+        );
+        const newEnd = Math.min(newStart + range, canvasTimeEnd);
+        
+        setVisibleTimeStart(newStart);
+        setVisibleTimeEnd(newEnd);
+        
+        if (updateScrollCanvasRef.current) {
+          updateScrollCanvasRef.current(newStart, newEnd);
+        }
+      } 
+      // Pionowe przewijanie touchpadem - płynny zoom
+      else if (Math.abs(event.deltaY) > 5) {
+        event.preventDefault();
+        
+                 const delta = event.deltaY > 0 ? -1 : 1;
+         const center = (visibleTimeStart + visibleTimeEnd) / 2;
+         const range = (visibleTimeEnd - visibleTimeStart) / 2;
+        
+        // Bardzo płynny zoom dla touchpada (małe zmiany)
+        const zoomFactor = delta > 0 ? 0.95 : 1.05;
+        const newRange = range * zoomFactor;
+        
+        // Nie pozwól na zoom out poza canvas
+        if (delta < 0) {
+          const maxRange = (canvasTimeEnd - canvasTimeStart) / 2;
+          if (newRange > maxRange) return;
+        }
+        
+        const newStart = Math.max(center - newRange, canvasTimeStart);
+        const newEnd = Math.min(center + newRange, canvasTimeEnd);
+        
+        const newZoomLevel = delta > 0 ? 
+          Math.min(zoomLevel * 1.05, 25) : 
+          Math.max(zoomLevel / 1.05, 0.04);
+        
+        setZoomLevel(newZoomLevel);
+        setVisibleTimeStart(newStart);
+        setVisibleTimeEnd(newEnd);
+        
+        if (updateScrollCanvasRef.current) {
+          updateScrollCanvasRef.current(newStart, newEnd);
+        }
+      }
+    }
+  }, [visibleTimeStart, visibleTimeEnd, canvasTimeStart, canvasTimeEnd, zoomLevel, detectTouchpad, touchpadScrollTimeout]);
 
   // Event listener dla scroll synchronizacji
   const handleScrollSync = useCallback(() => {
@@ -1280,13 +1423,118 @@ const ProductionTimeline = React.memo(() => {
     }
   }, [visibleTimeStart, visibleTimeEnd]);
 
-  // Dodaj event listener dla wheel zoom i scroll sync
+  // Obsługa dotykowych gestów dla urządzeń mobilnych
+  const [touchStart, setTouchStart] = useState(null);
+  const [touchEnd, setTouchEnd] = useState(null);
+  const [isPinching, setIsPinching] = useState(false);
+  const [initialPinchDistance, setInitialPinchDistance] = useState(0);
+
+  const getTouchDistance = (touch1, touch2) => {
+    return Math.sqrt(
+      Math.pow(touch2.clientX - touch1.clientX, 2) + 
+      Math.pow(touch2.clientY - touch1.clientY, 2)
+    );
+  };
+
+  const handleTouchStart = useCallback((event) => {
+    if (event.touches.length === 2) {
+      // Pinch gesture start
+      setIsPinching(true);
+      const distance = getTouchDistance(event.touches[0], event.touches[1]);
+      setInitialPinchDistance(distance);
+      event.preventDefault();
+    } else if (event.touches.length === 1) {
+      setTouchStart({
+        x: event.touches[0].clientX,
+        y: event.touches[0].clientY,
+        time: Date.now()
+      });
+    }
+  }, []);
+
+  const handleTouchMove = useCallback((event) => {
+    if (event.touches.length === 2 && isPinching) {
+      // Pinch zoom
+      event.preventDefault();
+      const distance = getTouchDistance(event.touches[0], event.touches[1]);
+      const scale = distance / initialPinchDistance;
+      
+      if (Math.abs(scale - 1) > 0.05) { // Próg aby uniknąć przypadkowych zmian
+        const center = (visibleTimeStart + visibleTimeEnd) / 2;
+        const range = (visibleTimeEnd - visibleTimeStart) / 2;
+        const newRange = range / scale;
+        
+        // Ograniczenia zoom
+        const maxRange = (canvasTimeEnd - canvasTimeStart) / 2;
+        if (newRange > maxRange || newRange < 60000) return; // min 1 minuta
+        
+        const newStart = Math.max(center - newRange, canvasTimeStart);
+        const newEnd = Math.min(center + newRange, canvasTimeEnd);
+        
+        setVisibleTimeStart(newStart);
+        setVisibleTimeEnd(newEnd);
+        setInitialPinchDistance(distance);
+        
+        if (updateScrollCanvasRef.current) {
+          updateScrollCanvasRef.current(newStart, newEnd);
+        }
+      }
+    } else if (event.touches.length === 1 && touchStart) {
+      setTouchEnd({
+        x: event.touches[0].clientX,
+        y: event.touches[0].clientY,
+        time: Date.now()
+      });
+    }
+  }, [isPinching, initialPinchDistance, touchStart, visibleTimeStart, visibleTimeEnd, canvasTimeStart, canvasTimeEnd]);
+
+  const handleTouchEnd = useCallback((event) => {
+    if (isPinching) {
+      setIsPinching(false);
+      setInitialPinchDistance(0);
+    } else if (touchStart && touchEnd) {
+      // Swipe gesture
+      const deltaX = touchEnd.x - touchStart.x;
+      const deltaY = touchEnd.y - touchStart.y;
+      const deltaTime = touchEnd.time - touchStart.time;
+      
+      // Sprawdź czy to swipe (szybki ruch)
+      if (deltaTime < 300 && Math.abs(deltaX) > 50) {
+        const range = visibleTimeEnd - visibleTimeStart;
+        const swipeAmount = -(deltaX / 300) * range; // Normalize swipe distance
+        
+        const newStart = Math.max(
+          Math.min(visibleTimeStart + swipeAmount, canvasTimeEnd - range),
+          canvasTimeStart
+        );
+        const newEnd = Math.min(newStart + range, canvasTimeEnd);
+        
+        setVisibleTimeStart(newStart);
+        setVisibleTimeEnd(newEnd);
+        
+        if (updateScrollCanvasRef.current) {
+          updateScrollCanvasRef.current(newStart, newEnd);
+        }
+      }
+    }
+    
+    setTouchStart(null);
+    setTouchEnd(null);
+  }, [isPinching, touchStart, touchEnd, visibleTimeStart, visibleTimeEnd, canvasTimeStart, canvasTimeEnd]);
+
+  // Dodaj event listener dla wheel zoom, touch events i scroll sync
   useEffect(() => {
     const timelineElement = document.querySelector('.react-calendar-timeline');
     if (timelineElement) {
+      // Mouse wheel
       timelineElement.addEventListener('wheel', handleWheel, { passive: false });
       
-      // Różne selektory dla kontenerów scroll w react-calendar-timeline
+      // Touch events dla urządzeń mobilnych
+      timelineElement.addEventListener('touchstart', handleTouchStart, { passive: false });
+      timelineElement.addEventListener('touchmove', handleTouchMove, { passive: false });
+      timelineElement.addEventListener('touchend', handleTouchEnd, { passive: true });
+      
+      // Scroll containers
       const scrollSelectors = [
         '.rct-scroll',
         '.rct-canvas',
@@ -1309,13 +1557,21 @@ const ProductionTimeline = React.memo(() => {
       
       return () => {
         timelineElement.removeEventListener('wheel', handleWheel);
+        timelineElement.removeEventListener('touchstart', handleTouchStart);
+        timelineElement.removeEventListener('touchmove', handleTouchMove);
+        timelineElement.removeEventListener('touchend', handleTouchEnd);
         timelineElement.removeEventListener('scroll', handleScrollSync);
         scrollContainers.forEach(container => {
           container.removeEventListener('scroll', handleScrollSync);
         });
+        
+        // Wyczyść timeout touchpada przy unmount
+        if (touchpadScrollTimeout) {
+          clearTimeout(touchpadScrollTimeout);
+        }
       };
     }
-  }, [handleWheel, handleScrollSync]);
+  }, [handleWheel, handleScrollSync, handleTouchStart, handleTouchMove, handleTouchEnd]);
 
   // Synchronizuj canvas gdy visible time się zmieni (backup dla przypadku gdy updateScrollCanvas nie było dostępne)
   useEffect(() => {
@@ -1594,7 +1850,11 @@ const ProductionTimeline = React.memo(() => {
         color: '#666'
       }}>
         <Typography variant="caption">
-          💡 <strong>Wskazówki:</strong> Użyj Ctrl + scroll aby zoomować myszką | Włącz "Edycja ON" aby móc przesuwać zadania{editMode ? ' | Przeciągnij zadania aby zmienić czas, zmień rozmiar przeciągając krawędzie | Włącz "Dociąganie" aby automatycznie ustawiać zadania po kolei' : ' | W trybie wyłączonym możesz bezpiecznie przewijać timeline bez przypadkowego przesuwania zadań'}
+          💡 <strong>Wskazówki:</strong> 
+          Touchpad: przewijaj dwoma palcami poziomo/pionowo | Ctrl + scroll - zoom | 
+          Urządzenia dotykowe: pinch to zoom, swipe to scroll | 
+          Włącz "Edycja ON" aby móc przesuwać zadania
+          {editMode ? ' | Przeciągnij zadania aby zmienić czas, zmień rozmiar przeciągając krawędzie | Włącz "Dociąganie" aby automatycznie ustawiać zadania po kolei' : ' | W trybie wyłączonym możesz bezpiecznie przewijać timeline bez przypadkowego przesuwania zadań'}
         </Typography>
       </Box>
 

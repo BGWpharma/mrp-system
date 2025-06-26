@@ -666,7 +666,7 @@ body.dark-mode .fc-timeline-event {
   visibility: hidden;
 }
 
-/* Ukrycie czarnych wskaźników kontynuacji wydarzeń w timeline */
+/* Ukrycie czarnych wskaźników kontynuacji w timeline */
 .fc-timeline-event:not(.fc-event-end)::after,
 .fc-timeline-event:not(.fc-event-start)::before {
   display: none !important;
@@ -958,4 +958,133 @@ body.dark-mode .react-calendar-timeline .rct-sidebar-header {
 .react-calendar-timeline .rct-header-cell:hover {
   transform: translateY(-1px) !important;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+}
+
+/* ===== ULEPSZENIA DLA TOUCHPAD I GESTÓW DOTYKOWYCH ===== */
+
+/* Wyłącz domyślne gesty przeglądarki i włącz płynne przewijanie */
+.react-calendar-timeline {
+  touch-action: none; /* Wyłącz domyślne gesty przeglądarki */
+  -webkit-overflow-scrolling: touch; /* Płynne przewijanie na iOS */
+  overscroll-behavior: contain; /* Zapobiega scrollowaniu strony podczas przewijania timeline */
+}
+
+.react-calendar-timeline .rct-canvas {
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+
+.react-calendar-timeline .rct-scroll {
+  touch-action: none;
+  scroll-behavior: smooth; /* Płynne przewijanie */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Smooth scrolling dla wszystkich kontenerów timeline */
+.react-calendar-timeline .rct-horizontal-scroll,
+.react-calendar-timeline .rct-timeline-container {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+/* Subtelna wskazówka wizualna podczas przewijania touchpadem */
+.react-calendar-timeline.touchpad-scrolling {
+  /* Usuń niebieskie tło - było mylące */
+  /* background: linear-gradient(90deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 150, 243, 0.05) 100%); */
+  /* Zamiast tego dodaj subtelny efekt na obramowaniu */
+  box-shadow: inset 0 0 0 1px rgba(33, 150, 243, 0.3);
+  transition: box-shadow 0.2s ease;
+}
+
+/* Optymalizacja dla różnych typów urządzeń wskazujących */
+@media (pointer: coarse) {
+  /* Urządzenia dotykowe - większe obszary do interakcji */
+  .react-calendar-timeline {
+    min-height: 400px;
+  }
+  
+  .react-calendar-timeline .rct-header-cell {
+    min-height: 40px;
+    padding: 8px;
+  }
+  
+  .react-calendar-timeline .rct-sidebar-header {
+    min-height: 40px;
+    padding: 8px;
+  }
+}
+
+@media (pointer: fine) {
+  /* Urządzenia z precyzyjnym wskaźnikiem (mysz, touchpad) */
+  .react-calendar-timeline .rct-header-cell {
+    transition: all 0.15s ease;
+  }
+  
+  .react-calendar-timeline .rct-header-cell:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    transform: translateY(-1px);
+  }
+}
+
+/* Wsparcie dla gestów pinch-to-zoom na urządzeniach dotykowych */
+@media (hover: none) {
+  .react-calendar-timeline {
+    /* Większe marginesy dla łatwiejszej interakcji palcami */
+    padding: 4px;
+  }
+  
+  .react-calendar-timeline .rct-timeline-item {
+    min-height: 36px; /* Większe elementy na dotyk */
+  }
+}
+
+/* Ulepszenie dla wysokiej gęstości pikseli (Retina, wysokie DPI) */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .react-calendar-timeline {
+    /* Ostrzejsze renderowanie na ekranach wysokiej rozdzielczości */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Animacje dla płynnych przejść podczas gestów */
+.react-calendar-timeline .rct-canvas,
+.react-calendar-timeline .rct-scroll {
+  transition: transform 0.1s ease-out;
+}
+
+/* Wsparcie dla różnych orientacji urządzenia */
+@media screen and (orientation: landscape) {
+  .react-calendar-timeline {
+    /* Optymalizacja dla orientacji poziomej */
+    height: calc(100vh - 120px);
+  }
+}
+
+@media screen and (orientation: portrait) {
+  .react-calendar-timeline {
+    /* Optymalizacja dla orientacji pionowej */
+    height: calc(100vh - 160px);
+  }
+}
+
+/* Wsparcie dla trybu ciemnego w gestach touchpada */
+body.dark-mode .react-calendar-timeline.touchpad-scrolling {
+  /* Usuń niebieskie tło też w trybie ciemnym */
+  /* background: linear-gradient(90deg, rgba(66, 165, 245, 0.15) 0%, rgba(66, 165, 245, 0.08) 100%); */
+  box-shadow: inset 0 0 0 1px rgba(66, 165, 245, 0.4);
+}
+
+/* Zmniejsz opóźnienia dla lepszej responsywności gestów */
+.react-calendar-timeline * {
+  -webkit-tap-highlight-color: transparent; /* Usuń highlight na dotyk w Safari */
+}
+
+/* Optymalizacja dla przesuwania palcem */
+.react-calendar-timeline .rct-timeline-item {
+  user-select: none; /* Zapobiega zaznaczaniu tekstu podczas gestów */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
