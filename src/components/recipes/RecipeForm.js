@@ -1616,14 +1616,9 @@ const RecipeForm = ({ recipeId }) => {
             justifyContent: 'space-between'
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <ScienceIcon color="primary" />
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <ScienceIcon color="secondary" sx={{ mr: 1 }} />
             <Typography variant="h6" fontWeight="500">Składniki odżywcze</Typography>
-            <Tooltip title="Użyj strzałek ↑ ↓ w kolumnie 'Kolejność', aby zmienić porządek składników">
-              <IconButton size="small" color="info">
-                <ArrowUpIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
           </Box>
           
           <Box sx={{ display: 'flex', gap: 1 }}>
@@ -1634,171 +1629,116 @@ const RecipeForm = ({ recipeId }) => {
               startIcon={<AddIcon />}
               sx={{ borderRadius: '20px' }}
             >
-              Dodaj składnik odżywczy
+              Dodaj składnik
+            </Button>
+            <Button 
+              variant="outlined"
+              size="small"
+              color="secondary"
+              onClick={handleOpenAddNutrientDialog}
+              startIcon={<ScienceIcon />}
+              sx={{ borderRadius: '20px' }}
+            >
+              Nowy składnik
             </Button>
           </Box>
         </Box>
         
         <Box sx={{ p: 3 }}>
-          {/* Status składników odżywczych */}
-          {usingFallback && (
-            <Alert severity="warning" sx={{ mb: 2 }}>
-              Składniki odżywcze są pobierane z kodu (fallback). 
-              Aby używać składników z bazy danych, wykonaj migrację w narzędziach systemowych.
-            </Alert>
-          )}
-          
-          
-          {loadingComponents && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-              <CircularProgress size={16} />
-              <Typography variant="body2" color="text.secondary">
-                Ładowanie składników odżywczych...
-              </Typography>
-            </Box>
-          )}
-          
-          {/* Opcja wyboru podstawy składników odżywczych */}
-          <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Typography variant="body2" color="text.secondary">
-              Wartości składników odżywczych podane na:
-            </Typography>
-            <FormControl size="small" sx={{ minWidth: 120 }}>
-              <Select
-                value={recipeData.nutritionalBasis || '1 caps'}
-                onChange={handleNutritionalBasisChange}
-                variant="outlined"
-              >
-                <MenuItem value="1 caps">1 caps</MenuItem>
-                <MenuItem value="100g">100g</MenuItem>
-              </Select>
-            </FormControl>
+          {/* Pole dla podstawy składników odżywczych */}
+          <Box sx={{ mb: 3 }}>
+            <TextField
+              label="Podstawa składników odżywczych"
+              name="nutritionalBasis"
+              value={recipeData.nutritionalBasis}
+              onChange={handleNutritionalBasisChange}
+              fullWidth
+              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+              helperText="Określ podstawę (np. '1 caps', '100g', '1 porcja'), dla której podane są wartości składników odżywczych"
+              InputProps={{
+                startAdornment: (
+                  <Box sx={{ color: 'text.secondary', mr: 1, display: 'flex', alignItems: 'center' }}>
+                    <ScienceIcon fontSize="small" />
+                  </Box>
+                )
+              }}
+            />
           </Box>
-
+          
           {recipeData.micronutrients && recipeData.micronutrients.length > 0 ? (
             <TableContainer sx={{ borderRadius: '8px', border: '1px solid', borderColor: 'divider' }}>
               <Table>
                 <TableHead sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.6)' : 'rgba(240, 245, 250, 0.8)' }}>
                   <TableRow>
-                    <TableCell width="1%"><Typography variant="subtitle2">Kolejność</Typography></TableCell>
-                    <TableCell width="37%"><Typography variant="subtitle2">Kod</Typography></TableCell>
-                    <TableCell width="15%"><Typography variant="subtitle2">Nazwa</Typography></TableCell>
-                    <TableCell width="10%"><Typography variant="subtitle2">Ilość</Typography></TableCell>
-                    <TableCell width="8%"><Typography variant="subtitle2">Jednostka</Typography></TableCell>
-                    <TableCell width="12%"><Typography variant="subtitle2">Kategoria</Typography></TableCell>
-                    <TableCell width="12%"><Typography variant="subtitle2">Uwagi</Typography></TableCell>
+                    <TableCell width="20%"><Typography variant="subtitle2">Składnik</Typography></TableCell>
+                    <TableCell width="20%"><Typography variant="subtitle2">Nazwa</Typography></TableCell>
+                    <TableCell width="15%"><Typography variant="subtitle2">Ilość</Typography></TableCell>
+                    <TableCell width="10%"><Typography variant="subtitle2">Jednostka</Typography></TableCell>
+                    <TableCell width="15%"><Typography variant="subtitle2">Kategoria</Typography></TableCell>
+                    <TableCell width="15%"><Typography variant="subtitle2">Uwagi</Typography></TableCell>
                     <TableCell width="5%"><Typography variant="subtitle2">Akcje</Typography></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {(recipeData.micronutrients || []).map((micronutrient, index) => (
+                  {recipeData.micronutrients.map((micronutrient, index) => (
                     <TableRow key={index} hover sx={{ '&:nth-of-type(even)': { bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.2)' : 'rgba(245, 247, 250, 0.5)' } }}>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
-                          <Tooltip title="Przesuń w górę">
-                            <span>
-                              <IconButton 
-                                size="small" 
-                                onClick={() => moveMicronutrientUp(index)}
-                                disabled={index === 0}
-                                sx={{ 
-                                  minHeight: '24px', 
-                                  minWidth: '24px',
-                                  opacity: index === 0 ? 0.3 : 1
-                                }}
-                              >
-                                <ArrowUpIcon fontSize="small" />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
-                          <Typography variant="caption" color="text.secondary">
-                            {index + 1}
-                          </Typography>
-                          <Tooltip title="Przesuń w dół">
-                            <span>
-                              <IconButton 
-                                size="small" 
-                                onClick={() => moveMicronutrientDown(index)}
-                                disabled={index === recipeData.micronutrients.length - 1}
-                                sx={{ 
-                                  minHeight: '24px', 
-                                  minWidth: '24px',
-                                  opacity: index === recipeData.micronutrients.length - 1 ? 0.3 : 1
-                                }}
-                              >
-                                <ArrowDownIcon fontSize="small" />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
-                        </Box>
-                      </TableCell>
                       <TableCell>
                         <Autocomplete
                           fullWidth
-                          size="small"
+                          variant="standard"
                           options={[
-                            ...nutritionalComponents,
-                            ...(usingFallback ? [] : [{
-                              code: '__ADD_NEW__',
-                              name: 'Dodaj nowy składnik odżywczy...',
-                              category: '⚡ Akcje',
+                            // Dodaj specjalną opcję na początku listy, jeśli nie ma składników lub są ładowane
+                            ...(loadingComponents ? [] : [{ 
+                              isAddNewOption: true,
+                              name: 'Dodaj nowy składnik odżywczy',
+                              code: 'ADD_NEW',
                               unit: '',
-                              isAddNewOption: true
-                            }])
+                              category: 'Brak'
+                            }]),
+                            ...nutritionalComponents
                           ]}
-                          getOptionLabel={(option) => 
-                            option.isAddNewOption 
-                              ? option.name 
-                              : `${option.code} - ${option.name}`
-                          }
                           groupBy={(option) => option.category}
-                          value={nutritionalComponents.find(comp => comp.code === micronutrient.code) || null}
+                          getOptionLabel={(option) => option.code || ''}
+                          value={nutritionalComponents.find(c => c.code === micronutrient.code) || null}
                           onChange={(event, newValue) => {
                             if (newValue?.isAddNewOption) {
                               handleOpenAddNutrientDialog();
-                            } else {
-                              handleMicronutrientChange(index, 'code', newValue ? newValue.code : '');
+                            } else if (newValue) {
+                              handleMicronutrientChange(index, 'code', newValue.code);
+                              handleMicronutrientChange(index, 'name', newValue.name);
+                              handleMicronutrientChange(index, 'unit', newValue.unit);
+                              handleMicronutrientChange(index, 'category', newValue.category);
                             }
                           }}
-                          isOptionEqualToValue={(option, value) => option.code === value.code}
-                          filterOptions={(options, params) => {
-                            const filtered = options.filter(option => {
-                              if (option.isAddNewOption) return true;
-                              return option.code.toLowerCase().includes(params.inputValue.toLowerCase()) ||
-                                     option.name.toLowerCase().includes(params.inputValue.toLowerCase());
-                            });
-                            return filtered;
-                          }}
+                          loading={loadingComponents}
                           renderInput={(params) => (
                             <TextField
                               {...params}
                               variant="standard"
-                              placeholder="Wyszukaj składnik..."
+                              placeholder="Wybierz składnik..."
                               InputProps={{
                                 ...params.InputProps,
-                                style: { fontSize: '0.875rem' }
+                                endAdornment: (
+                                  <>
+                                    {loadingComponents ? <CircularProgress color="inherit" size={20} /> : null}
+                                    {params.InputProps.endAdornment}
+                                  </>
+                                ),
                               }}
                             />
                           )}
                           renderOption={(props, option) => {
                             const { key, ...otherProps } = props;
                             return (
-                              <Box 
+                              <Box
                                 key={key}
-                                component="li" 
+                                component="li"
                                 {...otherProps}
                                 sx={option.isAddNewOption ? {
-                                  ...props.sx,
+                                  p: 1.5,
                                   bgcolor: theme => theme.palette.mode === 'dark' 
-                                    ? 'rgba(156, 39, 176, 0.1)' 
-                                    : 'rgba(156, 39, 176, 0.05)',
-                                  borderTop: '1px solid',
-                                  borderColor: 'divider',
-                                  '&:hover': {
-                                    bgcolor: theme => theme.palette.mode === 'dark' 
-                                      ? 'rgba(156, 39, 176, 0.2)' 
-                                      : 'rgba(156, 39, 176, 0.1)'
-                                  }
+                                    ? 'rgba(156, 39, 176, 0.25)'
+                                    : 'rgba(156, 39, 176, 0.1)'
                                 } : props.sx}
                               >
                               {option.isAddNewOption ? (
@@ -1976,6 +1916,49 @@ const RecipeForm = ({ recipeId }) => {
               </Typography>
             </Paper>
           )}
+        </Box>
+      </Paper>
+
+      {/* Sekcja notatek dodatkowych */}
+      <Paper 
+        elevation={3} 
+        sx={{ 
+          p: 0, 
+          mb: 3, 
+          borderRadius: '12px', 
+          overflow: 'hidden' 
+        }}
+      >
+        <Box 
+          sx={{ 
+            p: 2, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            bgcolor: theme => theme.palette.mode === 'dark' 
+              ? 'rgba(25, 35, 55, 0.5)' 
+              : 'rgba(245, 247, 250, 0.8)'
+          }}
+        >
+          <EditIcon color="primary" />
+          <Typography variant="h6" fontWeight="500">Notatki dodatkowe</Typography>
+        </Box>
+        
+        <Box sx={{ p: 3 }}>
+          <TextField
+            label="Notatki"
+            name="notes"
+            value={recipeData.notes || ''}
+            onChange={handleChange}
+            fullWidth
+            multiline
+            rows={4}
+            placeholder="Dodatkowe informacje, instrukcje, uwagi dotyczące receptury..."
+            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+            helperText="Te notatki będą widoczne w szczegółach receptury i mogą zawierać instrukcje produkcyjne, uwagi o bezpieczeństwie lub inne istotne informacje."
+          />
         </Box>
       </Paper>
 
