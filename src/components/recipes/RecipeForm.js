@@ -298,10 +298,15 @@ const RecipeForm = ({ recipeId }) => {
         try {
           const recipe = await getRecipeById(recipeId);
           
-          // Upewnij się, że micronutrients istnieje jako tablica
+          // Upewnij się, że micronutrients istnieje jako tablica i dodaj ID jeśli nie istnieje
+          const micronutrientsWithIds = (recipe.micronutrients || []).map((micronutrient, index) => ({
+            ...micronutrient,
+            id: micronutrient.id || `existing-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`
+          }));
+          
           const recipeWithMicronutrients = {
             ...recipe,
-            micronutrients: recipe.micronutrients || []
+            micronutrients: micronutrientsWithIds
           };
           
           setRecipeData(recipeWithMicronutrients);
@@ -893,7 +898,7 @@ const RecipeForm = ({ recipeId }) => {
       const selectedMicronutrient = nutritionalComponents.find(m => m.code === value);
       if (selectedMicronutrient) {
         newMicronutrients[index] = {
-          ...newMicronutrients[index],
+          ...newMicronutrients[index], // Zachowaj istniejące właściwości, w tym ID
           code: selectedMicronutrient.code,
           name: selectedMicronutrient.name,
           unit: selectedMicronutrient.unit,
@@ -914,10 +919,21 @@ const RecipeForm = ({ recipeId }) => {
   };
 
   const addMicronutrient = () => {
-    setRecipeData(prev => ({
-      ...prev,
-      micronutrients: [...prev.micronutrients, { ...DEFAULT_NUTRITIONAL_COMPONENT }]
-    }));
+    console.log('Adding new micronutrient');
+    const newMicronutrient = { 
+      ...DEFAULT_NUTRITIONAL_COMPONENT,
+      id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    };
+    console.log('New micronutrient:', newMicronutrient);
+    
+    setRecipeData(prev => {
+      const updated = {
+        ...prev,
+        micronutrients: [...prev.micronutrients, newMicronutrient]
+      };
+      console.log('Updated recipe data micronutrients:', updated.micronutrients);
+      return updated;
+    });
   };
 
   const removeMicronutrient = (index) => {
@@ -1011,7 +1027,8 @@ const RecipeForm = ({ recipeId }) => {
         unit: newNutrientData.unit,
         category: newNutrientData.category,
         quantity: '',
-        notes: ''
+        notes: '',
+        id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
       };
       
       setRecipeData(prev => ({
@@ -1681,7 +1698,7 @@ const RecipeForm = ({ recipeId }) => {
                 </TableHead>
                 <TableBody>
                   {recipeData.micronutrients.map((micronutrient, index) => (
-                    <TableRow key={index} hover sx={{ '&:nth-of-type(even)': { bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.2)' : 'rgba(245, 247, 250, 0.5)' } }}>
+                    <TableRow key={micronutrient.id || `micronutrient-${index}-${micronutrient.code || 'empty'}`} hover sx={{ '&:nth-of-type(even)': { bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.2)' : 'rgba(245, 247, 250, 0.5)' } }}>
                       <TableCell>
                         <Autocomplete
                           fullWidth
@@ -1700,14 +1717,46 @@ const RecipeForm = ({ recipeId }) => {
                           groupBy={(option) => option.category}
                           getOptionLabel={(option) => option.code || ''}
                           value={nutritionalComponents.find(c => c.code === micronutrient.code) || null}
+                          // Debug: logowanie aktualnej wartości
+                          onOpen={() => {
+                            console.log('Autocomplete opened for index:', index);
+                            console.log('Current micronutrient:', micronutrient);
+                            console.log('Available components:', nutritionalComponents.length);
+                            console.log('Found component:', nutritionalComponents.find(c => c.code === micronutrient.code));
+                          }}
                           onChange={(event, newValue) => {
+                            console.log('Autocomplete onChange:', { index, newValue });
                             if (newValue?.isAddNewOption) {
                               handleOpenAddNutrientDialog();
                             } else if (newValue) {
-                              handleMicronutrientChange(index, 'code', newValue.code);
-                              handleMicronutrientChange(index, 'name', newValue.name);
-                              handleMicronutrientChange(index, 'unit', newValue.unit);
-                              handleMicronutrientChange(index, 'category', newValue.category);
+                              // Aktualizuj wszystkie pola jednocześnie
+                              const newMicronutrients = [...recipeData.micronutrients];
+                              newMicronutrients[index] = {
+                                ...newMicronutrients[index], // Zachowaj istniejące właściwości, w tym ID
+                                code: newValue.code,
+                                name: newValue.name,
+                                unit: newValue.unit,
+                                category: newValue.category
+                              };
+                              console.log('Updated micronutrient:', newMicronutrients[index]);
+                              setRecipeData(prev => ({
+                                ...prev,
+                                micronutrients: newMicronutrients
+                              }));
+                            } else {
+                              // Jeśli newValue jest null (usunięcie wyboru), wyczyść pola
+                              const newMicronutrients = [...recipeData.micronutrients];
+                              newMicronutrients[index] = {
+                                ...newMicronutrients[index],
+                                code: '',
+                                name: '',
+                                unit: '',
+                                category: ''
+                              };
+                              setRecipeData(prev => ({
+                                ...prev,
+                                micronutrients: newMicronutrients
+                              }));
                             }
                           }}
                           loading={loadingComponents}
@@ -1727,19 +1776,19 @@ const RecipeForm = ({ recipeId }) => {
                               }}
                             />
                           )}
-                          renderOption={(props, option) => {
-                            const { key, ...otherProps } = props;
+                          renderOption={(props, option, { index: optionIndex }) => {
+                            const { key, ...restProps } = props;
                             return (
                               <Box
-                                key={key}
+                                key={option.isAddNewOption ? 'add-new-option' : `option-${option.code}-${optionIndex}`}
                                 component="li"
-                                {...otherProps}
+                                {...restProps}
                                 sx={option.isAddNewOption ? {
                                   p: 1.5,
                                   bgcolor: theme => theme.palette.mode === 'dark' 
                                     ? 'rgba(156, 39, 176, 0.25)'
                                     : 'rgba(156, 39, 176, 0.1)'
-                                } : props.sx}
+                                } : restProps.sx}
                               >
                               {option.isAddNewOption ? (
                                 <Box sx={{ 
@@ -1794,7 +1843,7 @@ const RecipeForm = ({ recipeId }) => {
                             );
                           }}
                           renderGroup={(params) => (
-                            <Box key={params.key}>
+                            <Box key={`group-${params.group}-${params.key || 'default'}`}>
                               <Typography
                                 variant="overline"
                                 sx={{
