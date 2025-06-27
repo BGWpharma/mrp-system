@@ -150,9 +150,76 @@ const COReportsPage = () => {
     try {
       setLoading(true);
       
-      // Pobierz wszystkie zamówienia bez filtrowania
+      // Pobierz wszystkie zamówienia
       const allOrders = await getAllOrders();
-      setOrders(allOrders || []);
+      
+      // Sprawdź i oczyść nieaktualne dane zadań produkcyjnych
+      const { getTaskById } = await import('../../services/productionService');
+      const { updateOrder } = await import('../../services/orderService');
+      
+      const cleanedOrders = [];
+      
+      for (const order of allOrders) {
+        let orderChanged = false;
+        const cleanedOrder = { ...order };
+        
+        if (cleanedOrder.items && Array.isArray(cleanedOrder.items)) {
+          for (let i = 0; i < cleanedOrder.items.length; i++) {
+            const item = cleanedOrder.items[i];
+            
+            // Jeśli pozycja ma przypisane zadanie produkcyjne, sprawdź czy nadal istnieje
+            if (item.productionTaskId) {
+              try {
+                await getTaskById(item.productionTaskId);
+                // Zadanie istnieje, zachowaj dane
+              } catch (error) {
+                // Zadanie nie istnieje, wyczyść dane
+                if (error.message && error.message.includes('nie istnieje')) {
+                  console.log(`Czyszczę nieistniejące zadanie ${item.productionTaskId} z pozycji ${item.name} w zamówieniu ${order.orderNumber}`);
+                  orderChanged = true;
+                  
+                  cleanedOrder.items[i] = {
+                    ...item,
+                    productionTaskId: null,
+                    productionTaskNumber: null,
+                    productionStatus: null,
+                    productionCost: 0,
+                    fullProductionCost: 0
+                  };
+                }
+              }
+            }
+          }
+        }
+        
+        // Jeśli dane zamówienia się zmieniły, zapisz je (ale nie blokuj ładowania na błędach zapisu)
+        if (orderChanged) {
+          try {
+            const safeUpdateData = {
+              items: cleanedOrder.items,
+              orderNumber: cleanedOrder.orderNumber,
+              orderDate: cleanedOrder.orderDate,
+              status: cleanedOrder.status,
+              customer: cleanedOrder.customer,
+              shippingCost: cleanedOrder.shippingCost,
+              totalValue: cleanedOrder.totalValue,
+              additionalCostsItems: cleanedOrder.additionalCostsItems,
+              productionTasks: cleanedOrder.productionTasks,
+              linkedPurchaseOrders: cleanedOrder.linkedPurchaseOrders
+            };
+            
+            await updateOrder(order.id, safeUpdateData, 'system');
+            console.log(`Zaktualizowano zamówienie ${order.orderNumber} - usunięto nieistniejące zadania produkcyjne`);
+          } catch (updateError) {
+            console.error(`Błąd podczas czyszczenia zamówienia ${order.orderNumber}:`, updateError);
+            // Kontynuuj mimo błędu zapisu
+          }
+        }
+        
+        cleanedOrders.push(cleanedOrder);
+      }
+      
+      setOrders(cleanedOrders);
       
       // Pobierz wszystkich klientów
       const allCustomers = await getAllCustomers();
@@ -419,9 +486,113 @@ const COReportsPage = () => {
   };
   
   // Funkcja do odświeżenia danych
-  const handleRefreshData = () => {
-    fetchData();
-    showInfo('Dane zostały odświeżone');
+  const handleRefreshData = async () => {
+    try {
+      setLoading(true);
+      showInfo('Odświeżanie danych...');
+      
+      // Najpierw pobierz wszystkie zamówienia
+      const allOrders = await getAllOrders();
+      
+      // Następnie sprawdź i zaktualizuj dane zadań produkcyjnych dla każdego zamówienia
+      const { getTaskById } = await import('../../services/productionService');
+      const { updateOrder } = await import('../../services/orderService');
+      
+      const updatedOrders = [];
+      
+      for (const order of allOrders) {
+        let orderChanged = false;
+        const updatedOrderData = { ...order };
+        
+        if (updatedOrderData.items && Array.isArray(updatedOrderData.items)) {
+          for (let i = 0; i < updatedOrderData.items.length; i++) {
+            const item = updatedOrderData.items[i];
+            
+            // Jeśli pozycja ma przypisane zadanie produkcyjne, sprawdź czy nadal istnieje
+            if (item.productionTaskId) {
+              try {
+                const taskDetails = await getTaskById(item.productionTaskId);
+                
+                // Sprawdź czy dane zadania się zmieniły
+                const currentCost = item.productionCost || 0;
+                const newCost = taskDetails.totalMaterialCost || 0;
+                const currentFullCost = item.fullProductionCost || 0;
+                const newFullCost = taskDetails.totalFullProductionCost || 0;
+                
+                if (Math.abs(currentCost - newCost) > 0.01 || 
+                    Math.abs(currentFullCost - newFullCost) > 0.01 ||
+                    item.productionTaskNumber !== taskDetails.moNumber ||
+                    item.productionStatus !== taskDetails.status) {
+                  
+                  orderChanged = true;
+                  updatedOrderData.items[i] = {
+                    ...item,
+                    productionTaskNumber: taskDetails.moNumber,
+                    productionStatus: taskDetails.status,
+                    productionCost: newCost,
+                    fullProductionCost: newFullCost
+                  };
+                }
+              } catch (error) {
+                // Jeśli zadanie nie istnieje, wyczyść dane z pozycji
+                if (error.message && error.message.includes('nie istnieje')) {
+                  console.log(`Zadanie ${item.productionTaskId} nie istnieje, czyszczę dane z pozycji ${item.name} w zamówieniu ${order.orderNumber}`);
+                  orderChanged = true;
+                  
+                  updatedOrderData.items[i] = {
+                    ...item,
+                    productionTaskId: null,
+                    productionTaskNumber: null,
+                    productionStatus: null,
+                    productionCost: 0,
+                    fullProductionCost: 0
+                  };
+                }
+              }
+            }
+          }
+        }
+        
+        // Jeśli dane zamówienia się zmieniły, zapisz je
+        if (orderChanged) {
+          try {
+            const safeUpdateData = {
+              items: updatedOrderData.items,
+              orderNumber: updatedOrderData.orderNumber,
+              orderDate: updatedOrderData.orderDate,
+              status: updatedOrderData.status,
+              customer: updatedOrderData.customer,
+              shippingCost: updatedOrderData.shippingCost,
+              totalValue: updatedOrderData.totalValue,
+              additionalCostsItems: updatedOrderData.additionalCostsItems,
+              productionTasks: updatedOrderData.productionTasks,
+              linkedPurchaseOrders: updatedOrderData.linkedPurchaseOrders
+            };
+            
+            await updateOrder(order.id, safeUpdateData, 'system');
+            console.log(`Zaktualizowano dane zadań produkcyjnych w zamówieniu ${order.orderNumber}`);
+          } catch (updateError) {
+            console.error(`Błąd podczas aktualizacji zamówienia ${order.orderNumber}:`, updateError);
+          }
+        }
+        
+        updatedOrders.push(updatedOrderData);
+      }
+      
+      // Zaktualizuj stan z synchronizowanymi danymi
+      setOrders(updatedOrders);
+      
+      // Pobierz klientów
+      const allCustomers = await getAllCustomers();
+      setCustomers(allCustomers || []);
+      
+      setLoading(false);
+      showSuccess('Dane zostały odświeżone i zsynchronizowane');
+    } catch (error) {
+      console.error('Błąd podczas odświeżania danych:', error);
+      setLoading(false);
+      showError('Nie udało się odświeżyć danych');
+    }
   };
   
   // Funkcja pomocnicza do uzyskania nazwy klienta
@@ -443,27 +614,31 @@ const COReportsPage = () => {
       filteredOrders.forEach(order => {
         if (order.items && Array.isArray(order.items) && order.items.length > 0) {
           order.items.forEach(item => {
-            // Sprawdź, czy pozycja ma koszt produkcji
-            if (item.productionCost && parseFloat(item.productionCost) > 0) {
+            // Sprawdź, czy pozycja ma koszt produkcji I przypisane zadanie produkcyjne
+            if ((item.productionCost && parseFloat(item.productionCost) > 0) || 
+                (item.productionTaskId && item.productionTaskNumber)) {
               try {
-                productionCosts.push({
-                  orderId: order.id,
-                  orderNumber: order.orderNumber || order.id,
-                  orderDate: order.orderDate,
-                  customerName: order.customer?.name || 'Nieznany klient',
-                  itemName: item.name || 'Produkt bez nazwy',
-                  quantity: parseFloat(item.quantity) || 0,
-                  unit: item.unit || 'szt.',
-                  productionTaskId: item.productionTaskId,
-                  productionTaskNumber: item.productionTaskNumber || 'N/A',
-                  productionCost: parseFloat(item.productionCost || 0),
-                  fullProductionCost: parseFloat(item.fullProductionCost || 0),
-                  unitProductionCost: parseFloat(item.productionUnitCost || 0),
-                  fullProductionUnitCost: parseFloat(item.fullProductionUnitCost || 0),
-                  totalItemValue: (parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0),
-                  totalProductionCost: (parseFloat(item.quantity) || 0) * parseFloat(item.productionUnitCost || item.productionCost || 0),
-                  totalFullProductionCost: (parseFloat(item.quantity) || 0) * parseFloat(item.fullProductionUnitCost || item.fullProductionCost || 0)
-                });
+                // Tylko dodaj pozycję jeśli ma rzeczywiste dane zadania produkcyjnego
+                if (item.productionTaskId && item.productionTaskNumber && item.productionTaskNumber !== 'N/A') {
+                  productionCosts.push({
+                    orderId: order.id,
+                    orderNumber: order.orderNumber || order.id,
+                    orderDate: order.orderDate,
+                    customerName: order.customer?.name || 'Nieznany klient',
+                    itemName: item.name || 'Produkt bez nazwy',
+                    quantity: parseFloat(item.quantity) || 0,
+                    unit: item.unit || 'szt.',
+                    productionTaskId: item.productionTaskId,
+                    productionTaskNumber: item.productionTaskNumber,
+                    productionCost: parseFloat(item.productionCost || 0),
+                    fullProductionCost: parseFloat(item.fullProductionCost || 0),
+                    unitProductionCost: parseFloat(item.productionUnitCost || 0),
+                    fullProductionUnitCost: parseFloat(item.fullProductionUnitCost || 0),
+                    totalItemValue: (parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0),
+                    totalProductionCost: (parseFloat(item.quantity) || 0) * parseFloat(item.productionUnitCost || item.productionCost || 0),
+                    totalFullProductionCost: (parseFloat(item.quantity) || 0) * parseFloat(item.fullProductionUnitCost || item.fullProductionCost || 0)
+                  });
+                }
               } catch (itemError) {
                 console.error('Błąd podczas przetwarzania pozycji zamówienia:', itemError, item);
               }

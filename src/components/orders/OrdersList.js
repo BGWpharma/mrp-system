@@ -1090,14 +1090,51 @@ const OrdersList = () => {
             } catch (error) {
               console.error(`Błąd podczas pobierania szczegółów zadania ${associatedTask.id}:`, error);
               
-              // W przypadku błędu, użyj podstawowych danych z associatedTask
+              // W przypadku błędu, sprawdź czy zadanie rzeczywiście istnieje
+              // Jeśli nie istnieje (np. zostało usunięte), wyczyść dane zadania z pozycji
+              if (error.message && error.message.includes('nie istnieje')) {
+                console.log(`Zadanie ${associatedTask.id} nie istnieje, czyszczę dane z pozycji ${item.name}`);
+                
+                // Sprawdź czy pozycja miała przypisane zadanie produkcyjne
+                if (item.productionTaskId || item.productionTaskNumber) {
+                  dataChanged = true;
+                }
+                
+                // Wyczyść dane zadania produkcyjnego z pozycji zamówienia
+                updatedOrderData.items[i] = {
+                  ...item,
+                  productionTaskId: null,
+                  productionTaskNumber: null,
+                  productionStatus: null,
+                  productionCost: 0,
+                  fullProductionCost: 0
+                };
+              } else {
+                // W przypadku innego błędu, użyj podstawowych danych z associatedTask
+                updatedOrderData.items[i] = {
+                  ...item,
+                  productionTaskId: associatedTask.id,
+                  productionTaskNumber: associatedTask.moNumber,
+                  productionStatus: associatedTask.status,
+                  productionCost: associatedTask.totalMaterialCost || 0,
+                  fullProductionCost: associatedTask.totalFullProductionCost || 0
+                };
+              }
+            }
+          } else {
+            // Jeśli nie ma powiązanego zadania, ale pozycja ma dane o zadaniu produkcyjnym, wyczyść je
+            if (item.productionTaskId || item.productionTaskNumber) {
+              console.log(`Pozycja ${item.name} ma przypisane zadanie, ale zadanie nie istnieje w zamówieniu. Czyszczę dane zadania.`);
+              dataChanged = true;
+              
+              // Wyczyść dane zadania produkcyjnego z pozycji zamówienia
               updatedOrderData.items[i] = {
                 ...item,
-                productionTaskId: associatedTask.id,
-                productionTaskNumber: associatedTask.moNumber,
-                productionStatus: associatedTask.status,
-                productionCost: associatedTask.totalMaterialCost || 0,
-                fullProductionCost: associatedTask.totalFullProductionCost || 0
+                productionTaskId: null,
+                productionTaskNumber: null,
+                productionStatus: null,
+                productionCost: 0,
+                fullProductionCost: 0
               };
             }
           }
