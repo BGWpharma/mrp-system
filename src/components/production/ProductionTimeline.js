@@ -2000,9 +2000,11 @@ const ProductionTimeline = React.memo(() => {
             }
           }}
           itemRenderer={({ item, itemContext, getItemProps }) => {
+            const { key, ...itemProps } = getItemProps();
             return (
               <div 
-                {...getItemProps()}
+                key={key}
+                {...itemProps}
                                  onMouseEnter={(e) => {
                    if (item.task) {
                      setTooltipData(item.task);
@@ -2018,7 +2020,7 @@ const ProductionTimeline = React.memo(() => {
                    setTooltipData(null);
                  }}
                                  style={{
-                   ...getItemProps().style,
+                   ...itemProps.style,
                    background: item.backgroundColor || '#1976d2',
                    color: '#fff',
                    border: '1px solid rgba(255, 255, 255, 0.3)',
@@ -2049,11 +2051,13 @@ const ProductionTimeline = React.memo(() => {
           <TimelineHeaders className="sticky">
             <SidebarHeader>
               {({ getRootProps }) => {
+                const { key, ...rootProps } = getRootProps();
                 return (
                   <div 
-                    {...getRootProps()}
+                    key={key}
+                    {...rootProps}
                     style={{
-                      ...getRootProps().style,
+                      ...rootProps.style,
                       background: themeMode === 'dark' 
                         ? 'linear-gradient(135deg, #1a237e 0%, #283593 50%, #3949ab 100%)'
                         : 'linear-gradient(135deg, #1976d2 0%, #1e88e5 50%, #42a5f5 100%)',
@@ -2087,11 +2091,13 @@ const ProductionTimeline = React.memo(() => {
                 fontWeight: 600
               }}
               intervalRenderer={({ getIntervalProps, intervalContext }) => {
+                const { key, ...intervalProps } = getIntervalProps();
                 return (
                   <div 
-                    {...getIntervalProps()}
+                    key={key}
+                    {...intervalProps}
                     style={{
-                      ...getIntervalProps().style,
+                      ...intervalProps.style,
                       background: themeMode === 'dark' 
                         ? 'linear-gradient(135deg, #0d47a1 0%, #1565c0 50%, #1976d2 100%)'
                         : 'linear-gradient(135deg, #0d47a1 0%, #1565c0 50%, #1976d2 100%)',
@@ -2119,11 +2125,13 @@ const ProductionTimeline = React.memo(() => {
                 fontWeight: 500
               }}
               intervalRenderer={({ getIntervalProps, intervalContext }) => {
+                const { key, ...intervalProps } = getIntervalProps();
                 return (
                   <div 
-                    {...getIntervalProps()}
+                    key={key}
+                    {...intervalProps}
                     style={{
-                      ...getIntervalProps().style,
+                      ...intervalProps.style,
                       background: themeMode === 'dark' 
                         ? 'linear-gradient(135deg, #1565c0 0%, #1976d2 50%, #1e88e5 100%)'
                         : 'linear-gradient(135deg, #1565c0 0%, #1976d2 50%, #1e88e5 100%)',

@@ -472,24 +472,24 @@ import {
   };
   
   // Pobieranie zadań produkcyjnych na dany okres - ZOPTYMALIZOWANA WERSJA
-  export const getTasksByDateRangeOptimizedNew = async (startDate, endDate, limit = 1000) => {
-    try {
-      const tasksRef = collection(db, PRODUCTION_TASKS_COLLECTION);
-      
-      // Konwersja dat na Timestamp dla Firestore
-      const startTimestamp = Timestamp.fromDate(new Date(startDate));
-      const endTimestamp = Timestamp.fromDate(new Date(endDate));
-      
-      console.log('Pobieranie zadań z optymalizacją serwerową dla okresu:', startDate, '-', endDate);
-      
-      // OPTYMALIZACJA 1: Filtrowanie po stronie serwera
-      const q = query(
-        tasksRef,
-        where('scheduledDate', '>=', startTimestamp),
-        where('scheduledDate', '<=', endTimestamp),
-        orderBy('scheduledDate', 'asc'),
-        limit(limit) // OPTYMALIZACJA 2: Limit wyników
-      );
+  export const getTasksByDateRangeOptimizedNew = async (startDate, endDate, maxResults = 1000) => {
+  try {
+    const tasksRef = collection(db, PRODUCTION_TASKS_COLLECTION);
+    
+    // Konwersja dat na Timestamp dla Firestore
+    const startTimestamp = Timestamp.fromDate(new Date(startDate));
+    const endTimestamp = Timestamp.fromDate(new Date(endDate));
+    
+    console.log('Pobieranie zadań z optymalizacją serwerową dla okresu:', startDate, '-', endDate);
+    
+    // OPTYMALIZACJA 1: Filtrowanie po stronie serwera
+    const q = query(
+      tasksRef,
+      where('scheduledDate', '>=', startTimestamp),
+      where('scheduledDate', '<=', endTimestamp),
+      orderBy('scheduledDate', 'asc'),
+      limit(maxResults) // OPTYMALIZACJA 2: Limit wyników
+    );
       
       const querySnapshot = await getDocs(q);
       let tasks = querySnapshot.docs.map(doc => ({
