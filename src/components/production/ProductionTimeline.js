@@ -380,7 +380,7 @@ const ProductionTimeline = React.memo(() => {
     endOfDay(addDays(new Date(), 30)).getTime()
   );
   const [canvasTimeStart, setCanvasTimeStart] = useState(
-    startOfDay(addDays(new Date(), -90)).getTime() // Rozszerzam zakres do 90 dni wstecz
+    startOfDay(addDays(new Date(), -365)).getTime() // Rozszerzam zakres do 90 dni wstecz
   );
   const [canvasTimeEnd, setCanvasTimeEnd] = useState(
     endOfDay(addDays(new Date(), 365)).getTime() // Rozszerzam zakres do roku w przód
@@ -413,7 +413,9 @@ const ProductionTimeline = React.memo(() => {
   const [advancedFilters, setAdvancedFilters] = useState({
     productName: '',
     moNumber: '',
-    orderNumber: ''
+    orderNumber: '',
+    startDate: null,
+    endDate: null
   });
   
   // Stan dla trybu edycji
@@ -652,6 +654,43 @@ const ProductionTimeline = React.memo(() => {
         const orderNumber = (task.orderNumber || '').toLowerCase();
         if (!orderNumber.includes(advancedFilters.orderNumber.toLowerCase())) {
           return false;
+        }
+      }
+
+      // Filtr według zakresu dat
+      if (advancedFilters.startDate || advancedFilters.endDate) {
+        const taskDate = task.scheduledDate;
+        if (taskDate) {
+          // Konwertuj datę zadania na obiekt Date
+          let taskDateObj;
+          if (taskDate instanceof Date) {
+            taskDateObj = taskDate;
+          } else if (taskDate.toDate && typeof taskDate.toDate === 'function') {
+            taskDateObj = taskDate.toDate();
+          } else {
+            taskDateObj = new Date(taskDate);
+          }
+
+          // Sprawdź czy data jest poprawna
+          if (!isNaN(taskDateObj.getTime())) {
+            // Filtruj według daty rozpoczęcia
+            if (advancedFilters.startDate) {
+              const startDate = new Date(advancedFilters.startDate);
+              startDate.setHours(0, 0, 0, 0); // Ustaw na początek dnia
+              if (taskDateObj < startDate) {
+                return false;
+              }
+            }
+
+            // Filtruj według daty zakończenia
+            if (advancedFilters.endDate) {
+              const endDate = new Date(advancedFilters.endDate);
+              endDate.setHours(23, 59, 59, 999); // Ustaw na koniec dnia
+              if (taskDateObj > endDate) {
+                return false;
+              }
+            }
+          }
         }
       }
 
@@ -1033,7 +1072,9 @@ const ProductionTimeline = React.memo(() => {
     setAdvancedFilters({
       productName: '',
       moNumber: '',
-      orderNumber: ''
+      orderNumber: '',
+      startDate: null,
+      endDate: null
     });
   };
 
@@ -1046,19 +1087,60 @@ const ProductionTimeline = React.memo(() => {
   const calculateSliderValue = useCallback(() => {
     const totalRange = canvasTimeEnd - canvasTimeStart;
     const currentPosition = visibleTimeStart - canvasTimeStart;
-    return totalRange > 0 ? (currentPosition / totalRange) * 100 : 0;
+    
+    // Zabezpieczenia
+    if (totalRange <= 0) return 0;
+    if (currentPosition < 0) return 0;
+    if (currentPosition >= totalRange) return 100;
+    
+    const percentage = (currentPosition / totalRange) * 100;
+    return Math.max(0, Math.min(100, percentage));
   }, [canvasTimeStart, canvasTimeEnd, visibleTimeStart]);
+
+  // Automatyczna aktualizacja wartości suwaka przy zmianie zakresu czasowego
+  useEffect(() => {
+    const newSliderValue = calculateSliderValue();
+    if (isFinite(newSliderValue)) {
+      setSliderValue(newSliderValue);
+    }
+  }, [calculateSliderValue, visibleTimeStart, visibleTimeEnd, canvasTimeStart, canvasTimeEnd]);
 
   // Obsługa suwaka poziomego
   const handleSliderChange = useCallback((event, newValue) => {
     const totalRange = canvasTimeEnd - canvasTimeStart;
     const viewRange = visibleTimeEnd - visibleTimeStart;
-    const newStart = canvasTimeStart + (totalRange * newValue / 100);
-    const newEnd = Math.min(newStart + viewRange, canvasTimeEnd);
+    
+    // Zabezpieczenia dla skrajnych wartości
+    const clampedValue = Math.max(0, Math.min(100, newValue));
+    
+    let newStart = canvasTimeStart + (totalRange * clampedValue / 100);
+    let newEnd = newStart + viewRange;
+    
+    // Zabezpieczenie dla maksymalnej pozycji suwaka
+    if (newEnd > canvasTimeEnd) {
+      newEnd = canvasTimeEnd;
+      newStart = Math.max(canvasTimeStart, newEnd - viewRange);
+    }
+    
+    // Zabezpieczenie dla minimalnej pozycji suwaka
+    if (newStart < canvasTimeStart) {
+      newStart = canvasTimeStart;
+      newEnd = Math.min(canvasTimeEnd, newStart + viewRange);
+    }
+    
+    // Upewnij się, że zakres jest poprawny
+    if (newEnd <= newStart) {
+      const minimumRange = 1000 * 60 * 60; // 1 godzina minimum
+      newEnd = newStart + minimumRange;
+      if (newEnd > canvasTimeEnd) {
+        newEnd = canvasTimeEnd;
+        newStart = newEnd - minimumRange;
+      }
+    }
     
     setVisibleTimeStart(newStart);
     setVisibleTimeEnd(newEnd);
-    setSliderValue(newValue);
+    setSliderValue(clampedValue);
     
     // Synchronizuj canvas
     if (updateScrollCanvasRef.current) {
@@ -1074,6 +1156,12 @@ const ProductionTimeline = React.memo(() => {
 
   // Obsługa zmiany widoku czasowego
   const handleTimeChange = (visibleTimeStart, visibleTimeEnd, updateScrollCanvas) => {
+    // Zabezpieczenia dla nieprawidłowych wartości
+    if (!visibleTimeStart || !visibleTimeEnd || visibleTimeEnd <= visibleTimeStart) {
+      console.warn('Nieprawidłowe wartości czasu:', { visibleTimeStart, visibleTimeEnd });
+      return;
+    }
+    
     // Zachowaj referencję do funkcji updateScrollCanvas
     updateScrollCanvasRef.current = updateScrollCanvas;
     
@@ -1094,9 +1182,15 @@ const ProductionTimeline = React.memo(() => {
     setVisibleTimeStart(visibleTimeStart);
     setVisibleTimeEnd(visibleTimeEnd);
     
-    // Aktualizuj suwak
-    const newSliderValue = calculateSliderValue();
-    setSliderValue(newSliderValue);
+    // Aktualizuj suwak tylko jeśli wartości są poprawne
+    try {
+      const newSliderValue = calculateSliderValue();
+      if (isFinite(newSliderValue)) {
+        setSliderValue(newSliderValue);
+      }
+    } catch (error) {
+      console.warn('Błąd podczas obliczania wartości suwaka:', error);
+    }
   };
 
   // Funkcje zoom
@@ -1587,10 +1681,7 @@ const ProductionTimeline = React.memo(() => {
       return () => timeouts.forEach(clearTimeout);
     }
     
-    // Aktualizuj wartość suwaka
-    const newSliderValue = calculateSliderValue();
-    setSliderValue(newSliderValue);
-  }, [visibleTimeStart, visibleTimeEnd, calculateSliderValue]);
+  }, [visibleTimeStart, visibleTimeEnd]);
 
   // Dodatkowa synchronizacja z obserwatorami dla jeszcze lepszej stabilności
   useEffect(() => {
@@ -2075,11 +2166,12 @@ const ProductionTimeline = React.memo(() => {
           </Typography>
           
           <Slider
-            value={sliderValue}
+            value={isFinite(sliderValue) ? Math.max(0, Math.min(100, sliderValue)) : 0}
             onChange={handleSliderChange}
             min={0}
             max={100}
             step={0.1}
+            disabled={!isFinite(sliderValue) || canvasTimeEnd <= canvasTimeStart}
             sx={{
               flex: 1,
               height: 4,
@@ -2111,7 +2203,7 @@ const ProductionTimeline = React.memo(() => {
             color: 'text.secondary',
             textAlign: 'right'
           }}>
-            {Math.round(sliderValue)}%
+            {isFinite(sliderValue) ? Math.round(sliderValue) : 0}%
           </Typography>
         </Box>
         
@@ -2124,13 +2216,17 @@ const ProductionTimeline = React.memo(() => {
           color: 'text.disabled'
         }}>
           <span>
-            {format(new Date(canvasTimeStart), 'dd.MM.yyyy', { locale: pl })}
+            {canvasTimeStart ? format(new Date(canvasTimeStart), 'dd.MM.yyyy', { locale: pl }) : '---'}
           </span>
           <span>
-            Widoczny zakres: {format(new Date(visibleTimeStart), 'dd.MM HH:mm', { locale: pl })} - {format(new Date(visibleTimeEnd), 'dd.MM HH:mm', { locale: pl })}
+            Widoczny zakres: {
+              visibleTimeStart && visibleTimeEnd 
+                ? `${format(new Date(visibleTimeStart), 'dd.MM HH:mm', { locale: pl })} - ${format(new Date(visibleTimeEnd), 'dd.MM HH:mm', { locale: pl })}`
+                : '---'
+            }
           </span>
           <span>
-            {format(new Date(canvasTimeEnd), 'dd.MM.yyyy', { locale: pl })}
+            {canvasTimeEnd ? format(new Date(canvasTimeEnd), 'dd.MM.yyyy', { locale: pl }) : '---'}
           </span>
         </Box>
       </Box>
@@ -2317,10 +2413,51 @@ const ProductionTimeline = React.memo(() => {
                   size="small"
                 />
               </Grid>
+              
+              {/* Sekcja filtrowania po datach */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" sx={{ mb: 1, mt: 2, fontWeight: 'bold', color: 'primary.main' }}>
+                  Filtrowanie po zakresie dat:
+                </Typography>
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                  <DateTimePicker
+                    label="Data od"
+                    value={advancedFilters.startDate}
+                    onChange={(newValue) => handleAdvancedFilterChange('startDate', newValue)}
+                    slotProps={{
+                      textField: {
+                        fullWidth: true,
+                        size: 'small',
+                        variant: 'outlined'
+                      }
+                    }}
+                  />
+                </LocalizationProvider>
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                  <DateTimePicker
+                    label="Data do"
+                    value={advancedFilters.endDate}
+                    onChange={(newValue) => handleAdvancedFilterChange('endDate', newValue)}
+                    slotProps={{
+                      textField: {
+                        fullWidth: true,
+                        size: 'small',
+                        variant: 'outlined'
+                      }
+                    }}
+                  />
+                </LocalizationProvider>
+              </Grid>
             </Grid>
             
             {/* Podgląd aktywnych filtrów */}
-            {(advancedFilters.productName || advancedFilters.moNumber || advancedFilters.orderNumber) && (
+            {(advancedFilters.productName || advancedFilters.moNumber || advancedFilters.orderNumber || advancedFilters.startDate || advancedFilters.endDate) && (
               <Box sx={{ mt: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
                   Aktywne filtry:
@@ -2344,6 +2481,22 @@ const ProductionTimeline = React.memo(() => {
                     label={`Zamówienie: ${advancedFilters.orderNumber}`} 
                     size="small" 
                     sx={{ mr: 1, mb: 1 }} 
+                  />
+                )}
+                {advancedFilters.startDate && (
+                  <Chip 
+                    label={`Od: ${format(new Date(advancedFilters.startDate), 'dd.MM.yyyy', { locale: pl })}`} 
+                    size="small" 
+                    sx={{ mr: 1, mb: 1 }} 
+                    color="primary"
+                  />
+                )}
+                {advancedFilters.endDate && (
+                  <Chip 
+                    label={`Do: ${format(new Date(advancedFilters.endDate), 'dd.MM.yyyy', { locale: pl })}`} 
+                    size="small" 
+                    sx={{ mr: 1, mb: 1 }} 
+                    color="primary"
                   />
                 )}
               </Box>

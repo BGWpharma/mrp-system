@@ -374,13 +374,6 @@ import {
         
         const isVisible = startsBeforeRangeEnds && endsAfterRangeStarts;
         
-        console.log('Sprawdzanie widoczności zadania:', task.id, task.name, 
-          'startDate:', taskStartDate, 
-          'endDate:', taskEndDate,
-          'startDateTime:', startDateTime,
-          'endDateTime:', endDateTime,
-          'Widoczne?', isVisible);
-        
         return isVisible;
       });
       
