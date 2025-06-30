@@ -6,6 +6,7 @@ import { NotificationProvider } from './contexts/NotificationContext';
 import { useTheme } from './contexts/ThemeContext';
 import { ColumnPreferencesProvider } from './contexts/ColumnPreferencesContext';
 import { InventoryListStateProvider } from './contexts/InventoryListStateContext';
+import { RecipeListStateProvider } from './contexts/RecipeListStateContext';
 import { SidebarProvider, useSidebar } from './contexts/SidebarContext';
 import Notifications from './components/common/Notifications';
 import { rtdb } from './services/firebase/config';
@@ -171,7 +172,8 @@ function App() {
         <NotificationProvider>
           <ColumnPreferencesProvider>
             <InventoryListStateProvider>
-              <SidebarProvider>
+              <RecipeListStateProvider>
+                <SidebarProvider>
                 <div className="app-container">
                   <Notifications />
                   <Routes>
@@ -338,6 +340,7 @@ function App() {
                   </Routes>
                 </div>
               </SidebarProvider>
+                </RecipeListStateProvider>
             </InventoryListStateProvider>
           </ColumnPreferencesProvider>
         </NotificationProvider>

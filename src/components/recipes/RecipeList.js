@@ -63,6 +63,7 @@ import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
 import searchService from '../../services/searchService';
 import { getAllWorkstations } from '../../services/workstationService';
+import { useRecipeListState } from '../../contexts/RecipeListStateContext';
 
 // UWAGA: Do poprawnego działania zapytań filtrowania wg. klienta wymagany jest
 // indeks złożony w Firestore dla kolekcji "recipes":
@@ -72,18 +73,21 @@ import { getAllWorkstations } from '../../services/workstationService';
 const RecipeList = () => {
   const [recipes, setRecipes] = useState([]);
   const [filteredRecipes, setFilteredRecipes] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const { showSuccess, showError } = useNotification();
   const navigate = useNavigate();
   
   // Użyj nowego hooka do buforowania danych klientów
   const { customers, loading: loadingCustomers, error: customersError, refreshCustomers } = useCustomersCache();
-  const [selectedCustomerId, setSelectedCustomerId] = useState('');
-  const [notesFilter, setNotesFilter] = useState(null); // null = wszystkie, true = z notatkami, false = bez notatek
   
-  // Dodajemy zakładki dla zmiany widoku
-  const [tabValue, setTabValue] = useState(0); // 0 - wszystkie, 1 - grupowane wg klienta
+  // Użyj kontekstu stanu listy receptur
+  const { state: listState, actions: listActions } = useRecipeListState();
+  
+  // Zmienne stanu z kontekstu
+  const searchTerm = listState.searchTerm;
+  const selectedCustomerId = listState.selectedCustomerId;
+  const notesFilter = listState.notesFilter;
+  const tabValue = listState.tabValue;
   
   // Grupujemy receptury wg klienta
   const [groupedRecipes, setGroupedRecipes] = useState({});
@@ -91,15 +95,9 @@ const RecipeList = () => {
   // Dodajemy stan dla powiadomienia o indeksie Firestore
   const [showIndexAlert, setShowIndexAlert] = useState(false);
 
-  // Dodajemy stan dla sortowania
-  const [tableSort, setTableSort] = useState({
-    field: 'name',
-    order: 'asc'
-  });
-
-  // Dodajemy stany do obsługi paginacji
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
+  const page = listState.page;
+  const limit = listState.limit;
+  const tableSort = listState.tableSort;
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -108,7 +106,7 @@ const RecipeList = () => {
   const [searchTimeout, setSearchTimeout] = useState(null);
 
   // Dodajemy stan dla rozwiniętych paneli klientów
-  const [expandedPanel, setExpandedPanel] = useState(null);
+  const expandedPanel = listState.expandedPanel;
   const [customerRecipes, setCustomerRecipes] = useState({});
   const [loadingCustomerRecipes, setLoadingCustomerRecipes] = useState({});
   
@@ -414,28 +412,28 @@ const RecipeList = () => {
 
   const handleTableSort = (field) => {
     const newOrder = tableSort.field === field && tableSort.order === 'asc' ? 'desc' : 'asc';
-    setTableSort({
+    listActions.setTableSort({
       field,
       order: newOrder
     });
-    setPage(1); // Reset do pierwszej strony po zmianie sortowania
+    listActions.setPage(1); // Reset do pierwszej strony po zmianie sortowania
   };
 
   // Obsługa zmiany strony paginacji
   const handleChangePage = (event, newPage) => {
-    setPage(newPage);
+    listActions.setPage(newPage);
   };
   
   // Obsługa zmiany liczby elementów na stronę
   const handleChangeRowsPerPage = (event) => {
-    setLimit(parseInt(event.target.value, 10));
-    setPage(1); // Wracamy na pierwszą stronę po zmianie rozmiaru
+    listActions.setLimit(parseInt(event.target.value, 10));
+    listActions.setPage(1); // Wracamy na pierwszą stronę po zmianie rozmiaru
   };
   
   // Obsługa kliknięcia panelu klienta
   const handlePanelChange = (customerId) => (event, isExpanded) => {
     const newExpandedPanel = isExpanded ? customerId : null;
-    setExpandedPanel(newExpandedPanel);
+    listActions.setExpandedPanel(newExpandedPanel);
     
     // Jeśli panel jest rozwijany i nie mamy jeszcze receptur dla tego klienta, pobierz je
     if (isExpanded && (!customerRecipes[customerId] || customerRecipes[customerId].length === 0)) {
@@ -472,15 +470,15 @@ const RecipeList = () => {
   const handleCustomerFilterChange = (event) => {
     const newCustomerId = event.target.value;
     console.log('Zmieniono filtr klienta na:', newCustomerId);
-    setSelectedCustomerId(newCustomerId);
-    setPage(1); // Reset do pierwszej strony po zmianie filtra
+    listActions.setSelectedCustomerId(newCustomerId);
+    listActions.setPage(1); // Reset do pierwszej strony po zmianie filtra
   };
 
   const handleNotesFilterChange = (event) => {
     const newNotesFilter = event.target.value === '' ? null : event.target.value === 'true';
     console.log('Zmieniono filtr notatek na:', newNotesFilter);
-    setNotesFilter(newNotesFilter);
-    setPage(1); // Reset do pierwszej strony po zmianie filtra
+    listActions.setNotesFilter(newNotesFilter);
+    listActions.setPage(1); // Reset do pierwszej strony po zmianie filtra
     
     // Wyczyść cache receptur dla klientów aby wymusić ponowne pobranie z nowym filtrem
     setCustomerRecipes({});
@@ -492,7 +490,11 @@ const RecipeList = () => {
   };
   
   const handleTabChange = (event, newValue) => {
-    setTabValue(newValue);
+    listActions.setTabValue(newValue);
+  };
+
+  const handleSearchTermChange = (e) => {
+    listActions.setSearchTerm(e.target.value);
   };
 
   // Funkcja eksportu receptur do CSV
@@ -1153,7 +1155,7 @@ const RecipeList = () => {
         <TextField
           placeholder="Szukaj receptur..."
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={handleSearchTermChange}
           variant="outlined"
           size="small"
           fullWidth={isMobile}
