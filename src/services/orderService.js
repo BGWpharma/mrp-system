@@ -1401,7 +1401,7 @@ export const getLastRecipeUsageInfo = async (recipeId) => {
       
       // Szukaj pozycji z podaną recepturą
       const recipeItem = order.items.find(item => 
-        (item.recipeId === recipeId || item.id === recipeId) && 
+        item.recipeId === recipeId && 
         (item.isRecipe === true || item.itemType === 'recipe')
       );
       
@@ -1648,58 +1648,399 @@ export const getOrdersWithPagination = async (page = 1, limit = 10, sortField = 
 };
 
 /**
- * Zapisuje szacowany koszt w pozycji zamówienia
- * @param {string} orderId - ID zamówienia
- * @param {number} itemIndex - Indeks pozycji w tablicy items
- * @param {Object} estimatedCostData - Dane szacowanego kosztu
- * @param {string} userId - ID użytkownika
- * @returns {Promise<void>}
+ * Odświeża ilości wysłane w zamówieniu na podstawie wszystkich powiązanych CMR
  */
-export const saveEstimatedCost = async (orderId, itemIndex, estimatedCostData, userId) => {
+export const refreshShippedQuantitiesFromCMR = async (orderId, userId = 'system') => {
   try {
-    if (!orderId || itemIndex === undefined || !estimatedCostData) {
-      throw new Error('Brakujące parametry do zapisania szacowanego kosztu');
-    }
-
-    // Pobierz aktualne zamówienie
+    console.log(`Rozpoczęcie odświeżania ilości wysłanych dla zamówienia ${orderId}...`);
+    
+    // Pobierz aktualne dane zamówienia
     const orderRef = doc(db, ORDERS_COLLECTION, orderId);
     const orderDoc = await getDoc(orderRef);
     
     if (!orderDoc.exists()) {
-      throw new Error('Zamówienie nie zostało znalezione');
+      throw new Error('Zamówienie nie istnieje');
     }
-
-    const orderData = orderDoc.data();
-    const items = [...(orderData.items || [])];
     
-    if (itemIndex >= items.length) {
-      throw new Error('Nieprawidłowy indeks pozycji');
+    const orderData = orderDoc.data();
+    const items = orderData.items || [];
+    
+    console.log(`Zamówienie ma ${items.length} pozycji:`, items.map(item => ({ name: item.name, quantity: item.quantity })));
+    
+    // Pobierz wszystkie CMR powiązane z tym zamówieniem
+    const { getCmrDocumentsByOrderId, findCmrDocumentsByOrderNumber } = await import('./cmrService');
+    let linkedCMRs = await getCmrDocumentsByOrderId(orderId);
+    
+    console.log(`Znaleziono ${linkedCMRs.length} powiązanych CMR dla zamówienia ${orderId}:`, 
+      linkedCMRs.map(cmr => ({ 
+        cmrNumber: cmr.cmrNumber, 
+        status: cmr.status, 
+        itemsCount: cmr.items?.length || 0,
+        linkedOrderId: cmr.linkedOrderId,
+        linkedOrderIds: cmr.linkedOrderIds
+      }))
+    );
+    
+    // Jeśli nie znaleziono CMR przez ID, spróbuj wyszukać przez numer zamówienia
+    if (linkedCMRs.length === 0 && orderData.orderNumber) {
+      console.log(`Próba wyszukania CMR przez numer zamówienia: ${orderData.orderNumber}`);
+      const cmrsByOrderNumber = await findCmrDocumentsByOrderNumber(orderData.orderNumber);
+      
+      if (cmrsByOrderNumber.length > 0) {
+        console.log(`✅ Znaleziono ${cmrsByOrderNumber.length} CMR przez numer zamówienia`);
+        linkedCMRs = cmrsByOrderNumber;
+      }
     }
-
-    // Aktualizuj pozycję z szacowanym kosztem
-    items[itemIndex] = {
-      ...items[itemIndex],
-      lastUsageInfo: {
-        ...items[itemIndex].lastUsageInfo,
-        cost: estimatedCostData.totalCost,
-        estimatedCost: true,
-        costDetails: estimatedCostData.details,
-        estimatedAt: new Date(),
-        estimatedBy: userId
+    
+    // Jeśli nie znaleziono CMR, zachowaj istniejące dane
+    if (linkedCMRs.length === 0) {
+      console.log('Brak powiązanych CMR - zachowuję istniejące dane');
+      return { 
+        success: true, 
+        updatedItems: items,
+        stats: {
+          processedCMRs: 0,
+          shippedItems: items.filter(item => parseFloat(item.shippedQuantity || 0) > 0).length,
+          cmrReferences: 0
+        }
+      };
+    }
+    
+    // Resetuj wszystkie ilości wysłane i historie CMR
+    const resetItems = items.map(item => ({
+      ...item,
+      shippedQuantity: 0,
+      lastShipmentDate: null,
+      lastCmrNumber: null,
+      cmrHistory: []
+    }));
+    
+    // Oblicz ponownie ilości wysłane na podstawie wszystkich CMR
+    let updatedItems = [...resetItems];
+    let processedCMRs = 0;
+    
+    // Najpierw zbierz wszystkie dane z CMR dla każdej pozycji
+    const itemCmrData = new Map(); // key: orderItemIndex, value: array of CMR entries
+    
+    // Funkcja pomocnicza do obliczania podobieństwa stringów (Levenshtein distance)
+    const calculateStringSimilarity = (str1, str2) => {
+      if (!str1 || !str2) return 0;
+      
+      const s1 = str1.toLowerCase().trim();
+      const s2 = str2.toLowerCase().trim();
+      
+      if (s1 === s2) return 1;
+      
+      const longer = s1.length > s2.length ? s1 : s2;
+      const shorter = s1.length > s2.length ? s2 : s1;
+      
+      if (longer.length === 0) return 1;
+      
+      const editDistance = levenshteinDistance(longer, shorter);
+      return (longer.length - editDistance) / longer.length;
+    };
+    
+    // Funkcja do obliczania odległości Levenshtein
+    const levenshteinDistance = (str1, str2) => {
+      const matrix = [];
+      for (let i = 0; i <= str2.length; i++) {
+        matrix[i] = [i];
+      }
+      for (let j = 0; j <= str1.length; j++) {
+        matrix[0][j] = j;
+      }
+      for (let i = 1; i <= str2.length; i++) {
+        for (let j = 1; j <= str1.length; j++) {
+          if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+            matrix[i][j] = matrix[i - 1][j - 1];
+          } else {
+            matrix[i][j] = Math.min(
+              matrix[i - 1][j - 1] + 1,
+              matrix[i][j - 1] + 1,
+              matrix[i - 1][j] + 1
+            );
+          }
+        }
+      }
+      return matrix[str2.length][str1.length];
+    };
+    
+    for (const cmr of linkedCMRs) {
+      console.log(`Sprawdzanie CMR ${cmr.cmrNumber} (status: ${cmr.status})...`);
+      
+      // Przetwarzaj tylko CMR w statusie "W transporcie", "Dostarczone" lub "Zakończony"
+      if (cmr.status === 'W transporcie' || cmr.status === 'Dostarczone' || cmr.status === 'Zakończony') {
+        console.log(`Przetwarzanie CMR ${cmr.cmrNumber} z ${cmr.items?.length || 0} pozycjami...`);
+        processedCMRs++;
+        
+        if (cmr.items && cmr.items.length > 0) {
+          for (let i = 0; i < cmr.items.length; i++) {
+            const cmrItem = cmr.items[i];
+            const quantity = parseFloat(cmrItem.quantity) || parseFloat(cmrItem.numberOfPackages) || 0;
+            
+            console.log(`CMR pozycja ${i}: "${cmrItem.description}", ilość: ${quantity}`);
+            
+            if (quantity <= 0) {
+              console.log(`Pomijam pozycję z zerową ilością`);
+              continue;
+            }
+            
+            // Ulepszone dopasowanie pozycji w zamówieniu
+            let orderItemIndex = -1;
+            
+            // Funkcja pomocnicza do normalizacji nazw produktów
+            const normalizeProductName = (name) => {
+              if (!name) return '';
+              return name
+                .trim()
+                .toLowerCase()
+                .replace(/[^a-z0-9]/g, '') // usuń wszystkie znaki niealfanumeryczne
+                .replace(/omega3/g, 'omega')
+                .replace(/omegacaps/g, 'omega')
+                .replace(/caps$/g, ''); // usuń "caps" na końcu
+            };
+            
+            const normalizedCmrName = normalizeProductName(cmrItem.description);
+            
+            // 1. Dokładne dopasowanie nazwy
+            orderItemIndex = updatedItems.findIndex(orderItem => 
+              orderItem.name && cmrItem.description && 
+              orderItem.name.trim().toLowerCase() === cmrItem.description.trim().toLowerCase()
+            );
+            
+            // 2. Jeśli nie znaleziono, spróbuj dopasowania przez ID
+            if (orderItemIndex === -1 && cmrItem.itemId) {
+              orderItemIndex = updatedItems.findIndex(orderItem => orderItem.id === cmrItem.itemId);
+            }
+            
+            // 3. Dopasowanie przez znormalizowane nazwy
+            if (orderItemIndex === -1 && normalizedCmrName) {
+              orderItemIndex = updatedItems.findIndex(orderItem => {
+                const normalizedOrderName = normalizeProductName(orderItem.name);
+                return normalizedOrderName === normalizedCmrName;
+              });
+            }
+            
+            // 4. Częściowe dopasowanie nazwy
+            if (orderItemIndex === -1) {
+              orderItemIndex = updatedItems.findIndex(orderItem => {
+                if (!orderItem.name || !cmrItem.description) return false;
+                const orderName = orderItem.name.trim().toLowerCase();
+                const cmrDesc = cmrItem.description.trim().toLowerCase();
+                return orderName.includes(cmrDesc) || cmrDesc.includes(orderName);
+              });
+            }
+            
+            // 5. Specjalne dopasowanie dla produktów OMEGA
+            if (orderItemIndex === -1 && cmrItem.description && cmrItem.description.toLowerCase().includes('omega')) {
+              orderItemIndex = updatedItems.findIndex(orderItem => 
+                orderItem.name && orderItem.name.toLowerCase().includes('omega')
+              );
+            }
+            
+            // 6. Ostatnia próba - dopasowanie według indeksu (tylko jeśli liczba pozycji się zgadza)
+            if (orderItemIndex === -1 && updatedItems.length === cmr.items.length && i < updatedItems.length) {
+              console.log(`Próba dopasowania według indeksu ${i}`);
+              orderItemIndex = i;
+            }
+            
+            console.log(`Dopasowanie dla "${cmrItem.description}": indeks ${orderItemIndex}`);
+            
+            // Dodatkowe debugowanie w przypadku braku dopasowania
+            if (orderItemIndex === -1) {
+              console.log(`🔍 Szczegółowa analiza dopasowania dla "${cmrItem.description}":`);
+              console.log(`  Znormalizowana nazwa CMR: "${normalizedCmrName}"`);
+              
+              // Sprawdź podobieństwo z każdą pozycją zamówienia
+              updatedItems.forEach((orderItem, idx) => {
+                const normalizedOrderName = normalizeProductName(orderItem.name);
+                const similarity = calculateStringSimilarity(cmrItem.description, orderItem.name);
+                
+                if (similarity > 0.7 || normalizedOrderName.includes(normalizedCmrName) || normalizedCmrName.includes(normalizedOrderName)) {
+                  console.log(`  Możliwe dopasowanie ${idx}: "${orderItem.name}" (norm: "${normalizedOrderName}") - podobieństwo: ${similarity.toFixed(2)}`);
+                }
+              });
+            }
+            
+            if (orderItemIndex !== -1) {
+              // Zbierz dane CMR dla tej pozycji
+              if (!itemCmrData.has(orderItemIndex)) {
+                itemCmrData.set(orderItemIndex, []);
+              }
+              
+              const cmrEntry = {
+                cmrNumber: cmr.cmrNumber,
+                quantity: quantity,
+                shipmentDate: cmr.issueDate ? (cmr.issueDate.toISOString ? cmr.issueDate.toISOString() : cmr.issueDate) : new Date().toISOString(),
+                unit: cmrItem.unit || updatedItems[orderItemIndex].unit || 'szt.'
+              };
+              
+              itemCmrData.get(orderItemIndex).push(cmrEntry);
+              console.log(`✅ Zapisano dane CMR ${cmr.cmrNumber} dla pozycji "${updatedItems[orderItemIndex].name}": ${quantity}`);
+            } else {
+              console.warn(`❌ Nie znaleziono odpowiadającej pozycji w zamówieniu dla "${cmrItem.description}" z CMR ${cmr.cmrNumber}`);
+              console.log('Dostępne pozycje w zamówieniu:', updatedItems.map((item, idx) => `${idx}: "${item.name}"`));
+            }
+          }
+        } else {
+          console.log(`CMR ${cmr.cmrNumber} nie ma pozycji`);
+        }
+      } else {
+        console.log(`Pomijam CMR ${cmr.cmrNumber} (status: ${cmr.status})`);
+      }
+    }
+    
+    // Teraz zaktualizuj pozycje zamówienia na podstawie zebranych danych
+    itemCmrData.forEach((cmrEntries, orderItemIndex) => {
+      const orderItem = updatedItems[orderItemIndex];
+      
+      // Usuń duplikaty CMR (jeśli ten sam CMR pojawia się wielokrotnie)
+      const uniqueCmrEntries = cmrEntries.reduce((unique, entry) => {
+        const existingIndex = unique.findIndex(e => e.cmrNumber === entry.cmrNumber);
+        if (existingIndex === -1) {
+          unique.push(entry);
+        } else {
+          // Jeśli CMR już istnieje, zachowaj większą ilość
+          if (entry.quantity > unique[existingIndex].quantity) {
+            unique[existingIndex] = entry;
+          }
+        }
+        return unique;
+      }, []);
+      
+      // Oblicz łączną ilość wysłaną
+      const totalShippedQuantity = uniqueCmrEntries.reduce((total, entry) => total + entry.quantity, 0);
+      
+      // Znajdź najnowszą datę wysyłki i ostatni numer CMR
+      const sortedEntries = uniqueCmrEntries.sort((a, b) => new Date(b.shipmentDate) - new Date(a.shipmentDate));
+      const lastShipmentDate = sortedEntries[0]?.shipmentDate || new Date().toISOString();
+      const lastCmrNumber = sortedEntries[0]?.cmrNumber || '';
+      
+      updatedItems[orderItemIndex] = {
+        ...orderItem,
+        shippedQuantity: totalShippedQuantity,
+        lastShipmentDate: lastShipmentDate,
+        lastCmrNumber: lastCmrNumber,
+        cmrHistory: uniqueCmrEntries
+      };
+      
+      console.log(`✅ Zaktualizowano pozycję "${orderItem.name}": łączna ilość wysłana = ${totalShippedQuantity} (z ${uniqueCmrEntries.length} CMR)`);
+      uniqueCmrEntries.forEach(entry => {
+        console.log(`  - CMR ${entry.cmrNumber}: ${entry.quantity} ${entry.unit}`);
+      });
+    });
+    
+    // Zapisz zaktualizowane dane do bazy
+    await updateDoc(orderRef, {
+      items: updatedItems,
+      updatedBy: userId,
+      updatedAt: serverTimestamp()
+    });
+    
+    console.log(`✅ Odświeżono ilości wysłane dla zamówienia ${orderId}`);
+    
+    // Zwróć statystyki
+    const totalShippedItems = updatedItems.filter(item => 
+      parseFloat(item.shippedQuantity) > 0
+    ).length;
+    
+    const totalCmrReferences = updatedItems.reduce((total, item) => 
+      total + (item.cmrHistory ? item.cmrHistory.length : 0), 0
+    );
+    
+    console.log(`Statystyki: ${totalShippedItems} pozycji wysłanych, ${totalCmrReferences} odniesień do CMR, przetworzono ${processedCMRs} CMR`);
+    
+    return { 
+      success: true, 
+      updatedItems,
+      stats: {
+        processedCMRs: processedCMRs,
+        shippedItems: totalShippedItems,
+        cmrReferences: totalCmrReferences
       }
     };
-
-    // Zapisz zaktualizowane zamówienie
-    await updateDoc(orderRef, {
-      items: items,
-      updatedAt: serverTimestamp(),
-      updatedBy: userId
-    });
-
-    console.log(`Zapisano szacowany koszt ${estimatedCostData.totalCost}€ dla pozycji ${itemIndex} w zamówieniu ${orderId}`);
-    
   } catch (error) {
-    console.error('Błąd podczas zapisywania szacowanego kosztu:', error);
+    console.error('Błąd podczas odświeżania ilości wysłanych:', error);
     throw error;
   }
-}; 
+};
+
+/**
+ * Funkcja pomocnicza do debugowania powiązań CMR z zamówieniami
+ */
+export const debugOrderCMRConnections = async (orderId) => {
+  try {
+    console.log(`🔍 Debugowanie połączeń CMR dla zamówienia ${orderId}`);
+    
+    // Pobierz dane zamówienia
+    const orderRef = doc(db, ORDERS_COLLECTION, orderId);
+    const orderDoc = await getDoc(orderRef);
+    
+    if (!orderDoc.exists()) {
+      console.log('❌ Zamówienie nie istnieje');
+      return;
+    }
+    
+    const orderData = orderDoc.data();
+    console.log('📋 Dane zamówienia:', {
+      orderNumber: orderData.orderNumber,
+      itemsCount: orderData.items?.length || 0,
+      items: orderData.items?.map(item => ({
+        name: item.name,
+        quantity: item.quantity,
+        shippedQuantity: item.shippedQuantity || 0,
+        cmrHistory: item.cmrHistory?.length || 0,
+        lastCmrNumber: item.lastCmrNumber
+      }))
+    });
+    
+    // Sprawdź powiązane CMR
+    const { getCmrDocumentsByOrderId } = await import('./cmrService');
+    const linkedCMRs = await getCmrDocumentsByOrderId(orderId);
+    
+    console.log(`📦 Znalezione CMR (${linkedCMRs.length}):`);
+    linkedCMRs.forEach((cmr, index) => {
+      console.log(`  ${index + 1}. CMR ${cmr.cmrNumber}:`, {
+        status: cmr.status,
+        issueDate: cmr.issueDate,
+        linkedOrderId: cmr.linkedOrderId,
+        linkedOrderIds: cmr.linkedOrderIds,
+        itemsCount: cmr.items?.length || 0,
+        items: cmr.items?.map(item => ({
+          description: item.description,
+          quantity: item.quantity || item.numberOfPackages,
+          unit: item.unit
+        }))
+      });
+    });
+    
+    // Sprawdź dopasowania nazw
+    if (linkedCMRs.length > 0 && orderData.items) {
+      console.log('🔗 Analiza dopasowań nazw:');
+      orderData.items.forEach((orderItem, orderIdx) => {
+        console.log(`  Pozycja zamówienia ${orderIdx}: "${orderItem.name}"`);
+        
+        linkedCMRs.forEach(cmr => {
+          if (cmr.items) {
+            cmr.items.forEach((cmrItem, cmrIdx) => {
+              const exactMatch = orderItem.name && cmrItem.description && 
+                orderItem.name.trim().toLowerCase() === cmrItem.description.trim().toLowerCase();
+              const partialMatch = orderItem.name && cmrItem.description && 
+                (orderItem.name.toLowerCase().includes(cmrItem.description.toLowerCase()) ||
+                 cmrItem.description.toLowerCase().includes(orderItem.name.toLowerCase()));
+              
+              if (exactMatch) {
+                console.log(`    ✅ DOKŁADNE dopasowanie z CMR ${cmr.cmrNumber}[${cmrIdx}]: "${cmrItem.description}"`);
+              } else if (partialMatch) {
+                console.log(`    🔶 CZĘŚCIOWE dopasowanie z CMR ${cmr.cmrNumber}[${cmrIdx}]: "${cmrItem.description}"`);
+              }
+            });
+          }
+        });
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Błąd podczas debugowania:', error);
+  }
+};

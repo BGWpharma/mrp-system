@@ -465,7 +465,7 @@ const CreateFromOrderPage = () => {
     if (Array.isArray(selectedItems)) {
     setSelectedItems(prev => 
       prev.map(item => 
-          (item.itemId === itemId || item.id === itemId)
+          (item.id === itemId)
           ? { ...item, selected: !item.selected } 
           : item
       )
@@ -1109,7 +1109,7 @@ const CreateFromOrderPage = () => {
   // Funkcja sprawdzająca czy konkretny produkt jest zaznaczony
   const isItemSelected = (itemId) => {
     if (Array.isArray(selectedItems)) {
-      return selectedItems.some(item => (item.itemId === itemId || item.id === itemId) && item.selected);
+      return selectedItems.some(item => item.id === itemId && item.selected);
     } else {
       return Boolean(selectedItems[itemId]);
     }

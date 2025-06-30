@@ -1028,32 +1028,28 @@ const OrdersList = () => {
   const handleRefreshMO = async (order) => {
     try {
       setLoading(true);
-      showInfo('Odświeżanie danych zadań produkcyjnych...');
+      showInfo('Odświeżanie danych MO...');
       
       // Import potrzebnych funkcji
       const { getOrderById } = await import('../../services/orderService');
-      const { getTaskById } = await import('../../services/productionService');
       
       // Pobierz zaktualizowane dane zamówienia
-      const updatedOrderData = await getOrderById(order.id);
+      const updatedOrder = await getOrderById(order.id);
       
-      if (!updatedOrderData) {
-        showError('Nie można znaleźć zamówienia');
-        setLoading(false);
-        return;
-      }
-
-      let dataChanged = false;
-
-      // Aktualizuj dane zadań produkcyjnych w pozycjach zamówienia
-      if (updatedOrderData.items && updatedOrderData.items.length > 0) {
-        for (let i = 0; i < updatedOrderData.items.length; i++) {
-          const item = updatedOrderData.items[i];
+      // Aktualizuj koszty produkcji dla pozycji zamówienia
+      if (updatedOrder.productionTasks && updatedOrder.productionTasks.length > 0 && updatedOrder.items && updatedOrder.items.length > 0) {
+        // Importuj funkcję do pobierania szczegółów zadania
+        const { getTaskById } = await import('../../services/productionService');
+        const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/costCalculator');
+        
+        console.log("Aktualizuję koszty produkcji dla zamówienia:", order.id);
+        
+        for (let i = 0; i < updatedOrder.items.length; i++) {
+          const item = updatedOrder.items[i];
           
           // Znajdź powiązane zadanie produkcyjne
-          const associatedTask = updatedOrderData.productionTasks?.find(task => 
-            task.orderItemId === item.id || 
-            (task.productName === item.name && task.quantity == item.quantity)
+          const associatedTask = updatedOrder.productionTasks?.find(task => 
+            task.id === item.productionTaskId
           );
           
           if (associatedTask) {
@@ -1061,129 +1057,130 @@ const OrdersList = () => {
               // Pobierz szczegółowe dane zadania z bazy danych
               const taskDetails = await getTaskById(associatedTask.id);
               
-              // Sprawdź czy dane się zmieniły
-              const oldProductionCost = item.productionCost || 0;
-              const newProductionCost = taskDetails.totalMaterialCost || associatedTask.totalMaterialCost || 0;
-              const oldFullProductionCost = item.fullProductionCost || 0;
-              const newFullProductionCost = taskDetails.totalFullProductionCost || associatedTask.totalFullProductionCost || 0;
+              const fullProductionCost = taskDetails.totalFullProductionCost || associatedTask.totalFullProductionCost || 0;
+              const productionCost = taskDetails.totalMaterialCost || associatedTask.totalMaterialCost || 0;
               
-              if (Math.abs(oldProductionCost - newProductionCost) > 0.01 || 
-                  Math.abs(oldFullProductionCost - newFullProductionCost) > 0.01 ||
-                  item.productionTaskNumber !== (associatedTask.moNumber || taskDetails.moNumber) ||
-                  item.productionStatus !== (associatedTask.status || taskDetails.status)) {
-                dataChanged = true;
-              }
+              // Oblicz koszty jednostkowe z uwzględnieniem logiki listy cenowej
+              const calculatedFullProductionUnitCost = calculateFullProductionUnitCost(item, fullProductionCost);
+              const calculatedProductionUnitCost = calculateProductionUnitCost(item, productionCost);
               
-              // Aktualizuj informacje o zadaniu produkcyjnym w pozycji zamówienia
-              updatedOrderData.items[i] = {
+              // Aktualizuj informacje o zadaniu produkcyjnym w elemencie zamówienia
+              updatedOrder.items[i] = {
                 ...item,
                 productionTaskId: associatedTask.id,
                 productionTaskNumber: associatedTask.moNumber || taskDetails.moNumber,
                 productionStatus: associatedTask.status || taskDetails.status,
                 // Używaj totalMaterialCost jako podstawowy koszt produkcji (tylko materiały wliczane do kosztów)
-                productionCost: newProductionCost,
+                productionCost: productionCost,
                 // Dodaj pełny koszt produkcji (wszystkie materiały niezależnie od flagi "wliczaj")
-                fullProductionCost: newFullProductionCost
+                fullProductionCost: fullProductionCost,
+                // Dodaj obliczone koszty jednostkowe
+                productionUnitCost: calculatedProductionUnitCost,
+                fullProductionUnitCost: calculatedFullProductionUnitCost
               };
               
-              console.log(`Zaktualizowano dane MO dla pozycji ${item.name}: ${updatedOrderData.items[i].productionTaskNumber}`);
+              console.log(`Zaktualizowano koszty dla pozycji ${item.name}: koszt podstawowy = ${updatedOrder.items[i].productionCost}€, pełny koszt = ${updatedOrder.items[i].fullProductionCost}€, pełny koszt/szt = ${calculatedFullProductionUnitCost.toFixed(2)}€ (lista cenowa: ${item.fromPriceList ? 'tak' : 'nie'})`);
             } catch (error) {
               console.error(`Błąd podczas pobierania szczegółów zadania ${associatedTask.id}:`, error);
               
-              // W przypadku błędu, sprawdź czy zadanie rzeczywiście istnieje
-              // Jeśli nie istnieje (np. zostało usunięte), wyczyść dane zadania z pozycji
-              if (error.message && error.message.includes('nie istnieje')) {
-                console.log(`Zadanie ${associatedTask.id} nie istnieje, czyszczę dane z pozycji ${item.name}`);
-                
-                // Sprawdź czy pozycja miała przypisane zadanie produkcyjne
-                if (item.productionTaskId || item.productionTaskNumber) {
-                  dataChanged = true;
-                }
-                
-                // Wyczyść dane zadania produkcyjnego z pozycji zamówienia
-                updatedOrderData.items[i] = {
-                  ...item,
-                  productionTaskId: null,
-                  productionTaskNumber: null,
-                  productionStatus: null,
-                  productionCost: 0,
-                  fullProductionCost: 0
-                };
-              } else {
-                // W przypadku innego błędu, użyj podstawowych danych z associatedTask
-                updatedOrderData.items[i] = {
-                  ...item,
-                  productionTaskId: associatedTask.id,
-                  productionTaskNumber: associatedTask.moNumber,
-                  productionStatus: associatedTask.status,
-                  productionCost: associatedTask.totalMaterialCost || 0,
-                  fullProductionCost: associatedTask.totalFullProductionCost || 0
-                };
-              }
-            }
-          } else {
-            // Jeśli nie ma powiązanego zadania, ale pozycja ma dane o zadaniu produkcyjnym, wyczyść je
-            if (item.productionTaskId || item.productionTaskNumber) {
-              console.log(`Pozycja ${item.name} ma przypisane zadanie, ale zadanie nie istnieje w zamówieniu. Czyszczę dane zadania.`);
-              dataChanged = true;
+              // W przypadku błędu, użyj podstawowych danych z associatedTask
+              const fullProductionCost = associatedTask.totalFullProductionCost || 0;
+              const productionCost = associatedTask.totalMaterialCost || 0;
               
-              // Wyczyść dane zadania produkcyjnego z pozycji zamówienia
-              updatedOrderData.items[i] = {
+              updatedOrder.items[i] = {
                 ...item,
-                productionTaskId: null,
-                productionTaskNumber: null,
-                productionStatus: null,
-                productionCost: 0,
-                fullProductionCost: 0
+                productionTaskId: associatedTask.id,
+                productionTaskNumber: associatedTask.moNumber,
+                productionStatus: associatedTask.status,
+                productionCost: productionCost,
+                fullProductionCost: fullProductionCost,
+                productionUnitCost: productionCost / (parseFloat(item.quantity) || 1),
+                fullProductionUnitCost: fullProductionCost / (parseFloat(item.quantity) || 1)
               };
             }
           }
         }
-      }
-      
-      // Jeśli dane się zmieniły, zapisz je do bazy danych
-      if (dataChanged) {
+        
+        // Zapisz zaktualizowane dane do bazy
         try {
           const { updateOrder } = await import('../../services/orderService');
           
-          // Przygotuj bezpieczne dane do aktualizacji
           const safeUpdateData = {
-            items: updatedOrderData.items,
-            orderNumber: updatedOrderData.orderNumber,
-            orderDate: updatedOrderData.orderDate, // Wymagane przez walidację
-            status: updatedOrderData.status,
-            customer: updatedOrderData.customer,
-            shippingCost: updatedOrderData.shippingCost,
-            totalValue: updatedOrderData.totalValue,
-            additionalCostsItems: updatedOrderData.additionalCostsItems,
-            productionTasks: updatedOrderData.productionTasks,
-            linkedPurchaseOrders: updatedOrderData.linkedPurchaseOrders
+            items: updatedOrder.items,
+            orderNumber: updatedOrder.orderNumber,
+            orderDate: updatedOrder.orderDate,
+            status: updatedOrder.status,
+            customer: updatedOrder.customer,
+            shippingCost: updatedOrder.shippingCost,
+            additionalCostsItems: updatedOrder.additionalCostsItems,
+            productionTasks: updatedOrder.productionTasks
           };
           
-          await updateOrder(updatedOrderData.id, safeUpdateData, 'system');
-          console.log(`Zapisano zaktualizowane dane MO zamówienia ${order.id} do bazy danych`);
-        } catch (error) {
-          console.error(`Błąd podczas aktualizacji danych MO zamówienia ${order.id} w bazie danych:`, error);
+          await updateOrder(updatedOrder.id, safeUpdateData, 'system');
+          
+          // Zaktualizuj lokalny stan
+          setOrders(prevOrders => prevOrders.map(o => {
+            if (o.id === order.id) {
+              return { ...o, ...updatedOrder };
+            }
+            return o;
+          }));
+          
+          showSuccess('Dane MO zostały odświeżone');
+        } catch (updateError) {
+          console.error('Błąd podczas zapisywania zaktualizowanych danych MO:', updateError);
+          showError('Nie udało się zapisać zaktualizowanych danych MO');
         }
+      } else {
+        showInfo('Brak danych MO do odświeżenia');
       }
+    } catch (error) {
+      console.error('Błąd podczas odświeżania danych MO:', error);
+      showError('Nie udało się odświeżyć danych MO');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRefreshCMRData = async (order) => {
+    try {
+      setLoading(true);
+      showInfo('Odświeżanie danych CMR...');
       
-      // Aktualizuj dane w stanie aplikacji
+      // Import funkcji do debugowania i odświeżania danych CMR
+      const { debugOrderCMRConnections, refreshShippedQuantitiesFromCMR } = await import('../../services/orderService');
+      
+      // Najpierw uruchom debugowanie aby zobaczyć stan przed odświeżaniem
+      console.log('=== ROZPOCZĘCIE DEBUGOWANIA CMR ===');
+      await debugOrderCMRConnections(order.id);
+      console.log('=== KONIEC DEBUGOWANIA CMR ===');
+      
+      // Odśwież dane wysłanych ilości na podstawie CMR
+      const result = await refreshShippedQuantitiesFromCMR(order.id, currentUser?.uid || 'system');
+      
+      // Zaktualizuj lokalny stan zamówienia
       setOrders(prevOrders => prevOrders.map(o => {
         if (o.id === order.id) {
-          return {
-            ...o,
-            ...updatedOrderData
+          return { 
+            ...o, 
+            items: result.updatedItems 
           };
         }
         return o;
       }));
       
-      setLoading(false);
-      showSuccess('Dane zadań produkcyjnych zostały odświeżone' + (dataChanged ? ' i zapisane do bazy danych' : ''));
+      // Pokaż statystyki odświeżania
+      const { stats } = result;
+      showSuccess(
+        `Dane CMR zostały odświeżone. ` +
+        `Przetworzono ${stats.processedCMRs} CMR, ` +
+        `zaktualizowano ${stats.shippedItems} pozycji z ${stats.cmrReferences} odniesieniami do CMR.`
+      );
     } catch (error) {
-      console.error('Błąd podczas odświeżania danych MO:', error);
+      console.error('Błąd podczas odświeżania danych CMR:', error);
+      showError('Nie udało się odświeżyć danych CMR: ' + error.message);
+    } finally {
       setLoading(false);
-      showError('Nie udało się odświeżyć danych zadań produkcyjnych');
     }
   };
 
@@ -1829,14 +1826,26 @@ const OrdersList = () => {
                                       <Typography variant="subtitle2">
                                         Produkty:
                                       </Typography>
-                                      <Button
-                                        size="small"
-                                        startIcon={<RefreshIcon />}
-                                        onClick={() => handleRefreshMO(order)}
-                                        title="Odśwież dane MO"
-                                      >
-                                        Odśwież MO
-                                      </Button>
+                                      <Box sx={{ display: 'flex', gap: 1 }}>
+                                        <Button
+                                          size="small"
+                                          startIcon={<RefreshIcon />}
+                                          onClick={() => handleRefreshMO(order)}
+                                          title="Odśwież dane MO"
+                                        >
+                                          Odśwież MO
+                                        </Button>
+                                        <Button
+                                          size="small"
+                                          startIcon={<RefreshIcon />}
+                                          onClick={() => handleRefreshCMRData(order)}
+                                          title="Odśwież dane wysłanych ilości z CMR"
+                                          variant="outlined"
+                                          color="secondary"
+                                        >
+                                          Odśwież CMR
+                                        </Button>
+                                      </Box>
                                     </Box>
                                     <TableContainer component={Paper} variant="outlined">
                                       <Table size="small">
@@ -1858,57 +1867,72 @@ const OrdersList = () => {
                                                 {item.quantity} {typeof item.unit === 'object' ? JSON.stringify(item.unit) : (item.unit || '')}
                                               </TableCell>
                                               <TableCell align="right">
-                                                {item.shippedQuantity && parseFloat(item.shippedQuantity) > 0 ? (
-                                                  <Box>
-                                                    <Typography variant="body2" color="success.main">
-                                                      {item.shippedQuantity} {typeof item.unit === 'object' ? JSON.stringify(item.unit) : (item.unit || '')}
-                                                    </Typography>
-                                                    {/* Zawsze sprawdź historię CMR najpierw */}
-                                                    {item.cmrHistory && Array.isArray(item.cmrHistory) && item.cmrHistory.length > 0 ? (
-                                                      <Box sx={{ mt: 0.5 }}>
-                                                        {item.cmrHistory.map((cmrEntry, cmrIndex) => (
-                                                          <Typography 
-                                                            key={cmrIndex} 
-                                                            variant="caption" 
-                                                            color="text.secondary"
-                                                            sx={{ display: 'block', lineHeight: 1.2 }}
-                                                          >
-                                                            CMR: {cmrEntry.cmrNumber} ({cmrEntry.quantity} {cmrEntry.unit || item.unit || 'szt.'})
-                                                          </Typography>
-                                                        ))}
-                                                      </Box>
-                                                    ) : item.lastCmrNumber ? (
-                                                      <Typography variant="caption" color="text.secondary">
-                                                        CMR: {item.lastCmrNumber}
+                                                {(() => {
+                                                  // Oblicz łączną ilość wysłaną z historii CMR
+                                                  const totalShippedFromCMR = item.cmrHistory && Array.isArray(item.cmrHistory) ? 
+                                                    item.cmrHistory.reduce((total, cmrEntry) => {
+                                                      return total + (parseFloat(cmrEntry.quantity) || 0);
+                                                    }, 0) : 0;
+                                                  
+                                                  // Użyj ilości z historii CMR lub fallback na shippedQuantity
+                                                  const displayQuantity = totalShippedFromCMR > 0 ? totalShippedFromCMR : (parseFloat(item.shippedQuantity) || 0);
+                                                  const orderedQuantity = parseFloat(item.quantity) || 0;
+                                                  
+                                                  // Sprawdź czy pozycja jest w pełni wysłana
+                                                  const isFullyShipped = displayQuantity >= orderedQuantity;
+                                                  const hasHistory = item.cmrHistory && item.cmrHistory.length > 0;
+                                                  
+                                                  return (
+                                                    <div>
+                                                      <Typography 
+                                                        variant="body2"
+                                                        style={{ 
+                                                          color: isFullyShipped ? '#4caf50' : '#ff9800',
+                                                          fontWeight: 'bold'
+                                                        }}
+                                                      >
+                                                        {displayQuantity.toLocaleString()} / {orderedQuantity.toLocaleString()}
                                                       </Typography>
-                                                    ) : null}
-                                                  </Box>
-                                                ) : (
-                                                  <Box>
-                                                    <Typography variant="body2" color="text.secondary">
-                                                      0 {typeof item.unit === 'object' ? JSON.stringify(item.unit) : (item.unit || '')}
-                                                    </Typography>
-                                                    {/* Pokaż CMR nawet jeśli shippedQuantity jest 0 lub undefined */}
-                                                    {item.cmrHistory && Array.isArray(item.cmrHistory) && item.cmrHistory.length > 0 ? (
-                                                      <Box sx={{ mt: 0.5 }}>
-                                                        {item.cmrHistory.map((cmrEntry, cmrIndex) => (
-                                                          <Typography 
-                                                            key={cmrIndex} 
-                                                            variant="caption" 
-                                                            color="text.secondary"
-                                                            sx={{ display: 'block', lineHeight: 1.2 }}
-                                                          >
-                                                            CMR: {cmrEntry.cmrNumber} ({cmrEntry.quantity} {cmrEntry.unit || item.unit || 'szt.'})
-                                                          </Typography>
-                                                        ))}
-                                                      </Box>
-                                                    ) : item.lastCmrNumber ? (
-                                                      <Typography variant="caption" color="text.secondary">
-                                                        CMR: {item.lastCmrNumber}
-                                                      </Typography>
-                                                    ) : null}
-                                                  </Box>
-                                                )}
+                                                      
+                                                      {hasHistory && (
+                                                        <div style={{ marginTop: '4px' }}>
+                                                          {item.cmrHistory.map((cmrEntry, cmrIndex) => (
+                                                            <Typography 
+                                                              key={cmrIndex}
+                                                              variant="caption" 
+                                                              style={{ 
+                                                                display: 'block', 
+                                                                fontSize: '0.7rem',
+                                                                color: '#666',
+                                                                lineHeight: '1.2'
+                                                              }}
+                                                            >
+                                                              {cmrEntry.cmrNumber}: {parseFloat(cmrEntry.quantity || 0).toLocaleString()} {cmrEntry.unit || 'szt.'}
+                                                              {cmrEntry.shipmentDate && (
+                                                                <span style={{ color: '#999', marginLeft: '4px' }}>
+                                                                  ({new Date(cmrEntry.shipmentDate).toLocaleDateString('pl-PL')})
+                                                                </span>
+                                                              )}
+                                                            </Typography>
+                                                          ))}
+                                                        </div>
+                                                      )}
+                                                      
+                                                      {!hasHistory && displayQuantity > 0 && (
+                                                        <Typography 
+                                                          variant="caption" 
+                                                          style={{ 
+                                                            display: 'block', 
+                                                            fontSize: '0.7rem',
+                                                            color: '#999'
+                                                          }}
+                                                        >
+                                                          {item.lastCmrNumber && `Ostatni CMR: ${item.lastCmrNumber}`}
+                                                        </Typography>
+                                                      )}
+                                                    </div>
+                                                  );
+                                                })()}
                                               </TableCell>
                                               <TableCell align="right">
                                                 {formatCurrency(parseFloat(item.price) || 0)}

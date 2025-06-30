@@ -981,7 +981,7 @@ export const generateCmrNumber = (issueDate = null, customerAffix = '') => {
 };
 
 /**
- * Pobiera dokumenty CMR powiązane z określonym zamówieniem
+ * Pobierz wszystkie dokumenty CMR związane z danym zamówieniem (obsługuje stary i nowy format)
  */
 export const getCmrDocumentsByOrderId = async (orderId) => {
   try {
@@ -1033,14 +1033,47 @@ export const getCmrDocumentsByOrderId = async (orderId) => {
     processSnapshot(oldFormatSnapshot);
     processSnapshot(newFormatSnapshot);
     
+    // Pobierz pozycje dla każdego CMR z kolekcji cmrItems
+    const cmrDocumentsWithItems = await Promise.all(
+      cmrDocuments.map(async (cmrDoc) => {
+        try {
+          const itemsRef = collection(db, CMR_ITEMS_COLLECTION);
+          const itemsQuery = query(itemsRef, where('cmrId', '==', cmrDoc.id));
+          const itemsSnapshot = await getDocs(itemsQuery);
+          
+          const items = itemsSnapshot.docs.map(itemDoc => ({
+            id: itemDoc.id,
+            ...itemDoc.data()
+          }));
+          
+          console.log(`CMR ${cmrDoc.cmrNumber} ma ${items.length} pozycji:`, items.map(item => ({
+            description: item.description,
+            quantity: item.quantity || item.numberOfPackages,
+            unit: item.unit
+          })));
+          
+          return {
+            ...cmrDoc,
+            items: items
+          };
+        } catch (error) {
+          console.error(`Błąd podczas pobierania pozycji dla CMR ${cmrDoc.id}:`, error);
+          return {
+            ...cmrDoc,
+            items: []
+          };
+        }
+      })
+    );
+    
     // Sortuj po dacie wystawienia (najnowsze najpierw)
-    cmrDocuments.sort((a, b) => {
+    cmrDocumentsWithItems.sort((a, b) => {
       const dateA = a.issueDate || new Date(0);
       const dateB = b.issueDate || new Date(0);
       return dateB - dateA;
     });
     
-    return cmrDocuments;
+    return cmrDocumentsWithItems;
   } catch (error) {
     console.error('Błąd podczas pobierania dokumentów CMR dla zamówienia:', error);
     throw error;
@@ -1369,5 +1402,60 @@ export const migrateAllCmrToNewFormat = async () => {
   } catch (error) {
     console.error('Błąd podczas masowej migracji CMR:', error);
     throw error;
+  }
+};
+
+/**
+ * Znajduje CMR dokumenty powiązane z zamówieniem przez różne metody
+ * Używa jako fallback wyszukiwanie przez numer zamówienia w polach tekstowych
+ */
+export const findCmrDocumentsByOrderNumber = async (orderNumber) => {
+  try {
+    console.log(`Szukanie CMR przez numer zamówienia: ${orderNumber}`);
+    
+    // Zapytanie wyszukujące CMR gdzie numer zamówienia może być w różnych polach tekstowych
+    const cmrRef = collection(db, CMR_COLLECTION);
+    const allCmrQuery = query(cmrRef, orderBy('issueDate', 'desc'));
+    
+    const snapshot = await getDocs(allCmrQuery);
+    const matchingCMRs = [];
+    
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      
+      // Sprawdź różne pola gdzie może być zapisany numer zamówienia
+      const fieldsToCheck = [
+        data.attachedDocuments,
+        data.instructionsFromSender,
+        data.notes,
+        data.reservations,
+        data.cmrNumber
+      ];
+      
+      const hasOrderReference = fieldsToCheck.some(field => 
+        field && typeof field === 'string' && 
+        field.toLowerCase().includes(orderNumber.toLowerCase())
+      );
+      
+      if (hasOrderReference) {
+        const processedDocument = {
+          id: doc.id,
+          ...data,
+          issueDate: safeParseDate(data.issueDate),
+          deliveryDate: safeParseDate(data.deliveryDate),
+          loadingDate: safeParseDate(data.loadingDate),
+          createdAt: safeParseDate(data.createdAt),
+          updatedAt: safeParseDate(data.updatedAt)
+        };
+        
+        matchingCMRs.push(processedDocument);
+      }
+    });
+    
+    console.log(`Znaleziono ${matchingCMRs.length} CMR przez numer zamówienia ${orderNumber}`);
+    return matchingCMRs;
+  } catch (error) {
+    console.error('Błąd podczas wyszukiwania CMR przez numer zamówienia:', error);
+    return [];
   }
 };

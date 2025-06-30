@@ -111,12 +111,24 @@ const DEFAULT_ITEM = {
   itemType: 'product'
 };
 
+// Funkcja do generowania unikalnego ID pozycji
+const generateItemId = () => {
+  return `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+};
+
 const DEFAULT_MARGIN = 20; // Domyślna marża w procentach
 
 const OrderForm = ({ orderId }) => {
   const [loading, setLoading] = useState(!!orderId);
   const [saving, setSaving] = useState(false);
-  const [orderData, setOrderData] = useState({...DEFAULT_ORDER});
+  const [orderData, setOrderData] = useState(() => {
+    const defaultOrder = {...DEFAULT_ORDER};
+    // Upewnij się, że każda pozycja ma unikalne ID
+    if (defaultOrder.items && defaultOrder.items.length > 0) {
+      defaultOrder.items = defaultOrder.items.map(item => ({ ...item, id: generateItemId() }));
+    }
+    return defaultOrder;
+  });
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
   const [services, setServices] = useState([]); // Dodajemy listę usług
@@ -215,9 +227,30 @@ const OrderForm = ({ orderId }) => {
           
           if (!fetchedOrder.items || fetchedOrder.items.length === 0) {
             console.log("DEBUG - Zastępuję pozycje zamówienia domyślną pozycją");
-            fetchedOrder.items = [{ ...DEFAULT_ORDER.items[0] }];
+            fetchedOrder.items = [{ ...DEFAULT_ORDER.items[0], id: generateItemId() }];
           } else {
             console.log("DEBUG - Pozycje zamówienia zostały zachowane:", fetchedOrder.items.length, "pozycji");
+            // Upewnij się, że wszystkie pozycje mają unikalne ID i zachowaj kompatybilność z starymi danymi
+            fetchedOrder.items = fetchedOrder.items.map(item => {
+              const newItem = {
+                ...item,
+                id: item.id || generateItemId()
+              };
+              
+              // Kompatybilność z starymi danymi - jeśli nie ma recipeId/serviceId/productId ale ma określony typ
+              if (!newItem.recipeId && (newItem.itemType === 'recipe' || newItem.isRecipe)) {
+                // Dla starych receptur może być przechowane w innym polu lub nie ma tej informacji
+                console.log(`Pozycja receptury "${newItem.name}" nie ma recipeId - możliwe stare dane`);
+              }
+              if (!newItem.serviceId && newItem.itemType === 'service') {
+                console.log(`Pozycja usługi "${newItem.name}" nie ma serviceId - możliwe stare dane`);
+              }
+              if (!newItem.productId && newItem.itemType === 'product') {
+                console.log(`Pozycja produktu "${newItem.name}" nie ma productId - możliwe stare dane`);
+              }
+              
+              return newItem;
+            });
           }
           
           // Przypisz informacje o zadaniach produkcyjnych do pozycji zamówienia
@@ -753,7 +786,8 @@ const OrderForm = ({ orderId }) => {
       }
       
       const itemType = type;
-      let id = product.id;
+      // Generuj unikalne ID dla pozycji - każda pozycja ma swoje własne ID
+      let id = generateItemId();
       let name = product.name;
       let unit = product.unit || 'szt.';
       let basePrice = 0;
@@ -761,7 +795,10 @@ const OrderForm = ({ orderId }) => {
       let margin = DEFAULT_MARGIN;
       let isRecipe = type === 'recipe';
       let fromPriceList = false;
+      // Przechowuj ID receptury/usługi w osobnych polach, a nie jako ID pozycji
       let recipeId = isRecipe ? product.id : null;
+      let serviceId = type === 'service' ? product.id : null;
+      let productId = (!isRecipe && type !== 'service') ? product.id : null;
       let minOrderQuantity = 0;
       let lastUsageInfo = null;
       
@@ -864,16 +901,8 @@ const OrderForm = ({ orderId }) => {
                     
                                          console.log(`Obliczono szacowany koszt materiałów: ${estimatedCost.totalCost}€`, estimatedCost.details);
                      
-                     // Zapisz szacowany koszt w bazie danych jeśli jesteśmy w trybie edycji
-                     if (orderId && currentUser) {
-                       try {
-                         const { saveEstimatedCost } = await import('../../services/orderService');
-                         await saveEstimatedCost(orderId, index, estimatedCost, currentUser.uid);
-                         console.log('Zapisano szacowany koszt w bazie danych');
-                       } catch (error) {
-                         console.error('Błąd podczas zapisywania szacowanego kosztu:', error);
-                       }
-                     }
+                     // Zapamiętaj szacowany koszt w obiekcie lastUsageInfo - zostanie zapisany podczas zapisu zamówienia
+                     console.log('Szacowany koszt zostanie zapisany podczas zapisu zamówienia');
                    }
                  }
               } catch (error) {
@@ -899,6 +928,8 @@ const OrderForm = ({ orderId }) => {
         fromPriceList,
         isRecipe,
         recipeId,
+        serviceId,
+        productId,
         itemType,
         minOrderQuantity,
         originalUnit: unit,
@@ -924,7 +955,7 @@ const OrderForm = ({ orderId }) => {
   const addItem = () => {
     setOrderData(prev => ({
       ...prev,
-      items: [...prev.items, { ...DEFAULT_ITEM }]
+      items: [...prev.items, { ...DEFAULT_ITEM, id: generateItemId() }]
     }));
   };
 
@@ -933,7 +964,7 @@ const OrderForm = ({ orderId }) => {
     updatedItems.splice(index, 1);
     
     if (updatedItems.length === 0) {
-      updatedItems.push({ ...DEFAULT_ITEM });
+      updatedItems.push({ ...DEFAULT_ITEM, id: generateItemId() });
     }
     
     setOrderData(prev => ({
@@ -1497,7 +1528,7 @@ const OrderForm = ({ orderId }) => {
       if (item.itemType === 'recipe' || item.isRecipe) {
         // Pozycja jest bezpośrednio recepturą
         try {
-          const recipe = await getRecipeById(item.id);
+          const recipe = await getRecipeById(item.recipeId);
           if (recipe && recipe.ingredients && recipe.ingredients.length > 0) {
             recipeItems.push({
               orderItem: item,
@@ -2314,17 +2345,37 @@ const OrderForm = ({ orderId }) => {
     try {
       const item = orderData.items[index];
       if (!item || !item.id) {
-        showError("Nie można odświeżyć ceny - brak identyfikatora produktu");
+        showError("Nie można odświeżyć ceny - brak identyfikatora pozycji");
         return;
       }
       
       let price = 0;
       let fromPriceList = false;
+      let productId = null;
+      
+      // Określ ID produktu do wyszukiwania ceny
+      if (item.itemType === 'recipe' || item.isRecipe) {
+        productId = item.recipeId; // Dla receptur używaj recipeId
+      } else if (item.itemType === 'service') {
+        productId = item.serviceId; // Dla usług używaj serviceId
+      } else {
+        productId = item.productId; // Dla zwykłych produktów używaj productId
+        // Fallback dla starych danych bez productId
+        if (!productId) {
+          showError("Nie można odświeżyć ceny dla starych pozycji - brak identyfikatora produktu. Usuń pozycję i dodaj ponownie.");
+          return;
+        }
+      }
+      
+      if (!productId) {
+        showError("Nie można odświeżyć ceny - brak identyfikatora produktu/usługi/receptury");
+        return;
+      }
       
       // Sprawdź najpierw cenę z listy cenowej klienta, jeśli klient istnieje
       if (orderData.customer?.id) {
         try {
-          const priceListItem = await getPriceForCustomerProduct(orderData.customer.id, item.id, item.isRecipe);
+          const priceListItem = await getPriceForCustomerProduct(orderData.customer.id, productId, item.isRecipe);
           
           if (priceListItem) {
             console.log(`Znaleziono cenę w liście cenowej: ${priceListItem} dla ${item.name}`);
@@ -2341,7 +2392,7 @@ const OrderForm = ({ orderId }) => {
         // Dla produktu/usługi
         if (!item.isRecipe && item.itemType !== 'recipe') {
           try {
-            const productDetails = await getProductById(item.id);
+            const productDetails = await getProductById(productId);
             if (productDetails) {
               const basePrice = productDetails.standardPrice || 0;
               const margin = item.margin || DEFAULT_MARGIN;
@@ -2356,13 +2407,8 @@ const OrderForm = ({ orderId }) => {
         } else {
           // Dla receptury
           try {
-            // Spróbuj pobrać recepturę
-            let recipe = await getRecipeById(item.recipeId || item.id);
-            
-            if (!recipe) {
-              // Jeśli nie ma receptury o tym ID, spróbuj pobrać recepturę powiązaną z produktem
-              recipe = await getRecipeByProductId(item.id);
-            }
+            // Pobierz recepturę po recipeId
+            const recipe = await getRecipeById(productId);
             
             if (recipe) {
               // Oblicz koszt produkcji z receptury (ignoruj processingCostPerUnit dla CO)
@@ -2434,7 +2480,6 @@ const OrderForm = ({ orderId }) => {
     try {
       const { getRecipeById } = await import('../../services/recipeService');
       const { calculateEstimatedMaterialsCost } = await import('../../utils/costCalculator');
-      const { saveEstimatedCost } = await import('../../services/orderService');
       
       for (let index = 0; index < orderData.items.length; index++) {
         const item = orderData.items[index];
@@ -2442,7 +2487,7 @@ const OrderForm = ({ orderId }) => {
         
         // Sprawdź czy pozycja to receptura
         const isRecipe = item.itemType === 'recipe' || item.isRecipe;
-        if (!isRecipe || !item.id) continue;
+        if (!isRecipe || !item.recipeId) continue;
         
         // Sprawdź czy pozycja ma już ostatni koszt
         if (item.lastUsageInfo && item.lastUsageInfo.cost && item.lastUsageInfo.cost > 0 && !item.lastUsageInfo.estimatedCost) {
@@ -2453,7 +2498,7 @@ const OrderForm = ({ orderId }) => {
         try {
           console.log(`Obliczam szacowany koszt dla pozycji ${index}: ${item.name}`);
           
-          const recipe = await getRecipeById(item.id);
+          const recipe = await getRecipeById(item.recipeId);
           if (!recipe) {
             console.warn(`Nie znaleziono receptury dla pozycji ${index}`);
             continue;
@@ -2486,18 +2531,16 @@ const OrderForm = ({ orderId }) => {
               items: updatedItemsArray
             }));
             
-            // Zapisz w bazie danych
-            await saveEstimatedCost(orderId, index, estimatedCost, currentUser.uid);
             updatedItems++;
             
-            console.log(`Obliczono i zapisano szacowany koszt dla pozycji ${index}: ${estimatedCost.totalCost}€`);
+            console.log(`Obliczono szacowany koszt dla pozycji ${index}: ${estimatedCost.totalCost}€`);
           }
         } catch (error) {
           console.error(`Błąd podczas obliczania kosztu dla pozycji ${index}:`, error);
         }
       }
       
-      showSuccess(`Przetworzono ${processedItems} pozycji, zaktualizowano ${updatedItems} szacowanych kosztów`);
+      showSuccess(`Przetworzono ${processedItems} pozycji, zaktualizowano ${updatedItems} szacowanych kosztów. Zapisz zamówienie, aby zachować zmiany.`);
       
     } catch (error) {
       console.error('Błąd podczas obliczania szacowanych kosztów:', error);
@@ -2808,7 +2851,7 @@ const OrderForm = ({ orderId }) => {
                         <Autocomplete
                           options={services}
                           getOptionLabel={(option) => option.name || ''}
-                          value={services.find(s => s.id === item.id) || null}
+                          value={services.find(s => s.id === item.serviceId) || null}
                           onChange={(_, newValue) => handleProductSelect(index, newValue, 'service')}
                           renderInput={(params) => (
                             <TextField 
@@ -2824,7 +2867,7 @@ const OrderForm = ({ orderId }) => {
                         <Autocomplete
                           options={recipes}
                           getOptionLabel={(option) => option.name || ''}
-                          value={recipes.find(r => r.id === item.id) || null}
+                          value={recipes.find(r => r.id === item.recipeId) || null}
                           onChange={(_, newValue) => handleProductSelect(index, newValue, 'recipe')}
                           renderInput={(params) => (
                             <TextField 
