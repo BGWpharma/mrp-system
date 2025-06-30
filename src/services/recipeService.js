@@ -82,9 +82,10 @@ import {
    * @param {string} sortOrder - Kierunek sortowania (asc/desc) (domyślnie 'desc')
    * @param {string} customerId - Opcjonalne filtrowanie wg ID klienta
    * @param {string} searchTerm - Opcjonalne filtrowanie wg tekstu wyszukiwania
+   * @param {boolean|null} hasNotes - Opcjonalne filtrowanie wg notatek (true = z notatkami, false = bez notatek, null = wszystkie)
    * @returns {Object} - Obiekt zawierający dane i informacje o paginacji
    */
-  export const getRecipesWithPagination = async (page = 1, limit = 10, sortField = 'updatedAt', sortOrder = 'desc', customerId = null, searchTerm = null) => {
+  export const getRecipesWithPagination = async (page = 1, limit = 10, sortField = 'updatedAt', sortOrder = 'desc', customerId = null, searchTerm = null, hasNotes = null) => {
     try {
       // Pobierz całkowitą liczbę receptur (przed filtrowaniem przez customerId)
       let countQuery;
@@ -131,11 +132,22 @@ import {
       const querySnapshot = await getDocs(q);
       const allDocs = querySnapshot.docs;
       
-      // Filtruj wyniki na serwerze jeśli podano searchTerm
+      // Filtruj wyniki na serwerze jeśli podano searchTerm lub hasNotes
       let filteredDocs = allDocs;
+      
+      // Filtrowanie po notatce
+      if (hasNotes !== null) {
+        filteredDocs = filteredDocs.filter(doc => {
+          const data = doc.data();
+          const hasRecipeNotes = data.notes && data.notes.trim() !== '';
+          return hasNotes ? hasRecipeNotes : !hasRecipeNotes;
+        });
+      }
+      
+      // Filtrowanie po terminie wyszukiwania
       if (searchTerm && searchTerm.trim() !== '') {
         const searchTermLower = searchTerm.toLowerCase().trim();
-        filteredDocs = allDocs.filter(doc => {
+        filteredDocs = filteredDocs.filter(doc => {
           const data = doc.data();
           return (
             (data.name && data.name.toLowerCase().includes(searchTermLower)) ||
@@ -171,7 +183,40 @@ import {
         };
       }
       
-      // Standardowa paginacja bez wyszukiwania
+      // Standardowa paginacja z opcjonalnym filtrowaniem po notatce
+      if (hasNotes !== null) {
+        // Jeśli filtrujemy po notatce, również należy to uwzględnić
+        filteredDocs = allDocs.filter(doc => {
+          const data = doc.data();
+          const hasRecipeNotes = data.notes && data.notes.trim() !== '';
+          return hasNotes ? hasRecipeNotes : !hasRecipeNotes;
+        });
+        
+        // Przelicz statystyki po filtrowaniu
+        const filteredTotalCount = filteredDocs.length;
+        const filteredTotalPages = Math.ceil(filteredTotalCount / itemsPerPage);
+        const filteredSafePageNum = Math.min(pageNum, Math.max(1, filteredTotalPages));
+        
+        const startIndex = (filteredSafePageNum - 1) * itemsPerPage;
+        const endIndex = Math.min(startIndex + itemsPerPage, filteredDocs.length);
+        const paginatedDocs = filteredDocs.slice(startIndex, endIndex);
+        
+        const recipes = paginatedDocs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        return {
+          data: recipes,
+          pagination: {
+            page: filteredSafePageNum,
+            limit: itemsPerPage,
+            totalItems: filteredTotalCount,
+            totalPages: filteredTotalPages
+          }
+        };
+      }
+      
       const startIndex = (safePageNum - 1) * itemsPerPage;
       const endIndex = Math.min(startIndex + itemsPerPage, allDocs.length);
       const paginatedDocs = allDocs.slice(startIndex, endIndex);

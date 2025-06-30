@@ -80,6 +80,7 @@ const RecipeList = () => {
   // Użyj nowego hooka do buforowania danych klientów
   const { customers, loading: loadingCustomers, error: customersError, refreshCustomers } = useCustomersCache();
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [notesFilter, setNotesFilter] = useState(null); // null = wszystkie, true = z notatkami, false = bez notatek
   
   // Dodajemy zakładki dla zmiany widoku
   const [tabValue, setTabValue] = useState(0); // 0 - wszystkie, 1 - grupowane wg klienta
@@ -177,6 +178,11 @@ const RecipeList = () => {
       }
     };
   }, [searchTerm]);
+
+  // Czyść cache receptur dla klientów gdy zmieni się filtrowanie
+  useEffect(() => {
+    setCustomerRecipes({});
+  }, [debouncedSearchTerm, notesFilter]);
   
   // Zmodyfikowana funkcja pobierająca receptury używająca indeksu wyszukiwania
   const fetchRecipes = useCallback(async () => {
@@ -189,7 +195,8 @@ const RecipeList = () => {
         limit,
         sortField: tableSort.field,
         sortOrder: tableSort.order,
-        customerId: selectedCustomerId || null
+        customerId: selectedCustomerId || null,
+        hasNotes: notesFilter
       };
       
       // Użyj nowego searchService zamiast bezpośredniego zapytania do Firestore
@@ -229,7 +236,8 @@ const RecipeList = () => {
           tableSort.field, 
           tableSort.order,
           selectedCustomerId,
-          debouncedSearchTerm
+          debouncedSearchTerm,
+          notesFilter
         );
         
         setRecipes(fallbackResult.data);
@@ -248,7 +256,7 @@ const RecipeList = () => {
       
       setLoading(false);
     }
-  }, [page, limit, tableSort, selectedCustomerId, debouncedSearchTerm, showError]);
+  }, [page, limit, tableSort, selectedCustomerId, debouncedSearchTerm, notesFilter, showError]);
       
   // Odświeżamy indeks wyszukiwania - funkcja do ręcznego wywołania przez użytkownika
   const refreshSearchIndex = async () => {
@@ -329,6 +337,8 @@ const RecipeList = () => {
         sortOrder: 'asc',
         // Filtruj receptury bez klienta lub dla konkretnego klienta
         customerId: customerId === 'noCustomer' ? null : customerId,
+        // Uwzględnij filtr notatek
+        hasNotes: notesFilter,
         // Pobierz wszystkie wyniki (duża wartość limitu)
         page: 1,
         limit: 1000
@@ -363,6 +373,14 @@ const RecipeList = () => {
       } else {
           // Dla konkretnego klienta pobierz receptury bezpośrednio
           fallbackData = await getRecipesByCustomer(customerId);
+        }
+        
+        // Zastosuj filtrowanie według notatek, jeśli istnieje
+        if (notesFilter !== null) {
+          fallbackData = fallbackData.filter(recipe => {
+            const hasRecipeNotes = recipe.notes && recipe.notes.trim() !== '';
+            return notesFilter ? hasRecipeNotes : !hasRecipeNotes;
+          });
         }
         
         // Zastosuj filtrowanie według searchTerm, jeśli istnieje
@@ -457,6 +475,21 @@ const RecipeList = () => {
     setSelectedCustomerId(newCustomerId);
     setPage(1); // Reset do pierwszej strony po zmianie filtra
   };
+
+  const handleNotesFilterChange = (event) => {
+    const newNotesFilter = event.target.value === '' ? null : event.target.value === 'true';
+    console.log('Zmieniono filtr notatek na:', newNotesFilter);
+    setNotesFilter(newNotesFilter);
+    setPage(1); // Reset do pierwszej strony po zmianie filtra
+    
+    // Wyczyść cache receptur dla klientów aby wymusić ponowne pobranie z nowym filtrem
+    setCustomerRecipes({});
+    
+    // Jeśli jesteśmy w widoku grupowanym i mamy rozwinięty panel, odśwież go
+    if (tabValue === 1 && expandedPanel) {
+      fetchRecipesForCustomer(expandedPanel);
+    }
+  };
   
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
@@ -479,6 +512,14 @@ const RecipeList = () => {
         // Filtruj po kliencie jeśli wybrano
         if (selectedCustomerId) {
           allRecipes = allRecipes.filter(recipe => recipe.customerId === selectedCustomerId);
+        }
+        
+        // Filtruj po notatkach jeśli wybrano
+        if (notesFilter !== null) {
+          allRecipes = allRecipes.filter(recipe => {
+            const hasRecipeNotes = recipe.notes && recipe.notes.trim() !== '';
+            return notesFilter ? hasRecipeNotes : !hasRecipeNotes;
+          });
         }
         
         // Filtruj po wyszukiwanym terminie jeśli jest
@@ -1161,6 +1202,35 @@ const RecipeList = () => {
                 {customer.name}
               </MenuItem>
             ))}
+          </Select>
+        </FormControl>
+
+        <FormControl 
+          sx={{ 
+            minWidth: isMobile ? 'auto' : '180px',
+            '& .MuiOutlinedInput-root': isMobile ? {
+              borderRadius: '4px',
+              bgcolor: mode === 'dark' ? 'background.paper' : 'white',
+              '& fieldset': {
+                borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.23)' : 'rgba(0, 0, 0, 0.15)',
+              },
+            } : {}
+          }} 
+          size="small"
+          fullWidth={isMobile}
+        >
+          <InputLabel id="notes-filter-label" sx={isMobile ? { fontSize: '0.9rem' } : {}}>Filtruj wg notatek</InputLabel>
+          <Select
+            labelId="notes-filter-label"
+            value={notesFilter === null ? '' : notesFilter.toString()}
+            onChange={handleNotesFilterChange}
+            label="Filtruj wg notatek"
+            displayEmpty
+            startAdornment={<InfoIcon sx={{ color: 'action.active', mr: 1 }} />}
+          >
+            <MenuItem value="">Wszystkie receptury</MenuItem>
+            <MenuItem value="true">Z notatkami</MenuItem>
+            <MenuItem value="false">Bez notatek</MenuItem>
           </Select>
         </FormControl>
       </Box>

@@ -109,6 +109,7 @@ class SearchIndexService {
           id: doc.id,
           name: data.name || '',
           description: data.description || '',
+          notes: data.notes || '',
           customerId: data.customerId || null,
           createdAt: data.createdAt,
           updatedAt: data.updatedAt,
@@ -143,10 +144,11 @@ class SearchIndexService {
         sortField: 'name',
         sortOrder: 'asc',
         customerId: null,
+        hasNotes: null, // null = wszytskie, true = tylko z notatkami, false = tylko bez notatek
       };
       
       // Połącz opcje z domyślnymi
-      const { page, limit, sortField, sortOrder, customerId } = {
+      const { page, limit, sortField, sortOrder, customerId, hasNotes } = {
         ...defaultOptions,
         ...options
       };
@@ -162,6 +164,14 @@ class SearchIndexService {
       // Filtruj według klienta jeśli podano
       if (customerId) {
         filteredRecipes = filteredRecipes.filter(recipe => recipe.customerId === customerId);
+      }
+      
+      // Filtruj według notatek jeśli podano
+      if (hasNotes !== null) {
+        filteredRecipes = filteredRecipes.filter(recipe => {
+          const hasRecipeNotes = recipe.notes && recipe.notes.trim() !== '';
+          return hasNotes ? hasRecipeNotes : !hasRecipeNotes;
+        });
       }
       
       // Filtruj według terminu wyszukiwania jeśli podano
