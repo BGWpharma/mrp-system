@@ -1569,6 +1569,7 @@ const InventoryList = () => {
                     <TableRow>
                       {visibleColumns.name && <TableCell>SKU</TableCell>}
                       {visibleColumns.category && <TableCell>Kategoria</TableCell>}
+                      {visibleColumns.barcode && <TableCell>Kod kreskowy</TableCell>}
                       {visibleColumns.totalQuantity && <TableCell>Ilość całkowita</TableCell>}
                       {visibleColumns.reservedQuantity && <TableCell>Ilość zarezerwowana</TableCell>}
                       {visibleColumns.availableQuantity && <TableCell>Ilość dostępna</TableCell>}
@@ -1587,6 +1588,7 @@ const InventoryList = () => {
                           </TableCell>
                         )}
                         {visibleColumns.category && <TableCell><Skeleton variant="text" width="70%" /></TableCell>}
+                        {visibleColumns.barcode && <TableCell><Skeleton variant="text" width="60%" /></TableCell>}
                         {visibleColumns.totalQuantity && <TableCell><Skeleton variant="text" width="50%" /></TableCell>}
                         {visibleColumns.reservedQuantity && <TableCell><Skeleton variant="text" width="50%" /></TableCell>}
                         {visibleColumns.availableQuantity && <TableCell><Skeleton variant="text" width="50%" /></TableCell>}
@@ -1641,6 +1643,21 @@ const InventoryList = () => {
                             <Box sx={{ display: 'flex', alignItems: 'center' }}>
                               Kategoria
                               {tableSort.field === 'category' && (
+                                <ArrowDropUpIcon 
+                                  sx={{ 
+                                    transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
+                                    transition: 'transform 0.2s'
+                                  }} 
+                                />
+                              )}
+                            </Box>
+                          </TableCell>
+                        )}
+                        {visibleColumns.barcode && (
+                          <TableCell onClick={() => handleTableSort('barcode')} style={{ cursor: 'pointer' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              Kod kreskowy
+                              {tableSort.field === 'barcode' && (
                                 <ArrowDropUpIcon 
                                   sx={{ 
                                     transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
@@ -1777,6 +1794,18 @@ const InventoryList = () => {
                                 </TableCell>
                               )}
                               {visibleColumns.category && <TableCell>{item.category}</TableCell>}
+                              {visibleColumns.barcode && (
+                                <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                                  {item.barcode ? (
+                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                      <QrCodeIcon sx={{ mr: 0.5, color: 'text.secondary', fontSize: '1rem' }} />
+                                      {item.barcode}
+                                    </Box>
+                                  ) : (
+                                    <Typography variant="body2" color="text.secondary">-</Typography>
+                                  )}
+                                </TableCell>
+                              )}
                               {visibleColumns.totalQuantity && (
                                 <TableCell>
                                   <Typography variant="body1">{item.quantity} {item.unit}</Typography>
@@ -1936,6 +1965,10 @@ const InventoryList = () => {
             <MenuItem onClick={() => toggleColumnVisibility('category')}>
               <Checkbox checked={visibleColumns.category} />
               <ListItemText primary="Kategoria" />
+            </MenuItem>
+            <MenuItem onClick={() => toggleColumnVisibility('barcode')}>
+              <Checkbox checked={visibleColumns.barcode} />
+              <ListItemText primary="Kod kreskowy" />
             </MenuItem>
             <MenuItem onClick={() => toggleColumnVisibility('totalQuantity')}>
               <Checkbox checked={visibleColumns.totalQuantity} />

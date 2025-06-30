@@ -22,7 +22,8 @@ import {
   Inventory as InventoryIcon,
   LocalShipping as ShippingIcon,
   WarehouseOutlined as WarehouseIcon,
-  Category as CategoryIcon
+  Category as CategoryIcon,
+  QrCode as QrCodeIcon
 } from '@mui/icons-material';
 import { 
   createInventoryItem, 
@@ -53,7 +54,8 @@ const InventoryItemForm = ({ itemId }) => {
     packingGroup: '',
     boxesPerPallet: '',
     itemsPerBox: '',
-    currency: 'EUR'
+    currency: 'EUR',
+    barcode: ''
   });
 
   useEffect(() => {
@@ -257,6 +259,26 @@ const InventoryItemForm = ({ itemId }) => {
                 helperText="Chemical Abstracts Service number (opcjonalny)"
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
                 placeholder="np. 64-17-5"
+              />
+            </Grid>
+            
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Kod kreskowy (Barcode)"
+                name="barcode"
+                value={itemData.barcode || ''}
+                onChange={handleChange}
+                fullWidth
+                helperText="Kod kreskowy produktu (opcjonalny)"
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                placeholder="np. 1234567890123"
+                InputProps={{
+                  startAdornment: (
+                    <Box sx={{ color: 'text.secondary', mr: 1, display: 'flex', alignItems: 'center' }}>
+                      <QrCodeIcon fontSize="small" />
+                    </Box>
+                  ),
+                }}
               />
             </Grid>
             

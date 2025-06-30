@@ -768,6 +768,12 @@ const ItemDetailsPage = () => {
                         <TableCell>{item.casNumber || 'Nie określono'}</TableCell>
                       </TableRow>
                       <TableRow>
+                        <TableCell component="th" sx={{ width: '40%', fontWeight: 'medium' }}>Kod kreskowy</TableCell>
+                        <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.9rem' }}>
+                          {item.barcode || 'Nie określono'}
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
                         <TableCell component="th" sx={{ width: '40%', fontWeight: 'medium' }}>Minimalny stan</TableCell>
                         <TableCell>{item.minStock ? `${formatQuantity(item.minStock)} ${item.unit}` : 'Nie określono'}</TableCell>
                       </TableRow>
