@@ -415,11 +415,12 @@ const RecipeForm = ({ recipeId }) => {
       if (recipeId) {
         await updateRecipe(recipeId, recipeData, currentUser.uid);
         showSuccess('Receptura została zaktualizowana');
+        navigate(`/recipes/${recipeId}`);
       } else {
-        await createRecipe(recipeData, currentUser.uid);
+        const newRecipe = await createRecipe(recipeData, currentUser.uid);
         showSuccess('Receptura została utworzona');
+        navigate(`/recipes/${newRecipe.id}`);
       }
-      navigate('/recipes');
     } catch (error) {
       showError('Błąd podczas zapisywania receptury: ' + error.message);
       console.error('Error saving recipe:', error);
