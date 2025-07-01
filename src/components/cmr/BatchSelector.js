@@ -22,7 +22,7 @@ import {
   Autocomplete,
   Grid
 } from '@mui/material';
-import { getItemBatches, getAllInventoryItems } from '../../services/inventoryService';
+import { getItemBatches, getAllInventoryItems, getAllWarehouses } from '../../services/inventoryService';
 
 /**
  * Komponent do wyboru partii magazynowych dla pozycji CMR
@@ -39,6 +39,7 @@ const BatchSelector = ({
   const [inventoryItems, setInventoryItems] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
   const [batches, setBatches] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
   const [selectedBatchIds, setSelectedBatchIds] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingBatches, setLoadingBatches] = useState(false);
@@ -48,6 +49,7 @@ const BatchSelector = ({
   useEffect(() => {
     if (open) {
       loadInventoryItems();
+      loadWarehouses();
       // Ustawienie wybranych partii
       setSelectedBatchIds(selectedBatches.map(batch => batch.id) || []);
       // Automatyczne wyszukiwanie na podstawie dostępnych danych
@@ -55,14 +57,14 @@ const BatchSelector = ({
     }
   }, [open, selectedBatches, itemDescription, itemMarks, itemCode]);
 
-  // Ładowanie partii po wyborze pozycji magazynowej
+  // Ładowanie partii po wyborze pozycji magazynowej lub załadowaniu magazynów
   useEffect(() => {
-    if (selectedItem) {
+    if (selectedItem && warehouses.length > 0) {
       loadBatches(selectedItem.id);
     } else {
       setBatches([]);
     }
-  }, [selectedItem]);
+  }, [selectedItem, warehouses]);
 
   const loadInventoryItems = async () => {
     try {
@@ -82,6 +84,15 @@ const BatchSelector = ({
       console.error('Błąd podczas ładowania pozycji magazynowych:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadWarehouses = async () => {
+    try {
+      const warehousesData = await getAllWarehouses();
+      setWarehouses(warehousesData);
+    } catch (error) {
+      console.error('Błąd podczas ładowania magazynów:', error);
     }
   };
 
@@ -157,7 +168,18 @@ const BatchSelector = ({
       const batchesData = await getItemBatches(itemId);
       // Filtruj tylko partie z dostępną ilością > 0
       const availableBatches = batchesData.filter(batch => batch.quantity > 0);
-      setBatches(availableBatches);
+      
+      // Dodaj informacje o lokalizacji magazynu do każdej partii
+      const enhancedBatches = availableBatches.map(batch => {
+        const warehouse = warehouses.find(w => w.id === batch.warehouseId);
+        return {
+          ...batch,
+          warehouseName: warehouse?.name || 'Magazyn podstawowy',
+          warehouseAddress: warehouse?.address || '',
+        };
+      });
+      
+      setBatches(enhancedBatches);
     } catch (error) {
       console.error('Błąd podczas ładowania partii:', error);
       setBatches([]);
