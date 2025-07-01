@@ -31,6 +31,7 @@ import {
 } from '@mui/icons-material';
 import { getExpiringBatches, getExpiredBatches } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
+import { useDebounce } from '../../hooks/useDebounce';
 import { Timestamp } from 'firebase/firestore';
 
 // TabPanel component
@@ -64,13 +65,20 @@ const ExpiryDatesPage = () => {
   const [daysThreshold, setDaysThreshold] = useState(30);
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Użyj debounce dla daysThreshold, aby uniknąć częstych wywołań API
+  // Tylko gdy wartość jest liczbą większą od 0
+  const debouncedDaysThreshold = useDebounce(
+    typeof daysThreshold === 'number' && daysThreshold > 0 ? daysThreshold : 30, 
+    800
+  );
+
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
         
         // Pobierz partie z krótkim terminem ważności
-        const expiringData = await getExpiringBatches(daysThreshold);
+        const expiringData = await getExpiringBatches(debouncedDaysThreshold);
         setExpiringBatches(expiringData);
         
         // Pobierz przeterminowane partie
@@ -85,16 +93,24 @@ const ExpiryDatesPage = () => {
     };
 
     fetchData();
-  }, [showError, daysThreshold]);
+  }, [showError, debouncedDaysThreshold]);
 
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
   };
 
   const handleDaysThresholdChange = (e) => {
-    const value = parseInt(e.target.value);
-    if (!isNaN(value) && value > 0) {
-      setDaysThreshold(value);
+    const value = e.target.value;
+    
+    // Pozwól na puste pole podczas pisania
+    if (value === '') {
+      setDaysThreshold('');
+      return;
+    }
+    
+    const numValue = parseInt(value);
+    if (!isNaN(numValue) && numValue > 0) {
+      setDaysThreshold(numValue);
     }
   };
 
@@ -200,7 +216,7 @@ const ExpiryDatesPage = () => {
             }}
           />
           <Typography variant="body2" color="text.secondary">
-            Pokazuje produkty wygasające w ciągu {daysThreshold} dni
+            Pokazuje produkty wygasające w ciągu {daysThreshold || '...'} dni
           </Typography>
         </Box>
         
@@ -301,9 +317,9 @@ const ExpiryDatesPage = () => {
                             variant="outlined" 
                             size="small" 
                             component={Link}
-                            to={`/inventory/${batch.itemId}/issue`}
+                            to={`/inventory/${batch.itemId}/batches`}
                           >
-                            Wydaj
+                            Zarządzaj partiami
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -362,15 +378,25 @@ const ExpiryDatesPage = () => {
                         </TableCell>
                         <TableCell>{batch.quantity}</TableCell>
                         <TableCell>
-                          <Button 
-                            variant="outlined" 
-                            size="small" 
-                            component={Link}
-                            to={`/inventory/${batch.itemId}/issue`}
-                            color="error"
-                          >
-                            Utylizuj
-                          </Button>
+                          <Box sx={{ display: 'flex', gap: 1, flexDirection: 'column' }}>
+                            <Button 
+                              variant="outlined" 
+                              size="small" 
+                              component={Link}
+                              to={`/inventory/${batch.itemId}/batches`}
+                            >
+                              Zarządzaj partiami
+                            </Button>
+                            <Button 
+                              variant="outlined" 
+                              size="small" 
+                              component={Link}
+                              to={`/inventory/${batch.itemId}/issue`}
+                              color="error"
+                            >
+                              Utylizuj
+                            </Button>
+                          </Box>
                         </TableCell>
                       </TableRow>
                     );

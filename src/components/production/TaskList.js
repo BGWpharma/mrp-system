@@ -307,7 +307,7 @@ const TaskList = () => {
         filters
       );
       
-      console.log("Pobrane zadania z paginacją:", result.data);
+      console.log("Pobrano", result.data.length, "zadań z paginacją");
       setTasks(result.data);
       setFilteredTasks(result.data);
       setTotalItems(result.pagination.totalItems);
@@ -419,9 +419,8 @@ const TaskList = () => {
   const openAddToInventoryDialog = (task) => {
     setCurrentTaskId(task.id);
     
-    // Dodaję logowanie do celów diagnostycznych
-    console.log('Dane zadania:', task);
-    console.log('Data ważności z zadania:', task.expiryDate);
+    // Logowanie tylko podstawowych danych zadania
+    console.log('Otwieranie dialogu dla zadania ID:', task.id, 'MO:', task.moNumber);
     
     // Poprawna konwersja daty ważności z różnych formatów
     let expiryDate = null;
@@ -441,7 +440,7 @@ const TaskList = () => {
           // Obsługa formatu string
           expiryDate = new Date(task.expiryDate);
         }
-        console.log('Skonwertowana data ważności:', expiryDate);
+        console.log('Skonwertowana data ważności:', expiryDate?.toISOString());
       } catch (error) {
         console.error('Błąd konwersji daty ważności:', error);
         // W przypadku błędu konwersji, ustaw datę domyślną
@@ -460,12 +459,7 @@ const TaskList = () => {
       warehouseId: task.warehouseId || (warehouses.length > 0 ? warehouses[0].id : '')
     });
     
-    console.log('Dane formularza po konwersji:', {
-      expiryDate: expiryDate,
-      lotNumber: task.lotNumber || `SN/${task.moNumber || ''}`,
-      finalQuantity: task.quantity.toString(),
-      warehouseId: task.warehouseId || (warehouses.length > 0 ? warehouses[0].id : '')
-    });
+    console.log('Formularz przygotowany dla MO:', task.moNumber, 'LOT:', task.lotNumber || `SN/${task.moNumber || ''}`);
     
     setAddToInventoryDialogOpen(true);
   };

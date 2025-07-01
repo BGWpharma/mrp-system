@@ -292,7 +292,13 @@ const TaskDetailsPage = () => {
 
   // Funkcja do obsługi zmiany alergenów
   const handleAllergenChange = (event, newValue) => {
-    setSelectedAllergens(newValue);
+    // Filtruj puste wartości i duplikaty
+    const filteredValue = newValue
+      .map(value => typeof value === 'string' ? value.trim() : value)
+      .filter(value => value && value.length > 0)
+      .filter((value, index, array) => array.indexOf(value) === index);
+    
+    setSelectedAllergens(filteredValue);
   };
 
   // Stan dla głównej zakładki
@@ -7609,6 +7615,7 @@ const TaskDetailsPage = () => {
                     
                     <Autocomplete
                       multiple
+                      freeSolo
                       id="allergens-autocomplete"
                       options={availableAllergens}
                       value={selectedAllergens}
@@ -7617,9 +7624,10 @@ const TaskDetailsPage = () => {
                         <TextField
                           {...params}
                           label="Alergeny"
-                          placeholder="Wybierz alergeny..."
+                          placeholder="Wybierz z listy lub wpisz własny alergen..."
                           variant="outlined"
                           fullWidth
+                          helperText="Możesz wybrać z listy lub wpisać własny alergen i nacisnąć Enter"
                         />
                       )}
                       renderTags={(value, getTagProps) =>
@@ -7627,6 +7635,7 @@ const TaskDetailsPage = () => {
                           <Chip
                             variant="outlined"
                             label={option}
+                            color={availableAllergens.includes(option) ? "default" : "secondary"}
                             {...getTagProps({ index })}
                           />
                         ))
