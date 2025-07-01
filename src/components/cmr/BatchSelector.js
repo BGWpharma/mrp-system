@@ -279,23 +279,14 @@ const BatchSelector = ({
         sx: { height: '80vh' }
       }}
     >
-      <DialogTitle>
+      <DialogTitle sx={{ mt: 1}}>
         Wybór partii magazynowych
         {selectedItem && (
-          <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>
+          <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1}}>
             Produkt: {selectedItem.name}
           </Typography>
         )}
-        {(itemDescription || itemMarks || itemCode) && (
-          <Box sx={{ mt: 1, p: 1, bgcolor: 'info.main', color: 'info.contrastText', borderRadius: 1 }}>
-            <Typography variant="caption">
-              🔍 Automatyczne wyszukiwanie dla pozycji CMR:
-              {itemCode && ` Kod: "${itemCode}"`}
-              {itemMarks && ` Znaki: "${itemMarks}"`}
-              {itemDescription && ` Opis: "${itemDescription}"`}
-            </Typography>
-          </Box>
-        )}
+
       </DialogTitle>
       
       <DialogContent>
