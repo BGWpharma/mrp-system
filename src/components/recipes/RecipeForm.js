@@ -1688,13 +1688,13 @@ const RecipeForm = ({ recipeId }) => {
               <Table>
                 <TableHead sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.6)' : 'rgba(240, 245, 250, 0.8)' }}>
                   <TableRow>
-                    <TableCell width="20%"><Typography variant="subtitle2">Składnik</Typography></TableCell>
-                    <TableCell width="20%"><Typography variant="subtitle2">Nazwa</Typography></TableCell>
-                    <TableCell width="14%"><Typography variant="subtitle2">Ilość</Typography></TableCell>
+                    <TableCell width="18%"><Typography variant="subtitle2">Składnik</Typography></TableCell>
+                    <TableCell width="18%"><Typography variant="subtitle2">Nazwa</Typography></TableCell>
+                    <TableCell width="12%"><Typography variant="subtitle2">Ilość</Typography></TableCell>
                     <TableCell width="8%"><Typography variant="subtitle2">Jednostka</Typography></TableCell>
-                    <TableCell width="15%"><Typography variant="subtitle2">Kategoria</Typography></TableCell>
-                    <TableCell width="19%"><Typography variant="subtitle2">Uwagi</Typography></TableCell>
-                    <TableCell width="4%"><Typography variant="subtitle2">Akcje</Typography></TableCell>
+                    <TableCell width="14%"><Typography variant="subtitle2">Kategoria</Typography></TableCell>
+                    <TableCell width="20%"><Typography variant="subtitle2">Uwagi</Typography></TableCell>
+                    <TableCell width="10%"><Typography variant="subtitle2">Akcje</Typography></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1933,13 +1933,37 @@ const RecipeForm = ({ recipeId }) => {
                         />
                       </TableCell>
                       <TableCell>
-                        <IconButton 
-                          color="error" 
-                          onClick={() => removeMicronutrient(index)}
-                          size="small"
-                        >
-                          <DeleteIcon />
-                        </IconButton>
+                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                          <Tooltip title="Przesuń w górę">
+                            <IconButton 
+                              color="primary" 
+                              onClick={() => moveMicronutrientUp(index)}
+                              size="small"
+                              disabled={index === 0}
+                            >
+                              <ArrowUpIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Przesuń w dół">
+                            <IconButton 
+                              color="primary" 
+                              onClick={() => moveMicronutrientDown(index)}
+                              size="small"
+                              disabled={index === recipeData.micronutrients.length - 1}
+                            >
+                              <ArrowDownIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Usuń składnik">
+                            <IconButton 
+                              color="error" 
+                              onClick={() => removeMicronutrient(index)}
+                              size="small"
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
                       </TableCell>
                     </TableRow>
                   ))}
