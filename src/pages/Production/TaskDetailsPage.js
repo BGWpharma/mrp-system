@@ -119,7 +119,7 @@ import { generateEndProductReportPDF } from '../../services/endProductReportServ
 const TaskDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { showSuccess, showError, showInfo } = useNotification();
+  const { showSuccess, showError, showInfo, showWarning } = useNotification();
   const { currentUser } = useAuth();
   
   const [task, setTask] = useState(null);
@@ -645,6 +645,29 @@ const TaskDetailsPage = () => {
       fetchAdditionalAttachments();
     }
   }, [task?.id]);
+
+  // Pobieranie alergenów z receptury przy załadowaniu zadania
+  useEffect(() => {
+    if (task?.recipe?.allergens && task.recipe.allergens.length > 0) {
+      console.log('Pobieranie alergenów z receptury:', task.recipe.allergens);
+      setSelectedAllergens(task.recipe.allergens);
+    } else if (task?.recipeId && !task?.recipe?.allergens) {
+      // Jeśli zadanie ma recipeId ale nie ma załadowanych danych receptury, pobierz je
+      const fetchRecipeAllergens = async () => {
+        try {
+          const { getRecipeById } = await import('../../services/recipeService');
+          const recipe = await getRecipeById(task.recipeId);
+          if (recipe?.allergens && recipe.allergens.length > 0) {
+            console.log('Pobrano alergeny z receptury:', recipe.allergens);
+            setSelectedAllergens(recipe.allergens);
+          }
+        } catch (error) {
+          console.error('Błąd podczas pobierania alergenów z receptury:', error);
+        }
+      };
+      fetchRecipeAllergens();
+    }
+  }, [task?.recipe?.allergens, task?.recipeId]);
 
   // Automatyczna aktualizacja kosztów gdy wykryto różnicę (z debouncing)
   useEffect(() => {
@@ -5536,6 +5559,43 @@ const TaskDetailsPage = () => {
     }
   };
 
+  // Funkcja do zapisywania alergenów do receptury
+  const saveAllergensToRecipe = async (recipeId, allergens) => {
+    try {
+      // Pobierz aktualną recepturę
+      const { getRecipeById, updateRecipe } = await import('../../services/recipeService');
+      const currentRecipe = await getRecipeById(recipeId);
+      
+      if (!currentRecipe) {
+        throw new Error('Nie znaleziono receptury');
+      }
+      
+      // Sprawdź czy alergeny się zmieniły
+      const currentAllergens = currentRecipe.allergens || [];
+      const sortedCurrentAllergens = [...currentAllergens].sort();
+      const sortedNewAllergens = [...allergens].sort();
+      
+      if (JSON.stringify(sortedCurrentAllergens) === JSON.stringify(sortedNewAllergens)) {
+        console.log('Alergeny są identyczne, pomijam aktualizację receptury');
+        return;
+      }
+      
+      // Zaktualizuj recepturę z nowymi allergenami
+      const updatedRecipeData = {
+        ...currentRecipe,
+        allergens: allergens,
+        updatedAt: new Date()
+      };
+      
+      await updateRecipe(recipeId, updatedRecipeData, currentUser.uid);
+      console.log(`Zaktualizowano alergeny w recepturze ${recipeId}:`, allergens);
+      
+    } catch (error) {
+      console.error('Błąd podczas zapisywania alergenów do receptury:', error);
+      throw error;
+    }
+  };
+
   // Funkcja do generowania raportu PDF
   const handleGenerateEndProductReport = async () => {
     if (!task) {
@@ -5694,6 +5754,17 @@ const TaskDetailsPage = () => {
       const result = await generateEndProductReportPDF(task, additionalData);
       
       if (result.success) {
+        // Zapisz alergeny do receptury jeśli zostały wybrane i zadanie ma przypisaną recepturę
+        if (selectedAllergens.length > 0 && task.recipeId) {
+          try {
+            await saveAllergensToRecipe(task.recipeId, selectedAllergens);
+            showInfo('Alergeny zostały zapisane do receptury');
+          } catch (allergenError) {
+            console.error('Błąd podczas zapisywania alergenów do receptury:', allergenError);
+            showWarning('Raport został wygenerowany, ale nie udało się zapisać alergenów do receptury');
+          }
+        }
+        
         if (result.withAttachments) {
           showSuccess(`Raport PDF został wygenerowany z załącznikami (${uniqueAttachments.length}): ${result.fileName}`);
         } else {
