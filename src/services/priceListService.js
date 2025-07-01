@@ -370,4 +370,66 @@ export const getPriceForCustomerProduct = async (customerId, productId, isRecipe
     console.error('Błąd podczas pobierania ceny dla klienta:', error);
     return null;
   }
+};
+
+/**
+ * Pobiera wszystkie listy cenowe zawierające daną recepturę
+ * @param {string} recipeId - ID receptury
+ * @returns {Promise<Array>} - Lista obiektów zawierających informacje o liście cenowej i pozycji
+ */
+export const getPriceListsContainingRecipe = async (recipeId) => {
+  if (!recipeId) return [];
+  
+  try {
+    // Pobierz wszystkie elementy list cenowych dla danej receptury
+    const itemsQuery = query(
+      collection(db, PRICE_LIST_ITEMS_COLLECTION),
+      where('productId', '==', recipeId),
+      where('isRecipe', '==', true)
+    );
+    
+    const itemsSnapshot = await getDocs(itemsQuery);
+    
+    if (itemsSnapshot.empty) {
+      return [];
+    }
+    
+    const priceListsWithItems = [];
+    
+    // Dla każdego znalezionego elementu, pobierz informacje o liście cenowej
+    for (const itemDoc of itemsSnapshot.docs) {
+      const itemData = { id: itemDoc.id, ...itemDoc.data() };
+      
+      try {
+        // Pobierz szczegóły listy cenowej
+        const priceListDoc = await getDoc(doc(db, PRICE_LISTS_COLLECTION, itemData.priceListId));
+        
+        if (priceListDoc.exists()) {
+          const priceListData = { id: priceListDoc.id, ...priceListDoc.data() };
+          
+          priceListsWithItems.push({
+            priceList: priceListData,
+            item: itemData,
+            customerName: priceListData.customerName || 'Nieznany klient',
+            price: itemData.price || 0,
+            unit: itemData.unit || 'szt.',
+            notes: itemData.notes || '',
+            isActive: priceListData.isActive || false
+          });
+        }
+      } catch (error) {
+        console.error(`Błąd podczas pobierania listy cenowej ${itemData.priceListId}:`, error);
+      }
+    }
+    
+    // Sortuj według nazwy klienta
+    priceListsWithItems.sort((a, b) => 
+      (a.customerName || '').localeCompare(b.customerName || '')
+    );
+    
+    return priceListsWithItems;
+  } catch (error) {
+    console.error('Błąd podczas pobierania list cenowych zawierających recepturę:', error);
+    return [];
+  }
 }; 

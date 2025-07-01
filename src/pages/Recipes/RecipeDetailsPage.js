@@ -51,6 +51,7 @@ import { createInventoryItem, getAllInventoryItems, getInventoryItemByRecipeId }
 import { db } from '../../services/firebase/config';
 import { collection, query, where, limit, getDocs, doc, getDoc, updateDoc, orderBy } from 'firebase/firestore';
 import { getAllWorkstations } from '../../services/workstationService';
+import { getPriceListsContainingRecipe } from '../../services/priceListService';
 
 // TabPanel component for recipe detail tabs
 function TabPanel(props) {
@@ -90,6 +91,7 @@ const RecipeDetailsPage = () => {
   const [linking, setLinking] = useState(false);
   const [workstations, setWorkstations] = useState([]);
   const [inventoryProduct, setInventoryProduct] = useState(null);
+  const [priceLists, setPriceLists] = useState([]);
 
   useEffect(() => {
     const fetchRecipeData = async () => {
@@ -99,6 +101,7 @@ const RecipeDetailsPage = () => {
         await fetchVersions();
         await fetchWorkstations();
         await fetchInventoryProduct();
+        await fetchPriceLists();
       } catch (error) {
         console.error('Error fetching recipe data:', error);
         showError('Błąd podczas pobierania danych receptury');
@@ -145,6 +148,15 @@ const RecipeDetailsPage = () => {
       setInventoryProduct(inventoryItem);
     } catch (error) {
       console.error('Błąd podczas pobierania pozycji magazynowej:', error);
+    }
+  };
+
+  const fetchPriceLists = async () => {
+    try {
+      const priceListsData = await getPriceListsContainingRecipe(id);
+      setPriceLists(priceListsData);
+    } catch (error) {
+      console.error('Błąd podczas pobierania list cenowych:', error);
     }
   };
 
@@ -528,6 +540,33 @@ const RecipeDetailsPage = () => {
                     />
                   </Link>
                   : 'Brak powiązanej pozycji magazynowej'}
+              </Typography>
+            </Grid>
+            <Grid item xs={12}>
+              <Typography variant="subtitle2" color="text.secondary">
+                Listy cenowe: {priceLists.length > 0 ? (
+                  <Box component="span" sx={{ ml: 1 }}>
+                    {priceLists.map((priceListInfo, index) => (
+                      <Chip
+                        key={priceListInfo.priceList.id}
+                        label={`${priceListInfo.customerName} - ${priceListInfo.price.toFixed(2)} EUR/${priceListInfo.unit} ${!priceListInfo.isActive ? '(nieaktywna)' : ''}`}
+                        size="small"
+                        color={priceListInfo.isActive ? 'success' : 'default'}
+                        variant="outlined"
+                        sx={{ 
+                          ml: index > 0 ? 1 : 0, 
+                          mr: 1, 
+                          mb: 0.5,
+                          cursor: 'pointer'
+                        }}
+                        component={Link}
+                        to={`/sales/price-lists/${priceListInfo.priceList.id}`}
+                        style={{ textDecoration: 'none' }}
+                        title={`Lista cenowa: ${priceListInfo.priceList.name}${priceListInfo.notes ? '\nUwagi: ' + priceListInfo.notes : ''}`}
+                      />
+                    ))}
+                  </Box>
+                ) : 'Receptura nie jest dodana do żadnej listy cenowej'}
               </Typography>
             </Grid>
           </Grid>
