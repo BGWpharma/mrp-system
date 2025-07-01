@@ -1107,36 +1107,174 @@ const ForecastPage = () => {
           ) : forecastData.length > 0 && (
             <Slide direction="up" in={showResults} timeout={800}>
               <Paper sx={{ mt: 2, borderRadius: 2, overflow: 'hidden', boxShadow: 3 }}>
-                <TableContainer>
+                <TableContainer sx={{ maxHeight: '70vh' }}>
                   <Table size="small">
-                    <TableHead sx={{ bgcolor: 'primary.lighter' }}>
+                    <TableHead sx={{ bgcolor: 'background.paper' }}>
                       <TableRow>
-                        <TableCell width="25%" onClick={() => handleSortChange('name')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                        <TableCell 
+                          width="25%" 
+                          onClick={() => handleSortChange('name')} 
+                          sx={{ 
+                            cursor: 'pointer', 
+                            fontWeight: 'bold',
+                            position: 'sticky',
+                            top: 0,
+                            bgcolor: (theme) => theme.palette.mode === 'dark' 
+                              ? '#1e293b' 
+                              : '#f5f5f5',
+                            zIndex: 1
+                          }}
+                        >
                           Materiał {renderSortIcon('name')}
                         </TableCell>
-                        <TableCell align="right" width="10%" onClick={() => handleSortChange('availableQuantity')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                        <TableCell 
+                          align="right" 
+                          width="10%" 
+                          onClick={() => handleSortChange('availableQuantity')} 
+                          sx={{ 
+                            cursor: 'pointer', 
+                            fontWeight: 'bold',
+                            position: 'sticky',
+                            top: 0,
+                            bgcolor: (theme) => theme.palette.mode === 'dark' 
+                              ? '#1e293b' 
+                              : '#f5f5f5',
+                            zIndex: 1
+                          }}
+                        >
                           Dostępna ilość {renderSortIcon('availableQuantity')}
                         </TableCell>
-                        <TableCell align="right" width="10%" onClick={() => handleSortChange('requiredQuantity')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                        <TableCell 
+                          align="right" 
+                          width="10%" 
+                          onClick={() => handleSortChange('requiredQuantity')} 
+                          sx={{ 
+                            cursor: 'pointer', 
+                            fontWeight: 'bold',
+                            position: 'sticky',
+                            top: 0,
+                            bgcolor: (theme) => theme.palette.mode === 'dark' 
+                              ? '#1e293b' 
+                              : '#f5f5f5',
+                            zIndex: 1
+                          }}
+                        >
                           Potrzebna ilość {renderSortIcon('requiredQuantity')}
                         </TableCell>
-                        <TableCell align="right" width="10%" onClick={() => handleSortChange('balance')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                        <TableCell 
+                          align="right" 
+                          width="10%" 
+                          onClick={() => handleSortChange('balance')} 
+                          sx={{ 
+                            cursor: 'pointer', 
+                            fontWeight: 'bold',
+                            position: 'sticky',
+                            top: 0,
+                            bgcolor: (theme) => theme.palette.mode === 'dark' 
+                              ? '#1e293b' 
+                              : '#f5f5f5',
+                            zIndex: 1
+                          }}
+                        >
                           Bilans {renderSortIcon('balance')}
                         </TableCell>
-                        <TableCell align="right" width="10%">Oczekiwane dostawy</TableCell>
-                        <TableCell align="right" width="10%" onClick={() => handleSortChange('balanceWithDeliveries')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                        <TableCell 
+                          align="right" 
+                          width="10%" 
+                          sx={{ 
+                            fontWeight: 'bold',
+                            position: 'sticky',
+                            top: 0,
+                            bgcolor: (theme) => theme.palette.mode === 'dark' 
+                              ? '#1e293b' 
+                              : '#f5f5f5',
+                            zIndex: 1
+                          }}
+                        >
+                          Oczekiwane dostawy
+                        </TableCell>
+                        <TableCell 
+                          align="right" 
+                          width="10%" 
+                          onClick={() => handleSortChange('balanceWithDeliveries')} 
+                          sx={{ 
+                            cursor: 'pointer', 
+                            fontWeight: 'bold',
+                            position: 'sticky',
+                            top: 0,
+                            bgcolor: (theme) => theme.palette.mode === 'dark' 
+                              ? '#1e293b' 
+                              : '#f5f5f5',
+                            zIndex: 1
+                          }}
+                        >
                           Bilans z dostawami {renderSortIcon('balanceWithDeliveries')}
                         </TableCell>
-                        <TableCell align="right" width="10%" onClick={() => handleSortChange('price')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                        <TableCell 
+                          align="right" 
+                          width="10%" 
+                          onClick={() => handleSortChange('price')} 
+                          sx={{ 
+                            cursor: 'pointer', 
+                            fontWeight: 'bold',
+                            position: 'sticky',
+                            top: 0,
+                            bgcolor: (theme) => theme.palette.mode === 'dark' 
+                              ? '#1e293b' 
+                              : '#f5f5f5',
+                            zIndex: 1
+                          }}
+                        >
                           Cena {renderSortIcon('price')}
                         </TableCell>
-                        <TableCell align="right" width="10%" onClick={() => handleSortChange('cost')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                        <TableCell 
+                          align="right" 
+                          width="10%" 
+                          onClick={() => handleSortChange('cost')} 
+                          sx={{ 
+                            cursor: 'pointer', 
+                            fontWeight: 'bold',
+                            position: 'sticky',
+                            top: 0,
+                            bgcolor: (theme) => theme.palette.mode === 'dark' 
+                              ? '#1e293b' 
+                              : '#f5f5f5',
+                            zIndex: 1
+                          }}
+                        >
                           Szacowany koszt {renderSortIcon('cost')}
                         </TableCell>
-                        <TableCell width="10%" onClick={() => handleSortChange('status')} sx={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                        <TableCell 
+                          width="10%" 
+                          onClick={() => handleSortChange('status')} 
+                          sx={{ 
+                            cursor: 'pointer', 
+                            fontWeight: 'bold',
+                            position: 'sticky',
+                            top: 0,
+                            bgcolor: (theme) => theme.palette.mode === 'dark' 
+                              ? '#1e293b' 
+                              : '#f5f5f5',
+                            zIndex: 1
+                          }}
+                        >
                           Status {renderSortIcon('status')}
                         </TableCell>
-                        <TableCell align="center" width="5%">Akcje</TableCell>
+                        <TableCell 
+                          align="center" 
+                          width="5%" 
+                          sx={{ 
+                            fontWeight: 'bold',
+                            position: 'sticky',
+                            top: 0,
+                            bgcolor: (theme) => theme.palette.mode === 'dark' 
+                              ? '#1e293b' 
+                              : '#f5f5f5',
+                            zIndex: 1
+                          }}
+                        >
+                          Akcje
+                        </TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
