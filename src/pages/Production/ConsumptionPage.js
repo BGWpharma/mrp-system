@@ -68,6 +68,8 @@ const ConsumptionPage = () => {
   const [editError, setEditError] = useState('');
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [restoreReservation, setRestoreReservation] = useState(true);
+  const [validationResults, setValidationResults] = useState(null);
+  const [validationDetailsOpen, setValidationDetailsOpen] = useState(false);
   
   // Pobieranie danych zadania
   useEffect(() => {
@@ -573,10 +575,114 @@ const ConsumptionPage = () => {
       return total;
     }, 0).toFixed(2);
   };
-  
+
+  // Walidacja konsumpcji poprocesowej
+  const validatePostProductionConsumption = () => {
+    const validationErrors = [];
+    const validationWarnings = [];
+
+    if (!task || !task.materials) {
+      return { 
+        isValid: false, 
+        errors: ['Brak danych o materiałach w zadaniu'], 
+        warnings: [] 
+      };
+    }
+
+    // Sprawdzenie każdego materiału w zadaniu
+    for (const material of task.materials) {
+      const materialId = material.inventoryItemId || material.id;
+      const materialName = material.name || 'Nieznany materiał';
+      
+      // Wymagana ilość materiału z zadania
+      const requiredQuantity = material.quantity || 0;
+      
+      // Skonsumowana ilość materiału
+      const consumedQuantity = consumptionData
+        .filter(consumption => consumption.materialId === materialId)
+        .reduce((total, consumption) => total + Number(consumption.quantity || 0), 0);
+      
+      // Sprawdzenie czy materiał ma jeszcze aktywne rezerwacje
+      const hasActiveReservations = task.materialBatches && 
+                                   task.materialBatches[materialId] && 
+                                   task.materialBatches[materialId].length > 0;
+      
+      // Walidacja 1: Sprawdzenie czy pozostały aktywne rezerwacje (BŁĄD KRYTYCZNY)
+      if (hasActiveReservations) {
+        const totalReservedQuantity = task.materialBatches[materialId]
+          .reduce((total, batch) => total + Number(batch.quantity || 0), 0);
+        
+        if (totalReservedQuantity > 0) {
+          validationErrors.push(
+            `Materiał "${materialName}": pozostała nierozliczona rezerwacja w ilości ${totalReservedQuantity.toFixed(3)} ${material.unit || 'szt.'} - należy skonsumować lub anulować rezerwację`
+          );
+        }
+      }
+      
+      // Walidacja 2: Sprawdzenie czy ilość skonsumowana jest odpowiednia (OPCJONALNE - tylko ostrzeżenia)
+      const consumptionDifference = Math.abs(consumedQuantity - requiredQuantity);
+      const tolerancePercentage = 0.05; // 5% tolerancja
+      const toleranceAmount = requiredQuantity * tolerancePercentage;
+      
+      if (consumedQuantity < requiredQuantity) {
+        const shortfall = requiredQuantity - consumedQuantity;
+        
+        if (shortfall > toleranceAmount) {
+          validationWarnings.push(
+            `Materiał "${materialName}": skonsumowano mniej niż planowane - wymagane: ${requiredQuantity.toFixed(3)}, skonsumowane: ${consumedQuantity.toFixed(3)}, niedobór: ${shortfall.toFixed(3)} ${material.unit || 'szt.'}`
+          );
+        } else if (shortfall > 0) {
+          validationWarnings.push(
+            `Materiał "${materialName}": skonsumowano nieco mniej niż planowane - wymagane: ${requiredQuantity.toFixed(3)}, skonsumowane: ${consumedQuantity.toFixed(3)}, różnica: ${shortfall.toFixed(3)} ${material.unit || 'szt.'}`
+          );
+        }
+      } else if (consumedQuantity > requiredQuantity) {
+        const excess = consumedQuantity - requiredQuantity;
+        
+        if (excess > toleranceAmount) {
+          validationWarnings.push(
+            `Materiał "${materialName}": skonsumowano więcej niż planowane - wymagane: ${requiredQuantity.toFixed(3)}, skonsumowane: ${consumedQuantity.toFixed(3)}, nadwyżka: ${excess.toFixed(3)} ${material.unit || 'szt.'}`
+          );
+        }
+      }
+      
+      // Walidacja 3: Sprawdzenie czy materiał w ogóle został skonsumowany (jeśli był wymagany) - OPCJONALNE
+      if (requiredQuantity > 0 && consumedQuantity === 0) {
+        validationWarnings.push(
+          `Materiał "${materialName}": brak konsumpcji mimo planowanej ilości ${requiredQuantity.toFixed(3)} ${material.unit || 'szt.'}`
+        );
+      }
+    }
+
+    // Sprawdzenie czy są materiały skonsumowane które nie były w oryginalnym zadaniu
+    const taskMaterialIds = new Set(task.materials.map(m => m.inventoryItemId || m.id));
+    const consumedMaterialIds = new Set(consumptionData.map(c => c.materialId));
+    
+    for (const consumedMaterialId of consumedMaterialIds) {
+      if (!taskMaterialIds.has(consumedMaterialId)) {
+        const consumedMaterial = consumptionData.find(c => c.materialId === consumedMaterialId);
+        validationWarnings.push(
+          `Skonsumowano materiał "${consumedMaterial?.materialName || 'Nieznany'}" który nie był pierwotnie przewidziany w zadaniu`
+        );
+      }
+    }
+
+    const isValid = validationErrors.length === 0;
+    
+    return {
+      isValid,
+      errors: validationErrors,
+      warnings: validationWarnings
+    };
+  };
+
   const handleConfirmTask = async () => {
     try {
       setConfirmLoading(true);
+      
+      // Walidacja została już wykonana przy otwieraniu dialogu
+      // Zapisz wyniki walidacji wraz z zatwierdzeniem
+      const validation = validationResults || validatePostProductionConsumption();
       
       // Najpierw oznacz zadanie jako mające potwierdzone zużycie materiałów
       await updateDoc(doc(db, 'productionTasks', taskId), {
@@ -584,6 +690,12 @@ const ConsumptionPage = () => {
         materialConsumptionConfirmedAt: new Date().toISOString(),
         materialConsumptionConfirmedBy: currentUser.uid,
         materialConsumptionConfirmedByName: currentUser.displayName || currentUser.email,
+        validationResults: {
+          errors: validation.errors,
+          warnings: validation.warnings,
+          validatedAt: new Date().toISOString(),
+          validatedBy: currentUser.uid
+        },
         updatedAt: serverTimestamp(),
         updatedBy: currentUser.uid
       });
@@ -593,6 +705,7 @@ const ConsumptionPage = () => {
       
       showSuccess('Konsumpcja została zatwierdzona. Zadanie oznaczono jako zakończone.');
       setConfirmDialogOpen(false);
+      setValidationResults(null);
       
       // Odśwież dane zadania
       await fetchTaskData();
@@ -644,7 +757,11 @@ const ConsumptionPage = () => {
             variant="contained"
             color="success"
             startIcon={<CheckIcon />}
-            onClick={() => setConfirmDialogOpen(true)}
+            onClick={() => {
+              const validation = validatePostProductionConsumption();
+              setValidationResults(validation);
+              setConfirmDialogOpen(true);
+            }}
             size="large"
             sx={{ 
               minWidth: '200px',
@@ -705,6 +822,43 @@ const ConsumptionPage = () => {
                   <Typography variant="body2" color="text.secondary">
                     Data: {formatDate(task.materialConsumptionConfirmedAt)}
                   </Typography>
+                  
+                  {/* Wyniki walidacji przy zatwierdzeniu */}
+                  {task.validationResults && (
+                    <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid', borderColor: 'success.300' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                        Wyniki walidacji:
+                      </Typography>
+                      
+                      {task.validationResults.errors && task.validationResults.errors.length > 0 && (
+                        <Typography variant="caption" color="error.main" sx={{ display: 'block' }}>
+                          • Błędy: {task.validationResults.errors.length}
+                        </Typography>
+                      )}
+                      
+                      {task.validationResults.warnings && task.validationResults.warnings.length > 0 && (
+                        <Typography variant="caption" color="warning.main" sx={{ display: 'block' }}>
+                          • Ostrzeżenia: {task.validationResults.warnings.length}
+                        </Typography>
+                      )}
+                      
+                      {(!task.validationResults.errors || task.validationResults.errors.length === 0) && 
+                       (!task.validationResults.warnings || task.validationResults.warnings.length === 0) && (
+                        <Typography variant="caption" color="success.main" sx={{ display: 'block' }}>
+                          • Walidacja przeszła pomyślnie
+                        </Typography>
+                      )}
+                      
+                      <Button
+                        size="small"
+                        variant="text"
+                        onClick={() => setValidationDetailsOpen(true)}
+                        sx={{ mt: 1, fontSize: '0.75rem', textTransform: 'none' }}
+                      >
+                        Zobacz szczegóły walidacji
+                      </Button>
+                    </Box>
+                  )}
                 </Box>
               )}
               
@@ -971,7 +1125,7 @@ const ConsumptionPage = () => {
       </Dialog>
       
       {/* Dialog zatwierdzania zadania */}
-      <Dialog open={confirmDialogOpen} onClose={() => setConfirmDialogOpen(false)}>
+      <Dialog open={confirmDialogOpen} onClose={() => setConfirmDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Zatwierdź zadanie</DialogTitle>
         <DialogContent>
           <DialogContentText>
@@ -979,13 +1133,132 @@ const ConsumptionPage = () => {
             <br/><br/>
             Zatwierdzenie zadania oznaczy, że wszystkie konsumpcje zostały zarejestrowane i zadanie jest ukończone.
           </DialogContentText>
+          
+          {/* Wyniki walidacji */}
+          {validationResults && (
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                Wyniki walidacji konsumpcji
+              </Typography>
+              
+              {/* Błędy krytyczne */}
+              {validationResults.errors.length > 0 && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Błędy krytyczne - zadanie nie może zostać zatwierdzone:
+                  </Typography>
+                  <ul style={{ margin: 0, paddingLeft: '20px' }}>
+                    {validationResults.errors.map((error, index) => (
+                      <li key={index}>{error}</li>
+                    ))}
+                  </ul>
+                </Alert>
+              )}
+              
+              {/* Ostrzeżenia */}
+              {validationResults.warnings.length > 0 && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Ostrzeżenia - sprawdź poniższe kwestie:
+                  </Typography>
+                  <ul style={{ margin: 0, paddingLeft: '20px' }}>
+                    {validationResults.warnings.map((warning, index) => (
+                      <li key={index}>{warning}</li>
+                    ))}
+                  </ul>
+                </Alert>
+              )}
+              
+              {/* Sukces */}
+              {validationResults.isValid && validationResults.warnings.length === 0 && (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2">
+                    ✓ Walidacja przeszła pomyślnie - konsumpcja materiałów jest prawidłowa
+                  </Typography>
+                </Alert>
+              )}
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmDialogOpen(false)}>
+          <Button onClick={() => {
+            setConfirmDialogOpen(false);
+            setValidationResults(null);
+          }}>
             Anuluj
           </Button>
-          <Button onClick={handleConfirmTask} variant="contained" color="success" disabled={confirmLoading}>
-            Zatwierdź
+          <Button 
+            onClick={handleConfirmTask} 
+            variant="contained" 
+            color={validationResults?.isValid ? "success" : "warning"}
+            disabled={confirmLoading || (validationResults && !validationResults.isValid)}
+          >
+            {validationResults?.isValid 
+              ? (validationResults.warnings.length > 0 ? 'Zatwierdź mimo ostrzeżeń' : 'Zatwierdź')
+              : 'Nie można zatwierdzić'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Dialog szczegółów walidacji */}
+      <Dialog open={validationDetailsOpen} onClose={() => setValidationDetailsOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Szczegóły walidacji konsumpcji</DialogTitle>
+        <DialogContent>
+          {task?.validationResults ? (
+            <Box>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                Walidacja wykonana: {formatDate(task.validationResults.validatedAt)}
+              </Typography>
+              
+              {/* Błędy */}
+              {task.validationResults.errors && task.validationResults.errors.length > 0 ? (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Błędy krytyczne ({task.validationResults.errors.length}):
+                  </Typography>
+                  <ul style={{ margin: 0, paddingLeft: '20px' }}>
+                    {task.validationResults.errors.map((error, index) => (
+                      <li key={index}>{error}</li>
+                    ))}
+                  </ul>
+                </Alert>
+              ) : (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2">
+                    ✓ Brak błędów krytycznych
+                  </Typography>
+                </Alert>
+              )}
+              
+              {/* Ostrzeżenia */}
+              {task.validationResults.warnings && task.validationResults.warnings.length > 0 ? (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Ostrzeżenia ({task.validationResults.warnings.length}):
+                  </Typography>
+                  <ul style={{ margin: 0, paddingLeft: '20px' }}>
+                    {task.validationResults.warnings.map((warning, index) => (
+                      <li key={index}>{warning}</li>
+                    ))}
+                  </ul>
+                </Alert>
+              ) : (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2">
+                    ✓ Brak ostrzeżeń
+                  </Typography>
+                </Alert>
+              )}
+            </Box>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              Brak dostępnych wyników walidacji dla tego zadania.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setValidationDetailsOpen(false)}>
+            Zamknij
           </Button>
         </DialogActions>
       </Dialog>
