@@ -100,6 +100,7 @@ const PurchaseOrderForm = ({ orderId }) => {
     totalValue: 0,
     totalGross: 0,
     additionalCostsItems: [], // Tablica obiektów z dodatkowymi kosztami
+    globalDiscount: 0, // Rabat procentowy dla całej wartości PO
     currency: 'EUR',
     targetWarehouseId: '', // Nowe pole dla magazynu docelowego
     orderDate: formatDateForInput(new Date()),
@@ -242,7 +243,7 @@ const PurchaseOrderForm = ({ orderId }) => {
   }, [poData.currency]);
 
   // Funkcja do obliczania sumy
-  const calculateTotals = useCallback((items = [], additionalCosts = []) => {
+  const calculateTotals = useCallback((items = [], additionalCosts = [], globalDiscount = 0) => {
     // Obliczanie wartości netto i VAT dla pozycji produktów
     let itemsNetTotal = 0;
     let itemsVatTotal = 0;
@@ -271,29 +272,47 @@ const PurchaseOrderForm = ({ orderId }) => {
       additionalCostsVatTotal += costVat;
     });
     
-    // Suma wartości netto: produkty + dodatkowe koszty
-    const totalNet = itemsNetTotal + additionalCostsNetTotal;
+    // Suma wartości netto przed rabatem: produkty + dodatkowe koszty
+    const totalNetBeforeDiscount = itemsNetTotal + additionalCostsNetTotal;
     
-    // Suma VAT: VAT od produktów + VAT od dodatkowych kosztów
-    const totalVat = itemsVatTotal + additionalCostsVatTotal;
+    // Suma VAT przed rabatem: VAT od produktów + VAT od dodatkowych kosztów
+    const totalVatBeforeDiscount = itemsVatTotal + additionalCostsVatTotal;
     
-    // Wartość brutto: suma netto + suma VAT
-    const totalGross = totalNet + totalVat;
+    // Wartość brutto przed rabatem: suma netto + suma VAT
+    const totalGrossBeforeDiscount = totalNetBeforeDiscount + totalVatBeforeDiscount;
+    
+    // Obliczanie rabatu globalnego (stosowany do wartości brutto)
+    const globalDiscountMultiplier = (100 - parseFloat(globalDiscount || 0)) / 100;
+    const discountAmount = totalGrossBeforeDiscount * (parseFloat(globalDiscount || 0) / 100);
+    
+    // Końcowe wartości z uwzględnieniem rabatu globalnego
+    const totalNet = totalNetBeforeDiscount * globalDiscountMultiplier;
+    const totalVat = totalVatBeforeDiscount * globalDiscountMultiplier;
+    const totalGross = totalGrossBeforeDiscount * globalDiscountMultiplier;
     
     console.log('Obliczenia calculateTotals:');
     console.log('itemsNetTotal:', itemsNetTotal);
     console.log('itemsVatTotal:', itemsVatTotal);
     console.log('additionalCostsNetTotal:', additionalCostsNetTotal);
     console.log('additionalCostsVatTotal:', additionalCostsVatTotal);
-    console.log('totalNet:', totalNet);
-    console.log('totalVat:', totalVat);
-    console.log('totalGross:', totalGross);
+    console.log('totalNetBeforeDiscount:', totalNetBeforeDiscount);
+    console.log('totalVatBeforeDiscount:', totalVatBeforeDiscount);
+    console.log('totalGrossBeforeDiscount:', totalGrossBeforeDiscount);
+    console.log('globalDiscount:', globalDiscount, '%');
+    console.log('discountAmount:', discountAmount);
+    console.log('totalNet (po rabacie):', totalNet);
+    console.log('totalVat (po rabacie):', totalVat);
+    console.log('totalGross (po rabacie):', totalGross);
     
     return {
       itemsNetTotal,
       itemsVatTotal,
       additionalCostsNetTotal,
       additionalCostsVatTotal,
+      totalNetBeforeDiscount,
+      totalVatBeforeDiscount,
+      totalGrossBeforeDiscount,
+      discountAmount,
       totalNet,
       totalVat,
       totalGross
@@ -302,7 +321,7 @@ const PurchaseOrderForm = ({ orderId }) => {
 
   // Aktualizacja totali przy zmianie elementów
   useEffect(() => {
-    const totals = calculateTotals(poData.items, poData.additionalCostsItems);
+    const totals = calculateTotals(poData.items, poData.additionalCostsItems, poData.globalDiscount);
     setPoData(prev => ({
       ...prev,
       totalValue: totals.totalNet,
@@ -311,9 +330,13 @@ const PurchaseOrderForm = ({ orderId }) => {
       itemsNetTotal: totals.itemsNetTotal,
       itemsVatTotal: totals.itemsVatTotal,
       additionalCostsNetTotal: totals.additionalCostsNetTotal,
-      additionalCostsVatTotal: totals.additionalCostsVatTotal
+      additionalCostsVatTotal: totals.additionalCostsVatTotal,
+      totalNetBeforeDiscount: totals.totalNetBeforeDiscount,
+      totalVatBeforeDiscount: totals.totalVatBeforeDiscount,
+      totalGrossBeforeDiscount: totals.totalGrossBeforeDiscount,
+      discountAmount: totals.discountAmount
     }));
-  }, [poData.items, poData.additionalCostsItems, calculateTotals]);
+  }, [poData.items, poData.additionalCostsItems, poData.globalDiscount, calculateTotals]);
   
   const handleChange = (e, value) => {
     // Obsługa przypadku gdy funkcja jest wywoływana z nazwą i wartością
@@ -374,6 +397,7 @@ const PurchaseOrderForm = ({ orderId }) => {
         unit: 'szt',
         unitPrice: 0,
         totalPrice: 0,
+        discount: 0, // Domyślny rabat 0%
         vatRate: 0, // Domyślna stawka VAT 0%
         currency: poData.currency, // Domyślna waluta zgodna z zamówieniem
         originalUnitPrice: 0, // Wartość w oryginalnej walucie
@@ -646,11 +670,16 @@ const PurchaseOrderForm = ({ orderId }) => {
     
     updatedItems[index][field] = value;
     
-    // Przelicz totalPrice jeśli zmieniono quantity lub unitPrice
-    if (field === 'quantity' || field === 'unitPrice') {
+    // Przelicz totalPrice jeśli zmieniono quantity, unitPrice lub discount
+    if (field === 'quantity' || field === 'unitPrice' || field === 'discount') {
       const quantity = field === 'quantity' ? value : updatedItems[index].quantity;
       const unitPrice = field === 'unitPrice' ? value : updatedItems[index].unitPrice;
-      updatedItems[index].totalPrice = quantity * unitPrice;
+      const discount = field === 'discount' ? value : (updatedItems[index].discount || 0);
+      
+      // Oblicz cenę po rabacie
+      const discountMultiplier = (100 - parseFloat(discount || 0)) / 100;
+      const priceAfterDiscount = unitPrice * discountMultiplier;
+      updatedItems[index].totalPrice = quantity * priceAfterDiscount;
       
       // Jeśli zmieniono unitPrice i waluta pozycji jest taka sama jak waluta zamówienia
       if (field === 'unitPrice' && (!updatedItems[index].currency || updatedItems[index].currency === poData.currency)) {
@@ -680,16 +709,23 @@ const PurchaseOrderForm = ({ orderId }) => {
             
             // Aktualizuj pozycję z ceną dostawcy
             const updatedItems = [...poData.items];
+            const discount = updatedItems[index].discount || 0;
+            const quantity = updatedItems[index].quantity || Math.max(1, supplierPrice.minQuantity || 1);
+            const unitPrice = supplierPrice.price || 0;
+            const discountMultiplier = (100 - parseFloat(discount)) / 100;
+            const priceAfterDiscount = unitPrice * discountMultiplier;
+            
             updatedItems[index] = {
               ...updatedItems[index],
               inventoryItemId: selectedItem.id,
               name: selectedItem.name,
               unit: selectedItem.unit || 'szt',
               // Używamy ceny dostawcy
-              unitPrice: supplierPrice.price || 0,
+              unitPrice: unitPrice,
               // Zachowujemy istniejącą ilość, jeśli jest, lub używamy minQuantity, jeśli jest większe od 1
-              quantity: updatedItems[index].quantity || Math.max(1, supplierPrice.minQuantity || 1),
-              totalPrice: (updatedItems[index].quantity || 1) * (supplierPrice.price || 0),
+              quantity: quantity,
+              totalPrice: quantity * priceAfterDiscount,
+              discount: discount, // Zachowujemy istniejący rabat
               vatRate: updatedItems[index].vatRate || 0, // Zachowujemy stawkę VAT lub ustawiamy domyślną 0%
               minOrderQuantity: supplierPrice.minQuantity || selectedItem.minOrderQuantity || 0,
               // Zachowujemy istniejące wartości dla nowych pól lub ustawiamy domyślne
@@ -719,15 +755,22 @@ const PurchaseOrderForm = ({ orderId }) => {
     
     // Jeśli nie ma ceny dostawcy lub wystąpił błąd, używamy domyślnych wartości
     const updatedItems = [...poData.items];
+    const discount = updatedItems[index].discount || 0;
+    const quantity = updatedItems[index].quantity || 1;
+    const unitPrice = updatedItems[index].unitPrice || 0;
+    const discountMultiplier = (100 - parseFloat(discount)) / 100;
+    const priceAfterDiscount = unitPrice * discountMultiplier;
+    
     updatedItems[index] = {
       ...updatedItems[index],
       inventoryItemId: selectedItem.id,
       name: selectedItem.name,
       unit: selectedItem.unit || 'szt',
       // Zachowujemy istniejące wartości jeśli są, lub ustawiamy domyślne
-      quantity: updatedItems[index].quantity || 1,
-      unitPrice: updatedItems[index].unitPrice || 0,
-      totalPrice: (updatedItems[index].quantity || 1) * (updatedItems[index].unitPrice || 0),
+      quantity: quantity,
+      unitPrice: unitPrice,
+      totalPrice: quantity * priceAfterDiscount,
+      discount: discount, // Zachowujemy istniejący rabat
       vatRate: updatedItems[index].vatRate || 0, // Zachowujemy stawkę VAT lub ustawiamy domyślną 0%
       minOrderQuantity: selectedItem.minOrderQuantity || 0,
       // Zachowujemy istniejące wartości dla nowych pól lub ustawiamy domyślne
@@ -773,7 +816,7 @@ const PurchaseOrderForm = ({ orderId }) => {
       }
       
       // Obliczanie wartości przy użyciu funkcji calculateTotals
-      const totals = calculateTotals(orderData.items, orderData.additionalCostsItems);
+      const totals = calculateTotals(orderData.items, orderData.additionalCostsItems, orderData.globalDiscount);
       
       // Dodaj obliczone wartości do zapisywanych danych
       orderData.totalValue = totals.totalNet;
@@ -960,13 +1003,18 @@ const PurchaseOrderForm = ({ orderId }) => {
             hasDefaultPrices = true;
           }
           
+          // Uwzględnij rabat przy obliczaniu totalPrice
+          const discount = item.discount || 0;
+          const discountMultiplier = (100 - parseFloat(discount)) / 100;
+          const priceAfterDiscount = bestPrice.price * discountMultiplier;
+          
           return {
             ...item,
             supplierPrice: bestPrice.price,
             supplierId: bestPrice.supplierId,
             supplierName: supplierName,
             unitPrice: bestPrice.price,
-            totalPrice: bestPrice.price * item.quantity
+            totalPrice: priceAfterDiscount * item.quantity
           };
         }
         return item;
@@ -1071,13 +1119,18 @@ const PurchaseOrderForm = ({ orderId }) => {
             hasDefaultPrices = true;
           }
           
+          // Uwzględnij rabat przy obliczaniu totalPrice
+          const discount = item.discount || 0;
+          const discountMultiplier = (100 - parseFloat(discount)) / 100;
+          const priceAfterDiscount = bestPrice.price * discountMultiplier;
+          
           return {
             ...item,
             supplierPrice: bestPrice.price,
             supplierId: bestPrice.supplierId,
             supplierName: supplierName,
             unitPrice: bestPrice.price,
-            totalPrice: bestPrice.price * item.quantity
+            totalPrice: priceAfterDiscount * item.quantity
           };
         }
         return item;
@@ -1148,10 +1201,15 @@ const PurchaseOrderForm = ({ orderId }) => {
       if (item.inventoryItemId && supplierSuggestions[item.inventoryItemId]) {
         const suggestion = supplierSuggestions[item.inventoryItemId];
         
+        // Uwzględnij rabat przy obliczaniu totalPrice
+        const discount = item.discount || 0;
+        const discountMultiplier = (100 - parseFloat(discount)) / 100;
+        const priceAfterDiscount = suggestion.price * discountMultiplier;
+        
         return {
           ...item,
           unitPrice: suggestion.price,
-          totalPrice: suggestion.price * item.quantity
+          totalPrice: priceAfterDiscount * item.quantity
         };
       }
       return item;
@@ -1199,10 +1257,14 @@ const PurchaseOrderForm = ({ orderId }) => {
         if (minOrderQuantity > 0 && parseFloat(item.quantity) < minOrderQuantity && item.unit === inventoryItem.unit) {
           console.log(`[DEBUG] Aktualizuję ilość z ${item.quantity} na ${minOrderQuantity}`);
           const updatedQuantity = minOrderQuantity;
+          // Uwzględnij rabat przy obliczaniu totalPrice
+          const discount = item.discount || 0;
+          const discountMultiplier = (100 - parseFloat(discount)) / 100;
+          const priceAfterDiscount = (item.unitPrice || 0) * discountMultiplier;
           return {
             ...item,
             quantity: updatedQuantity,
-            totalPrice: (item.unitPrice || 0) * updatedQuantity
+            totalPrice: priceAfterDiscount * updatedQuantity
           };
         }
         
@@ -1373,11 +1435,16 @@ const PurchaseOrderForm = ({ orderId }) => {
           const originalPrice = parseFloat(item.originalUnitPrice) || 0;
           const convertedPrice = originalPrice * rate;
           
+          // Uwzględnij rabat przy obliczaniu totalPrice
+          const discount = item.discount || 0;
+          const discountMultiplier = (100 - parseFloat(discount)) / 100;
+          const priceAfterDiscount = convertedPrice * discountMultiplier;
+          
           return {
             ...item,
             exchangeRate: rate,
             unitPrice: convertedPrice.toFixed(6),
-            totalPrice: (convertedPrice * item.quantity).toFixed(2)
+            totalPrice: (priceAfterDiscount * item.quantity).toFixed(2)
           };
         }
         return item;
@@ -1799,11 +1866,16 @@ const PurchaseOrderForm = ({ orderId }) => {
           const originalPrice = parseFloat(item.originalUnitPrice) || 0;
           const convertedPrice = originalPrice * rate;
           
+          // Uwzględnij rabat przy obliczaniu totalPrice
+          const discount = item.discount || 0;
+          const discountMultiplier = (100 - parseFloat(discount)) / 100;
+          const priceAfterDiscount = convertedPrice * discountMultiplier;
+          
           return {
             ...item,
             exchangeRate: rate,
             unitPrice: convertedPrice.toFixed(6),
-            totalPrice: (convertedPrice * item.quantity).toFixed(2)
+            totalPrice: (priceAfterDiscount * item.quantity).toFixed(2)
           };
         }
         return item;
@@ -1912,6 +1984,7 @@ const PurchaseOrderForm = ({ orderId }) => {
             quantity: requiredQuantity,
             unit: inventoryItem.unit || 'szt',
             unitPrice: bestPrice ? bestPrice.price : 0,
+            discount: 0, // Domyślny rabat 0%
             totalPrice: bestPrice ? bestPrice.price * requiredQuantity : 0
           }];
           
@@ -2028,12 +2101,17 @@ const PurchaseOrderForm = ({ orderId }) => {
             // Przelicz wartość z pełną precyzją
             const convertedPrice = originalPrice * rate;
             
+            // Uwzględnij rabat przy obliczaniu totalPrice
+            const discount = item.discount || 0;
+            const discountMultiplier = (100 - parseFloat(discount)) / 100;
+            const priceAfterDiscount = convertedPrice * discountMultiplier;
+            
             // Aktualizuj pozycję z nowym kursem i przeliczoną wartością
             updatedItems[i] = {
               ...updatedItems[i],
               exchangeRate: rate,
               unitPrice: convertedPrice.toFixed(6),
-              totalPrice: (convertedPrice * item.quantity).toFixed(2)
+              totalPrice: (priceAfterDiscount * item.quantity).toFixed(2)
             };
             
             updated = true;
@@ -2636,10 +2714,11 @@ const PurchaseOrderForm = ({ orderId }) => {
               <TableHead>
                 <TableRow>
                   {/* Podstawowe kolumny - zawsze widoczne */}
-                  <TableCell width="25%">Produkt</TableCell>
-                  <TableCell width="17%">Ilość</TableCell>
-                  <TableCell width="8%">Jedn.</TableCell>
-                  <TableCell width="18%">Cena jedn.</TableCell>
+                  <TableCell width="20%">Produkt</TableCell>
+                  <TableCell width="10%">Ilość</TableCell>
+                  <TableCell width="7%">Jedn.</TableCell>
+                  <TableCell width="15%">Cena jedn.</TableCell>
+                  <TableCell width="8%">Rabat %</TableCell>
                   <TableCell width="7%">Waluta</TableCell>
                   <TableCell width="5%">VAT</TableCell>
                   <TableCell width="15%">Kwota po przew.</TableCell>
@@ -2730,6 +2809,32 @@ const PurchaseOrderForm = ({ orderId }) => {
                         </Box>
                       </TableCell>
                       <TableCell>
+                        <TextField
+                          type="number"
+                          value={item.discount || 0}
+                          onChange={(e) => handleItemChange(index, 'discount', e.target.value)}
+                          size="small"
+                          inputProps={{ min: 0, max: 100, step: 'any' }}
+                          InputProps={{
+                            endAdornment: '%',
+                          }}
+                          sx={{ 
+                            width: '100%',
+                            '& input[type=number]': {
+                              '-moz-appearance': 'textfield',
+                            },
+                            '& input[type=number]::-webkit-outer-spin-button': {
+                              '-webkit-appearance': 'none',
+                              margin: 0,
+                            },
+                            '& input[type=number]::-webkit-inner-spin-button': {
+                              '-webkit-appearance': 'none',
+                              margin: 0,
+                            },
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
                         <FormControl size="small" sx={{ width: '100%' }}>
                           <Select
                             value={item.currency || poData.currency}
@@ -2793,8 +2898,21 @@ const PurchaseOrderForm = ({ orderId }) => {
                     {/* Dodatkowy wiersz z pozostałymi polami - widoczny po rozwinięciu */}
                     {poData.expandedItems && poData.expandedItems[index] && (
                       <TableRow sx={{ backgroundColor: 'action.hover' }}>
-                        <TableCell colSpan={8}>
+                        <TableCell colSpan={9}>
                           <Grid container spacing={2} sx={{ py: 1 }}>
+                            <Grid item xs={12} sm={4}>
+                              <Typography variant="caption" display="block" gutterBottom>
+                                Kwota przed rabatem
+                              </Typography>
+                              <Typography variant="body2">
+                                {formatCurrency((item.unitPrice || 0) * item.quantity, item.currency || poData.currency)}
+                                {item.discount > 0 && (
+                                  <Typography variant="caption" component="span" sx={{ ml: 1, color: 'success.main' }}>
+                                    (rabat {item.discount}%)
+                                  </Typography>
+                                )}
+                              </Typography>
+                            </Grid>
                             <Grid item xs={12} sm={4}>
                               <Typography variant="caption" display="block" gutterBottom>
                                 Kwota oryginalna
@@ -3023,6 +3141,14 @@ const PurchaseOrderForm = ({ orderId }) => {
                   <Divider sx={{ my: 2 }} />
                   
                   {/* Podsumowanie końcowe */}
+                  {parseFloat(poData.globalDiscount || 0) > 0 && (
+                    <Box sx={{ mb: 1 }}>
+                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                        Wartość przed rabatem: <strong>{parseFloat(poData.totalGrossBeforeDiscount || 0).toFixed(2)} {poData.currency}</strong>
+                      </Typography>
+                    </Box>
+                  )}
+                  
                   <Box sx={{ mb: 1 }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'medium' }}>
                       Wartość netto razem: <strong>{parseFloat(poData.totalValue || 0).toFixed(2)} {poData.currency}</strong>
@@ -3033,6 +3159,47 @@ const PurchaseOrderForm = ({ orderId }) => {
                     <Typography variant="subtitle1" sx={{ fontWeight: 'medium' }}>
                       Suma podatku VAT: <strong>{parseFloat(poData.totalVat || 0).toFixed(2)} {poData.currency}</strong>
                     </Typography>
+                  </Box>
+                  
+                  {/* Rabat globalny */}
+                  <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'medium', minWidth: '150px' }}>
+                      Rabat globalny:
+                    </Typography>
+                    <TextField
+                      type="number"
+                      size="small"
+                      value={poData.globalDiscount || 0}
+                      onChange={(e) => handleChange({ target: { name: 'globalDiscount', value: e.target.value } })}
+                      inputProps={{ 
+                        min: 0, 
+                        max: 100, 
+                        step: 0.01,
+                        'aria-label': 'Rabat globalny'
+                      }}
+                      sx={{ 
+                        width: 120,
+                        '& input[type=number]': {
+                          '-moz-appearance': 'textfield',
+                        },
+                        '& input[type=number]::-webkit-outer-spin-button': {
+                          '-webkit-appearance': 'none',
+                          margin: 0,
+                        },
+                        '& input[type=number]::-webkit-inner-spin-button': {
+                          '-webkit-appearance': 'none',
+                          margin: 0,
+                        },
+                      }}
+                      InputProps={{
+                        endAdornment: <Typography variant="body2" sx={{ color: 'text.secondary' }}>%</Typography>
+                      }}
+                    />
+                    {parseFloat(poData.globalDiscount || 0) > 0 && (
+                      <Typography variant="body2" sx={{ color: 'success.main', fontWeight: 'medium' }}>
+                        Oszczędność: -{parseFloat(poData.discountAmount || 0).toFixed(2)} {poData.currency}
+                      </Typography>
+                    )}
                   </Box>
                   
                   <Box sx={{ 
