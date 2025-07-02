@@ -62,6 +62,7 @@ import {
 } from '../../services/inventoryService';
 import { CURRENCY_OPTIONS } from '../../config';
 import { formatCurrency } from '../../utils/formatUtils';
+import { formatNumberClean } from '../../utils/formatters';
 import { formatDateForInput } from '../../utils/dateUtils';
 import { formatAddress } from '../../utils/addressUtils';
 import { 
@@ -2593,7 +2594,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                           Suma:
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                          {parseFloat(poData.additionalCostsItems.reduce((sum, item) => sum + (parseFloat(item.value) || 0), 0))} {poData.currency}
+                          {formatNumberClean(poData.additionalCostsItems.reduce((sum, item) => sum + (parseFloat(item.value) || 0), 0))} {poData.currency}
                         </TableCell>
                         <TableCell />
                         <TableCell />
@@ -2614,7 +2615,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                                 VAT {vatRate}%:
                               </TableCell>
                               <TableCell align="right" sx={{ fontStyle: 'italic' }}>
-                                {vatValue.toFixed(6)} {poData.currency}
+                                {formatNumberClean(vatValue)} {poData.currency}
                               </TableCell>
                               <TableCell />
                               <TableCell />
@@ -2636,7 +2637,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                               const vatRate = typeof item.vatRate === 'number' ? item.vatRate : 0;
                               return sum + (itemValue * vatRate) / 100;
                             }, 0);
-                            return parseFloat(netTotal + vatTotal);
+                            return formatNumberClean(netTotal + vatTotal);
                           })()} {poData.currency}
                         </TableCell>
                         <TableCell />
@@ -3061,7 +3062,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                   {/* Sekcja produktów */}
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'medium', color: 'text.primary' }}>
-                      Wartość produktów netto: <strong>{parseFloat(poData.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0)).toFixed(2)} {poData.currency}</strong>
+                      Wartość produktów netto: <strong>{formatNumberClean(poData.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0))} {poData.currency}</strong>
                     </Typography>
                     
                     {/* Sekcja VAT dla produktów */}
@@ -3080,7 +3081,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                           
                           return (
                             <Typography key={vatRate} variant="body2" sx={{ pl: 1, color: 'text.secondary' }}>
-                              Stawka {vatRate}%: <strong>{parseFloat(vatValue).toFixed(2)} {poData.currency}</strong> <span style={{ fontSize: '0.85em' }}>(od {parseFloat(sumNet).toFixed(2)} {poData.currency})</span>
+                              Stawka {vatRate}%: <strong>{formatNumberClean(vatValue)} {poData.currency}</strong> <span style={{ fontSize: '0.85em' }}>(od {formatNumberClean(sumNet)} {poData.currency})</span>
                             </Typography>
                           );
                         })}
@@ -3092,12 +3093,12 @@ const PurchaseOrderForm = ({ orderId }) => {
                   {poData.additionalCostsItems.length > 0 && (
                     <Box sx={{ mb: 2 }}>
                       <Typography variant="subtitle1" sx={{ fontWeight: 'medium', color: 'text.primary' }}>
-                        Suma dodatkowych kosztów: <strong>{parseFloat(poData.additionalCostsNetTotal || 0).toFixed(2)} {poData.currency}</strong>
+                        Suma dodatkowych kosztów: <strong>{formatNumberClean(poData.additionalCostsNetTotal || 0)} {poData.currency}</strong>
                       </Typography>
                       
                       <Box sx={{ ml: 2, mt: 1 }}>
                         <Typography variant="body2" color="text.secondary" gutterBottom>
-                          VAT od dodatkowych kosztów: <strong>{parseFloat(poData.additionalCostsVatTotal || 0).toFixed(2)} {poData.currency}</strong>
+                          VAT od dodatkowych kosztów: <strong>{formatNumberClean(poData.additionalCostsVatTotal || 0)} {poData.currency}</strong>
                         </Typography>
                         {/* Grupowanie kosztów według stawki VAT */}
                         {Array.from(new Set(poData.additionalCostsItems.map(cost => cost.vatRate))).sort((a, b) => a - b).map(vatRate => {
@@ -3109,7 +3110,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                           
                           return (
                             <Typography key={vatRate} variant="body2" sx={{ pl: 1, color: 'text.secondary' }}>
-                              Stawka {vatRate}%: <strong>{parseFloat(vatValue).toFixed(2)} {poData.currency}</strong> <span style={{ fontSize: '0.85em' }}>(od {parseFloat(sumNet).toFixed(2)} {poData.currency})</span>
+                              Stawka {vatRate}%: <strong>{formatNumberClean(vatValue)} {poData.currency}</strong> <span style={{ fontSize: '0.85em' }}>(od {formatNumberClean(sumNet)} {poData.currency})</span>
                             </Typography>
                           );
                         })}
@@ -3144,20 +3145,20 @@ const PurchaseOrderForm = ({ orderId }) => {
                   {parseFloat(poData.globalDiscount || 0) > 0 && (
                     <Box sx={{ mb: 1 }}>
                       <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                        Wartość przed rabatem: <strong>{parseFloat(poData.totalGrossBeforeDiscount || 0).toFixed(2)} {poData.currency}</strong>
+                        Wartość przed rabatem: <strong>{formatNumberClean(poData.totalGrossBeforeDiscount || 0)} {poData.currency}</strong>
                       </Typography>
                     </Box>
                   )}
                   
                   <Box sx={{ mb: 1 }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'medium' }}>
-                      Wartość netto razem: <strong>{parseFloat(poData.totalValue || 0).toFixed(2)} {poData.currency}</strong>
+                      Wartość netto razem: <strong>{formatNumberClean(poData.totalValue || 0)} {poData.currency}</strong>
                     </Typography>
                   </Box>
                   
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'medium' }}>
-                      Suma podatku VAT: <strong>{parseFloat(poData.totalVat || 0).toFixed(2)} {poData.currency}</strong>
+                      Suma podatku VAT: <strong>{formatNumberClean(poData.totalVat || 0)} {poData.currency}</strong>
                     </Typography>
                   </Box>
                   
@@ -3197,7 +3198,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                     />
                     {parseFloat(poData.globalDiscount || 0) > 0 && (
                       <Typography variant="body2" sx={{ color: 'success.main', fontWeight: 'medium' }}>
-                        Oszczędność: -{parseFloat(poData.discountAmount || 0).toFixed(2)} {poData.currency}
+                        Oszczędność: -{formatNumberClean(poData.discountAmount || 0)} {poData.currency}
                       </Typography>
                     )}
                   </Box>
@@ -3215,7 +3216,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                         ? theme.palette.primary.light 
                         : 'primary.dark' 
                     }}>
-                      Wartość brutto: <strong>{parseFloat(poData.totalGross || 0).toFixed(2)} {poData.currency}</strong>
+                      Wartość brutto: <strong>{formatNumberClean(poData.totalGross || 0)} {poData.currency}</strong>
                     </Typography>
                   </Box>
                 </Paper>

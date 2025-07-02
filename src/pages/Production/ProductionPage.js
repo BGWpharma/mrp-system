@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Container, Typography, Box, Tabs, Tab, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, CircularProgress, useMediaQuery, useTheme, IconButton, Menu, MenuItem, SwipeableDrawer, List, ListItem, ListItemIcon, ListItemText, Divider } from '@mui/material';
 import {
   FormatListBulleted as ListIcon,
-  CalendarMonth as CalendarIcon,
+  Timeline as TimelineIcon,
   Assessment as ReportIcon,
   TrendingUp as ForecastIcon,
   ViewModule as GridIcon,
@@ -15,7 +15,7 @@ import {
   Menu as MenuIcon
 } from '@mui/icons-material';
 import TaskList from '../../components/production/TaskList';
-import ProductionCalendar from '../../components/production/ProductionCalendar';
+import ProductionTimeline from '../../components/production/ProductionTimeline';
 import ProductionReportPage from './ProductionReportPage';
 import ForecastPage from './ForecastPage';
 import FormsPage from './FormsPage';
@@ -82,7 +82,7 @@ const ProductionPage = () => {
   
   const tabData = [
           { icon: <ListIcon />, label: "Lista zadań", value: 0 },
-    { icon: <CalendarIcon />, label: "Kalendarz", value: 1 },
+    { icon: <TimelineIcon />, label: "Timeline", value: 1 },
     { icon: <ReportIcon />, label: "Raport MO", value: 2 },
     { icon: <FormsIcon />, label: "Formularze", value: 3 },
     { icon: <ForecastIcon />, label: "Prognoza zapotrzebowania", value: 4 },
@@ -94,7 +94,7 @@ const ProductionPage = () => {
   const renderTabContent = () => {
     switch (activeTab) {
       case 0: return <TaskList />;
-      case 1: return <ProductionCalendar />;
+      case 1: return <ProductionTimeline />;
       case 2: return <ProductionReportPage />;
       case 3: return <FormsPage />;
       case 4: return <ForecastPage />;

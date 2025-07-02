@@ -1965,22 +1965,56 @@ import {
   // Anulowanie bookowania produktu
   export const cancelBooking = async (itemId, quantity, taskId, userId) => {
     try {
-      // UWAGA: Ta funkcja jest wywoływana w confirmMaterialConsumption (po potwierdzeniu zużycia), 
-      // a nie automatycznie przy zmianie statusu zadania na 'Zakończone'
+      // OPTYMALIZACJA: Równoległe pobieranie danych produktu i rezerwacji
+      const [item, originalBookingSnapshot, taskData] = await Promise.all([
+        // Pobierz aktualny stan produktu
+        getInventoryItemById(itemId),
+        
+        // Pobierz oryginalne rezerwacje dla tego zadania
+        (async () => {
+          const originalBookingRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
+          const originalBookingQuery = query(
+            originalBookingRef,
+            where('itemId', '==', itemId),
+            where('referenceId', '==', taskId),
+            where('type', '==', 'booking')
+          );
+          return await getDocs(originalBookingQuery);
+        })(),
+        
+        // Pobierz dane zadania produkcyjnego równolegle
+        (async () => {
+          try {
+            const taskRef = doc(db, 'productionTasks', taskId);
+            const taskDoc = await getDoc(taskRef);
+            
+            if (taskDoc.exists()) {
+              const data = taskDoc.data();
+              return {
+                taskName: data.name || '',
+                taskNumber: data.moNumber || data.number || '',
+                clientName: data.clientName || data.customer?.name || '',
+                clientId: data.clientId || data.customer?.id || ''
+              };
+            }
+            return {
+              taskName: '',
+              taskNumber: '',
+              clientName: '',
+              clientId: ''
+            };
+          } catch (error) {
+            console.warn(`Nie udało się pobrać danych zadania ${taskId}:`, error);
+            return {
+              taskName: '',
+              taskNumber: '',
+              clientName: '',
+              clientId: ''
+            };
+          }
+        })()
+      ]);
       
-      // Pobierz aktualny stan produktu
-      const item = await getInventoryItemById(itemId);
-      
-      // Pobierz oryginalne rezerwacje dla tego zadania
-      const originalBookingRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
-      const originalBookingQuery = query(
-        originalBookingRef,
-        where('itemId', '==', itemId),
-        where('referenceId', '==', taskId),
-        where('type', '==', 'booking')
-      );
-      
-      const originalBookingSnapshot = await getDocs(originalBookingQuery);
       let originalBookedQuantity = 0;
       
       originalBookingSnapshot.forEach((bookingDoc) => {
@@ -2057,69 +2091,50 @@ import {
         }
       }
       
-      // Pobierz dane zadania produkcyjnego
-      let taskNumber = '';
-      let taskName = '';
-      let clientName = '';
-      let clientId = '';
-      
-      try {
-        const taskRef = doc(db, 'productionTasks', taskId);
-        const taskDoc = await getDoc(taskRef);
+      // OPTYMALIZACJA: Równoległe tworzenie transakcji i aktualizacja rezerwacji
+      const [newTransactionRef, batchUpdateResult] = await Promise.all([
+        // Dodaj transakcję anulowania rezerwacji (booking_cancel)
+        (async () => {
+          const transactionData = {
+            itemId,
+            type: 'booking_cancel',
+            quantity,
+            date: new Date().toISOString(),
+            reference: `Zadanie: ${taskId}`,
+            notes: `Anulowanie rezerwacji materiału`,
+            userId,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            referenceId: taskId,
+            taskName: taskData.taskName,
+            taskNumber: taskData.taskNumber,
+            clientName: taskData.clientName,
+            clientId: taskData.clientId
+          };
+          
+          return await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
+        })(),
         
-        if (taskDoc.exists()) {
-          const taskData = taskDoc.data();
-          taskName = taskData.name || '';
-          taskNumber = taskData.moNumber || taskData.number || '';
-          clientName = taskData.clientName || taskData.customer?.name || '';
-          clientId = taskData.clientId || taskData.customer?.id || '';
-        }
-      } catch (error) {
-        console.warn(`Nie udało się pobrać danych zadania ${taskId}:`, error);
-        // Kontynuuj mimo błędu
-      }
-      
-      // Dodaj transakcję anulowania rezerwacji (booking_cancel)
-      const transactionData = {
-        itemId,
-        type: 'booking_cancel',
-        quantity,
-        date: new Date().toISOString(),
-        reference: `Zadanie: ${taskId}`,
-        notes: `Anulowanie rezerwacji materiału`,
-        userId,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        referenceId: taskId,
-        taskName,
-        taskNumber,
-        clientName,
-        clientId
-      };
-      
-      const newTransactionRef = await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
-      
-      // Znajdź i zaktualizuj status wszystkich rezerwacji dla tego zadania na "completed"
-      const reservationRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
-      const reservationQuery = query(
-        reservationRef,
-        where('referenceId', '==', taskId),
-        where('type', '==', 'booking')
-      );
-      
-      const reservationSnapshot = await getDocs(reservationQuery);
-      const batch = writeBatch(db);
-      
-      reservationSnapshot.forEach((bookingDoc) => {
-        const reservationDocRef = doc(db, INVENTORY_TRANSACTIONS_COLLECTION, bookingDoc.id);
-        batch.update(reservationDocRef, { 
-          status: 'completed',
-          updatedAt: serverTimestamp(),
-          completedAt: serverTimestamp()
-        });
-      });
-      
-      await batch.commit();
+        // Zaktualizuj status wszystkich rezerwacji dla tego zadania na "completed"
+        (async () => {
+          // Użyj już pobranej listy rezerwacji zamiast kolejnego zapytania
+          if (originalBookingSnapshot.docs.length > 0) {
+            const batch = writeBatch(db);
+            
+            originalBookingSnapshot.forEach((bookingDoc) => {
+              const reservationDocRef = doc(db, INVENTORY_TRANSACTIONS_COLLECTION, bookingDoc.id);
+              batch.update(reservationDocRef, { 
+                status: 'completed',
+                updatedAt: serverTimestamp(),
+                completedAt: serverTimestamp()
+              });
+            });
+            
+            return await batch.commit();
+          }
+          return null;
+        })()
+      ]);
       
       // Emituj zdarzenie o zmianie stanu magazynu
       const event = new CustomEvent('inventory-updated', { 
@@ -4309,49 +4324,75 @@ import {
       const deletedReservations = [];
       const errors = [];
       
-      // Dla każdej rezerwacji z zadaniem
-      for (const reservation of reservations) {
+      // OPTYMALIZACJA: Grupuj rezerwacje według itemId dla batch update
+      const reservationsByItem = {};
+      reservations.forEach(reservation => {
+        const itemId = reservation.itemId;
+        if (itemId) {
+          if (!reservationsByItem[itemId]) {
+            reservationsByItem[itemId] = [];
+          }
+          reservationsByItem[itemId].push(reservation);
+        }
+      });
+      
+      // OPTYMALIZACJA: Równoległe aktualizacje pozycji magazynowych
+      const inventoryUpdatePromises = Object.keys(reservationsByItem).map(async (itemId) => {
         try {
-          // Pobierz informacje o produkcie
-          const itemId = reservation.itemId;
-          const quantity = reservation.quantity;
+          const itemReservations = reservationsByItem[itemId];
+          const totalQuantityToCancel = itemReservations.reduce((sum, res) => sum + (res.quantity || 0), 0);
           
-          if (itemId) {
-            // Zaktualizuj stan magazynowy - zmniejsz ilość zarezerwowaną
-            const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
-            const itemDoc = await getDoc(itemRef);
+          // Pobierz i zaktualizuj stan magazynowy
+          const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
+          const itemDoc = await getDoc(itemRef);
+          
+          if (itemDoc.exists()) {
+            const itemData = itemDoc.data();
+            const bookedQuantity = itemData.bookedQuantity || 0;
             
-            if (itemDoc.exists()) {
-              const itemData = itemDoc.data();
-              const bookedQuantity = itemData.bookedQuantity || 0;
-              
-              // Oblicz nową wartość bookedQuantity (nie może być ujemna)
-              const newBookedQuantity = formatQuantityPrecision(Math.max(0, bookedQuantity - quantity), 3);
-              
-              // Aktualizuj pozycję magazynową
-              await updateDoc(itemRef, {
-                bookedQuantity: newBookedQuantity,
-                updatedAt: serverTimestamp()
-              });
-              
-              console.log(`Zaktualizowano bookedQuantity dla ${itemId}: ${bookedQuantity} -> ${newBookedQuantity}`);
-            }
+            // Oblicz nową wartość bookedQuantity (nie może być ujemna)
+            const newBookedQuantity = formatQuantityPrecision(Math.max(0, bookedQuantity - totalQuantityToCancel), 3);
+            
+            // Aktualizuj pozycję magazynową
+            await updateDoc(itemRef, {
+              bookedQuantity: newBookedQuantity,
+              updatedAt: serverTimestamp()
+            });
+            
+            console.log(`Zaktualizowano bookedQuantity dla ${itemId}: ${bookedQuantity} -> ${newBookedQuantity} (anulowano ${totalQuantityToCancel})`);
           }
           
-          // Usuń rezerwację
+          return { success: true, itemId, totalQuantityToCancel };
+        } catch (error) {
+          console.error(`Błąd podczas aktualizacji pozycji magazynowej ${itemId}:`, error);
+          return { success: false, itemId, error: error.message };
+        }
+      });
+      
+      // OPTYMALIZACJA: Batch deletion rezerwacji
+      const reservationDeletionPromises = reservations.map(async (reservation) => {
+        try {
           const reservationRef = doc(db, INVENTORY_TRANSACTIONS_COLLECTION, reservation.id);
           await deleteDoc(reservationRef);
           
           console.log(`Usunięto rezerwację ${reservation.id} dla zadania ${taskId}`);
           deletedReservations.push(reservation);
+          return { success: true, reservationId: reservation.id };
         } catch (error) {
           console.error(`Błąd podczas usuwania rezerwacji ${reservation.id}:`, error);
           errors.push({
             id: reservation.id,
             error: error.message
           });
+          return { success: false, reservationId: reservation.id, error: error.message };
         }
-      }
+      });
+      
+      // Wykonaj wszystkie operacje równolegle
+      await Promise.allSettled([
+        ...inventoryUpdatePromises,
+        ...reservationDeletionPromises
+      ]);
       
       // Aktualizuj również dane zadania produkcyjnego, aby odzwierciedlić usunięte rezerwacje
       try {

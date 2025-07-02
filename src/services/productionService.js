@@ -1025,83 +1025,94 @@ import {
       
       const task = taskSnapshot.data();
       
-      // Anuluj rezerwacje materiałów bez względu na stan zadania
+      // OPTYMALIZACJA 1: Równoległe anulowanie rezerwacji materiałów
+      const materialCancellationPromises = [];
       if (task.materials && task.materials.length > 0) {
         for (const material of task.materials) {
-          try {
-            if (!material.id && !material.inventoryItemId) {
-              console.warn(`Materiał ${material.name} nie ma ID, pomijam anulowanie rezerwacji`);
-              continue;
-            }
-            // Anuluj rezerwację materiału
-            const materialId = material.inventoryItemId || material.id;
-            await cancelBooking(materialId, material.quantity, taskId, task.createdBy || 'system');
-            console.log(`Anulowano rezerwację materiału ${material.name} dla usuniętego zadania`);
-          } catch (error) {
-            console.error(`Błąd przy anulowaniu rezerwacji materiału ${material.name}:`, error);
-            // Kontynuuj anulowanie rezerwacji pozostałych materiałów mimo błędu
+          if (!material.id && !material.inventoryItemId) {
+            console.warn(`Materiał ${material.name} nie ma ID, pomijam anulowanie rezerwacji`);
+            continue;
           }
+          
+          // Dodaj do tablicy promises zamiast await w pętli
+          const materialId = material.inventoryItemId || material.id;
+          materialCancellationPromises.push(
+            cancelBooking(materialId, material.quantity, taskId, task.createdBy || 'system')
+              .then(() => console.log(`Anulowano rezerwację materiału ${material.name} dla usuniętego zadania`))
+              .catch(error => console.error(`Błąd przy anulowaniu rezerwacji materiału ${material.name}:`, error))
+          );
+        }
+        
+        // Wykonaj wszystkie anulowania równolegle
+        if (materialCancellationPromises.length > 0) {
+          await Promise.allSettled(materialCancellationPromises);
         }
       }
       
-      // Usuń wszystkie rezerwacje związane z tym zadaniem z kolekcji transakcji
+      // OPTYMALIZACJA 2: Usuń redundantne czyszczenie - tylko konkretne rezerwacje dla tego zadania
       try {
-        const { cleanupTaskReservations, cleanupDeletedTaskReservations } = await import('./inventoryService');
+        const { cleanupTaskReservations } = await import('./inventoryService');
         
-        // Najpierw wyczyść konkretne rezerwacje dla tego zadania
+        // Wyczyść tylko konkretne rezerwacje dla tego zadania (bez globalnego czyszczenia)
         await cleanupTaskReservations(taskId);
         console.log(`Usunięto wszystkie rezerwacje związane z zadaniem ${taskId}`);
-        
-        
-        // Dodatkowo uruchom pełne czyszczenie rezerwacji z usuniętych zadań
-        // to zapewni że wszystkie rezerwacje będą usunięte, nawet jeśli pojedyncze anulowanie się nie powiodło
-        await cleanupDeletedTaskReservations();
-        console.log(`Wykonano pełne czyszczenie rezerwacji z usuniętych zadań`);
       } catch (error) {
         console.error(`Błąd podczas usuwania rezerwacji dla zadania ${taskId}:`, error);
         // Kontynuuj usuwanie zadania mimo błędu
       }
       
-      // Ta część została usunięta, aby zachować partie produktów w magazynie
-      // Zamiast usuwania partii, tylko zalogujemy, że istnieją
-      try {
-        const batchesRef = collection(db, 'inventoryBatches');
-        const q = query(batchesRef, where('sourceId', '==', taskId), where('source', '==', 'Produkcja'));
-        const batchesSnapshot = await getDocs(q);
+      // OPTYMALIZACJA 3: Równoległe wykonanie operacji sprawdzania partii i pobierania transakcji
+      const [batchesCheck, transactionsSnapshot, orderRemovalResult] = await Promise.allSettled([
+        // Sprawdź partie produktów
+        (async () => {
+          try {
+            const batchesRef = collection(db, 'inventoryBatches');
+            const q = query(batchesRef, where('sourceId', '==', taskId), where('source', '==', 'Produkcja'));
+            const batchesSnapshot = await getDocs(q);
+            
+            if (batchesSnapshot.docs.length > 0) {
+              console.log(`Zadanie ${taskId} ma ${batchesSnapshot.docs.length} powiązanych partii produktów w magazynie, które zostały zachowane.`);
+            }
+            return batchesSnapshot.docs.length;
+          } catch (error) {
+            console.error(`Błąd podczas sprawdzania partii produktów: ${error.message}`);
+            return 0;
+          }
+        })(),
         
-        if (batchesSnapshot.docs.length > 0) {
-          console.log(`Zadanie ${taskId} ma ${batchesSnapshot.docs.length} powiązanych partii produktów w magazynie, które zostały zachowane.`);
-        }
-      } catch (error) {
-        console.error(`Błąd podczas sprawdzania partii produktów: ${error.message}`);
-      }
+        // Pobierz transakcje związane z tym zadaniem
+        (async () => {
+          const transactionsRef = collection(db, 'inventoryTransactions');
+          const transactionsQuery = query(transactionsRef, where('reference', '==', `Zadanie: ${taskId}`));
+          return await getDocs(transactionsQuery);
+        })(),
+        
+        // Usuń zadanie z zamówienia (jeśli powiązane)
+        (async () => {
+          if (task.orderId) {
+            try {
+              const { removeProductionTaskFromOrder } = await import('./orderService');
+              await removeProductionTaskFromOrder(task.orderId, taskId);
+              console.log(`Zadanie produkcyjne ${taskId} zostało usunięte z zamówienia ${task.orderId}`);
+              return true;
+            } catch (orderError) {
+              console.error(`Błąd podczas usuwania zadania ${taskId} z zamówienia ${task.orderId}:`, orderError);
+              return false;
+            }
+          }
+          return null;
+        })()
+      ]);
       
-      // Pobierz transakcje związane z tym zadaniem
-      const transactionsRef = collection(db, 'inventoryTransactions');
-      const transactionsQuery = query(transactionsRef, where('reference', '==', `Zadanie: ${taskId}`));
-      const transactionsSnapshot = await getDocs(transactionsQuery);
-      
-      // Usuń wszystkie transakcje
-      const transactionDeletions = transactionsSnapshot.docs.map(doc => 
-        deleteDoc(doc.ref)
-      );
-      
-      // Poczekaj na usunięcie wszystkich transakcji
-      await Promise.all(transactionDeletions);
-      
-      // Sprawdź, czy zadanie jest powiązane z zamówieniem klienta
-      if (task.orderId) {
-        try {
-          // Importuj funkcję do usuwania zadania z zamówienia
-          const { removeProductionTaskFromOrder } = await import('./orderService');
-          
-          // Usuń zadanie z zamówienia
-          await removeProductionTaskFromOrder(task.orderId, taskId);
-          console.log(`Zadanie produkcyjne ${taskId} zostało usunięte z zamówienia ${task.orderId}`);
-        } catch (orderError) {
-          console.error(`Błąd podczas usuwania zadania ${taskId} z zamówienia ${task.orderId}:`, orderError);
-          // Kontynuuj usuwanie zadania mimo błędu
-        }
+      // OPTYMALIZACJA 4: Batch deletion transakcji (już zoptymalizowane)
+      if (transactionsSnapshot.status === 'fulfilled' && transactionsSnapshot.value.docs.length > 0) {
+        const transactionDeletions = transactionsSnapshot.value.docs.map(doc => 
+          deleteDoc(doc.ref)
+        );
+        
+        // Wykonaj usuwanie transakcji równolegle
+        await Promise.all(transactionDeletions);
+        console.log(`Usunięto ${transactionDeletions.length} transakcji związanych z zadaniem ${taskId}`);
       }
       
       // Na końcu usuń samo zadanie

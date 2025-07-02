@@ -131,6 +131,46 @@ export const formatDate = (date, options = {}) => {
       return String(value);
     }
   };
+  
+  /**
+   * Formatuje liczbę usuwając niepotrzebne zera po przecinku
+   * 
+   * @param {number} value - Wartość do sformatowania
+   * @param {number} maxPrecision - Maksymalna liczba miejsc po przecinku (domyślnie 6)
+   * @returns {string} Sformatowana liczba
+   */
+  export const formatNumberClean = (value, maxPrecision = 6) => {
+    if (value === undefined || value === null) return '—';
+    
+    try {
+      // Upewnij się, że value jest liczbą
+      if (typeof value === 'string') {
+        value = parseFloat(value);
+      }
+      
+      if (isNaN(value)) {
+        console.warn('Nieprawidłowa wartość liczby:', value);
+        return '—';
+      }
+      
+      // Zaokrąglij do maksymalnej precyzji
+      const roundedValue = parseFloat(value.toFixed(maxPrecision));
+      
+      // Konwertuj na string i usuń niepotrzebne zera na końcu
+      let result = roundedValue.toString();
+      
+      // Jeśli jest kropka dziesiętna, usuń niepotrzebne zera po przecinku
+      if (result.includes('.')) {
+        result = result.replace(/\.?0+$/, '');
+      }
+      
+      // W polskim formacie używamy przecinka zamiast kropki
+      return result.replace('.', ',');
+    } catch (error) {
+      console.error('Error formatting number clean:', error);
+      return String(value);
+    }
+  };
 
   /**
    * Formatuje ilość towaru w pozycji magazynowej z zaokrągleniem do 4 cyfr po przecinku
