@@ -5,7 +5,7 @@ import {
   Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   FormControl, InputLabel, Select, MenuItem, TextField, CircularProgress, IconButton,
-  List, ListItem, ListItemText, ListItemIcon, Collapse, Tooltip
+  List, ListItem, ListItemText, ListItemIcon, Collapse, Tooltip, Menu
 } from '@mui/material';
 import { 
   Edit as EditIcon, 
@@ -52,9 +52,7 @@ import { db } from '../../services/firebase/config';
 import { updateDoc, doc, getDoc } from 'firebase/firestore';
 import { formatCurrency } from '../../utils/formatUtils';
 import { getUsersDisplayNames } from '../../services/userService';
-import { getCompanyInfo } from '../../services/companyService';
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
+import { createPurchaseOrderPdfGenerator } from './PurchaseOrderPdfGenerator';
 
 const PurchaseOrderDetails = ({ orderId }) => {
   const navigate = useNavigate();
@@ -71,6 +69,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
   const [invoiceLink, setInvoiceLink] = useState('');
   const [userNames, setUserNames] = useState({});
   const [menuAnchorRef, setMenuAnchorRef] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [relatedBatches, setRelatedBatches] = useState([]);
   const [loadingBatches, setLoadingBatches] = useState(false);
   const [expandedItems, setExpandedItems] = useState({});
@@ -384,9 +383,31 @@ const PurchaseOrderDetails = ({ orderId }) => {
       showSuccess(`Ceny bazowe partii zostały zaktualizowane na podstawie aktualnych cen pozycji w zamówieniu (zaktualizowano ${result.updated} partii)`);
       // Odśwież dane partii po aktualizacji
       await fetchRelatedBatches(orderId);
+      setMenuOpen(false);
     } catch (error) {
       console.error('Błąd podczas aktualizacji cen bazowych partii:', error);
       showError('Nie udało się zaktualizować cen bazowych partii: ' + error.message);
+    }
+  };
+
+  const handleMenuOpen = (event) => {
+    setMenuAnchorRef(event.currentTarget);
+    setMenuOpen(true);
+  };
+
+  const handleMenuClose = () => {
+    setMenuOpen(false);
+    setMenuAnchorRef(null);
+  };
+
+  const handleUpdateBatchPricesFromMenu = async () => {
+    try {
+      await updateBatchesForPurchaseOrder(orderId);
+      showSuccess('Ceny partii zostały zaktualizowane');
+      await fetchRelatedBatches(orderId);
+      setMenuOpen(false);
+    } catch (error) {
+      showError('Błąd podczas aktualizacji cen partii: ' + error.message);
     }
   };
   
@@ -471,19 +492,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
     }
   };
   
-  const formatAddress = (address) => {
-    if (!address) return 'Brak adresu';
-    return `${address.street || ''}, ${address.postalCode || ''} ${address.city || ''}, ${address.country || ''}`;
-  };
-  
-  const getSupplierMainAddress = (supplier) => {
-    if (!supplier || !supplier.addresses || supplier.addresses.length === 0) {
-      return null;
-    }
-    
-    const mainAddress = supplier.addresses.find(addr => addr.isMain);
-    return mainAddress || supplier.addresses[0];
-  };
+
   
   const canReceiveItems = purchaseOrder.status === PURCHASE_ORDER_STATUSES.ORDERED || 
                           purchaseOrder.status === 'ordered' || 
@@ -505,379 +514,14 @@ const PurchaseOrderDetails = ({ orderId }) => {
     try {
       showSuccess('Generowanie PDF w toku...');
       
-      // Pobierz informacje o magazynie docelowym
-      let targetWarehouse = null;
-      if (purchaseOrder.targetWarehouseId) {
-        try {
-          targetWarehouse = await getWarehouseById(purchaseOrder.targetWarehouseId);
-        } catch (error) {
-          console.warn('Nie udało się pobrać danych magazynu docelowego:', error);
-        }
-      }
-      
-      // Pobierz dane firmy (buyer)
-      let companyData = null;
-      try {
-        companyData = await getCompanyInfo();
-      } catch (error) {
-        console.warn('Nie udało się pobrać danych firmy:', error);
-      }
-      
-      // Utwórz PDF w orientacji pionowej A4
-      const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      
-      // Załaduj szablon tła
-      const templateImg = new Image();
-      templateImg.crossOrigin = 'anonymous';
-      
-      const loadTemplate = () => {
-        return new Promise((resolve, reject) => {
-          templateImg.onload = () => resolve(templateImg);
-                     templateImg.onerror = () => {
-             console.warn('Could not load PO-template.png template, using white background');
-             resolve(null);
-           };
-          templateImg.src = '/templates/PO-template.png';
-        });
-      };
-
-      const template = await loadTemplate();
-      
-      // Funkcja do konwersji polskich znaków
-      const convertPolishChars = (text) => {
-        if (!text) return '';
-        return text
-          .replace(/ą/g, 'a').replace(/ć/g, 'c').replace(/ę/g, 'e')
-          .replace(/ł/g, 'l').replace(/ń/g, 'n').replace(/ó/g, 'o')
-          .replace(/ś/g, 's').replace(/ź/g, 'z').replace(/ż/g, 'z')
-          .replace(/Ą/g, 'A').replace(/Ć/g, 'C').replace(/Ę/g, 'E')
-          .replace(/Ł/g, 'L').replace(/Ń/g, 'N').replace(/Ó/g, 'O')
-          .replace(/Ś/g, 'S').replace(/Ź/g, 'Z').replace(/Ż/g, 'Z');
-      };
-      
-      // Dodaj szablon jako tło (jeśli się załadował)
-      if (template) {
-        doc.addImage(template, 'PNG', 0, 0, pageWidth, pageHeight);
-      }
-
-      // Funkcja pomocnicza do sprawdzania czy potrzeba nowej strony
-      const checkPageBreak = (currentY, requiredHeight) => {
-        if (currentY + requiredHeight > pageHeight - 20) {
-          doc.addPage();
-          if (template) {
-            doc.addImage(template, 'PNG', 0, 0, pageWidth, pageHeight);
-          }
-          return 30; // Nowy Y po dodaniu strony
-        }
-        return currentY;
-      };
-
-      // Pozycje startowe (dostosowane do szablonu)
-      let currentY = 45;
-      const leftMargin = 20;
-      const rightMargin = pageWidth - 20;
-      
-      // Numer zamówienia (w prawym górnym rogu)
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(14);
-      doc.setTextColor(0, 0, 0);
-      doc.text(`Order: ${purchaseOrder.number || ''}`, leftMargin, 35, { align: 'left' });
-
-      // Data zamówienia
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      doc.text(`Date: ${purchaseOrder.orderDate ? new Date(purchaseOrder.orderDate).toLocaleDateString('en-GB') : ''}`, leftMargin, 42, { align: 'left' });
-
-      // Dane dostawcy (lewa strona)
-      currentY = 60;
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      doc.setTextColor(0, 0, 0);
-      doc.text('SUPPLIER:', leftMargin, currentY);
-      
-      currentY += 8;
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      
-      if (purchaseOrder.supplier) {
-        // Nazwa dostawcy
-        doc.setFont('helvetica', 'bold');
-        doc.text(convertPolishChars(purchaseOrder.supplier.name || ''), leftMargin, currentY);
-        currentY += 6;
-        
-        doc.setFont('helvetica', 'normal');
-        // Adres dostawcy
-        const supplierAddress = getSupplierMainAddress(purchaseOrder.supplier);
-        if (supplierAddress) {
-          const addressFormatted = formatAddress(supplierAddress);
-          const addressLines = doc.splitTextToSize(convertPolishChars(addressFormatted), 80);
-          addressLines.forEach(line => {
-            doc.text(line, leftMargin, currentY);
-            currentY += 5;
-          });
-        }
-        
-        // Kontakt
-        if (purchaseOrder.supplier.email) {
-          doc.text(`Email: ${purchaseOrder.supplier.email}`, leftMargin, currentY);
-          currentY += 5;
-        }
-        
-        if (purchaseOrder.supplier.phone) {
-          doc.text(`Phone: ${purchaseOrder.supplier.phone}`, leftMargin, currentY);
-          currentY += 5;
-        }
-      }
-
-      // ORDER DETAILS w lewej kolumnie (pod SUPPLIER)
-      currentY += 10;
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      doc.setTextColor(0, 0, 0);
-      doc.text('ORDER DETAILS:', leftMargin, currentY);
-      
-      currentY += 8;
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      
-
-      
-      if (purchaseOrder.expectedDeliveryDate) {
-        doc.text(`Expected delivery: ${new Date(purchaseOrder.expectedDeliveryDate).toLocaleDateString('en-GB')}`, leftMargin, currentY);
-        currentY += 6;
-      }
-      
-      // PRAWA KOLUMNA - BUYER
-      let rightY = 60;
-      const rightColumnX = pageWidth / 2 + 10;
-      
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      doc.setTextColor(0, 0, 0);
-      doc.text('BUYER:', rightColumnX, rightY);
-      
-      rightY += 8;
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      
-      if (companyData) {
-        // Nazwa firmy
-        if (companyData.name) {
-          doc.setFont('helvetica', 'bold');
-          doc.text(convertPolishChars(companyData.name), rightColumnX, rightY);
-          rightY += 6;
-          doc.setFont('helvetica', 'normal');
-        }
-        
-        // Adres firmy
-        if (companyData.address) {
-          doc.text(convertPolishChars(companyData.address), rightColumnX, rightY);
-          rightY += 5;
-        }
-        
-        // Miasto
-        if (companyData.city) {
-          doc.text(convertPolishChars(companyData.city), rightColumnX, rightY);
-          rightY += 5;
-        }
-        // VAT-UE
-        if (companyData.vatEu) {
-          doc.text(`VAT-EU: ${companyData.vatEu}`, rightColumnX, rightY);
-          rightY += 5;
-        }
-        
-        // Email
-        if (companyData.email) {
-          doc.text(`Email: ${companyData.email}`, rightColumnX, rightY);
-          rightY += 5;
-        }
-        
-        // Telefon
-        if (companyData.phone) {
-          doc.text(`Phone: ${companyData.phone}`, rightColumnX, rightY);
-          rightY += 5;
-        }
-      }
-      
-      // PRAWA KOLUMNA - DELIVERY ADDRESS (pod BUYER)
-      if (targetWarehouse) {
-        rightY += 10;
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(12);
-        doc.text('DELIVERY ADDRESS:', rightColumnX, rightY);
-        rightY += 8;
-        
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(10);
-        
-        // Nazwa magazynu
-        if (targetWarehouse.name) {
-          doc.text(convertPolishChars(targetWarehouse.name), rightColumnX, rightY);
-          rightY += 5;
-        }
-        
-        // Adres magazynu (może być wielolinijkowy)
-        if (targetWarehouse.address) {
-          const addressLines = doc.splitTextToSize(convertPolishChars(targetWarehouse.address), 80);
-          addressLines.forEach(line => {
-            doc.text(line, rightColumnX, rightY);
-            rightY += 5;
-          });
-        }
-      }
-
-      // Tabela z pozycjami zamówienia
-      currentY = Math.max(currentY, rightY) + 15;
-      currentY = checkPageBreak(currentY, 60);
-      
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      doc.text('ORDER ITEMS:', leftMargin, currentY);
-      currentY += 10;
-
-      // Nagłówki tabeli
-      const colWidths = [50, 15, 15, 25, 25, 15, 25]; // szerokości kolumn (dodano kolumnę dla daty)
-      const startX = leftMargin;
-      let currentX = startX;
-
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.setFillColor(240, 240, 240);
-      doc.rect(startX, currentY, colWidths.reduce((a, b) => a + b, 0), 8, 'F');
-      
-      const headers = ['Product Name', 'Qty', 'Unit', 'Unit Price', 'Value', 'VAT', 'Expected Date'];
-      headers.forEach((header, index) => {
-        doc.text(header, currentX + 2, currentY + 6);
-        currentX += colWidths[index];
+      // Użyj nowego komponentu do generowania PDF
+      const pdfGenerator = createPurchaseOrderPdfGenerator(purchaseOrder, {
+        useTemplate: true,
+        templatePath: '/templates/PO-template.png',
+        language: 'en'
       });
       
-      currentY += 10;
-
-      // Dane tabeli
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      
-      const vatValues = calculateVATValues(purchaseOrder.items, purchaseOrder.additionalCostsItems);
-      
-      if (purchaseOrder.items && purchaseOrder.items.length > 0) {
-        purchaseOrder.items.forEach((item, index) => {
-          currentY = checkPageBreak(currentY, 8);
-          
-          currentX = startX;
-          
-          // Nazwa produktu (może być długa, dzielimy na linie)
-          const nameLines = doc.splitTextToSize(convertPolishChars(item.name || ''), colWidths[0] - 4);
-          const lineHeight = Math.max(6, nameLines.length * 4);
-          
-          // Tło wiersza
-          if (index % 2 === 1) {
-            doc.setFillColor(248, 248, 248);
-            doc.rect(startX, currentY, colWidths.reduce((a, b) => a + b, 0), lineHeight, 'F');
-          }
-          
-          // Nazwa produktu
-          nameLines.forEach((line, lineIndex) => {
-            doc.text(line, currentX + 2, currentY + 4 + (lineIndex * 4));
-          });
-          currentX += colWidths[0];
-          
-          // Ilość
-          doc.text((item.quantity || '').toString(), currentX + 2, currentY + 4);
-          currentX += colWidths[1];
-          
-          // Jednostka
-          doc.text(convertPolishChars(item.unit || ''), currentX + 2, currentY + 4);
-          currentX += colWidths[2];
-          
-          // Cena jednostkowa
-          doc.text(formatCurrency(item.unitPrice, purchaseOrder.currency, 2), currentX + 2, currentY + 4);
-          currentX += colWidths[3];
-          
-          // Wartość
-          doc.text(formatCurrency(item.totalPrice, purchaseOrder.currency), currentX + 2, currentY + 4);
-          currentX += colWidths[4];
-          
-          // VAT
-          doc.text(`${item.vatRate || 0}%`, currentX + 2, currentY + 4);
-          currentX += colWidths[5];
-          
-          // Expected Date (plannedDeliveryDate)
-          const expectedDate = item.plannedDeliveryDate ? 
-            new Date(item.plannedDeliveryDate).toLocaleDateString('en-GB') : '-';
-          doc.text(expectedDate, currentX + 2, currentY + 4);
-          
-          currentY += lineHeight;
-        });
-      }
-
-      // Podsumowanie
-      currentY += 10;
-      currentY = checkPageBreak(currentY, 40);
-      
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      doc.text('SUMMARY:', leftMargin, currentY);
-      currentY += 8;
-      
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      
-      const summaryX = pageWidth - 80;
-      doc.text(`Net value: ${formatCurrency(vatValues.totalNet, purchaseOrder.currency)}`, summaryX, currentY);
-      currentY += 6;
-      doc.text(`VAT: ${formatCurrency(vatValues.totalVat, purchaseOrder.currency)}`, summaryX, currentY);
-      currentY += 6;
-      
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      doc.text(`TOTAL GROSS: ${formatCurrency(vatValues.totalGross, purchaseOrder.currency)}`, summaryX, currentY);
-
-      // Uwagi (jeśli istnieją)
-      if (purchaseOrder.notes) {
-        currentY += 15;
-        currentY = checkPageBreak(currentY, 30);
-        
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(10);
-        doc.text('NOTES:', leftMargin, currentY);
-        currentY += 6;
-        
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(9);
-        const notesLines = doc.splitTextToSize(convertPolishChars(purchaseOrder.notes), pageWidth - 40);
-        notesLines.forEach(line => {
-          currentY = checkPageBreak(currentY, 5);
-          doc.text(line, leftMargin, currentY);
-          currentY += 5;
-        });
-      }
-
-      // Stopka z datą wygenerowania
-      const pageCount = doc.internal.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
-        doc.setTextColor(150, 150, 150);
-        doc.text(
-          `Generated: ${new Date().toLocaleString('en-GB')} | Page ${i} of ${pageCount}`,
-          pageWidth / 2,
-          pageHeight - 10,
-          { align: 'center' }
-        );
-      }
-
-      // Pobierz PDF
-      const fileName = `PO_${purchaseOrder.number || 'zamowienie'}_${new Date().toISOString().split('T')[0]}.pdf`;
-      doc.save(fileName);
-      
+      await pdfGenerator.downloadPdf();
       showSuccess('PDF został pobrany pomyślnie');
       
     } catch (error) {
@@ -886,51 +530,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
     }
   };
   
-  const calculateVATValues = (items = [], additionalCostsItems = []) => {
-    let itemsNetTotal = 0;
-    let itemsVatTotal = 0;
-    
-    items.forEach(item => {
-      const itemNet = parseFloat(item.totalPrice) || 0;
-      itemsNetTotal += itemNet;
-      
-      const vatRate = typeof item.vatRate === 'number' ? item.vatRate : 0;
-      const itemVat = (itemNet * vatRate) / 100;
-      itemsVatTotal += itemVat;
-    });
-    
-    let additionalCostsNetTotal = 0;
-    let additionalCostsVatTotal = 0;
-    
-    additionalCostsItems.forEach(cost => {
-      const costNet = parseFloat(cost.value) || 0;
-      additionalCostsNetTotal += costNet;
-      
-      const vatRate = typeof cost.vatRate === 'number' ? cost.vatRate : 0;
-      const costVat = (costNet * vatRate) / 100;
-      additionalCostsVatTotal += costVat;
-    });
-    
-    const totalNet = itemsNetTotal + additionalCostsNetTotal;
-    
-    const totalVat = itemsVatTotal + additionalCostsVatTotal;
-    
-    const totalGross = totalNet + totalVat;
-    
-    return {
-      itemsNetTotal,
-      itemsVatTotal,
-      additionalCostsNetTotal,
-      additionalCostsVatTotal,
-      totalNet,
-      totalVat,
-      totalGross,
-      vatRates: {
-        items: Array.from(new Set(items.map(item => item.vatRate))),
-        additionalCosts: Array.from(new Set(additionalCostsItems.map(cost => cost.vatRate)))
-      }
-    };
-  };
+
   
   const hasDynamicFields = purchaseOrder?.additionalCostsItems?.length > 0 || 
                           (purchaseOrder?.additionalCosts && parseFloat(purchaseOrder.additionalCosts) > 0);
@@ -957,6 +557,65 @@ const PurchaseOrderDetails = ({ orderId }) => {
       setNewPaymentStatus('');
       setPaymentStatusDialogOpen(false);
     }
+  };
+
+  // Funkcje pomocnicze dla interfejsu użytkownika
+  const formatAddress = (address) => {
+    if (!address) return 'Brak adresu';
+    return `${address.street || ''}, ${address.postalCode || ''} ${address.city || ''}, ${address.country || ''}`;
+  };
+  
+  const getSupplierMainAddress = (supplier) => {
+    if (!supplier || !supplier.addresses || supplier.addresses.length === 0) {
+      return null;
+    }
+    
+    const mainAddress = supplier.addresses.find(addr => addr.isMain);
+    return mainAddress || supplier.addresses[0];
+  };
+
+  const calculateVATValues = (items = [], additionalCostsItems = []) => {
+    let itemsNetTotal = 0;
+    let itemsVatTotal = 0;
+    
+    items.forEach(item => {
+      const itemNet = parseFloat(item.totalPrice) || 0;
+      itemsNetTotal += itemNet;
+      
+      const vatRate = typeof item.vatRate === 'number' ? item.vatRate : 0;
+      const itemVat = (itemNet * vatRate) / 100;
+      itemsVatTotal += itemVat;
+    });
+    
+    let additionalCostsNetTotal = 0;
+    let additionalCostsVatTotal = 0;
+    
+    additionalCostsItems.forEach(cost => {
+      const costNet = parseFloat(cost.value) || 0;
+      additionalCostsNetTotal += costNet;
+      
+      const vatRate = typeof cost.vatRate === 'number' ? cost.vatRate : 0;
+      const costVat = (costNet * vatRate) / 100;
+      additionalCostsVatTotal += costVat;
+    });
+    
+    const totalNet = itemsNetTotal + additionalCostsNetTotal;
+    const totalVat = itemsVatTotal + additionalCostsVatTotal;
+    const totalGross = totalNet + totalVat;
+    
+    return {
+      itemsNetTotal,
+      itemsVatTotal,
+      additionalCostsNetTotal,
+      additionalCostsVatTotal,
+      totalNet,
+      totalVat,
+      totalGross,
+      vatRates: {
+        items: Array.from(new Set(items.map(item => item.vatRate))),
+        additionalCosts: Array.from(new Set(additionalCostsItems.map(cost => cost.vatRate)))
+      }
+    };
   };
   
   return (
@@ -989,30 +648,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                 Pobierz PDF
               </Button>
               
-              {hasDynamicFields && (
-                <Button
-                  variant="outlined"
-                  color="success"
-                  onClick={handleUpdateBatchPrices}
-                  startIcon={<RefreshIcon />}
-                  sx={{ mr: 1 }}
-                >
-                  Aktualizuj ceny partii
-                </Button>
-              )}
-              
-              {/* Przycisk do aktualizacji cen bazowych - dostępny zawsze gdy są pozycje w zamówieniu */}
-              {purchaseOrder?.items?.length > 0 && (
-                <Button
-                  variant="outlined"
-                  color="primary"
-                  onClick={handleUpdateBasePrices}
-                  startIcon={<RefreshIcon />}
-                  sx={{ mr: 1 }}
-                >
-                  Aktualizuj ceny bazowe
-                </Button>
-              )}
+
               
               <Button
                 component={Link}
@@ -1027,11 +663,58 @@ const PurchaseOrderDetails = ({ orderId }) => {
               <IconButton
                 color="primary"
                 aria-label="menu"
-                ref={menuAnchorRef}
-                onClick={(event) => setMenuAnchorRef(event.currentTarget)}
+                onClick={handleMenuOpen}
               >
                 <MoreVertIcon />
               </IconButton>
+              
+              <Menu
+                anchorEl={menuAnchorRef}
+                open={menuOpen}
+                onClose={handleMenuClose}
+                PaperProps={{
+                  elevation: 1,
+                  sx: {
+                    overflow: 'visible',
+                    filter: 'drop-shadow(0px 2px 8px rgba(0,0,0,0.32))',
+                    mt: 1.5,
+                    '& .MuiAvatar-root': {
+                      width: 32,
+                      height: 32,
+                      ml: -0.5,
+                      mr: 1,
+                    },
+                    '&:before': {
+                      content: '""',
+                      display: 'block',
+                      position: 'absolute',
+                      top: 0,
+                      right: 14,
+                      width: 10,
+                      height: 10,
+                      bgcolor: 'background.paper',
+                      transform: 'translateY(-50%) rotate(45deg)',
+                      zIndex: 0,
+                    },
+                  },
+                }}
+                transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+                anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+              >
+                {hasDynamicFields && (
+                  <MenuItem onClick={handleUpdateBatchPricesFromMenu}>
+                    <RefreshIcon sx={{ mr: 1 }} />
+                    Aktualizuj ceny partii
+                  </MenuItem>
+                )}
+                
+                {purchaseOrder?.items?.length > 0 && (
+                  <MenuItem onClick={handleUpdateBasePrices}>
+                    <RefreshIcon sx={{ mr: 1 }} />
+                    Aktualizuj ceny bazowe
+                  </MenuItem>
+                )}
+              </Menu>
             </Box>
           </Box>
           
@@ -1527,29 +1210,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                   </TableBody>
                 </Table>
 
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    onClick={handleUpdateBatchPrices}
-                    startIcon={<RefreshIcon />}
-                    sx={{ mr: 1 }}
-                  >
-                    Zaktualizuj ceny partii
-                  </Button>
-                  
-                  <Button
-                    variant="outlined"
-                    color="primary"
-                    onClick={handleUpdateBasePrices}
-                    startIcon={<RefreshIcon />}
-                  >
-                    Aktualizuj ceny bazowe
-                  </Button>
-                </Box>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, textAlign: 'right' }}>
-                  Zaktualizuj ceny partii (dodatkowe koszty) lub ceny bazowe (aktualne ceny pozycji)
-                </Typography>
+
               </>
             ) : (
               <Typography variant="body2">

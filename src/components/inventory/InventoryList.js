@@ -1275,6 +1275,8 @@ const InventoryList = () => {
         return [
           fixPolishChars(item.category || ''),
           fixPolishChars(item.name || ''), // Przenosimy name do kolumny SKU
+          fixPolishChars(item.casNumber || ''),
+          fixPolishChars(item.barcode || ''),
           (Number(item.quantity) || 0).toFixed(2) + ' ' + (item.unit || 'pcs.'),
           bookedQuantity.toFixed(2) + ' ' + (item.unit || 'pcs.'),
           availableQuantity.toFixed(2) + ' ' + (item.unit || 'pcs.'),
@@ -1286,6 +1288,8 @@ const InventoryList = () => {
       const tableHeaders = [
         'Category',
         'SKU',
+        'CAS Number',
+        'Barcode',
         'Total Quantity',
         'Reserved Quantity',
         'Available Quantity',
@@ -1357,6 +1361,7 @@ const InventoryList = () => {
           category: item.category || '',
           sku: item.name || '', // Przenosimy name do kolumny SKU
           casNumber: item.casNumber || '',
+          barcode: item.barcode || '',
           totalQuantity: (Number(item.quantity) || 0).toFixed(2),
           unit: item.unit || 'pcs.',
           reservedQuantity: bookedQuantity.toFixed(2),
@@ -1373,6 +1378,7 @@ const InventoryList = () => {
         { label: 'Category', key: 'category' },
         { label: 'SKU', key: 'sku' },
         { label: 'CAS Number', key: 'casNumber' },
+        { label: 'Barcode', key: 'barcode' },
         { label: 'Total Quantity', key: 'totalQuantity' },
         { label: 'Unit', key: 'unit' },
         { label: 'Reserved Quantity', key: 'reservedQuantity' },
@@ -1569,6 +1575,7 @@ const InventoryList = () => {
                     <TableRow>
                       {visibleColumns.name && <TableCell>SKU</TableCell>}
                       {visibleColumns.category && <TableCell>Kategoria</TableCell>}
+                      {visibleColumns.casNumber && <TableCell>Numer CAS</TableCell>}
                       {visibleColumns.barcode && <TableCell>Kod kreskowy</TableCell>}
                       {visibleColumns.totalQuantity && <TableCell>Ilość całkowita</TableCell>}
                       {visibleColumns.reservedQuantity && <TableCell>Ilość zarezerwowana</TableCell>}
@@ -1588,6 +1595,7 @@ const InventoryList = () => {
                           </TableCell>
                         )}
                         {visibleColumns.category && <TableCell><Skeleton variant="text" width="70%" /></TableCell>}
+                        {visibleColumns.casNumber && <TableCell><Skeleton variant="text" width="60%" /></TableCell>}
                         {visibleColumns.barcode && <TableCell><Skeleton variant="text" width="60%" /></TableCell>}
                         {visibleColumns.totalQuantity && <TableCell><Skeleton variant="text" width="50%" /></TableCell>}
                         {visibleColumns.reservedQuantity && <TableCell><Skeleton variant="text" width="50%" /></TableCell>}
@@ -1643,6 +1651,21 @@ const InventoryList = () => {
                             <Box sx={{ display: 'flex', alignItems: 'center' }}>
                               Kategoria
                               {tableSort.field === 'category' && (
+                                <ArrowDropUpIcon 
+                                  sx={{ 
+                                    transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
+                                    transition: 'transform 0.2s'
+                                  }} 
+                                />
+                              )}
+                            </Box>
+                          </TableCell>
+                        )}
+                        {visibleColumns.casNumber && (
+                          <TableCell onClick={() => handleTableSort('casNumber')} style={{ cursor: 'pointer' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              Numer CAS
+                              {tableSort.field === 'casNumber' && (
                                 <ArrowDropUpIcon 
                                   sx={{ 
                                     transform: tableSort.order === 'desc' ? 'rotate(180deg)' : 'none',
@@ -1794,6 +1817,17 @@ const InventoryList = () => {
                                 </TableCell>
                               )}
                               {visibleColumns.category && <TableCell>{item.category}</TableCell>}
+                              {visibleColumns.casNumber && (
+                                <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                                  {item.casNumber ? (
+                                    <Typography variant="body2" sx={{ color: 'text.primary' }}>
+                                      {item.casNumber}
+                                    </Typography>
+                                  ) : (
+                                    <Typography variant="body2" color="text.secondary">-</Typography>
+                                  )}
+                                </TableCell>
+                              )}
                               {visibleColumns.barcode && (
                                 <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
                                   {item.barcode ? (
@@ -1965,6 +1999,10 @@ const InventoryList = () => {
             <MenuItem onClick={() => toggleColumnVisibility('category')}>
               <Checkbox checked={visibleColumns.category} />
               <ListItemText primary="Kategoria" />
+            </MenuItem>
+            <MenuItem onClick={() => toggleColumnVisibility('casNumber')}>
+              <Checkbox checked={visibleColumns.casNumber} />
+              <ListItemText primary="Numer CAS" />
             </MenuItem>
             <MenuItem onClick={() => toggleColumnVisibility('barcode')}>
               <Checkbox checked={visibleColumns.barcode} />

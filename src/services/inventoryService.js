@@ -4181,6 +4181,43 @@ import {
     }
   };
 
+  /**
+   * Usuwa flagę domyślności ze wszystkich cen dostawców dla danej pozycji magazynowej
+   * @param {string} itemId - ID pozycji magazynowej
+   * @returns {Promise<void>}
+   */
+  export const unsetDefaultSupplierPrice = async (itemId) => {
+    try {
+      // Pobieramy wszystkie ceny dostawców dla danej pozycji
+      const supplierPricesRef = collection(db, INVENTORY_SUPPLIER_PRICES_COLLECTION);
+      const q = query(
+        supplierPricesRef,
+        where('itemId', '==', itemId),
+        where('isDefault', '==', true)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        // Brak domyślnych cen do usunięcia
+        return;
+      }
+      
+      // Usuwamy flagę domyślności ze wszystkich pozycji
+      const batch = writeBatch(db);
+      
+      querySnapshot.forEach(doc => {
+        batch.update(doc.ref, { isDefault: false });
+      });
+      
+      // Zatwierdzamy zmiany
+      await batch.commit();
+    } catch (error) {
+      console.error('Błąd podczas usuwania domyślnej ceny dostawcy:', error);
+      throw error;
+    }
+  };
+
   // Usuwanie rezerwacji produktu
   export const deleteReservation = async (reservationId, userId) => {
     try {

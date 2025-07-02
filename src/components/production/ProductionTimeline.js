@@ -1932,23 +1932,6 @@ const ProductionTimeline = React.memo(() => {
       </Box>
 
       {/* Instrukcje zoom */}
-      <Box sx={{ 
-        mb: 1, 
-        p: 1, 
-        bgcolor: '#f8f9fa', 
-        borderRadius: 1, 
-        fontSize: '0.75rem',
-        color: '#666'
-      }}>
-        <Typography variant="caption">
-          💡 <strong>Wskazówki:</strong> 
-          Touchpad: przewijaj dwoma palcami poziomo/pionowo | Ctrl + scroll - zoom | 
-          Urządzenia dotykowe: pinch to zoom, swipe to scroll | 
-          Włącz "Edycja ON" aby móc przesuwać zadania
-          {editMode ? ' | Przeciągnij zadania aby zmienić czas, zmień rozmiar przeciągając krawędzie | Włącz "Dociąganie" aby automatycznie ustawiać zadania po kolei' : ' | W trybie wyłączonym możesz bezpiecznie przewijać timeline bez przypadkowego przesuwania zadań'}
-        </Typography>
-      </Box>
-
       {/* Timeline */}
       <Box sx={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
 

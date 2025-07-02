@@ -261,6 +261,7 @@ const Sidebar = ({ onToggle }) => {
       children: [
         { text: 'Formularze', icon: <ListAltIcon />, path: '/production/forms' },
         { text: 'Kalkulator', icon: <CalculateIcon />, path: '/production/calculator' },
+        { text: 'Prognoza', icon: <ForecastIcon />, path: '/production/forecast' },
         { text: 'Zadania produkcyjne', icon: <ListIcon />, path: '/production' },
         { text: 'Receptury', icon: <RecipesIcon />, path: '/recipes' },
         { text: 'Timeline', icon: <AnalyticsIcon />, path: '/production/timeline' },

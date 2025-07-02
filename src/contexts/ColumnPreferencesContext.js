@@ -12,6 +12,7 @@ const defaultColumnPreferences = {
   inventory: {
     name: true,
     category: true,
+    casNumber: false,
     barcode: false,
     totalQuantity: true,
     reservedQuantity: true,

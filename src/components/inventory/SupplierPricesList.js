@@ -34,7 +34,7 @@ import {
   Cancel as CancelIcon,
   Check as CheckIcon
 } from '@mui/icons-material';
-import { getSupplierPrices, addSupplierPrice, updateSupplierPrice, deleteSupplierPrice, setDefaultSupplierPrice } from '../../services/inventoryService';
+import { getSupplierPrices, addSupplierPrice, updateSupplierPrice, deleteSupplierPrice, setDefaultSupplierPrice, unsetDefaultSupplierPrice } from '../../services/inventoryService';
 import { getAllSuppliers } from '../../services/supplierService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -219,22 +219,40 @@ const SupplierPricesList = ({ itemId, currency = DEFAULT_CURRENCY }) => {
     }
   };
   
-  // Dodaję nową funkcję do ustawiania domyślnej ceny
+  // Funkcja do ustawiania/odznaczania domyślnej ceny dostawcy
   const handleSetDefaultPrice = async (priceId) => {
     try {
-      await setDefaultSupplierPrice(itemId, priceId);
+      // Sprawdź, czy kliknięta cena jest już domyślna
+      const clickedPrice = supplierPrices.find(price => price.id === priceId);
       
-      // Aktualizuj lokalny stan - odznacz wszystkie inne ceny i oznacz wybraną jako domyślną
-      const updatedPrices = supplierPrices.map(price => ({
-        ...price,
-        isDefault: price.id === priceId
-      }));
-      
-      setSupplierPrices(updatedPrices);
-      showSuccess('Ustawiono domyślną cenę dostawcy');
+      if (clickedPrice && clickedPrice.isDefault) {
+        // Jeśli cena jest już domyślna, odznacz ją
+        await unsetDefaultSupplierPrice(itemId);
+        
+        // Aktualizuj lokalny stan - odznacz wszystkie ceny
+        const updatedPrices = supplierPrices.map(price => ({
+          ...price,
+          isDefault: false
+        }));
+        
+        setSupplierPrices(updatedPrices);
+        showSuccess('Odznaczono domyślną cenę dostawcy');
+      } else {
+        // Jeśli cena nie jest domyślna, ustaw ją jako domyślną
+        await setDefaultSupplierPrice(itemId, priceId);
+        
+        // Aktualizuj lokalny stan - odznacz wszystkie inne ceny i oznacz wybraną jako domyślną
+        const updatedPrices = supplierPrices.map(price => ({
+          ...price,
+          isDefault: price.id === priceId
+        }));
+        
+        setSupplierPrices(updatedPrices);
+        showSuccess('Ustawiono domyślną cenę dostawcy');
+      }
     } catch (error) {
-      console.error('Błąd podczas ustawiania domyślnej ceny:', error);
-      showError('Nie udało się ustawić domyślnej ceny');
+      console.error('Błąd podczas zmiany domyślnej ceny:', error);
+      showError('Nie udało się zmienić domyślnej ceny');
     }
   };
   
@@ -291,7 +309,7 @@ const SupplierPricesList = ({ itemId, currency = DEFAULT_CURRENCY }) => {
                       color={item.isDefault ? "primary" : "default"}
                       onClick={() => handleSetDefaultPrice(item.id)}
                       size="small"
-                      title={item.isDefault ? "Domyślna cena" : "Ustaw jako domyślną"}
+                      title={item.isDefault ? "Kliknij aby odznacząć domyślną cenę" : "Ustaw jako domyślną"}
                     >
                       <CheckIcon />
                     </IconButton>
