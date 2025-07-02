@@ -2599,14 +2599,14 @@ const TaskDetailsPage = () => {
   const handleRawMaterialsQuantityChange = (id, value) => {
     setRawMaterialsItems(prev => prev.map(item => {
       if (item.id === id) {
-        // Ograniczamy wartość do dostępnej ilości
-        const parsedValue = parseFloat(value) || 0;
-        const limitedValue = Math.min(parsedValue, item.availableQuantity);
+        // Pozwalamy na wprowadzenie dowolnej wartości - to tylko planowanie, nie rezerwacja
+        const parsedValue = value === '' ? '' : parseFloat(value);
+        const finalValue = value === '' ? 0 : (isNaN(parsedValue) ? 0 : Math.max(0, parsedValue));
         
         return { 
           ...item, 
-          quantity: limitedValue, 
-          selected: limitedValue > 0 
+          quantity: finalValue, 
+          selected: finalValue > 0 
         };
       }
       return item;
@@ -8303,6 +8303,8 @@ const TaskDetailsPage = () => {
             <DialogContent>
               <DialogContentText sx={{ mb: 2 }}>
                 Wybierz surowiec, który chcesz dodać do zadania produkcyjnego.
+                <br />
+                <strong>Uwaga:</strong> Możesz dodać dowolną ilość - to jest tylko planowanie, nie rezerwacja materiałów.
               </DialogContentText>
               
               {/* Pasek wyszukiwania surowców */}
@@ -8359,16 +8361,34 @@ const TaskDetailsPage = () => {
                             </TableCell>
                             <TableCell>{item.name}</TableCell>
                             <TableCell>{item.category}</TableCell>
-                            <TableCell>{item.availableQuantity} {item.unit}</TableCell>
+                            <TableCell>
+                              <Box>
+                                <Typography variant="body2">
+                                  {item.availableQuantity} {item.unit}
+                                </Typography>
+                                {item.selected && item.quantity > item.availableQuantity && (
+                                  <Typography variant="caption" color="warning.main">
+                                    ⚠️ Więcej niż dostępne
+                                  </Typography>
+                                )}
+                              </Box>
+                            </TableCell>
                             <TableCell>
                               <TextField
                                 type="number"
                                 value={item.quantity || ''}
                                 onChange={(e) => handleRawMaterialsQuantityChange(item.id, e.target.value)}
                                 disabled={!item.selected}
-                                inputProps={{ min: 0, max: item.availableQuantity, step: 'any' }}
+                                inputProps={{ min: 0, step: 'any' }}
                                 size="small"
-                                sx={{ width: '100px' }}
+                                sx={{ 
+                                  width: '100px',
+                                  '& .MuiOutlinedInput-root': {
+                                    borderColor: item.selected && item.quantity > item.availableQuantity ? 'warning.main' : undefined
+                                  }
+                                }}
+                                placeholder="Ilość do dodania"
+                                color={item.selected && item.quantity > item.availableQuantity ? 'warning' : 'primary'}
                               />
                             </TableCell>
                           </TableRow>
