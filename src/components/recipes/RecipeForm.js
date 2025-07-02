@@ -54,6 +54,7 @@ import {
 } from '@mui/icons-material';
 import { createRecipe, updateRecipe, getRecipeById, fixRecipeYield } from '../../services/recipeService';
 import { getAllInventoryItems, getIngredientPrices, createInventoryItem, getAllWarehouses } from '../../services/inventoryService';
+import { getAllPriceLists, addPriceListItem } from '../../services/priceListService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { collection, query, where, limit, getDocs } from 'firebase/firestore';
@@ -136,6 +137,18 @@ const RecipeForm = ({ recipeId }) => {
     category: ''
   });
   
+  // Stany dla dialogu dodawania receptury do listy cenowej
+  const [addToPriceListDialogOpen, setAddToPriceListDialogOpen] = useState(false);
+  const [priceLists, setPriceLists] = useState([]);
+  const [loadingPriceLists, setLoadingPriceLists] = useState(false);
+  const [addingToPriceList, setAddingToPriceList] = useState(false);
+  const [priceListData, setPriceListData] = useState({
+    priceListId: '',
+    price: 0,
+    notes: ''
+  });
+  const [newRecipeId, setNewRecipeId] = useState(null);
+
   // Funkcje pomocnicze do konwersji jednostek
   const getUnitGroup = (unit) => {
     for (const [group, units] of Object.entries(UNIT_GROUPS)) {
@@ -402,6 +415,20 @@ const RecipeForm = ({ recipeId }) => {
     fetchWorkstations();
   }, [recipeId, showError, location.state]);
 
+  // Funkcja do pobierania list cenowych
+  const fetchPriceLists = async () => {
+    try {
+      setLoadingPriceLists(true);
+      const data = await getAllPriceLists();
+      setPriceLists(data);
+    } catch (error) {
+      console.error('Błąd podczas pobierania list cenowych:', error);
+      showError('Błąd podczas pobierania list cenowych');
+    } finally {
+      setLoadingPriceLists(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -418,8 +445,12 @@ const RecipeForm = ({ recipeId }) => {
         navigate(`/recipes/${recipeId}`);
       } else {
         const newRecipe = await createRecipe(recipeData, currentUser.uid);
+        setNewRecipeId(newRecipe.id);
         showSuccess('Receptura została utworzona');
-        navigate(`/recipes/${newRecipe.id}`);
+        
+        // Pokaż dialog pytający o dodanie do listy cenowej
+        await fetchPriceLists();
+        setAddToPriceListDialogOpen(true);
       }
     } catch (error) {
       showError('Błąd podczas zapisywania receptury: ' + error.message);
@@ -1042,6 +1073,62 @@ const RecipeForm = ({ recipeId }) => {
       console.error('Błąd przy dodawaniu składnika:', error);
       showError('Wystąpił błąd podczas dodawania składnika');
     }
+  };
+
+  // Funkcje do obsługi dialogu dodawania do listy cenowej
+  const handleClosePriceListDialog = () => {
+    setAddToPriceListDialogOpen(false);
+    setPriceListData({ priceListId: '', price: 0, notes: '' });
+    
+    // Przekieruj do strony szczegółów receptury
+    if (newRecipeId) {
+      navigate(`/recipes/${newRecipeId}`);
+    }
+  };
+
+  const handlePriceListDataChange = (field, value) => {
+    setPriceListData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleAddToPriceList = async () => {
+    if (!priceListData.priceListId) {
+      showError('Wybierz listę cenową');
+      return;
+    }
+
+    if (!priceListData.price || priceListData.price < 0) {
+      showError('Wprowadź poprawną cenę');
+      return;
+    }
+
+    try {
+      setAddingToPriceList(true);
+      
+      const itemData = {
+        productId: newRecipeId,
+        productName: recipeData.name,
+        price: parseFloat(priceListData.price),
+        unit: recipeData.yield?.unit || 'szt.',
+        notes: priceListData.notes,
+        isRecipe: true
+      };
+
+      await addPriceListItem(priceListData.priceListId, itemData, currentUser.uid);
+      showSuccess('Receptura została dodana do listy cenowej');
+      handleClosePriceListDialog();
+    } catch (error) {
+      console.error('Błąd podczas dodawania do listy cenowej:', error);
+      showError('Błąd podczas dodawania receptury do listy cenowej: ' + error.message);
+    } finally {
+      setAddingToPriceList(false);
+    }
+  };
+
+  const handleSkipPriceList = () => {
+    handleClosePriceListDialog();
   };
 
   if (loading) {
@@ -2366,6 +2453,162 @@ const RecipeForm = ({ recipeId }) => {
             }}
           >
             Dodaj składnik
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog dodawania receptury do listy cenowej */}
+      <Dialog 
+        open={addToPriceListDialogOpen} 
+        onClose={handleClosePriceListDialog}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: '12px',
+            overflow: 'hidden'
+          }
+        }}
+      >
+        <Box sx={{ 
+          p: 2, 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 1,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          bgcolor: theme => theme.palette.mode === 'dark' 
+            ? 'rgba(25, 35, 55, 0.5)' 
+            : 'rgba(245, 247, 250, 0.8)'
+        }}>
+          <ProductIcon color="primary" />
+          <DialogTitle sx={{ p: 0 }}>Dodaj recepturę do listy cenowej</DialogTitle>
+        </Box>
+        
+        <DialogContent sx={{ mt: 2 }}>
+          <DialogContentText sx={{ mb: 2 }}>
+            Receptura "{recipeData.name}" została pomyślnie utworzona. Czy chcesz dodać ją do listy cenowej?
+          </DialogContentText>
+          
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <FormControl 
+                fullWidth 
+                required 
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                disabled={loadingPriceLists}
+              >
+                <InputLabel id="price-list-select-label">Lista cenowa</InputLabel>
+                <Select
+                  labelId="price-list-select-label"
+                  value={priceListData.priceListId}
+                  onChange={(e) => handlePriceListDataChange('priceListId', e.target.value)}
+                  label="Lista cenowa"
+                  error={!priceListData.priceListId}
+                >
+                  {loadingPriceLists ? (
+                    <MenuItem disabled>
+                      <CircularProgress size={20} sx={{ mr: 1 }} />
+                      Ładowanie list cenowych...
+                    </MenuItem>
+                  ) : priceLists.length > 0 ? (
+                    priceLists.map((priceList) => (
+                      <MenuItem key={priceList.id} value={priceList.id}>
+                        <Box>
+                          <Typography variant="body2" fontWeight="medium">
+                            {priceList.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {priceList.customerName || 'Klient nieznany'}
+                          </Typography>
+                        </Box>
+                      </MenuItem>
+                    ))
+                  ) : (
+                    <MenuItem disabled>
+                      Brak dostępnych list cenowych
+                    </MenuItem>
+                  )}
+                </Select>
+                <FormHelperText>
+                  {!priceListData.priceListId ? 'Wybierz listę cenową' : ''}
+                </FormHelperText>
+              </FormControl>
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
+              <TextField
+                label="Cena jednostkowa (EUR)"
+                type="number"
+                value={priceListData.price}
+                onChange={(e) => handlePriceListDataChange('price', parseFloat(e.target.value) || 0)}
+                fullWidth
+                required
+                error={!priceListData.price || priceListData.price < 0}
+                helperText={
+                  !priceListData.price || priceListData.price < 0 
+                    ? 'Wprowadź poprawną cenę' 
+                    : `Za ${recipeData.yield?.unit || 'szt.'}`
+                }
+                inputProps={{ min: 0, step: 0.01 }}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                InputProps={{
+                  startAdornment: (
+                    <Box sx={{ color: 'text.secondary', mr: 1, display: 'flex', alignItems: 'center' }}>
+                      €
+                    </Box>
+                  )
+                }}
+              />
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
+              <TextField
+                label="Jednostka"
+                value={recipeData.yield?.unit || 'szt.'}
+                fullWidth
+                disabled
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                helperText="Jednostka z receptury"
+              />
+            </Grid>
+            
+            <Grid item xs={12}>
+              <TextField
+                label="Notatki (opcjonalnie)"
+                value={priceListData.notes}
+                onChange={(e) => handlePriceListDataChange('notes', e.target.value)}
+                fullWidth
+                multiline
+                rows={2}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                helperText="Dodatkowe informacje o cenie"
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        
+        <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+          <Button 
+            onClick={handleSkipPriceList}
+            variant="outlined"
+            sx={{ borderRadius: '8px' }}
+          >
+            Pomiń
+          </Button>
+          <Button 
+            onClick={handleAddToPriceList} 
+            variant="contained" 
+            color="primary"
+            disabled={addingToPriceList || !priceListData.priceListId || !priceListData.price || priceListData.price < 0}
+            startIcon={addingToPriceList ? <CircularProgress size={20} /> : <AddIcon />}
+            sx={{ 
+              borderRadius: '8px', 
+              boxShadow: '0 4px 6px rgba(0,0,0,0.15)',
+              px: 3
+            }}
+          >
+            {addingToPriceList ? 'Dodawanie...' : 'Dodaj do listy cenowej'}
           </Button>
         </DialogActions>
       </Dialog>
