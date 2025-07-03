@@ -6650,17 +6650,17 @@ const TaskDetailsPage = () => {
                     </Paper>
                   )}
 
-                  {/* 3.3 Clinical and bibliographic research */}
+                  {/* 3.3 Certificates */}
                   <Paper sx={{ p: 3, mb: 3 }}>
                     <Typography variant="h6" sx={{ mb: 2 }}>
-                      3.3 Clinical and bibliographic research
+                      3.3 Certificates
                     </Typography>
                     
                     {/* Sekcja przesyłania plików */}
                     <Box sx={{ mb: 3, p: 2, backgroundColor: 'info.light', borderRadius: 1, border: 1, borderColor: 'info.main', borderStyle: 'dashed', opacity: 0.8 }}>
                       <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
                         <CloudUploadIcon sx={{ mr: 1 }} />
-                        Dodaj dokumenty badań klinicznych i bibliograficznych
+                        Dodaj certyfikaty
                       </Typography>
                       
                       <input
@@ -6694,7 +6694,7 @@ const TaskDetailsPage = () => {
                       <Box>
                         <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold' }}>
                           <AttachFileIcon sx={{ mr: 1 }} />
-                          Załączone dokumenty ({clinicalAttachments.length})
+                          Załączone certyfikaty ({clinicalAttachments.length})
                         </Typography>
                         
                         <TableContainer component={Paper} sx={{ mt: 2 }}>
@@ -6755,7 +6755,7 @@ const TaskDetailsPage = () => {
                           {/* Podsumowanie załączników */}
                           <Box sx={{ p: 2, backgroundColor: 'action.hover', borderTop: 1, borderColor: 'divider' }}>
                             <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                              Łączna liczba dokumentów: {clinicalAttachments.length}
+                              Łączna liczba certyfikatów: {clinicalAttachments.length}
                             </Typography>
                             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                               Łączny rozmiar: {formatClinicalFileSize(clinicalAttachments.reduce((sum, attachment) => sum + attachment.size, 0))}
@@ -6766,7 +6766,7 @@ const TaskDetailsPage = () => {
                     ) : (
                       <Paper sx={{ p: 2, backgroundColor: 'warning.light', border: 1, borderColor: 'warning.main', borderStyle: 'dashed', opacity: 0.7 }}>
                         <Typography variant="body2" color="text.secondary" align="center">
-                          Brak załączonych dokumentów badań klinicznych
+                          Brak załączonych certyfikatów
                         </Typography>
                       </Paper>
                     )}
@@ -6779,7 +6779,7 @@ const TaskDetailsPage = () => {
                     </Typography>
                     
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                      Załączniki związane z właściwościami fizykochemicznymi składników z powiązanych zamówień zakupu
+                      Załączniki związane z właściwościami fizykochemicznymi składników (np. CoA) z powiązanych zamówień zakupu
                     </Typography>
 
                     {/* Wyświetlanie załączników z PO pogrupowanych według składników */}

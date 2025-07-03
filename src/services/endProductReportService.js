@@ -837,7 +837,7 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       activeIngredientsEstimatedHeight += 12 + estimateTableHeight(expiryHeaders, expiryDataSample) + 20;
     }
     
-    // Check if we have clinical attachments for 3.3 subsection
+    // Check if we have certificate attachments for 3.3 subsection
     if (clinicalAttachments.length > 0) {
       const clinicalHeaders = ['File type', 'File name', 'Size', 'Upload date'];
       // Create proper data array for estimation
@@ -941,7 +941,7 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       currentY += 16;
     }
 
-    // 3.3 Clinical and bibliographic research
+    // 3.3 Certificates
     // Calculate estimated height for this subsection  
     let clinicalSubsectionHeight = 0;
     if (clinicalAttachments.length > 0) {
@@ -958,7 +958,7 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       clinicalSubsectionHeight = 8; // "No data" message
     }
     
-    addSubsectionHeaderWithPageBreak('3.3', 'Clinical and bibliographic research', clinicalSubsectionHeight, '#6C35EA');
+    addSubsectionHeaderWithPageBreak('3.3', 'Certificates', clinicalSubsectionHeight, '#6C35EA');
     
     if (clinicalAttachments.length > 0) {
       const clinicalHeaders = ['File type', 'File name', 'Size', 'Upload date'];
@@ -975,7 +975,7 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       doc.setTextColor(25, 118, 210);
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
-      doc.text(`Total documents: ${clinicalAttachments.length}`, margin, currentY);
+      doc.text(`Total certificates: ${clinicalAttachments.length}`, margin, currentY);
       doc.setTextColor(85, 85, 85);
       doc.setFont('helvetica', 'normal');
       doc.text(`Total size: ${formatFileSize(clinicalAttachments.reduce((sum, attachment) => sum + attachment.size, 0))}`, margin, currentY + 4);
@@ -984,7 +984,7 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       doc.setTextColor(150, 150, 150);
       doc.setFontSize(9);
       doc.setFont('helvetica', 'italic');
-      doc.text('No clinical research documents attached', margin, currentY);
+      doc.text('No certificates attached', margin, currentY);
       currentY += 8;
     }
 
@@ -1402,7 +1402,42 @@ By purchasing the product, the Buyer accepts the conditions outlined in this doc
       }
     }
 
-    currentY += 15;
+    // Add GTC download button/link
+    checkPageBreak(25);
+    currentY += 10;
+    
+    // Add separator line
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.5);
+    doc.line(margin, currentY, margin + contentWidth, currentY);
+    currentY += 8;
+    
+    // Add GTC download section
+    doc.setTextColor(108, 53, 234); // Matching section header color #6C35EA
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Download General Terms and Conditions of Sale (GTC):', margin, currentY);
+    currentY += 6;
+    
+    // Create clickable link button
+    const gtcUrl = 'https://firebasestorage.googleapis.com/v0/b/bgw-mrp-system.firebasestorage.app/o/GTC%2FGTC%20-%20BGW%20PHARMA.pdf?alt=media&token=406c2b02-487a-460c-b3cb-3dc62b277d91';
+    const buttonWidth = 60;
+    const buttonHeight = 8;
+    
+    // Draw button background with section header color
+    doc.setFillColor(108, 53, 234); // Matching section header color #6C35EA
+    doc.roundedRect(margin, currentY, buttonWidth, buttonHeight, 2, 2, 'F');
+    
+    // Add button text
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('DOWNLOAD GTC PDF', margin + buttonWidth/2, currentY + 5, { align: 'center' });
+    
+    // Make the button clickable
+    doc.link(margin, currentY, buttonWidth, buttonHeight, { url: gtcUrl });
+    
+    currentY += 10;
 
     // 9. Additional Attachments
     // Calculate estimated height for attachments section
