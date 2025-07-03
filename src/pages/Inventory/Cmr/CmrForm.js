@@ -445,7 +445,7 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
     });
   };
   
-  const validateForm = () => {
+  const validateForm = (skipBatchValidation = false) => {
     const errors = {};
     
     // Walidacja powiązania z CO
@@ -489,8 +489,8 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
       if (!item.quantity) itemError.quantity = 'Ilość jest wymagana';
       if (!item.unit) itemError.unit = 'Jednostka jest wymagana';
       
-      // Walidacja powiązania z partiami magazynowymi
-      if (!item.linkedBatches || item.linkedBatches.length === 0) {
+      // Walidacja powiązania z partiami magazynowymi - pomijamy dla statusu 'Szkic'
+      if (!skipBatchValidation && (!item.linkedBatches || item.linkedBatches.length === 0)) {
         itemError.linkedBatches = 'Każda pozycja musi być powiązana z przynajmniej jedną partią magazynową';
       }
       
@@ -539,7 +539,9 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
     // Upewnij się, że vehicleInfo jest zdefiniowane
     if (!dataToSubmit.vehicleInfo) dataToSubmit.vehicleInfo = {};
     
-    const isValid = validateForm();
+    // Pomiń walidację partii jeśli CMR jest w stanie 'Szkic'
+    const skipBatchValidation = formData.status === CMR_STATUSES.DRAFT;
+    const isValid = validateForm(skipBatchValidation);
     console.log('Wynik walidacji:', isValid);
     
     if (isValid) {

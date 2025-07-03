@@ -342,7 +342,7 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
     });
   };
   
-  const validateForm = () => {
+  const validateForm = (skipBatchValidation = false) => {
     const errors = {};
     
     // Walidacja powiązania z CO
@@ -370,8 +370,8 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
       if (!item.numberOfPackages) itemError.numberOfPackages = 'Ilość sztuk jest wymagana';
       if (!item.packagingMethod) itemError.packagingMethod = 'Sposób pakowania jest wymagany';
       
-      // Walidacja powiązania z partiami magazynowymi
-      if (!item.linkedBatches || item.linkedBatches.length === 0) {
+      // Walidacja powiązania z partiami magazynowymi - pomijamy dla statusu 'Szkic'
+      if (!skipBatchValidation && (!item.linkedBatches || item.linkedBatches.length === 0)) {
         itemError.linkedBatches = 'Każda pozycja musi być powiązana z przynajmniej jedną partią magazynową';
       }
       
@@ -392,8 +392,8 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
     e.preventDefault();
     console.log('Próba wysłania formularza CMR:', formData);
     
-    // Walidacja formularza
-    const isValid = validateForm();
+    // Walidacja formularza - pomiń walidację partii dla nowych CMR (domyślnie są w stanie 'Szkic')
+    const isValid = validateForm(true); // Nowe CMR są zawsze w stanie 'Szkic', więc pomijamy walidację partii
     if (!isValid) {
       showMessage('Formularz zawiera błędy. Popraw zaznaczone pola.', 'error');
       return;

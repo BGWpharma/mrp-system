@@ -77,6 +77,8 @@ const PurchaseOrderDetails = ({ orderId }) => {
   const [warehouseNames, setWarehouseNames] = useState({});
   const [paymentStatusDialogOpen, setPaymentStatusDialogOpen] = useState(false);
   const [newPaymentStatus, setNewPaymentStatus] = useState('');
+  const [supplierPricesDialogOpen, setSupplierPricesDialogOpen] = useState(false);
+  const [pendingStatusUpdate, setPendingStatusUpdate] = useState(null);
   
   useEffect(() => {
     const fetchPurchaseOrder = async () => {
@@ -246,6 +248,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
   
   const handleDeleteClick = () => {
     setDeleteDialogOpen(true);
+    setMenuOpen(false);
   };
   
   const handleDeleteConfirm = async () => {
@@ -266,6 +269,24 @@ const PurchaseOrderDetails = ({ orderId }) => {
   
   const handleStatusUpdate = async () => {
     try {
+      // Sprawdź czy status zmienia się na "completed" i czy zamówienie ma pozycje i dostawcę
+      if (newStatus === 'completed' && 
+          purchaseOrder?.items?.length > 0 && 
+          purchaseOrder?.supplier?.id &&
+          purchaseOrder.status !== 'completed') {
+        
+        // Zapisz dane do oczekującej aktualizacji i pokaż dialog
+        setPendingStatusUpdate({
+          orderId: orderId,
+          newStatus: newStatus,
+          currentStatus: purchaseOrder.status
+        });
+        setSupplierPricesDialogOpen(true);
+        setStatusDialogOpen(false);
+        return;
+      }
+      
+      // Standardowa aktualizacja statusu (bez pytania o ceny dostawców)
       await updatePurchaseOrderStatus(orderId, newStatus, currentUser.uid);
       setStatusDialogOpen(false);
       
@@ -430,6 +451,52 @@ const PurchaseOrderDetails = ({ orderId }) => {
       console.error('Błąd podczas aktualizacji cen dostawców:', error);
       showError('Błąd podczas aktualizacji cen dostawców: ' + error.message);
     }
+  };
+
+  const handleSupplierPricesConfirm = async (updatePrices) => {
+    try {
+      if (!pendingStatusUpdate) return;
+
+      // Zaktualizuj status zamówienia
+      await updatePurchaseOrderStatus(pendingStatusUpdate.orderId, pendingStatusUpdate.newStatus, currentUser.uid);
+      
+      // Jeśli użytkownik chce zaktualizować ceny dostawców
+      if (updatePrices) {
+        try {
+          const { updateSupplierPricesFromCompletedPO } = await import('../../services/inventoryService');
+          const result = await updateSupplierPricesFromCompletedPO(pendingStatusUpdate.orderId, currentUser.uid);
+          
+          if (result.success && result.updated > 0) {
+            showSuccess(`Status zamówienia został zaktualizowany. Dodatkowo zaktualizowano ${result.updated} cen dostawców i ustawiono jako domyślne.`);
+          } else {
+            showSuccess('Status zamówienia został zaktualizowany. Nie znaleziono cen dostawców do aktualizacji.');
+          }
+        } catch (pricesError) {
+          console.error('Błąd podczas aktualizacji cen dostawców:', pricesError);
+          showSuccess('Status zamówienia został zaktualizowany.');
+          showError('Błąd podczas aktualizacji cen dostawców: ' + pricesError.message);
+        }
+      } else {
+        showSuccess('Status zamówienia został zaktualizowany bez aktualizacji cen dostawców.');
+      }
+      
+      // Odśwież dane zamówienia
+      const updatedOrder = await getPurchaseOrderById(pendingStatusUpdate.orderId);
+      setPurchaseOrder(updatedOrder);
+      
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji statusu:', error);
+      showError('Nie udało się zaktualizować statusu zamówienia');
+    } finally {
+      setSupplierPricesDialogOpen(false);
+      setPendingStatusUpdate(null);
+    }
+  };
+
+  const handleSupplierPricesCancel = () => {
+    setSupplierPricesDialogOpen(false);
+    setPendingStatusUpdate(null);
+    setNewStatus('');
   };
   
   const getStatusChip = (status) => {
@@ -742,6 +809,11 @@ const PurchaseOrderDetails = ({ orderId }) => {
                     Aktualizuj ceny dostawcy
                   </MenuItem>
                 )}
+                
+                <MenuItem onClick={handleDeleteClick} sx={{ color: 'error.main' }}>
+                  <DeleteIcon sx={{ mr: 1 }} />
+                  Usuń zamówienie
+                </MenuItem>
               </Menu>
             </Box>
           </Box>
@@ -1379,15 +1451,12 @@ const PurchaseOrderDetails = ({ orderId }) => {
               label="Status"
             >
               <MenuItem value="draft">{translateStatus('draft')}</MenuItem>
-              <MenuItem value="pending">{translateStatus('pending')}</MenuItem>
-              <MenuItem value="approved">{translateStatus('approved')}</MenuItem>
               <MenuItem value="ordered">{translateStatus('ordered')}</MenuItem>
-              <MenuItem value="partial">{translateStatus('partial')}</MenuItem>
               <MenuItem value="shipped">{translateStatus('shipped')}</MenuItem>
+              <MenuItem value="partial">{translateStatus('partial')}</MenuItem>
               <MenuItem value="delivered">{translateStatus('delivered')}</MenuItem>
-              <MenuItem value="cancelled">{translateStatus('cancelled')}</MenuItem>
               <MenuItem value="completed">{translateStatus('completed')}</MenuItem>
-              <MenuItem value="confirmed">{translateStatus('confirmed')}</MenuItem>
+              <MenuItem value="cancelled">{translateStatus('cancelled')}</MenuItem>
             </Select>
           </FormControl>
         </DialogContent>
@@ -1446,6 +1515,51 @@ const PurchaseOrderDetails = ({ orderId }) => {
         </DialogActions>
       </Dialog>
       
+      {/* Dialog potwierdzenia aktualizacji cen dostawców */}
+      <Dialog
+        open={supplierPricesDialogOpen}
+        onClose={handleSupplierPricesCancel}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          Zaktualizować ceny dostawców?
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Zamówienie zostanie oznaczone jako zakończone. 
+          </DialogContentText>
+          <DialogContentText sx={{ mt: 2, fontWeight: 'bold' }}>
+            Czy chcesz również automatycznie zaktualizować ceny dostawców w pozycjach magazynowych na podstawie cen z tego zamówienia?
+          </DialogContentText>
+          <DialogContentText sx={{ mt: 2, fontSize: '0.875rem', color: 'text.secondary' }}>
+            • Zaktualizowane ceny zostaną ustawione jako domyślne<br/>
+            • Historia zmian cen zostanie zachowana<br/>
+            • Można to zrobić później ręcznie z menu akcji
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleSupplierPricesCancel} color="inherit">
+            Anuluj
+          </Button>
+          <Button 
+            onClick={() => handleSupplierPricesConfirm(false)} 
+            color="primary"
+            variant="outlined"
+          >
+            Tylko zmień status
+          </Button>
+          <Button 
+            onClick={() => handleSupplierPricesConfirm(true)} 
+            color="primary"
+            variant="contained"
+            startIcon={<RefreshIcon />}
+          >
+            Zmień status i zaktualizuj ceny
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Dialog linku do faktury */}
       <Dialog
         open={invoiceLinkDialogOpen}
@@ -1555,6 +1669,35 @@ const PurchaseOrderDetails = ({ orderId }) => {
         <DialogActions>
           <Button onClick={() => setInvoiceLinkDialogOpen(false)}>Anuluj</Button>
           <Button onClick={handleInvoiceLinkSave} color="primary">Zapisz</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog potwierdzenia usunięcia */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+      >
+        <DialogTitle>Potwierdzenie usunięcia</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Czy na pewno chcesz usunąć to zamówienie zakupu?
+          </DialogContentText>
+          <DialogContentText sx={{ mt: 2, fontWeight: 'bold', color: 'error.main' }}>
+            Ta operacja jest nieodwracalna!
+          </DialogContentText>
+          {purchaseOrder && (
+            <DialogContentText sx={{ mt: 2 }}>
+              <strong>Zamówienie:</strong> {purchaseOrder.number || `#${orderId.substring(0, 8).toUpperCase()}`}<br/>
+              <strong>Dostawca:</strong> {purchaseOrder.supplier?.name || 'Nieznany'}<br/>
+              <strong>Wartość:</strong> {purchaseOrder.totalGross ? `${Number(purchaseOrder.totalGross).toFixed(2)} ${purchaseOrder.currency || 'PLN'}` : 'Nieznana'}
+            </DialogContentText>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)}>Anuluj</Button>
+          <Button onClick={handleDeleteConfirm} color="error" variant="contained">
+            Usuń
+          </Button>
         </DialogActions>
       </Dialog>
     </Container>

@@ -1010,28 +1010,8 @@ export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, user
       
       await updateDoc(poRef, updateFields);
 
-      // Automatycznie aktualizuj ceny dostawców gdy zamówienie zostanie zakończone
-      if (newStatus === PURCHASE_ORDER_STATUSES.COMPLETED) {
-        try {
-          console.log(`Rozpoczynam automatyczną aktualizację cen dostawców dla zakończonego zamówienia ${purchaseOrderId}`);
-          
-          const { updateSupplierPricesFromCompletedPO } = await import('./inventoryService');
-          const updateResult = await updateSupplierPricesFromCompletedPO(purchaseOrderId, userId);
-          
-          if (updateResult.success && updateResult.updated > 0) {
-            console.log(`Automatycznie zaktualizowano ${updateResult.updated} cen dostawców dla zamówienia ${purchaseOrderId} i ustawiono jako domyślne`);
-            
-            // Dodaj informację o automatycznej aktualizacji do powiadomienia
-            const additionalMessage = ` Automatycznie zaktualizowano ${updateResult.updated} cen dostawców (ustawiono jako domyślne).`;
-            // Tę informację można wykorzystać w powiadomieniach poniżej
-          } else {
-            console.log(`Nie zaktualizowano żadnych cen dostawców dla zamówienia ${purchaseOrderId}: ${updateResult.message}`);
-          }
-        } catch (error) {
-          console.error(`Błąd podczas automatycznej aktualizacji cen dostawców dla zamówienia ${purchaseOrderId}:`, error);
-          // Nie zatrzymujemy procesu - aktualizacja statusu powinna przejść mimo błędu aktualizacji cen
-        }
-      }
+      // Uwaga: Automatyczna aktualizacja cen dostawców została przeniesiona do interfejsu użytkownika
+      // gdzie użytkownik może zdecydować czy chce zaktualizować ceny przy zmianie statusu na 'completed'
       
       // Mapuj angielskie statusy na polskie
       const statusTranslations = {
@@ -1211,14 +1191,15 @@ export const PURCHASE_ORDER_PAYMENT_STATUSES = {
 export const translateStatus = (status) => {
   switch (status) {
     case 'draft': return 'Projekt';
-    case 'pending': return 'Oczekujące';
-    case 'approved': return 'Zatwierdzone';
     case 'ordered': return 'Zamówione';
-    case 'partial': return 'Częściowo dostarczone';
     case 'shipped': return 'Wysłane';
+    case 'partial': return 'Częściowo dostarczone';
     case 'delivered': return 'Dostarczone';
     case 'completed': return 'Zakończone';
     case 'cancelled': return 'Anulowane';
+    // Zachowujemy obsługę ukrytych statusów dla istniejących zamówień
+    case 'pending': return 'Oczekujące';
+    case 'approved': return 'Zatwierdzone';
     case 'confirmed': return 'Potwierdzone';
     default: return status;
   }

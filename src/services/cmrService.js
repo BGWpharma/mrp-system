@@ -60,7 +60,7 @@ export const TRANSPORT_TYPES = {
 export const getAllCmrDocuments = async () => {
   try {
     const cmrRef = collection(db, CMR_COLLECTION);
-    const q = query(cmrRef, orderBy('createdAt', 'desc'));
+    const q = query(cmrRef, orderBy('issueDate', 'desc'));
     const snapshot = await getDocs(q);
     
     return snapshot.docs.map(doc => {
@@ -514,6 +514,49 @@ export const deleteCmrDocument = async (cmrId) => {
   }
 };
 
+// Funkcja do walidacji czy wszystkie pozycje CMR mają przypisane partie magazynowe
+const validateCmrBatches = async (cmrId) => {
+  try {
+    const cmrData = await getCmrDocumentById(cmrId);
+    
+    if (!cmrData || !cmrData.items || cmrData.items.length === 0) {
+      return { 
+        isValid: false, 
+        message: 'CMR nie zawiera żadnych pozycji do walidacji' 
+      };
+    }
+    
+    const errors = [];
+    
+    cmrData.items.forEach((item, index) => {
+      if (!item.linkedBatches || item.linkedBatches.length === 0) {
+        errors.push({
+          index: index + 1,
+          description: item.description || `Pozycja ${index + 1}`,
+          error: 'Brak powiązanych partii magazynowych'
+        });
+      }
+    });
+    
+    if (errors.length > 0) {
+      const errorMessages = errors.map(err => `• ${err.description}: ${err.error}`).join('\n');
+      return {
+        isValid: false,
+        message: `Następujące pozycje nie mają przypisanych partii magazynowych:\n${errorMessages}`,
+        errors
+      };
+    }
+    
+    return { isValid: true, message: 'Wszystkie pozycje mają przypisane partie' };
+  } catch (error) {
+    console.error('Błąd podczas walidacji partii CMR:', error);
+    return {
+      isValid: false,
+      message: `Błąd podczas walidacji: ${error.message}`
+    };
+  }
+};
+
 // Zmiana statusu dokumentu CMR
 export const updateCmrStatus = async (cmrId, newStatus, userId) => {
   try {
@@ -525,6 +568,19 @@ export const updateCmrStatus = async (cmrId, newStatus, userId) => {
       throw new Error('Dokument CMR nie istnieje');
     }
     const currentStatus = currentCmrDoc.data().status;
+    
+    // Walidacja partii przy przejściu ze statusu "Szkic" lub "Wystawiony" na "W transporcie"
+    if (newStatus === CMR_STATUSES.IN_TRANSIT && 
+        (currentStatus === CMR_STATUSES.DRAFT || currentStatus === CMR_STATUSES.ISSUED)) {
+      console.log('Walidacja partii przed rozpoczęciem transportu...');
+      const validationResult = await validateCmrBatches(cmrId);
+      
+      if (!validationResult.isValid) {
+        throw new Error(`Nie można rozpocząć transportu: ${validationResult.message}`);
+      }
+      
+      console.log('Walidacja partii zakończona pomyślnie');
+    }
     
     let reservationResult = null;
     let deliveryResult = null;

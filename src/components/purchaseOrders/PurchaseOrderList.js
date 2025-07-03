@@ -7,7 +7,7 @@ import {
   Tooltip, Menu, Checkbox, ListItemText, TableSortLabel, Pagination, TableFooter, CircularProgress,
   Fade, Skeleton
 } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, ViewColumn as ViewColumnIcon, Clear as ClearIcon } from '@mui/icons-material';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, ViewColumn as ViewColumnIcon, Clear as ClearIcon, Refresh as RefreshIcon } from '@mui/icons-material';
 import { getAllPurchaseOrders, deletePurchaseOrder, updatePurchaseOrderStatus, updatePurchaseOrderPaymentStatus, getPurchaseOrdersWithPagination, clearSearchCache, PURCHASE_ORDER_STATUSES, PURCHASE_ORDER_PAYMENT_STATUSES, translateStatus, translatePaymentStatus } from '../../services/purchaseOrderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -30,6 +30,8 @@ const PurchaseOrderList = () => {
   const [paymentStatusDialogOpen, setPaymentStatusDialogOpen] = useState(false);
   const [poToUpdatePaymentStatus, setPoToUpdatePaymentStatus] = useState(null);
   const [newPaymentStatus, setNewPaymentStatus] = useState('');
+  const [supplierPricesDialogOpen, setSupplierPricesDialogOpen] = useState(false);
+  const [pendingStatusUpdate, setPendingStatusUpdate] = useState(null);
   const [columnMenuAnchor, setColumnMenuAnchor] = useState(null);
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -214,6 +216,24 @@ const PurchaseOrderList = () => {
   
   const handleStatusUpdate = async () => {
     try {
+      // Sprawdź czy status zmienia się na "completed" i czy zamówienie ma pozycje i dostawcę
+      if (newStatus === 'completed' && 
+          poToUpdateStatus?.items?.length > 0 && 
+          poToUpdateStatus?.supplier?.id &&
+          poToUpdateStatus.status !== 'completed') {
+        
+        // Zapisz dane do oczekującej aktualizacji i pokaż dialog
+        setPendingStatusUpdate({
+          purchaseOrder: poToUpdateStatus,
+          newStatus: newStatus,
+          currentStatus: poToUpdateStatus.status
+        });
+        setSupplierPricesDialogOpen(true);
+        setStatusDialogOpen(false);
+        return;
+      }
+      
+      // Standardowa aktualizacja statusu (bez pytania o ceny dostawców)
       await updatePurchaseOrderStatus(poToUpdateStatus.id, newStatus, currentUser.uid);
       
       // Po aktualizacji odświeżamy listę
@@ -249,19 +269,67 @@ const PurchaseOrderList = () => {
       showError('Nie udało się zaktualizować statusu płatności');
     }
   };
+
+  const handleSupplierPricesConfirm = async (updatePrices) => {
+    try {
+      if (!pendingStatusUpdate) return;
+
+      // Zaktualizuj status zamówienia
+      await updatePurchaseOrderStatus(pendingStatusUpdate.purchaseOrder.id, pendingStatusUpdate.newStatus, currentUser.uid);
+      
+      // Jeśli użytkownik chce zaktualizować ceny dostawców
+      if (updatePrices) {
+        try {
+          const { updateSupplierPricesFromCompletedPO } = await import('../../services/inventoryService');
+          const result = await updateSupplierPricesFromCompletedPO(pendingStatusUpdate.purchaseOrder.id, currentUser.uid);
+          
+          if (result.success && result.updated > 0) {
+            showSuccess(`Status zamówienia został zaktualizowany. Dodatkowo zaktualizowano ${result.updated} cen dostawców i ustawiono jako domyślne.`);
+          } else {
+            showSuccess('Status zamówienia został zaktualizowany. Nie znaleziono cen dostawców do aktualizacji.');
+          }
+        } catch (pricesError) {
+          console.error('Błąd podczas aktualizacji cen dostawców:', pricesError);
+          showSuccess('Status zamówienia został zaktualizowany.');
+          showError('Błąd podczas aktualizacji cen dostawców: ' + pricesError.message);
+        }
+      } else {
+        showSuccess('Status zamówienia został zaktualizowany bez aktualizacji cen dostawców.');
+      }
+      
+      // Po aktualizacji odświeżamy listę
+      fetchPurchaseOrders();
+      
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji statusu:', error);
+      showError('Nie udało się zaktualizować statusu zamówienia');
+    } finally {
+      setSupplierPricesDialogOpen(false);
+      setPendingStatusUpdate(null);
+      setStatusDialogOpen(false);
+      setPoToUpdateStatus(null);
+    }
+  };
+
+  const handleSupplierPricesCancel = () => {
+    setSupplierPricesDialogOpen(false);
+    setPendingStatusUpdate(null);
+    setNewStatus('');
+  };
   
   // Funkcja do tłumaczenia statusów na skrócone wersje dla listy
   const translateStatusShort = (status) => {
     switch (status) {
       case 'draft': return 'Projekt';
-      case 'pending': return 'Oczekujące';
-      case 'approved': return 'Zatwierdzone';
       case 'ordered': return 'Zamówione';
-      case 'partial': return 'Cz. dostarczone';
       case 'shipped': return 'Wysłane';
+      case 'partial': return 'Cz. dostarczone';
       case 'delivered': return 'Dostarczone';
       case 'completed': return 'Zakończone';
       case 'cancelled': return 'Anulowane';
+      // Zachowujemy obsługę ukrytych statusów dla istniejących zamówień
+      case 'pending': return 'Oczekujące';
+      case 'approved': return 'Zatwierdzone';
       case 'confirmed': return 'Potwierdzone';
       default: return status;
     }
@@ -275,23 +343,14 @@ const PurchaseOrderList = () => {
       case PURCHASE_ORDER_STATUSES.DRAFT:
         color = '#757575'; // szary - projekt
         break;
-      case PURCHASE_ORDER_STATUSES.PENDING:
-        color = '#757575'; // szary - oczekujące
-        break;
-      case PURCHASE_ORDER_STATUSES.APPROVED:
-        color = '#ffeb3b'; // żółty - zatwierdzone
-        break;
       case PURCHASE_ORDER_STATUSES.ORDERED:
         color = '#1976d2'; // niebieski - zamówione
         break;
-      case PURCHASE_ORDER_STATUSES.PARTIAL:
-        color = '#81c784'; // jasno zielony - częściowo dostarczone
-        break;
-      case PURCHASE_ORDER_STATUSES.CONFIRMED:
-        color = '#2196f3'; // jasnoniebieski - potwierdzone
-        break;
       case PURCHASE_ORDER_STATUSES.SHIPPED:
         color = '#9c27b0'; // fioletowy - wysłane
+        break;
+      case PURCHASE_ORDER_STATUSES.PARTIAL:
+        color = '#81c784'; // jasno zielony - częściowo dostarczone
         break;
       case PURCHASE_ORDER_STATUSES.DELIVERED:
         color = '#4caf50'; // zielony - dostarczone
@@ -301,6 +360,16 @@ const PurchaseOrderList = () => {
         break;
       case PURCHASE_ORDER_STATUSES.CANCELLED:
         color = '#f44336'; // czerwony - anulowane
+        break;
+      // Zachowujemy obsługę ukrytych statusów dla istniejących zamówień
+      case PURCHASE_ORDER_STATUSES.PENDING:
+        color = '#757575'; // szary - oczekujące
+        break;
+      case PURCHASE_ORDER_STATUSES.APPROVED:
+        color = '#ffeb3b'; // żółty - zatwierdzone
+        break;
+      case PURCHASE_ORDER_STATUSES.CONFIRMED:
+        color = '#2196f3'; // jasnoniebieski - potwierdzone
         break;
       default:
         color = '#757575'; // szary domyślny
@@ -437,7 +506,7 @@ const PurchaseOrderList = () => {
               label="Status"
             >
               <MenuItem value="all">Wszystkie statusy</MenuItem>
-              {Object.values(PURCHASE_ORDER_STATUSES).map((status) => (
+              {['draft', 'ordered', 'shipped', 'partial', 'delivered', 'completed', 'cancelled'].map((status) => (
                 <MenuItem key={status} value={status}>
                   {translateStatus(status)}
                 </MenuItem>
@@ -757,7 +826,7 @@ const PurchaseOrderList = () => {
               onChange={(e) => setNewStatus(e.target.value)}
               label="Status"
             >
-              {Object.values(PURCHASE_ORDER_STATUSES).map((status) => (
+              {['draft', 'ordered', 'shipped', 'partial', 'delivered', 'completed', 'cancelled'].map((status) => (
                 <MenuItem key={status} value={status}>
                   {translateStatus(status)}
                 </MenuItem>
@@ -768,6 +837,51 @@ const PurchaseOrderList = () => {
         <DialogActions>
           <Button onClick={() => setStatusDialogOpen(false)}>Anuluj</Button>
           <Button color="primary" onClick={handleStatusUpdate}>Zaktualizuj</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog potwierdzenia aktualizacji cen dostawców */}
+      <Dialog
+        open={supplierPricesDialogOpen}
+        onClose={handleSupplierPricesCancel}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          Zaktualizować ceny dostawców?
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Zamówienie zostanie oznaczone jako zakończone.
+          </DialogContentText>
+          <DialogContentText sx={{ mt: 2, fontWeight: 'bold' }}>
+            Czy chcesz również automatycznie zaktualizować ceny dostawców w pozycjach magazynowych na podstawie cen z tego zamówienia?
+          </DialogContentText>
+          <DialogContentText sx={{ mt: 2, fontSize: '0.875rem', color: 'text.secondary' }}>
+            • Zaktualizowane ceny zostaną ustawione jako domyślne<br/>
+            • Historia zmian cen zostanie zachowana<br/>
+            • Można to zrobić później ręcznie z menu akcji
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleSupplierPricesCancel} color="inherit">
+            Anuluj
+          </Button>
+          <Button 
+            onClick={() => handleSupplierPricesConfirm(false)} 
+            color="primary"
+            variant="outlined"
+          >
+            Tylko zmień status
+          </Button>
+          <Button 
+            onClick={() => handleSupplierPricesConfirm(true)} 
+            color="primary"
+            variant="contained"
+            startIcon={<RefreshIcon />}
+          >
+            Zmień status i zaktualizuj ceny
+          </Button>
         </DialogActions>
       </Dialog>
 
