@@ -410,6 +410,27 @@ const PurchaseOrderDetails = ({ orderId }) => {
       showError('Błąd podczas aktualizacji cen partii: ' + error.message);
     }
   };
+
+  const handleUpdateSupplierPrices = async () => {
+    try {
+      const { updateSupplierPricesFromCompletedPO } = await import('../../services/inventoryService');
+      const result = await updateSupplierPricesFromCompletedPO(orderId, currentUser.uid);
+      
+      if (result.success) {
+        if (result.updated > 0) {
+          showSuccess(`Zaktualizowano ${result.updated} cen dostawców na podstawie tego zamówienia i ustawiono jako domyślne`);
+        } else {
+          showSuccess('Nie znaleziono cen do aktualizacji lub ceny są już aktualne');
+        }
+      } else {
+        showError(result.message || 'Nie udało się zaktualizować cen dostawców');
+      }
+      setMenuOpen(false);
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji cen dostawców:', error);
+      showError('Błąd podczas aktualizacji cen dostawców: ' + error.message);
+    }
+  };
   
   const getStatusChip = (status) => {
     const statusConfig = {
@@ -712,6 +733,13 @@ const PurchaseOrderDetails = ({ orderId }) => {
                   <MenuItem onClick={handleUpdateBasePrices}>
                     <RefreshIcon sx={{ mr: 1 }} />
                     Aktualizuj ceny bazowe
+                  </MenuItem>
+                )}
+
+                {purchaseOrder?.items?.length > 0 && purchaseOrder?.supplier?.id && (
+                  <MenuItem onClick={handleUpdateSupplierPrices}>
+                    <RefreshIcon sx={{ mr: 1 }} />
+                    Aktualizuj ceny dostawcy
                   </MenuItem>
                 )}
               </Menu>

@@ -1349,7 +1349,62 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
 
     currentY += 10;
 
-    // 8. Additional Attachments
+    // 8. Disclaimer & Terms of Use
+    const disclaimerEstimatedHeight = 300; // Estimated height for disclaimer content
+    addSectionHeaderWithPageBreak(8, 'Disclaimer & Terms of Use', disclaimerEstimatedHeight, '#6C35EA');
+    
+    // Add disclaimer content
+    const disclaimerText = `This Technical Data Sheet (TDS) describes the typical properties of the product and has been prepared with due care based on our current knowledge, internal analyses, and data from our suppliers. The legally binding parameters for the product are defined in the agreed-upon Product Specification Sheet and confirmed for each batch in its respective Certificate of Analysis (CoA).
+
+Due to the natural variability of raw materials, minor batch-to-batch variations in non-critical organoleptic or physical parameters may occur. BGW PHARMA reserves the right to inform Clients of any significant deviations from the specifications. This provision does not apply to active ingredients, vitamins, minerals, or declared nutritional values, which must comply with labelling requirements under EU regulations.
+
+We are committed to continuous improvement and reserve the right to modify the product's specifications. The Buyer will be notified with reasonable advance notice of any changes, particularly those affecting mandatory labelling information or the composition of active ingredients.
+
+The Buyer is solely responsible for:
+
+• Verifying the product's suitability for their specific application and manufacturing processes.
+
+• Ensuring that their final product complies with all applicable laws and regulations.
+
+• Maintaining full traceability in accordance with the requirements of EU food law.
+
+Where information regarding health claims authorized under Regulation (EC) No 1924/2006 is provided, BGW PHARMA shall not be held liable for any modifications or alterations of these claims made by the Buyer. It remains the Buyer's exclusive responsibility to ensure compliance with all applicable regulations concerning the use of such claims in final products.
+
+BGW PHARMA shall not be held liable for damages resulting from improper use, storage, or handling of the product, subject to applicable EU obligations on food safety and product liability directives.
+
+This document does not constitute a warranty and is subject to our official General Terms and Conditions of Sale, which govern all legal aspects of the transaction, including specific warranties, claims procedures, liability limitations, and force majeure provisions. In the event of any discrepancy between this TDS and our General Terms and Conditions of Sale, the latter shall prevail.
+
+By purchasing the product, the Buyer accepts the conditions outlined in this document and confirms the receipt and acceptance of our General Terms and Conditions of Sale.`;
+
+    // Split disclaimer text into manageable paragraphs
+    const disclaimerParagraphs = disclaimerText.split('\n\n');
+    
+    doc.setTextColor(51, 51, 51);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    
+    for (const paragraph of disclaimerParagraphs) {
+      if (paragraph.trim()) {
+        checkPageBreak(20); // Check if we need a new page for each paragraph
+        
+        // Handle bullet points specially
+        if (paragraph.startsWith('•')) {
+          const lines = doc.splitTextToSize(paragraph, contentWidth - 10);
+          doc.text(lines, margin + 10, currentY);
+          currentY += Math.max(8, lines.length * 4.5);
+        } else {
+          const lines = doc.splitTextToSize(paragraph, contentWidth);
+          doc.text(lines, margin, currentY);
+          currentY += Math.max(8, lines.length * 4.5);
+        }
+        
+        currentY += 4; // Add spacing between paragraphs
+      }
+    }
+
+    currentY += 15;
+
+    // 9. Additional Attachments
     // Calculate estimated height for attachments section
     let attachmentsEstimatedHeight = 0;
     if (additionalData.additionalAttachments && additionalData.additionalAttachments.length > 0) {
@@ -1365,7 +1420,7 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       attachmentsEstimatedHeight = 8; // "No data" message
     }
     
-    addSectionHeaderWithPageBreak(8, 'Additional Attachments', attachmentsEstimatedHeight, '#6C35EA');
+    addSectionHeaderWithPageBreak(9, 'Additional Attachments', attachmentsEstimatedHeight, '#6C35EA');
     
     if (additionalData.additionalAttachments && additionalData.additionalAttachments.length > 0) {
       const additionalAttHeaders = ['File type', 'File name', 'Size', 'Upload date'];

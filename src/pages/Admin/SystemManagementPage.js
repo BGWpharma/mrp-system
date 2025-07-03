@@ -14,7 +14,9 @@ import {
   List,
   ListItem,
   ListItemText,
-  CircularProgress
+  CircularProgress,
+  Grid,
+  TextField
 } from '@mui/material';
 import {
   Settings as SettingsIcon,
@@ -27,17 +29,24 @@ import APIKeySettings from '../../components/common/APIKeySettings';
 import CounterEditor from '../../components/admin/CounterEditor';
 import FormOptionsManager from '../../components/admin/FormOptionsManager';
 import NutritionalComponentsManager from '../../components/admin/NutritionalComponentsManager';
+import { 
+  migrateInventoryItemsFromV1toV2, 
+  checkInventoryIntegrityAndFix,
+  bulkUpdateSupplierPricesFromCompletedPOs
+} from '../../services/inventoryService';
 
 /**
  * Strona dla administratorów z narzędziami do zarządzania systemem
  */
 const SystemManagementPage = () => {
   const { currentUser } = useAuth();
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showError, showNotification } = useNotification();
   const [isLoading, setIsLoading] = useState(false);
   const [migrationResults, setMigrationResults] = useState(null);
   const [isLoadingComponents, setIsLoadingComponents] = useState(false);
   const [componentsMigrationResults, setComponentsMigrationResults] = useState(null);
+  const [updatingPrices, setUpdatingPrices] = useState(false);
+  const [priceUpdateDays, setPriceUpdateDays] = useState(30);
   
   // Funkcja do uruchomienia migracji limitów wiadomości AI
   const handleRunAILimitsMigration = async () => {
@@ -76,6 +85,33 @@ const SystemManagementPage = () => {
       showError('Wystąpił błąd podczas migracji składników. Sprawdź konsolę.');
     } finally {
       setIsLoadingComponents(false);
+    }
+  };
+
+  const handleBulkUpdateSupplierPrices = async () => {
+    if (!window.confirm(`Czy na pewno chcesz zaktualizować ceny dostawców na podstawie zamówień z ostatnich ${priceUpdateDays} dni? Ta operacja może trwać kilka minut.`)) {
+      return;
+    }
+
+    try {
+      setUpdatingPrices(true);
+      showNotification('Rozpoczynam masową aktualizację cen dostawców...', 'info');
+
+      const result = await bulkUpdateSupplierPricesFromCompletedPOs(currentUser.uid, priceUpdateDays);
+
+      if (result.success) {
+        showNotification(
+          `Zakończono masową aktualizację cen dostawców. ${result.message}`,
+          'success'
+        );
+      } else {
+        showNotification('Błąd podczas masowej aktualizacji cen dostawców', 'error');
+      }
+    } catch (error) {
+      console.error('Błąd podczas masowej aktualizacji cen dostawców:', error);
+      showNotification('Błąd podczas masowej aktualizacji cen dostawców: ' + error.message, 'error');
+    } finally {
+      setUpdatingPrices(false);
     }
   };
 
@@ -205,8 +241,75 @@ const SystemManagementPage = () => {
           </CardActions>
         </Card>
         
-        {/* Tutaj można dodać więcej narzędzi administracyjnych */}
-        
+        {/* Nowa sekcja zarządzania cenami dostawców */}
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Zarządzanie cenami dostawców
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Narzędzia do automatycznej aktualizacji cen dostawców na podstawie zakończonych zamówień zakupu.
+            </Typography>
+
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <Card variant="outlined">
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Masowa aktualizacja cen dostawców
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      Automatycznie aktualizuje ceny dostawców na podstawie najnowszych zakończonych zamówień zakupu.
+                    </Typography>
+
+                    <Box sx={{ mb: 2 }}>
+                      <TextField
+                        type="number"
+                        label="Liczba dni wstecz"
+                        value={priceUpdateDays}
+                        onChange={(e) => setPriceUpdateDays(parseInt(e.target.value) || 30)}
+                        InputProps={{
+                          inputProps: { min: 1, max: 365 }
+                        }}
+                        helperText="Ile dni wstecz sprawdzać zakończone zamówienia"
+                        size="small"
+                        sx={{ mb: 2 }}
+                      />
+                    </Box>
+
+                    <Button
+                      variant="contained"
+                      onClick={handleBulkUpdateSupplierPrices}
+                      disabled={updatingPrices}
+                      startIcon={updatingPrices ? <CircularProgress size={20} /> : <RefreshIcon />}
+                    >
+                      {updatingPrices ? 'Aktualizowanie...' : 'Aktualizuj ceny dostawców'}
+                    </Button>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <Card variant="outlined">
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Jak to działa?
+                    </Typography>
+                    <Typography variant="body2" component="div">
+                      <ul>
+                        <li>System przeszukuje zamówienia zakupu ze statusem "zakończone" z wybranego okresu</li>
+                        <li>Dla każdej pozycji w zamówieniu sprawdza czy dostawca ma już przypisaną cenę</li>
+                        <li>Jeśli cena istnieje i różni się od ceny w zamówieniu - aktualizuje ją</li>
+                        <li>Jeśli ceny nie ma - tworzy nową z danymi z zamówienia</li>
+                        <li>Zachowuje historię zmian cen dla każdego dostawcy</li>
+                      </ul>
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
       </Paper>
     </Container>
   );

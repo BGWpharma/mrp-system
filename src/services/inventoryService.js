@@ -5276,3 +5276,308 @@ export const deleteBatchCertificate = async (batchId, userId) => {
       throw error;
     }
   };
+
+  /**
+   * Automatycznie aktualizuje ceny dostawców na podstawie najnowszego zakończonego zamówienia zakupu
+   * @param {string} purchaseOrderId - ID zamówienia zakupowego
+   * @param {string} userId - ID użytkownika wykonującego aktualizację
+   * @returns {Promise<Object>} - Wynik operacji z liczbą zaktualizowanych cen
+   */
+  export const updateSupplierPricesFromCompletedPO = async (purchaseOrderId, userId) => {
+    try {
+      console.log(`Rozpoczynam aktualizację cen dostawców dla zamówienia ${purchaseOrderId}`);
+      
+      // Pobierz dane zamówienia zakupu
+      const { getPurchaseOrderById } = await import('./purchaseOrderService');
+      const poData = await getPurchaseOrderById(purchaseOrderId);
+      
+      if (!poData) {
+        throw new Error('Nie znaleziono zamówienia zakupowego');
+      }
+      
+      if (poData.status !== 'completed') {
+        console.log(`Zamówienie ${purchaseOrderId} nie ma statusu 'completed' (aktualny: ${poData.status})`);
+        return { success: false, message: 'Zamówienie nie ma statusu zakończone', updated: 0 };
+      }
+      
+      if (!poData.items || poData.items.length === 0) {
+        console.log(`Zamówienie ${purchaseOrderId} nie ma pozycji do przetworzenia`);
+        return { success: false, message: 'Zamówienie nie zawiera pozycji', updated: 0 };
+      }
+      
+      if (!poData.supplier || !poData.supplier.id) {
+        console.log(`Zamówienie ${purchaseOrderId} nie ma przypisanego dostawcy`);
+        return { success: false, message: 'Zamówienie nie ma przypisanego dostawcy', updated: 0 };
+      }
+      
+      const supplierId = poData.supplier.id;
+      let updatedCount = 0;
+      const results = [];
+      
+      // Przetwórz każdą pozycję zamówienia
+      for (const item of poData.items) {
+        if (!item.inventoryItemId || !item.unitPrice) {
+          console.log(`Pozycja ${item.name} nie ma inventoryItemId lub unitPrice, pomijam`);
+          continue;
+        }
+        
+        const itemId = item.inventoryItemId;
+        const newPrice = parseFloat(item.unitPrice);
+        
+        if (isNaN(newPrice) || newPrice <= 0) {
+          console.log(`Nieprawidłowa cena dla pozycji ${item.name}: ${item.unitPrice}, pomijam`);
+          continue;
+        }
+        
+        try {
+          // Sprawdź czy dostawca już ma cenę dla tej pozycji
+          const existingPrice = await getSupplierPriceForItem(itemId, supplierId);
+          
+          if (existingPrice) {
+            // Aktualizuj istniejącą cenę
+            const oldPrice = parseFloat(existingPrice.price);
+            
+            // Aktualizuj tylko jeśli cena się zmieniła (z tolerancją na błędy zaokrąglenia)
+            if (Math.abs(oldPrice - newPrice) > 0.0001) {
+              const supplierPriceData = {
+                ...existingPrice,
+                price: newPrice,
+                lastPurchaseOrderId: purchaseOrderId,
+                lastPurchaseOrderNumber: poData.number || null,
+                lastPurchaseDate: poData.orderDate || new Date(),
+                autoUpdatedFromPO: true,
+                itemId: itemId,
+                supplierId: supplierId,
+                isDefault: true // Ustawiamy najnowszą cenę jako domyślną
+              };
+              
+              await updateSupplierPrice(existingPrice.id, supplierPriceData, userId);
+              
+              // Ustaw tę cenę jako domyślną (usunie domyślność z innych cen tego produktu)
+              await setDefaultSupplierPrice(itemId, existingPrice.id);
+              
+              console.log(`Zaktualizowano cenę dostawcy dla ${item.name}: ${oldPrice} → ${newPrice} (ustawiono jako domyślną)`);
+              updatedCount++;
+              
+              results.push({
+                itemId: itemId,
+                itemName: item.name,
+                oldPrice: oldPrice,
+                newPrice: newPrice,
+                action: 'updated',
+                priceId: existingPrice.id,
+                setAsDefault: true
+              });
+            } else {
+              console.log(`Cena dla ${item.name} nie zmieniła się (${oldPrice}), pomijam aktualizację`);
+              results.push({
+                itemId: itemId,
+                itemName: item.name,
+                oldPrice: oldPrice,
+                newPrice: newPrice,
+                action: 'skipped',
+                reason: 'no_change'
+              });
+            }
+          } else {
+            // Dodaj nową cenę dostawcy
+            const supplierPriceData = {
+              itemId: itemId,
+              supplierId: supplierId,
+              price: newPrice,
+              minQuantity: parseInt(item.minOrderQuantity) || 1,
+              leadTime: 7,
+              currency: item.currency || poData.currency || 'EUR',
+              notes: `Automatycznie dodana z zamówienia ${poData.number || purchaseOrderId}`,
+              lastPurchaseOrderId: purchaseOrderId,
+              lastPurchaseOrderNumber: poData.number || null,
+              lastPurchaseDate: poData.orderDate || new Date(),
+              autoUpdatedFromPO: true,
+              isDefault: true // Nowa cena zostanie ustawiona jako domyślna
+            };
+            
+            const newPriceRecord = await addSupplierPrice(supplierPriceData, userId);
+            
+            // Ustaw nową cenę jako domyślną (usunie domyślność z innych cen tego produktu)
+            await setDefaultSupplierPrice(itemId, newPriceRecord.id);
+            
+            console.log(`Dodano nową cenę dostawcy dla ${item.name}: ${newPrice} (ustawiono jako domyślną)`);
+            updatedCount++;
+            
+            results.push({
+              itemId: itemId,
+              itemName: item.name,
+              oldPrice: null,
+              newPrice: newPrice,
+              action: 'created',
+              priceId: newPriceRecord.id,
+              setAsDefault: true
+            });
+          }
+        } catch (error) {
+          console.error(`Błąd podczas aktualizacji ceny dla pozycji ${item.name}:`, error);
+          results.push({
+            itemId: itemId,
+            itemName: item.name,
+            action: 'error',
+            error: error.message
+          });
+        }
+      }
+      
+      const message = updatedCount > 0 
+        ? `Zaktualizowano ${updatedCount} cen dostawców na podstawie zamówienia ${poData.number || purchaseOrderId}. Najnowsze ceny ustawiono jako domyślne.`
+        : `Nie zaktualizowano żadnych cen dostawców dla zamówienia ${poData.number || purchaseOrderId}`;
+      
+      console.log(message);
+      
+      return {
+        success: true,
+        message: message,
+        updated: updatedCount,
+        results: results,
+        purchaseOrderNumber: poData.number,
+        supplierId: supplierId,
+        supplierName: poData.supplier.name
+      };
+      
+    } catch (error) {
+      console.error('Błąd podczas automatycznej aktualizacji cen dostawców:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Znajduje najnowsze zakończone zamówienie zakupu dla danej pozycji magazynowej i dostawcy
+   * @param {string} itemId - ID pozycji magazynowej
+   * @param {string} supplierId - ID dostawcy
+   * @returns {Promise<Object|null>} - Najnowsze zakończone zamówienie lub null
+   */
+  export const getLatestCompletedPurchaseOrderForItem = async (itemId, supplierId) => {
+    try {
+      const { collection, query, where, orderBy, limit, getDocs } = await import('firebase/firestore');
+      const { db } = await import('./firebase/config');
+      
+      // Znajdź zamówienia zakupu z danym dostawcą i statusem 'completed'
+      const poRef = collection(db, 'purchaseOrders');
+      const q = query(
+        poRef,
+        where('supplier.id', '==', supplierId),
+        where('status', '==', 'completed'),
+        orderBy('updatedAt', 'desc'),
+        limit(50) // Ograniczenie dla wydajności
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        return null;
+      }
+      
+      // Przeszukaj zamówienia w poszukiwaniu takiego, które zawiera daną pozycję
+      for (const doc of querySnapshot.docs) {
+        const poData = doc.data();
+        
+        // Sprawdź czy zamówienie zawiera pozycję o danym itemId
+        const hasItem = poData.items && poData.items.some(item => 
+          item.inventoryItemId === itemId && item.unitPrice && parseFloat(item.unitPrice) > 0
+        );
+        
+        if (hasItem) {
+          return {
+            id: doc.id,
+            ...poData,
+            // Znajdź konkretną pozycję w zamówieniu
+            itemData: poData.items.find(item => item.inventoryItemId === itemId)
+          };
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Błąd podczas wyszukiwania najnowszego zakończonego zamówienia:', error);
+      return null;
+    }
+  };
+
+  /**
+   * Masowa aktualizacja cen dostawców na podstawie wszystkich zakończonych zamówień
+   * @param {string} userId - ID użytkownika wykonującego aktualizację
+   * @param {number} daysBack - Liczba dni wstecz do sprawdzenia (domyślnie 30)
+   * @returns {Promise<Object>} - Wynik operacji z statystykami
+   */
+  export const bulkUpdateSupplierPricesFromCompletedPOs = async (userId, daysBack = 30) => {
+    try {
+      console.log(`Rozpoczynam masową aktualizację cen dostawców z ostatnich ${daysBack} dni`);
+      
+      const { collection, query, where, orderBy, getDocs, Timestamp } = await import('firebase/firestore');
+      const { db } = await import('./firebase/config');
+      
+      // Oblicz datę graniczną
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - daysBack);
+      
+      // Znajdź wszystkie zakończone zamówienia z ostatnich X dni
+      const poRef = collection(db, 'purchaseOrders');
+      const q = query(
+        poRef,
+        where('status', '==', 'completed'),
+        where('updatedAt', '>=', Timestamp.fromDate(cutoffDate)),
+        orderBy('updatedAt', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        return {
+          success: true,
+          message: `Nie znaleziono zakończonych zamówień z ostatnich ${daysBack} dni`,
+          processed: 0,
+          updated: 0,
+          errors: 0
+        };
+      }
+      
+      let processedCount = 0;
+      let totalUpdated = 0;
+      let errorCount = 0;
+      const results = [];
+      
+      // Przetwórz każde zakończone zamówienie
+      for (const doc of querySnapshot.docs) {
+        try {
+          const result = await updateSupplierPricesFromCompletedPO(doc.id, userId);
+          processedCount++;
+          totalUpdated += result.updated;
+          results.push(result);
+          
+          console.log(`Przetworzono zamówienie ${doc.id}: ${result.updated} aktualizacji`);
+        } catch (error) {
+          console.error(`Błąd podczas przetwarzania zamówienia ${doc.id}:`, error);
+          errorCount++;
+          results.push({
+            purchaseOrderId: doc.id,
+            success: false,
+            error: error.message,
+            updated: 0
+          });
+        }
+      }
+      
+      const message = `Przetworzono ${processedCount} zamówień, zaktualizowano ${totalUpdated} cen dostawców (ustawiono jako domyślne), błędy: ${errorCount}`;
+      console.log(message);
+      
+      return {
+        success: true,
+        message: message,
+        processed: processedCount,
+        updated: totalUpdated,
+        errors: errorCount,
+        results: results
+      };
+      
+    } catch (error) {
+      console.error('Błąd podczas masowej aktualizacji cen dostawców:', error);
+      throw error;
+    }
+  };

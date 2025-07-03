@@ -999,8 +999,39 @@ export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, user
         updateFields.deliveredBy = userId;
         console.log(`Zamówienie ${purchaseOrderId} oznaczone jako dostarczone w dniu ${new Date().toLocaleDateString()} o godzinie ${new Date().toLocaleTimeString()}`);
       }
+
+      // Jeśli status zmieniany jest na "completed" (zakończone)
+      // dodaj pole z datą i godziną zakończenia
+      if (newStatus === PURCHASE_ORDER_STATUSES.COMPLETED) {
+        updateFields.completedAt = serverTimestamp();
+        updateFields.completedBy = userId;
+        console.log(`Zamówienie ${purchaseOrderId} oznaczone jako zakończone w dniu ${new Date().toLocaleDateString()} o godzinie ${new Date().toLocaleTimeString()}`);
+      }
       
       await updateDoc(poRef, updateFields);
+
+      // Automatycznie aktualizuj ceny dostawców gdy zamówienie zostanie zakończone
+      if (newStatus === PURCHASE_ORDER_STATUSES.COMPLETED) {
+        try {
+          console.log(`Rozpoczynam automatyczną aktualizację cen dostawców dla zakończonego zamówienia ${purchaseOrderId}`);
+          
+          const { updateSupplierPricesFromCompletedPO } = await import('./inventoryService');
+          const updateResult = await updateSupplierPricesFromCompletedPO(purchaseOrderId, userId);
+          
+          if (updateResult.success && updateResult.updated > 0) {
+            console.log(`Automatycznie zaktualizowano ${updateResult.updated} cen dostawców dla zamówienia ${purchaseOrderId} i ustawiono jako domyślne`);
+            
+            // Dodaj informację o automatycznej aktualizacji do powiadomienia
+            const additionalMessage = ` Automatycznie zaktualizowano ${updateResult.updated} cen dostawców (ustawiono jako domyślne).`;
+            // Tę informację można wykorzystać w powiadomieniach poniżej
+          } else {
+            console.log(`Nie zaktualizowano żadnych cen dostawców dla zamówienia ${purchaseOrderId}: ${updateResult.message}`);
+          }
+        } catch (error) {
+          console.error(`Błąd podczas automatycznej aktualizacji cen dostawców dla zamówienia ${purchaseOrderId}:`, error);
+          // Nie zatrzymujemy procesu - aktualizacja statusu powinna przejść mimo błędu aktualizacji cen
+        }
+      }
       
       // Mapuj angielskie statusy na polskie
       const statusTranslations = {

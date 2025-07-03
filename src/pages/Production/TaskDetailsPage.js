@@ -7731,10 +7731,74 @@ const TaskDetailsPage = () => {
                     </Box>
                   </Paper>
                   
-                  {/* 8. Additional Attachments */}
+                  {/* 8. Disclaimer & Terms of Use */}
+                  <Paper sx={{ p: 3, mb: 3 }}>
+                    <Typography variant="h6" sx={{ mb: 2, color: 'error.main' }}>
+                      8. Disclaimer & Terms of Use
+                    </Typography>
+                    
+                    <Box sx={{ 
+                      p: 3, 
+                      backgroundColor: 'background.default', 
+                      borderRadius: 2, 
+                      border: 1, 
+                      borderColor: 'divider',
+                      boxShadow: 1
+                    }}>
+                      <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.6, color: 'text.primary' }}>
+                        <strong>DISCLAIMER & TERMS OF USE</strong>
+                      </Typography>
+                      
+                      <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.6, color: 'text.primary' }}>
+                        This Technical Data Sheet (TDS) describes the typical properties of the product and has been prepared with due care based on our current knowledge, internal analyses, and data from our suppliers. The legally binding parameters for the product are defined in the agreed-upon Product Specification Sheet and confirmed for each batch in its respective Certificate of Analysis (CoA).
+                      </Typography>
+                      
+                      <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.6, color: 'text.primary' }}>
+                        Due to the natural variability of raw materials, minor batch-to-batch variations in non-critical organoleptic or physical parameters may occur. BGW PHARMA reserves the right to inform Clients of any significant deviations from the specifications. This provision does not apply to active ingredients, vitamins, minerals, or declared nutritional values, which must comply with labelling requirements under EU regulations.
+                      </Typography>
+                      
+                      <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.6, color: 'text.primary' }}>
+                        We are committed to continuous improvement and reserve the right to modify the product's specifications. The Buyer will be notified with reasonable advance notice of any changes, particularly those affecting mandatory labelling information or the composition of active ingredients.
+                      </Typography>
+                      
+                      <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold', color: 'text.primary' }}>
+                        The Buyer is solely responsible for:
+                      </Typography>
+                      
+                      <Box component="ul" sx={{ mb: 2, pl: 3 }}>
+                        <Typography component="li" variant="body2" sx={{ mb: 0.5, lineHeight: 1.6, color: 'text.primary' }}>
+                          Verifying the product's suitability for their specific application and manufacturing processes.
+                        </Typography>
+                        <Typography component="li" variant="body2" sx={{ mb: 0.5, lineHeight: 1.6, color: 'text.primary' }}>
+                          Ensuring that their final product complies with all applicable laws and regulations.
+                        </Typography>
+                        <Typography component="li" variant="body2" sx={{ mb: 0.5, lineHeight: 1.6, color: 'text.primary' }}>
+                          Maintaining full traceability in accordance with the requirements of EU food law.
+                        </Typography>
+                      </Box>
+                      
+                      <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.6, color: 'text.primary' }}>
+                        Where information regarding health claims authorized under Regulation (EC) No 1924/2006 is provided, BGW PHARMA shall not be held liable for any modifications or alterations of these claims made by the Buyer. It remains the Buyer's exclusive responsibility to ensure compliance with all applicable regulations concerning the use of such claims in final products.
+                      </Typography>
+                      
+                      <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.6, color: 'text.primary' }}>
+                        BGW PHARMA shall not be held liable for damages resulting from improper use, storage, or handling of the product, subject to applicable EU obligations on food safety and product liability directives.
+                      </Typography>
+                      
+                      <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.6, color: 'text.primary' }}>
+                        This document does not constitute a warranty and is subject to our official General Terms and Conditions of Sale, which govern all legal aspects of the transaction, including specific warranties, claims procedures, liability limitations, and force majeure provisions. In the event of any discrepancy between this TDS and our General Terms and Conditions of Sale, the latter shall prevail.
+                      </Typography>
+                      
+                      <Typography variant="body2" sx={{ lineHeight: 1.6, fontWeight: 'bold', color: 'text.primary' }}>
+                        By purchasing the product, the Buyer accepts the conditions outlined in this document and confirms the receipt and acceptance of our General Terms and Conditions of Sale.
+                      </Typography>
+                    </Box>
+                  </Paper>
+                  
+                  {/* 9. Additional Attachments */}
                   <Paper sx={{ p: 3, mb: 3 }}>
                     <Typography variant="h6" sx={{ mb: 2 }}>
-                      8. Additional Attachments
+                      9. Additional Attachments
                     </Typography>
                     
                     <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
