@@ -39,7 +39,8 @@ import {
   DateRange as MonthlyIcon,
   Search as SearchIcon,
   Edit as EditIcon,
-  Lock as LockIcon
+  Lock as LockIcon,
+  Undo as UndoIcon
 } from '@mui/icons-material';
 import Timeline, {
   DateHeader,
@@ -421,6 +422,10 @@ const ProductionTimeline = React.memo(() => {
   // Stan dla trybu edycji
   const [editMode, setEditMode] = useState(false);
   
+  // Stany dla systemu cofania akcji (Ctrl+Z)
+  const [undoStack, setUndoStack] = useState([]);
+  const [maxUndoSteps] = useState(10); // Maksymalna liczba kroków do cofnięcia
+  
   // Nowe stany dla ulepszenia obsługi touchpada
   const [isTouchpadScrolling, setIsTouchpadScrolling] = useState(false);
   const [touchpadScrollTimeout, setTouchpadScrollTimeout] = useState(null);
@@ -442,6 +447,10 @@ const ProductionTimeline = React.memo(() => {
     fetchCustomers();
     fetchTasks();
   }, []);
+
+
+
+
 
   const fetchWorkstations = async () => {
     try {
@@ -516,6 +525,69 @@ const ProductionTimeline = React.memo(() => {
       setLoading(false);
     }
   }, [canvasTimeStart, canvasTimeEnd, showError]);
+
+  // Referencja do funkcji cofania (unika problemów z hoisting)
+  const undoFunctionRef = useRef(null);
+
+  // Funkcja cofania ostatniej akcji
+  const handleUndo = useCallback(async () => {
+    if (undoStack.length === 0) {
+      showError('Brak akcji do cofnięcia');
+      return;
+    }
+
+    try {
+      // Pobierz ostatnią akcję ze stosu
+      const lastAction = undoStack[undoStack.length - 1];
+      
+      if (lastAction.type === 'move') {
+        // Przywróć poprzedni stan zadania
+        const updateData = {
+          scheduledDate: lastAction.previousData.scheduledDate,
+          endDate: lastAction.previousData.endDate,
+          estimatedDuration: lastAction.previousData.estimatedDuration
+        };
+
+        await updateTask(lastAction.taskId, updateData, currentUser.uid);
+        
+        // Usuń ostatnią akcję ze stosu
+        setUndoStack(prevStack => prevStack.slice(0, -1));
+        
+        showSuccess('Ostatnia akcja została cofnięta');
+        
+        // Odśwież dane
+        fetchTasks();
+      }
+    } catch (error) {
+      console.error('Błąd podczas cofania akcji:', error);
+      showError('Błąd podczas cofania akcji: ' + error.message);
+    }
+  }, [undoStack, showError, showSuccess, fetchTasks, currentUser.uid]);
+
+  // Aktualizuj referencję
+  undoFunctionRef.current = handleUndo;
+
+  // Obsługa skrótu klawiszowego Ctrl+Z
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      // Sprawdź czy naciśnięto Ctrl+Z (lub Cmd+Z na Mac)
+      if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !event.shiftKey) {
+        event.preventDefault();
+        // Użyj referencji zamiast bezpośredniego wywołania
+        if (undoFunctionRef.current) {
+          undoFunctionRef.current();
+        }
+      }
+    };
+
+    // Dodaj nasłuchiwanie zdarzeń klawiatury
+    document.addEventListener('keydown', handleKeyDown);
+
+    // Sprzątanie
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []); // Usuń zależność od handleUndo
 
   // Funkcje pomocnicze dla kolorów
   const getStatusColor = (status) => {
@@ -845,6 +917,18 @@ const ProductionTimeline = React.memo(() => {
     return { newStartTime, newEndTime };
   };
 
+  // Funkcja pomocnicza do dodawania akcji do undo stack
+  const addToUndoStack = useCallback((action) => {
+    setUndoStack(prevStack => {
+      const newStack = [...prevStack, action];
+      // Ogranicz rozmiar stosu do maksymalnej liczby kroków
+      if (newStack.length > maxUndoSteps) {
+        return newStack.slice(-maxUndoSteps);
+      }
+      return newStack;
+    });
+  }, [maxUndoSteps]);
+
   // Obsługa zmian w timeline
   const handleItemMove = useCallback(async (itemId, dragTime, newGroupId) => {
     try {
@@ -860,6 +944,19 @@ const ProductionTimeline = React.memo(() => {
       
       const item = items.find(i => i.id === itemId);
       if (!item) return;
+
+      // Zapisz poprzedni stan zadania do undo stack
+      const previousState = {
+        type: 'move',
+        taskId: itemId,
+        previousData: {
+          scheduledDate: item.task?.scheduledDate || new Date(item.start_time),
+          endDate: item.task?.endDate || new Date(item.end_time),
+          estimatedDuration: item.task?.estimatedDuration || Math.round((item.end_time - item.start_time) / (1000 * 60)),
+          workstationId: item.task?.workstationId || item.group
+        },
+        timestamp: new Date().toISOString()
+      };
 
       let newStartTime = roundToMinute(new Date(dragTime));
       const duration = item.end_time - item.start_time;
@@ -887,6 +984,9 @@ const ProductionTimeline = React.memo(() => {
 
       await updateTask(itemId, updateData, currentUser.uid);
       
+      // Dodaj akcję do undo stack po udanej aktualizacji
+      addToUndoStack(previousState);
+      
       if (snapToPrevious) {
         showSuccess('Zadanie zostało zaktualizowane i dociągnięte do poprzedniego');
       } else {
@@ -899,7 +999,7 @@ const ProductionTimeline = React.memo(() => {
       console.error('Błąd podczas aktualizacji zadania:', error);
       showError('Błąd podczas aktualizacji zadania: ' + error.message);
     }
-  }, [items, roundToMinute, snapToTask, snapToPrevious, showError, showSuccess, fetchTasks, currentUser.uid]);
+  }, [items, roundToMinute, snapToTask, snapToPrevious, showError, showSuccess, fetchTasks, currentUser.uid, addToUndoStack]);
 
   const handleItemResize = async (itemId, time, edge) => {
     try {
@@ -1863,6 +1963,24 @@ const ProductionTimeline = React.memo(() => {
               </IconButton>
             </Tooltip>
           </Box>
+          
+          {/* Przycisk Undo */}
+          <Tooltip title={`Cofnij ostatnią akcję (Ctrl+Z) - ${undoStack.length} dostępnych`}>
+            <span>
+              <IconButton 
+                size="small" 
+                onClick={handleUndo}
+                disabled={undoStack.length === 0}
+                sx={{ 
+                  border: '1px solid #ddd', 
+                  borderRadius: 1,
+                  opacity: undoStack.length === 0 ? 0.5 : 1
+                }}
+              >
+                <UndoIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
           
           <Button
             variant="outlined"
