@@ -14,7 +14,8 @@ import {
   MenuItem,
   FormHelperText,
   Alert,
-  Divider
+  Divider,
+  Autocomplete
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -28,7 +29,8 @@ import {
 import { 
   createInventoryItem, 
   updateInventoryItem, 
-  getInventoryItemById
+  getInventoryItemById,
+  getAllInventoryItems
 } from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -37,6 +39,8 @@ import SupplierPricesList from './SupplierPricesList';
 const InventoryItemForm = ({ itemId }) => {
   const [loading, setLoading] = useState(!!itemId);
   const [saving, setSaving] = useState(false);
+  const [packageItems, setPackageItems] = useState([]);
+  const [selectedPackageItem, setSelectedPackageItem] = useState(null);
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
   const navigate = useNavigate();
@@ -55,29 +59,39 @@ const InventoryItemForm = ({ itemId }) => {
     boxesPerPallet: '',
     itemsPerBox: '',
     currency: 'EUR',
-    barcode: ''
+    barcode: '',
+    parentPackageItemId: ''
   });
 
   useEffect(() => {
-    if (itemId) {
-      const fetchItem = async () => {
-        try {
+    const fetchData = async () => {
+      try {
+        // Pobierz pozycje magazynowe kategorii "Opakowania zbiorcze"
+        const allItems = await getAllInventoryItems();
+        const packages = allItems.filter(item => item.category === 'Opakowania zbiorcze');
+        setPackageItems(packages);
+
+        if (itemId) {
           const item = await getInventoryItemById(itemId);
           // Usuwamy pola, które nie chcemy edytować bezpośrednio
           const { quantity, bookedQuantity, notes, ...restItem } = item;
           setItemData(restItem);
-        } catch (error) {
-          showError('Błąd podczas pobierania pozycji: ' + error.message);
-          console.error('Error fetching inventory item:', error);
-        } finally {
-          setLoading(false);
+          
+          // Znajdź wybrany karton jeśli istnieje
+          if (restItem.parentPackageItemId) {
+            const selectedPackage = packages.find(pkg => pkg.id === restItem.parentPackageItemId);
+            setSelectedPackageItem(selectedPackage || null);
+          }
         }
-      };
-      
-      fetchItem();
-    } else {
-      setLoading(false);
-    }
+      } catch (error) {
+        showError('Błąd podczas pobierania danych: ' + error.message);
+        console.error('Error fetching data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
   }, [itemId, showError]);
 
   const handleSubmit = async (e) => {
@@ -105,6 +119,14 @@ const InventoryItemForm = ({ itemId }) => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setItemData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handlePackageChange = (event, newValue) => {
+    setSelectedPackageItem(newValue);
+    setItemData(prev => ({ 
+      ...prev, 
+      parentPackageItemId: newValue ? newValue.id : '' 
+    }));
   };
 
   if (loading) {
@@ -428,6 +450,28 @@ const InventoryItemForm = ({ itemId }) => {
                     </Box>
                   ),
                 }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Autocomplete
+                options={packageItems}
+                getOptionLabel={(option) => `${option.name} (${option.quantity} ${option.unit})`}
+                value={selectedPackageItem}
+                onChange={handlePackageChange}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Powiązanie z kartonem (opakowanie zbiorcze)"
+                    fullWidth
+                    helperText="Wybierz pozycję magazynową kartonu, w którym pakowana jest ta pozycja"
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                  />
+                )}
+                isOptionEqualToValue={(option, value) => option.id === value?.id}
+                noOptionsText="Brak dostępnych kartonów"
+                clearText="Wyczyść"
+                openText="Otwórz"
+                closeText="Zamknij"
               />
             </Grid>
           </Grid>

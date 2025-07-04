@@ -40,6 +40,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import LinkIcon from '@mui/icons-material/Link';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import { Calculate as CalculateIcon } from '@mui/icons-material';
 import { 
   CMR_STATUSES, 
   CMR_PAYMENT_STATUSES, 
@@ -50,6 +51,7 @@ import { getOrderById, getAllOrders, searchOrdersByNumber } from '../../../servi
 import { getCustomerById } from '../../../services/customerService';
 import { getCompanyData } from '../../../services/companyService';
 import BatchSelector from '../../../components/cmr/BatchSelector';
+import WeightCalculationDialog from '../../../components/cmr/WeightCalculationDialog';
 
 /**
  * Komponent formularza CMR rozszerzony o możliwość uzupełniania pól na podstawie zamówienia klienta (CO).
@@ -174,6 +176,10 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
   const [availableOrderItems, setAvailableOrderItems] = useState([]);
   const [orderItemsSelectorOpen, setOrderItemsSelectorOpen] = useState(false);
   
+  // Stany dla kalkulatora wagi
+  const [weightCalculatorOpen, setWeightCalculatorOpen] = useState(false);
+  const [currentWeightItemIndex, setCurrentWeightItemIndex] = useState(null);
+  
   // Funkcja do wyświetlania komunikatów
   const showMessage = (message, severity = 'info') => {
     setSnackbarMessage(message);
@@ -221,6 +227,32 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
       };
       return { ...prev, items: updatedItems };
     });
+  };
+
+  // Funkcje do obsługi kalkulatora wagi
+  const handleOpenWeightCalculator = (itemIndex) => {
+    setCurrentWeightItemIndex(itemIndex);
+    setWeightCalculatorOpen(true);
+  };
+
+  const handleCloseWeightCalculator = () => {
+    setWeightCalculatorOpen(false);
+    setCurrentWeightItemIndex(null);
+  };
+
+  const handleAcceptWeight = (calculatedWeight) => {
+    if (currentWeightItemIndex !== null) {
+      setFormData(prev => {
+        const updatedItems = [...prev.items];
+        updatedItems[currentWeightItemIndex] = {
+          ...updatedItems[currentWeightItemIndex],
+          weight: calculatedWeight.toString()
+        };
+        return { ...prev, items: updatedItems };
+      });
+      
+      showMessage(`Zastosowano obliczoną wagę: ${calculatedWeight} kg`, 'success');
+    }
   };
   
   // Funkcja do ładowania dostępnych zamówień klienta (CO)
@@ -1790,13 +1822,30 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                     </Grid>
                     
                     <Grid item xs={12} sm={6} md={3}>
-                      <TextField
-                        label="Waga (kg)"
-                        value={item.weight}
-                        onChange={(e) => handleItemChange(index, 'weight', e.target.value)}
-                        fullWidth
-                        type="number"
-                      />
+                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-end' }}>
+                        <TextField
+                          label="Waga (kg)"
+                          value={item.weight}
+                          onChange={(e) => handleItemChange(index, 'weight', e.target.value)}
+                          fullWidth
+                          type="number"
+                          InputProps={{
+                            endAdornment: (
+                              <IconButton
+                                size="small"
+                                onClick={() => handleOpenWeightCalculator(index)}
+                                title="Oblicz wagę na podstawie danych magazynowych"
+                                sx={{ 
+                                  color: 'primary.main',
+                                  '&:hover': { bgcolor: 'primary.50' }
+                                }}
+                              >
+                                <CalculateIcon fontSize="small" />
+                              </IconButton>
+                            )
+                          }}
+                        />
+                      </Box>
                     </Grid>
                     
                     <Grid item xs={12} sm={6} md={3}>
@@ -2111,6 +2160,14 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
           itemCode={currentItemIndex !== null ? formData.items[currentItemIndex]?.productCode || formData.items[currentItemIndex]?.marks || '' : ''}
         />
         
+        {/* Dialog kalkulatora wagi */}
+        <WeightCalculationDialog
+          open={weightCalculatorOpen}
+          onClose={handleCloseWeightCalculator}
+          onAcceptWeight={handleAcceptWeight}
+          cmrItem={currentWeightItemIndex !== null ? formData.items[currentWeightItemIndex] : null}
+        />
+
         {/* Snackbar dla komunikatów */}
         <Snackbar
           open={snackbarOpen}

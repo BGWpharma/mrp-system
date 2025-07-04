@@ -132,6 +132,19 @@ const ItemDetailsPage = () => {
       try {
         setLoading(true);
         const itemData = await getInventoryItemById(id);
+        
+        // Pobierz informacje o powiązanym kartonie jeśli istnieje
+        if (itemData.parentPackageItemId) {
+          try {
+            const parentPackageItem = await getInventoryItemById(itemData.parentPackageItemId);
+            itemData.parentPackageItem = parentPackageItem;
+          } catch (error) {
+            console.error('Nie udało się pobrać danych powiązanego kartonu:', error);
+            // Jeśli nie można pobrać kartonu, usuń powiązanie aby uniknąć błędów
+            itemData.parentPackageItem = null;
+          }
+        }
+        
         setItem(itemData);
         
         // Pobierz historię transakcji
@@ -792,6 +805,25 @@ const ItemDetailsPage = () => {
                       <TableRow>
                         <TableCell component="th" sx={{ fontWeight: 'medium' }}>Waga</TableCell>
                         <TableCell>{item.weight ? `${formatQuantity(item.weight)} kg` : 'Nie określono'}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>Powiązany karton</TableCell>
+                        <TableCell>
+                          {item.parentPackageItem ? (
+                            <Typography 
+                              component="span"
+                              sx={{ 
+                                color: 'primary.main',
+                                cursor: 'pointer',
+                                textDecoration: 'underline',
+                                '&:hover': { textDecoration: 'none' }
+                              }}
+                              onClick={() => navigate(`/inventory/${item.parentPackageItem.id}`)}
+                            >
+                              {item.parentPackageItem.name}
+                            </Typography>
+                          ) : 'Nie określono'}
+                        </TableCell>
                       </TableRow>
                     </TableBody>
                   </Table>

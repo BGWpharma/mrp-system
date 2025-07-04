@@ -48,10 +48,12 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import LinkIcon from '@mui/icons-material/Link';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import { Calculate as CalculateIcon } from '@mui/icons-material';
 import { getOrderById, searchOrdersByNumber } from '../../../services/orderService';
 import { getCustomerById } from '../../../services/customerService';
 import { getCompanyData } from '../../../services/companyService';
 import BatchSelector from '../../../components/cmr/BatchSelector';
+import WeightCalculationDialog from '../../../components/cmr/WeightCalculationDialog';
 
 /**
  * Nowy komponent formularza CMR oparty na oficjalnym dokumencie.
@@ -156,6 +158,10 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
   const [availableOrderItems, setAvailableOrderItems] = useState([]);
   const [orderItemsSelectorOpen, setOrderItemsSelectorOpen] = useState(false);
   
+  // Stany dla kalkulatora wagi
+  const [weightCalculatorOpen, setWeightCalculatorOpen] = useState(false);
+  const [currentWeightItemIndex, setCurrentWeightItemIndex] = useState(null);
+  
   // Funkcja do wyświetlania komunikatów
   const showMessage = (message, severity = 'info') => {
     setSnackbarMessage(message);
@@ -202,6 +208,32 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
       };
       return { ...prev, items: updatedItems };
     });
+  };
+
+  // Funkcje do obsługi kalkulatora wagi
+  const handleOpenWeightCalculator = (itemIndex) => {
+    setCurrentWeightItemIndex(itemIndex);
+    setWeightCalculatorOpen(true);
+  };
+
+  const handleCloseWeightCalculator = () => {
+    setWeightCalculatorOpen(false);
+    setCurrentWeightItemIndex(null);
+  };
+
+  const handleAcceptWeight = (calculatedWeight) => {
+    if (currentWeightItemIndex !== null) {
+      setFormData(prev => {
+        const updatedItems = [...prev.items];
+        updatedItems[currentWeightItemIndex] = {
+          ...updatedItems[currentWeightItemIndex],
+          weight: calculatedWeight.toString()
+        };
+        return { ...prev, items: updatedItems };
+      });
+      
+      showMessage(`Zastosowano obliczoną wagę: ${calculatedWeight} kg`, 'success');
+    }
   };
   
   useEffect(() => {
@@ -1287,14 +1319,29 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                           />
                         </TableCell>
                         <TableCell>
-                          <TextField
-                            value={item.weight}
-                            onChange={(e) => handleItemChange(index, 'weight', e.target.value)}
-                            fullWidth
-                            type="number"
-                            size="small"
-                            variant="outlined"
-                          />
+                          <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                            <TextField
+                              value={item.weight}
+                              onChange={(e) => handleItemChange(index, 'weight', e.target.value)}
+                              fullWidth
+                              type="number"
+                              size="small"
+                              variant="outlined"
+                            />
+                            <IconButton
+                              size="small"
+                              onClick={() => handleOpenWeightCalculator(index)}
+                              title="Oblicz wagę na podstawie danych magazynowych"
+                              sx={{ 
+                                color: 'primary.main',
+                                '&:hover': { bgcolor: 'primary.50' },
+                                minWidth: 32,
+                                height: 32
+                              }}
+                            >
+                              <CalculateIcon fontSize="small" />
+                            </IconButton>
+                          </Box>
                         </TableCell>
                         <TableCell>
                           <TextField
@@ -1821,6 +1868,14 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
           itemDescription={currentItemIndex !== null ? formData.items[currentItemIndex]?.description || '' : ''}
           itemMarks={currentItemIndex !== null ? formData.items[currentItemIndex]?.marks || '' : ''}
           itemCode={currentItemIndex !== null ? formData.items[currentItemIndex]?.marks || formData.items[currentItemIndex]?.productCode || '' : ''}
+        />
+
+        {/* Dialog kalkulatora wagi */}
+        <WeightCalculationDialog
+          open={weightCalculatorOpen}
+          onClose={handleCloseWeightCalculator}
+          onAcceptWeight={handleAcceptWeight}
+          cmrItem={currentWeightItemIndex !== null ? formData.items[currentWeightItemIndex] : null}
         />
         
         {/* Snackbar do wyświetlania komunikatów */}
