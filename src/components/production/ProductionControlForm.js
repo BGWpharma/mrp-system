@@ -27,12 +27,12 @@ import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { pl } from 'date-fns/locale';
-import { Send as SendIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
+import { Send as SendIcon, ArrowBack as ArrowBackIcon, Delete as DeleteIcon, Visibility as VisibilityIcon, AttachFile as AttachFileIcon } from '@mui/icons-material';
 import { getMONumbersForSelect } from '../../services/moService';
 import { formatDateForInput } from '../../utils/dateUtils';
 import { db, storage } from '../../services/firebase/config';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc, getDocs } from 'firebase/firestore';
-import { ref as firebaseStorageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref as firebaseStorageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { format } from 'date-fns';
 import { query, where } from 'firebase/firestore';
@@ -153,6 +153,71 @@ const getMODetailsById = async (moNumber) => {
   }
 };
 
+// Komponent do wyświetlania istniejącego załącznika
+const ExistingAttachment = ({ fileUrl, fileName, onRemove, fieldName }) => {
+  if (!fileUrl) return null;
+
+  const isImage = fileName && /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(fileName);
+
+  return (
+    <Box sx={{ 
+      mt: 1, 
+      p: 2, 
+      border: '1px solid #e0e0e0', 
+      borderRadius: 1, 
+      backgroundColor: 'rgba(0, 0, 0, 0.02)',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 2
+    }}>
+      {isImage ? (
+        <img 
+          src={fileUrl} 
+          alt={fileName || 'Załącznik'}
+          style={{ 
+            maxWidth: '60px', 
+            maxHeight: '60px', 
+            borderRadius: '4px',
+            cursor: 'pointer' 
+          }}
+          onClick={() => window.open(fileUrl, '_blank')}
+        />
+      ) : (
+        <AttachFileIcon color="action" />
+      )}
+      
+      <Box sx={{ flexGrow: 1 }}>
+        <Typography variant="body2" color="text.primary">
+          {fileName || 'Załączony plik'}
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          Aktualnie załączony plik
+        </Typography>
+      </Box>
+      
+      <Box sx={{ display: 'flex', gap: 1 }}>
+        <Button
+          size="small"
+          variant="outlined"
+          startIcon={<VisibilityIcon />}
+          onClick={() => window.open(fileUrl, '_blank')}
+        >
+          Pokaż
+        </Button>
+        <Button
+          size="small"
+          variant="outlined"
+          color="error"
+          startIcon={<DeleteIcon />}
+          onClick={() => onRemove(fieldName)}
+        >
+          Usuń
+        </Button>
+      </Box>
+    </Box>
+  );
+};
+
 const ProductionControlForm = ({ 
   isDialog = false, 
   onClose = null, 
@@ -198,6 +263,14 @@ const ProductionControlForm = ({
     productPhoto1: null,
     productPhoto2: null,
     productPhoto3: null,
+    documentScansUrl: prefilledData.documentScansUrl || '',
+    documentScansName: prefilledData.documentScansName || '',
+    productPhoto1Url: prefilledData.productPhoto1Url || '',
+    productPhoto1Name: prefilledData.productPhoto1Name || '',
+    productPhoto2Url: prefilledData.productPhoto2Url || '',
+    productPhoto2Name: prefilledData.productPhoto2Name || '',
+    productPhoto3Url: prefilledData.productPhoto3Url || '',
+    productPhoto3Name: prefilledData.productPhoto3Name || '',
     humidity: prefilledData.humidity || '',
     temperature: prefilledData.temperature || ''
   });
@@ -207,6 +280,7 @@ const ProductionControlForm = ({
   const [moOptions, setMoOptions] = useState([]);
   const [loadingMO, setLoadingMO] = useState(false);
   const [editId, setEditId] = useState(null);
+  const [removedAttachments, setRemovedAttachments] = useState([]); // Śledzenie usuniętych załączników
 
   // Ref do timeoutów dla debounce'owania suwaków
   const sliderTimeoutRef = useRef(null);
@@ -344,6 +418,14 @@ const ProductionControlForm = ({
           productPhoto1: null,
           productPhoto2: null,
           productPhoto3: null,
+          documentScansUrl: editData.documentScansUrl || '',
+          documentScansName: editData.documentScansName || '',
+          productPhoto1Url: editData.productPhoto1Url || '',
+          productPhoto1Name: editData.productPhoto1Name || '',
+          productPhoto2Url: editData.productPhoto2Url || '',
+          productPhoto2Name: editData.productPhoto2Name || '',
+          productPhoto3Url: editData.productPhoto3Url || '',
+          productPhoto3Name: editData.productPhoto3Name || '',
           humidity: humidity,
           temperature: temperature
         });
@@ -354,8 +436,27 @@ const ProductionControlForm = ({
     }
   }, [isEditMode]);
 
-  const handleChange = async (e) => {
+  const handleChange = (e) => {
     const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    
+    // Wyczyść błąd walidacji po zmianie wartości
+    if (validationErrors[name]) {
+      setValidationErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+  };
+
+  // Oddzielna funkcja do obsługi zmiany Manufacturing Order
+  const handleMOChange = async (e) => {
+    const { name, value } = e.target;
+    
+    // Najpierw zaktualizuj stan formularza
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -364,14 +465,13 @@ const ProductionControlForm = ({
     // Jeśli zmieniono numer MO, pobierz dodatkowe dane i uzupełnij pola
     if (name === 'manufacturingOrder' && value) {
       try {
-        // Pokaż spinner ładowania
         setLoadingMO(true);
         
         // Pobierz szczegóły MO
         const moDetails = await getMODetailsById(value);
         
         if (moDetails) {
-          // Format daty ważności do wyświetlenia - używamy pełnej daty
+          // Format daty ważności do wyświetlenia
           let formattedExpiryDate = '';
           if (moDetails.expiryDate) {
             try {
@@ -389,8 +489,8 @@ const ProductionControlForm = ({
             ...prev,
             productName: productName,
             lotNumber: moDetails.lotNumber || '',
-            expiryDate: formattedExpiryDate, // Używamy pełnej daty
-            customerOrder: moDetails.orderNumber || '' // Automatycznie ustaw Customer Order
+            expiryDate: formattedExpiryDate,
+            customerOrder: moDetails.orderNumber || ''
           }));
         }
       } catch (error) {
@@ -421,9 +521,30 @@ const ProductionControlForm = ({
     if (file) {
       setFormData(prev => ({
         ...prev,
-        [fieldName]: file
+        [fieldName]: file,
+        // Wyczyść istniejący URL gdy użytkownik wybierze nowy plik
+        [`${fieldName}Url`]: '',
+        [`${fieldName}Name`]: ''
       }));
     }
+  };
+
+  const handleRemoveAttachment = (fieldName) => {
+    // Jeśli istnieje URL do pliku, dodaj go do listy do usunięcia
+    if (formData[`${fieldName}Url`]) {
+      setRemovedAttachments(prev => [...prev, {
+        fieldName,
+        url: formData[`${fieldName}Url`],
+        name: formData[`${fieldName}Name`]
+      }]);
+    }
+    
+    setFormData(prev => ({
+      ...prev,
+      [fieldName]: null,
+      [`${fieldName}Url`]: '',
+      [`${fieldName}Name`]: ''
+    }));
   };
 
   const handleCheckboxChange = (e) => {
@@ -558,13 +679,48 @@ const ProductionControlForm = ({
         const uploadFiles = async () => {
           const fileFields = ['documentScans', 'productPhoto1', 'productPhoto2', 'productPhoto3'];
           
+          // Usuń pliki które zostały oznaczone do usunięcia
+          for (const removedFile of removedAttachments) {
+            try {
+              // Wyciągnij ścieżkę z URL Firebase Storage
+              const url = removedFile.url;
+              if (url.includes('firebase')) {
+                // Dekoduj URL aby uzyskać ścieżkę pliku
+                const baseUrl = 'https://firebasestorage.googleapis.com/v0/b/';
+                const pathStart = url.indexOf('/o/') + 3;
+                const pathEnd = url.indexOf('?');
+                if (pathStart > 2 && pathEnd > pathStart) {
+                  const filePath = decodeURIComponent(url.substring(pathStart, pathEnd));
+                  const fileRef = firebaseStorageRef(storage, filePath);
+                  await deleteObject(fileRef);
+                  console.log(`Usunięto plik: ${filePath}`);
+                }
+              }
+            } catch (error) {
+              console.error('Błąd podczas usuwania pliku:', error);
+              // Kontynuuj mimo błędu usuwania
+            }
+          }
+          
           for (const field of fileFields) {
+            // Sprawdź czy pole zostało usunięte
+            const wasRemoved = removedAttachments.some(removed => removed.fieldName === field);
+            
             if (formData[field]) {
+              // Jeśli wybrano nowy plik, prześlij go
               const storageRef = firebaseStorageRef(storage, `forms/kontrola-produkcji/${formData.manufacturingOrder}/${field}-${Date.now()}-${formData[field].name}`);
               await uploadBytes(storageRef, formData[field]);
               const fileUrl = await getDownloadURL(storageRef);
               odpowiedzData[`${field}Url`] = fileUrl;
               odpowiedzData[`${field}Name`] = formData[field].name;
+            } else if (formData[`${field}Url`] && !wasRemoved) {
+              // Jeśli nie wybrano nowego pliku ale istnieje URL i nie został usunięty, zachowaj go
+              odpowiedzData[`${field}Url`] = formData[`${field}Url`];
+              odpowiedzData[`${field}Name`] = formData[`${field}Name`];
+            } else if (wasRemoved) {
+              // Jeśli plik został usunięty, ustaw pola na null
+              odpowiedzData[`${field}Url`] = null;
+              odpowiedzData[`${field}Name`] = null;
             }
           }
         };
@@ -584,6 +740,9 @@ const ProductionControlForm = ({
         }
         
       setSubmitted(true);
+      
+      // Wyczyść listę usuniętych załączników po pomyślnym zapisie
+      setRemovedAttachments([]);
       
       // W trybie dialogu - wywołaj callback i zamknij dialog
       if (isDialog) {
@@ -623,9 +782,18 @@ const ProductionControlForm = ({
           productPhoto1: null,
           productPhoto2: null,
           productPhoto3: null,
+          documentScansUrl: '',
+          documentScansName: '',
+          productPhoto1Url: '',
+          productPhoto1Name: '',
+          productPhoto2Url: '',
+          productPhoto2Name: '',
+          productPhoto3Url: '',
+          productPhoto3Name: '',
           humidity: '',
           temperature: ''
         });
+        setRemovedAttachments([]); // Wyczyść listę usuniętych załączników
       }
       } catch (error) {
         console.error('Błąd podczas zapisywania formularza kontroli produkcji:', error);
@@ -651,7 +819,8 @@ const ProductionControlForm = ({
     };
   }, []);
 
-  const FormContent = () => (
+  // Główny content formularza
+  const formContent = (
     <>
       <Box sx={{ mb: 3 }}>
         <Typography variant="h5" gutterBottom align="center" fontWeight="bold">
@@ -755,7 +924,7 @@ const ProductionControlForm = ({
                 <Select
                   name="manufacturingOrder"
                   value={formData.manufacturingOrder}
-                  onChange={handleChange}
+                  onChange={handleMOChange}
                   label="Manufacturing Order"
                   disabled={loadingMO}
                   startAdornment={
@@ -1071,11 +1240,23 @@ const ProductionControlForm = ({
                 <FormLabel component="legend">Numer zmiany produkcji</FormLabel>
                 <FormGroup>
                   <FormControlLabel
-                    control={<Checkbox onChange={handleCheckboxChange} value="Zmiana 1" />}
+                    control={
+                      <Checkbox 
+                        onChange={handleCheckboxChange} 
+                        value="Zmiana 1"
+                        checked={formData.shiftNumber.includes("Zmiana 1")}
+                      />
+                    }
                     label="Zmiana 1"
                   />
                   <FormControlLabel
-                    control={<Checkbox onChange={handleCheckboxChange} value="Zmiana 2" />}
+                    control={
+                      <Checkbox 
+                        onChange={handleCheckboxChange} 
+                        value="Zmiana 2"
+                        checked={formData.shiftNumber.includes("Zmiana 2")}
+                      />
+                    }
                     label="Zmiana 2"
                   />
                 </FormGroup>
@@ -1145,6 +1326,14 @@ const ProductionControlForm = ({
               <Typography variant="body2" color="text.secondary" gutterBottom>
                 Np. Plan mieszań
               </Typography>
+              
+              <ExistingAttachment
+                fileUrl={formData.documentScansUrl}
+                fileName={formData.documentScansName}
+                onRemove={handleRemoveAttachment}
+                fieldName="documentScans"
+              />
+              
               <input
                 type="file"
                 onChange={(e) => handleFileChange(e, 'documentScans')}
@@ -1159,6 +1348,14 @@ const ProductionControlForm = ({
               <Typography variant="body2" color="text.secondary" gutterBottom>
                 Zdjęcie produktu od frontu
               </Typography>
+              
+              <ExistingAttachment
+                fileUrl={formData.productPhoto1Url}
+                fileName={formData.productPhoto1Name}
+                onRemove={handleRemoveAttachment}
+                fieldName="productPhoto1"
+              />
+              
               <input
                 type="file"
                 onChange={(e) => handleFileChange(e, 'productPhoto1')}
@@ -1173,6 +1370,14 @@ const ProductionControlForm = ({
               <Typography variant="body2" color="text.secondary" gutterBottom>
                 Zdjęcie produktu z widocznym nr. LOT - EXP
               </Typography>
+              
+              <ExistingAttachment
+                fileUrl={formData.productPhoto2Url}
+                fileName={formData.productPhoto2Name}
+                onRemove={handleRemoveAttachment}
+                fieldName="productPhoto2"
+              />
+              
               <input
                 type="file"
                 onChange={(e) => handleFileChange(e, 'productPhoto2')}
@@ -1187,6 +1392,14 @@ const ProductionControlForm = ({
               <Typography variant="body2" color="text.secondary" gutterBottom>
                 Zdjęcie zapakowanego produktu w karton z widoczną etykietą
               </Typography>
+              
+              <ExistingAttachment
+                fileUrl={formData.productPhoto3Url}
+                fileName={formData.productPhoto3Name}
+                onRemove={handleRemoveAttachment}
+                fieldName="productPhoto3"
+              />
+              
               <input
                 type="file"
                 onChange={(e) => handleFileChange(e, 'productPhoto3')}
@@ -1223,14 +1436,14 @@ const ProductionControlForm = ({
 
   // W trybie dialogu zwróć tylko zawartość formularza
   if (isDialog) {
-    return <FormContent />;
+    return formContent;
   }
 
   // W trybie normalnym zwróć formularz w kontenerze
   return (
     <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
       <Paper sx={{ p: 4 }}>
-        <FormContent />
+        {formContent}
       </Paper>
     </Container>
   );

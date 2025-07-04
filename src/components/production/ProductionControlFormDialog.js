@@ -20,13 +20,57 @@ const ProductionControlFormDialog = ({
   const preparePrefilledData = () => {
     if (!task) return {};
 
+    // Funkcja pomocnicza do formatowania daty
+    const formatExpiryDate = (dateValue) => {
+      try {
+        if (!dateValue) return '';
+        
+        let date;
+        
+        // Jeśli to obiekt Date
+        if (dateValue instanceof Date) {
+          date = dateValue;
+        }
+        // Jeśli to timestamp Firestore
+        else if (dateValue.toDate && typeof dateValue.toDate === 'function') {
+          date = dateValue.toDate();
+        }
+        // Jeśli to timestamp z sekundami
+        else if (dateValue.seconds) {
+          date = new Date(dateValue.seconds * 1000);
+        }
+        // Jeśli to string
+        else if (typeof dateValue === 'string') {
+          date = new Date(dateValue);
+        } else {
+          return '';
+        }
+        
+        // Sprawdź czy data jest poprawna
+        if (isNaN(date.getTime())) {
+          console.error('Invalid date format:', dateValue);
+          return '';
+        }
+        
+        // Formatuj datę do wyświetlenia w formacie DD.MM.YYYY (format polski)
+        return date.toLocaleDateString('pl-PL', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        });
+      } catch (error) {
+        console.error('Error formatting expiry date:', error, dateValue);
+        return '';
+      }
+    };
+
     return {
       manufacturingOrder: task.moNumber || '',
       customerOrder: task.orderNumber || '',
       productName: task.productName || '',
       lotNumber: task.lotNumber || `SN/${task.moNumber}`,
       quantity: task.quantity || '',
-      expiryDate: task.expiryDate ? new Date(task.expiryDate) : null
+      expiryDate: formatExpiryDate(task.expiryDate)
     };
   };
 

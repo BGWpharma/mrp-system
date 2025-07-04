@@ -20,13 +20,78 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { pl } from 'date-fns/locale';
 import { formatDateForInput } from '../../utils/dateUtils';
-import { Send as SendIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
+import { Send as SendIcon, ArrowBack as ArrowBackIcon, Delete as DeleteIcon, Visibility as VisibilityIcon, AttachFile as AttachFileIcon } from '@mui/icons-material';
 import { getMONumbersForSelect } from '../../services/moService';
 import { db, storage } from '../../services/firebase/config';
 import { collection, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+
+// Komponent do wyświetlania istniejącego załącznika
+const ExistingAttachment = ({ fileUrl, fileName, onRemove }) => {
+  if (!fileUrl) return null;
+
+  const isImage = fileName && /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(fileName);
+
+  return (
+    <Box sx={{ 
+      mt: 1, 
+      p: 2, 
+      border: '1px solid #e0e0e0', 
+      borderRadius: 1, 
+      backgroundColor: 'rgba(0, 0, 0, 0.02)',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 2
+    }}>
+      {isImage ? (
+        <img 
+          src={fileUrl} 
+          alt={fileName || 'Załącznik'}
+          style={{ 
+            maxWidth: '60px', 
+            maxHeight: '60px', 
+            borderRadius: '4px',
+            cursor: 'pointer' 
+          }}
+          onClick={() => window.open(fileUrl, '_blank')}
+        />
+      ) : (
+        <AttachFileIcon color="action" />
+      )}
+      
+      <Box sx={{ flexGrow: 1 }}>
+        <Typography variant="body2" color="text.primary">
+          {fileName || 'Załączony plik'}
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          Aktualnie załączony plik
+        </Typography>
+      </Box>
+      
+      <Box sx={{ display: 'flex', gap: 1 }}>
+        <Button
+          size="small"
+          variant="outlined"
+          startIcon={<VisibilityIcon />}
+          onClick={() => window.open(fileUrl, '_blank')}
+        >
+          Pokaż
+        </Button>
+        <Button
+          size="small"
+          variant="outlined"
+          color="error"
+          startIcon={<DeleteIcon />}
+          onClick={onRemove}
+        >
+          Usuń
+        </Button>
+      </Box>
+    </Box>
+  );
+};
 
 const CompletedMOForm = () => {
   const navigate = useNavigate();
@@ -44,7 +109,9 @@ const CompletedMOForm = () => {
     packagingLoss: '',
     bulkLoss: '',
     rawMaterialLoss: '',
-    mixingPlanReport: null
+    mixingPlanReport: null,
+    mixingPlanReportUrl: '',
+    mixingPlanReportName: ''
   });
 
   const [editId, setEditId] = useState(null);
@@ -52,6 +119,7 @@ const CompletedMOForm = () => {
   const [submitted, setSubmitted] = useState(false);
   const [moOptions, setMoOptions] = useState([]);
   const [loadingMO, setLoadingMO] = useState(false);
+  const [removedAttachments, setRemovedAttachments] = useState([]); // Śledzenie usuniętych załączników
 
   // Sprawdź, czy istnieją dane do edycji w sessionStorage
   useEffect(() => {
@@ -72,7 +140,9 @@ const CompletedMOForm = () => {
           packagingLoss: editData.packagingLoss || '',
           bulkLoss: editData.bulkLoss || '',
           rawMaterialLoss: editData.rawMaterialLoss || '',
-          mixingPlanReport: null // Pliki muszą być wybrane ponownie
+          mixingPlanReport: null,
+          mixingPlanReportUrl: editData.mixingPlanReportUrl || '',
+          mixingPlanReportName: editData.mixingPlanReportName || ''
         });
         setEditId(editData.id);
       }
@@ -134,9 +204,29 @@ const CompletedMOForm = () => {
     if (file) {
       setFormData(prev => ({
         ...prev,
-        mixingPlanReport: file
+        mixingPlanReport: file,
+        // Wyczyść istniejący URL gdy użytkownik wybierze nowy plik
+        mixingPlanReportUrl: '',
+        mixingPlanReportName: ''
       }));
     }
+  };
+
+  const handleRemoveAttachment = () => {
+    // Jeśli istnieje URL do pliku, dodaj go do listy do usunięcia
+    if (formData.mixingPlanReportUrl) {
+      setRemovedAttachments(prev => [...prev, {
+        url: formData.mixingPlanReportUrl,
+        name: formData.mixingPlanReportName
+      }]);
+    }
+    
+    setFormData(prev => ({
+      ...prev,
+      mixingPlanReport: null,
+      mixingPlanReportUrl: '',
+      mixingPlanReportName: ''
+    }));
   };
 
   const validate = () => {
@@ -197,13 +287,48 @@ const CompletedMOForm = () => {
           createdAt: serverTimestamp()
         };
         
-        // Jeśli dołączono plik, prześlij go do Firebase Storage
+        // Obsługa plików
+        // Usuń pliki które zostały oznaczone do usunięcia
+        for (const removedFile of removedAttachments) {
+          try {
+            // Wyciągnij ścieżkę z URL Firebase Storage
+            const url = removedFile.url;
+            if (url.includes('firebase')) {
+              // Dekoduj URL aby uzyskać ścieżkę pliku
+              const baseUrl = 'https://firebasestorage.googleapis.com/v0/b/';
+              const pathStart = url.indexOf('/o/') + 3;
+              const pathEnd = url.indexOf('?');
+              if (pathStart > 2 && pathEnd > pathStart) {
+                const filePath = decodeURIComponent(url.substring(pathStart, pathEnd));
+                const fileRef = ref(storage, filePath);
+                await deleteObject(fileRef);
+                console.log(`Usunięto plik: ${filePath}`);
+              }
+            }
+          } catch (error) {
+            console.error('Błąd podczas usuwania pliku:', error);
+            // Kontynuuj mimo błędu usuwania
+          }
+        }
+        
+        // Sprawdź czy plik został usunięty
+        const wasRemoved = removedAttachments.length > 0;
+        
         if (formData.mixingPlanReport) {
+          // Jeśli wybrano nowy plik, prześlij go
           const storageRef = ref(storage, `forms/skonczone-mo/${formData.moNumber}/${Date.now()}-${formData.mixingPlanReport.name}`);
           await uploadBytes(storageRef, formData.mixingPlanReport);
           const fileUrl = await getDownloadURL(storageRef);
           odpowiedzData.mixingPlanReportUrl = fileUrl;
           odpowiedzData.mixingPlanReportName = formData.mixingPlanReport.name;
+        } else if (formData.mixingPlanReportUrl && !wasRemoved) {
+          // Jeśli nie wybrano nowego pliku ale istnieje URL i nie został usunięty, zachowaj go
+          odpowiedzData.mixingPlanReportUrl = formData.mixingPlanReportUrl;
+          odpowiedzData.mixingPlanReportName = formData.mixingPlanReportName;
+        } else if (wasRemoved) {
+          // Jeśli plik został usunięty, ustaw pola na null
+          odpowiedzData.mixingPlanReportUrl = null;
+          odpowiedzData.mixingPlanReportName = null;
         }
         
         // Zapisz odpowiedź w Firestore
@@ -220,6 +345,9 @@ const CompletedMOForm = () => {
         
         setSubmitted(true);
         
+        // Wyczyść listę usuniętych załączników po pomyślnym zapisie
+        setRemovedAttachments([]);
+        
         // Reset formularza po pomyślnym wysłaniu
         setFormData({
           email: '',
@@ -230,8 +358,11 @@ const CompletedMOForm = () => {
           packagingLoss: '',
           bulkLoss: '',
           rawMaterialLoss: '',
-          mixingPlanReport: null
+          mixingPlanReport: null,
+          mixingPlanReportUrl: '',
+          mixingPlanReportName: ''
         });
+        setRemovedAttachments([]); // Wyczyść listę usuniętych załączników
       } catch (error) {
         console.error('Błąd podczas zapisywania formularza:', error);
         alert(`Wystąpił błąd podczas zapisywania formularza: ${error.message}`);
@@ -396,16 +527,18 @@ const CompletedMOForm = () => {
               <Typography variant="subtitle2" gutterBottom>
                 Raport z planu mieszań:
               </Typography>
+              
+              <ExistingAttachment
+                fileUrl={formData.mixingPlanReportUrl}
+                fileName={formData.mixingPlanReportName}
+                onRemove={handleRemoveAttachment}
+              />
+              
               <input
                 type="file"
                 onChange={handleFileChange}
                 style={{ width: '100%', marginTop: '8px' }}
               />
-              {isEditMode && formData.mixingPlanReportUrl && (
-                <Typography variant="caption" color="primary">
-                  Aktualny plik: {formData.mixingPlanReportName}
-                </Typography>
-              )}
             </Grid>
             
             <Grid item xs={12}>
