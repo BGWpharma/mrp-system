@@ -29,10 +29,11 @@ import {
   FormControlLabel,
   Checkbox,
   Autocomplete,
-  Switch
+  Switch,
+  Tooltip
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import pl from 'date-fns/locale/pl';
 import enUS from 'date-fns/locale/en-US';
 import { useAuth } from '../../../hooks/useAuth';
@@ -41,7 +42,6 @@ import {
   getAllCmrDocuments, 
   CMR_STATUSES,
   CMR_PAYMENT_STATUSES,
-  TRANSPORT_TYPES,
   deleteCmrDocument,
   generateCmrReport,
   translatePaymentStatus,
@@ -54,11 +54,11 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import LocalShippingIcon from '@mui/icons-material/LocalShipping';
-import NoteIcon from '@mui/icons-material/Note';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import GetAppIcon from '@mui/icons-material/GetApp';
 import TranslateIcon from '@mui/icons-material/Translate';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 
 // Słownik tłumaczeń dla raportów
 const translations = {
@@ -145,6 +145,9 @@ const CmrListPage = () => {
   const [cmrToUpdatePaymentStatus, setCmrToUpdatePaymentStatus] = useState(null);
   const [newPaymentStatus, setNewPaymentStatus] = useState('');
   
+  // Stan sortowania
+  const [sortOrder, setSortOrder] = useState('asc'); // 'asc' lub 'desc'
+  
   // Nowe stany dla generowania raportów
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [reportFilters, setReportFilters] = useState({
@@ -154,7 +157,8 @@ const CmrListPage = () => {
     recipient: '',
     status: '',
     includeItems: true,
-    language: 'pl' // Domyślny język - polski
+    language: 'pl', // Domyślny język - polski
+    sort: 'asc' // Domyślna kolejność sortowania
   });
   const [reportData, setReportData] = useState(null);
   const [generatingReport, setGeneratingReport] = useState(false);
@@ -181,6 +185,28 @@ const CmrListPage = () => {
       setLoading(false);
     }
   };
+
+  // Funkcja sortująca dokumenty CMR według daty wystawienia
+  const sortCmrDocuments = (documents, order) => {
+    return [...documents].sort((a, b) => {
+      const dateA = a.issueDate ? new Date(a.issueDate) : new Date(0);
+      const dateB = b.issueDate ? new Date(b.issueDate) : new Date(0);
+      
+      if (order === 'asc') {
+        return dateA - dateB; // od najstarszej do najnowszej
+      } else {
+        return dateB - dateA; // od najnowszej do najstarszej
+      }
+    });
+  };
+
+  // Funkcja do przełączania kolejności sortowania
+  const handleToggleSort = () => {
+    setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+  };
+
+  // Posortowane dokumenty na podstawie aktualnej kolejności sortowania
+  const sortedCmrDocuments = sortCmrDocuments(cmrDocuments, sortOrder);
   
   const fetchCustomers = async () => {
     try {
@@ -505,9 +531,16 @@ const CmrListPage = () => {
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: { xs: 'column', sm: 'row' } }}>
-        <Typography variant="h5">
-          Dokumenty CMR
-        </Typography>
+        <Box>
+          <Typography variant="h5">
+            Dokumenty CMR
+          </Typography>
+          {cmrDocuments.length > 0 && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              Sortowanie: {sortOrder === 'asc' ? 'od najstarszej do najnowszej' : 'od najnowszej do najstarszej'} daty wystawienia
+            </Typography>
+          )}
+        </Box>
         <Box sx={{ 
           display: 'flex', 
           gap: 1, 
@@ -551,7 +584,20 @@ const CmrListPage = () => {
             <TableHead>
               <TableRow>
                 <TableCell>Numer CMR</TableCell>
-                <TableCell>Data wystawienia</TableCell>
+                <TableCell>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    Data wystawienia
+                    <Tooltip title={`Sortuj ${sortOrder === 'asc' ? 'od najnowszej' : 'od najstarszej'}`}>
+                      <IconButton 
+                        size="small" 
+                        onClick={handleToggleSort}
+                        sx={{ ml: 1 }}
+                      >
+                        {sortOrder === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />}
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                </TableCell>
                 <TableCell>Nadawca</TableCell>
                 <TableCell>Odbiorca</TableCell>
                 <TableCell>Status</TableCell>
@@ -560,7 +606,7 @@ const CmrListPage = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {cmrDocuments.map((cmr) => (
+              {sortedCmrDocuments.map((cmr) => (
                 <TableRow key={cmr.id}>
                   <TableCell>{cmr.cmrNumber}</TableCell>
                   <TableCell>{formatDate(cmr.issueDate)}</TableCell>

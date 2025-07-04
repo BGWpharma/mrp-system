@@ -26,6 +26,13 @@ const searchCache = {
   timestamp: new Map(),
   maxCacheAge: 60 * 1000, // 60 sekund (1 minuta)
   
+  // Nowy cache dla wyszukiwania pozycji magazynowych
+  inventorySearchCache: new Map(),
+  inventorySearchTimestamp: new Map(),
+  
+  // Debouncing dla wyszukiwania pozycji magazynowych
+  inventorySearchTimeout: null,
+  
   // Generuje klucz cache na podstawie parametrów zapytania
   generateKey(page, itemsPerPage, sortField, sortOrder, filters) {
     // Uwzględnij wszystkie filtry w kluczu cache, szczególnie searchTerm
@@ -90,6 +97,8 @@ const searchCache = {
   clear() {
     this.results.clear();
     this.timestamp.clear();
+    this.inventorySearchCache.clear();
+    this.inventorySearchTimestamp.clear();
     console.log('Cache został wyczyszczony');
   },
   
@@ -108,6 +117,9 @@ const searchCache = {
         this.timestamp.delete(key);
       }
     }
+    // Wyczyść również cache wyszukiwania pozycji magazynowych
+    this.inventorySearchCache.clear();
+    this.inventorySearchTimestamp.clear();
     console.log('Cache wyszukiwania został wyczyszczony');
   }
 };
@@ -214,12 +226,20 @@ export const getAllPurchaseOrders = async () => {
 };
 
 /**
- * Pobiera zamówienia zakupowe z paginacją
+ * Pobiera zamówienia zakupowe z paginacją i zaawansowanym wyszukiwaniem
+ * 
+ * NOWE FUNKCJE WYSZUKIWANIA:
+ * - Wyszukuje w pozycjach zamówienia (nazwy produktów, kody, opisy)
+ * - Wyszukuje w pozycjach magazynowych powiązanych z zamówieniami
+ * - Używa cache dla lepszej wydajności
+ * - Obsługuje debouncing dla wyszukiwania pozycji magazynowych
+ * 
  * @param {number} page - Numer strony (numeracja od 1)
  * @param {number} itemsPerPage - Liczba elementów na stronę
  * @param {string} sortField - Pole, po którym sortujemy
  * @param {string} sortOrder - Kierunek sortowania (asc/desc)
  * @param {Object} filters - Opcjonalne filtry (status, searchTerm, dateFrom, dateTo, supplierName, priceMin, priceMax)
+ *   - searchTerm: Wyszukuje w numerach PO, notatkach, nazwach dostawców, nazwach produktów w pozycjach
  * @param {boolean} useCache - Czy używać cache (domyślnie true)
  * @returns {Object} - Obiekt zawierający dane i metadane paginacji
  */
@@ -395,6 +415,47 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
             return true;
           }
           
+          // NOWE: Szukaj w pozycjach zamówienia (items)
+          if (data.items && Array.isArray(data.items)) {
+            const foundInItems = data.items.some(item => {
+              // Szukaj w nazwie produktu
+              if (item.name && item.name.toLowerCase().includes(searchTerm)) {
+                console.log(`✓ Znaleziono dopasowanie w nazwie produktu: ${item.name}`);
+                return true;
+              }
+              
+              // Szukaj w kodzie produktu/SKU (jeśli istnieje)
+              if (item.code && item.code.toLowerCase().includes(searchTerm)) {
+                console.log(`✓ Znaleziono dopasowanie w kodzie produktu: ${item.code}`);
+                return true;
+              }
+              
+              // Szukaj w numerze katalogowym (jeśli istnieje)
+              if (item.catalogNumber && item.catalogNumber.toLowerCase().includes(searchTerm)) {
+                console.log(`✓ Znaleziono dopasowanie w numerze katalogowym: ${item.catalogNumber}`);
+                return true;
+              }
+              
+              // Szukaj w opisie pozycji (jeśli istnieje)
+              if (item.description && item.description.toLowerCase().includes(searchTerm)) {
+                console.log(`✓ Znaleziono dopasowanie w opisie pozycji: ${item.description}`);
+                return true;
+              }
+              
+              // Szukaj w numerze faktury pozycji (może być przydatne)
+              if (item.invoiceNumber && item.invoiceNumber.toLowerCase().includes(searchTerm)) {
+                console.log(`✓ Znaleziono dopasowanie w numerze faktury pozycji: ${item.invoiceNumber}`);
+                return true;
+              }
+              
+              return false;
+            });
+            
+            if (foundInItems) {
+              return true;
+            }
+          }
+          
           return false;
         });
         
@@ -467,6 +528,110 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
         allDocs = Array.from(combinedDocsMap.values());
         
         console.log(`Łącznie znaleziono ${allDocs.length} zamówień dla zapytania '${searchTerm}'`);
+        
+        // NOWE: Wyszukiwanie dodatkowe w pozycjach magazynowych
+        // Pobierz pozycje magazynowe pasujące do zapytania wyszukiwania
+        if (searchTerm.length >= 3) { // Zwiększono do 3 znaków dla lepszej wydajności
+          const inventorySearchStartTime = Date.now();
+          try {
+            console.log(`[PERFORMANCE] Rozpoczynam wyszukiwanie w pozycjach magazynowych dla: "${searchTerm}"`);
+            
+            // Sprawdź cache dla wyszukiwania pozycji magazynowych
+            const inventoryCacheKey = searchTerm.toLowerCase().trim();
+            const now = Date.now();
+            let matchingInventoryItemIds = new Set();
+            
+            if (searchCache.inventorySearchCache.has(inventoryCacheKey) && 
+                searchCache.inventorySearchTimestamp.has(inventoryCacheKey)) {
+              const cacheTime = searchCache.inventorySearchTimestamp.get(inventoryCacheKey);
+              if (now - cacheTime < searchCache.maxCacheAge) {
+                matchingInventoryItemIds = searchCache.inventorySearchCache.get(inventoryCacheKey);
+                console.log(`Używam cache dla wyszukiwania pozycji magazynowych: ${matchingInventoryItemIds.size} pozycji`);
+              }
+            }
+            
+            // Jeśli nie ma w cache lub cache wygasł, wykonaj wyszukiwanie
+            if (matchingInventoryItemIds.size === 0) {
+              try {
+                // Importuj i użyj funkcji wyszukiwania pozycji magazynowych
+                const { getAllInventoryItems } = await import('./inventoryService');
+                const inventorySearchResult = await getAllInventoryItems(
+                  null, // warehouseId - wszystkie magazyny
+                  1, // page - pierwsza strona
+                  50, // pageSize - ograniczenie do 50 najlepszych wyników dla wydajności
+                  searchTerm, // searchTerm - nasze zapytanie
+                  null, // searchCategory
+                  'name', // sortField - sortuj po nazwie dla lepszych wyników
+                  'asc'  // sortOrder - rosnąco
+                );
+                
+                // Wyciągnij ID pozycji magazynowych, które pasują do wyszukiwania
+                matchingInventoryItemIds = new Set(
+                  inventorySearchResult.map ? inventorySearchResult.map(item => item.id) : 
+                  inventorySearchResult.items ? inventorySearchResult.items.map(item => item.id) : []
+                );
+                
+                // Zapisz w cache tylko jeśli znaleziono wyniki
+                if (matchingInventoryItemIds.size > 0) {
+                  searchCache.inventorySearchCache.set(inventoryCacheKey, matchingInventoryItemIds);
+                  searchCache.inventorySearchTimestamp.set(inventoryCacheKey, now);
+                  console.log(`Zapisano ${matchingInventoryItemIds.size} pozycji magazynowych w cache`);
+                } else {
+                  // Zapisz również puste wyniki w cache, aby uniknąć powtórnych zapytań
+                  searchCache.inventorySearchCache.set(inventoryCacheKey, new Set());
+                  searchCache.inventorySearchTimestamp.set(inventoryCacheKey, now);
+                  console.log(`Zapisano pusty wynik wyszukiwania pozycji magazynowych w cache`);
+                }
+              } catch (inventoryError) {
+                console.warn('Błąd podczas wyszukiwania pozycji magazynowych:', inventoryError);
+                // W przypadku błędu, kontynuuj bez pozycji magazynowych
+                matchingInventoryItemIds = new Set();
+              }
+            }
+            
+            const inventorySearchDuration = Date.now() - inventorySearchStartTime;
+            console.log(`[PERFORMANCE] Wyszukiwanie pozycji magazynowych zakończone w ${inventorySearchDuration}ms. Znaleziono ${matchingInventoryItemIds.size} pozycji`);
+            
+            if (matchingInventoryItemIds.size > 0) {
+              // Znajdź zamówienia zawierające te pozycje magazynowe
+              // Optymalizacja: użyj Set dla szybszego dostępu
+              const existingOrderIds = new Set(allDocs.map(doc => doc.id));
+              let addedCount = 0;
+              
+              // Przefiltruj wszystkie dokumenty, ale tylko te, które jeszcze nie są w wynikach
+              const inventoryMatchingDocs = allDocs.filter(doc => {
+                if (existingOrderIds.has(doc.id)) {
+                  return false; // Już mamy to zamówienie
+                }
+                
+                const data = doc.data();
+                if (data.items && Array.isArray(data.items)) {
+                  return data.items.some(item => 
+                    item.inventoryItemId && matchingInventoryItemIds.has(item.inventoryItemId)
+                  );
+                }
+                return false;
+              });
+              
+              console.log(`Znaleziono ${inventoryMatchingDocs.length} nowych zamówień z pasującymi pozycjami magazynowymi`);
+              
+              // Dodaj znalezione zamówienia do wyników
+              for (const doc of inventoryMatchingDocs) {
+                if (!existingOrderIds.has(doc.id)) {
+                  allDocs.push(doc);
+                  existingOrderIds.add(doc.id);
+                  addedCount++;
+                }
+              }
+              
+              console.log(`Dodano ${addedCount} nowych zamówień. Łącznie: ${allDocs.length} zamówień`);
+            }
+          } catch (error) {
+            const inventorySearchDuration = Date.now() - inventorySearchStartTime;
+            console.warn(`[PERFORMANCE] Błąd podczas wyszukiwania w pozycjach magazynowych po ${inventorySearchDuration}ms:`, error);
+            // Kontynuuj bez tego wyszukiwania w przypadku błędu
+          }
+        }
         
         // Zbierz ID dostawców do późniejszego pobrania
         allDocs.forEach(doc => {
