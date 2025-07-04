@@ -789,6 +789,10 @@ const ItemDetailsPage = () => {
                         <TableCell component="th" sx={{ fontWeight: 'medium' }}>Ilość produktu per karton</TableCell>
                         <TableCell>{item.itemsPerBox ? `${formatQuantity(item.itemsPerBox)} ${item.unit}` : 'Nie określono'}</TableCell>
                       </TableRow>
+                      <TableRow>
+                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>Waga</TableCell>
+                        <TableCell>{item.weight ? `${formatQuantity(item.weight)} kg` : 'Nie określono'}</TableCell>
+                      </TableRow>
                     </TableBody>
                   </Table>
                 </TableContainer>

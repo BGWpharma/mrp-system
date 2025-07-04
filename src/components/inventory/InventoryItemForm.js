@@ -410,6 +410,26 @@ const InventoryItemForm = ({ itemId }) => {
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
               />
             </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Waga (kg)"
+                name="weight"
+                type="number"
+                value={itemData.weight || ''}
+                onChange={handleChange}
+                inputProps={{ min: 0, step: 0.001 }}
+                helperText="Waga jednostkowa produktu w kilogramach"
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                InputProps={{
+                  endAdornment: (
+                    <Box sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
+                      kg
+                    </Box>
+                  ),
+                }}
+              />
+            </Grid>
           </Grid>
         </Box>
       </Paper>
