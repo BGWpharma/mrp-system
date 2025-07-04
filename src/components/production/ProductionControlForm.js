@@ -141,7 +141,8 @@ const getMODetailsById = async (moNumber) => {
         productName: productName,
         lotNumber: taskData.lotNumber || `SN/${taskData.moNumber}`,
         expiryDate: expiryDate,
-        quantity: taskData.quantity || ''
+        quantity: taskData.quantity || '',
+        orderNumber: taskData.orderNumber || '' // Dodaj orderNumber
       };
     }
     
@@ -383,7 +384,8 @@ const ProductionControlForm = () => {
             ...prev,
             productName: productName,
             lotNumber: moDetails.lotNumber || '',
-            expiryDate: formattedExpiryDate // Używamy pełnej daty
+            expiryDate: formattedExpiryDate, // Używamy pełnej daty
+            customerOrder: moDetails.orderNumber || '' // Automatycznie ustaw Customer Order
           }));
         }
       } catch (error) {
