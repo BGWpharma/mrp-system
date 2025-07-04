@@ -435,7 +435,7 @@ const CmrDetailsPage = () => {
         
         // Cechy i numery (pole 6)
         let marksText = items.map((item, index) => 
-          index === 0 ? item.id || '' : '\n\n\n' + (item.id || '') // Trzy znaki nowej linii dla większego odstępu
+          index === 0 ? item.id || '' : '\n\n\n' + (item.id || '')
         ).join('');
         addTextToField('field-marks', marksText, '7px');
         
@@ -447,13 +447,13 @@ const CmrDetailsPage = () => {
         
         // Sposób opakowania (pole 8)
         let packingText = items.map((item, index) => 
-          index === 0 ? item.unit || '' : '\n\n' + (item.unit || '') // Przywrócone do dwóch znaków nowej linii
+          index === 0 ? item.unit || '' : '\n\n\n' + (item.unit || '')
         ).join('');
         addTextToField('field-packing', packingText, '7px');
         
         // Rodzaj towaru (pole 9)
         let goodsText = items.map((item, index) => 
-          index === 0 ? item.description || '' : '\n\n' + (item.description || '') // Przywrócone do dwóch znaków nowej linii
+          index === 0 ? item.description || '' : '\n\n\n' + (item.description || '')
         ).join('');
         addTextToField('field-goods', goodsText, '7px');
         

@@ -40,10 +40,10 @@
       <rect id="field-goods" x="70" y="440" width="80" height="220" fill="rgba(0,0,255,0.2)" stroke="blue" stroke-width="2" data-field-name="goods" opacity="0"/>
       
       <!-- Pole 11: Waga brutto -->
-      <rect id="field-weight" x="530" y="440" width="65" height="125" fill="rgba(0,0,255,0.2)" stroke="blue" stroke-width="2" data-field-name="weight" opacity="0"/>
+      <rect id="field-weight" x="530" y="440" width="65" height="220" fill="rgba(0,0,255,0.2)" stroke="blue" stroke-width="2" data-field-name="weight" opacity="0"/>
       
       <!-- Pole 12: Objętość -->
-      <rect id="field-volume" x="620" y="440" width="65" height="125" fill="rgba(0,0,255,0.2)" stroke="blue" stroke-width="2" data-field-name="volume" opacity="0"/>
+      <rect id="field-volume" x="620" y="440" width="65" height="220" fill="rgba(0,0,255,0.2)" stroke="blue" stroke-width="2" data-field-name="volume" opacity="0"/>
       
       <!-- Pole 13: Instrukcje nadawcy -->
       <rect id="field-instructions" x="70" y="710" width="310" height="125" fill="rgba(0,255,0,0.2)" stroke="green" stroke-width="2" data-field-name="instructions" opacity="0"/>
