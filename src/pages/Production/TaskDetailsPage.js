@@ -115,6 +115,9 @@ import { getUsersDisplayNames } from '../../services/userService';
 import { getCompanyData } from '../../services/companyService';
 import { getWorkstationById } from '../../services/workstationService';
 import { generateEndProductReportPDF } from '../../services/endProductReportService';
+import ProductionControlFormDialog from '../../components/production/ProductionControlFormDialog';
+import CompletedMOFormDialog from '../../components/production/CompletedMOFormDialog';
+import ProductionShiftFormDialog from '../../components/production/ProductionShiftFormDialog';
 
 const TaskDetailsPage = () => {
   const { id } = useParams();
@@ -198,6 +201,11 @@ const TaskDetailsPage = () => {
     productionShift: []
   });
   const [loadingFormResponses, setLoadingFormResponses] = useState(false);
+  
+  // Stany dla dialogów formularzy produkcyjnych
+  const [productionControlDialogOpen, setProductionControlDialogOpen] = useState(false);
+  const [completedMODialogOpen, setCompletedMODialogOpen] = useState(false);
+  const [productionShiftDialogOpen, setProductionShiftDialogOpen] = useState(false);
   const [formTab, setFormTab] = useState(0);
 
   // Nowe stany dla opcji dodawania do magazynu w dialogu historii produkcji
@@ -3800,6 +3808,30 @@ const TaskDetailsPage = () => {
   };
 
   // Funkcja do pobierania odpowiedzi formularzy powiązanych z zadaniem
+  const handleProductionControlFormSuccess = (formData) => {
+    showSuccess('Formularz kontroli produkcji został zapisany pomyślnie!');
+    // Odśwież formularze produkcyjne dla tego zadania
+    if (task?.moNumber) {
+      fetchFormResponses(task.moNumber);
+    }
+  };
+
+  const handleCompletedMOFormSuccess = (formData) => {
+    showSuccess('Raport zakończonego MO został zapisany pomyślnie!');
+    // Odśwież formularze produkcyjne dla tego zadania
+    if (task?.moNumber) {
+      fetchFormResponses(task.moNumber);
+    }
+  };
+
+  const handleProductionShiftFormSuccess = (formData) => {
+    showSuccess('Raport zmiany produkcyjnej został zapisany pomyślnie!');
+    // Odśwież formularze produkcyjne dla tego zadania
+    if (task?.moNumber) {
+      fetchFormResponses(task.moNumber);
+    }
+  };
+
   const fetchFormResponses = async (moNumber) => {
     if (!moNumber) return;
     
@@ -6141,7 +6173,44 @@ const TaskDetailsPage = () => {
             <Grid container spacing={3}>
               <Grid item xs={12}>
                 <Paper sx={{ p: 3 }}>
-                  <Typography variant="h6" component="h2" gutterBottom>Formularze produkcyjne</Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                    <Typography variant="h6" component="h2">Formularze produkcyjne</Typography>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      {formTab === 0 && (
+                        <Button
+                          variant="contained"
+                          color="success"
+                          startIcon={<AssessmentIcon />}
+                          onClick={() => setCompletedMODialogOpen(true)}
+                          size="medium"
+                        >
+                          Wypełnij raport zakończonego MO
+                        </Button>
+                      )}
+                      {formTab === 1 && (
+                        <Button
+                          variant="contained"
+                          color="primary"
+                          startIcon={<FormIcon />}
+                          onClick={() => setProductionControlDialogOpen(true)}
+                          size="medium"
+                        >
+                          Wypełnij raport kontroli produkcji
+                        </Button>
+                      )}
+                      {formTab === 2 && (
+                        <Button
+                          variant="contained"
+                          color="warning"
+                          startIcon={<TimelineIcon />}
+                          onClick={() => setProductionShiftDialogOpen(true)}
+                          size="medium"
+                        >
+                          Wypełnij raport zmiany produkcyjnej
+                        </Button>
+                      )}
+                    </Box>
+                  </Box>
                   {loadingFormResponses ? (<Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}><CircularProgress /></Box>) : (
                     <Box sx={{ width: '100%' }}>
                       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
@@ -8745,6 +8814,30 @@ const TaskDetailsPage = () => {
               </Button>
             </DialogActions>
           </Dialog>
+
+          {/* Dialog formularza kontroli produkcji */}
+          <ProductionControlFormDialog
+            open={productionControlDialogOpen}
+            onClose={() => setProductionControlDialogOpen(false)}
+            task={task}
+            onSuccess={handleProductionControlFormSuccess}
+          />
+
+          {/* Dialog formularza zakończonego MO */}
+          <CompletedMOFormDialog
+            open={completedMODialogOpen}
+            onClose={() => setCompletedMODialogOpen(false)}
+            task={task}
+            onSuccess={handleCompletedMOFormSuccess}
+          />
+
+          {/* Dialog formularza zmiany produkcyjnej */}
+          <ProductionShiftFormDialog
+            open={productionShiftDialogOpen}
+            onClose={() => setProductionShiftDialogOpen(false)}
+            task={task}
+            onSuccess={handleProductionShiftFormSuccess}
+          />
         </>
       ) : (
         <Typography variant="body1" color="textSecondary">

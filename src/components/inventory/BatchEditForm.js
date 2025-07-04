@@ -21,6 +21,7 @@ import {
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { pl } from 'date-fns/locale';
 import { ArrowBack as ArrowBackIcon, Save as SaveIcon, ShoppingCart as ShoppingCartIcon } from '@mui/icons-material';
 import { getInventoryItemById, getItemBatches, updateBatch, getInventoryBatch } from '../../services/inventoryService';
 import { getLimitedPurchaseOrdersForBatchEdit, getPurchaseOrderById } from '../../services/purchaseOrderService';
@@ -354,7 +355,7 @@ const BatchEditForm = () => {
   }
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDateFns}>
+    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
       <Box component="form" onSubmit={handleSubmit} noValidate>
         <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Button 
@@ -442,6 +443,7 @@ const BatchEditForm = () => {
                       label="Wybierz datę"
                       value={batchData.expiryDate}
                       onChange={handleDateChange}
+                      format="dd-MM-yyyy"
                       slotProps={{
                         textField: {
                           fullWidth: true,

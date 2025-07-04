@@ -153,7 +153,12 @@ const getMODetailsById = async (moNumber) => {
   }
 };
 
-const ProductionControlForm = () => {
+const ProductionControlForm = ({ 
+  isDialog = false, 
+  onClose = null, 
+  prefilledData = {}, 
+  onSuccess = null 
+}) => {
   const navigate = useNavigate();
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
@@ -168,33 +173,33 @@ const ProductionControlForm = () => {
   const [loadingCustomerOrders, setLoadingCustomerOrders] = useState(false);
 
   const [formData, setFormData] = useState({
-    email: '',
-    name: '',
-    position: '',
-    fillDate: new Date(),
-    manufacturingOrder: '',
-    customerOrder: '',
-    productionStartDate: new Date(),
-    productionStartTime: '',
-    productionEndDate: new Date(),
-    productionEndTime: '',
-    readingDate: new Date(),
-    readingTime: '',
-    productName: '',
-    lotNumber: '',
-    expiryDate: '',
-    quantity: '',
-    shiftNumber: [],
-    rawMaterialPurity: 'Prawidłowa',
-    packagingPurity: 'Prawidłowa',
-    packagingClosure: 'Prawidłowa',
-    packagingQuantity: 'Prawidłowa',
+    email: prefilledData.email || '',
+    name: prefilledData.name || '',
+    position: prefilledData.position || '',
+    fillDate: prefilledData.fillDate || new Date(),
+    manufacturingOrder: prefilledData.manufacturingOrder || '',
+    customerOrder: prefilledData.customerOrder || '',
+    productionStartDate: prefilledData.productionStartDate || new Date(),
+    productionStartTime: prefilledData.productionStartTime || '',
+    productionEndDate: prefilledData.productionEndDate || new Date(),
+    productionEndTime: prefilledData.productionEndTime || '',
+    readingDate: prefilledData.readingDate || new Date(),
+    readingTime: prefilledData.readingTime || '',
+    productName: prefilledData.productName || '',
+    lotNumber: prefilledData.lotNumber || '',
+    expiryDate: prefilledData.expiryDate || '',
+    quantity: prefilledData.quantity || '',
+    shiftNumber: prefilledData.shiftNumber || [],
+    rawMaterialPurity: prefilledData.rawMaterialPurity || 'Prawidłowa',
+    packagingPurity: prefilledData.packagingPurity || 'Prawidłowa',
+    packagingClosure: prefilledData.packagingClosure || 'Prawidłowa',
+    packagingQuantity: prefilledData.packagingQuantity || 'Prawidłowa',
     documentScans: null,
     productPhoto1: null,
     productPhoto2: null,
     productPhoto3: null,
-    humidity: '',
-    temperature: ''
+    humidity: prefilledData.humidity || '',
+    temperature: prefilledData.temperature || ''
   });
 
   const [validationErrors, setValidationErrors] = useState({});
@@ -580,36 +585,48 @@ const ProductionControlForm = () => {
         
       setSubmitted(true);
       
-      // Reset formularza po pomyślnym wysłaniu
-      setFormData({
-        email: '',
-        name: '',
-        position: '',
-        fillDate: new Date(),
-        manufacturingOrder: '',
-        customerOrder: '',
-        productionStartDate: new Date(),
-        productionStartTime: '',
-        productionEndDate: new Date(),
-        productionEndTime: '',
-        readingDate: new Date(),
-        readingTime: '',
-        productName: '',
-        lotNumber: '',
-        expiryDate: '',
-        quantity: '',
-        shiftNumber: [],
-        rawMaterialPurity: 'Prawidłowa',
-        packagingPurity: 'Prawidłowa',
-        packagingClosure: 'Prawidłowa',
-        packagingQuantity: 'Prawidłowa',
-        documentScans: null,
-        productPhoto1: null,
-        productPhoto2: null,
-        productPhoto3: null,
-        humidity: '',
-        temperature: ''
-      });
+      // W trybie dialogu - wywołaj callback i zamknij dialog
+      if (isDialog) {
+        if (onSuccess) {
+          onSuccess(odpowiedzData);
+        }
+        setTimeout(() => {
+          if (onClose) {
+            onClose();
+          }
+        }, 1500); // Krótkie opóźnienie aby użytkownik zobaczył komunikat sukcesu
+      } else {
+        // Reset formularza po pomyślnym wysłaniu (tylko w trybie normalnym)
+        setFormData({
+          email: '',
+          name: '',
+          position: '',
+          fillDate: new Date(),
+          manufacturingOrder: '',
+          customerOrder: '',
+          productionStartDate: new Date(),
+          productionStartTime: '',
+          productionEndDate: new Date(),
+          productionEndTime: '',
+          readingDate: new Date(),
+          readingTime: '',
+          productName: '',
+          lotNumber: '',
+          expiryDate: '',
+          quantity: '',
+          shiftNumber: [],
+          rawMaterialPurity: 'Prawidłowa',
+          packagingPurity: 'Prawidłowa',
+          packagingClosure: 'Prawidłowa',
+          packagingQuantity: 'Prawidłowa',
+          documentScans: null,
+          productPhoto1: null,
+          productPhoto2: null,
+          productPhoto3: null,
+          humidity: '',
+          temperature: ''
+        });
+      }
       } catch (error) {
         console.error('Błąd podczas zapisywania formularza kontroli produkcji:', error);
         alert(`Wystąpił błąd podczas zapisywania formularza: ${error.message}`);
@@ -618,7 +635,11 @@ const ProductionControlForm = () => {
   };
   
   const handleBack = () => {
-    navigate('/production/forms/responses');
+    if (isDialog && onClose) {
+      onClose();
+    } else {
+      navigate('/production/forms/responses');
+    }
   };
 
   // Wyczyść timeout przy odmontowaniu komponentu
@@ -630,18 +651,17 @@ const ProductionControlForm = () => {
     };
   }, []);
 
-  return (
-    <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
-      <Paper sx={{ p: 4 }}>
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="h5" gutterBottom align="center" fontWeight="bold">
-            {isEditMode ? 'EDYCJA - RAPORT KONTROLA PRODUKCJI' : 'RAPORT - KONTROLA PRODUKCJI'}
-          </Typography>
-          <Typography variant="body2" align="center" color="text.secondary" paragraph>
-            W razie awarii i pilnych zgłoszeń prosimy o kontakt: mateusz@bgwpharma.com
-          </Typography>
-          <Divider />
-        </Box>
+  const FormContent = () => (
+    <>
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h5" gutterBottom align="center" fontWeight="bold">
+          {isEditMode ? 'EDYCJA - RAPORT KONTROLA PRODUKCJI' : 'RAPORT - KONTROLA PRODUKCJI'}
+        </Typography>
+        <Typography variant="body2" align="center" color="text.secondary" paragraph>
+          W razie awarii i pilnych zgłoszeń prosimy o kontakt: mateusz@bgwpharma.com
+        </Typography>
+        <Divider />
+      </Box>
 
         {submitted && (
           <Alert severity="success" sx={{ mb: 3 }}>
@@ -1198,6 +1218,19 @@ const ProductionControlForm = () => {
             </Grid>
           </Grid>
         </Box>
+    </>
+  );
+
+  // W trybie dialogu zwróć tylko zawartość formularza
+  if (isDialog) {
+    return <FormContent />;
+  }
+
+  // W trybie normalnym zwróć formularz w kontenerze
+  return (
+    <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
+      <Paper sx={{ p: 4 }}>
+        <FormContent />
       </Paper>
     </Container>
   );
