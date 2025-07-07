@@ -19,7 +19,8 @@ import {
   FormLabel,
   Checkbox,
   FormGroup,
-  CircularProgress
+  CircularProgress,
+  Autocomplete
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -32,7 +33,7 @@ import { db } from '../../services/firebase/config';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, getDocs, query, where } from 'firebase/firestore';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { useStaffOptions, useShiftWorkerOptions, useProductOptionsForPrinting } from '../../hooks/useFormOptions';
+import { useStaffOptions, useShiftWorkerOptions, useProductOptionsForPrinting, useFilteredProductOptions } from '../../hooks/useFormOptions';
 
 // Funkcja do pobierania szczegółów zadania produkcyjnego (MO) na podstawie numeru MO
 const getMODetailsById = async (moNumber) => {
@@ -73,6 +74,16 @@ const ProductionShiftForm = () => {
   const { options: shiftWorkerOptions, loading: shiftWorkersLoading } = useShiftWorkerOptions();
   // Hook dla opcji produktów używany tylko w polach "Rodzaj nadrukowanych doypack/tub"
   const { options: productOptions, loading: productLoading } = useProductOptionsForPrinting();
+  
+  // Stany dla wyszukiwarek produktów
+  const [firstProductSearch, setFirstProductSearch] = useState('');
+  const [secondProductSearch, setSecondProductSearch] = useState('');
+  const [thirdProductSearch, setThirdProductSearch] = useState('');
+  
+  // Przefiltrowane opcje produktów dla każdego pola
+  const filteredFirstProducts = useFilteredProductOptions(firstProductSearch, productOptions);
+  const filteredSecondProducts = useFilteredProductOptions(secondProductSearch, productOptions);
+  const filteredThirdProducts = useFilteredProductOptions(thirdProductSearch, productOptions);
 
   const [formData, setFormData] = useState({
     email: '',
@@ -594,20 +605,44 @@ const ProductionShiftForm = () => {
             </Grid>
             
             <Grid item xs={12}>
-              <FormControl fullWidth>
-                <InputLabel>Rodzaj nadrukowanych doypack/tub - 1</InputLabel>
-                <Select
-                  name="firstProduct"
-                  value={formData.firstProduct}
-                  onChange={handleChange}
-                  label="Rodzaj nadrukowanych doypack/tub - 1"
-                >
-                  <MenuItem value="BRAK">BRAK</MenuItem>
-                  {productOptions.map(option => (
-                    <MenuItem key={option} value={option}>{option}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Autocomplete
+                fullWidth
+                freeSolo
+                options={[{ id: 'brak', name: 'BRAK', searchText: 'brak' }, ...filteredFirstProducts]}
+                getOptionLabel={(option) => typeof option === 'string' ? option : option.name}
+                value={null} // Zawsze null aby umożliwić swobodne wpisywanie
+                onChange={(event, newValue) => {
+                  const value = newValue ? (typeof newValue === 'string' ? newValue : newValue.name) : '';
+                  setFormData(prev => ({ ...prev, firstProduct: value || 'BRAK' }));
+                  setFirstProductSearch(value || '');
+                }}
+                onInputChange={(event, newInputValue) => {
+                  setFirstProductSearch(newInputValue);
+                  setFormData(prev => ({ ...prev, firstProduct: newInputValue || 'BRAK' }));
+                }}
+                inputValue={firstProductSearch}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Rodzaj nadrukowanych doypack/tub - 1"
+                    placeholder="Wpisz nazwę produktu lub fragment, np. 'mango', lub 'BRAK'"
+                    helperText="Wyszukaj gotowy produkt z magazynu lub wpisz dowolny tekst"
+                  />
+                )}
+                renderOption={(props, option) => (
+                  <li {...props} key={option.id || option.name}>
+                    <Box>
+                      <Typography variant="body2">{option.name}</Typography>
+                      {option.description && (
+                        <Typography variant="caption" color="text.secondary">
+                          {option.description}
+                        </Typography>
+                      )}
+                    </Box>
+                  </li>
+                )}
+                loading={productLoading}
+              />
             </Grid>
             
             {formData.firstProduct !== 'BRAK' && (
@@ -626,20 +661,44 @@ const ProductionShiftForm = () => {
             )}
             
             <Grid item xs={12}>
-              <FormControl fullWidth>
-                <InputLabel>Rodzaj nadrukowanych doypack/tub - 2</InputLabel>
-                <Select
-                  name="secondProduct"
-                  value={formData.secondProduct}
-                  onChange={handleChange}
-                  label="Rodzaj nadrukowanych doypack/tub - 2"
-                >
-                  <MenuItem value="BRAK">BRAK</MenuItem>
-                  {productOptions.map(option => (
-                    <MenuItem key={option} value={option}>{option}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Autocomplete
+                fullWidth
+                freeSolo
+                options={[{ id: 'brak', name: 'BRAK', searchText: 'brak' }, ...filteredSecondProducts]}
+                getOptionLabel={(option) => typeof option === 'string' ? option : option.name}
+                value={null} // Zawsze null aby umożliwić swobodne wpisywanie
+                onChange={(event, newValue) => {
+                  const value = newValue ? (typeof newValue === 'string' ? newValue : newValue.name) : '';
+                  setFormData(prev => ({ ...prev, secondProduct: value || 'BRAK' }));
+                  setSecondProductSearch(value || '');
+                }}
+                onInputChange={(event, newInputValue) => {
+                  setSecondProductSearch(newInputValue);
+                  setFormData(prev => ({ ...prev, secondProduct: newInputValue || 'BRAK' }));
+                }}
+                inputValue={secondProductSearch}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Rodzaj nadrukowanych doypack/tub - 2"
+                    placeholder="Wpisz nazwę produktu lub fragment, np. 'mango', lub 'BRAK'"
+                    helperText="Wyszukaj gotowy produkt z magazynu lub wpisz dowolny tekst"
+                  />
+                )}
+                renderOption={(props, option) => (
+                  <li {...props} key={option.id || option.name}>
+                    <Box>
+                      <Typography variant="body2">{option.name}</Typography>
+                      {option.description && (
+                        <Typography variant="caption" color="text.secondary">
+                          {option.description}
+                        </Typography>
+                      )}
+                    </Box>
+                  </li>
+                )}
+                loading={productLoading}
+              />
             </Grid>
             
             {formData.secondProduct !== 'BRAK' && (
@@ -658,20 +717,44 @@ const ProductionShiftForm = () => {
             )}
             
             <Grid item xs={12}>
-              <FormControl fullWidth>
-                <InputLabel>Rodzaj nadrukowanych doypack/tub - 3</InputLabel>
-                <Select
-                  name="thirdProduct"
-                  value={formData.thirdProduct}
-                  onChange={handleChange}
-                  label="Rodzaj nadrukowanych doypack/tub - 3"
-                >
-                  <MenuItem value="BRAK">BRAK</MenuItem>
-                  {productOptions.map(option => (
-                    <MenuItem key={option} value={option}>{option}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Autocomplete
+                fullWidth
+                freeSolo
+                options={[{ id: 'brak', name: 'BRAK', searchText: 'brak' }, ...filteredThirdProducts]}
+                getOptionLabel={(option) => typeof option === 'string' ? option : option.name}
+                value={null} // Zawsze null aby umożliwić swobodne wpisywanie
+                onChange={(event, newValue) => {
+                  const value = newValue ? (typeof newValue === 'string' ? newValue : newValue.name) : '';
+                  setFormData(prev => ({ ...prev, thirdProduct: value || 'BRAK' }));
+                  setThirdProductSearch(value || '');
+                }}
+                onInputChange={(event, newInputValue) => {
+                  setThirdProductSearch(newInputValue);
+                  setFormData(prev => ({ ...prev, thirdProduct: newInputValue || 'BRAK' }));
+                }}
+                inputValue={thirdProductSearch}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Rodzaj nadrukowanych doypack/tub - 3"
+                    placeholder="Wpisz nazwę produktu lub fragment, np. 'mango', lub 'BRAK'"
+                    helperText="Wyszukaj gotowy produkt z magazynu lub wpisz dowolny tekst"
+                  />
+                )}
+                renderOption={(props, option) => (
+                  <li {...props} key={option.id || option.name}>
+                    <Box>
+                      <Typography variant="body2">{option.name}</Typography>
+                      {option.description && (
+                        <Typography variant="caption" color="text.secondary">
+                          {option.description}
+                        </Typography>
+                      )}
+                    </Box>
+                  </li>
+                )}
+                loading={productLoading}
+              />
             </Grid>
             
             {formData.thirdProduct !== 'BRAK' && (

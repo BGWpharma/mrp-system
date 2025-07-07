@@ -42,7 +42,7 @@ export const useFormOptions = (optionType) => {
 };
 
 /**
- * Hook do pobierania opcji produktów z bazy danych produktów
+ * Hook do pobierania gotowych produktów z magazynu dla pól drukowania
  * Używany w polach "Rodzaj nadrukowanych doypack/tub"
  */
 export const useProductOptionsForPrinting = () => {
@@ -51,33 +51,75 @@ export const useProductOptionsForPrinting = () => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchProducts = async () => {
+    const fetchFinishedProducts = async () => {
       try {
         setLoading(true);
         setError(null);
-        const products = await getAllProducts();
-        setOptions(products);
+        
+        // Import funkcji do pobierania pozycji magazynowych
+        const { getAllInventoryItems } = await import('../services/inventoryService');
+        
+        // Pobierz wszystkie pozycje magazynowe
+        const allItems = await getAllInventoryItems();
+        
+        // Filtruj tylko gotowe produkty
+        const finishedProducts = allItems
+          .filter(item => item.category === 'Gotowe produkty')
+          .map(item => ({
+            id: item.id,
+            name: item.name,
+            description: item.description || '',
+            searchText: `${item.name} ${item.description || ''}`.toLowerCase()
+          }));
+        
+        setOptions(finishedProducts);
       } catch (err) {
-        console.error('Błąd podczas pobierania produktów:', err);
+        console.error('Błąd podczas pobierania gotowych produktów:', err);
         setError(err.message);
         
         // W przypadku błędu, użyj domyślnych opcji jako fallback
         setOptions([
-          "BLC-COLL-GLYC",
-          "BW3Y-Glycine",
-          "BW3Y-MAGN-BISG",
-          "BW3Y-VITAMINC",
-          "COR-MULTIVIT 60 caps"
+          { id: 'fallback-1', name: "BLC-COLL-GLYC", description: '', searchText: "blc-coll-glyc" },
+          { id: 'fallback-2', name: "BW3Y-Glycine", description: '', searchText: "bw3y-glycine" },
+          { id: 'fallback-3', name: "BW3Y-MAGN-BISG", description: '', searchText: "bw3y-magn-bisg" },
+          { id: 'fallback-4', name: "BW3Y-VITAMINC", description: '', searchText: "bw3y-vitaminc" },
+          { id: 'fallback-5', name: "COR-MULTIVIT 60 caps", description: '', searchText: "cor-multivit 60 caps" }
         ]);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchProducts();
+    fetchFinishedProducts();
   }, []);
 
   return { options, loading, error };
+};
+
+/**
+ * Hook do wyszukiwania gotowych produktów
+ * @param {string} searchTerm - Fraza wyszukiwania
+ * @param {Array} allOptions - Wszystkie dostępne opcje produktów
+ * @returns {Array} Przefiltrowane opcje produktów
+ */
+export const useFilteredProductOptions = (searchTerm, allOptions) => {
+  const [filteredOptions, setFilteredOptions] = useState([]);
+
+  useEffect(() => {
+    if (!searchTerm || searchTerm.trim() === '') {
+      setFilteredOptions(allOptions.slice(0, 10)); // Pokaż pierwsze 10 opcji gdy brak wyszukiwania
+      return;
+    }
+
+    const searchLower = searchTerm.toLowerCase().trim();
+    const filtered = allOptions.filter(option => 
+      option.searchText.includes(searchLower)
+    ).slice(0, 20); // Maksymalnie 20 wyników
+
+    setFilteredOptions(filtered);
+  }, [searchTerm, allOptions]);
+
+  return filteredOptions;
 };
 
 /**

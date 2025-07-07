@@ -146,7 +146,7 @@ const CmrListPage = () => {
   const [newPaymentStatus, setNewPaymentStatus] = useState('');
   
   // Stan sortowania
-  const [sortOrder, setSortOrder] = useState('asc'); // 'asc' lub 'desc'
+  const [sortOrder, setSortOrder] = useState('desc'); // 'asc' lub 'desc' - domyślnie od najnowszej
   
   // Nowe stany dla generowania raportów
   const [reportDialogOpen, setReportDialogOpen] = useState(false);

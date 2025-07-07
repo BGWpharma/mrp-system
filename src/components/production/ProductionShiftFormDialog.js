@@ -21,7 +21,8 @@ import {
   FormLabel,
   Checkbox,
   FormGroup,
-  CircularProgress
+  CircularProgress,
+  Autocomplete
 } from '@mui/material';
 import { Close as CloseIcon, Send as SendIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
@@ -32,7 +33,7 @@ import { getMONumbersForSelect } from '../../services/moService';
 import { db } from '../../services/firebase/config';
 import { collection, addDoc, serverTimestamp, getDocs, query, where } from 'firebase/firestore';
 import { useAuth } from '../../hooks/useAuth';
-import { useStaffOptions, useShiftWorkerOptions, useProductOptionsForPrinting } from '../../hooks/useFormOptions';
+import { useStaffOptions, useShiftWorkerOptions, useProductOptionsForPrinting, useFilteredProductOptions } from '../../hooks/useFormOptions';
 
 // Funkcja do pobierania szczegółów zadania produkcyjnego (MO) na podstawie numeru MO
 const getMODetailsById = async (moNumber) => {
@@ -73,6 +74,18 @@ const ProductionShiftFormDialog = ({
   const { options: staffOptions, loading: staffLoading } = useStaffOptions();
   const { options: shiftWorkerOptions, loading: shiftWorkersLoading } = useShiftWorkerOptions();
   const { options: productOptions, loading: productLoading } = useProductOptionsForPrinting();
+  
+  // Stany dla wyszukiwarek produktów
+  const [productSearches, setProductSearches] = useState({
+    first: '',
+    second: '',
+    third: ''
+  });
+  
+  // Przefiltrowane opcje produktów dla każdego pola
+  const filteredFirstProducts = useFilteredProductOptions(productSearches.first, productOptions);
+  const filteredSecondProducts = useFilteredProductOptions(productSearches.second, productOptions);
+  const filteredThirdProducts = useFilteredProductOptions(productSearches.third, productOptions);
 
   const [formData, setFormData] = useState({
     email: '',
@@ -262,7 +275,7 @@ const ProductionShiftFormDialog = ({
       try {
         setSubmitted(false);
         
-        const odpowiedziRef = collection(db, 'Forms/ZmianaProdukcyjna/Odpowiedzi');
+        const odpowiedziRef = collection(db, 'Forms/ZmianaProdukcji/Odpowiedzi');
         
         const odpowiedzData = {
           email: formData.email,
@@ -581,52 +594,209 @@ const ProductionShiftFormDialog = ({
               </Typography>
             </Grid>
             
-            {[1, 2, 3].map((num) => (
-              <React.Fragment key={num}>
-                <Grid item xs={12} sm={4}>
-                  <FormControl fullWidth>
-                    <InputLabel>{`Produkt nadrukowany ${num}`}</InputLabel>
-                    <Select
-                      name={`${num === 1 ? 'first' : num === 2 ? 'second' : 'third'}Product`}
-                      value={formData[`${num === 1 ? 'first' : num === 2 ? 'second' : 'third'}Product`]}
-                      onChange={handleChange}
-                      label={`Produkt nadrukowany ${num}`}
-                    >
-                      <MenuItem value="BRAK">BRAK</MenuItem>
-                      {productOptions.map(option => (
-                        <MenuItem key={option} value={option}>{option}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} sm={4}>
+            {/* Pierwszy produkt */}
+            <Grid item xs={12}>
+              <Autocomplete
+                fullWidth
+                freeSolo
+                options={[{ id: 'brak', name: 'BRAK', searchText: 'brak' }, ...filteredFirstProducts]}
+                getOptionLabel={(option) => typeof option === 'string' ? option : option.name}
+                value={null}
+                onChange={(event, newValue) => {
+                  const value = newValue ? (typeof newValue === 'string' ? newValue : newValue.name) : '';
+                  setFormData(prev => ({ ...prev, firstProduct: value || 'BRAK' }));
+                  setProductSearches(prev => ({ ...prev, first: value || '' }));
+                }}
+                onInputChange={(event, newInputValue) => {
+                  setProductSearches(prev => ({ ...prev, first: newInputValue }));
+                  setFormData(prev => ({ ...prev, firstProduct: newInputValue || 'BRAK' }));
+                }}
+                inputValue={productSearches.first}
+                renderInput={(params) => (
                   <TextField
-                    fullWidth
-                    label={`Ilość produktu ${num} (szt.)`}
-                    name={`${num === 1 ? 'first' : num === 2 ? 'second' : 'third'}ProductQuantity`}
-                    type="number"
-                    value={formData[`${num === 1 ? 'first' : num === 2 ? 'second' : 'third'}ProductQuantity`]}
-                    onChange={handleChange}
-                    error={!!validationErrors[`${num === 1 ? 'first' : num === 2 ? 'second' : 'third'}ProductQuantity`]}
-                    helperText={validationErrors[`${num === 1 ? 'first' : num === 2 ? 'second' : 'third'}ProductQuantity`]}
-                    inputProps={{ min: 0, step: 'any' }}
+                    {...params}
+                    label="Produkt nadrukowany 1"
+                    placeholder="Wpisz nazwę produktu lub fragment, np. 'mango', lub 'BRAK'"
+                    helperText="Wyszukaj gotowy produkt z magazynu lub wpisz dowolny tekst"
                   />
-                </Grid>
-                <Grid item xs={12} sm={4}>
+                )}
+                renderOption={(props, option) => (
+                  <li {...props} key={`first-${option.id || option.name}`}>
+                    <Box>
+                      <Typography variant="body2">{option.name}</Typography>
+                      {option.description && (
+                        <Typography variant="caption" color="text.secondary">
+                          {option.description}
+                        </Typography>
+                      )}
+                    </Box>
+                  </li>
+                )}
+                loading={productLoading}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Ilość produktu 1 (szt.)"
+                name="firstProductQuantity"
+                type="number"
+                value={formData.firstProductQuantity}
+                onChange={handleChange}
+                error={!!validationErrors.firstProductQuantity}
+                helperText={validationErrors.firstProductQuantity}
+                inputProps={{ min: 0, step: 'any' }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Straty produktu 1 (szt.)"
+                name="firstProductLoss"
+                type="number"
+                value={formData.firstProductLoss}
+                onChange={handleChange}
+                error={!!validationErrors.firstProductLoss}
+                helperText={validationErrors.firstProductLoss}
+                inputProps={{ min: 0, step: 'any' }}
+              />
+            </Grid>
+
+            {/* Drugi produkt */}
+            <Grid item xs={12}>
+              <Autocomplete
+                fullWidth
+                freeSolo
+                options={[{ id: 'brak', name: 'BRAK', searchText: 'brak' }, ...filteredSecondProducts]}
+                getOptionLabel={(option) => typeof option === 'string' ? option : option.name}
+                value={null}
+                onChange={(event, newValue) => {
+                  const value = newValue ? (typeof newValue === 'string' ? newValue : newValue.name) : '';
+                  setFormData(prev => ({ ...prev, secondProduct: value || 'BRAK' }));
+                  setProductSearches(prev => ({ ...prev, second: value || '' }));
+                }}
+                onInputChange={(event, newInputValue) => {
+                  setProductSearches(prev => ({ ...prev, second: newInputValue }));
+                  setFormData(prev => ({ ...prev, secondProduct: newInputValue || 'BRAK' }));
+                }}
+                inputValue={productSearches.second}
+                renderInput={(params) => (
                   <TextField
-                    fullWidth
-                    label={`Straty produktu ${num} (szt.)`}
-                    name={`${num === 1 ? 'first' : num === 2 ? 'second' : 'third'}ProductLoss`}
-                    type="number"
-                    value={formData[`${num === 1 ? 'first' : num === 2 ? 'second' : 'third'}ProductLoss`]}
-                    onChange={handleChange}
-                    error={!!validationErrors[`${num === 1 ? 'first' : num === 2 ? 'second' : 'third'}ProductLoss`]}
-                    helperText={validationErrors[`${num === 1 ? 'first' : num === 2 ? 'second' : 'third'}ProductLoss`]}
-                    inputProps={{ min: 0, step: 'any' }}
+                    {...params}
+                    label="Produkt nadrukowany 2"
+                    placeholder="Wpisz nazwę produktu lub fragment, np. 'mango', lub 'BRAK'"
+                    helperText="Wyszukaj gotowy produkt z magazynu lub wpisz dowolny tekst"
                   />
-                </Grid>
-              </React.Fragment>
-            ))}
+                )}
+                renderOption={(props, option) => (
+                  <li {...props} key={`second-${option.id || option.name}`}>
+                    <Box>
+                      <Typography variant="body2">{option.name}</Typography>
+                      {option.description && (
+                        <Typography variant="caption" color="text.secondary">
+                          {option.description}
+                        </Typography>
+                      )}
+                    </Box>
+                  </li>
+                )}
+                loading={productLoading}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Ilość produktu 2 (szt.)"
+                name="secondProductQuantity"
+                type="number"
+                value={formData.secondProductQuantity}
+                onChange={handleChange}
+                error={!!validationErrors.secondProductQuantity}
+                helperText={validationErrors.secondProductQuantity}
+                inputProps={{ min: 0, step: 'any' }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Straty produktu 2 (szt.)"
+                name="secondProductLoss"
+                type="number"
+                value={formData.secondProductLoss}
+                onChange={handleChange}
+                error={!!validationErrors.secondProductLoss}
+                helperText={validationErrors.secondProductLoss}
+                inputProps={{ min: 0, step: 'any' }}
+              />
+            </Grid>
+
+            {/* Trzeci produkt */}
+            <Grid item xs={12}>
+              <Autocomplete
+                fullWidth
+                freeSolo
+                options={[{ id: 'brak', name: 'BRAK', searchText: 'brak' }, ...filteredThirdProducts]}
+                getOptionLabel={(option) => typeof option === 'string' ? option : option.name}
+                value={null}
+                onChange={(event, newValue) => {
+                  const value = newValue ? (typeof newValue === 'string' ? newValue : newValue.name) : '';
+                  setFormData(prev => ({ ...prev, thirdProduct: value || 'BRAK' }));
+                  setProductSearches(prev => ({ ...prev, third: value || '' }));
+                }}
+                onInputChange={(event, newInputValue) => {
+                  setProductSearches(prev => ({ ...prev, third: newInputValue }));
+                  setFormData(prev => ({ ...prev, thirdProduct: newInputValue || 'BRAK' }));
+                }}
+                inputValue={productSearches.third}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Produkt nadrukowany 3"
+                    placeholder="Wpisz nazwę produktu lub fragment, np. 'mango', lub 'BRAK'"
+                    helperText="Wyszukaj gotowy produkt z magazynu lub wpisz dowolny tekst"
+                  />
+                )}
+                renderOption={(props, option) => (
+                  <li {...props} key={`third-${option.id || option.name}`}>
+                    <Box>
+                      <Typography variant="body2">{option.name}</Typography>
+                      {option.description && (
+                        <Typography variant="caption" color="text.secondary">
+                          {option.description}
+                        </Typography>
+                      )}
+                    </Box>
+                  </li>
+                )}
+                loading={productLoading}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Ilość produktu 3 (szt.)"
+                name="thirdProductQuantity"
+                type="number"
+                value={formData.thirdProductQuantity}
+                onChange={handleChange}
+                error={!!validationErrors.thirdProductQuantity}
+                helperText={validationErrors.thirdProductQuantity}
+                inputProps={{ min: 0, step: 'any' }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Straty produktu 3 (szt.)"
+                name="thirdProductLoss"
+                type="number"
+                value={formData.thirdProductLoss}
+                onChange={handleChange}
+                error={!!validationErrors.thirdProductLoss}
+                helperText={validationErrors.thirdProductLoss}
+                inputProps={{ min: 0, step: 'any' }}
+              />
+            </Grid>
             
             {/* Sekcja dodatkowych informacji */}
             <Grid item xs={12}>
