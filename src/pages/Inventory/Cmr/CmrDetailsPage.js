@@ -232,283 +232,343 @@ const CmrDetailsPage = () => {
   
   const handleGenerateOfficialCmr = async () => {
     try {
-      // Pobierz szablon SVG z polami formularza
-      const response = await fetch('/templates/cmr-template.svg');
-      if (!response.ok) {
-        throw new Error('Nie udało się pobrać szablonu CMR');
+      // Lista tła dla każdej kopii
+      const backgroundTemplates = [
+        'cmr-template-1.svg',
+        'cmr-template-2.svg', 
+        'cmr-template-3.svg',
+        'cmr-template-4.svg'
+      ];
+
+      const generatedDocuments = [];
+
+      // Pobierz główny szablon z polami formularza
+      const mainTemplateResponse = await fetch('/templates/cmr-template.svg');
+      if (!mainTemplateResponse.ok) {
+        throw new Error('Nie udało się pobrać głównego szablonu CMR');
       }
-      let svgText = await response.text();
-      
-      // Pobierz obrazek tła jako dane binarne
-      try {
-        const bgImageResponse = await fetch('/templates/cmr-wzor-original.svg');
-        if (bgImageResponse.ok) {
-          const bgImageBlob = await bgImageResponse.blob();
+      const mainTemplateText = await mainTemplateResponse.text();
+
+      // Generuj każdy z 4 szablonów
+      for (let i = 0; i < backgroundTemplates.length; i++) {
+        const backgroundTemplateName = backgroundTemplates[i];
+        const copyNumber = i + 1;
+
+        try {
+          // Pobierz szablon tła
+          const bgResponse = await fetch(`/templates/cmr/${backgroundTemplateName}`);
+          if (!bgResponse.ok) {
+            throw new Error(`Nie udało się pobrać tła ${backgroundTemplateName}`);
+          }
+          const bgImageBlob = await bgResponse.blob();
           
-          // Konwertuj plik SVG tła na dane base64
+          // Konwertuj tło na base64
           const reader = new FileReader();
-          const base64Data = await new Promise((resolve, reject) => {
+          const base64BgData = await new Promise((resolve, reject) => {
             reader.onload = () => resolve(reader.result);
             reader.onerror = reject;
             reader.readAsDataURL(bgImageBlob);
           });
+
+          // Skopiuj główny szablon i zastąp tło
+          let svgText = mainTemplateText;
           
-          // Zastąp tło w szablonie obrazem base64
+          // Zastąp tło w szablonie
           svgText = svgText.replace(
-            /<rect id="template-background"[^>]*\/>/,
-            `<image href="${base64Data}" width="793.33331" height="1122.6667" />`
+            '<rect id="template-background" width="793.33331" height="1122.6667" fill="white" />',
+            `<image id="template-background" href="${base64BgData}" width="793.33331" height="1122.6667" />`
           );
-        }
-      } catch (bgError) {
-        console.error('Błąd podczas pobierania obrazu tła:', bgError);
-        // Kontynuuj nawet bez tła, sama treść dokumentu jest ważniejsza
-      }
-      
-      // Utworzenie parsera DOM
-      const parser = new DOMParser();
-      const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
-      
-      // Sprawdź, czy szablon został poprawnie sparsowany
-      const parseError = svgDoc.querySelector('parsererror');
-      if (parseError) {
-        console.error('Błąd parsowania SVG:', parseError);
-        throw new Error('Nie udało się przetworzyć szablonu CMR');
-      }
-      
-      // Funkcja do dodawania tekstu do pola formularza
-      const addTextToField = (fieldId, text, fontSize = '7px', fontWeight = 'normal') => {
-        if (!text) return;
-        
-        // Znajdź pole formularza po ID
-        const field = svgDoc.getElementById(fieldId);
-        if (!field) {
-          console.warn(`Nie znaleziono pola o ID: ${fieldId}`);
-          return;
-        }
-        
-        // Pobierz współrzędne i wymiary pola
-        const x = parseFloat(field.getAttribute('x')) + 5;
-        const y = parseFloat(field.getAttribute('y')) + 15;
-        const width = parseFloat(field.getAttribute('width'));
-        const height = parseFloat(field.getAttribute('height'));
-        
-        // Utwórz element tekstowy
-        const textElement = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        textElement.setAttribute('x', x);
-        textElement.setAttribute('y', y);
-        textElement.setAttribute('font-family', 'Arial, Helvetica, sans-serif');
-        textElement.setAttribute('font-size', fontSize);
-        textElement.setAttribute('font-weight', fontWeight);
-        textElement.setAttribute('fill', 'black');
-        
-        // Podziel tekst na linie
-        const lines = text.toString().split('\n');
-        
-        // Dostosowanie wysokości linii w zależności od pola
-        let lineHeight;
-        if (fieldId === 'field-goods' || fieldId === 'field-packages' || 
-            fieldId === 'field-weight' || fieldId === 'field-volume') {
-          lineHeight = parseInt(fontSize) * 1.8; // Zwiększona wysokość dla wybranych pól
-        } else {
-          lineHeight = parseInt(fontSize) * 1.2; // Standardowa wysokość dla pozostałych pól
-        }
-        
-        lines.forEach((line, index) => {
-          // Jeśli tekst jest zbyt długi dla pola, podziel go na kilka linii
-          const maxCharsPerLine = Math.floor(width / (parseInt(fontSize) * 0.6));
-          let currentLine = line;
-          let lineCount = 0;
+
+          // Utworz parser DOM dla SVG
+          const parser = new DOMParser();
+          const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
           
-          while (currentLine.length > 0) {
-            const tspan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-            tspan.setAttribute('x', x);
-            
-            if (currentLine.length <= maxCharsPerLine) {
-              tspan.textContent = currentLine;
-              tspan.setAttribute('y', y + (index * lineHeight) + (lineCount * lineHeight));
-              textElement.appendChild(tspan);
-              break;
-            } else {
-              // Znajdź ostatnią spację przed maxCharsPerLine
-              let cutIndex = maxCharsPerLine;
-              while (cutIndex > 0 && currentLine.charAt(cutIndex) !== ' ') {
-                cutIndex--;
-              }
-              
-              // Jeśli nie znaleziono spacji, przetnij po prostu po maxCharsPerLine znaków
-              if (cutIndex === 0) {
-                cutIndex = maxCharsPerLine;
-              }
-              
-              const linePart = currentLine.substring(0, cutIndex);
-              tspan.textContent = linePart;
-              tspan.setAttribute('y', y + (index * lineHeight) + (lineCount * lineHeight));
-              textElement.appendChild(tspan);
-              
-              currentLine = currentLine.substring(cutIndex).trim();
-              lineCount++;
-              
-              // Sprawdź, czy nie wychodzimy poza wysokość pola
-              if (y + (index * lineHeight) + (lineCount * lineHeight) > y + height) {
-                break;
-              }
-            }
+          // Sprawdź, czy szablon został poprawnie sparsowany
+          const parseError = svgDoc.querySelector('parsererror');
+          if (parseError) {
+            console.error(`Błąd parsowania SVG dla szablonu ${copyNumber}:`, parseError);
+            throw new Error(`Nie udało się przetworzyć szablonu CMR ${copyNumber}`);
           }
-        });
-        
-        // Dodaj element tekstowy do dokumentu
-        const formFields = svgDoc.getElementById('form-fields');
-        if (formFields) {
-          formFields.appendChild(textElement);
-        } else {
-          console.warn('Nie znaleziono grupy form-fields w dokumencie SVG');
-          svgDoc.documentElement.appendChild(textElement);
+          
+          // Funkcja do dodawania tekstu do pola formularza
+          const addTextToField = (svgDoc, fieldId, text, fontSize = '7px', fontWeight = 'normal') => {
+            if (!text) return;
+            
+            // Znajdź pole formularza po ID
+            const field = svgDoc.getElementById(fieldId);
+            if (!field) {
+              console.warn(`Nie znaleziono pola o ID: ${fieldId}`);
+              return;
+            }
+            
+            // Pobierz współrzędne i wymiary pola
+            const x = parseFloat(field.getAttribute('x')) + 5;
+            const y = parseFloat(field.getAttribute('y')) + 15;
+            const width = parseFloat(field.getAttribute('width'));
+            const height = parseFloat(field.getAttribute('height'));
+            
+            // Utwórz element tekstowy
+            const textElement = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            textElement.setAttribute('x', x);
+            textElement.setAttribute('y', y);
+            textElement.setAttribute('font-family', 'Arial, Helvetica, sans-serif');
+            textElement.setAttribute('font-size', fontSize);
+            textElement.setAttribute('font-weight', fontWeight);
+            textElement.setAttribute('fill', 'black');
+            
+            // Podziel tekst na linie
+            const lines = text.toString().split('\n');
+            
+            // Dostosowanie wysokości linii w zależności od pola
+            let lineHeight;
+            if (fieldId === 'field-goods' || fieldId === 'field-packages' || 
+                fieldId === 'field-weight' || fieldId === 'field-volume') {
+              lineHeight = parseInt(fontSize) * 1.8; // Zwiększona wysokość dla wybranych pól
+            } else {
+              lineHeight = parseInt(fontSize) * 1.2; // Standardowa wysokość dla pozostałych pól
+            }
+            
+            lines.forEach((line, index) => {
+              // Jeśli tekst jest zbyt długi dla pola, podziel go na kilka linii
+              const maxCharsPerLine = Math.floor(width / (parseInt(fontSize) * 0.6));
+              let currentLine = line;
+              let lineCount = 0;
+              
+              while (currentLine.length > 0) {
+                const tspan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+                tspan.setAttribute('x', x);
+                
+                if (currentLine.length <= maxCharsPerLine) {
+                  tspan.textContent = currentLine;
+                  tspan.setAttribute('y', y + (index * lineHeight) + (lineCount * lineHeight));
+                  textElement.appendChild(tspan);
+                  break;
+                } else {
+                  // Znajdź ostatnią spację przed maxCharsPerLine
+                  let cutIndex = maxCharsPerLine;
+                  while (cutIndex > 0 && currentLine.charAt(cutIndex) !== ' ') {
+                    cutIndex--;
+                  }
+                  
+                  // Jeśli nie znaleziono spacji, przetnij po prostu po maxCharsPerLine znaków
+                  if (cutIndex === 0) {
+                    cutIndex = maxCharsPerLine;
+                  }
+                  
+                  const linePart = currentLine.substring(0, cutIndex);
+                  tspan.textContent = linePart;
+                  tspan.setAttribute('y', y + (index * lineHeight) + (lineCount * lineHeight));
+                  textElement.appendChild(tspan);
+                  
+                  currentLine = currentLine.substring(cutIndex).trim();
+                  lineCount++;
+                  
+                  // Sprawdź, czy nie wychodzimy poza wysokość pola
+                  if (y + (index * lineHeight) + (lineCount * lineHeight) > y + height) {
+                    break;
+                  }
+                }
+              }
+            });
+            
+            // Dodaj element tekstowy do dokumentu
+            const formFields = svgDoc.getElementById('form-fields');
+            if (formFields) {
+              formFields.appendChild(textElement);
+            } else {
+              console.warn('Nie znaleziono grupy form-fields w dokumencie SVG');
+              svgDoc.documentElement.appendChild(textElement);
+            }
+          };
+          
+          // Funkcja do mapowania danych na pola w dokumencie
+          const fillDocumentFields = (svgDoc) => {
+            // Formatowanie daty w formie DD.MM.YYYY
+            const formatDateSimple = (date) => {
+              if (!date) return '';
+              
+              // Obsługa timestampu Firestore
+              if (date && typeof date === 'object' && typeof date.toDate === 'function') {
+                date = date.toDate();
+              }
+              
+              let dateObj;
+              if (typeof date === 'string') {
+                dateObj = new Date(date);
+              } else {
+                dateObj = date;
+              }
+              
+              if (isNaN(dateObj.getTime())) {
+                return '';
+              }
+              
+              const day = dateObj.getDate().toString().padStart(2, '0');
+              const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+              const year = dateObj.getFullYear();
+              
+              return `${day}.${month}.${year}`;
+            };
+            
+            // Mapowanie danych CMR na pola w szablonie
+            
+            // Dane nadawcy
+            const senderText = [
+              cmrData.sender,
+              cmrData.senderAddress,
+              `${cmrData.senderPostalCode || ''} ${cmrData.senderCity || ''}`,
+              cmrData.senderCountry
+            ].filter(Boolean).join('\n');
+            addTextToField(svgDoc, 'field-sender', senderText, '7px');
+            
+            // Dane odbiorcy
+            const recipientText = [
+              cmrData.recipient,
+              cmrData.recipientAddress
+            ].filter(Boolean).join('\n');
+            addTextToField(svgDoc, 'field-recipient', recipientText, '7px');
+            
+            // Miejsce przeznaczenia
+            addTextToField(svgDoc, 'field-destination', cmrData.deliveryPlace, '7px');
+            
+            // Miejsce i data załadowania
+            const loadingText = `${cmrData.loadingPlace || ''}\n${formatDateSimple(cmrData.loadingDate) || ''}`;
+            addTextToField(svgDoc, 'field-loading-place-date', loadingText, '7px');
+            
+            // Miejsce wystawienia (adres z miejsca załadowania)
+            addTextToField(svgDoc, 'field-issue-place-address', cmrData.loadingPlace || '', '7px');
+            
+            // Załączone dokumenty
+            addTextToField(svgDoc, 'field-documents', cmrData.attachedDocuments, '7px');
+            
+            // Numery rejestracyjne (dodane w dwóch miejscach)
+            const vehicleRegText = `${cmrData.vehicleInfo?.vehicleRegistration || ''} / ${cmrData.vehicleInfo?.trailerRegistration || ''}`;
+            addTextToField(svgDoc, 'field-vehicle-registration', vehicleRegText, '7px');
+            addTextToField(svgDoc, 'field-vehicle-registration-2', vehicleRegText, '7px');
+            
+            // Dane o towarach
+            if (cmrData.items && cmrData.items.length > 0) {
+              const items = cmrData.items;
+              
+              // Cechy i numery (pole 6)
+              let marksText = items.map((item, index) => 
+                index === 0 ? item.id || '' : '\n\n\n' + (item.id || '')
+              ).join('');
+              addTextToField(svgDoc, 'field-marks', marksText, '7px');
+              
+              // Ilość sztuk (pole 7)
+              let packagesText = items.map((item, index) => 
+                index === 0 ? item.quantity?.toString() || '' : '\n\n\n' + (item.quantity?.toString() || '')
+              ).join('');
+              addTextToField(svgDoc, 'field-packages', packagesText, '7px');
+              
+              // Sposób opakowania (pole 8)
+              let packingText = items.map((item, index) => 
+                index === 0 ? item.unit || '' : '\n\n\n' + (item.unit || '')
+              ).join('');
+              addTextToField(svgDoc, 'field-packing', packingText, '7px');
+              
+              // Rodzaj towaru (pole 9)
+              let goodsText = items.map((item, index) => 
+                index === 0 ? item.description || '' : '\n\n\n' + (item.description || '')
+              ).join('');
+              addTextToField(svgDoc, 'field-goods', goodsText, '7px');
+              
+              // Waga brutto (pole 11)
+              let weightsText = items.map((item, index) => 
+                index === 0 ? item.weight?.toString() || '' : '\n\n\n' + (item.weight?.toString() || '')
+              ).join('');
+              addTextToField(svgDoc, 'field-weight', weightsText, '7px');
+              
+              // Objętość (pole 12)
+              let volumesText = items.map((item, index) => 
+                index === 0 ? item.volume?.toString() || '' : '\n\n\n' + (item.volume?.toString() || '')
+              ).join('');
+              addTextToField(svgDoc, 'field-volume', volumesText, '7px');
+            }
+            
+            // Dane przewoźnika
+            const carrierText = [
+              cmrData.carrier,
+              cmrData.carrierAddress,
+              `${cmrData.carrierPostalCode || ''} ${cmrData.carrierCity || ''}`,
+              cmrData.carrierCountry
+            ].filter(Boolean).join('\n');
+            addTextToField(svgDoc, 'field-carrier', carrierText, '7px');
+            
+            // Zastrzeżenia i uwagi
+            addTextToField(svgDoc, 'field-reservations', cmrData.reservations, '7px');
+            
+            // Instrukcje nadawcy
+            addTextToField(svgDoc, 'field-instructions', cmrData.instructionsFromSender, '7px');
+            
+            // Postanowienia specjalne
+            addTextToField(svgDoc, 'field-special-agreements', cmrData.specialAgreements, '7px');
+            
+            // Numer CMR w środkowej części dokumentu
+            addTextToField(svgDoc, 'field-cmr-number-middle', `${cmrData.cmrNumber || ''}`, '7px', 'bold');
+            
+            // Informacje do zapłaty (pole payment)
+            const paymentText = cmrData.paymentMethod === 'sender' ? 'Płaci nadawca' : 
+                               cmrData.paymentMethod === 'recipient' ? 'Płaci odbiorca' : '';
+            addTextToField(svgDoc, 'field-payment', paymentText, '7px');
+            addTextToField(svgDoc, 'field-payer-bottom', paymentText, '7px');
+            
+            // Pełny numer CMR w dolnej części
+            addTextToField(svgDoc, 'field-full-cmr-number', `${cmrData.cmrNumber}`, '7px', 'bold');
+            
+            // Miejsce i data wystawienia
+            const formatDateSimple2 = (date) => {
+              if (!date) return '';
+              
+              // Obsługa timestampu Firestore
+              if (date && typeof date === 'object' && typeof date.toDate === 'function') {
+                date = date.toDate();
+              }
+              
+              let dateObj;
+              if (typeof date === 'string') {
+                dateObj = new Date(date);
+              } else {
+                dateObj = date;
+              }
+              
+              if (isNaN(dateObj.getTime())) {
+                return '';
+              }
+              
+              const day = dateObj.getDate().toString().padStart(2, '0');
+              const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+              const year = dateObj.getFullYear();
+              
+              return `${day}.${month}.${year}`;
+            };
+            
+            const issuePlaceDate = `${cmrData.issuePlace || ''} ${formatDateSimple2(cmrData.issueDate) || ''}`;
+            addTextToField(svgDoc, 'field-issue-place-date', issuePlaceDate, '7px');
+          };
+          
+          // Wypełnij pola w obecnym szablonie
+          fillDocumentFields(svgDoc);
+          
+          // Przekształć dokument z powrotem do tekstu
+          const serializer = new XMLSerializer();
+          const updatedSvgString = serializer.serializeToString(svgDoc);
+          
+          // Dodaj do listy wygenerowanych dokumentów
+          generatedDocuments.push({
+            svgString: updatedSvgString,
+            copyNumber: copyNumber,
+            backgroundTemplate: backgroundTemplateName
+          });
+          
+        } catch (templateError) {
+          console.error(`Błąd podczas generowania szablonu ${copyNumber}:`, templateError);
+          showError(`Nie udało się wygenerować kopii ${copyNumber}: ${templateError.message}`);
         }
-      };
-      
-      // Formatowanie daty w formie DD.MM.YYYY
-      const formatDateSimple = (date) => {
-        if (!date) return '';
-        
-        // Obsługa timestampu Firestore
-        if (date && typeof date === 'object' && typeof date.toDate === 'function') {
-          date = date.toDate();
-        }
-        
-        let dateObj;
-        if (typeof date === 'string') {
-          dateObj = new Date(date);
-        } else {
-          dateObj = date;
-        }
-        
-        if (isNaN(dateObj.getTime())) {
-          return '';
-        }
-        
-        const day = dateObj.getDate().toString().padStart(2, '0');
-        const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
-        const year = dateObj.getFullYear();
-        
-        return `${day}.${month}.${year}`;
-      };
-      
-      // Mapowanie danych CMR na pola w szablonie
-      
-      // Dane nadawcy
-      const senderText = [
-        cmrData.sender,
-        cmrData.senderAddress,
-        `${cmrData.senderPostalCode || ''} ${cmrData.senderCity || ''}`,
-        cmrData.senderCountry
-      ].filter(Boolean).join('\n');
-      addTextToField('field-sender', senderText, '7px');
-      
-      // Dane odbiorcy
-      const recipientText = [
-        cmrData.recipient,
-        cmrData.recipientAddress
-      ].filter(Boolean).join('\n');
-      addTextToField('field-recipient', recipientText, '7px');
-      
-      // Miejsce przeznaczenia
-      addTextToField('field-destination', cmrData.deliveryPlace, '7px');
-      
-      // Miejsce i data załadowania
-      const loadingText = `${cmrData.loadingPlace || ''}\n${formatDateSimple(cmrData.loadingDate) || ''}`;
-      addTextToField('field-loading-place-date', loadingText, '7px');
-      
-      // Miejsce wystawienia (adres z miejsca załadowania)
-      addTextToField('field-issue-place-address', cmrData.loadingPlace || '', '7px');
-      
-      // Załączone dokumenty
-      addTextToField('field-documents', cmrData.attachedDocuments, '7px');
-      
-      // Numery rejestracyjne (dodane w dwóch miejscach)
-      const vehicleRegText = `${cmrData.vehicleInfo?.vehicleRegistration || ''} / ${cmrData.vehicleInfo?.trailerRegistration || ''}`;
-      addTextToField('field-vehicle-registration', vehicleRegText, '7px');
-      addTextToField('field-vehicle-registration-2', vehicleRegText, '7px');
-      
-      // Dane o towarach
-      if (cmrData.items && cmrData.items.length > 0) {
-        const items = cmrData.items;
-        
-        // Cechy i numery (pole 6)
-        let marksText = items.map((item, index) => 
-          index === 0 ? item.id || '' : '\n\n\n' + (item.id || '')
-        ).join('');
-        addTextToField('field-marks', marksText, '7px');
-        
-        // Ilość sztuk (pole 7)
-        let packagesText = items.map((item, index) => 
-          index === 0 ? item.quantity?.toString() || '' : '\n\n\n' + (item.quantity?.toString() || '')
-        ).join('');
-        addTextToField('field-packages', packagesText, '7px');
-        
-        // Sposób opakowania (pole 8)
-        let packingText = items.map((item, index) => 
-          index === 0 ? item.unit || '' : '\n\n\n' + (item.unit || '')
-        ).join('');
-        addTextToField('field-packing', packingText, '7px');
-        
-        // Rodzaj towaru (pole 9)
-        let goodsText = items.map((item, index) => 
-          index === 0 ? item.description || '' : '\n\n\n' + (item.description || '')
-        ).join('');
-        addTextToField('field-goods', goodsText, '7px');
-        
-        // Waga brutto (pole 11)
-        let weightsText = items.map((item, index) => 
-          index === 0 ? item.weight?.toString() || '' : '\n\n\n' + (item.weight?.toString() || '')
-        ).join('');
-        addTextToField('field-weight', weightsText, '7px');
-        
-        // Objętość (pole 12)
-        let volumesText = items.map((item, index) => 
-          index === 0 ? item.volume?.toString() || '' : '\n\n\n' + (item.volume?.toString() || '')
-        ).join('');
-        addTextToField('field-volume', volumesText, '7px');
       }
       
-      // Dane przewoźnika
-      const carrierText = [
-        cmrData.carrier,
-        cmrData.carrierAddress,
-        `${cmrData.carrierPostalCode || ''} ${cmrData.carrierCity || ''}`,
-        cmrData.carrierCountry
-      ].filter(Boolean).join('\n');
-      addTextToField('field-carrier', carrierText, '7px');
-      
-      // Zastrzeżenia i uwagi
-      addTextToField('field-reservations', cmrData.reservations, '7px');
-      
-      // Instrukcje nadawcy
-      addTextToField('field-instructions', cmrData.instructionsFromSender, '7px');
-      
-      // Postanowienia specjalne
-      addTextToField('field-special-agreements', cmrData.specialAgreements, '7px');
-      
-      // Numer CMR w środkowej części dokumentu
-      addTextToField('field-cmr-number-middle', `${cmrData.cmrNumber || ''}`, '7px', 'bold');
-      
-      // Informacje do zapłaty (pole payment)
-      const paymentText = cmrData.paymentMethod === 'sender' ? 'Płaci nadawca' : 
-                         cmrData.paymentMethod === 'recipient' ? 'Płaci odbiorca' : '';
-      addTextToField('field-payment', paymentText, '7px');
-      addTextToField('field-payer-bottom', paymentText, '7px');
-      
-      // Pełny numer CMR w dolnej części
-      addTextToField('field-full-cmr-number', `${cmrData.cmrNumber}`, '7px', 'bold');
-      
-      // Miejsce i data wystawienia
-      const issuePlaceDate = `${cmrData.issuePlace || ''} ${formatDateSimple(cmrData.issueDate) || ''}`;
-      addTextToField('field-issue-place-date', issuePlaceDate, '7px');
-      
-      // Przekształć dokument z powrotem do tekstu
-      const serializer = new XMLSerializer();
-      const updatedSvgString = serializer.serializeToString(svgDoc);
-      
-      // Konwertuj SVG na obraz za pomocą biblioteki Canvas
+      // Funkcja do konwersji SVG na obraz
       const convertSvgToImage = async (svgString) => {
         return new Promise((resolve, reject) => {
           try {
@@ -548,37 +608,157 @@ const CmrDetailsPage = () => {
         });
       };
       
+      // Przygotuj dokumenty do drukowania
       try {
-        // Konwertuj SVG na PNG a następnie pobierz plik
-        const imgData = await convertSvgToImage(updatedSvgString);
+        const printImages = [];
         
-        // Utwórz link do pobrania
-        const downloadLink = document.createElement('a');
-        downloadLink.href = imgData;
-        downloadLink.download = `CMR-${cmrData.cmrNumber || 'dokument'}.png`;
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-        document.body.removeChild(downloadLink);
+        // Konwertuj wszystkie dokumenty na obrazy
+        for (const docData of generatedDocuments) {
+          try {
+            const imgData = await convertSvgToImage(docData.svgString);
+            printImages.push(imgData);
+          } catch (imageError) {
+            console.error(`Błąd konwersji kopii ${docData.copyNumber} do obrazu:`, imageError);
+          }
+        }
         
-        showSuccess('Wygenerowano oficjalny dokument CMR');
-      } catch (error) {
-        console.error('Błąd konwersji dokumentu:', error);
+        if (printImages.length === 0) {
+          throw new Error('Nie udało się przygotować żadnych obrazów do drukowania');
+        }
         
-        // Jeśli konwersja na PNG nie powiodła się, spróbuj zapisać jako SVG
-        const blob = new Blob([updatedSvgString], { type: 'image/svg+xml' });
-        const url = URL.createObjectURL(blob);
+        // Utwórz nowe okno do drukowania
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+          throw new Error('Nie udało się otworzyć okna drukowania. Sprawdź ustawienia blokowania popup.');
+        }
         
-        const downloadLink = document.createElement('a');
-        downloadLink.href = url;
-        downloadLink.download = `CMR-${cmrData.cmrNumber || 'dokument'}.svg`;
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-        document.body.removeChild(downloadLink);
+        // Przygotuj HTML do drukowania
+        const htmlContent = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>CMR ${cmrData.cmrNumber || 'dokument'} - Drukowanie</title>
+            <style>
+              @page {
+                size: A4;
+                margin: 0;
+              }
+              
+              * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+              }
+              
+              body {
+                font-family: Arial, sans-serif;
+                background: white;
+              }
+              
+              .page {
+                width: 210mm;
+                height: 297mm;
+                page-break-after: always;
+                position: relative;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+              }
+              
+              .page:last-child {
+                page-break-after: avoid;
+              }
+              
+              .page img {
+                width: 100%;
+                height: 100%;
+                object-fit: contain;
+              }
+              
+              @media print {
+                body {
+                  -webkit-print-color-adjust: exact;
+                  print-color-adjust: exact;
+                }
+                
+                .page {
+                  page-break-inside: avoid;
+                }
+              }
+            </style>
+          </head>
+          <body>
+            ${printImages.map((imgData, index) => `
+              <div class="page">
+                <img src="${imgData}" alt="CMR Kopia ${index + 1}" />
+              </div>
+            `).join('')}
+          </body>
+          </html>
+        `;
         
-        URL.revokeObjectURL(url);
+        // Wpisz HTML do okna drukowania
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
         
-        showSuccess('Wygenerowano dokument CMR w formacie SVG');
+        // Poczekaj na załadowanie obrazów i uruchom drukowanie
+        printWindow.onload = () => {
+          setTimeout(() => {
+            printWindow.focus();
+            printWindow.print();
+            
+            // Opcjonalnie zamknij okno po drukowaniu (niektóre przeglądarki to robią automatycznie)
+            printWindow.onafterprint = () => {
+              printWindow.close();
+            };
+          }, 1000); // Krótkie opóźnienie aby obrazy się załadowały
+        };
+        
+        showSuccess(`Przygotowano ${printImages.length} kopii dokumentu CMR do drukowania`);
+        
+      } catch (printError) {
+        console.error('Błąd podczas przygotowywania do drukowania:', printError);
+        showError('Nie udało się przygotować dokumentów do drukowania: ' + printError.message);
+        
+        // Fallback - spróbuj wygenerować PDF do pobrania
+        try {
+          const { jsPDF } = await import('jspdf');
+          
+          const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: 'a4'
+          });
+          
+          let isFirstPage = true;
+          
+          for (const docData of generatedDocuments) {
+            try {
+              const imgData = await convertSvgToImage(docData.svgString);
+              
+              if (!isFirstPage) {
+                pdf.addPage();
+              }
+              
+              pdf.addImage(imgData, 'PNG', 0, 0, 210, 297);
+              isFirstPage = false;
+              
+            } catch (imageError) {
+              console.error(`Błąd konwersji kopii ${docData.copyNumber}:`, imageError);
+            }
+          }
+          
+          if (!isFirstPage) {
+            pdf.save(`CMR-${cmrData.cmrNumber || 'dokument'}-wszystkie-kopie.pdf`);
+            showSuccess('Wygenerowano plik PDF jako alternatywę');
+          }
+          
+        } catch (fallbackError) {
+          console.error('Błąd fallback PDF:', fallbackError);
+          showError('Nie udało się przygotować dokumentów w żaden sposób');
+        }
       }
+
     } catch (error) {
       console.error('Błąd podczas generowania dokumentu CMR:', error);
       showError('Nie udało się wygenerować dokumentu CMR: ' + error.message);
