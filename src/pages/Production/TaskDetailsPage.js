@@ -1037,7 +1037,7 @@ const TaskDetailsPage = () => {
         // Użyj LOT z zadania produkcyjnego, jeśli jest dostępny,
         // w przeciwnym przypadku wygeneruj na podstawie numeru MO
         const lotNumber = task.lotNumber || 
-                         (task.moNumber ? `SN/${task.moNumber}` : `LOT-PROD-${id.substring(0, 6)}`);
+                         (task.moNumber ? `SN${task.moNumber.replace('MO', '')}` : `LOT-PROD-${id.substring(0, 6)}`);
           
         // Przygotuj dodatkowe informacje o pochodzeniu produktu
         const sourceInfo = new URLSearchParams();
