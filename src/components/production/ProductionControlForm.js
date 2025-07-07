@@ -219,6 +219,87 @@ const ExistingAttachment = ({ fileUrl, fileName, onRemove, fieldName }) => {
   );
 };
 
+// Komponent do wyświetlania podglądu nowo wybranego pliku
+const FilePreview = ({ file, onRemove, fieldName }) => {
+  const [previewUrl, setPreviewUrl] = useState(null);
+
+  useEffect(() => {
+    if (file && file instanceof File) {
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+      
+      // Cleanup URL gdy komponent się odmontowuje
+      return () => {
+        URL.revokeObjectURL(url);
+      };
+    }
+  }, [file]);
+
+  if (!file) return null;
+
+  const isImage = file.type.startsWith('image/');
+
+  return (
+    <Box sx={{ 
+      mt: 1, 
+      p: 2, 
+      border: '1px solid #2196f3', 
+      borderRadius: 1, 
+      backgroundColor: 'rgba(33, 150, 243, 0.08)',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 2
+    }}>
+      {isImage && previewUrl ? (
+        <img 
+          src={previewUrl} 
+          alt={file.name}
+          style={{ 
+            maxWidth: '60px', 
+            maxHeight: '60px', 
+            borderRadius: '4px',
+            cursor: 'pointer' 
+          }}
+          onClick={() => window.open(previewUrl, '_blank')}
+        />
+      ) : (
+        <AttachFileIcon color="primary" />
+      )}
+      
+      <Box sx={{ flexGrow: 1 }}>
+        <Typography variant="body2" color="text.primary">
+          {file.name}
+        </Typography>
+        <Typography variant="caption" color="primary">
+          Nowy plik - gotowy do zapisania
+        </Typography>
+      </Box>
+      
+      <Box sx={{ display: 'flex', gap: 1 }}>
+        {isImage && previewUrl && (
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<VisibilityIcon />}
+            onClick={() => window.open(previewUrl, '_blank')}
+          >
+            Podgląd
+          </Button>
+        )}
+        <Button
+          size="small"
+          variant="outlined"
+          color="error"
+          startIcon={<DeleteIcon />}
+          onClick={() => onRemove(fieldName)}
+        >
+          Usuń
+        </Button>
+      </Box>
+    </Box>
+  );
+};
+
 const ProductionControlForm = ({ 
   isDialog = false, 
   onClose = null, 
@@ -540,6 +621,7 @@ const ProductionControlForm = ({
       }]);
     }
     
+    // Wyczyść wszystkie pola związane z tym załącznikiem
     setFormData(prev => ({
       ...prev,
       [fieldName]: null,
@@ -1328,9 +1410,17 @@ const ProductionControlForm = ({
                 Np. Plan mieszań
               </Typography>
               
+              {/* Pokaż istniejący plik (z URL) */}
               <ExistingAttachment
                 fileUrl={formData.documentScansUrl}
                 fileName={formData.documentScansName}
+                onRemove={handleRemoveAttachment}
+                fieldName="documentScans"
+              />
+              
+              {/* Pokaż nowo wybrany plik */}
+              <FilePreview
+                file={formData.documentScans}
                 onRemove={handleRemoveAttachment}
                 fieldName="documentScans"
               />
@@ -1351,9 +1441,17 @@ const ProductionControlForm = ({
                 Zdjęcie produktu od frontu
               </Typography>
               
+              {/* Pokaż istniejący plik (z URL) */}
               <ExistingAttachment
                 fileUrl={formData.productPhoto1Url}
                 fileName={formData.productPhoto1Name}
+                onRemove={handleRemoveAttachment}
+                fieldName="productPhoto1"
+              />
+              
+              {/* Pokaż nowo wybrany plik */}
+              <FilePreview
+                file={formData.productPhoto1}
                 onRemove={handleRemoveAttachment}
                 fieldName="productPhoto1"
               />
@@ -1374,9 +1472,17 @@ const ProductionControlForm = ({
                 Zdjęcie produktu z widocznym nr. LOT - EXP
               </Typography>
               
+              {/* Pokaż istniejący plik (z URL) */}
               <ExistingAttachment
                 fileUrl={formData.productPhoto2Url}
                 fileName={formData.productPhoto2Name}
+                onRemove={handleRemoveAttachment}
+                fieldName="productPhoto2"
+              />
+              
+              {/* Pokaż nowo wybrany plik */}
+              <FilePreview
+                file={formData.productPhoto2}
                 onRemove={handleRemoveAttachment}
                 fieldName="productPhoto2"
               />
@@ -1397,9 +1503,17 @@ const ProductionControlForm = ({
                 Zdjęcie zapakowanego produktu w karton z widoczną etykietą
               </Typography>
               
+              {/* Pokaż istniejący plik (z URL) */}
               <ExistingAttachment
                 fileUrl={formData.productPhoto3Url}
                 fileName={formData.productPhoto3Name}
+                onRemove={handleRemoveAttachment}
+                fieldName="productPhoto3"
+              />
+              
+              {/* Pokaż nowo wybrany plik */}
+              <FilePreview
+                file={formData.productPhoto3}
                 onRemove={handleRemoveAttachment}
                 fieldName="productPhoto3"
               />
