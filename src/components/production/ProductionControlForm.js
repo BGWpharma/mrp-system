@@ -39,6 +39,7 @@ import { query, where } from 'firebase/firestore';
 import { getAllOrders } from '../../services/orderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useStaffOptions, usePositionOptions } from '../../hooks/useFormOptions';
+import FileOrCameraInput from '../common/FileOrCameraInput';
 
 // Funkcja pomocnicza do formatowania daty w prawidłowym formacie dla pola expiryDate
 const formatExpiryDate = (dateValue) => {
@@ -1334,11 +1335,12 @@ const ProductionControlForm = ({
                 fieldName="documentScans"
               />
               
-              <input
-                type="file"
-                onChange={(e) => handleFileChange(e, 'documentScans')}
-                style={{ width: '100%', marginTop: '8px' }}
-              />
+              <Box sx={{ mt: 1 }}>
+                <FileOrCameraInput
+                  onChange={(e) => handleFileChange(e, 'documentScans')}
+                  accept="image/*,application/pdf,.doc,.docx"
+                />
+              </Box>
             </Grid>
             
             <Grid item xs={12}>
@@ -1356,11 +1358,12 @@ const ProductionControlForm = ({
                 fieldName="productPhoto1"
               />
               
-              <input
-                type="file"
-                onChange={(e) => handleFileChange(e, 'productPhoto1')}
-                style={{ width: '100%', marginTop: '8px' }}
-              />
+              <Box sx={{ mt: 1 }}>
+                <FileOrCameraInput
+                  onChange={(e) => handleFileChange(e, 'productPhoto1')}
+                  accept="image/*"
+                />
+              </Box>
             </Grid>
             
             <Grid item xs={12}>
@@ -1378,11 +1381,12 @@ const ProductionControlForm = ({
                 fieldName="productPhoto2"
               />
               
-              <input
-                type="file"
-                onChange={(e) => handleFileChange(e, 'productPhoto2')}
-                style={{ width: '100%', marginTop: '8px' }}
-              />
+              <Box sx={{ mt: 1 }}>
+                <FileOrCameraInput
+                  onChange={(e) => handleFileChange(e, 'productPhoto2')}
+                  accept="image/*"
+                />
+              </Box>
             </Grid>
             
             <Grid item xs={12}>
@@ -1400,11 +1404,12 @@ const ProductionControlForm = ({
                 fieldName="productPhoto3"
               />
               
-              <input
-                type="file"
-                onChange={(e) => handleFileChange(e, 'productPhoto3')}
-                style={{ width: '100%', marginTop: '8px' }}
-              />
+              <Box sx={{ mt: 1 }}>
+                <FileOrCameraInput
+                  onChange={(e) => handleFileChange(e, 'productPhoto3')}
+                  accept="image/*"
+                />
+              </Box>
             </Grid>
             
             <Grid item xs={12}>
