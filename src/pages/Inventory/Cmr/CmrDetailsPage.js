@@ -57,6 +57,8 @@ import InventoryIcon from '@mui/icons-material/Inventory';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import FileCopyIcon from '@mui/icons-material/FileCopy';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import LabelIcon from '@mui/icons-material/Label';
+import GridViewIcon from '@mui/icons-material/GridView';
 
 // Globalne style CSS dla drukowania
 const GlobalStyles = styled('style')({});
@@ -228,6 +230,16 @@ const CmrDetailsPage = () => {
   
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleBoxLabel = () => {
+    // TODO: Implementacja generowania etykiety kartonu
+    console.log('Generowanie etykiety kartonu dla CMR:', id);
+  };
+
+  const handlePalletLabel = () => {
+    // TODO: Implementacja generowania etykiety palety
+    console.log('Generowanie etykiety palety dla CMR:', id);
   };
   
   const handleGenerateOfficialCmr = async () => {
@@ -1105,6 +1117,28 @@ const CmrDetailsPage = () => {
             sx={{ mb: { xs: 1, sm: 0 } }}
           >
             Migruj CMR
+          </Button>
+          
+          <Button
+            variant="outlined"
+            startIcon={<LabelIcon />}
+            onClick={handleBoxLabel}
+            color="primary"
+            size="small"
+            sx={{ mb: { xs: 1, sm: 0 } }}
+          >
+            Etykieta kartonu
+          </Button>
+          
+          <Button
+            variant="outlined"
+            startIcon={<GridViewIcon />}
+            onClick={handlePalletLabel}
+            color="primary"
+            size="small"
+            sx={{ mb: { xs: 1, sm: 0 } }}
+          >
+            Etykieta palety
           </Button>
         </Box>
       </Box>

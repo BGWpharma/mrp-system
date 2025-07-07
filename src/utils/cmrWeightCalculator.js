@@ -211,4 +211,165 @@ export const getPackageData = async (parentPackageItemId) => {
     console.error('Błąd podczas pobierania danych kartonu:', error);
     return null;
   }
+};
+
+/**
+ * Oblicza wagę dla każdej palety osobno
+ * @param {Object} params - Parametry obliczenia
+ * @param {number} params.quantity - Ilość produktu w CMR
+ * @param {number} params.unitWeight - Waga jednostkowa produktu w kg
+ * @param {number} params.itemsPerBox - Ilość produktu w kartonie
+ * @param {number} params.boxesPerPallet - Ilość kartonów na palecie
+ * @param {number} params.packageWeight - Waga kartonu w kg (domyślnie 0.34 kg)
+ * @param {number} params.palletWeight - Waga palety w kg (domyślnie 25 kg)
+ * @returns {Object} Szczegółowe obliczenia wagi dla każdej palety
+ */
+export const calculatePalletWeights = ({
+  quantity,
+  unitWeight = 0,
+  itemsPerBox = 0,
+  boxesPerPallet = 0,
+  packageWeight = 0.34,
+  palletWeight = 25
+}) => {
+  // Walidacja danych wejściowych
+  if (!quantity || quantity <= 0 || !itemsPerBox || !boxesPerPallet) {
+    return {
+      pallets: [],
+      totalWeight: 0,
+      palletsCount: 0
+    };
+  }
+
+  // Oblicz podstawowe wartości
+  const totalBoxesNeeded = calculateBoxesNeeded(quantity, itemsPerBox);
+  const fullPallets = Math.floor(totalBoxesNeeded / boxesPerPallet);
+  const remainingBoxes = totalBoxesNeeded % boxesPerPallet;
+  const totalPallets = fullPallets + (remainingBoxes > 0 ? 1 : 0);
+  
+  const pallets = [];
+  let totalWeight = 0;
+  let remainingQuantity = quantity;
+
+  // Oblicz pełne palety
+  for (let i = 0; i < fullPallets; i++) {
+    const itemsOnPallet = Math.min(remainingQuantity, boxesPerPallet * itemsPerBox);
+    const boxesOnPallet = boxesPerPallet;
+    const productWeight = itemsOnPallet * unitWeight;
+    const packagesWeight = boxesOnPallet * packageWeight;
+    const palletTotalWeight = productWeight + packagesWeight + palletWeight;
+    
+    pallets.push({
+      palletNumber: i + 1,
+      itemsCount: itemsOnPallet,
+      boxesCount: boxesOnPallet,
+      productWeight: Number(productWeight.toFixed(3)),
+      packagesWeight: Number(packagesWeight.toFixed(3)),
+      palletWeight: palletWeight,
+      totalWeight: Number(palletTotalWeight.toFixed(3)),
+      isFull: true
+    });
+    
+    totalWeight += palletTotalWeight;
+    remainingQuantity -= itemsOnPallet;
+  }
+
+  // Oblicz ostatnią niepełną paletę (jeśli istnieje)
+  if (remainingBoxes > 0 && remainingQuantity > 0) {
+    const itemsOnPallet = remainingQuantity;
+    const boxesOnPallet = remainingBoxes;
+    const productWeight = itemsOnPallet * unitWeight;
+    const packagesWeight = boxesOnPallet * packageWeight;
+    const palletTotalWeight = productWeight + packagesWeight + palletWeight;
+    
+    pallets.push({
+      palletNumber: fullPallets + 1,
+      itemsCount: itemsOnPallet,
+      boxesCount: boxesOnPallet,
+      productWeight: Number(productWeight.toFixed(3)),
+      packagesWeight: Number(packagesWeight.toFixed(3)),
+      palletWeight: palletWeight,
+      totalWeight: Number(palletTotalWeight.toFixed(3)),
+      isFull: false
+    });
+    
+    totalWeight += palletTotalWeight;
+  }
+
+  return {
+    pallets,
+    totalWeight: Number(totalWeight.toFixed(3)),
+    palletsCount: totalPallets,
+    totalBoxes: totalBoxesNeeded,
+    fullPalletsCount: fullPallets,
+    partialPalletsCount: remainingBoxes > 0 ? 1 : 0
+  };
+};
+
+/**
+ * Oblicza wagę dla kartonów - pełnego i niepełnego (jeśli występuje)
+ * @param {Object} params - Parametry obliczenia
+ * @param {number} params.quantity - Ilość produktu w CMR
+ * @param {number} params.unitWeight - Waga jednostkowa produktu w kg
+ * @param {number} params.itemsPerBox - Ilość produktu w kartonie
+ * @param {number} params.packageWeight - Waga kartonu w kg (domyślnie 0.34 kg)
+ * @returns {Object} Szczegółowe obliczenia wagi dla kartonów
+ */
+export const calculateBoxWeights = ({
+  quantity,
+  unitWeight = 0,
+  itemsPerBox = 0,
+  packageWeight = 0.34
+}) => {
+  // Walidacja danych wejściowych
+  if (!quantity || quantity <= 0 || !itemsPerBox) {
+    return {
+      fullBox: null,
+      partialBox: null,
+      totalBoxes: 0,
+      fullBoxesCount: 0,
+      partialBoxesCount: 0
+    };
+  }
+
+  // Oblicz podstawowe wartości
+  const totalBoxesNeeded = calculateBoxesNeeded(quantity, itemsPerBox);
+  const fullBoxes = Math.floor(quantity / itemsPerBox);
+  const remainingItems = quantity % itemsPerBox;
+  const hasPartialBox = remainingItems > 0;
+
+  // Oblicz wagę pełnego kartonu
+  const fullBoxProductWeight = itemsPerBox * unitWeight;
+  const fullBoxTotalWeight = fullBoxProductWeight + packageWeight;
+
+  const fullBox = {
+    itemsCount: itemsPerBox,
+    productWeight: Number(fullBoxProductWeight.toFixed(3)),
+    packageWeight: packageWeight,
+    totalWeight: Number(fullBoxTotalWeight.toFixed(3)),
+    isFull: true
+  };
+
+  // Oblicz wagę niepełnego kartonu (jeśli istnieje)
+  let partialBox = null;
+  if (hasPartialBox) {
+    const partialBoxProductWeight = remainingItems * unitWeight;
+    const partialBoxTotalWeight = partialBoxProductWeight + packageWeight;
+
+    partialBox = {
+      itemsCount: remainingItems,
+      productWeight: Number(partialBoxProductWeight.toFixed(3)),
+      packageWeight: packageWeight,
+      totalWeight: Number(partialBoxTotalWeight.toFixed(3)),
+      isFull: false
+    };
+  }
+
+  return {
+    fullBox,
+    partialBox,
+    totalBoxes: totalBoxesNeeded,
+    fullBoxesCount: fullBoxes,
+    partialBoxesCount: hasPartialBox ? 1 : 0
+  };
 }; 
