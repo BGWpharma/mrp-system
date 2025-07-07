@@ -63,7 +63,8 @@ import {
   ArrowDropUp as ArrowDropUpIcon,
   PictureAsPdf as PdfIcon,
   TableChart as CsvIcon,
-  Clear as ClearIcon
+  Clear as ClearIcon,
+  Assignment as CoAIcon
 } from '@mui/icons-material';
 import { getAllInventoryItems, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, getItemBatches, updateReservation, updateReservationTasks, cleanupDeletedTaskReservations, deleteReservation, getInventoryItemById, recalculateAllInventoryQuantities, cleanupMicroReservations } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
@@ -73,6 +74,7 @@ import { exportToCSV } from '../../utils/exportUtils';
 import { useAuth } from '../../hooks/useAuth';
 import LabelDialog from './LabelDialog';
 import EditReservationDialog from './EditReservationDialog';
+import CoAGeneratorDialog from './CoAGeneratorDialog';
 import { doc, getDoc, updateDoc, serverTimestamp, collection, getDocs, addDoc, deleteDoc, query, orderBy, limit, where } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
@@ -122,6 +124,8 @@ const InventoryList = () => {
   const [warehouseItems, setWarehouseItems] = useState([]);
   const [warehouseItemsLoading, setWarehouseItemsLoading] = useState(false);
   const [batchesDialogOpen, setBatchesDialogOpen] = useState(false);
+  const [coaDialogOpen, setCoaDialogOpen] = useState(false);
+  const [menuAnchorEl, setMenuAnchorEl] = useState(null);
   const [warehouseItemsTotalCount, setWarehouseItemsTotalCount] = useState(0);
   const [warehouseItemsTotalPages, setWarehouseItemsTotalPages] = useState(1);
   const warehouseSearchTermRef = useRef(null);
@@ -1404,6 +1408,47 @@ const InventoryList = () => {
     }
   };
 
+  // Funkcja do obsługi generatora CoA
+  const handleCoAGenerator = () => {
+    setCoaDialogOpen(true);
+  };
+
+  // Funkcja do zamknięcia dialogu CoA
+  const handleCloseCoADialog = () => {
+    setCoaDialogOpen(false);
+  };
+
+  // Funkcja do obsługi wygenerowania CoA
+  const handleCoAGenerated = (markdownContent) => {
+    showSuccess('Certyfikat CoA został wygenerowany');
+    console.log('Generated CoA content:', markdownContent);
+  };
+
+  const handleMoreMenuOpen = (event) => {
+    setMenuAnchorEl(event.currentTarget);
+  };
+
+  const handleMoreMenuClose = () => {
+    setMenuAnchorEl(null);
+  };
+
+  const handleMenuItemClick = (action) => {
+    handleMoreMenuClose();
+    switch (action) {
+      case 'pdf':
+        generatePdfReport();
+        break;
+      case 'csv':
+        generateCsvReport();
+        break;
+      case 'coa':
+        handleCoAGenerator();
+        break;
+      default:
+        break;
+    }
+  };
+
   // Funkcje do obsługi wyszukiwania w lokalizacji
   const handleWarehouseSearchTermChange = (e) => {
     listActions.setWarehouseSearchTerm(e.target.value);
@@ -1453,46 +1498,16 @@ const InventoryList = () => {
         <Typography variant="h5">Stany</Typography>
         <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, width: { xs: '100%', sm: 'auto' } }}>
           <Box sx={{ display: 'flex', gap: 1, width: '100%' }}>
-            <Tooltip title="Generuj raport PDF">
+            <Tooltip title="Więcej opcji">
               <Button
                 variant="outlined"
                 color="primary"
-                onClick={generatePdfReport}
-                startIcon={<PdfIcon />}
+                onClick={handleMoreMenuOpen}
+                startIcon={<MoreVertIcon />}
                 sx={{ flex: 1 }}
                 disabled={mainTableLoading}
               >
-                PDF
-              </Button>
-            </Tooltip>
-            <Tooltip title="Generuj raport CSV">
-              <Button
-                variant="outlined"
-                color="primary"
-                onClick={generateCsvReport}
-                startIcon={<CsvIcon />}
-                sx={{ flex: 1 }}
-                disabled={mainTableLoading}
-              >
-                CSV
-              </Button>
-            </Tooltip>
-          </Box>
-          <Box sx={{ display: 'flex', gap: 1, width: '100%' }}>
-            <Tooltip title="Sprawdź daty ważności produktów">
-              <Button 
-                variant="outlined" 
-                color="warning" 
-                component={RouterLink} 
-                to="/inventory/expiry-dates"
-                startIcon={
-                  <Badge badgeContent={expiringCount + expiredCount} color="error" max={99}>
-                    <WarningIcon />
-                  </Badge>
-                }
-                sx={{ flex: 1 }}
-              >
-                Daty ważności
+                Więcej
               </Button>
             </Tooltip>
             <Button 
@@ -1507,6 +1522,44 @@ const InventoryList = () => {
             </Button>
           </Box>
         </Box>
+
+        {/* Menu rozwijane z opcjami */}
+        <Menu
+          anchorEl={menuAnchorEl}
+          open={Boolean(menuAnchorEl)}
+          onClose={handleMoreMenuClose}
+          PaperProps={{
+            elevation: 3,
+            sx: { mt: 1 }
+          }}
+        >
+          <MenuItem onClick={() => handleMenuItemClick('pdf')}>
+            <ListItemIcon>
+              <PdfIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Raport PDF</ListItemText>
+          </MenuItem>
+          <MenuItem onClick={() => handleMenuItemClick('csv')}>
+            <ListItemIcon>
+              <CsvIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Raport CSV</ListItemText>
+          </MenuItem>
+          <MenuItem onClick={() => handleMenuItemClick('coa')}>
+            <ListItemIcon>
+              <CoAIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Generator CoA</ListItemText>
+          </MenuItem>
+          <MenuItem component={RouterLink} to="/inventory/expiry-dates" onClick={handleMoreMenuClose}>
+            <ListItemIcon>
+              <Badge badgeContent={expiringCount + expiredCount} color="error" max={99}>
+                <WarningIcon fontSize="small" />
+              </Badge>
+            </ListItemIcon>
+            <ListItemText>Daty ważności</ListItemText>
+          </MenuItem>
+        </Menu>
       </Box>
 
       {/* Dodaję zakładkę "Grupy" */}
@@ -2883,6 +2936,13 @@ const InventoryList = () => {
           <Button onClick={handleCloseBatchesDialog}>Zamknij</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Dialog generatora CoA */}
+      <CoAGeneratorDialog
+        open={coaDialogOpen}
+        onClose={handleCloseCoADialog}
+        onGenerate={handleCoAGenerated}
+      />
 
     </div>
   );
