@@ -58,7 +58,8 @@ import {
   ViewColumn as ViewColumnIcon,
   BuildCircle as BuildCircleIcon,
   ArrowDropDown as ArrowDropDownIcon,
-  Download as DownloadIcon
+  Download as DownloadIcon,
+  Sort as SortIcon
 } from '@mui/icons-material';
 import { getAllTasks, updateTaskStatus, deleteTask, addTaskProductToInventory, stopProduction, getTasksWithPagination } from '../../services/productionService';
 import { getAllWarehouses } from '../../services/inventoryService';
@@ -169,6 +170,7 @@ const TaskList = () => {
   // Stany do obsługi sortowania
   const [sortField, setSortField] = useState('scheduledDate');
   const [sortOrder, setSortOrder] = useState('asc');
+  const [sortMenuAnchor, setSortMenuAnchor] = useState(null);
 
   // Nowe stany dla opcji dodawania do magazynu w dialogu zatrzymania produkcji
   const [addToInventoryOnStop, setAddToInventoryOnStop] = useState(true);
@@ -813,6 +815,19 @@ const TaskList = () => {
     setPage(1); // Reset do pierwszej strony przy zmianie sortowania
   };
 
+  const handleSortMenuOpen = (event) => {
+    setSortMenuAnchor(event.currentTarget);
+  };
+
+  const handleSortMenuClose = () => {
+    setSortMenuAnchor(null);
+  };
+
+  const handleSortChange = (field) => {
+    handleSort(field);
+    handleSortMenuClose();
+  };
+
   // Funkcja eksportu wszystkich zadań do CSV
   const handleExportCSV = async () => {
     try {
@@ -1110,8 +1125,11 @@ const TaskList = () => {
       px: isMobile ? 1 : 2,
       bgcolor: isMobile ? (mode === 'dark' ? 'background.default' : 'transparent') : 'transparent'
     }}>
-      <Box sx={{ mb: isMobile ? 2 : 4 }}>
-        <Typography variant="h5" gutterBottom align="center" sx={{ fontSize: isMobile ? '1.25rem' : '1.5rem' }}>
+      <Box sx={{ mb: isMobile ? 1 : 4 }}>
+        <Typography variant="h5" gutterBottom align="center" sx={{ 
+          fontSize: isMobile ? '1.1rem' : '1.5rem',
+          mb: isMobile ? 0.5 : 1
+        }}>
           Zadania Produkcyjne
         </Typography>
         
@@ -1120,31 +1138,35 @@ const TaskList = () => {
           flexDirection: isMobile ? 'column' : 'row',
           justifyContent: 'space-between',
           alignItems: isMobile ? 'stretch' : 'center', 
-          mb: 2,
-          gap: isMobile ? 1 : 2
+          mb: isMobile ? 1 : 2,
+          gap: isMobile ? 0.5 : 2
         }}>
           {/* Lewa strona - Wyszukiwanie i filtrowanie */}
           <Box sx={{ 
             display: 'flex', 
-            flexDirection: isMobile ? 'column' : 'row',
-            gap: isMobile ? 1 : 2,
+            flexDirection: isMobile ? 'row' : 'row',
+            gap: isMobile ? 0.5 : 2,
             order: isMobile ? 1 : 1
           }}>
             {/* Wyszukiwanie - pierwsze od lewej */}
             <TextField
               variant="outlined"
               size="small"
-              placeholder="Szukaj zadania..."
+              placeholder={isMobile ? "Szukaj..." : "Szukaj zadania..."}
               value={searchTerm}
               onChange={handleSearchChange}
               sx={{ 
-                width: isMobile ? '100%' : 250
+                width: isMobile ? '50%' : 250,
+                '& .MuiInputBase-root': {
+                  fontSize: isMobile ? '0.8rem' : '0.875rem'
+                }
               }}
               InputProps={{
-                startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
+                startAdornment: <SearchIcon color="action" sx={{ mr: isMobile ? 0.5 : 1, fontSize: isMobile ? '1.1rem' : '1.25rem' }} />,
                 sx: {
                   borderRadius: '4px',
-                  bgcolor: mode === 'dark' ? 'background.paper' : 'white'
+                  bgcolor: mode === 'dark' ? 'background.paper' : 'white',
+                  height: isMobile ? '36px' : '40px'
                 }
               }}
             />
@@ -1154,14 +1176,19 @@ const TaskList = () => {
               variant="outlined" 
               size="small" 
               sx={{ 
-                minWidth: isMobile ? '100%' : 200,
+                minWidth: isMobile ? '50%' : 200,
                 '& .MuiOutlinedInput-root': {
                   borderRadius: '4px',
                   bgcolor: mode === 'dark' ? 'background.paper' : 'white',
+                  height: isMobile ? '36px' : '40px',
+                  fontSize: isMobile ? '0.8rem' : '0.875rem'
+                },
+                '& .MuiInputLabel-root': {
+                  fontSize: isMobile ? '0.8rem' : '0.875rem'
                 }
               }}
             >
-              <InputLabel id="status-filter-label">Status</InputLabel>
+              <InputLabel id="status-filter-label">{isMobile ? "Status" : "Status"}</InputLabel>
               <Select
                 labelId="status-filter-label"
                 id="status-filter"
@@ -1182,44 +1209,74 @@ const TaskList = () => {
           {/* Prawa strona - Przyciski i konfiguracja */}
           <Box sx={{ 
             display: 'flex', 
-            flexDirection: isMobile ? 'column' : 'row',
-            gap: 1,
+            flexDirection: isMobile ? 'row' : 'row',
+            gap: isMobile ? 0.5 : 1,
             width: isMobile ? '100%' : 'auto',
             order: isMobile ? 2 : 2
           }}>
             <Button 
               variant="contained" 
               color="primary" 
-              startIcon={<AddIcon />}
+              startIcon={<AddIcon sx={{ fontSize: isMobile ? '1rem' : '1.25rem' }} />}
               component={Link}
               to="/production/create-from-order"
-              fullWidth={isMobile}
-              size={isMobile ? "small" : "medium"}
+              size="small"
+              sx={{
+                fontSize: isMobile ? '0.7rem' : '0.875rem',
+                padding: isMobile ? '4px 8px' : '6px 16px',
+                minHeight: isMobile ? '32px' : '36px',
+                flex: isMobile ? 1 : 'none'
+              }}
             >
-              Nowe Zadanie
+              {isMobile ? "Nowe" : "Nowe Zadanie"}
             </Button>
             
             <Button 
               variant="outlined" 
               color="secondary" 
-              startIcon={loading ? <CircularProgress size={16} /> : <DownloadIcon />}
+              startIcon={loading ? <CircularProgress size={12} /> : <DownloadIcon sx={{ fontSize: isMobile ? '1rem' : '1.25rem' }} />}
               onClick={handleExportCSV}
               disabled={loading}
-              fullWidth={isMobile}
-              size={isMobile ? "small" : "medium"}
+              size="small"
+              sx={{
+                fontSize: isMobile ? '0.7rem' : '0.875rem',
+                padding: isMobile ? '4px 8px' : '6px 16px',
+                minHeight: isMobile ? '32px' : '36px',
+                flex: isMobile ? 1 : 'none'
+              }}
             >
-              {loading ? 'Eksportowanie...' : 'Eksportuj CSV'}
+              {loading ? (isMobile ? 'Export...' : 'Eksportowanie...') : (isMobile ? 'CSV' : 'Eksportuj CSV')}
             </Button>
             
-            {/* Konfiguracja kolumn */}
-            <Tooltip title="Konfiguruj widoczne kolumny">
-              <IconButton 
-                onClick={handleColumnMenuOpen} 
-                size={isMobile ? "small" : "medium"}
-              >
-                <ViewColumnIcon />
-              </IconButton>
-            </Tooltip>
+            {/* Sortowanie - tylko na mobile */}
+            {isMobile && (
+              <Tooltip title="Sortowanie">
+                <IconButton 
+                  onClick={handleSortMenuOpen} 
+                  size="small"
+                  sx={{
+                    padding: isMobile ? '4px' : '8px',
+                    '& .MuiSvgIcon-root': {
+                      fontSize: isMobile ? '1.1rem' : '1.25rem'
+                    }
+                  }}
+                >
+                  <SortIcon />
+                </IconButton>
+              </Tooltip>
+            )}
+
+            {/* Konfiguracja kolumn - tylko na desktop */}
+            {!isMobile && (
+              <Tooltip title="Konfiguruj widoczne kolumny">
+                <IconButton 
+                  onClick={handleColumnMenuOpen} 
+                  size="medium"
+                >
+                  <ViewColumnIcon />
+                </IconButton>
+              </Tooltip>
+            )}
           </Box>
         </Box>
         
@@ -1545,6 +1602,50 @@ const TaskList = () => {
         )}
       </Box>
       
+      {/* Menu sortowania - tylko dla mobile */}
+      <Menu
+        anchorEl={sortMenuAnchor}
+        open={Boolean(sortMenuAnchor)}
+        onClose={handleSortMenuClose}
+      >
+        <MenuItem onClick={() => handleSortChange('moNumber')}>
+          <ListItemText 
+            primary="Nazwa zadania" 
+            secondary={sortField === 'moNumber' ? `(${sortOrder === 'asc' ? 'A-Z' : 'Z-A'})` : ''}
+          />
+        </MenuItem>
+        <MenuItem onClick={() => handleSortChange('productName')}>
+          <ListItemText 
+            primary="Produkt" 
+            secondary={sortField === 'productName' ? `(${sortOrder === 'asc' ? 'A-Z' : 'Z-A'})` : ''}
+          />
+        </MenuItem>
+        <MenuItem onClick={() => handleSortChange('quantity')}>
+          <ListItemText 
+            primary="Ilość" 
+            secondary={sortField === 'quantity' ? `(${sortOrder === 'asc' ? 'rosnąco' : 'malejąco'})` : ''}
+          />
+        </MenuItem>
+        <MenuItem onClick={() => handleSortChange('status')}>
+          <ListItemText 
+            primary="Status" 
+            secondary={sortField === 'status' ? `(${sortOrder === 'asc' ? 'A-Z' : 'Z-A'})` : ''}
+          />
+        </MenuItem>
+        <MenuItem onClick={() => handleSortChange('scheduledDate')}>
+          <ListItemText 
+            primary="Planowany start" 
+            secondary={sortField === 'scheduledDate' ? `(${sortOrder === 'asc' ? 'najwcześniej' : 'najpóźniej'})` : ''}
+          />
+        </MenuItem>
+        <MenuItem onClick={() => handleSortChange('endDate')}>
+          <ListItemText 
+            primary="Planowane zakończenie" 
+            secondary={sortField === 'endDate' ? `(${sortOrder === 'asc' ? 'najwcześniej' : 'najpóźniej'})` : ''}
+          />
+        </MenuItem>
+      </Menu>
+
       {/* Menu konfiguracji kolumn */}
       <Menu
         anchorEl={columnMenuAnchor}

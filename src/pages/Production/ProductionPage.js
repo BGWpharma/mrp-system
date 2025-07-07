@@ -112,7 +112,7 @@ const ProductionPage = () => {
             Produkcja
           </Typography>
           
-          {isMobile && (
+          {isMobile && isAdmin && (
             <IconButton 
               color="primary" 
               onClick={() => setMobileMenuOpen(true)}
@@ -137,93 +137,71 @@ const ProductionPage = () => {
         )}
       </Box>
       
-      {isMobile ? (
-        // Zakładki na ekranie mobilnym - pokazujemy tylko aktualną zakładkę i menu z pełną listą
-        <Box sx={{ width: '100%', mb: 2 }}>
-          <Tabs 
-            value={activeTab} 
-            onChange={handleTabChange} 
-            variant="fullWidth"
+      {/* Zakładki - scrollable na mobilnych, auto na desktop */}
+      <Tabs 
+        value={activeTab} 
+        onChange={handleTabChange} 
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
+        sx={{ 
+          borderBottom: 1, 
+          borderColor: 'divider', 
+          mb: 1,
+          '& .MuiTab-root': {
+            minHeight: isMobile ? '48px' : '56px',
+            py: 1,
+            fontSize: isMobile ? '0.775rem' : '0.875rem',
+            minWidth: isMobile ? '120px' : '160px'
+          },
+          '& .MuiTabs-scrollButtons': {
+            '&.Mui-disabled': {
+              opacity: 0.3
+            }
+          }
+        }}
+      >
+        {tabData.map((tab, index) => (
+          <Tab 
+            key={index} 
+            icon={tab.icon} 
+            label={isMobile ? tab.label.split(' ')[0] : tab.label}
+            iconPosition={isMobile ? "top" : "start"}
             sx={{ 
-              borderBottom: 1, 
-              borderColor: 'divider',
-              '& .MuiTab-root': {
-                minHeight: '48px',
-                py: 1,
-                fontSize: '0.775rem'
+              '& .MuiSvgIcon-root': {
+                fontSize: isMobile ? '1.1rem' : '1.25rem'
               }
             }}
-          >
-            <Tab 
-              icon={tabData[activeTab].icon} 
-              label={tabData[activeTab].label}
-              sx={{ 
-                '& .MuiSvgIcon-root': {
-                  fontSize: '1.2rem',
-                  mr: 1
-                }
-              }}
-            />
-          </Tabs>
-          
-          {/* Menu boczne z wszystkimi zakładkami */}
-          <SwipeableDrawer
-            anchor="left"
-            open={mobileMenuOpen}
-            onClose={() => setMobileMenuOpen(false)}
-            onOpen={() => setMobileMenuOpen(true)}
-          >
-            <Box sx={{ width: 250 }}>
-              <List>
-                <ListItem sx={{ py: 2 }}>
-                  <Typography variant="h6">Menu produkcji</Typography>
-                </ListItem>
-                <Divider />
-                {tabData.map((tab, index) => (
-                  <ListItem 
-                    button 
-                    key={index} 
-                    onClick={() => handleTabChange(null, tab.value)}
-                    selected={activeTab === tab.value}
-                  >
-                    <ListItemIcon>
-                      {tab.icon}
-                    </ListItemIcon>
-                    <ListItemText primary={tab.label.split(' ')[0]} secondary={tab.label.split(' ').slice(1).join(' ')} />
-                  </ListItem>
-                ))}
-                
-                {isAdmin && (
-                  <>
-                    <Divider sx={{ my: 1 }} />
-                    <ListItem button onClick={() => {
-                      setMobileMenuOpen(false);
-                      setAdminDialogOpen(true);
-                    }}>
-                      <ListItemIcon>
-                        <AdminIcon />
-                      </ListItemIcon>
-                      <ListItemText primary="Funkcje administracyjne" />
-                    </ListItem>
-                  </>
-                )}
-              </List>
-            </Box>
-          </SwipeableDrawer>
-        </Box>
-      ) : (
-        // Zakładki na ekranie desktopowym - standardowe wyświetlanie
-        <Tabs 
-          value={activeTab} 
-          onChange={handleTabChange} 
-          variant="scrollable"
-          scrollButtons="auto"
-          sx={{ borderBottom: 1, borderColor: 'divider', mb: 1 }}
+          />
+        ))}
+      </Tabs>
+
+      {/* Menu boczne tylko dla funkcji administracyjnych na mobile */}
+      {isMobile && isAdmin && (
+        <SwipeableDrawer
+          anchor="left"
+          open={mobileMenuOpen}
+          onClose={() => setMobileMenuOpen(false)}
+          onOpen={() => setMobileMenuOpen(true)}
         >
-          {tabData.map((tab, index) => (
-            <Tab key={index} icon={tab.icon} label={tab.label} iconPosition="start" />
-          ))}
-        </Tabs>
+          <Box sx={{ width: 250 }}>
+            <List>
+              <ListItem sx={{ py: 2 }}>
+                <Typography variant="h6">Funkcje administracyjne</Typography>
+              </ListItem>
+              <Divider />
+              <ListItem button onClick={() => {
+                setMobileMenuOpen(false);
+                setAdminDialogOpen(true);
+              }}>
+                <ListItemIcon>
+                  <AdminIcon />
+                </ListItemIcon>
+                <ListItemText primary="Funkcje administracyjne" />
+              </ListItem>
+            </List>
+          </Box>
+        </SwipeableDrawer>
       )}
       
       {/* Wyświetlamy zawartość aktualnie wybranej zakładki */}
