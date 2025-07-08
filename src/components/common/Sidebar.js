@@ -275,6 +275,7 @@ const Sidebar = ({ onToggle }) => {
       children: [
         { text: 'CMR', icon: <ShippingIcon />, path: '/inventory/cmr' },
         { text: 'Dostawcy', icon: <SuppliersIcon />, path: '/suppliers' },
+        { text: 'Formularze', icon: <ListAltIcon />, path: '/inventory/forms' },
         { text: 'Interakcje zakupowe', icon: <CallIcon />, path: '/crm/interactions' },
         { text: 'Inwentaryzacja', icon: <QualityReportsIcon />, path: '/inventory/stocktaking' },
         { text: 'Stan', icon: <WarehouseIcon />, path: '/inventory' },

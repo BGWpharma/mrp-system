@@ -59,6 +59,10 @@ import StocktakingPage from './pages/Inventory/StocktakingPage';
 import StocktakingFormPage from './pages/Inventory/StocktakingFormPage';
 import StocktakingDetailsPage from './pages/Inventory/StocktakingDetailsPage';
 import StocktakingReportPage from './pages/Inventory/StocktakingReportPage';
+import InventoryFormsPage from './pages/Inventory/InventoryFormsPage';
+import InventoryFormsResponsesPage from './pages/Inventory/InventoryFormsResponsesPage';
+import LoadingReportFormPage from './pages/Inventory/LoadingReportFormPage';
+import UnloadingReportFormPage from './pages/Inventory/UnloadingReportFormPage';
 
 // Quality
 import QualityPage from './pages/Quality/QualityPage';
@@ -248,6 +252,10 @@ function App() {
                     <Route path="/inventory/stocktaking/:id" element={<PrivateLayout><StocktakingDetailsPage /></PrivateLayout>} />
                     <Route path="/inventory/stocktaking/:id/edit" element={<PrivateLayout><StocktakingFormPage /></PrivateLayout>} />
                     <Route path="/inventory/stocktaking/:id/report" element={<PrivateLayout><StocktakingReportPage /></PrivateLayout>} />
+                    <Route path="/inventory/forms" element={<PrivateLayout><InventoryFormsPage /></PrivateLayout>} />
+                    <Route path="/inventory/forms/responses" element={<PrivateLayout><InventoryFormsResponsesPage /></PrivateLayout>} />
+                    <Route path="/inventory/forms/loading-report" element={<PrivateLayout><LoadingReportFormPage /></PrivateLayout>} />
+            <Route path="/inventory/forms/unloading-report" element={<PrivateLayout><UnloadingReportFormPage /></PrivateLayout>} />
                     
                     {/* CMR Routes */}
                     <Route path="/inventory/cmr" element={<PrivateLayout><CmrListPage /></PrivateLayout>} />

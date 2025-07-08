@@ -144,6 +144,20 @@ export const useShiftWorkerOptions = () => {
 };
 
 /**
+ * Hook do pobierania opcji pracowników magazynowych (imię i nazwisko)
+ */
+export const useInventoryEmployeeOptions = () => {
+  return useFormOptions(FORM_OPTION_TYPES.INVENTORY_EMPLOYEES);
+};
+
+/**
+ * Hook do pobierania opcji stanowisk magazynowych
+ */
+export const useInventoryPositionOptions = () => {
+  return useFormOptions(FORM_OPTION_TYPES.INVENTORY_POSITIONS);
+};
+
+/**
  * Funkcja zwracająca domyślne opcje w przypadku błędu
  * @param {string} optionType - Typ opcji
  * @returns {Array} Tablica domyślnych opcji
@@ -167,6 +181,12 @@ const getFallbackOptions = (optionType) => {
       "Mariia Pokrovets",
       "Valentyna Tarasiuk",
       "Daria Shadiuk"
+    ],
+    [FORM_OPTION_TYPES.INVENTORY_EMPLOYEES]: [
+      "Łukasz Bojke"
+    ],
+    [FORM_OPTION_TYPES.INVENTORY_POSITIONS]: [
+      "Magazynier"
     ]
   };
 

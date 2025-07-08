@@ -20,14 +20,18 @@ const FORM_OPTIONS_COLLECTION = 'formOptions';
 export const FORM_OPTION_TYPES = {
   STAFF: 'staff',
   POSITIONS: 'positions', 
-  SHIFT_WORKERS: 'shiftWorkers'
+  SHIFT_WORKERS: 'shiftWorkers',
+  INVENTORY_EMPLOYEES: 'inventoryEmployees',
+  INVENTORY_POSITIONS: 'inventoryPositions'
 };
 
 // Nazwy kategorii opcji
 export const FORM_OPTION_CATEGORIES = {
-  [FORM_OPTION_TYPES.STAFF]: 'Pracownicy - Imię i nazwisko',
-  [FORM_OPTION_TYPES.POSITIONS]: 'Stanowiska',
-  [FORM_OPTION_TYPES.SHIFT_WORKERS]: 'Pracownicy zmian'
+  [FORM_OPTION_TYPES.STAFF]: 'Pracownicy - Imię i nazwisko (Produkcja)',
+  [FORM_OPTION_TYPES.POSITIONS]: 'Stanowiska (Produkcja)',
+  [FORM_OPTION_TYPES.SHIFT_WORKERS]: 'Pracownicy zmian (Produkcja)',
+  [FORM_OPTION_TYPES.INVENTORY_EMPLOYEES]: 'Pracownicy - Imię i nazwisko (Magazyn)',
+  [FORM_OPTION_TYPES.INVENTORY_POSITIONS]: 'Stanowiska (Magazyn)'
 };
 
 /**

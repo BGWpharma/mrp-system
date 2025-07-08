@@ -86,6 +86,12 @@ const FormOptionsManager = () => {
       "Mariia Pokrovets",
       "Valentyna Tarasiuk",
       "Daria Shadiuk"
+    ],
+    [FORM_OPTION_TYPES.INVENTORY_EMPLOYEES]: [
+      "Łukasz Bojke"
+    ],
+    [FORM_OPTION_TYPES.INVENTORY_POSITIONS]: [
+      "Magazynier"
     ]
   };
 
