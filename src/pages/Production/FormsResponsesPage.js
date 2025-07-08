@@ -179,10 +179,10 @@ const FormsResponsesPage = () => {
         csvContent += `${formatDateTime(row.fillDate)},${row.email || ''},${row.name || ''},${row.position || ''},${row.manufacturingOrder || ''},${row.customerOrder || ''},${row.productName || ''},${row.lotNumber || ''},${row.temperature || ''},${row.humidity || ''},${row.documentScansUrl || ''},${row.productPhoto1Url || ''},${row.productPhoto2Url || ''},${row.productPhoto3Url || ''}\n`;
       });
     } else {
-      csvContent += "Data,Email,Osoba odpowiedzialna,Rodzaj zmiany,Produkt,Numer MO,Ilość produkcji,Pracownicy,Inne czynności\n";
+      csvContent += "Data,Email,Osoba odpowiedzialna,Rodzaj zmiany,Produkt,Numer MO,Ilość produkcji,Pracownicy,Straty surowca,Inne czynności\n";
       data.forEach(row => {
         const workers = Array.isArray(row.shiftWorkers) ? row.shiftWorkers.join(', ') : '';
-        csvContent += `${formatDateTime(row.fillDate)},${row.email || ''},${row.responsiblePerson || ''},${row.shiftType || ''},${row.product || ''},${row.moNumber || ''},${row.productionQuantity || ''},"${workers}",${row.otherActivities || ''}\n`;
+        csvContent += `${formatDateTime(row.fillDate)},${row.email || ''},${row.responsiblePerson || ''},${row.shiftType || ''},${row.product || ''},${row.moNumber || ''},${row.productionQuantity || ''},"${workers}",${row.rawMaterialLoss || ''},${row.otherActivities || ''}\n`;
       });
     }
     
@@ -714,6 +714,7 @@ const FormsResponsesPage = () => {
                   <TableCell>Nadruk doypack/tub 3</TableCell>
                   <TableCell align="right">Ilość nadruku 3</TableCell>
                   <TableCell align="right">Straty nadruku 3</TableCell>
+                  <TableCell>Straty surowca</TableCell>
                   <TableCell>Inne czynności</TableCell>
                   <TableCell>Awarie maszyn</TableCell>
                   <TableCell align="center">Akcje</TableCell>
@@ -740,6 +741,7 @@ const FormsResponsesPage = () => {
                     <TableCell>{row.thirdProduct !== 'BRAK' ? row.thirdProduct : '-'}</TableCell>
                     <TableCell align="right">{row.thirdProduct !== 'BRAK' ? row.thirdProductQuantity : '-'}</TableCell>
                     <TableCell align="right">{row.thirdProduct !== 'BRAK' ? (row.thirdProductLoss || '0') : '-'}</TableCell>
+                    <TableCell>{row.rawMaterialLoss || '-'}</TableCell>
                     <TableCell>{row.otherActivities}</TableCell>
                     <TableCell>{row.machineIssues}</TableCell>
                     <TableCell align="center">

@@ -58,7 +58,8 @@ import {
   getTasksByDateRange, 
   updateTask,
   getTasksByDateRangeOptimizedNew,
-  getAllTasks
+  getAllTasks,
+  getProductionHistory
 } from '../../services/productionService';
 import { getAllWorkstations } from '../../services/workstationService';
 import { getAllCustomers } from '../../services/customerService';
@@ -343,10 +344,10 @@ const CustomTooltip = React.memo(({ task, position, visible, themeMode, workstat
         color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.5)'
       }}>
         <div style={{ marginBottom: '4px' }}>
-          <strong>Start:</strong> {formatDate(task.scheduledDate)}
+          <strong>{task.actualStartDate ? 'Rzeczywisty start:' : 'Planowany start:'}</strong> {formatDate(task.actualStartDate || task.scheduledDate)}
         </div>
         <div>
-          <strong>Koniec:</strong> {formatDate(task.endDate)}
+          <strong>{task.actualEndDate ? 'Rzeczywiste zakończenie:' : 'Planowane zakończenie:'}</strong> {formatDate(task.actualEndDate || task.endDate)}
         </div>
       </div>
     </div>
@@ -366,6 +367,7 @@ const ProductionTimeline = React.memo(() => {
   const [tasks, setTasks] = useState([]);
   const [workstations, setWorkstations] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [productionHistoryMap, setProductionHistoryMap] = useState(new Map()); // Mapa taskId -> historia produkcji
   const [loading, setLoading] = useState(true);
   const [groupBy, setGroupBy] = useState('workstation'); // 'workstation' lub 'order'
   const [useWorkstationColors, setUseWorkstationColors] = useState(false);
@@ -525,6 +527,72 @@ const ProductionTimeline = React.memo(() => {
       setLoading(false);
     }
   }, [canvasTimeStart, canvasTimeEnd, showError]);
+
+  // Funkcja do pobierania historii produkcji dla zadań zakończonych
+  const fetchProductionHistoryForCompletedTasks = useCallback(async () => {
+    const completedTasks = tasks.filter(task => task.status === 'Zakończone');
+    
+    if (completedTasks.length === 0) {
+      return;
+    }
+
+    const historyMap = new Map();
+    
+    // Pobierz historię produkcji dla każdego zakończonego zadania
+    await Promise.all(
+      completedTasks.map(async (task) => {
+        try {
+          const history = await getProductionHistory(task.id);
+          if (history && history.length > 0) {
+            historyMap.set(task.id, history);
+          }
+        } catch (error) {
+          console.error(`Błąd podczas pobierania historii produkcji dla zadania ${task.id}:`, error);
+        }
+      })
+    );
+
+    setProductionHistoryMap(historyMap);
+  }, [tasks]);
+
+  // Pobieranie historii produkcji gdy zadania się załadują
+  useEffect(() => {
+    if (tasks.length > 0) {
+      fetchProductionHistoryForCompletedTasks();
+    }
+  }, [tasks, fetchProductionHistoryForCompletedTasks]);
+
+  // Funkcja do obliczania rzeczywistych dat na podstawie historii produkcji
+  const calculateActualDatesFromHistory = useCallback((taskId, history) => {
+    if (!history || history.length === 0) {
+      return null;
+    }
+
+    // Konwertuj daty z historii
+    const sessions = history.map(session => ({
+      startTime: session.startTime instanceof Date ? session.startTime :
+                 session.startTime?.toDate ? session.startTime.toDate() :
+                 new Date(session.startTime),
+      endTime: session.endTime instanceof Date ? session.endTime :
+               session.endTime?.toDate ? session.endTime.toDate() :
+               new Date(session.endTime)
+    })).filter(session => 
+      !isNaN(session.startTime.getTime()) && !isNaN(session.endTime.getTime())
+    );
+
+    if (sessions.length === 0) {
+      return null;
+    }
+
+    // Znajdź najwcześniejszą datę rozpoczęcia i najpóźniejszą datę zakończenia
+    const actualStartTime = new Date(Math.min(...sessions.map(s => s.startTime.getTime())));
+    const actualEndTime = new Date(Math.max(...sessions.map(s => s.endTime.getTime())));
+
+    return {
+      actualStartTime,
+      actualEndTime
+    };
+  }, []);
 
   // Referencja do funkcji cofania (unika problemów z hoisting)
   const undoFunctionRef = useRef(null);
@@ -785,10 +853,30 @@ const ProductionTimeline = React.memo(() => {
          return rounded;
        };
        
-       const startTime = roundToMinute(convertToDate(task.scheduledDate));
-       const endTime = task.endDate ? roundToMinute(convertToDate(task.endDate)) : 
-         task.estimatedDuration ? new Date(startTime.getTime() + task.estimatedDuration * 60 * 1000) :
-         new Date(startTime.getTime() + 8 * 60 * 60 * 1000); // Domyślnie 8 godzin
+       let startTime, endTime;
+       
+       // Dla zadań zakończonych używaj rzeczywistych dat z historii produkcji
+       if (task.status === 'Zakończone' && productionHistoryMap.has(task.id)) {
+         const history = productionHistoryMap.get(task.id);
+         const actualDates = calculateActualDatesFromHistory(task.id, history);
+         
+         if (actualDates) {
+           startTime = roundToMinute(actualDates.actualStartTime);
+           endTime = roundToMinute(actualDates.actualEndTime);
+         } else {
+           // Fallback do planowanych dat jeśli nie można obliczyć rzeczywistych
+           startTime = roundToMinute(convertToDate(task.scheduledDate));
+           endTime = task.endDate ? roundToMinute(convertToDate(task.endDate)) : 
+             task.estimatedDuration ? new Date(startTime.getTime() + task.estimatedDuration * 60 * 1000) :
+             new Date(startTime.getTime() + 8 * 60 * 60 * 1000);
+         }
+       } else {
+         // Dla innych statusów używaj planowanych dat
+         startTime = roundToMinute(convertToDate(task.scheduledDate));
+         endTime = task.endDate ? roundToMinute(convertToDate(task.endDate)) : 
+           task.estimatedDuration ? new Date(startTime.getTime() + task.estimatedDuration * 60 * 1000) :
+           new Date(startTime.getTime() + 8 * 60 * 60 * 1000); // Domyślnie 8 godzin
+       }
 
              let groupId;
        if (groupBy === 'workstation') {
@@ -796,6 +884,20 @@ const ProductionTimeline = React.memo(() => {
        } else {
          groupId = task.orderId || 'no-order';
        }
+
+      // Przygotuj obiekt zadania z rzeczywistymi datami dla tooltip
+      let taskForTooltip = { ...task };
+      
+      // Dla zadań zakończonych dodaj rzeczywiste daty z historii produkcji
+      if (task.status === 'Zakończone' && productionHistoryMap.has(task.id)) {
+        const history = productionHistoryMap.get(task.id);
+        const actualDates = calculateActualDatesFromHistory(task.id, history);
+        
+        if (actualDates) {
+          taskForTooltip.actualStartDate = actualDates.actualStartTime;
+          taskForTooltip.actualEndDate = actualDates.actualEndTime;
+        }
+      }
 
       return {
         id: task.id,
@@ -807,13 +909,13 @@ const ProductionTimeline = React.memo(() => {
         canResize: editMode,
         canChangeGroup: false,
         // Dodatkowe dane
-        task: task,
+        task: taskForTooltip,
         backgroundColor: getItemColor(task)
       };
     });
     
     return finalItems;
-  }, [tasks, selectedCustomers, selectedWorkstations, groupBy, useWorkstationColors, workstations, getItemColor, advancedFilters, editMode]);
+  }, [tasks, selectedCustomers, selectedWorkstations, groupBy, useWorkstationColors, workstations, getItemColor, advancedFilters, editMode, productionHistoryMap, calculateActualDatesFromHistory]);
 
   // Funkcja pomocnicza do zaokrąglania do pełnych minut
   const roundToMinute = useCallback((date) => {

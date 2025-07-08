@@ -22,6 +22,7 @@ const EditPriceListItemDialog = ({ open, onClose, item, onItemUpdated }) => {
     productName: '',
     price: 0,
     unit: 'szt.',
+    minQuantity: 1,
     notes: ''
   });
   const [loading, setLoading] = useState(false);
@@ -36,6 +37,7 @@ const EditPriceListItemDialog = ({ open, onClose, item, onItemUpdated }) => {
         productName: item.productName,
         price: item.price,
         unit: item.unit || 'szt.',
+        minQuantity: item.minQuantity || 1,
         notes: item.notes || '',
         priceListId: item.priceListId
       });
@@ -67,6 +69,11 @@ const EditPriceListItemDialog = ({ open, onClose, item, onItemUpdated }) => {
       return;
     }
     
+    if (typeof formData.minQuantity !== 'number' || formData.minQuantity <= 0) {
+      showNotification('Minimalna ilość musi być liczbą dodatnią', 'error');
+      return;
+    }
+    
     try {
       setLoading(true);
       await updatePriceListItem(item.id, formData, currentUser.uid);
@@ -95,7 +102,7 @@ const EditPriceListItemDialog = ({ open, onClose, item, onItemUpdated }) => {
               />
             </Grid>
             
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
                 label="Cena"
@@ -111,7 +118,23 @@ const EditPriceListItemDialog = ({ open, onClose, item, onItemUpdated }) => {
               />
             </Grid>
             
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                label="Minimalna ilość"
+                name="minQuantity"
+                type="number"
+                value={formData.minQuantity}
+                onChange={handleInputChange}
+                required
+                inputProps={{ 
+                  min: 1, 
+                  step: 'any'
+                }}
+              />
+            </Grid>
+            
+            <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
                 label="Jednostka"

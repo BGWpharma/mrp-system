@@ -106,6 +106,7 @@ const ProductionShiftFormDialog = ({
     firstProductLoss: '',
     secondProductLoss: '',
     thirdProductLoss: '',
+    rawMaterialLoss: '', // Nowe pole: Straty surowca
     otherActivities: '',
     machineIssues: ''
   });
@@ -310,6 +311,7 @@ const ProductionShiftFormDialog = ({
           firstProductLoss: formData.firstProductLoss,
           secondProductLoss: formData.secondProductLoss,
           thirdProductLoss: formData.thirdProductLoss,
+          rawMaterialLoss: formData.rawMaterialLoss,
           otherActivities: formData.otherActivities,
           machineIssues: formData.machineIssues,
           createdAt: serverTimestamp()
@@ -358,6 +360,7 @@ const ProductionShiftFormDialog = ({
       firstProductLoss: '',
       secondProductLoss: '',
       thirdProductLoss: '',
+      rawMaterialLoss: '',
       otherActivities: '',
       machineIssues: ''
     });
@@ -809,6 +812,20 @@ const ProductionShiftFormDialog = ({
                 error={!!validationErrors.thirdProductLoss}
                 helperText={validationErrors.thirdProductLoss}
                 inputProps={{ min: 0, step: 'any' }}
+              />
+            </Grid>
+            
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                multiline
+                rows={3}
+                label="Straty surowca"
+                name="rawMaterialLoss"
+                value={formData.rawMaterialLoss}
+                onChange={handleChange}
+                placeholder="Opisz straty surowca jeśli wystąpiły (opcjonalne)"
+                helperText="Pole opcjonalne - opisz rodzaj i ilość strat surowca"
               />
             </Grid>
             

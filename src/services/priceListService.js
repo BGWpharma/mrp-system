@@ -260,6 +260,10 @@ const validatePriceListItemData = (itemData) => {
   if (typeof itemData.price !== 'number' || itemData.price < 0) {
     throw new Error('Cena musi być liczbą nieujemną');
   }
+  
+  if (typeof itemData.minQuantity !== 'number' || itemData.minQuantity <= 0) {
+    throw new Error('Minimalna ilość musi być liczbą dodatnią');
+  }
 };
 
 /**
@@ -284,6 +288,7 @@ export const DEFAULT_PRICE_LIST_ITEM = {
   productName: '',
   price: 0,
   unit: 'szt.',
+  minQuantity: 1,
   notes: '',
   isRecipe: false // Informacja czy element jest recepturą
 };

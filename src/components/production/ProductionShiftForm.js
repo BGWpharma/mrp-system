@@ -104,6 +104,7 @@ const ProductionShiftForm = () => {
     firstProductLoss: '',
     secondProductLoss: '',
     thirdProductLoss: '',
+    rawMaterialLoss: '', // Nowe pole: Straty surowca
     otherActivities: '',
     machineIssues: ''
   });
@@ -168,6 +169,7 @@ const ProductionShiftForm = () => {
           firstProductLoss: editData.firstProductLoss || '',
           secondProductLoss: editData.secondProductLoss || '',
           thirdProductLoss: editData.thirdProductLoss || '',
+          rawMaterialLoss: editData.rawMaterialLoss || '',
           otherActivities: editData.otherActivities || '',
           machineIssues: editData.machineIssues || ''
         });
@@ -336,6 +338,7 @@ const ProductionShiftForm = () => {
           firstProductLoss: formData.firstProductLoss,
           secondProductLoss: formData.secondProductLoss,
           thirdProductLoss: formData.thirdProductLoss,
+          rawMaterialLoss: formData.rawMaterialLoss,
           otherActivities: formData.otherActivities,
           machineIssues: formData.machineIssues,
           createdAt: serverTimestamp()
@@ -375,6 +378,7 @@ const ProductionShiftForm = () => {
           firstProductLoss: '',
           secondProductLoss: '',
           thirdProductLoss: '',
+          rawMaterialLoss: '',
           otherActivities: '',
           machineIssues: ''
         });
@@ -807,6 +811,20 @@ const ProductionShiftForm = () => {
                 value={formData.thirdProductLoss}
                 onChange={handleChange}
                 placeholder="Proszę podać tylko wartość liczbową dla trzeciego zadrukowanego produktu z poprzedniej listy!"
+              />
+            </Grid>
+            
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                multiline
+                rows={3}
+                label="Straty surowca"
+                name="rawMaterialLoss"
+                value={formData.rawMaterialLoss}
+                onChange={handleChange}
+                placeholder="Opisz straty surowca jeśli wystąpiły (opcjonalne)"
+                helperText="Pole opcjonalne - opisz rodzaj i ilość strat surowca"
               />
             </Grid>
             
