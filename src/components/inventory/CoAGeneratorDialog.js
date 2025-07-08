@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -12,7 +12,9 @@ import {
   Paper,
   IconButton,
   Tooltip,
-  Divider
+  Divider,
+  Autocomplete,
+  CircularProgress
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -22,8 +24,19 @@ import {
 import ReactMarkdown from 'react-markdown';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import { getAllPurchaseOrders, updatePurchaseOrder } from '../../services/purchaseOrderService';
+import { useNotification } from '../../hooks/useNotification';
+import { useAuth } from '../../hooks/useAuth';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../../services/firebase/config';
 
 const CoAGeneratorDialog = ({ open, onClose, onGenerate }) => {
+  const { showSuccess, showError } = useNotification();
+  const { currentUser } = useAuth();
+  const [documentName, setDocumentName] = useState(`CoA_${new Date().toISOString().slice(0, 10)}`);
+  const [selectedPO, setSelectedPO] = useState('');
+  const [purchaseOrders, setPurchaseOrders] = useState([]);
+  const [loadingPOs, setLoadingPOs] = useState(false);
   const [markdownContent, setMarkdownContent] = useState(`# Certificate of Analysis (CoA)
 
 ## Informacje o produkcie
@@ -363,7 +376,56 @@ Produkt **ZGODNY** z wymaganiami specyfikacji.
       }
       
       // Zapisz plik
-      const fileName = `CoA_${new Date().toISOString().slice(0, 10)}.pdf`;
+      const fileName = documentName + '.pdf';
+      
+      // Jeśli wybrano PO, dodaj CoA do załączników
+      if (selectedPO) {
+        try {
+          // Przekonwertuj PDF na blob
+          const pdfBlob = doc.output('blob');
+          
+          // Prześlij do Firebase Storage
+          const timestamp = new Date().getTime();
+          const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+          const storagePath = `purchase-order-attachments/${selectedPO}/${timestamp}_${sanitizedFileName}`;
+          
+          const fileRef = ref(storage, storagePath);
+          await uploadBytes(fileRef, pdfBlob);
+          const downloadURL = await getDownloadURL(fileRef);
+          
+          // Przygotuj obiekt załącznika
+          const newAttachment = {
+            id: `${timestamp}_${Math.random().toString(36).substr(2, 9)}`,
+            fileName: fileName,
+            storagePath,
+            downloadURL,
+            contentType: 'application/pdf',
+            size: pdfBlob.size,
+            uploadedAt: new Date().toISOString(),
+            uploadedBy: currentUser?.uid
+          };
+          
+                     // Pobierz aktualne dane wybranego PO (optymalizacja - nie pobieramy wszystkich)
+          const selectedPOData = purchaseOrders.find(po => po.id === selectedPO);
+          
+          if (selectedPOData) {
+            // Dodaj nowy załącznik do istniejących
+            const updatedAttachments = [...(selectedPOData.attachments || []), newAttachment];
+            
+            // Aktualizuj PO z nowym załącznikiem
+            await updatePurchaseOrder(selectedPO, { 
+              attachments: updatedAttachments 
+            }, currentUser?.uid);
+            
+            showSuccess(`CoA zostało dodane do załączników zamówienia ${selectedPOData.number}`);
+          }
+        } catch (error) {
+          console.error('Błąd podczas dodawania CoA do PO:', error);
+          showError('Błąd podczas dodawania CoA do zamówienia: ' + error.message);
+        }
+      }
+      
+      // Pobierz plik lokalnie
       doc.save(fileName);
       
       if (onGenerate) {
@@ -378,8 +440,30 @@ Produkt **ZGODNY** z wymaganiami specyfikacji.
   };
 
   const handleClose = () => {
+    // Resetuj stan
+    setDocumentName(`CoA_${new Date().toISOString().slice(0, 10)}`);
+    setSelectedPO('');
     onClose();
   };
+
+  useEffect(() => {
+    const fetchPurchaseOrders = async () => {
+      if (!open) return; // Pobieraj dane tylko gdy dialog jest otwarty
+      
+      try {
+        setLoadingPOs(true);
+        const orders = await getAllPurchaseOrders();
+        setPurchaseOrders(orders);
+      } catch (error) {
+        console.error('Błąd podczas pobierania zamówień:', error);
+        showError('Błąd podczas pobierania zamówień: ' + error.message);
+      } finally {
+        setLoadingPOs(false);
+      }
+    };
+
+    fetchPurchaseOrders();
+  }, [open, showError]);
 
   return (
     <Dialog 
@@ -407,119 +491,192 @@ Produkt **ZGODNY** z wymaganiami specyfikacji.
         </Box>
       </DialogTitle>
       
-      <DialogContent sx={{ p: 0 }}>
-        <Grid container sx={{ height: '100%' }}>
-          {/* Pole edycji markdown */}
-          <Grid item xs={showPreview ? 6 : 12}>
-            <Box sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="subtitle2" gutterBottom>
-                Treść markdown:
-              </Typography>
+      <DialogContent sx={{ p: 0, height: 'calc(100% - 120px)', display: 'flex', flexDirection: 'column' }}>
+        {/* Nazwa dokumentu i wybór PO - pełna szerokość na górze */}
+        <Box sx={{ p: 2, borderBottom: '1px solid #eee', flexShrink: 0 }}>
+          <Grid container spacing={2}>
+            <Grid item xs={6}>
               <TextField
-                multiline
                 fullWidth
-                minRows={25}
-                value={markdownContent}
-                onChange={(e) => setMarkdownContent(e.target.value)}
-                placeholder="Wprowadź treść certyfikatu w formacie markdown..."
-                variant="outlined"
-                sx={{
-                  flexGrow: 1,
-                  '& .MuiInputBase-input': {
-                    fontFamily: 'monospace',
-                    fontSize: '14px'
-                  }
-                }}
+                label="Nazwa dokumentu"
+                value={documentName}
+                onChange={(e) => setDocumentName(e.target.value)}
+                placeholder="np. CoA_Batch_XYZ"
+                size="small"
+                helperText="Bez rozszerzenia .pdf"
               />
-            </Box>
+            </Grid>
+            <Grid item xs={6}>
+              <Autocomplete
+                size="small"
+                options={purchaseOrders}
+                value={purchaseOrders.find(po => po.id === selectedPO) || null}
+                onChange={(event, newValue) => {
+                  setSelectedPO(newValue ? newValue.id : '');
+                }}
+                getOptionLabel={(option) => 
+                  `${option.number} - ${option.supplier?.name || 'Brak dostawcy'} (${option.status})`
+                }
+                filterOptions={(options, { inputValue }) => {
+                  return options.filter(option => 
+                    option.number.toLowerCase().includes(inputValue.toLowerCase()) ||
+                    (option.supplier?.name || '').toLowerCase().includes(inputValue.toLowerCase()) ||
+                    option.status.toLowerCase().includes(inputValue.toLowerCase())
+                  );
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Purchase Order (opcjonalnie)"
+                    placeholder="Wyszukaj PO po numerze, dostawcy lub statusie"
+                    helperText={selectedPO ? 'CoA zostanie dodany do załączników PO' : 'Jeśli wybierzesz PO, CoA zostanie automatycznie dodany do załączników'}
+                    InputProps={{
+                      ...params.InputProps,
+                      endAdornment: (
+                        <>
+                          {loadingPOs ? <CircularProgress color="inherit" size={20} /> : null}
+                          {params.InputProps.endAdornment}
+                        </>
+                      ),
+                    }}
+                  />
+                )}
+                loading={loadingPOs}
+                disabled={loadingPOs}
+                noOptionsText="Brak zamówień do wyświetlenia"
+                clearOnBlur={false}
+                clearOnEscape={true}
+              />
+            </Grid>
           </Grid>
+        </Box>
+
+        {/* Główny obszar edycji i podglądu */}
+        <Box sx={{ flexGrow: 1, display: 'flex', minHeight: 0 }}>
+          {/* Pole edycji markdown - lewa strona */}
+          <Box sx={{ 
+            width: showPreview ? '50%' : '100%', 
+            p: 2, 
+            display: 'flex', 
+            flexDirection: 'column',
+            minHeight: 0
+          }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Treść markdown:
+            </Typography>
+            <TextField
+              multiline
+              fullWidth
+              value={markdownContent}
+              onChange={(e) => setMarkdownContent(e.target.value)}
+              placeholder="Wprowadź treść certyfikatu w formacie markdown..."
+              variant="outlined"
+              sx={{
+                flexGrow: 1,
+                '& .MuiInputBase-root': {
+                  height: '100%',
+                  alignItems: 'stretch'
+                },
+                '& .MuiInputBase-input': {
+                  fontFamily: 'monospace',
+                  fontSize: '14px',
+                  height: '100% !important',
+                  overflow: 'auto !important'
+                }
+              }}
+            />
+          </Box>
           
-          {/* Podgląd markdown */}
+          {/* Podgląd markdown - prawa strona */}
           {showPreview && (
             <>
               <Divider orientation="vertical" flexItem />
-              <Grid item xs={6}>
-                <Box sx={{ p: 2, height: '100%', overflow: 'auto' }}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Podgląd:
-                  </Typography>
-                  <Paper 
-                    elevation={1} 
-                    sx={{ 
-                      p: 2, 
-                      height: 'calc(100% - 30px)', 
-                      overflow: 'auto',
-                      backgroundColor: '#fafafa'
+              <Box sx={{ 
+                width: '50%', 
+                p: 2, 
+                display: 'flex', 
+                flexDirection: 'column',
+                minHeight: 0
+              }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Podgląd:
+                </Typography>
+                <Paper 
+                  elevation={1} 
+                  sx={{ 
+                    p: 2, 
+                    flexGrow: 1,
+                    overflow: 'auto',
+                    backgroundColor: '#fafafa'
+                  }}
+                >
+                  <ReactMarkdown
+                    components={{
+                      h1: ({ children }) => <Typography variant="h4" gutterBottom>{children}</Typography>,
+                      h2: ({ children }) => <Typography variant="h5" gutterBottom sx={{ mt: 2 }}>{children}</Typography>,
+                      h3: ({ children }) => <Typography variant="h6" gutterBottom sx={{ mt: 1 }}>{children}</Typography>,
+                      p: ({ children }) => <Typography variant="body1" paragraph>{children}</Typography>,
+                      strong: ({ children }) => <Typography component="span" sx={{ fontWeight: 'bold' }}>{children}</Typography>,
+                      table: ({ children }) => (
+                        <Box sx={{ overflowX: 'auto', my: 2 }}>
+                          <table style={{ 
+                            width: '100%', 
+                            borderCollapse: 'collapse',
+                            border: '1px solid #ddd'
+                          }}>
+                            {children}
+                          </table>
+                        </Box>
+                      ),
+                      thead: ({ children }) => (
+                        <thead style={{ backgroundColor: '#f0f0f0' }}>
+                          {children}
+                        </thead>
+                      ),
+                      tbody: ({ children }) => (
+                        <tbody>
+                          {children}
+                        </tbody>
+                      ),
+                      tr: ({ children, isHeader }) => (
+                        <tr style={{ 
+                          backgroundColor: isHeader ? '#f0f0f0' : 'transparent',
+                          '&:nth-of-type(even)': { backgroundColor: '#fafafa' }
+                        }}>
+                          {children}
+                        </tr>
+                      ),
+                      th: ({ children }) => (
+                        <th style={{ 
+                          border: '1px solid #ddd', 
+                          padding: '12px 8px', 
+                          backgroundColor: '#f0f0f0',
+                          textAlign: 'left',
+                          fontWeight: 'bold',
+                          fontSize: '14px'
+                        }}>
+                          {children}
+                        </th>
+                      ),
+                      td: ({ children }) => (
+                        <td style={{ 
+                          border: '1px solid #ddd', 
+                          padding: '8px',
+                          fontSize: '14px'
+                        }}>
+                          {children}
+                        </td>
+                      ),
+                      hr: () => <Divider sx={{ my: 2 }} />
                     }}
                   >
-                    <ReactMarkdown
-                      components={{
-                        h1: ({ children }) => <Typography variant="h4" gutterBottom>{children}</Typography>,
-                        h2: ({ children }) => <Typography variant="h5" gutterBottom sx={{ mt: 2 }}>{children}</Typography>,
-                        h3: ({ children }) => <Typography variant="h6" gutterBottom sx={{ mt: 1 }}>{children}</Typography>,
-                        p: ({ children }) => <Typography variant="body1" paragraph>{children}</Typography>,
-                        strong: ({ children }) => <Typography component="span" sx={{ fontWeight: 'bold' }}>{children}</Typography>,
-                        table: ({ children }) => (
-                          <Box sx={{ overflowX: 'auto', my: 2 }}>
-                            <table style={{ 
-                              width: '100%', 
-                              borderCollapse: 'collapse',
-                              border: '1px solid #ddd'
-                            }}>
-                              {children}
-                            </table>
-                          </Box>
-                        ),
-                        thead: ({ children }) => (
-                          <thead style={{ backgroundColor: '#f0f0f0' }}>
-                            {children}
-                          </thead>
-                        ),
-                        tbody: ({ children }) => (
-                          <tbody>
-                            {children}
-                          </tbody>
-                        ),
-                        tr: ({ children, isHeader }) => (
-                          <tr style={{ 
-                            backgroundColor: isHeader ? '#f0f0f0' : 'transparent',
-                            '&:nth-of-type(even)': { backgroundColor: '#fafafa' }
-                          }}>
-                            {children}
-                          </tr>
-                        ),
-                        th: ({ children }) => (
-                          <th style={{ 
-                            border: '1px solid #ddd', 
-                            padding: '12px 8px', 
-                            backgroundColor: '#f0f0f0',
-                            textAlign: 'left',
-                            fontWeight: 'bold',
-                            fontSize: '14px'
-                          }}>
-                            {children}
-                          </th>
-                        ),
-                        td: ({ children }) => (
-                          <td style={{ 
-                            border: '1px solid #ddd', 
-                            padding: '8px',
-                            fontSize: '14px'
-                          }}>
-                            {children}
-                          </td>
-                        ),
-                        hr: () => <Divider sx={{ my: 2 }} />
-                      }}
-                    >
-                      {markdownContent}
-                    </ReactMarkdown>
-                  </Paper>
-                </Box>
-              </Grid>
+                    {markdownContent}
+                  </ReactMarkdown>
+                </Paper>
+              </Box>
             </>
           )}
-        </Grid>
+        </Box>
       </DialogContent>
       
       <DialogActions sx={{ p: 2, borderTop: '1px solid #eee' }}>
