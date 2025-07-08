@@ -63,15 +63,25 @@ const InventoryFormsResponsesPage = () => {
       setLoadingReportResponses(loadingReportData);
 
       // Przetwarzanie odpowiedzi "Rozładunek Towaru"
-      const unloadingReportData = unloadingReportSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        fillDate: doc.data().fillDate?.toDate(),
-        unloadingDate: doc.data().unloadingDate?.toDate()
-      }));
+      const unloadingReportData = unloadingReportSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          fillDate: data.fillDate?.toDate(),
+          unloadingDate: data.unloadingDate?.toDate(),
+          // Obsługa selectedItems z konwersją dat ważności
+          selectedItems: data.selectedItems?.map(item => ({
+            ...item,
+            expiryDate: item.expiryDate?.toDate ? item.expiryDate.toDate() : item.expiryDate
+          })) || []
+        };
+      });
       setUnloadingReportResponses(unloadingReportData);
       
       console.log('✅ Formularze magazynowe zostały załadowane równolegle');
+      console.log('📦 Raporty rozładunku towaru:', unloadingReportData);
+      console.log('🔍 Przykładowe selectedItems:', unloadingReportData[0]?.selectedItems);
     } catch (err) {
       console.error('Błąd podczas pobierania danych:', err);
       setError(err.message);
@@ -97,6 +107,55 @@ const InventoryFormsResponsesPage = () => {
       return '-';
     }
   };
+
+  // Funkcja do formatowania pozycji dostarczonych
+  const formatDeliveredItems = (row) => {
+    // Nowy format z selectedItems (tablica obiektów)
+    if (row.selectedItems && Array.isArray(row.selectedItems) && row.selectedItems.length > 0) {
+      return (
+        <Box>
+          {row.selectedItems.map((item, index) => (
+            <Box key={index} sx={{ mb: 1, fontSize: '0.875rem' }}>
+              <Typography variant="body2" fontWeight="bold" sx={{ fontSize: '0.8rem' }}>
+                {item.productName || 'Brak nazwy'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                Zamówiono: {item.quantity ? `${item.quantity} ${item.unit || 'szt.'}` : 'Brak danych'}
+              </Typography>
+              {item.unloadedQuantity && (
+                <Typography variant="caption" color="primary" sx={{ fontSize: '0.75rem', display: 'block' }}>
+                  Rozładowano: {item.unloadedQuantity}
+                </Typography>
+              )}
+              {item.expiryDate && (
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', display: 'block' }}>
+                  Ważność: {(() => {
+                    try {
+                      const date = item.expiryDate.toDate ? item.expiryDate.toDate() : new Date(item.expiryDate);
+                      return format(date, 'dd.MM.yyyy');
+                    } catch (error) {
+                      return 'Nieprawidłowa data';
+                    }
+                  })()}
+                </Typography>
+              )}
+            </Box>
+          ))}
+        </Box>
+      );
+    }
+    
+    // Kompatybilność wsteczna ze starym formatem (goodsDescription)
+    if (row.goodsDescription) {
+      return (
+        <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+          {row.goodsDescription}
+        </Typography>
+      );
+    }
+    
+    return '-';
+  };
   
   const handleExportToCSV = (data, filename) => {
     // Funkcja do eksportu danych do pliku CSV
@@ -108,9 +167,31 @@ const InventoryFormsResponsesPage = () => {
         csvContent += `${formatDateTime(row.fillDate)},${row.email || ''},${row.employeeName || ''},${row.position || ''},${row.cmrNumber || ''},${row.loadingDate ? format(row.loadingDate, 'dd.MM.yyyy') : ''},${row.carrierName || ''},${row.vehicleRegistration || ''},${row.vehicleTechnicalCondition || ''},${row.clientName || ''},${row.orderNumber || ''},${row.palletProductName || ''},${row.palletQuantity || ''},${row.weight || ''},${row.notes || ''},${row.goodsNotes || ''}\n`;
       });
     } else if (tabValue === 1) {
-      csvContent += "Data wypełnienia,Email,Pracownik,Stanowisko,Data rozładunku,Przewoźnik,Nr rejestracyjny,Stan techniczny,Higiena transportu,Dostawca,Numer PO,Opis towaru,Ilość palet,Ilość kartonów/tub,Waga,Ocena wizualna,Nr certyfikatu ekologicznego,Uwagi rozładunku,Uwagi towaru\n";
+      csvContent += "Data wypełnienia,Email,Pracownik,Stanowisko,Data rozładunku,Przewoźnik,Nr rejestracyjny,Stan techniczny,Higiena transportu,Dostawca,Numer PO,Pozycje dostarczone,Ilość palet,Ilość kartonów/tub,Waga,Ocena wizualna,Nr certyfikatu ekologicznego,Uwagi rozładunku,Uwagi towaru\n";
       data.forEach(row => {
-        csvContent += `${formatDateTime(row.fillDate)},${row.email || ''},${row.employeeName || ''},${row.position || ''},${row.unloadingDate ? format(row.unloadingDate, 'dd.MM.yyyy') : ''},${row.carrierName || ''},${row.vehicleRegistration || ''},${row.vehicleTechnicalCondition || ''},${row.transportHygiene || ''},${row.supplierName || ''},${row.poNumber || ''},${row.goodsDescription || ''},${row.palletQuantity || ''},${row.cartonsTubsQuantity || ''},${row.weight || ''},${row.visualInspectionResult || ''},${row.ecoCertificateNumber || ''},${row.notes || ''},${row.goodsNotes || ''}\n`;
+        // Formatuj pozycje dostarczone dla CSV
+        let itemsText = '';
+        if (row.selectedItems && Array.isArray(row.selectedItems) && row.selectedItems.length > 0) {
+          itemsText = row.selectedItems.map(item => {
+            let itemText = item.productName || 'Brak nazwy';
+            if (item.quantity) itemText += ` (zamówiono: ${item.quantity} ${item.unit || 'szt.'})`;
+            if (item.unloadedQuantity) itemText += ` (rozładowano: ${item.unloadedQuantity})`;
+            if (item.expiryDate) {
+              try {
+                const date = item.expiryDate.toDate ? item.expiryDate.toDate() : new Date(item.expiryDate);
+                itemText += ` (ważność: ${format(date, 'dd.MM.yyyy')})`;
+              } catch (error) {
+                itemText += ` (ważność: nieprawidłowa data)`;
+              }
+            }
+            return itemText;
+          }).join('; ');
+        } else if (row.goodsDescription) {
+          // Kompatybilność wsteczna
+          itemsText = row.goodsDescription;
+        }
+        
+        csvContent += `${formatDateTime(row.fillDate)},${row.email || ''},${row.employeeName || ''},${row.position || ''},${row.unloadingDate ? format(row.unloadingDate, 'dd.MM.yyyy') : ''},${row.carrierName || ''},${row.vehicleRegistration || ''},${row.vehicleTechnicalCondition || ''},${row.transportHygiene || ''},${row.supplierName || ''},${row.poNumber || ''},${itemsText},${row.palletQuantity || ''},${row.cartonsTubsQuantity || ''},${row.weight || ''},${row.visualInspectionResult || ''},${row.ecoCertificateNumber || ''},${row.notes || ''},${row.goodsNotes || ''}\n`;
       });
     }
     
@@ -170,6 +251,9 @@ const InventoryFormsResponsesPage = () => {
 
   // Funkcja do obsługi edycji (przekierowanie do formularza z wypełnionymi danymi)
   const handleEditClick = (item, formType) => {
+    console.log('📝 Edycja odpowiedzi:', item);
+    console.log('🔍 selectedItems do edycji:', item.selectedItems);
+    
     // Zapisz dane do edycji w sessionStorage
     sessionStorage.setItem('editFormData', JSON.stringify(item));
     
@@ -345,7 +429,7 @@ const InventoryFormsResponsesPage = () => {
                 <TableCell>Higiena transportu</TableCell>
                 <TableCell>Dostawca</TableCell>
                 <TableCell>Numer PO</TableCell>
-                <TableCell>Opis towaru</TableCell>
+                <TableCell>Pozycje dostarczone</TableCell>
                 <TableCell align="right">Ilość palet</TableCell>
                 <TableCell align="right">Ilość kartonów/tub</TableCell>
                 <TableCell align="right">Waga</TableCell>
@@ -372,8 +456,8 @@ const InventoryFormsResponsesPage = () => {
                   <TableCell>{row.transportHygiene}</TableCell>
                   <TableCell>{row.supplierName}</TableCell>
                   <TableCell>{row.poNumber}</TableCell>
-                  <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {row.goodsDescription}
+                  <TableCell sx={{ maxWidth: 300, minWidth: 200 }}>
+                    {formatDeliveredItems(row)}
                   </TableCell>
                   <TableCell align="right">{row.palletQuantity}</TableCell>
                   <TableCell align="right">{row.cartonsTubsQuantity}</TableCell>
