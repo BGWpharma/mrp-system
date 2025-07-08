@@ -69,7 +69,6 @@ const ProductionControlFormDialog = ({
       customerOrder: task.orderNumber || '',
       productName: task.productName || '',
       lotNumber: task.lotNumber || `SN/${task.moNumber}`,
-      quantity: task.quantity || '',
       expiryDate: formatExpiryDate(task.expiryDate)
     };
   };

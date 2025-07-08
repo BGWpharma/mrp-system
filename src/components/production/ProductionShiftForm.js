@@ -378,6 +378,11 @@ const ProductionShiftForm = () => {
           otherActivities: '',
           machineIssues: ''
         });
+        
+        // Przekierowanie do strony odpowiedzi po 2 sekundach
+        setTimeout(() => {
+          navigate('/production/forms/responses');
+        }, 2000);
       } catch (error) {
         console.error('Błąd podczas zapisywania formularza zmiany produkcyjnej:', error);
         alert(`Wystąpił błąd podczas zapisywania formularza: ${error.message}`);

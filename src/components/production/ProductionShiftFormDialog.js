@@ -219,7 +219,7 @@ const ProductionShiftFormDialog = ({
     }
     
     if (!formData.responsiblePerson) {
-      errors.responsiblePerson = 'Osoba odpowiedzialna jest wymagana';
+      errors.responsiblePerson = 'Osoba odpowiedzialna za zmianę jest wymagana';
     }
     
     if (!formData.fillTime) {
@@ -227,7 +227,11 @@ const ProductionShiftFormDialog = ({
     }
     
     if (!formData.shiftType) {
-      errors.shiftType = 'Typ zmiany jest wymagany';
+      errors.shiftType = 'Rodzaj zmiany jest wymagany';
+    }
+    
+    if (!formData.product) {
+      errors.product = 'Produkt jest wymagany';
     }
     
     if (!formData.moNumber) {
@@ -235,10 +239,12 @@ const ProductionShiftFormDialog = ({
     }
     
     if (formData.shiftWorkers.length === 0) {
-      errors.shiftWorkers = 'Wybierz przynajmniej jednego pracownika';
+      errors.shiftWorkers = 'Wybierz co najmniej jednego pracownika zmiany';
     }
     
-    if (formData.productionQuantity && isNaN(formData.productionQuantity)) {
+    if (!formData.productionQuantity) {
+      errors.productionQuantity = 'Ilość zrobionego produktu jest wymagana';
+    } else if (isNaN(formData.productionQuantity)) {
       errors.productionQuantity = 'Podaj wartość liczbową';
     }
     
@@ -262,6 +268,14 @@ const ProductionShiftFormDialog = ({
     }
     if (formData.thirdProductLoss && isNaN(formData.thirdProductLoss)) {
       errors.thirdProductLoss = 'Podaj wartość liczbową';
+    }
+    
+    if (!formData.otherActivities) {
+      errors.otherActivities = 'Pozostałe czynności produkcyjne są wymagane';
+    }
+    
+    if (!formData.machineIssues) {
+      errors.machineIssues = 'Awarie maszyn są wymagane';
     }
     
     setValidationErrors(errors);
@@ -475,7 +489,7 @@ const ProductionShiftFormDialog = ({
             {/* Sekcja zmiany */}
             <Grid item xs={12}>
               <Typography variant="subtitle1" gutterBottom>
-                Sekcja: Zmiana
+                Sekcja: Pracownicy Produkcji/Rodzaj Zmiany
               </Typography>
             </Grid>
             
@@ -507,15 +521,14 @@ const ProductionShiftFormDialog = ({
             
             <Grid item xs={12} sm={6}>
               <FormControl component="fieldset" required error={!!validationErrors.shiftType}>
-                <FormLabel component="legend">Typ zmiany</FormLabel>
+                <FormLabel component="legend">Rodzaj zmiany</FormLabel>
                 <RadioGroup
                   name="shiftType"
                   value={formData.shiftType}
                   onChange={handleChange}
                 >
-                  <FormControlLabel value="Dzienna" control={<Radio />} label="Dzienna" />
-                  <FormControlLabel value="Popołudniowa" control={<Radio />} label="Popołudniowa" />
-                  <FormControlLabel value="Nocna" control={<Radio />} label="Nocna" />
+                  <FormControlLabel value="zmiana 1 (6-14)" control={<Radio />} label="zmiana 1 (6-14)" />
+                  <FormControlLabel value="zmiana 2 (14-22)" control={<Radio />} label="zmiana 2 (14-22)" />
                 </RadioGroup>
                 {validationErrors.shiftType && (
                   <Typography variant="caption" color="error">
@@ -528,17 +541,23 @@ const ProductionShiftFormDialog = ({
             {/* Sekcja produkcji */}
             <Grid item xs={12}>
               <Typography variant="subtitle1" gutterBottom>
-                Sekcja: Produkcja
+                Sekcja: Raport Wykonanych Czynności Na Zmianie
+              </Typography>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                Raport zmiany wykonujemy per jeden produkt gotowy!
               </Typography>
             </Grid>
             
             <Grid item xs={12} sm={6}>
               <TextField
+                required
                 fullWidth
                 label="Produkt"
                 name="product"
                 value={formData.product}
                 onChange={handleChange}
+                error={!!validationErrors.product}
+                helperText={validationErrors.product || "Nazwa produktu jest automatycznie wypełniana na podstawie wybranego MO"}
                 InputProps={{
                   readOnly: true,
                 }}
@@ -551,12 +570,12 @@ const ProductionShiftFormDialog = ({
                 required 
                 error={!!validationErrors.moNumber}
               >
-                <InputLabel>Manufacturing Order</InputLabel>
+                <InputLabel>Numer MO</InputLabel>
                 <Select
                   name="moNumber"
                   value={formData.moNumber}
                   onChange={handleChange}
-                  label="Manufacturing Order"
+                  label="Numer MO"
                   disabled={loadingMO}
                 >
                   {moOptions.map((option) => (
@@ -575,24 +594,19 @@ const ProductionShiftFormDialog = ({
             
             <Grid item xs={12}>
               <TextField
+                required
                 fullWidth
-                label="Ilość produkcji (szt.)"
+                label="Ilość zrobionego produktu"
                 name="productionQuantity"
-                type="number"
                 value={formData.productionQuantity}
                 onChange={handleChange}
+                placeholder="Proszę podać tylko wartość liczbową!"
                 error={!!validationErrors.productionQuantity}
                 helperText={validationErrors.productionQuantity}
-                inputProps={{ min: 0, step: 'any' }}
               />
             </Grid>
             
-            {/* Sekcja nadrukowanych produktów */}
-            <Grid item xs={12}>
-              <Typography variant="subtitle1" gutterBottom>
-                Rodzaj nadrukowanych doypack/tub
-              </Typography>
-            </Grid>
+
             
             {/* Pierwszy produkt */}
             <Grid item xs={12}>
@@ -615,7 +629,7 @@ const ProductionShiftFormDialog = ({
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Produkt nadrukowany 1"
+                    label="Rodzaj nadrukowanych doypack/tub - 1"
                     placeholder="Wpisz nazwę produktu lub fragment, np. 'mango', lub 'BRAK'"
                     helperText="Wyszukaj gotowy produkt z magazynu lub wpisz dowolny tekst"
                   />
@@ -638,7 +652,7 @@ const ProductionShiftFormDialog = ({
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Ilość produktu 1 (szt.)"
+                label="Ilość nadrukowanych doypack/tub - 1"
                 name="firstProductQuantity"
                 type="number"
                 value={formData.firstProductQuantity}
@@ -651,7 +665,7 @@ const ProductionShiftFormDialog = ({
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Straty produktu 1 (szt.)"
+                label="Ilość strat doypack/tub - 1"
                 name="firstProductLoss"
                 type="number"
                 value={formData.firstProductLoss}
@@ -683,7 +697,7 @@ const ProductionShiftFormDialog = ({
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Produkt nadrukowany 2"
+                    label="Rodzaj nadrukowanych doypack/tub - 2"
                     placeholder="Wpisz nazwę produktu lub fragment, np. 'mango', lub 'BRAK'"
                     helperText="Wyszukaj gotowy produkt z magazynu lub wpisz dowolny tekst"
                   />
@@ -706,7 +720,7 @@ const ProductionShiftFormDialog = ({
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Ilość produktu 2 (szt.)"
+                label="Ilość nadrukowanych doypack/tub - 2"
                 name="secondProductQuantity"
                 type="number"
                 value={formData.secondProductQuantity}
@@ -719,7 +733,7 @@ const ProductionShiftFormDialog = ({
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Straty produktu 2 (szt.)"
+                label="Ilość strat doypack/tub - 2"
                 name="secondProductLoss"
                 type="number"
                 value={formData.secondProductLoss}
@@ -751,7 +765,7 @@ const ProductionShiftFormDialog = ({
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Produkt nadrukowany 3"
+                    label="Rodzaj nadrukowanych doypack/tub - 3"
                     placeholder="Wpisz nazwę produktu lub fragment, np. 'mango', lub 'BRAK'"
                     helperText="Wyszukaj gotowy produkt z magazynu lub wpisz dowolny tekst"
                   />
@@ -774,7 +788,7 @@ const ProductionShiftFormDialog = ({
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Ilość produktu 3 (szt.)"
+                label="Ilość nadrukowanych doypack/tub - 3"
                 name="thirdProductQuantity"
                 type="number"
                 value={formData.thirdProductQuantity}
@@ -787,7 +801,7 @@ const ProductionShiftFormDialog = ({
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Straty produktu 3 (szt.)"
+                label="Ilość strat doypack/tub - 3"
                 name="thirdProductLoss"
                 type="number"
                 value={formData.thirdProductLoss}

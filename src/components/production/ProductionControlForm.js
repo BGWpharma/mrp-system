@@ -353,8 +353,8 @@ const ProductionControlForm = ({
     productPhoto2Name: prefilledData.productPhoto2Name || '',
     productPhoto3Url: prefilledData.productPhoto3Url || '',
     productPhoto3Name: prefilledData.productPhoto3Name || '',
-    humidity: prefilledData.humidity || '',
-    temperature: prefilledData.temperature || ''
+    humidity: prefilledData.humidity || 45, // Domyślna wartość w środku zakresu (45%)
+    temperature: prefilledData.temperature || 20 // Domyślna wartość w środku zakresu (20°C)
   });
 
   const [validationErrors, setValidationErrors] = useState({});
@@ -383,11 +383,14 @@ const ProductionControlForm = ({
 
     fetchMONumbers();
 
-    // Ustaw email zalogowanego użytkownika
+    // Ustaw email zalogowanego użytkownika i upewnij się że domyślne wartości suwaków są ustawione
     if (currentUser && currentUser.email) {
       setFormData(prev => ({
         ...prev,
-        email: currentUser.email
+        email: currentUser.email,
+        // Upewnij się że domyślne wartości suwaków są ustawione jeśli nie są jeszcze
+        humidity: prev.humidity !== '' ? prev.humidity : 45,
+        temperature: prev.temperature !== '' ? prev.temperature : 20
       }));
     }
   }, [currentUser]);
@@ -447,8 +450,8 @@ const ProductionControlForm = ({
           new Date();
         
         // Konwersja wilgotności i temperatury ze stringa na liczbę, jeśli to możliwe
-        let humidity = editData.humidity || '';
-        let temperature = editData.temperature || '';
+        let humidity = editData.humidity || 45; // Domyślna wartość jeśli brak danych
+        let temperature = editData.temperature || 20; // Domyślna wartość jeśli brak danych
         
         // Próba konwersji wilgotności na liczbę (usuń znak '%' jeśli istnieje)
         if (typeof humidity === 'string') {
@@ -459,6 +462,8 @@ const ProductionControlForm = ({
             humidity = 35; // Wartość poniżej normy
           } else if (humidity === 'POWYŻEJ NORMY 60%!') {
             humidity = 65; // Wartość powyżej normy
+          } else {
+            humidity = 45; // Domyślna wartość jeśli nie można sparsować
           }
         }
         
@@ -471,6 +476,8 @@ const ProductionControlForm = ({
             temperature = 7; // Wartość poniżej normy
           } else if (temperature === 'POWYŻEJ 25°C!') {
             temperature = 28; // Wartość powyżej normy
+          } else {
+            temperature = 20; // Domyślna wartość jeśli nie można sparsować
           }
         }
         
@@ -710,7 +717,7 @@ const ProductionControlForm = ({
     }
     
     if (!formData.quantity) {
-      errors.quantity = 'Ilość jest wymagana';
+      errors.quantity = 'Wyprodukowana ilość jest wymagana';
     } else if (isNaN(formData.quantity)) {
       errors.quantity = 'Podaj wartość liczbową';
     }
@@ -873,10 +880,15 @@ const ProductionControlForm = ({
           productPhoto2Name: '',
           productPhoto3Url: '',
           productPhoto3Name: '',
-          humidity: '',
-          temperature: ''
+          humidity: 45, // Domyślna wartość w środku zakresu (45%)
+          temperature: 20 // Domyślna wartość w środku zakresu (20°C)
         });
         setRemovedAttachments([]); // Wyczyść listę usuniętych załączników
+        
+        // Przekierowanie do strony odpowiedzi po 2 sekundach
+        setTimeout(() => {
+          navigate('/production/forms/responses');
+        }, 2000);
       }
       } catch (error) {
         console.error('Błąd podczas zapisywania formularza kontroli produkcji:', error);
@@ -1308,13 +1320,12 @@ const ProductionControlForm = ({
               <TextField
                 required
                 fullWidth
-                label="Ilość (szt.)"
+                label="Wyprodukowana ilość (szt.)"
                 name="quantity"
                 value={formData.quantity}
                 onChange={handleChange}
                 error={!!validationErrors.quantity}
                 helperText={validationErrors.quantity}
-                placeholder="W kartonie"
               />
             </Grid>
             

@@ -103,7 +103,7 @@ const CompletedMOForm = () => {
   const [formData, setFormData] = useState({
     email: '',
     date: new Date(),
-    time: '',
+    time: new Date().toLocaleTimeString('pl', { hour: '2-digit', minute: '2-digit' }),
     moNumber: '',
     productQuantity: '',
     packagingLoss: '',
@@ -352,7 +352,7 @@ const CompletedMOForm = () => {
         setFormData({
           email: '',
           date: new Date(),
-          time: '',
+          time: new Date().toLocaleTimeString('pl', { hour: '2-digit', minute: '2-digit' }),
           moNumber: '',
           productQuantity: '',
           packagingLoss: '',
@@ -363,6 +363,11 @@ const CompletedMOForm = () => {
           mixingPlanReportName: ''
         });
         setRemovedAttachments([]); // Wyczyść listę usuniętych załączników
+        
+        // Przekierowanie do strony odpowiedzi po 2 sekundach
+        setTimeout(() => {
+          navigate('/production/forms/responses');
+        }, 2000);
       } catch (error) {
         console.error('Błąd podczas zapisywania formularza:', error);
         alert(`Wystąpił błąd podczas zapisywania formularza: ${error.message}`);

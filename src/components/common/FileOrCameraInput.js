@@ -129,7 +129,7 @@ const FileOrCameraInput = ({
           
           closeCamera();
         }
-      }, 'image/jpeg', 0.8);
+      }, 'image/jpeg');
     }
   };
 
