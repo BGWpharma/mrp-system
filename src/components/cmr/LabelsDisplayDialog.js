@@ -19,13 +19,17 @@ import {
 import { useReactToPrint } from 'react-to-print';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import LabelPdfGenerator from '../../utils/LabelPdfGenerator';
 import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer';
 
 const LabelsDisplayDialog = ({ 
   open, 
   onClose, 
   labels, 
-  title = "Etykiety CMR" 
+  title = "Etykiety CMR",
+  cmrData = null,
+  itemsWeightDetails = null,
+  labelType = 'unknown' // 'box', 'pallet', 'unknown'
 }) => {
   const componentRef = useRef();
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -63,6 +67,70 @@ const LabelsDisplayDialog = ({
       }
     `
   });
+
+  // Nowa funkcja generowania PDF z PDF-lib (znacznie szybsza)
+  const generatePDFWithPdfLib = async () => {
+    if (!cmrData || !itemsWeightDetails) {
+      console.warn('Brak danych CMR lub szczegółów wagi - używam starą metodę');
+      return generatePDF();
+    }
+
+    setIsGeneratingPdf(true);
+    setPdfProgress('Inicjalizacja generatora PDF...');
+    
+    try {
+      const generator = new LabelPdfGenerator();
+      let pdfDoc;
+      
+      if (labelType === 'box') {
+        setPdfProgress('Generowanie etykiet kartonów...');
+        pdfDoc = await generator.generateBoxLabels(cmrData, itemsWeightDetails);
+      } else if (labelType === 'pallet') {
+        setPdfProgress('Generowanie etykiet palet...');
+        pdfDoc = await generator.generatePalletLabels(cmrData, itemsWeightDetails);
+      } else {
+        // Fallback - spróbuj określić typ na podstawie danych
+        const hasBoxes = itemsWeightDetails.some(item => item.hasDetailedData && item.boxes);
+        const hasPallets = itemsWeightDetails.some(item => item.hasDetailedData && item.pallets);
+        
+        if (hasBoxes && !hasPallets) {
+          setPdfProgress('Generowanie etykiet kartonów...');
+          pdfDoc = await generator.generateBoxLabels(cmrData, itemsWeightDetails);
+        } else if (hasPallets && !hasBoxes) {
+          setPdfProgress('Generowanie etykiet palet...');
+          pdfDoc = await generator.generatePalletLabels(cmrData, itemsWeightDetails);
+        } else {
+          console.warn('Nie można określić typu etykiet - używam starą metodę');
+          return generatePDF();
+        }
+      }
+      
+      setPdfProgress('Zapisywanie pliku PDF...');
+      
+      // Zapisz PDF
+      const fileName = `${title.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+      await generator.savePDF(fileName);
+      
+      console.log(`✅ PDF wygenerowany pomyślnie: ${fileName}`);
+      setPdfProgress('Gotowe!');
+      
+    } catch (error) {
+      console.error('❌ Błąd podczas generowania PDF z PDF-lib:', error);
+      setPdfProgress('Błąd - próba alternatywnej metody...');
+      
+      // Fallback do starej metody html2canvas
+      try {
+        await generatePDF();
+      } catch (fallbackError) {
+        console.error('❌ Wszystkie metody generowania PDF nie powiodły się:', fallbackError);
+        setPdfProgress('Błąd generowania');
+        alert('Wystąpił błąd podczas generowania PDF. Spróbuj ponownie lub użyj funkcji drukowania.');
+      }
+    } finally {
+      setIsGeneratingPdf(false);
+      setTimeout(() => setPdfProgress(''), 3000);
+    }
+  };
 
   const generatePDF = async () => {
     if (!componentRef.current || labels.length === 0) return;
@@ -328,7 +396,7 @@ const LabelsDisplayDialog = ({
           <Button
             variant="outlined"
             startIcon={isGeneratingPdf ? <CircularProgress size={16} /> : <PdfIcon />}
-            onClick={generatePDF}
+            onClick={generatePDFWithPdfLib}
             disabled={isGeneratingPdf || labels.length === 0}
             color="secondary"
           >

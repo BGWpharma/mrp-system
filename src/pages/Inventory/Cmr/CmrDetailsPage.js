@@ -190,6 +190,7 @@ const CmrDetailsPage = () => {
   // Stany dla dialogów
   const [labelsDialogOpen, setLabelsDialogOpen] = useState(false);
   const [currentLabels, setCurrentLabels] = useState([]);
+  const [currentLabelType, setCurrentLabelType] = useState('unknown');
   
   useEffect(() => {
     fetchCmrDocument();
@@ -516,6 +517,7 @@ const CmrDetailsPage = () => {
     }
     const labels = LabelGenerator.generateBoxLabels(cmrData, itemsWeightDetails);
     setCurrentLabels(labels);
+    setCurrentLabelType('box');
     setLabelsDialogOpen(true);
   };
 
@@ -526,12 +528,14 @@ const CmrDetailsPage = () => {
     }
     const labels = LabelGenerator.generatePalletLabels(cmrData, itemsWeightDetails);
     setCurrentLabels(labels);
+    setCurrentLabelType('pallet');
     setLabelsDialogOpen(true);
   };
 
   const handleLabelsDialogClose = () => {
     setLabelsDialogOpen(false);
     setCurrentLabels([]);
+    setCurrentLabelType('unknown');
   };
   
   const handleGenerateOfficialCmr = async () => {
@@ -2727,6 +2731,9 @@ const CmrDetailsPage = () => {
         onClose={handleLabelsDialogClose}
         labels={currentLabels}
         title={`Etykiety CMR ${cmrData?.cmrNumber || ''}`}
+        cmrData={cmrData}
+        itemsWeightDetails={itemsWeightDetails}
+        labelType={currentLabelType}
       />
     </Container>
   );
