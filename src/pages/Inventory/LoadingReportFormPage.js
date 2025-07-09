@@ -63,9 +63,11 @@ const LoadingReportFormPage = () => {
     employeeName: '',
     position: '',
     fillDate: new Date(),
+    fillTime: new Date().toLocaleTimeString('pl', { hour: '2-digit', minute: '2-digit' }),
     
     // Sekcja 3: Informacje o załadunku
     loadingDate: new Date(),
+    loadingTime: '',
     carrierName: '',
     vehicleRegistration: '',
     vehicleTechnicalCondition: '',
@@ -126,7 +128,9 @@ const LoadingReportFormPage = () => {
           employeeName: editData.employeeName || '',
           position: editData.position || '',
           fillDate: fillDate,
+          fillTime: editData.fillTime || '',
           loadingDate: loadingDate,
+          loadingTime: editData.loadingTime || '',
           carrierName: editData.carrierName || '',
           vehicleRegistration: editData.vehicleRegistration || '',
           vehicleTechnicalCondition: editData.vehicleTechnicalCondition || '',
@@ -154,12 +158,13 @@ const LoadingReportFormPage = () => {
     }
   }, [isEditMode]);
 
-  // Ustaw email zalogowanego użytkownika (tylko jeśli nie jesteśmy w trybie edycji)
+  // Ustaw email zalogowanego użytkownika i aktualną godzinę (tylko jeśli nie jesteśmy w trybie edycji)
   useEffect(() => {
     if (currentUser && currentUser.email && !isEditMode) {
       setFormData(prev => ({
         ...prev,
-        email: currentUser.email
+        email: currentUser.email,
+        fillTime: new Date().toLocaleTimeString('pl', { hour: '2-digit', minute: '2-digit' })
       }));
     }
   }, [currentUser, isEditMode]);
@@ -341,6 +346,11 @@ const LoadingReportFormPage = () => {
       newErrors.position = 'Stanowisko jest wymagane';
     }
     
+    // Walidacja godziny wypełnienia
+    if (!formData.fillTime) {
+      newErrors.fillTime = 'Godzina wypełnienia jest wymagana';
+    }
+    
     // Walidacja numeru CMR
     if (!formData.cmrNumber.trim()) {
       newErrors.cmrNumber = 'Nr CMR jest wymagany';
@@ -391,7 +401,9 @@ const LoadingReportFormPage = () => {
         employeeName: formData.employeeName,
         position: formData.position,
         fillDate: formData.fillDate,
+        fillTime: formData.fillTime,
         loadingDate: formData.loadingDate,
+        loadingTime: formData.loadingTime,
         carrierName: formData.carrierName,
         vehicleRegistration: formData.vehicleRegistration,
         vehicleTechnicalCondition: formData.vehicleTechnicalCondition,
@@ -442,7 +454,9 @@ const LoadingReportFormPage = () => {
           employeeName: '',
           position: '',
           fillDate: new Date(),
+          fillTime: new Date().toLocaleTimeString('pl', { hour: '2-digit', minute: '2-digit' }),
           loadingDate: new Date(),
+          loadingTime: '',
           carrierName: '',
           vehicleRegistration: '',
           vehicleTechnicalCondition: '',
@@ -659,6 +673,23 @@ const LoadingReportFormPage = () => {
                 renderInput={(params) => <TextField {...params} fullWidth required />}
               />
             </Grid>
+            
+            <Grid item xs={12} sm={6}>
+              <TextField
+                required
+                fullWidth
+                label="Godzina wypełnienia"
+                name="fillTime"
+                type="time"
+                value={formData.fillTime}
+                onChange={handleInputChange('fillTime')}
+                error={!!errors.fillTime}
+                helperText={errors.fillTime}
+                InputLabelProps={{
+                  shrink: true,
+                }}
+              />
+            </Grid>
 
             <Grid item xs={12}>
               <Divider sx={{ my: 2 }} />
@@ -673,6 +704,20 @@ const LoadingReportFormPage = () => {
                 value={formData.loadingDate}
                 onChange={handleDateChange('loadingDate')}
                 renderInput={(params) => <TextField {...params} fullWidth required />}
+              />
+            </Grid>
+            
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Godzina załadunku"
+                name="loadingTime"
+                type="time"
+                value={formData.loadingTime}
+                onChange={handleInputChange('loadingTime')}
+                InputLabelProps={{
+                  shrink: true,
+                }}
               />
             </Grid>
             
