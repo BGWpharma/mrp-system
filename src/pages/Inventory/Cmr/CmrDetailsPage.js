@@ -45,6 +45,13 @@ import {
   migrateCmrToNewFormat
 } from '../../../services/cmrService';
 import { getOrderById } from '../../../services/orderService';
+import { 
+  collection, 
+  query, 
+  where, 
+  getDocs 
+} from 'firebase/firestore';
+import { db } from '../../../services/firebase/config';
 
 // Ikony
 import EditIcon from '@mui/icons-material/Edit';
@@ -159,15 +166,103 @@ const CmrDetailsPage = () => {
   const [paymentStatusDialogOpen, setPaymentStatusDialogOpen] = useState(false);
   const [newPaymentStatus, setNewPaymentStatus] = useState('');
   
+  // Stany dla odpowiedzi formularzy
+  const [loadingFormResponses, setLoadingFormResponses] = useState([]);
+  const [loadingFormResponsesLoading, setLoadingFormResponsesLoading] = useState(false);
+  
   useEffect(() => {
     fetchCmrDocument();
   }, [id]);
+  
+  // Funkcja pobierania odpowiedzi formularzy załadunku dla danego CMR
+  const fetchLoadingFormResponses = async (cmrNumber) => {
+    if (!cmrNumber) return;
+    
+    setLoadingFormResponsesLoading(true);
+    try {
+      console.log('🔍 Searching for loading forms with CMR number:', cmrNumber);
+      
+      // Sprawdź różne warianty numeru CMR
+      const cmrVariants = [
+        cmrNumber,                    // Oryginalny numer (np. "CMR 08-07-2025 COR")
+        cmrNumber.replace('CMR ', ''), // Bez prefiksu (np. "08-07-2025 COR")
+        cmrNumber.replace(' COR', ''), // Bez sufiksu (np. "CMR 08-07-2025")
+        cmrNumber.replace('CMR ', '').replace(' COR', ''), // Tylko data (np. "08-07-2025")
+        `CMR ${cmrNumber}`,          // Z dodatkowym prefiksem (na wszelki wypadek)
+      ].filter((variant, index, array) => array.indexOf(variant) === index); // Usuń duplikaty
+      
+      console.log('🔍 Checking CMR variants:', cmrVariants);
+      
+      let loadingData = [];
+      
+      // Spróbuj wszystkie warianty
+      for (const variant of cmrVariants) {
+        const loadingQuery = query(
+          collection(db, 'Forms/ZaladunekTowaru/Odpowiedzi'), 
+          where('cmrNumber', '==', variant)
+        );
+        const loadingSnapshot = await getDocs(loadingQuery);
+        
+        console.log(`📄 Found ${loadingSnapshot.docs.length} loading form responses for variant: "${variant}"`);
+        
+        if (loadingSnapshot.docs.length > 0) {
+          const variantData = loadingSnapshot.docs.map(doc => {
+            const data = doc.data();
+            console.log('📝 Processing document:', doc.id, 'with CMR:', data.cmrNumber);
+            return {
+              id: doc.id,
+              ...data,
+              fillDate: data.fillDate?.toDate(),
+              loadingDate: data.loadingDate?.toDate(),
+              formType: 'loading'
+            };
+          });
+          loadingData.push(...variantData);
+        }
+      }
+      
+      // Jeśli nadal nic nie znaleziono, pokaż wszystkie numery CMR w kolekcji dla debugowania
+      if (loadingData.length === 0) {
+        console.log('🔍 No results found for any variant. Let me check all CMR numbers in the collection...');
+        const allDocsQuery = query(collection(db, 'Forms/ZaladunekTowaru/Odpowiedzi'));
+        const allDocsSnapshot = await getDocs(allDocsQuery);
+        console.log('📋 All CMR numbers in collection:');
+        allDocsSnapshot.docs.forEach((doc, index) => {
+          const data = doc.data();
+          console.log(`${index + 1}. CMR: "${data.cmrNumber}" (type: ${typeof data.cmrNumber})`);
+        });
+      }
+
+      // Sortowanie odpowiedzi od najnowszych (według daty wypełnienia)
+      const sortByFillDate = (a, b) => {
+        const dateA = a.fillDate || new Date(0);
+        const dateB = b.fillDate || new Date(0);
+        return new Date(dateB) - new Date(dateA); // Od najnowszych
+      };
+
+      setLoadingFormResponses(loadingData.sort(sortByFillDate));
+      console.log('✅ Set', loadingData.length, 'loading form responses');
+    } catch (error) {
+      console.error('Błąd podczas pobierania odpowiedzi formularzy załadunku:', error);
+      setLoadingFormResponses([]);
+    } finally {
+      setLoadingFormResponsesLoading(false);
+    }
+  };
   
   const fetchCmrDocument = async () => {
     try {
       setLoading(true);
       const data = await getCmrDocumentById(id);
       setCmrData(data);
+      
+      // Pobierz odpowiedzi formularzy załadunku dla tego CMR
+      if (data && data.cmrNumber) {
+        console.log('🚛 CMR Document loaded with number:', data.cmrNumber, '(type:', typeof data.cmrNumber, ')');
+        fetchLoadingFormResponses(data.cmrNumber);
+      } else {
+        console.log('❌ No CMR number found in document data:', data);
+      }
       
       // Debug: Wyświetl strukturę danych CMR (można usunąć po testach)
       console.log('CMR data:', data);
@@ -1052,96 +1147,100 @@ const CmrDetailsPage = () => {
   const isEditable = cmrData.status === CMR_STATUSES.DRAFT || cmrData.status === CMR_STATUSES.ISSUED;
   
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    <Container maxWidth="xl" sx={{ mt: 2, mb: 4 }}>
       <GlobalStyles>{globalPrintCss}</GlobalStyles>
       
-      {/* Wersja do wyświetlania na ekranie */}
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexDirection: { xs: 'column', sm: 'row' } }} className="no-print">
-        <Box>
-          <Typography variant="h5">
-            Dokument CMR: {cmrData.cmrNumber}
-          </Typography>
-          <Typography variant="subtitle1" color="text.secondary" sx={{ mb: 1 }}>
-            Status: {renderStatusChip(cmrData.status)}
-          </Typography>
-          <Typography variant="subtitle1" color="text.secondary">
-            Status płatności: {getPaymentStatusChip(cmrData.paymentStatus)}
-          </Typography>
-        </Box>
-        <Box sx={{ 
-          display: 'flex', 
-          gap: 1, 
-          flexWrap: 'wrap', 
-          mt: { xs: 2, sm: 0 },
-          width: { xs: '100%', sm: 'auto' } 
-        }}>
-          <Button
-            variant="outlined"
-            startIcon={<ArrowBackIcon />}
-            onClick={handleBack}
-            size="small"
-            sx={{ mb: { xs: 1, sm: 0 } }}
-          >
-            Powrót
-          </Button>
+      {/* Header z tytułem i akcjami */}
+      <Paper sx={{ p: 3, mb: 3 }} className="no-print">
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexDirection: { xs: 'column', md: 'row' } }}>
+          <Box sx={{ mb: { xs: 2, md: 0 } }}>
+            <Typography variant="h4" gutterBottom sx={{ fontWeight: 600, color: 'primary.main' }}>
+              {cmrData.cmrNumber}
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+              {renderStatusChip(cmrData.status)}
+              {getPaymentStatusChip(cmrData.paymentStatus)}
+              <Typography variant="body2" color="text.secondary">
+                Utworzono: {formatDate(cmrData.issueDate)}
+              </Typography>
+            </Box>
+          </Box>
           
-          {isEditable && (
+          {/* Grupa przycisków akcji */}
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
             <Button
               variant="outlined"
-              startIcon={<EditIcon />}
-              onClick={handleEdit}
-              size="small"
-              sx={{ mb: { xs: 1, sm: 0 } }}
+              startIcon={<ArrowBackIcon />}
+              onClick={handleBack}
+              sx={{ minWidth: 'auto' }}
             >
-              Edytuj
+              Powrót
             </Button>
-          )}
-          
-          <Button
-            variant="outlined"
-            startIcon={<FileCopyIcon />}
-            onClick={handleGenerateOfficialCmr}
-            color="primary"
-            size="small"
-            sx={{ mb: { xs: 1, sm: 0 } }}
-          >
-            Generuj oficjalny CMR
-          </Button>
-          
-          <Button
-            variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={handleMigrateCmr}
-            color="secondary"
-            size="small"
-            sx={{ mb: { xs: 1, sm: 0 } }}
-          >
-            Migruj CMR
-          </Button>
-          
-          <Button
-            variant="outlined"
-            startIcon={<LabelIcon />}
-            onClick={handleBoxLabel}
-            color="primary"
-            size="small"
-            sx={{ mb: { xs: 1, sm: 0 } }}
-          >
-            Etykieta kartonu
-          </Button>
-          
-          <Button
-            variant="outlined"
-            startIcon={<GridViewIcon />}
-            onClick={handlePalletLabel}
-            color="primary"
-            size="small"
-            sx={{ mb: { xs: 1, sm: 0 } }}
-          >
-            Etykieta palety
-          </Button>
+            
+            {isEditable && (
+              <Button
+                variant="contained"
+                startIcon={<EditIcon />}
+                onClick={handleEdit}
+                color="primary"
+              >
+                Edytuj
+              </Button>
+            )}
+            
+            <Button
+              variant="outlined"
+              startIcon={<PrintIcon />}
+              onClick={handlePrint}
+              color="info"
+            >
+              Drukuj
+            </Button>
+            
+            <Button
+              variant="outlined"
+              startIcon={<FileCopyIcon />}
+              onClick={handleGenerateOfficialCmr}
+              color="success"
+            >
+              Oficjalny CMR
+            </Button>
+            
+            {/* Grupa przycisków etykiet */}
+            <Box sx={{ display: 'flex', gap: 0.5 }}>
+              <Button
+                variant="outlined"
+                startIcon={<LabelIcon />}
+                onClick={handleBoxLabel}
+                size="small"
+                color="secondary"
+              >
+                Etykieta kartonu
+              </Button>
+              
+              <Button
+                variant="outlined"
+                startIcon={<GridViewIcon />}
+                onClick={handlePalletLabel}
+                size="small"
+                color="secondary"
+              >
+                Etykieta palety
+              </Button>
+            </Box>
+            
+            <Button
+              variant="text"
+              startIcon={<RefreshIcon />}
+              onClick={handleMigrateCmr}
+              size="small"
+              color="inherit"
+            >
+              Migruj
+            </Button>
+          </Box>
         </Box>
-      </Box>
+      </Paper>
       
       {/* Panel zmiany statusu */}
       {(isEditable || cmrData.status === CMR_STATUSES.IN_TRANSIT || cmrData.status === CMR_STATUSES.DELIVERED) && (
@@ -1210,288 +1309,299 @@ const CmrDetailsPage = () => {
       
       {/* Główne informacje - wersja ekranowa */}
       <Grid container spacing={3} className="no-print">
-        {/* Informacje podstawowe */}
-        <Grid item xs={12} md={6}>
-          <Card>
+        {/* Lewa kolumna - Informacje podstawowe i powiązane zamówienia */}
+        <Grid item xs={12} lg={8}>
+          {/* Informacje podstawowe */}
+          <Card sx={{ mb: 3 }}>
             <CardHeader 
               title="Informacje podstawowe" 
-              titleTypographyProps={{ variant: 'h6' }}
+              titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+              sx={{ pb: 1 }}
             />
             <Divider />
             <CardContent>
-              <Grid container spacing={2}>
-                <Grid item xs={6}>
-                  <Typography variant="body2" color="text.secondary">
+              <Grid container spacing={3}>
+                <Grid item xs={6} sm={3}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
                     Numer CMR
                   </Typography>
-                  <Typography variant="body1">
+                  <Typography variant="body1" sx={{ fontWeight: 500 }}>
                     {cmrData.cmrNumber}
                   </Typography>
                 </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="body2" color="text.secondary">
+                <Grid item xs={6} sm={3}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
                     Data wystawienia
                   </Typography>
                   <Typography variant="body1">
                     {formatDate(cmrData.issueDate)}
                   </Typography>
                 </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="body2" color="text.secondary">
+                <Grid item xs={6} sm={3}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
                     Data dostawy
                   </Typography>
                   <Typography variant="body1">
                     {formatDate(cmrData.deliveryDate)}
                   </Typography>
                 </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="body2" color="text.secondary">
+                <Grid item xs={6} sm={3}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
                     Typ transportu
                   </Typography>
                   <Typography variant="body1">
                     {cmrData.transportType}
                   </Typography>
                 </Grid>
-                
-                {/* Informacje o powiązanych zamówieniach klienta */}
-                {linkedOrders.length > 0 && (
-                  <>
-                    <Grid item xs={12}>
-                      <Divider sx={{ my: 1 }} />
-                      <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold' }}>
-                        Powiązane zamówienia klienta ({linkedOrders.length})
-                      </Typography>
-                    </Grid>
-                    {linkedOrders.map((order, index) => (
-                      <Grid item xs={12} key={order.id} sx={{ mb: 1 }}>
-                        <Box sx={{ 
-                          border: 1, 
-                          borderColor: 'divider',
-                          borderRadius: 1, 
-                          p: 2, 
-                          backgroundColor: 'background.paper',
-                          '&:hover': {
-                            backgroundColor: 'action.hover'
-                          }
-                        }}>
-                          <Grid container spacing={2} alignItems="center">
-                            <Grid item xs={12} sm={6}>
-                              <Typography variant="body2" color="text.secondary">
-                                Numer zamówienia
-                              </Typography>
-                              <Typography 
-                                variant="body1" 
-                                sx={{ 
-                                  color: 'primary.main', 
-                                  cursor: 'pointer',
-                                  textDecoration: 'underline',
-                                  fontWeight: 'medium'
-                                }}
-                                onClick={() => navigate(`/orders/${order.id}`)}
-                              >
-                                {order.orderNumber}
-                              </Typography>
-                            </Grid>
-                            <Grid item xs={12} sm={6}>
-                              <Typography variant="body2" color="text.secondary">
-                                Klient
-                              </Typography>
-                              <Typography variant="body1">
-                                {order.customer?.name || '-'}
-                              </Typography>
-                            </Grid>
-                            <Grid item xs={12} sm={6}>
-                              <Typography variant="body2" color="text.secondary">
-                                Data zamówienia
-                              </Typography>
-                              <Typography variant="body1">
-                                {formatDate(order.orderDate)}
-                              </Typography>
-                            </Grid>
-                            <Grid item xs={12} sm={6}>
-                              <Typography variant="body2" color="text.secondary">
-                                Status zamówienia
-                              </Typography>
-                              <Chip 
-                                label={order.status} 
-                                size="small"
-                                color={
-                                  order.status === 'Dostarczone' ? 'success' :
-                                  order.status === 'W realizacji' ? 'warning' :
-                                  order.status === 'Anulowane' ? 'error' : 'default'
-                                }
-                              />
-                            </Grid>
-                          </Grid>
-                        </Box>
-                      </Grid>
-                    ))}
-                  </>
-                )}
               </Grid>
             </CardContent>
           </Card>
+
+          {/* Powiązane zamówienia klienta */}
+          {linkedOrders.length > 0 && (
+            <Card sx={{ mb: 3 }}>
+              <CardHeader 
+                title={`Powiązane zamówienia klienta (${linkedOrders.length})`}
+                titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+                sx={{ pb: 1 }}
+              />
+              <Divider />
+              <CardContent>
+                <Grid container spacing={2}>
+                  {linkedOrders.map((order, index) => (
+                    <Grid item xs={12} key={order.id}>
+                      <Paper
+                        variant="outlined"
+                        sx={{ 
+                          p: 2,
+                          cursor: 'pointer',
+                          '&:hover': {
+                            backgroundColor: 'action.hover',
+                            borderColor: 'primary.main'
+                          }
+                        }}
+                        onClick={() => navigate(`/orders/${order.id}`)}
+                      >
+                        <Grid container spacing={2} alignItems="center">
+                          <Grid item xs={12} sm={6}>
+                            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                              Numer zamówienia
+                            </Typography>
+                            <Typography 
+                              variant="body1" 
+                              sx={{ 
+                                color: 'primary.main',
+                                fontWeight: 600
+                              }}
+                            >
+                              {order.orderNumber}
+                            </Typography>
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                              Klient
+                            </Typography>
+                            <Typography variant="body1">
+                              {order.customer?.name || '-'}
+                            </Typography>
+                          </Grid>
+                          <Grid item xs={6} sm={3}>
+                            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                              Data zamówienia
+                            </Typography>
+                            <Typography variant="body2">
+                              {formatDate(order.orderDate)}
+                            </Typography>
+                          </Grid>
+                          <Grid item xs={6} sm={3}>
+                            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                              Status
+                            </Typography>
+                            <Chip 
+                              label={order.status} 
+                              size="small"
+                              color={
+                                order.status === 'Dostarczone' ? 'success' :
+                                order.status === 'W realizacji' ? 'warning' :
+                                order.status === 'Anulowane' ? 'error' : 'default'
+                              }
+                            />
+                          </Grid>
+                        </Grid>
+                      </Paper>
+                    </Grid>
+                  ))}
+                </Grid>
+              </CardContent>
+            </Card>
+          )}
         </Grid>
         
-        {/* Strony */}
+        {/* Prawa kolumna - Strony, transport, płatności */}
+        <Grid item xs={12} lg={4}>
+          {/* Strony */}
+          <Card sx={{ mb: 3 }}>
+            <CardHeader 
+              title="Strony" 
+              titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+              sx={{ pb: 1 }}
+            />
+            <Divider />
+            <CardContent>
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                  Nadawca
+                </Typography>
+                <Typography variant="body1" sx={{ fontWeight: 500, mb: 1 }}>
+                  {cmrData.sender}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {cmrData.senderAddress}
+                  {cmrData.senderPostalCode && cmrData.senderCity && (
+                    <><br />{cmrData.senderPostalCode} {cmrData.senderCity}</>
+                  )}
+                  {cmrData.senderCountry && (
+                    <>, {cmrData.senderCountry}</>
+                  )}
+                </Typography>
+              </Box>
+              
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                  Odbiorca
+                </Typography>
+                <Typography variant="body1" sx={{ fontWeight: 500, mb: 1 }}>
+                  {cmrData.recipient}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>
+                  {cmrData.recipientAddress}
+                </Typography>
+              </Box>
+              
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                  Przewoźnik
+                </Typography>
+                <Typography variant="body1" sx={{ fontWeight: 500, mb: 1 }}>
+                  {cmrData.carrier}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {cmrData.carrierAddress}
+                  {cmrData.carrierPostalCode && cmrData.carrierCity && (
+                    <><br />{cmrData.carrierPostalCode} {cmrData.carrierCity}</>
+                  )}
+                  {cmrData.carrierCountry && (
+                    <>, {cmrData.carrierCountry}</>
+                  )}
+                </Typography>
+              </Box>
+                        </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+         
+      {/* Druga sekcja - Transport i lokalizacje */}
+      <Grid container spacing={3} className="no-print" sx={{ mt: 1 }}>
+        {/* Miejsca załadunku i rozładunku */}
         <Grid item xs={12} md={6}>
           <Card>
             <CardHeader 
-              title="Strony" 
-              titleTypographyProps={{ variant: 'h6' }}
+              title="Transport i lokalizacje" 
+              titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+              sx={{ pb: 1 }}
             />
             <Divider />
             <CardContent>
-              <Grid container spacing={2}>
-                <Grid item xs={12}>
-                  <Typography variant="body2" color="text.secondary">
-                    Nadawca
-                  </Typography>
-                  <Typography variant="body1">
-                    {cmrData.sender}
-                  </Typography>
-                  <Typography variant="body2">
-                    {cmrData.senderAddress}
-                    {cmrData.senderPostalCode && cmrData.senderCity && (
-                      <>, {cmrData.senderPostalCode} {cmrData.senderCity}</>
-                    )}
-                    {cmrData.senderCountry && (
-                      <>, {cmrData.senderCountry}</>
-                    )}
-                  </Typography>
-                </Grid>
-                <Grid item xs={12}>
-                  <Typography variant="body2" color="text.secondary">
-                    Odbiorca
-                  </Typography>
-                  <Typography variant="body1">
-                    {cmrData.recipient}
-                  </Typography>
-                  <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                    {cmrData.recipientAddress}
-                  </Typography>
-                </Grid>
-                <Grid item xs={12}>
-                  <Typography variant="body2" color="text.secondary">
-                    Przewoźnik
-                  </Typography>
-                  <Typography variant="body1">
-                    {cmrData.carrier}
-                  </Typography>
-                  <Typography variant="body2">
-                    {cmrData.carrierAddress}
-                    {cmrData.carrierPostalCode && cmrData.carrierCity && (
-                      <>, {cmrData.carrierPostalCode} {cmrData.carrierCity}</>
-                    )}
-                    {cmrData.carrierCountry && (
-                      <>, {cmrData.carrierCountry}</>
-                    )}
-                  </Typography>
-                </Grid>
-              </Grid>
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                  Miejsce załadunku
+                </Typography>
+                <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                  {cmrData.loadingPlace || '-'}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600, display: 'block', mt: 1 }}>
+                  Data załadunku
+                </Typography>
+                <Typography variant="body2">
+                  {formatDate(cmrData.loadingDate)}
+                </Typography>
+              </Box>
+              
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                  Miejsce dostawy
+                </Typography>
+                <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                  {cmrData.deliveryPlace || '-'}
+                </Typography>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
-        
-        {/* Miejsce załadunku i rozładunku */}
-        <Grid item xs={12}>
-          <Card>
-            <CardHeader 
-              title="Miejsce załadunku i rozładunku" 
-              titleTypographyProps={{ variant: 'h6' }}
-            />
-            <Divider />
-            <CardContent>
-              <Grid container spacing={2}>
-                <Grid item xs={12} md={6}>
-                  <Typography variant="body2" color="text.secondary">
-                    Miejsce załadunku
-                  </Typography>
-                  <Typography variant="body1">
-                    {cmrData.loadingPlace || '-'}
-                  </Typography>
-                  
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                    Data załadunku
-                  </Typography>
-                  <Typography variant="body1">
-                    {formatDate(cmrData.loadingDate)}
-                  </Typography>
-                </Grid>
-                
-                <Grid item xs={12} md={6}>
-                  <Typography variant="body2" color="text.secondary">
-                    Miejsce dostawy
-                  </Typography>
-                  <Typography variant="body1">
-                    {cmrData.deliveryPlace || '-'}
-                  </Typography>
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        {/* Dokumenty i instrukcje */}
-        <Grid item xs={12}>
-          <Card>
-            <CardHeader 
-              title="Dokumenty i instrukcje" 
-              titleTypographyProps={{ variant: 'h6' }}
-            />
-            <Divider />
-            <CardContent>
-              <Grid container spacing={2}>
-                <Grid item xs={12} md={6}>
-                  <Typography variant="body2" color="text.secondary">
-                    Załączone dokumenty
-                  </Typography>
-                  <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-                    {cmrData.attachedDocuments || '-'}
-                  </Typography>
-                </Grid>
-                
-                <Grid item xs={12} md={6}>
-                  <Typography variant="body2" color="text.secondary">
-                    Instrukcje nadawcy
-                  </Typography>
-                  <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-                    {cmrData.instructionsFromSender || '-'}
-                  </Typography>
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        {/* Informacje o pojeździe */}
+
+        {/* Pojazd */}
         <Grid item xs={12} md={6}>
           <Card>
             <CardHeader 
               title="Informacje o pojeździe" 
-              titleTypographyProps={{ variant: 'h6' }}
+              titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+              sx={{ pb: 1 }}
             />
             <Divider />
             <CardContent>
               <Grid container spacing={2}>
-                <Grid item xs={12} md={6}>
-                  <Typography variant="body2" color="text.secondary">
+                <Grid item xs={12}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
                     Numer rejestracyjny pojazdu
                   </Typography>
-                  <Typography variant="body1">
+                  <Typography variant="body1" sx={{ fontWeight: 500 }}>
                     {cmrData.vehicleInfo?.vehicleRegistration || '-'}
                   </Typography>
                 </Grid>
                 
-                <Grid item xs={12} md={6}>
-                  <Typography variant="body2" color="text.secondary">
+                <Grid item xs={12}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
                     Numer rejestracyjny naczepy
                   </Typography>
-                  <Typography variant="body1">
+                  <Typography variant="body1" sx={{ fontWeight: 500 }}>
                     {cmrData.vehicleInfo?.trailerRegistration || '-'}
                   </Typography>
                 </Grid>
               </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Trzecia sekcja - Dokumenty i opłaty */}
+      <Grid container spacing={3} className="no-print" sx={{ mt: 1 }}>
+        {/* Dokumenty i instrukcje */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardHeader 
+              title="Dokumenty i instrukcje" 
+              titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+              sx={{ pb: 1 }}
+            />
+            <Divider />
+            <CardContent>
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                  Załączone dokumenty
+                </Typography>
+                <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+                  {cmrData.attachedDocuments || '-'}
+                </Typography>
+              </Box>
+              
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                  Instrukcje nadawcy
+                </Typography>
+                <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+                  {cmrData.instructionsFromSender || '-'}
+                </Typography>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
@@ -1500,14 +1610,15 @@ const CmrDetailsPage = () => {
         <Grid item xs={12} md={6}>
           <Card>
             <CardHeader 
-              title="Opłaty i ustalenia szczególne" 
-              titleTypographyProps={{ variant: 'h6' }}
+              title="Opłaty i płatności" 
+              titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+              sx={{ pb: 1 }}
             />
             <Divider />
             <CardContent>
               <Grid container spacing={2}>
                 <Grid item xs={6}>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
                     Przewoźne
                   </Typography>
                   <Typography variant="body1">
@@ -1516,7 +1627,7 @@ const CmrDetailsPage = () => {
                 </Grid>
                 
                 <Grid item xs={6}>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
                     Koszty dodatkowe
                   </Typography>
                   <Typography variant="body1">
@@ -1525,7 +1636,7 @@ const CmrDetailsPage = () => {
                 </Grid>
                 
                 <Grid item xs={6}>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
                     Bonifikaty
                   </Typography>
                   <Typography variant="body1">
@@ -1534,7 +1645,7 @@ const CmrDetailsPage = () => {
                 </Grid>
                 
                 <Grid item xs={6}>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
                     Saldo
                   </Typography>
                   <Typography variant="body1">
@@ -1542,9 +1653,9 @@ const CmrDetailsPage = () => {
                   </Typography>
                 </Grid>
                 
-                <Grid item xs={12} sx={{ mt: 2 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Płatność
+                <Grid item xs={12} sx={{ mt: 1 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                    Sposób płatności
                   </Typography>
                   <Typography variant="body1">
                     {cmrData.paymentMethod === 'sender' ? 'Płaci nadawca' : 
@@ -1552,9 +1663,26 @@ const CmrDetailsPage = () => {
                      'Inny sposób płatności'}
                   </Typography>
                 </Grid>
-                
-                <Grid item xs={12} sx={{ mt: 2 }}>
-                  <Typography variant="body2" color="text.secondary">
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Czwarta sekcja - Ustalenia i uwagi */}
+      <Grid container spacing={3} className="no-print" sx={{ mt: 1 }}>
+        <Grid item xs={12}>
+          <Card>
+            <CardHeader 
+              title="Ustalenia szczególne i uwagi" 
+              titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+              sx={{ pb: 1 }}
+            />
+            <Divider />
+            <CardContent>
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
                     Ustalenia szczególne
                   </Typography>
                   <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
@@ -1562,8 +1690,8 @@ const CmrDetailsPage = () => {
                   </Typography>
                 </Grid>
                 
-                <Grid item xs={12} sx={{ mt: 2 }}>
-                  <Typography variant="body2" color="text.secondary">
+                <Grid item xs={12} md={6}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
                     Zastrzeżenia i uwagi przewoźnika
                   </Typography>
                   <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
@@ -1574,13 +1702,16 @@ const CmrDetailsPage = () => {
             </CardContent>
           </Card>
         </Grid>
+      </Grid>
         
-        {/* Elementy dokumentu CMR */}
+      {/* Piąta sekcja - Elementy dokumentu CMR */}
+      <Grid container spacing={3} className="no-print" sx={{ mt: 1 }}>
         <Grid item xs={12}>
           <Card>
             <CardHeader 
               title="Elementy dokumentu CMR" 
-              titleTypographyProps={{ variant: 'h6' }}
+              titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+              sx={{ pb: 1 }}
             />
             <Divider />
             <CardContent>
@@ -1639,19 +1770,244 @@ const CmrDetailsPage = () => {
             </CardContent>
           </Card>
         </Grid>
+      </Grid>
         
+      {/* Szósta sekcja - Uwagi i raporty */}
+      <Grid container spacing={3} className="no-print" sx={{ mt: 1 }}>
         {/* Uwagi i informacje dodatkowe */}
-        <Grid item xs={12}>
+        <Grid item xs={12} md={6}>
           <Card>
             <CardHeader 
               title="Uwagi i informacje dodatkowe" 
-              titleTypographyProps={{ variant: 'h6' }}
+              titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+              sx={{ pb: 1 }}
             />
             <Divider />
             <CardContent>
               <Typography variant="body1">
                 {cmrData.notes || 'Brak uwag'}
               </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Raporty załadunku towaru */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardHeader 
+              title={`Raporty załadunku towaru (${loadingFormResponses.length})`}
+              titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+              sx={{ pb: 1 }}
+            />
+            <Divider />
+            <CardContent>
+              {loadingFormResponsesLoading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                  <CircularProgress />
+                </Box>
+              ) : loadingFormResponses.length === 0 ? (
+                <Typography variant="body1" color="text.secondary">
+                  Brak raportów załadunku towaru dla tego CMR
+                </Typography>
+              ) : (
+                <Grid container spacing={3}>
+                  {loadingFormResponses.map((report, index) => (
+                    <Grid item xs={12} key={index}>
+                      <Paper sx={{ p: 3, backgroundColor: 'warning.light', border: 1, borderColor: 'warning.main', opacity: 0.8 }}>
+                        <Typography variant="subtitle2" gutterBottom sx={{ color: 'warning.main', fontWeight: 'bold' }}>
+                          Raport załadunku #{index + 1} - {report.fillDate ? format(report.fillDate, 'dd.MM.yyyy HH:mm', { locale: pl }) : 'Nie określono'}
+                        </Typography>
+                        
+                        <Grid container spacing={2}>
+                          {/* Podstawowe informacje */}
+                          <Grid item xs={12} sm={6} md={3}>
+                            <Typography variant="body2" color="text.secondary">
+                              Pracownik
+                            </Typography>
+                            <Typography variant="body1">
+                              {report.employeeName || 'Nie podano'}
+                            </Typography>
+                          </Grid>
+                          
+                          <Grid item xs={12} sm={6} md={3}>
+                            <Typography variant="body2" color="text.secondary">
+                              Stanowisko
+                            </Typography>
+                            <Typography variant="body1">
+                              {report.position || 'Nie podano'}
+                            </Typography>
+                          </Grid>
+                          
+                          <Grid item xs={12} sm={6} md={3}>
+                            <Typography variant="body2" color="text.secondary">
+                              Godzina wypełnienia
+                            </Typography>
+                            <Typography variant="body1">
+                              {report.fillTime || 'Nie podano'}
+                            </Typography>
+                          </Grid>
+                          
+                          <Grid item xs={12} sm={6} md={3}>
+                            <Typography variant="body2" color="text.secondary">
+                              Data załadunku
+                            </Typography>
+                            <Typography variant="body1">
+                              {report.loadingDate ? format(report.loadingDate, 'dd.MM.yyyy', { locale: pl }) : 'Nie podano'}
+                            </Typography>
+                          </Grid>
+                          
+                          <Grid item xs={12} sm={6} md={3}>
+                            <Typography variant="body2" color="text.secondary">
+                              Godzina załadunku
+                            </Typography>
+                            <Typography variant="body1">
+                              {report.loadingTime || 'Nie podano'}
+                            </Typography>
+                          </Grid>
+                          
+                          <Grid item xs={12} sm={6} md={3}>
+                            <Typography variant="body2" color="text.secondary">
+                              Przewoźnik
+                            </Typography>
+                            <Typography variant="body1">
+                              {report.carrierName || 'Nie podano'}
+                            </Typography>
+                          </Grid>
+                          
+                          <Grid item xs={12} sm={6} md={3}>
+                            <Typography variant="body2" color="text.secondary">
+                              Nr rejestracyjny pojazdu
+                            </Typography>
+                            <Typography variant="body1">
+                              {report.vehicleRegistration || 'Nie podano'}
+                            </Typography>
+                          </Grid>
+                          
+                          <Grid item xs={12} sm={6} md={3}>
+                            <Typography variant="body2" color="text.secondary">
+                              Stan techniczny pojazdu
+                            </Typography>
+                            <Typography variant="body1">
+                              {report.vehicleTechnicalCondition || 'Nie podano'}
+                            </Typography>
+                          </Grid>
+                          
+                          {/* Informacje o towarze */}
+                          <Grid item xs={12}>
+                            <Divider sx={{ my: 2 }} />
+                            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
+                              Informacje o towarze
+                            </Typography>
+                          </Grid>
+                          
+                          <Grid item xs={12} sm={6} md={3}>
+                            <Typography variant="body2" color="text.secondary">
+                              Klient
+                            </Typography>
+                            <Typography variant="body1">
+                              {report.clientName || 'Nie podano'}
+                            </Typography>
+                          </Grid>
+                          
+                          <Grid item xs={12} sm={6} md={3}>
+                            <Typography variant="body2" color="text.secondary">
+                              Nr zamówienia
+                            </Typography>
+                            <Typography variant="body1">
+                              {report.orderNumber || 'Nie podano'}
+                            </Typography>
+                          </Grid>
+                          
+                          <Grid item xs={12} sm={6} md={3}>
+                            <Typography variant="body2" color="text.secondary">
+                              Ilość palet
+                            </Typography>
+                            <Typography variant="body1">
+                              {report.palletQuantity || 'Nie podano'}
+                            </Typography>
+                          </Grid>
+                          
+                          <Grid item xs={12} sm={6} md={3}>
+                            <Typography variant="body2" color="text.secondary">
+                              Waga
+                            </Typography>
+                            <Typography variant="body1">
+                              {report.weight || 'Nie podano'}
+                            </Typography>
+                          </Grid>
+                          
+                          <Grid item xs={12} sm={6}>
+                            <Typography variant="body2" color="text.secondary">
+                              Paleta/Nazwa produktu
+                            </Typography>
+                            <Typography variant="body1">
+                              {report.palletProductName || 'Nie podano'}
+                            </Typography>
+                          </Grid>
+                          
+                          {/* Uwagi */}
+                          {(report.notes || report.goodsNotes) && (
+                            <>
+                              <Grid item xs={12}>
+                                <Divider sx={{ my: 2 }} />
+                                <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
+                                  Uwagi
+                                </Typography>
+                              </Grid>
+                              
+                              {report.notes && (
+                                <Grid item xs={12} sm={6}>
+                                  <Typography variant="body2" color="text.secondary">
+                                    Uwagi ogólne
+                                  </Typography>
+                                  <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+                                    {report.notes}
+                                  </Typography>
+                                </Grid>
+                              )}
+                              
+                              {report.goodsNotes && (
+                                <Grid item xs={12} sm={6}>
+                                  <Typography variant="body2" color="text.secondary">
+                                    Uwagi dotyczące towaru
+                                  </Typography>
+                                  <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+                                    {report.goodsNotes}
+                                  </Typography>
+                                </Grid>
+                              )}
+                            </>
+                          )}
+                          
+                          {/* Załączniki */}
+                          {report.documentsUrl && (
+                            <>
+                              <Grid item xs={12}>
+                                <Divider sx={{ my: 2 }} />
+                                <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
+                                  Załączniki
+                                </Typography>
+                              </Grid>
+                              
+                              <Grid item xs={12}>
+                                <Button
+                                  variant="outlined"
+                                  size="small"
+                                  href={report.documentsUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  {report.documentsName || 'Pobierz załącznik'}
+                                </Button>
+                              </Grid>
+                            </>
+                          )}
+                        </Grid>
+                      </Paper>
+                    </Grid>
+                  ))}
+                </Grid>
+              )}
             </CardContent>
           </Card>
         </Grid>

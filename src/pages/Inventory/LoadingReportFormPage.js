@@ -84,7 +84,10 @@ const LoadingReportFormPage = () => {
     // Załączniki
     documentsFile: null,
     documentsUrl: '',
-    documentsName: ''
+    documentsName: '',
+    
+    // Dostępne numery zamówień dla danego CMR
+    availableOrderNumbers: []
   });
   
   const [showSuccess, setShowSuccess] = useState(false);
@@ -239,10 +242,31 @@ const LoadingReportFormPage = () => {
         return quantity ? `${description} (${quantity} ${unit})` : description;
       }).filter(desc => desc.trim()).join(', ') || '';
       
-      // Pobierz numer zamówienia z powiązanych CO
-      const orderNumber = fullCmrData.linkedOrderNumbers?.length > 0 
-        ? fullCmrData.linkedOrderNumbers[0] 
-        : (fullCmrData.linkedOrders?.length > 0 ? fullCmrData.linkedOrders[0].orderNumber : '');
+      // Pobierz wszystkie numery zamówień z powiązanych CO
+      let availableOrderNumbers = [];
+      
+      // Sprawdź nowy format (linkedOrderNumbers)
+      if (fullCmrData.linkedOrderNumbers && Array.isArray(fullCmrData.linkedOrderNumbers)) {
+        availableOrderNumbers.push(...fullCmrData.linkedOrderNumbers);
+      }
+      
+      // Sprawdź czy są również powiązane zamówienia z numerami
+      if (fullCmrData.linkedOrders && Array.isArray(fullCmrData.linkedOrders)) {
+        const orderNumbersFromLinked = fullCmrData.linkedOrders
+          .map(order => order.orderNumber)
+          .filter(num => num && !availableOrderNumbers.includes(num));
+        availableOrderNumbers.push(...orderNumbersFromLinked);
+      }
+      
+      // Usuń duplikaty i puste wartości
+      availableOrderNumbers = [...new Set(availableOrderNumbers.filter(num => num && num.trim()))];
+      
+      // Wybierz odpowiedni numer zamówienia
+      const orderNumber = availableOrderNumbers.length === 1 
+        ? availableOrderNumbers[0] 
+        : availableOrderNumbers.length > 1 
+          ? availableOrderNumbers.join(', ') // Pokaż wszystkie jeśli jest więcej niż 1
+          : '';
       
       setFormData(prev => ({
         ...prev,
@@ -253,7 +277,9 @@ const LoadingReportFormPage = () => {
         clientName: fullCmrData.recipient || '',
         orderNumber: orderNumber || '',
         palletProductName: itemsDescription || '',
-        weight: totalWeight > 0 ? `${totalWeight} kg` : ''
+        weight: totalWeight > 0 ? `${totalWeight} kg` : '',
+        // Zapisz dostępne numery zamówień do późniejszego wyboru
+        availableOrderNumbers: availableOrderNumbers
       }));
       setCmrSearchQuery(fullCmrData.cmrNumber);
       
@@ -262,7 +288,7 @@ const LoadingReportFormPage = () => {
       if (fullCmrData.carrier) filledFields.push('przewoźnik');
       if (fullCmrData.vehicleInfo?.vehicleRegistration) filledFields.push('nr rejestracyjny');
       if (fullCmrData.recipient) filledFields.push('nazwa klienta');
-      if (orderNumber) filledFields.push('numer zamówienia');
+      if (orderNumber) filledFields.push(`numer${availableOrderNumbers.length > 1 ? 'y' : ''} zamówienia`);
       if (itemsDescription) filledFields.push('opis produktu');
       if (totalWeight > 0) filledFields.push('waga');
       
@@ -274,6 +300,7 @@ const LoadingReportFormPage = () => {
           rejestracja: fullCmrData.vehicleInfo?.vehicleRegistration,
           klient: fullCmrData.recipient,
           zamówienie: orderNumber,
+          dostępneZamówienia: availableOrderNumbers,
           produkty: itemsDescription,
           waga: `${totalWeight} kg`,
           pozycjeCMR: fullCmrData.items?.length || 0,
@@ -804,16 +831,52 @@ const LoadingReportFormPage = () => {
             </Grid>
             
             <Grid item xs={12} sm={6}>
-              <TextField
-                label="Numer zamówienia *"
-                value={formData.orderNumber}
-                onChange={handleInputChange('orderNumber')}
-                fullWidth
-                required
-                error={!!errors.orderNumber}
-                helperText={errors.orderNumber || "Automatycznie uzupełniane z powiązanych CO w CMR"}
-                placeholder="Automatycznie z CMR - powiązane CO"
-              />
+              {formData.availableOrderNumbers && formData.availableOrderNumbers.length > 1 ? (
+                <FormControl fullWidth required error={!!errors.orderNumber}>
+                  <InputLabel>Numer zamówienia *</InputLabel>
+                  <Select
+                    value={formData.orderNumber}
+                    onChange={handleInputChange('orderNumber')}
+                    label="Numer zamówienia *"
+                  >
+                    <MenuItem value="">
+                      <em>Wybierz numer zamówienia</em>
+                    </MenuItem>
+                    {formData.availableOrderNumbers.map((orderNum, index) => (
+                      <MenuItem key={index} value={orderNum}>
+                        {orderNum}
+                      </MenuItem>
+                    ))}
+                    <MenuItem value={formData.availableOrderNumbers.join(', ')}>
+                      <em>Wszystkie zamówienia: {formData.availableOrderNumbers.join(', ')}</em>
+                    </MenuItem>
+                  </Select>
+                  {errors.orderNumber && (
+                    <Typography variant="caption" color="error" sx={{ mt: 0.5, ml: 1.5 }}>
+                      {errors.orderNumber}
+                    </Typography>
+                  )}
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, ml: 1.5 }}>
+                    CMR ma {formData.availableOrderNumbers.length} powiązanych zamówień - wybierz jedno lub wszystkie
+                  </Typography>
+                </FormControl>
+              ) : (
+                <TextField
+                  label="Numer zamówienia *"
+                  value={formData.orderNumber}
+                  onChange={handleInputChange('orderNumber')}
+                  fullWidth
+                  required
+                  error={!!errors.orderNumber}
+                  helperText={
+                    errors.orderNumber || 
+                    (formData.availableOrderNumbers && formData.availableOrderNumbers.length === 1 
+                      ? "Automatycznie uzupełnione z powiązanego CO w CMR"
+                      : "Automatycznie uzupełniane z powiązanych CO w CMR")
+                  }
+                  placeholder="Automatycznie z CMR - powiązane CO"
+                />
+              )}
             </Grid>
             
             <Grid item xs={12} sm={6}>
