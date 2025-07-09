@@ -52,6 +52,13 @@ import {
   getDocs 
 } from 'firebase/firestore';
 import { db } from '../../../services/firebase/config';
+import { 
+  calculatePalletWeights, 
+  calculateBoxWeights, 
+  getInventoryDataFromBatches 
+} from '../../../utils/cmrWeightCalculator';
+import LabelsDisplayDialog from '../../../components/cmr/LabelsDisplayDialog';
+import LabelGenerator from '../../../components/cmr/LabelGenerator';
 
 // Ikony
 import EditIcon from '@mui/icons-material/Edit';
@@ -170,9 +177,179 @@ const CmrDetailsPage = () => {
   const [loadingFormResponses, setLoadingFormResponses] = useState([]);
   const [loadingFormResponsesLoading, setLoadingFormResponsesLoading] = useState(false);
   
+  // Stany dla szczegółów wag
+  const [itemsWeightDetails, setItemsWeightDetails] = useState([]);
+  const [weightDetailsLoading, setWeightDetailsLoading] = useState(false);
+  const [weightSummary, setWeightSummary] = useState({
+    totalWeight: 0,
+    totalPallets: 0,
+    totalBoxes: 0,
+    itemsBreakdown: []
+  });
+  
+  // Stany dla dialogów
+  const [labelsDialogOpen, setLabelsDialogOpen] = useState(false);
+  const [currentLabels, setCurrentLabels] = useState([]);
+  
   useEffect(() => {
     fetchCmrDocument();
   }, [id]);
+  
+  // Funkcja do obliczania szczegółów wag dla pozycji CMR
+  const calculateItemsWeightDetails = async (items) => {
+    if (!items || items.length === 0) {
+      setItemsWeightDetails([]);
+      setWeightSummary({
+        totalWeight: 0,
+        totalPallets: 0,
+        totalBoxes: 0,
+        itemsBreakdown: []
+      });
+      return;
+    }
+
+    setWeightDetailsLoading(true);
+    
+    try {
+      const weightDetails = [];
+      let totalWeight = 0;
+      let totalPallets = 0;
+      let totalBoxes = 0;
+
+      for (const item of items) {
+        const weight = parseFloat(item.weight) || 0;
+        totalWeight += weight;
+
+        // Sprawdź czy pozycja ma powiązane partie
+        if (item.linkedBatches && item.linkedBatches.length > 0) {
+          try {
+            const inventoryData = await getInventoryDataFromBatches(item.linkedBatches);
+            
+            if (inventoryData && inventoryData.itemsPerBox && inventoryData.boxesPerPallet) {
+              // Oblicz szczegóły palet
+              const palletData = calculatePalletWeights({
+                quantity: parseFloat(item.quantity) || 0,
+                unitWeight: inventoryData.weight || 0,
+                itemsPerBox: inventoryData.itemsPerBox,
+                boxesPerPallet: inventoryData.boxesPerPallet
+              });
+
+              // Oblicz szczegóły kartonów
+              const boxData = calculateBoxWeights({
+                quantity: parseFloat(item.quantity) || 0,
+                unitWeight: inventoryData.weight || 0,
+                itemsPerBox: inventoryData.itemsPerBox
+              });
+
+              totalPallets += palletData.palletsCount;
+              totalBoxes += boxData.totalBoxes;
+
+              weightDetails.push({
+                itemId: item.id || item.description,
+                description: item.description,
+                quantity: item.quantity,
+                unit: item.unit,
+                weight: weight,
+                hasDetailedData: true,
+                palletsCount: palletData.palletsCount,
+                pallets: palletData.pallets,
+                boxesCount: boxData.totalBoxes,
+                boxes: boxData,
+                linkedBatches: item.linkedBatches.map(batch => ({
+                  ...batch,
+                  // Uzupełnij dane partii z pełnych danych z bazy jeśli są dostępne
+                  ...(inventoryData.batchData ? {
+                    orderNumber: inventoryData.batchData.orderNumber,
+                    moNumber: inventoryData.batchData.moNumber,
+                    expiryDate: inventoryData.batchData.expiryDate,
+                    lotNumber: inventoryData.batchData.lotNumber
+                  } : {})
+                })),
+                inventoryData: {
+                  itemsPerBox: inventoryData.itemsPerBox,
+                  boxesPerPallet: inventoryData.boxesPerPallet,
+                  unitWeight: inventoryData.weight
+                }
+              });
+            } else {
+              // Brak szczegółowych danych
+              weightDetails.push({
+                itemId: item.id || item.description,
+                description: item.description,
+                quantity: item.quantity,
+                unit: item.unit,
+                weight: weight,
+                hasDetailedData: false,
+                palletsCount: 0,
+                pallets: [],
+                boxesCount: 0,
+                boxes: { fullBox: null, partialBox: null },
+                linkedBatches: item.linkedBatches.map(batch => ({
+                  ...batch,
+                  // Uzupełnij dane partii z pełnych danych z bazy jeśli są dostępne
+                  ...(inventoryData?.batchData ? {
+                    orderNumber: inventoryData.batchData.orderNumber,
+                    moNumber: inventoryData.batchData.moNumber,
+                    expiryDate: inventoryData.batchData.expiryDate,
+                    lotNumber: inventoryData.batchData.lotNumber
+                  } : {})
+                })),
+                inventoryData: null
+              });
+            }
+          } catch (error) {
+            console.error('Błąd podczas obliczania wagi dla pozycji:', error);
+            // Dodaj pozycję bez szczegółów w przypadku błędu
+            weightDetails.push({
+              itemId: item.id || item.description,
+              description: item.description,
+              quantity: item.quantity,
+              unit: item.unit,
+              weight: weight,
+              hasDetailedData: false,
+              palletsCount: 0,
+              pallets: [],
+              boxesCount: 0,
+              boxes: { fullBox: null, partialBox: null },
+              linkedBatches: item.linkedBatches,
+              inventoryData: null,
+              error: error.message
+            });
+          }
+        } else {
+          // Pozycja bez powiązanych partii
+          weightDetails.push({
+            itemId: item.id || item.description,
+            description: item.description,
+            quantity: item.quantity,
+            unit: item.unit,
+            weight: weight,
+            hasDetailedData: false,
+            palletsCount: 0,
+            pallets: [],
+            boxesCount: 0,
+            boxes: { fullBox: null, partialBox: null },
+            linkedBatches: item.linkedBatches || [],
+            inventoryData: null
+          });
+        }
+      }
+
+      setItemsWeightDetails(weightDetails);
+      setWeightSummary({
+        totalWeight: Number(totalWeight.toFixed(3)),
+        totalPallets,
+        totalBoxes,
+        itemsBreakdown: weightDetails
+      });
+
+    } catch (error) {
+      console.error('Błąd podczas obliczania szczegółów wag:', error);
+      showError('Wystąpił błąd podczas obliczania szczegółów wag');
+    } finally {
+      setWeightDetailsLoading(false);
+    }
+  };
   
   // Funkcja pobierania odpowiedzi formularzy załadunku dla danego CMR
   const fetchLoadingFormResponses = async (cmrNumber) => {
@@ -256,6 +433,11 @@ const CmrDetailsPage = () => {
       const data = await getCmrDocumentById(id);
       setCmrData(data);
       
+      // Oblicz szczegóły wag dla pozycji CMR
+      if (data && data.items && data.items.length > 0) {
+        await calculateItemsWeightDetails(data.items);
+      }
+      
       // Pobierz odpowiedzi formularzy załadunku dla tego CMR
       if (data && data.cmrNumber) {
         console.log('🚛 CMR Document loaded with number:', data.cmrNumber, '(type:', typeof data.cmrNumber, ')');
@@ -316,7 +498,7 @@ const CmrDetailsPage = () => {
   };
   
   const handleEdit = () => {
-    navigate(`/inventory/cmr/${id}/edit`);
+    navigate(`/inventory/cmr/edit/${id}`);
   };
   
   const handleBack = () => {
@@ -328,13 +510,28 @@ const CmrDetailsPage = () => {
   };
 
   const handleBoxLabel = () => {
-    // TODO: Implementacja generowania etykiety kartonu
-    console.log('Generowanie etykiety kartonu dla CMR:', id);
+    if (itemsWeightDetails.length === 0) {
+      showError('Brak danych do wygenerowania etykiet kartonów');
+      return;
+    }
+    const labels = LabelGenerator.generateBoxLabels(cmrData, itemsWeightDetails);
+    setCurrentLabels(labels);
+    setLabelsDialogOpen(true);
   };
 
   const handlePalletLabel = () => {
-    // TODO: Implementacja generowania etykiety palety
-    console.log('Generowanie etykiety palety dla CMR:', id);
+    if (itemsWeightDetails.length === 0) {
+      showError('Brak danych do wygenerowania etykiet palet');
+      return;
+    }
+    const labels = LabelGenerator.generatePalletLabels(cmrData, itemsWeightDetails);
+    setCurrentLabels(labels);
+    setLabelsDialogOpen(true);
+  };
+
+  const handleLabelsDialogClose = () => {
+    setLabelsDialogOpen(false);
+    setCurrentLabels([]);
   };
   
   const handleGenerateOfficialCmr = async () => {
@@ -1206,7 +1403,8 @@ const CmrDetailsPage = () => {
               Oficjalny CMR
             </Button>
             
-            {/* Grupa przycisków etykiet */}
+            {/* Grupa przycisków etykiet - tylko gdy dostępne są szczegółowe dane wag */}
+            {weightSummary && (weightSummary.totalPallets > 0 || weightSummary.totalBoxes > 0) && (
             <Box sx={{ display: 'flex', gap: 0.5 }}>
               <Button
                 variant="outlined"
@@ -1214,8 +1412,9 @@ const CmrDetailsPage = () => {
                 onClick={handleBoxLabel}
                 size="small"
                 color="secondary"
+                  disabled={weightSummary.totalBoxes === 0}
               >
-                Etykieta kartonu
+                  Etykiety kartonów ({weightSummary.totalBoxes})
               </Button>
               
               <Button
@@ -1224,10 +1423,12 @@ const CmrDetailsPage = () => {
                 onClick={handlePalletLabel}
                 size="small"
                 color="secondary"
+                  disabled={weightSummary.totalPallets === 0}
               >
-                Etykieta palety
+                  Etykiety palet ({weightSummary.totalPallets})
               </Button>
             </Box>
+            )}
             
             <Button
               variant="text"
@@ -1715,7 +1916,14 @@ const CmrDetailsPage = () => {
             />
             <Divider />
             <CardContent>
-              {cmrData.items && cmrData.items.length > 0 ? (
+              {weightDetailsLoading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                  <CircularProgress />
+                  <Typography variant="body1" sx={{ ml: 2 }}>
+                    Obliczanie szczegółów wag...
+                  </Typography>
+                </Box>
+              ) : cmrData.items && cmrData.items.length > 0 ? (
                 <TableContainer>
                   <Table>
                     <TableHead>
@@ -1725,21 +1933,121 @@ const CmrDetailsPage = () => {
                         <TableCell>Ilość</TableCell>
                         <TableCell>Jednostka</TableCell>
                         <TableCell>Waga (kg)</TableCell>
-                        <TableCell>Objętość (m³)</TableCell>
-                        <TableCell>Uwagi</TableCell>
+                        <TableCell>Palety</TableCell>
+                        <TableCell>Kartony</TableCell>
+                        <TableCell>Szczegóły wag</TableCell>
                         <TableCell>Powiązane partie</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {cmrData.items.map((item, index) => (
+                      {cmrData.items.map((item, index) => {
+                        const weightDetail = itemsWeightDetails.find(detail => 
+                          detail.itemId === (item.id || item.description)
+                        );
+                        
+                        return (
                         <TableRow key={item.id || index}>
                           <TableCell>{index + 1}</TableCell>
                           <TableCell>{item.description}</TableCell>
                           <TableCell>{item.quantity}</TableCell>
                           <TableCell>{item.unit}</TableCell>
                           <TableCell>{item.weight}</TableCell>
-                          <TableCell>{item.volume}</TableCell>
-                          <TableCell>{item.notes}</TableCell>
+                            <TableCell>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                  {weightDetail?.palletsCount || 0}
+                                </Typography>
+                                {weightDetail?.hasDetailedData && (
+                                  <Chip 
+                                    size="small" 
+                                    color="success" 
+                                    label="✓"
+                                    sx={{ height: 20, minWidth: 20 }}
+                                  />
+                                )}
+                              </Box>
+                            </TableCell>
+                            <TableCell>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                  {weightDetail?.boxesCount || 0}
+                                </Typography>
+                                {weightDetail?.hasDetailedData && (
+                                  <Chip 
+                                    size="small" 
+                                    color="success" 
+                                    label="✓"
+                                    sx={{ height: 20, minWidth: 20 }}
+                                  />
+                                )}
+                              </Box>
+                            </TableCell>
+                            <TableCell>
+                              {weightDetail?.hasDetailedData ? (
+                                <Box>
+                                  {/* Szczegóły palet */}
+                                  {weightDetail.pallets && weightDetail.pallets.length > 0 && (
+                                    <Box sx={{ mb: 1 }}>
+                                      <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                                        Palety:
+                                      </Typography>
+                                      {weightDetail.pallets.map((pallet, palletIndex) => (
+                                        <Typography key={palletIndex} variant="caption" display="block" sx={{ fontSize: '0.75rem' }}>
+                                          #{pallet.palletNumber}: {pallet.totalWeight} kg 
+                                          ({pallet.boxesCount} kart., {pallet.itemsCount} szt.)
+                                          {!pallet.isFull && ' (niepełna)'}
+                                        </Typography>
+                                      ))}
+                                    </Box>
+                                  )}
+                                  
+                                  {/* Szczegóły kartonów */}
+                                  {weightDetail.boxes && (weightDetail.boxes.fullBox || weightDetail.boxes.partialBox) && (
+                                    <Box>
+                                      <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'secondary.main' }}>
+                                        Kartony:
+                                      </Typography>
+                                      {weightDetail.boxes.fullBox && (
+                                        <Typography variant="caption" display="block" sx={{ fontSize: '0.75rem' }}>
+                                          Pełny: {weightDetail.boxes.fullBox.totalWeight} kg 
+                                          ({weightDetail.boxes.fullBox.itemsCount} szt.)
+                                          {weightDetail.boxes.fullBoxesCount > 1 && ` ×${weightDetail.boxes.fullBoxesCount}`}
+                                        </Typography>
+                                      )}
+                                      {weightDetail.boxes.partialBox && (
+                                        <Typography variant="caption" display="block" sx={{ fontSize: '0.75rem' }}>
+                                          Niepełny: {weightDetail.boxes.partialBox.totalWeight} kg 
+                                          ({weightDetail.boxes.partialBox.itemsCount} szt.)
+                                        </Typography>
+                                      )}
+                                    </Box>
+                                  )}
+                                  
+                                  {/* Parametry magazynowe */}
+                                  {weightDetail.inventoryData && (
+                                    <Typography variant="caption" display="block" sx={{ 
+                                      fontSize: '0.7rem', 
+                                      color: 'text.secondary',
+                                      mt: 0.5 
+                                    }}>
+                                      {weightDetail.inventoryData.itemsPerBox} szt./karton, {' '}
+                                      {weightDetail.inventoryData.boxesPerPallet} kart./paleta
+                                    </Typography>
+                                  )}
+                                </Box>
+                              ) : (
+                                <Typography variant="caption" sx={{ 
+                                  fontStyle: 'italic', 
+                                  color: 'warning.main',
+                                  fontSize: '0.75rem'
+                                }}>
+                                  {weightDetail?.error ? 
+                                    `Błąd: ${weightDetail.error}` : 
+                                    'Brak danych magazynowych'
+                                  }
+                                </Typography>
+                              )}
+                            </TableCell>
                           <TableCell>
                             {item.linkedBatches && item.linkedBatches.length > 0 ? (
                               <Box>
@@ -1758,7 +2066,8 @@ const CmrDetailsPage = () => {
                             )}
                           </TableCell>
                         </TableRow>
-                      ))}
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </TableContainer>
@@ -1771,6 +2080,121 @@ const CmrDetailsPage = () => {
           </Card>
         </Grid>
       </Grid>
+
+      {/* Podsumowanie wag CMR */}
+      {weightSummary && (weightSummary.totalPallets > 0 || weightSummary.totalBoxes > 0) && (
+        <Grid container spacing={3} className="no-print" sx={{ mt: 1 }}>
+          <Grid item xs={12}>
+            <Card>
+              <CardHeader 
+                title="Podsumowanie wag i opakowań" 
+                titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+                sx={{ pb: 1 }}
+              />
+              <Divider />
+              <CardContent>
+                <Grid container spacing={3}>
+                  {/* Podsumowanie główne */}
+                  <Grid item xs={12} md={4}>
+                    <Paper sx={{ p: 2, bgcolor: 'info.50', border: 1, borderColor: 'info.200' }}>
+                      <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1, color: 'info.main' }}>
+                        Łączne podsumowanie
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <Typography variant="body2">Całkowita waga:</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                            {weightSummary.totalWeight} kg
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <Typography variant="body2">Łączna liczba palet:</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                            {weightSummary.totalPallets}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <Typography variant="body2">Łączna liczba kartonów:</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                            {weightSummary.totalBoxes}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </Paper>
+                  </Grid>
+
+                  {/* Szczegółowy rozkład wag */}
+                  <Grid item xs={12} md={8}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2 }}>
+                      Szczegółowy rozkład wag i opakowań
+                    </Typography>
+                    <TableContainer component={Paper} variant="outlined">
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow sx={{ bgcolor: 'grey.50' }}>
+                            <TableCell sx={{ fontWeight: 'bold' }}>Pozycja</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>Waga (kg)</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>Palety</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>Kartony</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>Status danych</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {weightSummary.itemsBreakdown.map((item, index) => (
+                            <TableRow key={index}>
+                              <TableCell>
+                                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                  {item.description}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {item.quantity} {item.unit}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>
+                                <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                  {item.weight}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>
+                                <Typography variant="body2">
+                                  {item.palletsCount}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>
+                                <Typography variant="body2">
+                                  {item.boxesCount}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>
+                                <Chip 
+                                  size="small"
+                                  label={item.hasDetailedData ? 'Szczegółowe' : 'Podstawowe'}
+                                  color={item.hasDetailedData ? 'success' : 'warning'}
+                                  variant={item.hasDetailedData ? 'filled' : 'outlined'}
+                                />
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Grid>
+                </Grid>
+
+                {/* Informacje o metodzie obliczania */}
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  <Typography variant="body2">
+                    <strong>Informacje o obliczeniach:</strong><br />
+                    • Szczegółowe wyliczenia są dostępne dla pozycji z powiązanymi partiami magazynowymi<br />
+                    • Wagi obejmują produkty, kartony (0.34 kg) i palety (25 kg)<br />
+                    • Pozycje bez danych magazynowych pokazują tylko podstawowe informacje
+                  </Typography>
+                </Alert>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      )}
         
       {/* Szósta sekcja - Uwagi i raporty */}
       <Grid container spacing={3} className="no-print" sx={{ mt: 1 }}>
@@ -2141,21 +2565,26 @@ const CmrDetailsPage = () => {
                   <TableCell>Ilość</TableCell>
                   <TableCell>Jednostka</TableCell>
                   <TableCell>Waga (kg)</TableCell>
-                  <TableCell>Objętość (m³)</TableCell>
-                  <TableCell>Uwagi</TableCell>
+                  <TableCell>Palety</TableCell>
+                  <TableCell>Kartony</TableCell>
                   <TableCell>Powiązane partie</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {cmrData.items.map((item, index) => (
+                {cmrData.items.map((item, index) => {
+                  const weightDetail = itemsWeightDetails.find(detail => 
+                    detail.itemId === (item.id || item.description)
+                  );
+                  
+                  return (
                   <TableRow key={item.id || index}>
                     <TableCell>{index + 1}</TableCell>
                     <TableCell>{item.description}</TableCell>
                     <TableCell>{item.quantity}</TableCell>
                     <TableCell>{item.unit}</TableCell>
                     <TableCell>{item.weight}</TableCell>
-                    <TableCell>{item.volume}</TableCell>
-                    <TableCell>{item.notes}</TableCell>
+                      <TableCell>{weightDetail?.palletsCount || 0}</TableCell>
+                      <TableCell>{weightDetail?.boxesCount || 0}</TableCell>
                     <TableCell>
                       {item.linkedBatches && item.linkedBatches.length > 0 ? (
                         <Box>
@@ -2174,7 +2603,8 @@ const CmrDetailsPage = () => {
                       )}
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           ) : (
@@ -2290,6 +2720,14 @@ const CmrDetailsPage = () => {
           <Button onClick={handlePaymentStatusUpdate} color="primary">Zapisz</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Dialog generowania etykiet */}
+      <LabelsDisplayDialog
+        open={labelsDialogOpen}
+        onClose={handleLabelsDialogClose}
+        labels={currentLabels}
+        title={`Etykiety CMR ${cmrData?.cmrNumber || ''}`}
+      />
     </Container>
   );
 };

@@ -219,6 +219,9 @@ const BatchSelector = ({
       itemId: batch.itemId || selectedItem?.id || '',
       itemName: batch.itemName || selectedItem?.name || '',
       
+      // Kod kreskowy z pozycji magazynowej
+      barcode: selectedItem?.barcode || batch.barcode || '',
+      
       // Ilość i jednostka
       quantity: batch.quantity || 0,
       unit: batch.unit || selectedItem?.unit || 'szt.',

@@ -158,7 +158,7 @@ export const getInventoryDataFromBatches = async (linkedBatches) => {
   
   try {
     // Importuj dynamicznie, aby uniknąć cyklicznych zależności
-    const { getInventoryItemById } = await import('../services/inventoryService');
+    const { getInventoryItemById, getInventoryBatch } = await import('../services/inventoryService');
     
     if (!firstBatch.itemId) {
       return null;
@@ -170,12 +170,25 @@ export const getInventoryDataFromBatches = async (linkedBatches) => {
       return null;
     }
     
+    // Pobierz pełne dane partii z bazy danych
+    let fullBatchData = null;
+    if (firstBatch.id) {
+      try {
+        fullBatchData = await getInventoryBatch(firstBatch.id);
+      } catch (error) {
+        console.warn('Nie udało się pobrać pełnych danych partii:', error);
+      }
+    }
+    
     return {
       name: inventoryItem.name,
       weight: inventoryItem.weight,
       itemsPerBox: inventoryItem.itemsPerBox,
       boxesPerPallet: inventoryItem.boxesPerPallet,
-      parentPackageItemId: inventoryItem.parentPackageItemId
+      parentPackageItemId: inventoryItem.parentPackageItemId,
+      barcode: inventoryItem.barcode,
+      // Dodaj pełne dane partii jeśli są dostępne
+      batchData: fullBatchData
     };
   } catch (error) {
     console.error('Błąd podczas pobierania danych pozycji magazynowej:', error);

@@ -619,6 +619,73 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
     });
   };
 
+  // Funkcja do odświeżania parametrów magazynowych dla pozycji
+  const handleRefreshInventoryData = async (itemIndex) => {
+    const item = formData.items[itemIndex];
+    
+    if (!item.linkedBatches || item.linkedBatches.length === 0) {
+      showMessage('Brak powiązanych partii do odświeżenia', 'warning');
+      return;
+    }
+
+    try {
+      // Wyczyść cache dla tej pozycji
+      const firstBatch = item.linkedBatches[0];
+      
+      if (firstBatch.itemId && inventoryDataCache.has(firstBatch.itemId)) {
+        setInventoryDataCache(prev => {
+          const newCache = new Map(prev);
+          newCache.delete(firstBatch.itemId);
+          return newCache;
+        });
+      }
+
+      // Pobierz aktualne dane magazynowe
+      const freshInventoryData = await getInventoryDataFromBatches(item.linkedBatches);
+      
+      if (freshInventoryData) {
+        // Zaktualizuj powiązane partie z nowymi parametrami
+        const updatedLinkedBatches = item.linkedBatches.map(batch => ({
+          ...batch,
+          // Aktualizuj parametry z pozycji magazynowej
+          itemName: freshInventoryData.name || batch.itemName,
+          barcode: freshInventoryData.barcode || batch.barcode || '',
+          // Zachowaj oryginalne dane partii
+          quantity: batch.quantity,
+          unit: batch.unit,
+          batchNumber: batch.batchNumber,
+          lotNumber: batch.lotNumber,
+          expiryDate: batch.expiryDate,
+          warehouseId: batch.warehouseId,
+          warehouseName: batch.warehouseName
+        }));
+
+        setFormData(prev => {
+          const updatedItems = [...prev.items];
+          updatedItems[itemIndex] = {
+            ...updatedItems[itemIndex],
+            linkedBatches: updatedLinkedBatches
+          };
+
+          return { ...prev, items: updatedItems };
+        });
+
+        // Przelicz wagę z odświeżonymi danymi
+        setTimeout(() => calculateAndSetItemWeight(itemIndex, {
+          ...item,
+          linkedBatches: updatedLinkedBatches
+        }), 200);
+
+        showMessage(`Odświeżono parametry magazynowe dla pozycji ${itemIndex + 1}`, 'success');
+      } else {
+        showMessage('Nie udało się pobrać danych magazynowych', 'error');
+      }
+    } catch (error) {
+      console.error('Błąd podczas odświeżania danych magazynowych:', error);
+      showMessage('Błąd podczas odświeżania parametrów magazynowych', 'error');
+    }
+  };
+
   // Funkcje do obsługi kalkulatora wagi
   const handleOpenWeightCalculator = (itemIndex) => {
     setCurrentWeightItemIndex(itemIndex);
@@ -2525,14 +2592,28 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                               <Typography variant="subtitle2" color="text.secondary">
                                 Powiązane partie magazynowe
                               </Typography>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                startIcon={<LinkIcon />}
-                                onClick={() => handleOpenBatchSelector(index)}
-                              >
-                                Wybierz partie
-                              </Button>
+                              <Box sx={{ display: 'flex', gap: 1 }}>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  startIcon={<LinkIcon />}
+                                  onClick={() => handleOpenBatchSelector(index)}
+                                >
+                                  Wybierz partie
+                                </Button>
+                                {item.linkedBatches && item.linkedBatches.length > 0 && (
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    startIcon={<RefreshIcon />}
+                                    onClick={() => handleRefreshInventoryData(index)}
+                                    color="secondary"
+                                    title="Odśwież parametry magazynowe"
+                                  >
+                                    Odśwież
+                                  </Button>
+                                )}
+                              </Box>
                             </Box>
                             
                             {/* Wyświetlanie powiązanych partii */}
