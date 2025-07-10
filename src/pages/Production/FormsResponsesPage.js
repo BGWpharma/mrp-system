@@ -80,7 +80,13 @@ const FormsResponsesPage = () => {
         id: doc.id,
         ...doc.data(),
         date: doc.data().date?.toDate() // Konwersja Timestamp na Date
-      }));
+      }))
+      // Sortowanie od najnowszych (domyślnie)
+      .sort((a, b) => {
+        const dateA = a.date || new Date(0);
+        const dateB = b.date || new Date(0);
+        return dateB - dateA; // Od najnowszych do najstarszych
+      });
       setCompletedMOResponses(completedMOData);
 
       // Przetwarzanie odpowiedzi "Kontrola Produkcji"
@@ -91,7 +97,13 @@ const FormsResponsesPage = () => {
         productionStartDate: doc.data().productionStartDate?.toDate(),
         productionEndDate: doc.data().productionEndDate?.toDate(),
         readingDate: doc.data().readingDate?.toDate()
-      }));
+      }))
+      // Sortowanie od najnowszych (domyślnie)
+      .sort((a, b) => {
+        const dateA = a.fillDate || new Date(0);
+        const dateB = b.fillDate || new Date(0);
+        return dateB - dateA; // Od najnowszych do najstarszych
+      });
       setProductionControlResponses(controlData);
 
       // Przetwarzanie odpowiedzi "Zmiana Produkcji"
@@ -99,7 +111,13 @@ const FormsResponsesPage = () => {
         id: doc.id,
         ...doc.data(),
         fillDate: doc.data().fillDate?.toDate()
-      }));
+      }))
+      // Sortowanie od najnowszych (domyślnie)
+      .sort((a, b) => {
+        const dateA = a.fillDate || new Date(0);
+        const dateB = b.fillDate || new Date(0);
+        return dateB - dateA; // Od najnowszych do najstarszych
+      });
       setProductionShiftResponses(shiftData);
       setFilteredShiftResponses(shiftData);
       
@@ -144,6 +162,13 @@ const FormsResponsesPage = () => {
           item.moNumber && item.moNumber.toLowerCase().includes(shiftFilters.moNumber.toLowerCase())
         );
       }
+      
+      // Sortowanie przefiltrowanych danych od najnowszych
+      filtered.sort((a, b) => {
+        const dateA = a.fillDate || new Date(0);
+        const dateB = b.fillDate || new Date(0);
+        return dateB - dateA; // Od najnowszych do najstarszych
+      });
       
       setFilteredShiftResponses(filtered);
     }

@@ -59,7 +59,13 @@ const InventoryFormsResponsesPage = () => {
         ...doc.data(),
         fillDate: doc.data().fillDate?.toDate(),
         loadingDate: doc.data().loadingDate?.toDate()
-      }));
+      }))
+      // Sortowanie od najnowszych (domyślnie)
+      .sort((a, b) => {
+        const dateA = a.fillDate || new Date(0);
+        const dateB = b.fillDate || new Date(0);
+        return dateB - dateA; // Od najnowszych do najstarszych
+      });
       setLoadingReportResponses(loadingReportData);
 
       // Przetwarzanie odpowiedzi "Rozładunek Towaru"
@@ -76,6 +82,12 @@ const InventoryFormsResponsesPage = () => {
             expiryDate: item.expiryDate?.toDate ? item.expiryDate.toDate() : item.expiryDate
           })) || []
         };
+      })
+      // Sortowanie od najnowszych (domyślnie)
+      .sort((a, b) => {
+        const dateA = a.fillDate || new Date(0);
+        const dateB = b.fillDate || new Date(0);
+        return dateB - dateA; // Od najnowszych do najstarszych
       });
       setUnloadingReportResponses(unloadingReportData);
       
