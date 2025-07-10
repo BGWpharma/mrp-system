@@ -28,7 +28,9 @@ import {
   ShoppingCart as ShoppingCartIcon,
   AttachFile as AttachFileIcon,
   Image as ImageIcon,
-  PictureAsPdf as PdfIcon
+  PictureAsPdf as PdfIcon,
+  Assignment as AssignmentIcon,
+  LocalShipping as LocalShippingIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -49,7 +51,7 @@ import { getBatchesByPurchaseOrderId, getInventoryBatch, getWarehouseById } from
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../hooks/useNotification';
 import { db } from '../../services/firebase/config';
-import { updateDoc, doc, getDoc } from 'firebase/firestore';
+import { updateDoc, doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { formatCurrency } from '../../utils/formatUtils';
 import { getUsersDisplayNames } from '../../services/userService';
 import { createPurchaseOrderPdfGenerator } from './PurchaseOrderPdfGenerator';
@@ -80,6 +82,10 @@ const PurchaseOrderDetails = ({ orderId }) => {
   const [supplierPricesDialogOpen, setSupplierPricesDialogOpen] = useState(false);
   const [pendingStatusUpdate, setPendingStatusUpdate] = useState(null);
   
+  // Stany dla odpowiedzi formularzy rozładunku
+  const [unloadingFormResponses, setUnloadingFormResponses] = useState([]);
+  const [unloadingFormResponsesLoading, setUnloadingFormResponsesLoading] = useState(false);
+  
   useEffect(() => {
     const fetchPurchaseOrder = async () => {
       try {
@@ -96,6 +102,14 @@ const PurchaseOrderDetails = ({ orderId }) => {
         
         // Pobierz powiązane LOTy
         await fetchRelatedBatches(orderId);
+        
+        // Pobierz odpowiedzi formularzy rozładunku dla tego PO
+        if (data && data.number) {
+          console.log('🚛 PO Document loaded with number:', data.number, '(type:', typeof data.number, ')');
+          fetchUnloadingFormResponses(data.number);
+        } else {
+          console.log('❌ No PO number found in document data:', data);
+        }
       } catch (error) {
         showError('Błąd podczas pobierania danych zamówienia: ' + error.message);
       } finally {
@@ -185,6 +199,85 @@ const PurchaseOrderDetails = ({ orderId }) => {
       showError('Nie udało się odświeżyć listy partii: ' + error.message);
     } finally {
       setLoadingBatches(false);
+    }
+  };
+
+  // Funkcja pobierania odpowiedzi formularzy rozładunku dla danego PO
+  const fetchUnloadingFormResponses = async (poNumber) => {
+    if (!poNumber) return;
+    
+    setUnloadingFormResponsesLoading(true);
+    try {
+      console.log('🔍 Searching for unloading forms with PO number:', poNumber);
+      
+      // Sprawdź różne warianty numeru PO
+      const poVariants = [
+        poNumber,                     // Oryginalny numer (np. "PO-123")
+        poNumber.replace('PO-', ''),  // Bez prefiksu (np. "123")
+        `PO-${poNumber}`,            // Z dodatkowym prefiksem (na wszelki wypadek)
+      ].filter((variant, index, array) => array.indexOf(variant) === index); // Usuń duplikaty
+      
+      console.log('🔍 Checking PO variants:', poVariants);
+      
+      let unloadingData = [];
+      
+      // Spróbuj wszystkie warianty
+      for (const variant of poVariants) {
+        const unloadingQuery = query(
+          collection(db, 'Forms/RozladunekTowaru/Odpowiedzi'), 
+          where('poNumber', '==', variant)
+        );
+        const unloadingSnapshot = await getDocs(unloadingQuery);
+        
+        console.log(`📄 Found ${unloadingSnapshot.docs.length} unloading form responses for variant: "${variant}"`);
+        
+        if (unloadingSnapshot.docs.length > 0) {
+          const variantData = unloadingSnapshot.docs.map(doc => {
+            const data = doc.data();
+            console.log('📝 Processing document:', doc.id, 'with PO:', data.poNumber);
+            return {
+              id: doc.id,
+              ...data,
+              fillDate: data.fillDate?.toDate(),
+              unloadingDate: data.unloadingDate?.toDate(),
+              formType: 'unloading',
+              // Obsługa selectedItems z konwersją dat ważności
+              selectedItems: data.selectedItems?.map(item => ({
+                ...item,
+                expiryDate: item.expiryDate?.toDate ? item.expiryDate.toDate() : item.expiryDate
+              })) || []
+            };
+          });
+          unloadingData.push(...variantData);
+        }
+      }
+      
+      // Jeśli nadal nic nie znaleziono, pokaż wszystkie numery PO w kolekcji dla debugowania
+      if (unloadingData.length === 0) {
+        console.log('🔍 No results found for any variant. Let me check all PO numbers in the collection...');
+        const allDocsQuery = query(collection(db, 'Forms/RozladunekTowaru/Odpowiedzi'));
+        const allDocsSnapshot = await getDocs(allDocsQuery);
+        console.log('📋 All PO numbers in collection:');
+        allDocsSnapshot.docs.forEach((doc, index) => {
+          const data = doc.data();
+          console.log(`${index + 1}. PO: "${data.poNumber}" (type: ${typeof data.poNumber})`);
+        });
+      }
+
+      // Sortowanie odpowiedzi od najnowszych (według daty wypełnienia)
+      const sortByFillDate = (a, b) => {
+        const dateA = a.fillDate || new Date(0);
+        const dateB = b.fillDate || new Date(0);
+        return new Date(dateB) - new Date(dateA); // Od najnowszych
+      };
+
+      setUnloadingFormResponses(unloadingData.sort(sortByFillDate));
+      console.log('✅ Set', unloadingData.length, 'unloading form responses');
+    } catch (error) {
+      console.error('Błąd podczas pobierania odpowiedzi formularzy rozładunku:', error);
+      setUnloadingFormResponses([]);
+    } finally {
+      setUnloadingFormResponsesLoading(false);
     }
   };
   
@@ -497,6 +590,17 @@ const PurchaseOrderDetails = ({ orderId }) => {
     setSupplierPricesDialogOpen(false);
     setPendingStatusUpdate(null);
     setNewStatus('');
+  };
+
+  // Funkcja do obsługi edycji raportów rozładunku
+  const handleEditUnloadingReport = (report) => {
+    console.log('📝 Edycja raportu rozładunku:', report);
+    
+    // Zapisz dane do edycji w sessionStorage
+    sessionStorage.setItem('editFormData', JSON.stringify(report));
+    
+    // Przekieruj do formularza rozładunku w trybie edycji
+    navigate('/inventory/forms/unloading-report?edit=true');
   };
   
   const getStatusChip = (status) => {
@@ -1408,6 +1512,317 @@ const PurchaseOrderDetails = ({ orderId }) => {
             ) : (
               <Typography variant="body2" color="text.secondary">
                 Brak załączników do tego zamówienia
+              </Typography>
+            )}
+          </Paper>
+
+          {/* Sekcja odpowiedzi formularzy rozładunku */}
+          <Paper sx={{ mb: 3, p: 3, borderRadius: 2 }}>
+            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+              <LocalShippingIcon sx={{ mr: 1 }} />
+              Raporty rozładunku towaru
+              {unloadingFormResponsesLoading && (
+                <CircularProgress size={20} sx={{ ml: 2 }} />
+              )}
+            </Typography>
+            
+            {unloadingFormResponses.length > 0 ? (
+              <Box>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  Znaleziono {unloadingFormResponses.length} raport(ów) rozładunku dla PO: {purchaseOrder.number}
+                </Typography>
+                
+                {unloadingFormResponses.map((report, index) => (
+                  <Paper 
+                    key={report.id} 
+                    variant="outlined" 
+                    sx={{ 
+                      mb: 2, 
+                      p: 2, 
+                      border: '1px solid #e0e0e0',
+                      borderLeft: '4px solid #1976d2',
+                      backgroundColor: '#f8f9fa'
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                      <AssignmentIcon sx={{ mr: 1, color: 'primary.main' }} />
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                        Raport rozładunku #{index + 1}
+                      </Typography>
+                      <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Chip 
+                          label={`Wypełniono: ${report.fillDate ? format(report.fillDate, 'dd.MM.yyyy HH:mm', { locale: pl }) : 'Brak daty'}`}
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                        />
+                        <IconButton
+                          size="small"
+                          color="primary"
+                          onClick={() => handleEditUnloadingReport(report)}
+                          title="Edytuj raport rozładunku"
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    </Box>
+                    
+                    <Grid container spacing={2}>
+                      {/* Informacje podstawowe */}
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">
+                          Email pracownika
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {report.email || 'Nie podano'}
+                        </Typography>
+                      </Grid>
+                      
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">
+                          Pracownik
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {report.employeeName || 'Nie podano'}
+                        </Typography>
+                      </Grid>
+                      
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">
+                          Stanowisko
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {report.position || 'Nie podano'}
+                        </Typography>
+                      </Grid>
+                      
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">
+                          Godzina wypełnienia
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {report.fillTime || 'Nie podano'}
+                        </Typography>
+                      </Grid>
+                      
+                      {/* Informacje o rozładunku */}
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">
+                          Data rozładunku
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {report.unloadingDate ? format(report.unloadingDate, 'dd.MM.yyyy', { locale: pl }) : 'Nie podano'}
+                        </Typography>
+                      </Grid>
+                      
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">
+                          Godzina rozładunku
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {report.unloadingTime || 'Nie podano'}
+                        </Typography>
+                      </Grid>
+                      
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">
+                          Przewoźnik
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {report.carrierName || 'Nie podano'}
+                        </Typography>
+                      </Grid>
+                      
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">
+                          Nr rejestracyjny pojazdu
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {report.vehicleRegistration || 'Nie podano'}
+                        </Typography>
+                      </Grid>
+                      
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">
+                          Stan techniczny pojazdu
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {report.vehicleTechnicalCondition || 'Nie podano'}
+                        </Typography>
+                      </Grid>
+                      
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">
+                          Higiena transportu
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {report.transportHygiene || 'Nie podano'}
+                        </Typography>
+                      </Grid>
+                      
+                      {/* Informacje o towarze */}
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">
+                          Dostawca
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {report.supplierName || 'Nie podano'}
+                        </Typography>
+                      </Grid>
+                      
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">
+                          Ilość palet
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {report.palletQuantity || 'Nie podano'}
+                        </Typography>
+                      </Grid>
+                      
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">
+                          Ilość kartonów/tub
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {report.cartonsTubsQuantity || 'Nie podano'}
+                        </Typography>
+                      </Grid>
+                      
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">
+                          Waga
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {report.weight || 'Nie podano'}
+                        </Typography>
+                      </Grid>
+                      
+                      <Grid item xs={12} sm={6} md={4}>
+                        <Typography variant="caption" color="text.secondary">
+                          Ocena wizualna towaru
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {report.visualInspectionResult || 'Nie podano'}
+                        </Typography>
+                      </Grid>
+                      
+                      <Grid item xs={12} sm={6} md={4}>
+                        <Typography variant="caption" color="text.secondary">
+                          Nr certyfikatu eko
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {report.ecoCertificateNumber || 'Nie podano'}
+                        </Typography>
+                      </Grid>
+                      
+                      {/* Pozycje dostarczone */}
+                      {report.selectedItems && report.selectedItems.length > 0 && (
+                        <Grid item xs={12}>
+                          <Typography variant="caption" color="text.secondary">
+                            Pozycje dostarczone
+                          </Typography>
+                          <Box sx={{ mt: 1 }}>
+                            {report.selectedItems.map((item, itemIndex) => (
+                              <Box 
+                                key={itemIndex} 
+                                sx={{ 
+                                  display: 'flex', 
+                                  justifyContent: 'space-between', 
+                                  alignItems: 'center',
+                                  p: 1, 
+                                  mb: 1, 
+                                  backgroundColor: 'white', 
+                                  borderRadius: 1,
+                                  border: '1px solid #e0e0e0'
+                                }}
+                              >
+                                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                  {item.productName || 'Nieznany produkt'}
+                                </Typography>
+                                <Box sx={{ textAlign: 'right' }}>
+                                  <Typography variant="body2" color="primary">
+                                    Dostarczone: {item.unloadedQuantity || 'Nie podano'} {item.unit || ''}
+                                  </Typography>
+                                  {item.expiryDate && (
+                                    <Typography variant="caption" color="text.secondary">
+                                      Ważność: {format(item.expiryDate, 'dd.MM.yyyy', { locale: pl })}
+                                    </Typography>
+                                  )}
+                                </Box>
+                              </Box>
+                            ))}
+                          </Box>
+                        </Grid>
+                      )}
+                      
+                      {/* Uwagi */}
+                      {(report.notes || report.goodsNotes) && (
+                        <Grid item xs={12}>
+                          {report.notes && (
+                            <Box sx={{ mb: 1 }}>
+                              <Typography variant="caption" color="text.secondary">
+                                Uwagi rozładunku
+                              </Typography>
+                              <Typography variant="body2" sx={{ 
+                                fontStyle: 'italic', 
+                                p: 1, 
+                                backgroundColor: 'rgba(0, 0, 0, 0.04)', 
+                                borderRadius: 1,
+                                mt: 0.5
+                              }}>
+                                {report.notes}
+                              </Typography>
+                            </Box>
+                          )}
+                          {report.goodsNotes && (
+                            <Box>
+                              <Typography variant="caption" color="text.secondary">
+                                Uwagi towaru
+                              </Typography>
+                              <Typography variant="body2" sx={{ 
+                                fontStyle: 'italic', 
+                                p: 1, 
+                                backgroundColor: 'rgba(0, 0, 0, 0.04)', 
+                                borderRadius: 1,
+                                mt: 0.5
+                              }}>
+                                {report.goodsNotes}
+                              </Typography>
+                            </Box>
+                          )}
+                        </Grid>
+                      )}
+                      
+                      {/* Załącznik */}
+                      {report.documentsUrl && (
+                        <Grid item xs={12}>
+                          <Typography variant="caption" color="text.secondary">
+                            Załącznik
+                          </Typography>
+                          <Box sx={{ mt: 1 }}>
+                            <Button 
+                              size="small" 
+                              variant="outlined"
+                              href={report.documentsUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              startIcon={<AttachFileIcon />}
+                            >
+                              {report.documentsName || 'Pobierz załącznik'}
+                            </Button>
+                          </Box>
+                        </Grid>
+                      )}
+                    </Grid>
+                  </Paper>
+                ))}
+              </Box>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                {unloadingFormResponsesLoading 
+                  ? 'Szukanie raportów rozładunku...'
+                  : `Brak raportów rozładunku dla PO: ${purchaseOrder?.number || 'Nieznany'}`
+                }
               </Typography>
             )}
           </Paper>

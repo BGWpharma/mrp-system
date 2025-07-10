@@ -19,6 +19,7 @@ import {
   TableHead,
   TableRow,
   Alert,
+  AlertTitle,
   styled,
   Dialog,
   DialogActions,
@@ -73,6 +74,8 @@ import FileCopyIcon from '@mui/icons-material/FileCopy';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import LabelIcon from '@mui/icons-material/Label';
 import GridViewIcon from '@mui/icons-material/GridView';
+import WarningIcon from '@mui/icons-material/Warning';
+import CheckIcon from '@mui/icons-material/Check';
 
 // Globalne style CSS dla drukowania
 const GlobalStyles = styled('style')({});
@@ -176,6 +179,10 @@ const CmrDetailsPage = () => {
   // Stany dla odpowiedzi formularzy
   const [loadingFormResponses, setLoadingFormResponses] = useState([]);
   const [loadingFormResponsesLoading, setLoadingFormResponsesLoading] = useState(false);
+  
+  // Stany dla dialogu walidacji formularzy załadunku przed zmianą statusu na transport
+  const [loadingFormValidationDialogOpen, setLoadingFormValidationDialogOpen] = useState(false);
+  const [pendingStatusChange, setPendingStatusChange] = useState(null);
   
   // Stany dla szczegółów wag
   const [itemsWeightDetails, setItemsWeightDetails] = useState([]);
@@ -1078,7 +1085,26 @@ const CmrDetailsPage = () => {
     }
   };
   
-  const handleStatusChange = async (newStatus) => {
+  // Funkcja sprawdzająca czy można zmienić status na transport
+  const handleTransportValidation = (newStatus) => {
+    // Sprawdź czy to zmiana na status "W transporcie"
+    if (newStatus === CMR_STATUSES.IN_TRANSIT) {
+      // Sprawdź czy istnieją odpowiedzi z formularzy załadunku
+      if (loadingFormResponses.length === 0) {
+        showError('Nie można rozpocząć transportu. Brak odpowiedzi z formularza załadunku dla tego CMR. Proszę najpierw wypełnić formularz załadunku towaru.');
+        return;
+      }
+      
+      // Wyświetl dialog z odpowiedziami z formularza przed zmianą statusu
+      setPendingStatusChange(newStatus);
+      setLoadingFormValidationDialogOpen(true);
+    } else {
+      // Dla innych statusów, wykonaj bezpośrednio zmianę
+      executeStatusChange(newStatus);
+    }
+  };
+
+  const executeStatusChange = async (newStatus) => {
     try {
       const result = await updateCmrStatus(id, newStatus, currentUser.uid);
       
@@ -1182,6 +1208,21 @@ const CmrDetailsPage = () => {
       console.error('Błąd podczas zmiany statusu dokumentu CMR:', error);
       showError('Nie udało się zmienić statusu dokumentu CMR: ' + error.message);
     }
+  };
+
+  // Funkcja obsługująca potwierdzenie zmiany statusu po wyświetleniu formularzy
+  const handleConfirmStatusChange = () => {
+    setLoadingFormValidationDialogOpen(false);
+    if (pendingStatusChange) {
+      executeStatusChange(pendingStatusChange);
+      setPendingStatusChange(null);
+    }
+  };
+
+  // Funkcja obsługująca anulowanie zmiany statusu
+  const handleCancelStatusChange = () => {
+    setLoadingFormValidationDialogOpen(false);
+    setPendingStatusChange(null);
   };
   
   const formatDate = (date) => {
@@ -1466,7 +1507,7 @@ const CmrDetailsPage = () => {
                 <Button 
                   variant="contained" 
                   color="primary"
-                  onClick={() => handleStatusChange(CMR_STATUSES.ISSUED)}
+                  onClick={() => handleTransportValidation(CMR_STATUSES.ISSUED)}
                 >
                   Wystaw dokument
                 </Button>
@@ -1476,7 +1517,7 @@ const CmrDetailsPage = () => {
                 <Button 
                   variant="contained" 
                   color="warning"
-                  onClick={() => handleStatusChange(CMR_STATUSES.IN_TRANSIT)}
+                  onClick={() => handleTransportValidation(CMR_STATUSES.IN_TRANSIT)}
                 >
                   Rozpocznij transport
                 </Button>
@@ -1486,7 +1527,7 @@ const CmrDetailsPage = () => {
                 <Button 
                   variant="contained" 
                   color="success"
-                  onClick={() => handleStatusChange(CMR_STATUSES.DELIVERED)}
+                  onClick={() => handleTransportValidation(CMR_STATUSES.DELIVERED)}
                 >
                   Oznacz jako dostarczone
                 </Button>
@@ -1496,7 +1537,7 @@ const CmrDetailsPage = () => {
                 <Button 
                   variant="contained" 
                   color="info"
-                  onClick={() => handleStatusChange(CMR_STATUSES.COMPLETED)}
+                  onClick={() => handleTransportValidation(CMR_STATUSES.COMPLETED)}
                 >
                   Zakończ
                 </Button>
@@ -1507,7 +1548,7 @@ const CmrDetailsPage = () => {
                 <Button 
                   variant="contained" 
                   color="error"
-                  onClick={() => handleStatusChange(CMR_STATUSES.CANCELED)}
+                  onClick={() => handleTransportValidation(CMR_STATUSES.CANCELED)}
                 >
                   Anuluj
                 </Button>
@@ -2697,6 +2738,263 @@ const CmrDetailsPage = () => {
           </Box>
         </Box>
       </Box>
+
+      {/* Dialog walidacji formularzy załadunku przed zmianą statusu na transport */}
+      <Dialog
+        open={loadingFormValidationDialogOpen}
+        onClose={handleCancelStatusChange}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <WarningIcon color="warning" />
+            Potwierdź rozpoczęcie transportu
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 3 }}>
+            Znaleziono {loadingFormResponses.length} odpowiedzi z formularza załadunku towaru dla tego CMR. 
+            Sprawdź poniższe dane przed rozpoczęciem transportu:
+          </DialogContentText>
+          
+          {loadingFormResponses.length > 0 && (
+            <Grid container spacing={2}>
+              {loadingFormResponses.map((report, index) => (
+                <Grid item xs={12} key={index}>
+                  <Paper sx={{ p: 2, backgroundColor: 'background.default', border: 1, borderColor: 'divider' }}>
+                    <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                      Formularz załadunku #{index + 1} - {report.fillDate ? format(report.fillDate, 'dd.MM.yyyy HH:mm', { locale: pl }) : 'Nie określono'}
+                    </Typography>
+                    
+                                         <Grid container spacing={2}>
+                       {/* Informacje podstawowe o wypełnieniu */}
+                       <Grid item xs={12}>
+                         <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'text.primary', borderBottom: 1, borderColor: 'divider', pb: 1 }}>
+                           Informacje o wypełnieniu formularza
+                         </Typography>
+                       </Grid>
+                       
+                       <Grid item xs={12} sm={6} md={3}>
+                         <Typography variant="caption" color="text.secondary">
+                           Email pracownika
+                         </Typography>
+                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                           {report.email || 'Nie podano'}
+                         </Typography>
+                       </Grid>
+                       
+                       <Grid item xs={12} sm={6} md={3}>
+                         <Typography variant="caption" color="text.secondary">
+                           Pracownik
+                         </Typography>
+                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                           {report.employeeName || 'Nie podano'}
+                         </Typography>
+                       </Grid>
+                       
+                       <Grid item xs={12} sm={6} md={3}>
+                         <Typography variant="caption" color="text.secondary">
+                           Stanowisko
+                         </Typography>
+                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                           {report.position || 'Nie podano'}
+                         </Typography>
+                       </Grid>
+                       
+                       <Grid item xs={12} sm={6} md={3}>
+                         <Typography variant="caption" color="text.secondary">
+                           Godzina wypełnienia
+                         </Typography>
+                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                           {report.fillTime || 'Nie podano'}
+                         </Typography>
+                       </Grid>
+                       
+                       {/* Informacje o załadunku */}
+                       <Grid item xs={12}>
+                         <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'text.primary', borderBottom: 1, borderColor: 'divider', pb: 1, mt: 2 }}>
+                           Informacje o załadunku
+                         </Typography>
+                       </Grid>
+                       
+                       <Grid item xs={12} sm={6} md={3}>
+                         <Typography variant="caption" color="text.secondary">
+                           Data załadunku
+                         </Typography>
+                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                           {report.loadingDate ? format(report.loadingDate, 'dd.MM.yyyy', { locale: pl }) : 'Nie podano'}
+                         </Typography>
+                       </Grid>
+                       
+                       <Grid item xs={12} sm={6} md={3}>
+                         <Typography variant="caption" color="text.secondary">
+                           Godzina załadunku
+                         </Typography>
+                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                           {report.loadingTime || 'Nie podano'}
+                         </Typography>
+                       </Grid>
+                       
+                       <Grid item xs={12} sm={6} md={3}>
+                         <Typography variant="caption" color="text.secondary">
+                           Przewoźnik
+                         </Typography>
+                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                           {report.carrierName || 'Nie podano'}
+                         </Typography>
+                       </Grid>
+                       
+                       <Grid item xs={12} sm={6} md={3}>
+                         <Typography variant="caption" color="text.secondary">
+                           Nr rejestracyjny pojazdu
+                         </Typography>
+                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                           {report.vehicleRegistration || 'Nie podano'}
+                         </Typography>
+                       </Grid>
+                       
+                       <Grid item xs={12} sm={6}>
+                         <Typography variant="caption" color="text.secondary">
+                           Stan techniczny pojazdu
+                         </Typography>
+                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                           {report.vehicleTechnicalCondition || 'Nie podano'}
+                         </Typography>
+                       </Grid>
+                       
+                       {/* Informacje o towarze */}
+                       <Grid item xs={12}>
+                         <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'text.primary', borderBottom: 1, borderColor: 'divider', pb: 1, mt: 2 }}>
+                           Informacje o towarze
+                         </Typography>
+                       </Grid>
+                       
+                       <Grid item xs={12} sm={6} md={3}>
+                         <Typography variant="caption" color="text.secondary">
+                           Klient
+                         </Typography>
+                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                           {report.clientName || 'Nie podano'}
+                         </Typography>
+                       </Grid>
+                       
+                       <Grid item xs={12} sm={6} md={3}>
+                         <Typography variant="caption" color="text.secondary">
+                           Nr zamówienia
+                         </Typography>
+                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                           {report.orderNumber || 'Nie podano'}
+                         </Typography>
+                       </Grid>
+                       
+                       <Grid item xs={12} sm={6} md={3}>
+                         <Typography variant="caption" color="text.secondary">
+                           Ilość palet
+                         </Typography>
+                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                           {report.palletQuantity || 'Nie podano'}
+                         </Typography>
+                       </Grid>
+                       
+                       <Grid item xs={12} sm={6} md={3}>
+                         <Typography variant="caption" color="text.secondary">
+                           Waga
+                         </Typography>
+                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                           {report.weight || 'Nie podano'}
+                         </Typography>
+                       </Grid>
+                       
+                       {report.palletProductName && (
+                         <Grid item xs={12}>
+                           <Typography variant="caption" color="text.secondary">
+                             Nazwa produktu / Paleta
+                           </Typography>
+                           <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                             {report.palletProductName}
+                           </Typography>
+                         </Grid>
+                       )}
+                       
+                       {/* Uwagi */}
+                       {(report.notes || report.goodsNotes) && (
+                         <>
+                           <Grid item xs={12}>
+                             <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'text.primary', borderBottom: 1, borderColor: 'divider', pb: 1, mt: 2 }}>
+                               Uwagi
+                             </Typography>
+                           </Grid>
+                           
+                           {report.notes && (
+                             <Grid item xs={12} sm={6}>
+                               <Typography variant="caption" color="text.secondary">
+                                 Uwagi dotyczące załadunku
+                               </Typography>
+                               <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                                 {report.notes}
+                               </Typography>
+                             </Grid>
+                           )}
+                           
+                           {report.goodsNotes && (
+                             <Grid item xs={12} sm={6}>
+                               <Typography variant="caption" color="text.secondary">
+                                 Uwagi dotyczące towaru
+                               </Typography>
+                               <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                                 {report.goodsNotes}
+                               </Typography>
+                             </Grid>
+                           )}
+                         </>
+                       )}
+                       
+                       {/* Załączniki */}
+                       {report.documentsUrl && (
+                         <>
+                           <Grid item xs={12}>
+                             <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'text.primary', borderBottom: 1, borderColor: 'divider', pb: 1, mt: 2 }}>
+                               Załączniki
+                             </Typography>
+                           </Grid>
+                           
+                           <Grid item xs={12}>
+                             <Button
+                               variant="outlined"
+                               size="small"
+                               href={report.documentsUrl}
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               startIcon={<FileCopyIcon />}
+                             >
+                               {report.documentsName || 'Pobierz załącznik'}
+                             </Button>
+                           </Grid>
+                         </>
+                       )}
+                     </Grid>
+                  </Paper>
+                </Grid>
+              ))}
+            </Grid>
+          )}
+        
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelStatusChange} color="inherit">
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleConfirmStatusChange} 
+            color="warning" 
+            variant="contained"
+            startIcon={<CheckIcon />}
+          >
+            Potwierdź rozpoczęcie transportu
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Dialog zmiany statusu płatności */}
       <Dialog

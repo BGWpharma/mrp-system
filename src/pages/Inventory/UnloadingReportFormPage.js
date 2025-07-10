@@ -223,7 +223,8 @@ const UnloadingReportFormPage = () => {
           unloadedQuantity: item.unloadedQuantity || '',
           expiryDate: item.expiryDate ? 
             (item.expiryDate.toDate ? item.expiryDate.toDate() : new Date(item.expiryDate)) : 
-            null
+            null,
+          noExpiryDate: item.noExpiryDate || false
         }));
         setSelectedPoItems(normalizedItems);
         setPoSearchQuery(editData.poNumber || '');
@@ -362,7 +363,8 @@ const UnloadingReportFormPage = () => {
       const newItem = {
         ...item,
         unloadedQuantity: '',
-        expiryDate: null
+        expiryDate: null,
+        noExpiryDate: false
       };
       
       setSelectedPoItems(prev => [...prev, newItem]);
@@ -414,6 +416,29 @@ const UnloadingReportFormPage = () => {
       ...prev,
       selectedItems: prev.selectedItems.map(item => 
         item.id === itemId ? { ...item, expiryDate: date } : item
+      )
+    }));
+  };
+
+  // Funkcja do obsługi checkbox "nie dotyczy" dla daty ważności
+  const handleNoExpiryDateChange = (itemId, checked) => {
+    setSelectedPoItems(prev => 
+      prev.map(item => 
+        item.id === itemId ? { 
+          ...item, 
+          noExpiryDate: checked,
+          expiryDate: checked ? null : item.expiryDate // Wyczyść datę gdy zaznaczono "nie dotyczy"
+        } : item
+      )
+    );
+    setFormData(prev => ({
+      ...prev,
+      selectedItems: prev.selectedItems.map(item => 
+        item.id === itemId ? { 
+          ...item, 
+          noExpiryDate: checked,
+          expiryDate: checked ? null : item.expiryDate // Wyczyść datę gdy zaznaczono "nie dotyczy"
+        } : item
       )
     }));
   };
@@ -546,7 +571,8 @@ const UnloadingReportFormPage = () => {
         poNumber: formData.poNumber,
         selectedItems: formData.selectedItems.map(item => ({
           ...item,
-          expiryDate: item.expiryDate ? item.expiryDate : null // Zachowaj datę jako Date object
+          expiryDate: item.expiryDate ? item.expiryDate : null, // Zachowaj datę jako Date object
+          noExpiryDate: item.noExpiryDate || false // Zachowaj stan checkbox "nie dotyczy"
         })),
         palletQuantity: formData.palletQuantity,
         cartonsTubsQuantity: formData.cartonsTubsQuantity,
@@ -1059,19 +1085,40 @@ const UnloadingReportFormPage = () => {
                               />
                             </TableCell>
                             <TableCell>
-                              <DatePicker
-                                value={selectedItem?.expiryDate || null}
-                                onChange={(date) => handleExpiryDateChange(item.id, date)}
-                                disabled={!isSelected}
-                                renderInput={(params) => (
-                                  <TextField
-                                    {...params}
-                                    size="small"
-                                    placeholder="Data ważności"
-                                    sx={{ minWidth: 140 }}
+                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 160 }}>
+                                <DatePicker
+                                  value={selectedItem?.expiryDate || null}
+                                  onChange={(date) => handleExpiryDateChange(item.id, date)}
+                                  disabled={!isSelected || selectedItem?.noExpiryDate}
+                                  renderInput={(params) => (
+                                    <TextField
+                                      {...params}
+                                      size="small"
+                                      placeholder="Data ważności"
+                                      sx={{ minWidth: 140 }}
+                                    />
+                                  )}
+                                />
+                                {isSelected && (
+                                  <FormControlLabel
+                                    control={
+                                      <Checkbox
+                                        size="small"
+                                        checked={selectedItem?.noExpiryDate || false}
+                                        onChange={(e) => handleNoExpiryDateChange(item.id, e.target.checked)}
+                                      />
+                                    }
+                                    label="Nie dotyczy"
+                                    sx={{ 
+                                      margin: 0,
+                                      '& .MuiFormControlLabel-label': {
+                                        fontSize: '0.75rem',
+                                        color: 'text.secondary'
+                                      }
+                                    }}
                                   />
                                 )}
-                              />
+                              </Box>
                             </TableCell>
                           </TableRow>
                         );
