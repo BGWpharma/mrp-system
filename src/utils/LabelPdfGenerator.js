@@ -276,7 +276,7 @@ class LabelPdfGenerator {
       y: currentY - 4, // Wyśrodkowane względem logo
       size: 10, // Większy font dla większej etykiety
       font: this.fonts.bold,
-      color: rgb(0.1, 0.46, 0.82) // Niebieski kolor
+      color: rgb(0, 0, 0) // Czarny kolor
     });
 
     currentY -= 24; // Większy odstęp po nagłówku
@@ -303,13 +303,13 @@ class LabelPdfGenerator {
     page.drawText('PRODUCT:', {
       x: leftColumnX,
       y: leftY,
-      size: 9,
+      size: 10,
       font: this.fonts.bold
     });
-    leftY -= 10;
+    leftY -= 11;
 
     leftY = this.drawText(page, itemData.description || '', leftColumnX, leftY, {
-      size: 8,
+      size: 9,
       font: this.fonts.bold,
       maxWidth: columnWidth,
       lineHeight: 1.1
@@ -322,13 +322,13 @@ class LabelPdfGenerator {
       page.drawText('LOT:', {
         x: leftColumnX,
         y: leftY,
-        size: 9,
+        size: 10,
         font: this.fonts.bold
       });
-      leftY -= 10;
+      leftY -= 11;
       
       leftY = this.drawText(page, itemData.linkedBatches[0].batchNumber || itemData.linkedBatches[0].lotNumber, 
-        leftColumnX, leftY, { size: 8, maxWidth: columnWidth });
+        leftColumnX, leftY, { size: 9, maxWidth: columnWidth });
     }
 
     leftY -= 6;
@@ -337,13 +337,13 @@ class LabelPdfGenerator {
     page.drawText('QTY IN BOX:', {
       x: leftColumnX,
       y: leftY,
-      size: 9,
+      size: 10,
       font: this.fonts.bold
     });
-    leftY -= 10;
+    leftY -= 11;
 
     const qtyText = `${boxDetails.itemsCount || 0} / ${itemData.inventoryData?.itemsPerBox || 'N/A'} pcs`;
-    leftY = this.drawText(page, qtyText, leftColumnX, leftY, { size: 8, font: this.fonts.bold });
+    leftY = this.drawText(page, qtyText, leftColumnX, leftY, { size: 9, font: this.fonts.bold });
 
     leftY -= 6;
 
@@ -351,13 +351,13 @@ class LabelPdfGenerator {
     page.drawText('BOX WEIGHT:', {
       x: leftColumnX,
       y: leftY,
-      size: 9,
+      size: 10,
       font: this.fonts.bold
     });
-    leftY -= 10;
+    leftY -= 11;
 
     leftY = this.drawText(page, `${boxDetails.totalWeight || 0} kg`, leftColumnX, leftY, 
-      { size: 8, font: this.fonts.bold });
+      { size: 9, font: this.fonts.bold });
 
     // Prawa kolumna
     let rightY = currentY;
@@ -366,7 +366,7 @@ class LabelPdfGenerator {
     page.drawText('SENDER:', {
       x: rightColumnX,
       y: rightY,
-      size: 9,
+      size: 10,
       font: this.fonts.bold
     });
     rightY -= 10;
@@ -480,14 +480,14 @@ class LabelPdfGenerator {
       });
     }
 
-    // Numery CMR i PALLET (zielony kolor dla palet) - przesunięte w prawo
+    // Numery CMR i PALLET - przesunięte w prawo
     const headerText = `CMR: ${cmrData.cmrNumber || ''} | PALLET: ${palletNumber} / ${totalPallets}`;
     page.drawText(headerText, {
       x: margin + 38, // Dostosowane do większego logo
       y: currentY - 4, // Wyśrodkowane względem logo
       size: 10, // Większy font dla większej etykiety
       font: this.fonts.bold,
-      color: rgb(0.18, 0.49, 0.2) // Zielony kolor
+      color: rgb(0, 0, 0) // Czarny kolor
     });
 
     currentY -= 24; // Większy odstęp po nagłówku
@@ -514,13 +514,13 @@ class LabelPdfGenerator {
     page.drawText('PRODUCT:', {
       x: leftColumnX,
       y: leftY,
-      size: 9,
+      size: 10,
       font: this.fonts.bold
     });
-    leftY -= 10;
+    leftY -= 11;
 
     leftY = this.drawText(page, itemData.description || '', leftColumnX, leftY, {
-      size: 8,
+      size: 9,
       font: this.fonts.bold,
       maxWidth: columnWidth,
       lineHeight: 1.1
@@ -533,13 +533,13 @@ class LabelPdfGenerator {
       page.drawText('LOT:', {
         x: leftColumnX,
         y: leftY,
-        size: 9,
+        size: 10,
         font: this.fonts.bold
       });
-      leftY -= 10;
+      leftY -= 11;
       
       leftY = this.drawText(page, itemData.linkedBatches[0].batchNumber || itemData.linkedBatches[0].lotNumber, 
-        leftColumnX, leftY, { size: 8, maxWidth: columnWidth });
+        leftColumnX, leftY, { size: 9, maxWidth: columnWidth });
     }
 
     leftY -= 6;
@@ -548,13 +548,13 @@ class LabelPdfGenerator {
     page.drawText('QTY ON PALLET:', {
       x: leftColumnX,
       y: leftY,
-      size: 9,
+      size: 10,
       font: this.fonts.bold
     });
-    leftY -= 10;
+    leftY -= 11;
 
     const qtyText = `${palletDetails.itemsCount || 0} / ${(itemData.inventoryData?.boxesPerPallet * itemData.inventoryData?.itemsPerBox) || 'N/A'} pcs`;
-    leftY = this.drawText(page, qtyText, leftColumnX, leftY, { size: 8, font: this.fonts.bold });
+    leftY = this.drawText(page, qtyText, leftColumnX, leftY, { size: 9, font: this.fonts.bold });
 
     leftY -= 6;
 
@@ -562,13 +562,13 @@ class LabelPdfGenerator {
     page.drawText('BOXES COUNT:', {
       x: leftColumnX,
       y: leftY,
-      size: 9,
+      size: 10,
       font: this.fonts.bold
     });
-    leftY -= 10;
+    leftY -= 11;
 
     const boxesText = `${palletDetails.boxesCount || 0} / ${itemData.inventoryData?.boxesPerPallet || 'N/A'} pcs`;
-    leftY = this.drawText(page, boxesText, leftColumnX, leftY, { size: 8, font: this.fonts.bold });
+    leftY = this.drawText(page, boxesText, leftColumnX, leftY, { size: 9, font: this.fonts.bold });
 
     leftY -= 6;
 
@@ -576,13 +576,13 @@ class LabelPdfGenerator {
     page.drawText('PALLET WEIGHT:', {
       x: leftColumnX,
       y: leftY,
-      size: 9,
+      size: 10,
       font: this.fonts.bold
     });
-    leftY -= 10;
+    leftY -= 11;
 
     leftY = this.drawText(page, `${palletDetails.totalWeight || 0} kg`, leftColumnX, leftY, 
-      { size: 8, font: this.fonts.bold });
+      { size: 9, font: this.fonts.bold });
 
     // Prawa kolumna
     let rightY = currentY;
@@ -591,13 +591,13 @@ class LabelPdfGenerator {
     page.drawText('SENDER:', {
       x: rightColumnX,
       y: rightY,
-      size: 9,
+      size: 10,
       font: this.fonts.bold
     });
-    rightY -= 10;
+    rightY -= 11;
 
     rightY = this.drawText(page, cmrData.sender || '', rightColumnX, rightY, {
-      size: 8,
+      size: 9,
       maxWidth: columnWidth,
       lineHeight: 1.1
     });
@@ -608,13 +608,13 @@ class LabelPdfGenerator {
     page.drawText('RECIPIENT:', {
       x: rightColumnX,
       y: rightY,
-      size: 9,
+      size: 10,
       font: this.fonts.bold
     });
-    rightY -= 10;
+    rightY -= 11;
 
     rightY = this.drawText(page, cmrData.recipient || '', rightColumnX, rightY, {
-      size: 8,
+      size: 9,
       maxWidth: columnWidth,
       lineHeight: 1.1
     });
@@ -625,17 +625,17 @@ class LabelPdfGenerator {
     page.drawText('DELIVERY ADDRESS:', {
       x: rightColumnX,
       y: rightY,
-      size: 9,
+      size: 10,
       font: this.fonts.bold
     });
-    rightY -= 10;
+    rightY -= 11;
 
     const deliveryAddress = cmrData.recipientAddress || cmrData.deliveryPlace || cmrData.unloadingPlace || 'N/A';
     const addressLines = this.formatAddress(deliveryAddress);
     
     for (const line of addressLines) {
       rightY = this.drawText(page, line, rightColumnX, rightY, {
-        size: 8,
+        size: 9,
         maxWidth: columnWidth,
         lineHeight: 1.1
       });
