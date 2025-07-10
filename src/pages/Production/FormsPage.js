@@ -138,31 +138,6 @@ const FormsPage = () => {
         </Grid>
       </Grid>
       
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Portal Brygadzistów BGW Pharma
-        </Typography>
-        
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Portal zawiera wszystkie niezbędne dokumenty i formularze produkcyjne.
-        </Typography>
-        
-        <Button 
-          variant="contained" 
-          color="primary"
-          endIcon={<LaunchIcon />}
-          component="a"
-          href={googleSiteUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Otwórz portal formularzy
-        </Button>
-      </Paper>
-      
-      <Alert severity="info" sx={{ mt: 3 }}>
-        Z powodów bezpieczeństwa, strona Google Sites nie może być wyświetlona bezpośrednio w aplikacji.
-      </Alert>
     </Container>
   );
 };

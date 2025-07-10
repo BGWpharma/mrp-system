@@ -39,10 +39,21 @@ class LabelPdfGenerator {
    */
   async loadCompanyLogo() {
     try {
-      const response = await fetch('/templates/cmr/BGWPHARMA_logo50.png');
+      // Spróbuj najpierw załadować większe logo dla lepszej jakości
+      let response = await fetch('/templates/cmr/BGWPHARMA_logo150.png');
       if (response.ok) {
         const logoBytes = await response.arrayBuffer();
         this.logoImage = await this.doc.embedPng(logoBytes);
+        console.log('✅ Załadowano logo w wysokiej jakości');
+        return;
+      }
+      
+      // Fallback do mniejszego logo jeśli większe nie jest dostępne
+      response = await fetch('/templates/cmr/BGWPHARMA_logo150.png');
+      if (response.ok) {
+        const logoBytes = await response.arrayBuffer();
+        this.logoImage = await this.doc.embedPng(logoBytes);
+        console.log('✅ Załadowano standardowe logo');
       }
     } catch (error) {
       console.warn('Błąd podczas ładowania logo:', error);
@@ -86,7 +97,7 @@ class LabelPdfGenerator {
       // Stwórz canvas do generowania kodu kreskowego
       const canvas = document.createElement('canvas');
       JsBarcode(canvas, value, {
-        format: 'CODE128',
+        format: 'EAN13',
         width: options.width || 2,
         height: options.height || 50,
         fontSize: 14,
@@ -238,37 +249,37 @@ class LabelPdfGenerator {
    * Generuje etykietę kartonu
    */
   async generateBoxLabel(cmrData, itemData, boxDetails, boxNumber, totalBoxes) {
-    // Rozmiar etykiety: standardowa etykieta wysyłkowa 4"x2.5" (101.6x63.5mm)
-    const width = 288; // 4 cale = 288 punktów
-    const height = 180; // 2.5 cala = 180 punktów
+    // Rozmiar etykiety: 150mm x 100mm
+    const width = 425; // 150mm = 425 punktów
+    const height = 283; // 100mm = 283 punkty
     
     const page = this.doc.addPage([width, height]);
     
-    // Marginesy
-    const margin = 6;
-    let currentY = height - margin - 8;
+    // Marginesy - większe dla formatu 150x100mm
+    const margin = 10;
+    let currentY = height - margin - 12;
 
     // Nagłówek z logo i numerami
     if (this.logoImage) {
       page.drawImage(this.logoImage, {
         x: margin,
-        y: currentY - 10,
-        width: 10,
-        height: 10
+        y: currentY - 18, // Dostosowane do większego formatu
+        width: 36, // Zwiększone logo
+        height: 36 // Zwiększone logo
       });
     }
 
-    // Numery CMR i BOX
+    // Numery CMR i BOX - przesunięte w prawo żeby nie nakładały się na logo
     const headerText = `CMR: ${cmrData.cmrNumber || ''} | BOX: ${boxNumber} / ${totalBoxes}`;
     page.drawText(headerText, {
-      x: margin + 14,
-      y: currentY - 4,
-      size: 8,
+      x: margin + 38, // Dostosowane do większego logo
+      y: currentY - 4, // Wyśrodkowane względem logo
+      size: 10, // Większy font dla większej etykiety
       font: this.fonts.bold,
       color: rgb(0.1, 0.46, 0.82) // Niebieski kolor
     });
 
-    currentY -= 16;
+    currentY -= 24; // Większy odstęp po nagłówku
 
     // Linia oddzielająca
     page.drawLine({
@@ -278,7 +289,7 @@ class LabelPdfGenerator {
       color: rgb(0, 0, 0)
     });
 
-    currentY -= 8;
+    currentY -= 16;
 
     // Dwie kolumny
     const leftColumnX = margin;
@@ -292,13 +303,13 @@ class LabelPdfGenerator {
     page.drawText('PRODUCT:', {
       x: leftColumnX,
       y: leftY,
-      size: 6,
+      size: 9,
       font: this.fonts.bold
     });
-    leftY -= 9;
+    leftY -= 10;
 
     leftY = this.drawText(page, itemData.description || '', leftColumnX, leftY, {
-      size: 7,
+      size: 8,
       font: this.fonts.bold,
       maxWidth: columnWidth,
       lineHeight: 1.1
@@ -307,46 +318,46 @@ class LabelPdfGenerator {
     // LOT number jeśli dostępny
     if (itemData.linkedBatches && itemData.linkedBatches[0] && 
         (itemData.linkedBatches[0].batchNumber || itemData.linkedBatches[0].lotNumber)) {
-      leftY -= 3;
+      leftY -= 4;
       page.drawText('LOT:', {
         x: leftColumnX,
         y: leftY,
-        size: 6,
+        size: 9,
         font: this.fonts.bold
       });
-      leftY -= 9;
+      leftY -= 10;
       
       leftY = this.drawText(page, itemData.linkedBatches[0].batchNumber || itemData.linkedBatches[0].lotNumber, 
-        leftColumnX, leftY, { size: 7, maxWidth: columnWidth });
+        leftColumnX, leftY, { size: 8, maxWidth: columnWidth });
     }
 
-    leftY -= 5;
+    leftY -= 6;
 
     // Ilość w kartonie
     page.drawText('QTY IN BOX:', {
       x: leftColumnX,
       y: leftY,
-      size: 6,
+      size: 9,
       font: this.fonts.bold
     });
-    leftY -= 9;
+    leftY -= 10;
 
     const qtyText = `${boxDetails.itemsCount || 0} / ${itemData.inventoryData?.itemsPerBox || 'N/A'} pcs`;
-    leftY = this.drawText(page, qtyText, leftColumnX, leftY, { size: 7, font: this.fonts.bold });
+    leftY = this.drawText(page, qtyText, leftColumnX, leftY, { size: 8, font: this.fonts.bold });
 
-    leftY -= 5;
+    leftY -= 6;
 
     // Waga kartonu
     page.drawText('BOX WEIGHT:', {
       x: leftColumnX,
       y: leftY,
-      size: 6,
+      size: 9,
       font: this.fonts.bold
     });
-    leftY -= 9;
+    leftY -= 10;
 
     leftY = this.drawText(page, `${boxDetails.totalWeight || 0} kg`, leftColumnX, leftY, 
-      { size: 7, font: this.fonts.bold });
+      { size: 8, font: this.fonts.bold });
 
     // Prawa kolumna
     let rightY = currentY;
@@ -355,51 +366,51 @@ class LabelPdfGenerator {
     page.drawText('SENDER:', {
       x: rightColumnX,
       y: rightY,
-      size: 6,
+      size: 9,
       font: this.fonts.bold
     });
-    rightY -= 9;
+    rightY -= 10;
 
     rightY = this.drawText(page, cmrData.sender || '', rightColumnX, rightY, {
-      size: 7,
+      size: 8,
       maxWidth: columnWidth,
       lineHeight: 1.1
     });
 
-    rightY -= 3;
+    rightY -= 4;
 
     // Odbiorca
     page.drawText('RECIPIENT:', {
       x: rightColumnX,
       y: rightY,
-      size: 6,
+      size: 9,
       font: this.fonts.bold
     });
-    rightY -= 9;
+    rightY -= 10;
 
     rightY = this.drawText(page, cmrData.recipient || '', rightColumnX, rightY, {
-      size: 7,
+      size: 8,
       maxWidth: columnWidth,
       lineHeight: 1.1
     });
 
-    rightY -= 3;
+    rightY -= 4;
 
     // Adres dostawy
     page.drawText('DELIVERY ADDRESS:', {
       x: rightColumnX,
       y: rightY,
-      size: 6,
+      size: 9,
       font: this.fonts.bold
     });
-    rightY -= 9;
+    rightY -= 10;
 
     const deliveryAddress = cmrData.recipientAddress || cmrData.deliveryPlace || cmrData.unloadingPlace || 'N/A';
     const addressLines = this.formatAddress(deliveryAddress);
     
     for (const line of addressLines) {
       rightY = this.drawText(page, line, rightColumnX, rightY, {
-        size: 6,
+        size: 8,
         maxWidth: columnWidth,
         lineHeight: 1.1
       });
@@ -417,26 +428,27 @@ class LabelPdfGenerator {
       if (qrImage) {
         page.drawImage(qrImage, {
           x: margin,
-          y: 6,
-          width: 38,
-          height: 38
+          y: 10, // Wyżej dla większej etykiety
+          width: 60, // Większy QR kod
+          height: 60
         });
       }
 
-      // Kod kreskowy po prawej - powiększony
-      const barcodeValue = linkedBatch.batchNumber || linkedBatch.lotNumber || 'UNKNOWN';
+      // Kod kreskowy tuż obok QR kodu - używa kodu kreskowego z parametrów magazynowych
+      const barcodeValue = itemData.barcode || itemData.inventoryData?.barcode || linkedBatch.batchNumber || linkedBatch.lotNumber || 'UNKNOWN';
+      
       const barcodeImage = await this.generateBarcode(barcodeValue, {
-        width: 2.5,
-        height: 50,
+        width: 3.0,
+        height: 45,
         displayValue: false
       });
       
       if (barcodeImage) {
         page.drawImage(barcodeImage, {
-          x: rightColumnX,
-          y: 6,
-          width: columnWidth - 5,
-          height: 38
+          x: margin + 66, // Tuż obok większego QR kodu (60 + 6 margines)
+          y: 10, // Wyżej dla większej etykiety
+          width: 340, // Jeszcze dłuższy kod kreskowy
+          height: 45
         });
       }
     }
@@ -448,37 +460,37 @@ class LabelPdfGenerator {
    * Generuje etykietę palety
    */
   async generatePalletLabel(cmrData, itemData, palletDetails, palletNumber, totalPallets) {
-    // Rozmiar etykiety: standardowa etykieta wysyłkowa 4"x2.5" (101.6x63.5mm)
-    const width = 288; // 4 cale = 288 punktów
-    const height = 180; // 2.5 cala = 180 punktów
+    // Rozmiar etykiety: 150mm x 100mm
+    const width = 425; // 150mm = 425 punktów
+    const height = 283; // 100mm = 283 punkty
     
     const page = this.doc.addPage([width, height]);
     
-    // Marginesy
-    const margin = 6;
-    let currentY = height - margin - 8;
+    // Marginesy - większe dla formatu 150x100mm
+    const margin = 10;
+    let currentY = height - margin - 12;
 
     // Nagłówek z logo i numerami
     if (this.logoImage) {
       page.drawImage(this.logoImage, {
         x: margin,
-        y: currentY - 10,
-        width: 10,
-        height: 10
+        y: currentY - 18, // Dostosowane do większego formatu
+        width: 36, // Zwiększone logo
+        height: 36 // Zwiększone logo
       });
     }
 
-    // Numery CMR i PALLET (zielony kolor dla palet)
+    // Numery CMR i PALLET (zielony kolor dla palet) - przesunięte w prawo
     const headerText = `CMR: ${cmrData.cmrNumber || ''} | PALLET: ${palletNumber} / ${totalPallets}`;
     page.drawText(headerText, {
-      x: margin + 14,
-      y: currentY - 4,
-      size: 8,
+      x: margin + 38, // Dostosowane do większego logo
+      y: currentY - 4, // Wyśrodkowane względem logo
+      size: 10, // Większy font dla większej etykiety
       font: this.fonts.bold,
       color: rgb(0.18, 0.49, 0.2) // Zielony kolor
     });
 
-    currentY -= 16;
+    currentY -= 24; // Większy odstęp po nagłówku
 
     // Linia oddzielająca
     page.drawLine({
@@ -488,7 +500,7 @@ class LabelPdfGenerator {
       color: rgb(0, 0, 0)
     });
 
-    currentY -= 8;
+    currentY -= 16;
 
     // Dwie kolumny
     const leftColumnX = margin;
@@ -502,13 +514,13 @@ class LabelPdfGenerator {
     page.drawText('PRODUCT:', {
       x: leftColumnX,
       y: leftY,
-      size: 6,
+      size: 9,
       font: this.fonts.bold
     });
-    leftY -= 9;
+    leftY -= 10;
 
     leftY = this.drawText(page, itemData.description || '', leftColumnX, leftY, {
-      size: 7,
+      size: 8,
       font: this.fonts.bold,
       maxWidth: columnWidth,
       lineHeight: 1.1
@@ -517,113 +529,113 @@ class LabelPdfGenerator {
     // LOT number jeśli dostępny
     if (itemData.linkedBatches && itemData.linkedBatches[0] && 
         (itemData.linkedBatches[0].batchNumber || itemData.linkedBatches[0].lotNumber)) {
-      leftY -= 3;
+      leftY -= 4;
       page.drawText('LOT:', {
         x: leftColumnX,
         y: leftY,
-        size: 6,
+        size: 9,
         font: this.fonts.bold
       });
-      leftY -= 9;
+      leftY -= 10;
       
       leftY = this.drawText(page, itemData.linkedBatches[0].batchNumber || itemData.linkedBatches[0].lotNumber, 
-        leftColumnX, leftY, { size: 7, maxWidth: columnWidth });
+        leftColumnX, leftY, { size: 8, maxWidth: columnWidth });
     }
 
-    leftY -= 5;
+    leftY -= 6;
 
     // Ilość na palecie
     page.drawText('QTY ON PALLET:', {
       x: leftColumnX,
       y: leftY,
-      size: 6,
+      size: 9,
       font: this.fonts.bold
     });
-    leftY -= 9;
+    leftY -= 10;
 
     const qtyText = `${palletDetails.itemsCount || 0} / ${(itemData.inventoryData?.boxesPerPallet * itemData.inventoryData?.itemsPerBox) || 'N/A'} pcs`;
-    leftY = this.drawText(page, qtyText, leftColumnX, leftY, { size: 7, font: this.fonts.bold });
+    leftY = this.drawText(page, qtyText, leftColumnX, leftY, { size: 8, font: this.fonts.bold });
 
-    leftY -= 5;
+    leftY -= 6;
 
     // Liczba kartonów
     page.drawText('BOXES COUNT:', {
       x: leftColumnX,
       y: leftY,
-      size: 6,
+      size: 9,
       font: this.fonts.bold
     });
-    leftY -= 9;
+    leftY -= 10;
 
     const boxesText = `${palletDetails.boxesCount || 0} / ${itemData.inventoryData?.boxesPerPallet || 'N/A'} pcs`;
-    leftY = this.drawText(page, boxesText, leftColumnX, leftY, { size: 7, font: this.fonts.bold });
+    leftY = this.drawText(page, boxesText, leftColumnX, leftY, { size: 8, font: this.fonts.bold });
 
-    leftY -= 5;
+    leftY -= 6;
 
     // Waga palety
     page.drawText('PALLET WEIGHT:', {
       x: leftColumnX,
       y: leftY,
-      size: 6,
+      size: 9,
       font: this.fonts.bold
     });
-    leftY -= 9;
+    leftY -= 10;
 
     leftY = this.drawText(page, `${palletDetails.totalWeight || 0} kg`, leftColumnX, leftY, 
-      { size: 7, font: this.fonts.bold });
+      { size: 8, font: this.fonts.bold });
 
-    // Prawa kolumna - identyczna jak w BoxLabel
+    // Prawa kolumna
     let rightY = currentY;
 
     // Nadawca
     page.drawText('SENDER:', {
       x: rightColumnX,
       y: rightY,
-      size: 6,
+      size: 9,
       font: this.fonts.bold
     });
-    rightY -= 9;
+    rightY -= 10;
 
     rightY = this.drawText(page, cmrData.sender || '', rightColumnX, rightY, {
-      size: 7,
+      size: 8,
       maxWidth: columnWidth,
       lineHeight: 1.1
     });
 
-    rightY -= 3;
+    rightY -= 4;
 
     // Odbiorca
     page.drawText('RECIPIENT:', {
       x: rightColumnX,
       y: rightY,
-      size: 6,
+      size: 9,
       font: this.fonts.bold
     });
-    rightY -= 9;
+    rightY -= 10;
 
     rightY = this.drawText(page, cmrData.recipient || '', rightColumnX, rightY, {
-      size: 7,
+      size: 8,
       maxWidth: columnWidth,
       lineHeight: 1.1
     });
 
-    rightY -= 3;
+    rightY -= 4;
 
     // Adres dostawy
     page.drawText('DELIVERY ADDRESS:', {
       x: rightColumnX,
       y: rightY,
-      size: 6,
+      size: 9,
       font: this.fonts.bold
     });
-    rightY -= 9;
+    rightY -= 10;
 
     const deliveryAddress = cmrData.recipientAddress || cmrData.deliveryPlace || cmrData.unloadingPlace || 'N/A';
     const addressLines = this.formatAddress(deliveryAddress);
     
     for (const line of addressLines) {
       rightY = this.drawText(page, line, rightColumnX, rightY, {
-        size: 6,
+        size: 8,
         maxWidth: columnWidth,
         lineHeight: 1.1
       });
@@ -641,26 +653,27 @@ class LabelPdfGenerator {
       if (qrImage) {
         page.drawImage(qrImage, {
           x: margin,
-          y: 6,
-          width: 38,
-          height: 38
+          y: 10, // Wyżej dla większej etykiety
+          width: 60, // Większy QR kod
+          height: 60
         });
       }
 
-      // Kod kreskowy po prawej - powiększony
-      const barcodeValue = linkedBatch.batchNumber || linkedBatch.lotNumber || 'UNKNOWN';
+      // Kod kreskowy tuż obok QR kodu - używa kodu kreskowego z parametrów magazynowych
+      const barcodeValue = itemData.barcode || itemData.inventoryData?.barcode || linkedBatch.batchNumber || linkedBatch.lotNumber || 'UNKNOWN';
+      
       const barcodeImage = await this.generateBarcode(barcodeValue, {
-        width: 2.5,
-        height: 50,
+        width: 3.0,
+        height: 45,
         displayValue: false
       });
       
       if (barcodeImage) {
         page.drawImage(barcodeImage, {
-          x: rightColumnX,
-          y: 6,
-          width: columnWidth - 5,
-          height: 38
+          x: margin + 66, // Tuż obok większego QR kodu (60 + 6 margines)
+          y: 10, // Wyżej dla większej etykiety
+          width: 340, // Jeszcze dłuższy kod kreskowy
+          height: 45
         });
       }
     }

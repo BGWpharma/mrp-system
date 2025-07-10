@@ -892,11 +892,19 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
               quantity: item.quantity,
               unit: item.unit,
               weight: weight,
+              barcode: inventoryData.barcode, // Dodaj kod kreskowy
               palletsCount: palletData.palletsCount,
               pallets: palletData.pallets,
               boxesCount: boxData.totalBoxes,
               boxes: boxData,
-              hasDetailedData: true
+              hasDetailedData: true,
+              linkedBatches: item.linkedBatches,
+              inventoryData: {
+                itemsPerBox: inventoryData.itemsPerBox,
+                boxesPerPallet: inventoryData.boxesPerPallet,
+                unitWeight: inventoryData.weight,
+                barcode: inventoryData.barcode
+              }
             });
           } else {
             // Brak szczegółowych danych magazynowych
@@ -905,11 +913,14 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
               quantity: item.quantity,
               unit: item.unit,
               weight: weight,
+              barcode: inventoryData?.barcode || null, // Dodaj kod kreskowy jeśli dostępny
               palletsCount: 0,
               pallets: [],
               boxesCount: 0,
               boxes: { fullBox: null, partialBox: null },
-              hasDetailedData: false
+              hasDetailedData: false,
+              linkedBatches: item.linkedBatches,
+              inventoryData: null
             });
           }
         } catch (error) {
@@ -919,11 +930,14 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
             quantity: item.quantity,
             unit: item.unit,
             weight: weight,
+            barcode: null, // Brak kodu kreskowego przy błędzie
             palletsCount: 0,
             pallets: [],
             boxesCount: 0,
             boxes: { fullBox: null, partialBox: null },
-            hasDetailedData: false
+            hasDetailedData: false,
+            linkedBatches: item.linkedBatches,
+            inventoryData: null
           });
         }
       } else {
@@ -933,11 +947,14 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
           quantity: item.quantity,
           unit: item.unit,
           weight: weight,
+          barcode: null, // Brak kodu kreskowego bez powiązanych partii
           palletsCount: 0,
           pallets: [],
           boxesCount: 0,
           boxes: { fullBox: null, partialBox: null },
-          hasDetailedData: false
+          hasDetailedData: false,
+          linkedBatches: item.linkedBatches || [],
+          inventoryData: null
         });
       }
     }

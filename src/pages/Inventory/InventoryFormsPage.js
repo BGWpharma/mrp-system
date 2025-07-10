@@ -95,19 +95,6 @@ const InventoryFormsPage = () => {
         </Grid>
       </Grid>
       
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          System zarządzania magazynem BGW Pharma
-        </Typography>
-        
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Wszystkie formularze magazynowe są dostępne w ramach systemu MRP. Wypełniaj je systematycznie zgodnie z procedurami magazynowymi.
-        </Typography>
-        
-        <Alert severity="info">
-          Formularze magazynowe są automatycznie zapisywane w systemie i dostępne w sekcji "Wyświetl odpowiedzi".
-        </Alert>
-      </Paper>
     </Container>
   );
 };

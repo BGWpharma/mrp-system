@@ -251,6 +251,7 @@ const CmrDetailsPage = () => {
                 quantity: item.quantity,
                 unit: item.unit,
                 weight: weight,
+                barcode: inventoryData.barcode, // Dodaj kod kreskowy na głównym poziomie
                 hasDetailedData: true,
                 palletsCount: palletData.palletsCount,
                 pallets: palletData.pallets,
@@ -269,7 +270,8 @@ const CmrDetailsPage = () => {
                 inventoryData: {
                   itemsPerBox: inventoryData.itemsPerBox,
                   boxesPerPallet: inventoryData.boxesPerPallet,
-                  unitWeight: inventoryData.weight
+                  unitWeight: inventoryData.weight,
+                  barcode: inventoryData.barcode
                 }
               });
             } else {
@@ -280,6 +282,7 @@ const CmrDetailsPage = () => {
                 quantity: item.quantity,
                 unit: item.unit,
                 weight: weight,
+                barcode: inventoryData?.barcode, // Dodaj kod kreskowy jeśli dostępny
                 hasDetailedData: false,
                 palletsCount: 0,
                 pallets: [],
@@ -307,6 +310,7 @@ const CmrDetailsPage = () => {
               quantity: item.quantity,
               unit: item.unit,
               weight: weight,
+              barcode: null, // Brak kodu kreskowego przy błędzie
               hasDetailedData: false,
               palletsCount: 0,
               pallets: [],
@@ -325,6 +329,7 @@ const CmrDetailsPage = () => {
             quantity: item.quantity,
             unit: item.unit,
             weight: weight,
+            barcode: null, // Brak kodu kreskowego bez powiązanych partii
             hasDetailedData: false,
             palletsCount: 0,
             pallets: [],
