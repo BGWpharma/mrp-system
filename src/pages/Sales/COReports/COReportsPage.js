@@ -63,8 +63,9 @@ import {
 } from 'date-fns';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useNotification } from '../../../hooks/useNotification';
-import { getAllOrders } from '../../../services/orderService';
+import { getAllOrders, updateOrder } from '../../../services/orderService';
 import { getAllCustomers } from '../../../services/customerService';
+import { getTaskById } from '../../../services/productionService';
 import { formatCurrency } from '../../../utils/formatUtils';
 import { exportToCSV, exportToPDF, formatDateForExport, formatCurrencyForExport } from '../../../utils/exportUtils';
 import {
@@ -154,8 +155,7 @@ const COReportsPage = () => {
       const allOrders = await getAllOrders();
       
       // Sprawdź i oczyść nieaktualne dane zadań produkcyjnych
-      const { getTaskById } = await import('../../services/productionService');
-      const { updateOrder } = await import('../../services/orderService');
+      // Importy są już na górze pliku
       
       const cleanedOrders = [];
       
@@ -495,8 +495,7 @@ const COReportsPage = () => {
       const allOrders = await getAllOrders();
       
       // Następnie sprawdź i zaktualizuj dane zadań produkcyjnych dla każdego zamówienia
-      const { getTaskById } = await import('../../services/productionService');
-      const { updateOrder } = await import('../../services/orderService');
+      // Importy są już na górze pliku
       
       const updatedOrders = [];
       
