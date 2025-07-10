@@ -446,7 +446,9 @@ const LoadingReportFormPage = () => {
 
       // Obsługa załączników
       if (formData.documentsFile) {
-        const storageRef = ref(storage, `forms/zaladunek-towaru/${formData.cmrNumber || Date.now()}/${Date.now()}-${formData.documentsFile.name}`);
+        const cmrNumber = formData.cmrNumber || 'brak-cmr';
+        const sanitizedCmrNumber = cmrNumber.replace(/[^a-zA-Z0-9-_]/g, '_');
+        const storageRef = ref(storage, `forms/zaladunek-towaru/${sanitizedCmrNumber}/${Date.now()}-${formData.documentsFile.name}`);
         await uploadBytes(storageRef, formData.documentsFile);
         const fileUrl = await getDownloadURL(storageRef);
         odpowiedzData.documentsUrl = fileUrl;

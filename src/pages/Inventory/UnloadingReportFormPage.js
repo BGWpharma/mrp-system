@@ -559,7 +559,9 @@ const UnloadingReportFormPage = () => {
 
       // Obsługa załączników
       if (formData.documentsFile) {
-        const storageRef = ref(storage, `forms/rozladunek-towaru/${Date.now()}-${formData.documentsFile.name}`);
+        const poNumber = formData.poNumber || 'brak-po';
+        const sanitizedPoNumber = poNumber.replace(/[^a-zA-Z0-9-_]/g, '_');
+        const storageRef = ref(storage, `forms/rozladunek-towaru/${sanitizedPoNumber}/${Date.now()}-${formData.documentsFile.name}`);
         await uploadBytes(storageRef, formData.documentsFile);
         const fileUrl = await getDownloadURL(storageRef);
         odpowiedzData.documentsUrl = fileUrl;
