@@ -29,7 +29,9 @@ import {
   FormControl,
   InputLabel,
   Select,
-  MenuItem
+  MenuItem,
+  Tabs,
+  Tab
 } from '@mui/material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -76,6 +78,34 @@ import LabelIcon from '@mui/icons-material/Label';
 import GridViewIcon from '@mui/icons-material/GridView';
 import WarningIcon from '@mui/icons-material/Warning';
 import CheckIcon from '@mui/icons-material/Check';
+
+// TabPanel component
+function TabPanel(props) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`cmr-tabpanel-${index}`}
+      aria-labelledby={`cmr-tab-${index}`}
+      {...other}
+    >
+      {value === index && (
+        <Box sx={{ py: 3 }}>
+          {children}
+        </Box>
+      )}
+    </div>
+  );
+}
+
+function a11yProps(index) {
+  return {
+    id: `cmr-tab-${index}`,
+    'aria-controls': `cmr-tabpanel-${index}`,
+  };
+}
 
 // Globalne style CSS dla drukowania
 const GlobalStyles = styled('style')({});
@@ -175,6 +205,9 @@ const CmrDetailsPage = () => {
   const [linkedOrders, setLinkedOrders] = useState([]);
   const [paymentStatusDialogOpen, setPaymentStatusDialogOpen] = useState(false);
   const [newPaymentStatus, setNewPaymentStatus] = useState('');
+  
+  // Stan dla Tabs
+  const [activeTab, setActiveTab] = useState(0);
   
   // Stany dla odpowiedzi formularzy
   const [loadingFormResponses, setLoadingFormResponses] = useState([]);
@@ -516,6 +549,10 @@ const CmrDetailsPage = () => {
   
   const handleBack = () => {
     navigate('/inventory/cmr');
+  };
+
+  const handleTabChange = (event, newValue) => {
+    setActiveTab(newValue);
   };
   
   const handlePrint = () => {
@@ -1558,8 +1595,28 @@ const CmrDetailsPage = () => {
         </Card>
       )}
       
-      {/* Główne informacje - wersja ekranowa */}
-      <Grid container spacing={3} className="no-print">
+      {/* Nawigacja kartami */}
+      <Paper sx={{ mb: 3 }} className="no-print">
+        <Tabs 
+          value={activeTab} 
+          onChange={handleTabChange} 
+          variant="scrollable"
+          scrollButtons="auto"
+          sx={{ borderBottom: 1, borderColor: 'divider' }}
+        >
+          <Tab label="Podstawowe" {...a11yProps(0)} />
+          <Tab label="Strony i Transport" {...a11yProps(1)} />
+          <Tab label="Elementy i Wagi" {...a11yProps(2)} />
+          <Tab label="Finanse i Ustalenia" {...a11yProps(3)} />
+          <Tab label="Dodatkowe" {...a11yProps(4)} />
+        </Tabs>
+      </Paper>
+
+      {/* Zawartość kart */}
+      <div className="no-print">
+        {/* KARTA 1: PODSTAWOWE */}
+        <TabPanel value={activeTab} index={0}>
+          <Grid container spacing={3}>
         {/* Lewa kolumna - Informacje podstawowe i powiązane zamówienia */}
         <Grid item xs={12} lg={8}>
           {/* Informacje podstawowe */}
@@ -1750,742 +1807,821 @@ const CmrDetailsPage = () => {
           </Card>
         </Grid>
       </Grid>
-         
-      {/* Druga sekcja - Transport i lokalizacje */}
-      <Grid container spacing={3} className="no-print" sx={{ mt: 1 }}>
-        {/* Miejsca załadunku i rozładunku */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardHeader 
-              title="Transport i lokalizacje" 
-              titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-              sx={{ pb: 1 }}
-            />
-            <Divider />
-            <CardContent>
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                  Miejsce załadunku
-                </Typography>
-                <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                  {cmrData.loadingPlace || '-'}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600, display: 'block', mt: 1 }}>
-                  Data załadunku
-                </Typography>
-                <Typography variant="body2">
-                  {formatDate(cmrData.loadingDate)}
-                </Typography>
-              </Box>
-              
-              <Box>
-                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                  Miejsce dostawy
-                </Typography>
-                <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                  {cmrData.deliveryPlace || '-'}
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
 
-        {/* Pojazd */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardHeader 
-              title="Informacje o pojeździe" 
-              titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-              sx={{ pb: 1 }}
-            />
-            <Divider />
-            <CardContent>
-              <Grid container spacing={2}>
-                <Grid item xs={12}>
-                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                    Numer rejestracyjny pojazdu
-                  </Typography>
-                  <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                    {cmrData.vehicleInfo?.vehicleRegistration || '-'}
-                  </Typography>
-                </Grid>
-                
-                <Grid item xs={12}>
-                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                    Numer rejestracyjny naczepy
-                  </Typography>
-                  <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                    {cmrData.vehicleInfo?.trailerRegistration || '-'}
-                  </Typography>
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
 
-      {/* Trzecia sekcja - Dokumenty i opłaty */}
-      <Grid container spacing={3} className="no-print" sx={{ mt: 1 }}>
-        {/* Dokumenty i instrukcje */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardHeader 
-              title="Dokumenty i instrukcje" 
-              titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-              sx={{ pb: 1 }}
-            />
-            <Divider />
-            <CardContent>
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                  Załączone dokumenty
-                </Typography>
-                <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-                  {cmrData.attachedDocuments || '-'}
-                </Typography>
-              </Box>
-              
-              <Box>
-                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                  Instrukcje nadawcy
-                </Typography>
-                <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-                  {cmrData.instructionsFromSender || '-'}
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        {/* Opłaty i płatności */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardHeader 
-              title="Opłaty i płatności" 
-              titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-              sx={{ pb: 1 }}
-            />
-            <Divider />
-            <CardContent>
-              <Grid container spacing={2}>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                    Przewoźne
-                  </Typography>
-                  <Typography variant="body1">
-                    {cmrData.freight || '-'}
-                  </Typography>
-                </Grid>
-                
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                    Koszty dodatkowe
-                  </Typography>
-                  <Typography variant="body1">
-                    {cmrData.carriage || '-'}
-                  </Typography>
-                </Grid>
-                
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                    Bonifikaty
-                  </Typography>
-                  <Typography variant="body1">
-                    {cmrData.discounts || '-'}
-                  </Typography>
-                </Grid>
-                
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                    Saldo
-                  </Typography>
-                  <Typography variant="body1">
-                    {cmrData.balance || '-'}
-                  </Typography>
-                </Grid>
-                
-                <Grid item xs={12} sx={{ mt: 1 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                    Sposób płatności
-                  </Typography>
-                  <Typography variant="body1">
-                    {cmrData.paymentMethod === 'sender' ? 'Płaci nadawca' : 
-                     cmrData.paymentMethod === 'recipient' ? 'Płaci odbiorca' : 
-                     'Inny sposób płatności'}
-                  </Typography>
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
 
-      {/* Czwarta sekcja - Ustalenia i uwagi */}
-      <Grid container spacing={3} className="no-print" sx={{ mt: 1 }}>
-        <Grid item xs={12}>
-          <Card>
-            <CardHeader 
-              title="Ustalenia szczególne i uwagi" 
-              titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-              sx={{ pb: 1 }}
-            />
-            <Divider />
-            <CardContent>
-              <Grid container spacing={3}>
-                <Grid item xs={12} md={6}>
-                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                    Ustalenia szczególne
-                  </Typography>
-                  <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-                    {cmrData.specialAgreements || '-'}
-                  </Typography>
-                </Grid>
-                
-                <Grid item xs={12} md={6}>
-                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                    Zastrzeżenia i uwagi przewoźnika
-                  </Typography>
-                  <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-                    {cmrData.reservations || '-'}
-                  </Typography>
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-        
-      {/* Piąta sekcja - Elementy dokumentu CMR */}
-      <Grid container spacing={3} className="no-print" sx={{ mt: 1 }}>
-        <Grid item xs={12}>
-          <Card>
-            <CardHeader 
-              title="Elementy dokumentu CMR" 
-              titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-              sx={{ pb: 1 }}
-            />
-            <Divider />
-            <CardContent>
-              {weightDetailsLoading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-                  <CircularProgress />
-                  <Typography variant="body1" sx={{ ml: 2 }}>
-                    Obliczanie szczegółów wag...
-                  </Typography>
-                </Box>
-              ) : cmrData.items && cmrData.items.length > 0 ? (
-                <TableContainer>
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Lp.</TableCell>
-                        <TableCell>Opis</TableCell>
-                        <TableCell>Ilość</TableCell>
-                        <TableCell>Jednostka</TableCell>
-                        <TableCell>Waga (kg)</TableCell>
-                        <TableCell>Palety</TableCell>
-                        <TableCell>Kartony</TableCell>
-                        <TableCell>Szczegóły wag</TableCell>
-                        <TableCell>Powiązane partie</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {cmrData.items.map((item, index) => {
-                        const weightDetail = itemsWeightDetails.find(detail => 
-                          detail.itemId === (item.id || item.description)
-                        );
-                        
-                        return (
-                        <TableRow key={item.id || index}>
-                          <TableCell>{index + 1}</TableCell>
-                          <TableCell>{item.description}</TableCell>
-                          <TableCell>{item.quantity}</TableCell>
-                          <TableCell>{item.unit}</TableCell>
-                          <TableCell>{item.weight}</TableCell>
-                            <TableCell>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                                  {weightDetail?.palletsCount || 0}
-                                </Typography>
-                                {weightDetail?.hasDetailedData && (
-                                  <Chip 
-                                    size="small" 
-                                    color="success" 
-                                    label="✓"
-                                    sx={{ height: 20, minWidth: 20 }}
-                                  />
-                                )}
-                              </Box>
-                            </TableCell>
-                            <TableCell>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                                  {weightDetail?.boxesCount || 0}
-                                </Typography>
-                                {weightDetail?.hasDetailedData && (
-                                  <Chip 
-                                    size="small" 
-                                    color="success" 
-                                    label="✓"
-                                    sx={{ height: 20, minWidth: 20 }}
-                                  />
-                                )}
-                              </Box>
-                            </TableCell>
-                            <TableCell>
-                              {weightDetail?.hasDetailedData ? (
-                                <Box>
-                                  {/* Szczegóły palet */}
-                                  {weightDetail.pallets && weightDetail.pallets.length > 0 && (
-                                    <Box sx={{ mb: 1 }}>
-                                      <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                                        Palety:
-                                      </Typography>
-                                      {weightDetail.pallets.map((pallet, palletIndex) => (
-                                        <Typography key={palletIndex} variant="caption" display="block" sx={{ fontSize: '0.75rem' }}>
-                                          #{pallet.palletNumber}: {pallet.totalWeight} kg 
-                                          ({pallet.boxesCount} kart., {pallet.itemsCount} szt.)
-                                          {!pallet.isFull && ' (niepełna)'}
-                                        </Typography>
-                                      ))}
-                                    </Box>
-                                  )}
-                                  
-                                  {/* Szczegóły kartonów */}
-                                  {weightDetail.boxes && (weightDetail.boxes.fullBox || weightDetail.boxes.partialBox) && (
-                                    <Box>
-                                      <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'secondary.main' }}>
-                                        Kartony:
-                                      </Typography>
-                                      {weightDetail.boxes.fullBox && (
-                                        <Typography variant="caption" display="block" sx={{ fontSize: '0.75rem' }}>
-                                          Pełny: {weightDetail.boxes.fullBox.totalWeight} kg 
-                                          ({weightDetail.boxes.fullBox.itemsCount} szt.)
-                                          {weightDetail.boxes.fullBoxesCount > 1 && ` ×${weightDetail.boxes.fullBoxesCount}`}
-                                        </Typography>
-                                      )}
-                                      {weightDetail.boxes.partialBox && (
-                                        <Typography variant="caption" display="block" sx={{ fontSize: '0.75rem' }}>
-                                          Niepełny: {weightDetail.boxes.partialBox.totalWeight} kg 
-                                          ({weightDetail.boxes.partialBox.itemsCount} szt.)
-                                        </Typography>
-                                      )}
-                                    </Box>
-                                  )}
-                                  
-                                  {/* Parametry magazynowe */}
-                                  {weightDetail.inventoryData && (
-                                    <Typography variant="caption" display="block" sx={{ 
-                                      fontSize: '0.7rem', 
-                                      color: 'text.secondary',
-                                      mt: 0.5 
-                                    }}>
-                                      {weightDetail.inventoryData.itemsPerBox} szt./karton, {' '}
-                                      {weightDetail.inventoryData.boxesPerPallet} kart./paleta
-                                    </Typography>
-                                  )}
-                                </Box>
-                              ) : (
-                                <Typography variant="caption" sx={{ 
-                                  fontStyle: 'italic', 
-                                  color: 'warning.main',
-                                  fontSize: '0.75rem'
-                                }}>
-                                  {weightDetail?.error ? 
-                                    `Błąd: ${weightDetail.error}` : 
-                                    'Brak danych magazynowych'
-                                  }
-                                </Typography>
-                              )}
-                            </TableCell>
-                          <TableCell>
-                            {item.linkedBatches && item.linkedBatches.length > 0 ? (
-                              <Box>
-                                {item.linkedBatches.map((batch, batchIndex) => (
-                                  <Typography key={batch.id} variant="body2" sx={{ fontSize: '0.9rem' }}>
-                                    {batch.batchNumber || batch.lotNumber || 'Bez numeru'} 
-                                    ({batch.quantity} {batch.unit || 'szt.'})
-                                    {batchIndex < item.linkedBatches.length - 1 ? '; ' : ''}
-                                  </Typography>
-                                ))}
-                              </Box>
-                            ) : (
-                              <Typography variant="body2" sx={{ fontSize: '0.9rem', fontStyle: 'italic' }}>
-                                Brak powiązanych partii
-                              </Typography>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              ) : (
-                <Typography variant="body1" sx={{ textAlign: 'center', py: 2 }}>
-                  Brak elementów w dokumencie CMR
-                </Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+    </TabPanel>
 
-      {/* Podsumowanie wag CMR */}
-      {weightSummary && (weightSummary.totalPallets > 0 || weightSummary.totalBoxes > 0) && (
-        <Grid container spacing={3} className="no-print" sx={{ mt: 1 }}>
-          <Grid item xs={12}>
-            <Card>
-              <CardHeader 
-                title="Podsumowanie wag i opakowań" 
-                titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-                sx={{ pb: 1 }}
-              />
-              <Divider />
-              <CardContent>
-                <Grid container spacing={3}>
-                  {/* Podsumowanie główne */}
-                  <Grid item xs={12} md={4}>
-                    <Paper sx={{ p: 2, bgcolor: 'info.50', border: 1, borderColor: 'info.200' }}>
-                      <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1, color: 'info.main' }}>
-                        Łączne podsumowanie
-                      </Typography>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <Typography variant="body2">Całkowita waga:</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                            {weightSummary.totalWeight} kg
-                          </Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <Typography variant="body2">Łączna liczba palet:</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                            {weightSummary.totalPallets}
-                          </Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <Typography variant="body2">Łączna liczba kartonów:</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                            {weightSummary.totalBoxes}
-                          </Typography>
-                        </Box>
+        {/* KARTA 2: STRONY I TRANSPORT */}
+        <TabPanel value={activeTab} index={1}>
+          <Grid container spacing={3}>
+            {/* Strony */}
+            <Grid item xs={12}>
+              <Card>
+                <CardHeader 
+                  title="Strony" 
+                  titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+                  sx={{ pb: 1 }}
+                />
+                <Divider />
+                <CardContent>
+                  <Grid container spacing={3}>
+                    <Grid item xs={12} md={4}>
+                      <Box sx={{ mb: 3 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                          Nadawca
+                        </Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 500, mb: 1 }}>
+                          {cmrData.sender}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {cmrData.senderAddress}
+                          {cmrData.senderPostalCode && cmrData.senderCity && (
+                            <><br />{cmrData.senderPostalCode} {cmrData.senderCity}</>
+                          )}
+                          {cmrData.senderCountry && (
+                            <>, {cmrData.senderCountry}</>
+                          )}
+                        </Typography>
                       </Box>
-                    </Paper>
+                    </Grid>
+                    
+                    <Grid item xs={12} md={4}>
+                      <Box sx={{ mb: 3 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                          Odbiorca
+                        </Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 500, mb: 1 }}>
+                          {cmrData.recipient}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>
+                          {cmrData.recipientAddress}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    
+                    <Grid item xs={12} md={4}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                          Przewoźnik
+                        </Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 500, mb: 1 }}>
+                          {cmrData.carrier}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {cmrData.carrierAddress}
+                          {cmrData.carrierPostalCode && cmrData.carrierCity && (
+                            <><br />{cmrData.carrierPostalCode} {cmrData.carrierCity}</>
+                          )}
+                          {cmrData.carrierCountry && (
+                            <>, {cmrData.carrierCountry}</>
+                          )}
+                        </Typography>
+                      </Box>
+                    </Grid>
                   </Grid>
+                </CardContent>
+              </Card>
+            </Grid>
 
-                  {/* Szczegółowy rozkład wag */}
-                  <Grid item xs={12} md={8}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2 }}>
-                      Szczegółowy rozkład wag i opakowań
+            {/* Transport i lokalizacje */}
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardHeader 
+                  title="Transport i lokalizacje" 
+                  titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+                  sx={{ pb: 1 }}
+                />
+                <Divider />
+                <CardContent>
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                      Miejsce załadunku
                     </Typography>
-                    <TableContainer component={Paper} variant="outlined">
-                      <Table size="small">
+                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                      {cmrData.loadingPlace || '-'}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600, display: 'block', mt: 1 }}>
+                      Data załadunku
+                    </Typography>
+                    <Typography variant="body2">
+                      {formatDate(cmrData.loadingDate)}
+                    </Typography>
+                  </Box>
+                  
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                      Miejsce dostawy
+                    </Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                      {cmrData.deliveryPlace || '-'}
+                    </Typography>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Informacje o pojeździe */}
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardHeader 
+                  title="Informacje o pojeździe" 
+                  titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+                  sx={{ pb: 1 }}
+                />
+                <Divider />
+                <CardContent>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12}>
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                        Numer rejestracyjny pojazdu
+                      </Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                        {cmrData.vehicleInfo?.vehicleRegistration || '-'}
+                      </Typography>
+                    </Grid>
+                    
+                    <Grid item xs={12}>
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                        Numer rejestracyjny naczepy
+                      </Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                        {cmrData.vehicleInfo?.trailerRegistration || '-'}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </TabPanel>
+
+        {/* KARTA 3: ELEMENTY I WAGI */}
+        <TabPanel value={activeTab} index={2}>
+          <Grid container spacing={3}>
+            {/* Elementy dokumentu CMR */}
+            <Grid item xs={12}>
+              <Card>
+                <CardHeader 
+                  title="Elementy dokumentu CMR" 
+                  titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+                  sx={{ pb: 1 }}
+                />
+                <Divider />
+                <CardContent>
+                  {weightDetailsLoading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                      <CircularProgress />
+                      <Typography variant="body1" sx={{ ml: 2 }}>
+                        Obliczanie szczegółów wag...
+                      </Typography>
+                    </Box>
+                  ) : cmrData.items && cmrData.items.length > 0 ? (
+                    <TableContainer>
+                      <Table>
                         <TableHead>
-                          <TableRow sx={{ bgcolor: 'grey.50' }}>
-                            <TableCell sx={{ fontWeight: 'bold' }}>Pozycja</TableCell>
-                            <TableCell sx={{ fontWeight: 'bold' }}>Waga (kg)</TableCell>
-                            <TableCell sx={{ fontWeight: 'bold' }}>Palety</TableCell>
-                            <TableCell sx={{ fontWeight: 'bold' }}>Kartony</TableCell>
-                            <TableCell sx={{ fontWeight: 'bold' }}>Status danych</TableCell>
+                          <TableRow>
+                            <TableCell>Lp.</TableCell>
+                            <TableCell>Opis</TableCell>
+                            <TableCell>Ilość</TableCell>
+                            <TableCell>Jednostka</TableCell>
+                            <TableCell>Waga (kg)</TableCell>
+                            <TableCell>Palety</TableCell>
+                            <TableCell>Kartony</TableCell>
+                            <TableCell>Szczegóły wag</TableCell>
+                            <TableCell>Powiązane partie</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {weightSummary.itemsBreakdown.map((item, index) => (
-                            <TableRow key={index}>
+                          {cmrData.items.map((item, index) => {
+                            const weightDetail = itemsWeightDetails.find(detail => 
+                              detail.itemId === (item.id || item.description)
+                            );
+                            
+                            return (
+                            <TableRow key={item.id || index}>
+                              <TableCell>{index + 1}</TableCell>
+                              <TableCell>{item.description}</TableCell>
+                              <TableCell>{item.quantity}</TableCell>
+                              <TableCell>{item.unit}</TableCell>
+                              <TableCell>{item.weight}</TableCell>
+                                <TableCell>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                      {weightDetail?.palletsCount || 0}
+                                    </Typography>
+                                    {weightDetail?.hasDetailedData && (
+                                      <Chip 
+                                        size="small" 
+                                        color="success" 
+                                        label="✓"
+                                        sx={{ height: 20, minWidth: 20 }}
+                                      />
+                                    )}
+                                  </Box>
+                                </TableCell>
+                                <TableCell>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                      {weightDetail?.boxesCount || 0}
+                                    </Typography>
+                                    {weightDetail?.hasDetailedData && (
+                                      <Chip 
+                                        size="small" 
+                                        color="success" 
+                                        label="✓"
+                                        sx={{ height: 20, minWidth: 20 }}
+                                      />
+                                    )}
+                                  </Box>
+                                </TableCell>
+                                <TableCell>
+                                  {weightDetail?.hasDetailedData ? (
+                                    <Box>
+                                      {/* Szczegóły palet */}
+                                      {weightDetail.pallets && weightDetail.pallets.length > 0 && (
+                                        <Box sx={{ mb: 1 }}>
+                                          <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                                            Palety:
+                                          </Typography>
+                                          {weightDetail.pallets.map((pallet, palletIndex) => (
+                                            <Typography key={palletIndex} variant="caption" display="block" sx={{ fontSize: '0.75rem' }}>
+                                              #{pallet.palletNumber}: {pallet.totalWeight} kg 
+                                              ({pallet.boxesCount} kart., {pallet.itemsCount} szt.)
+                                              {!pallet.isFull && ' (niepełna)'}
+                                            </Typography>
+                                          ))}
+                                        </Box>
+                                      )}
+                                      
+                                      {/* Szczegóły kartonów */}
+                                      {weightDetail.boxes && (weightDetail.boxes.fullBox || weightDetail.boxes.partialBox) && (
+                                        <Box>
+                                          <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'secondary.main' }}>
+                                            Kartony:
+                                          </Typography>
+                                          {weightDetail.boxes.fullBox && (
+                                            <Typography variant="caption" display="block" sx={{ fontSize: '0.75rem' }}>
+                                              Pełny: {weightDetail.boxes.fullBox.totalWeight} kg 
+                                              ({weightDetail.boxes.fullBox.itemsCount} szt.)
+                                              {weightDetail.boxes.fullBoxesCount > 1 && ` ×${weightDetail.boxes.fullBoxesCount}`}
+                                            </Typography>
+                                          )}
+                                          {weightDetail.boxes.partialBox && (
+                                            <Typography variant="caption" display="block" sx={{ fontSize: '0.75rem' }}>
+                                              Niepełny: {weightDetail.boxes.partialBox.totalWeight} kg 
+                                              ({weightDetail.boxes.partialBox.itemsCount} szt.)
+                                            </Typography>
+                                          )}
+                                        </Box>
+                                      )}
+                                      
+                                      {/* Parametry magazynowe */}
+                                      {weightDetail.inventoryData && (
+                                        <Typography variant="caption" display="block" sx={{ 
+                                          fontSize: '0.7rem', 
+                                          color: 'text.secondary',
+                                          mt: 0.5 
+                                        }}>
+                                          {weightDetail.inventoryData.itemsPerBox} szt./karton, {' '}
+                                          {weightDetail.inventoryData.boxesPerPallet} kart./paleta
+                                        </Typography>
+                                      )}
+                                    </Box>
+                                  ) : (
+                                    <Typography variant="caption" sx={{ 
+                                      fontStyle: 'italic', 
+                                      color: 'warning.main',
+                                      fontSize: '0.75rem'
+                                    }}>
+                                      {weightDetail?.error ? 
+                                        `Błąd: ${weightDetail.error}` : 
+                                        'Brak danych magazynowych'
+                                      }
+                                    </Typography>
+                                  )}
+                                </TableCell>
                               <TableCell>
-                                <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                  {item.description}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  {item.quantity} {item.unit}
-                                </Typography>
-                              </TableCell>
-                              <TableCell>
-                                <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                                  {item.weight}
-                                </Typography>
-                              </TableCell>
-                              <TableCell>
-                                <Typography variant="body2">
-                                  {item.palletsCount}
-                                </Typography>
-                              </TableCell>
-                              <TableCell>
-                                <Typography variant="body2">
-                                  {item.boxesCount}
-                                </Typography>
-                              </TableCell>
-                              <TableCell>
-                                <Chip 
-                                  size="small"
-                                  label={item.hasDetailedData ? 'Szczegółowe' : 'Podstawowe'}
-                                  color={item.hasDetailedData ? 'success' : 'warning'}
-                                  variant={item.hasDetailedData ? 'filled' : 'outlined'}
-                                />
+                                {item.linkedBatches && item.linkedBatches.length > 0 ? (
+                                  <Box>
+                                    {item.linkedBatches.map((batch, batchIndex) => (
+                                      <Typography key={batch.id} variant="body2" sx={{ fontSize: '0.9rem' }}>
+                                        {batch.batchNumber || batch.lotNumber || 'Bez numeru'} 
+                                        ({batch.quantity} {batch.unit || 'szt.'})
+                                        {batchIndex < item.linkedBatches.length - 1 ? '; ' : ''}
+                                      </Typography>
+                                    ))}
+                                  </Box>
+                                ) : (
+                                  <Typography variant="body2" sx={{ fontSize: '0.9rem', fontStyle: 'italic' }}>
+                                    Brak powiązanych partii
+                                  </Typography>
+                                )}
                               </TableCell>
                             </TableRow>
-                          ))}
+                            );
+                          })}
                         </TableBody>
                       </Table>
                     </TableContainer>
-                  </Grid>
-                </Grid>
+                  ) : (
+                    <Typography variant="body1" sx={{ textAlign: 'center', py: 2 }}>
+                      Brak elementów w dokumencie CMR
+                    </Typography>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
 
-                {/* Informacje o metodzie obliczania */}
-                <Alert severity="info" sx={{ mt: 2 }}>
-                  <Typography variant="body2">
-                    <strong>Informacje o obliczeniach:</strong><br />
-                    • Szczegółowe wyliczenia są dostępne dla pozycji z powiązanymi partiami magazynowymi<br />
-                    • Wagi obejmują produkty, kartony (0.34 kg) i palety (25 kg)<br />
-                    • Pozycje bez danych magazynowych pokazują tylko podstawowe informacje
-                  </Typography>
-                </Alert>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      )}
-        
-      {/* Szósta sekcja - Uwagi i raporty */}
-      <Grid container spacing={3} className="no-print" sx={{ mt: 1 }}>
-        {/* Uwagi i informacje dodatkowe */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardHeader 
-              title="Uwagi i informacje dodatkowe" 
-              titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-              sx={{ pb: 1 }}
-            />
-            <Divider />
-            <CardContent>
-              <Typography variant="body1">
-                {cmrData.notes || 'Brak uwag'}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
+            {/* Podsumowanie wag CMR */}
+            {weightSummary && (weightSummary.totalPallets > 0 || weightSummary.totalBoxes > 0) && (
+              <Grid item xs={12}>
+                <Card>
+                  <CardHeader 
+                    title="Podsumowanie wag i opakowań" 
+                    titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+                    sx={{ pb: 1 }}
+                  />
+                  <Divider />
+                  <CardContent>
+                    <Grid container spacing={3}>
+                      {/* Podsumowanie główne */}
+                      <Grid item xs={12} md={4}>
+                        <Paper sx={{ p: 2, bgcolor: 'info.50', border: 1, borderColor: 'info.200' }}>
+                          <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1, color: 'info.main' }}>
+                            Łączne podsumowanie
+                          </Typography>
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <Typography variant="body2">Całkowita waga:</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                {weightSummary.totalWeight} kg
+                              </Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <Typography variant="body2">Łączna liczba palet:</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                {weightSummary.totalPallets}
+                              </Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <Typography variant="body2">Łączna liczba kartonów:</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                {weightSummary.totalBoxes}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </Paper>
+                      </Grid>
 
-        {/* Raporty załadunku towaru */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardHeader 
-              title={`Raporty załadunku towaru (${loadingFormResponses.length})`}
-              titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-              sx={{ pb: 1 }}
-            />
-            <Divider />
-            <CardContent>
-              {loadingFormResponsesLoading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-                  <CircularProgress />
-                </Box>
-              ) : loadingFormResponses.length === 0 ? (
-                <Typography variant="body1" color="text.secondary">
-                  Brak raportów załadunku towaru dla tego CMR
-                </Typography>
-              ) : (
-                <Grid container spacing={3}>
-                  {loadingFormResponses.map((report, index) => (
-                    <Grid item xs={12} key={index}>
-                      <Paper sx={{ p: 3, backgroundColor: 'warning.light', border: 1, borderColor: 'warning.main', opacity: 0.8 }}>
-                        <Typography variant="subtitle2" gutterBottom sx={{ color: 'warning.main', fontWeight: 'bold' }}>
-                          Raport załadunku #{index + 1} - {report.fillDate ? format(report.fillDate, 'dd.MM.yyyy HH:mm', { locale: pl }) : 'Nie określono'}
+                      {/* Szczegółowy rozkład wag */}
+                      <Grid item xs={12} md={8}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2 }}>
+                          Szczegółowy rozkład wag i opakowań
                         </Typography>
-                        
-                        <Grid container spacing={2}>
-                          {/* Podstawowe informacje */}
-                          <Grid item xs={12} sm={6} md={3}>
-                            <Typography variant="body2" color="text.secondary">
-                              Pracownik
-                            </Typography>
-                            <Typography variant="body1">
-                              {report.employeeName || 'Nie podano'}
-                            </Typography>
-                          </Grid>
-                          
-                          <Grid item xs={12} sm={6} md={3}>
-                            <Typography variant="body2" color="text.secondary">
-                              Stanowisko
-                            </Typography>
-                            <Typography variant="body1">
-                              {report.position || 'Nie podano'}
-                            </Typography>
-                          </Grid>
-                          
-                          <Grid item xs={12} sm={6} md={3}>
-                            <Typography variant="body2" color="text.secondary">
-                              Godzina wypełnienia
-                            </Typography>
-                            <Typography variant="body1">
-                              {report.fillTime || 'Nie podano'}
-                            </Typography>
-                          </Grid>
-                          
-                          <Grid item xs={12} sm={6} md={3}>
-                            <Typography variant="body2" color="text.secondary">
-                              Data załadunku
-                            </Typography>
-                            <Typography variant="body1">
-                              {report.loadingDate ? format(report.loadingDate, 'dd.MM.yyyy', { locale: pl }) : 'Nie podano'}
-                            </Typography>
-                          </Grid>
-                          
-                          <Grid item xs={12} sm={6} md={3}>
-                            <Typography variant="body2" color="text.secondary">
-                              Godzina załadunku
-                            </Typography>
-                            <Typography variant="body1">
-                              {report.loadingTime || 'Nie podano'}
-                            </Typography>
-                          </Grid>
-                          
-                          <Grid item xs={12} sm={6} md={3}>
-                            <Typography variant="body2" color="text.secondary">
-                              Przewoźnik
-                            </Typography>
-                            <Typography variant="body1">
-                              {report.carrierName || 'Nie podano'}
-                            </Typography>
-                          </Grid>
-                          
-                          <Grid item xs={12} sm={6} md={3}>
-                            <Typography variant="body2" color="text.secondary">
-                              Nr rejestracyjny pojazdu
-                            </Typography>
-                            <Typography variant="body1">
-                              {report.vehicleRegistration || 'Nie podano'}
-                            </Typography>
-                          </Grid>
-                          
-                          <Grid item xs={12} sm={6} md={3}>
-                            <Typography variant="body2" color="text.secondary">
-                              Stan techniczny pojazdu
-                            </Typography>
-                            <Typography variant="body1">
-                              {report.vehicleTechnicalCondition || 'Nie podano'}
-                            </Typography>
-                          </Grid>
-                          
-                          {/* Informacje o towarze */}
-                          <Grid item xs={12}>
-                            <Divider sx={{ my: 2 }} />
-                            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
-                              Informacje o towarze
-                            </Typography>
-                          </Grid>
-                          
-                          <Grid item xs={12} sm={6} md={3}>
-                            <Typography variant="body2" color="text.secondary">
-                              Klient
-                            </Typography>
-                            <Typography variant="body1">
-                              {report.clientName || 'Nie podano'}
-                            </Typography>
-                          </Grid>
-                          
-                          <Grid item xs={12} sm={6} md={3}>
-                            <Typography variant="body2" color="text.secondary">
-                              Nr zamówienia
-                            </Typography>
-                            <Typography variant="body1">
-                              {report.orderNumber || 'Nie podano'}
-                            </Typography>
-                          </Grid>
-                          
-                          <Grid item xs={12} sm={6} md={3}>
-                            <Typography variant="body2" color="text.secondary">
-                              Ilość palet
-                            </Typography>
-                            <Typography variant="body1">
-                              {report.palletQuantity || 'Nie podano'}
-                            </Typography>
-                          </Grid>
-                          
-                          <Grid item xs={12} sm={6} md={3}>
-                            <Typography variant="body2" color="text.secondary">
-                              Waga
-                            </Typography>
-                            <Typography variant="body1">
-                              {report.weight || 'Nie podano'}
-                            </Typography>
-                          </Grid>
-                          
-                          <Grid item xs={12} sm={6}>
-                            <Typography variant="body2" color="text.secondary">
-                              Paleta/Nazwa produktu
-                            </Typography>
-                            <Typography variant="body1">
-                              {report.palletProductName || 'Nie podano'}
-                            </Typography>
-                          </Grid>
-                          
-                          {/* Uwagi */}
-                          {(report.notes || report.goodsNotes) && (
-                            <>
-                              <Grid item xs={12}>
-                                <Divider sx={{ my: 2 }} />
-                                <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
-                                  Uwagi
-                                </Typography>
-                              </Grid>
-                              
-                              {report.notes && (
-                                <Grid item xs={12} sm={6}>
-                                  <Typography variant="body2" color="text.secondary">
-                                    Uwagi ogólne
-                                  </Typography>
-                                  <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-                                    {report.notes}
-                                  </Typography>
-                                </Grid>
-                              )}
-                              
-                              {report.goodsNotes && (
-                                <Grid item xs={12} sm={6}>
-                                  <Typography variant="body2" color="text.secondary">
-                                    Uwagi dotyczące towaru
-                                  </Typography>
-                                  <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-                                    {report.goodsNotes}
-                                  </Typography>
-                                </Grid>
-                              )}
-                            </>
-                          )}
-                          
-                          {/* Załączniki */}
-                          {report.documentsUrl && (
-                            <>
-                              <Grid item xs={12}>
-                                <Divider sx={{ my: 2 }} />
-                                <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
-                                  Załączniki
-                                </Typography>
-                              </Grid>
-                              
-                              <Grid item xs={12}>
-                                <Button
-                                  variant="outlined"
-                                  size="small"
-                                  href={report.documentsUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
-                                  {report.documentsName || 'Pobierz załącznik'}
-                                </Button>
-                              </Grid>
-                            </>
-                          )}
-                        </Grid>
-                      </Paper>
+                        <TableContainer component={Paper} variant="outlined">
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow sx={{ bgcolor: 'grey.50' }}>
+                                <TableCell sx={{ fontWeight: 'bold' }}>Pozycja</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold' }}>Waga (kg)</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold' }}>Palety</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold' }}>Kartony</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold' }}>Status danych</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {weightSummary.itemsBreakdown.map((item, index) => (
+                                <TableRow key={index}>
+                                  <TableCell>
+                                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                      {item.description}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                      {item.quantity} {item.unit}
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                      {item.weight}
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Typography variant="body2">
+                                      {item.palletsCount}
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Typography variant="body2">
+                                      {item.boxesCount}
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Chip 
+                                      size="small"
+                                      label={item.hasDetailedData ? 'Szczegółowe' : 'Podstawowe'}
+                                      color={item.hasDetailedData ? 'success' : 'warning'}
+                                      variant={item.hasDetailedData ? 'filled' : 'outlined'}
+                                    />
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      </Grid>
                     </Grid>
-                  ))}
-                </Grid>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+
+                    {/* Informacje o metodzie obliczania */}
+                    <Alert severity="info" sx={{ mt: 2 }}>
+                      <Typography variant="body2">
+                        <strong>Informacje o obliczeniach:</strong><br />
+                        • Szczegółowe wyliczenia są dostępne dla pozycji z powiązanymi partiami magazynowymi<br />
+                        • Wagi obejmują produkty, kartony (0.34 kg) i palety (25 kg)<br />
+                        • Pozycje bez danych magazynowych pokazują tylko podstawowe informacje
+                      </Typography>
+                    </Alert>
+                  </CardContent>
+                </Card>
+              </Grid>
+            )}
+          </Grid>
+        </TabPanel>
+
+        {/* KARTA 4: FINANSE I USTALENIA */}
+        <TabPanel value={activeTab} index={3}>
+          <Grid container spacing={3}>
+            {/* Dokumenty i instrukcje */}
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardHeader 
+                  title="Dokumenty i instrukcje" 
+                  titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+                  sx={{ pb: 1 }}
+                />
+                <Divider />
+                <CardContent>
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                      Załączone dokumenty
+                    </Typography>
+                    <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+                      {cmrData.attachedDocuments || '-'}
+                    </Typography>
+                  </Box>
+                  
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                      Instrukcje nadawcy
+                    </Typography>
+                    <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+                      {cmrData.instructionsFromSender || '-'}
+                    </Typography>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+            
+            {/* Opłaty i płatności */}
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardHeader 
+                  title="Opłaty i płatności" 
+                  titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+                  sx={{ pb: 1 }}
+                />
+                <Divider />
+                <CardContent>
+                  <Grid container spacing={2}>
+                    <Grid item xs={6}>
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                        Przewoźne
+                      </Typography>
+                      <Typography variant="body1">
+                        {cmrData.freight || '-'}
+                      </Typography>
+                    </Grid>
+                    
+                    <Grid item xs={6}>
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                        Koszty dodatkowe
+                      </Typography>
+                      <Typography variant="body1">
+                        {cmrData.carriage || '-'}
+                      </Typography>
+                    </Grid>
+                    
+                    <Grid item xs={6}>
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                        Bonifikaty
+                      </Typography>
+                      <Typography variant="body1">
+                        {cmrData.discounts || '-'}
+                      </Typography>
+                    </Grid>
+                    
+                    <Grid item xs={6}>
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                        Saldo
+                      </Typography>
+                      <Typography variant="body1">
+                        {cmrData.balance || '-'}
+                      </Typography>
+                    </Grid>
+                    
+                    <Grid item xs={12} sx={{ mt: 1 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                        Sposób płatności
+                      </Typography>
+                      <Typography variant="body1">
+                        {cmrData.paymentMethod === 'sender' ? 'Płaci nadawca' : 
+                         cmrData.paymentMethod === 'recipient' ? 'Płaci odbiorca' : 
+                         'Inny sposób płatności'}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Ustalenia szczególne i uwagi */}
+            <Grid item xs={12}>
+              <Card>
+                <CardHeader 
+                  title="Ustalenia szczególne i uwagi" 
+                  titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+                  sx={{ pb: 1 }}
+                />
+                <Divider />
+                <CardContent>
+                  <Grid container spacing={3}>
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                        Ustalenia szczególne
+                      </Typography>
+                      <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+                        {cmrData.specialAgreements || '-'}
+                      </Typography>
+                    </Grid>
+                    
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                        Zastrzeżenia i uwagi przewoźnika
+                      </Typography>
+                      <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+                        {cmrData.reservations || '-'}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </TabPanel>
+
+        {/* KARTA 5: DODATKOWE */}
+        <TabPanel value={activeTab} index={4}>
+          <Grid container spacing={3}>
+            {/* Uwagi i informacje dodatkowe */}
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardHeader 
+                  title="Uwagi i informacje dodatkowe" 
+                  titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+                  sx={{ pb: 1 }}
+                />
+                <Divider />
+                <CardContent>
+                  <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+                    {cmrData.notes || 'Brak uwag'}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Raporty załadunku towaru */}
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardHeader 
+                  title={`Raporty załadunku towaru (${loadingFormResponses.length})`}
+                  titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+                  sx={{ pb: 1 }}
+                />
+                <Divider />
+                <CardContent>
+                  {loadingFormResponsesLoading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                      <CircularProgress />
+                    </Box>
+                  ) : loadingFormResponses.length === 0 ? (
+                    <Typography variant="body1" color="text.secondary">
+                      Brak raportów załadunku towaru dla tego CMR
+                    </Typography>
+                  ) : (
+                    <Grid container spacing={3}>
+                      {loadingFormResponses.map((report, index) => (
+                        <Grid item xs={12} key={index}>
+                          <Paper sx={{ p: 3, backgroundColor: 'warning.light', border: 1, borderColor: 'warning.main', opacity: 0.8 }}>
+                            <Typography variant="subtitle2" gutterBottom sx={{ color: 'warning.main', fontWeight: 'bold' }}>
+                              Raport załadunku #{index + 1} - {report.fillDate ? format(report.fillDate, 'dd.MM.yyyy HH:mm', { locale: pl }) : 'Nie określono'}
+                            </Typography>
+                            
+                            <Grid container spacing={2}>
+                              {/* Podstawowe informacje */}
+                              <Grid item xs={12} sm={6} md={3}>
+                                <Typography variant="body2" color="text.secondary">
+                                  Pracownik
+                                </Typography>
+                                <Typography variant="body1">
+                                  {report.employeeName || 'Nie podano'}
+                                </Typography>
+                              </Grid>
+                              
+                              <Grid item xs={12} sm={6} md={3}>
+                                <Typography variant="body2" color="text.secondary">
+                                  Stanowisko
+                                </Typography>
+                                <Typography variant="body1">
+                                  {report.position || 'Nie podano'}
+                                </Typography>
+                              </Grid>
+                              
+                              <Grid item xs={12} sm={6} md={3}>
+                                <Typography variant="body2" color="text.secondary">
+                                  Godzina wypełnienia
+                                </Typography>
+                                <Typography variant="body1">
+                                  {report.fillTime || 'Nie podano'}
+                                </Typography>
+                              </Grid>
+                              
+                              <Grid item xs={12} sm={6} md={3}>
+                                <Typography variant="body2" color="text.secondary">
+                                  Data załadunku
+                                </Typography>
+                                <Typography variant="body1">
+                                  {report.loadingDate ? format(report.loadingDate, 'dd.MM.yyyy', { locale: pl }) : 'Nie podano'}
+                                </Typography>
+                              </Grid>
+                              
+                              <Grid item xs={12} sm={6} md={3}>
+                                <Typography variant="body2" color="text.secondary">
+                                  Godzina załadunku
+                                </Typography>
+                                <Typography variant="body1">
+                                  {report.loadingTime || 'Nie podano'}
+                                </Typography>
+                              </Grid>
+                              
+                              <Grid item xs={12} sm={6} md={3}>
+                                <Typography variant="body2" color="text.secondary">
+                                  Przewoźnik
+                                </Typography>
+                                <Typography variant="body1">
+                                  {report.carrierName || 'Nie podano'}
+                                </Typography>
+                              </Grid>
+                              
+                              <Grid item xs={12} sm={6} md={3}>
+                                <Typography variant="body2" color="text.secondary">
+                                  Nr rejestracyjny pojazdu
+                                </Typography>
+                                <Typography variant="body1">
+                                  {report.vehicleRegistration || 'Nie podano'}
+                                </Typography>
+                              </Grid>
+                              
+                              <Grid item xs={12} sm={6} md={3}>
+                                <Typography variant="body2" color="text.secondary">
+                                  Stan techniczny pojazdu
+                                </Typography>
+                                <Typography variant="body1">
+                                  {report.vehicleTechnicalCondition || 'Nie podano'}
+                                </Typography>
+                              </Grid>
+                              
+                              {/* Informacje o towarze */}
+                              <Grid item xs={12}>
+                                <Divider sx={{ my: 2 }} />
+                                <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
+                                  Informacje o towarze
+                                </Typography>
+                              </Grid>
+                              
+                              <Grid item xs={12} sm={6} md={3}>
+                                <Typography variant="body2" color="text.secondary">
+                                  Klient
+                                </Typography>
+                                <Typography variant="body1">
+                                  {report.clientName || 'Nie podano'}
+                                </Typography>
+                              </Grid>
+                              
+                              <Grid item xs={12} sm={6} md={3}>
+                                <Typography variant="body2" color="text.secondary">
+                                  Nr zamówienia
+                                </Typography>
+                                <Typography variant="body1">
+                                  {report.orderNumber || 'Nie podano'}
+                                </Typography>
+                              </Grid>
+                              
+                              <Grid item xs={12} sm={6} md={3}>
+                                <Typography variant="body2" color="text.secondary">
+                                  Ilość palet
+                                </Typography>
+                                <Typography variant="body1">
+                                  {report.palletQuantity || 'Nie podano'}
+                                </Typography>
+                              </Grid>
+                              
+                              <Grid item xs={12} sm={6} md={3}>
+                                <Typography variant="body2" color="text.secondary">
+                                  Waga
+                                </Typography>
+                                <Typography variant="body1">
+                                  {report.weight || 'Nie podano'}
+                                </Typography>
+                              </Grid>
+                              
+                              <Grid item xs={12} sm={6}>
+                                <Typography variant="body2" color="text.secondary">
+                                  Paleta/Nazwa produktu
+                                </Typography>
+                                <Typography variant="body1">
+                                  {report.palletProductName || 'Nie podano'}
+                                </Typography>
+                              </Grid>
+                              
+                              {/* Uwagi */}
+                              {(report.notes || report.goodsNotes) && (
+                                <>
+                                  <Grid item xs={12}>
+                                    <Divider sx={{ my: 2 }} />
+                                    <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
+                                      Uwagi
+                                    </Typography>
+                                  </Grid>
+                                  
+                                  {report.notes && (
+                                    <Grid item xs={12} sm={6}>
+                                      <Typography variant="body2" color="text.secondary">
+                                        Uwagi ogólne
+                                      </Typography>
+                                      <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+                                        {report.notes}
+                                      </Typography>
+                                    </Grid>
+                                  )}
+                                  
+                                  {report.goodsNotes && (
+                                    <Grid item xs={12} sm={6}>
+                                      <Typography variant="body2" color="text.secondary">
+                                        Uwagi dotyczące towaru
+                                      </Typography>
+                                      <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+                                        {report.goodsNotes}
+                                      </Typography>
+                                    </Grid>
+                                  )}
+                                </>
+                              )}
+                              
+                              {/* Załączniki */}
+                              {report.documentsUrl && (
+                                <>
+                                  <Grid item xs={12}>
+                                    <Divider sx={{ my: 2 }} />
+                                    <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
+                                      Załączniki
+                                    </Typography>
+                                  </Grid>
+                                  
+                                  <Grid item xs={12}>
+                                    <Button
+                                      variant="outlined"
+                                      size="small"
+                                      href={report.documentsUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      {report.documentsName || 'Pobierz załącznik'}
+                                    </Button>
+                                  </Grid>
+                                </>
+                              )}
+                            </Grid>
+                          </Paper>
+                        </Grid>
+                      ))}
+                    </Grid>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </TabPanel>
+      </div>
     
       {/* Wersja do druku */}
       <Box sx={{ display: 'none' }} className="print-container">

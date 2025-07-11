@@ -152,7 +152,7 @@ const UnloadingReportFormPage = () => {
       
       if (exactMatch) {
         console.log('Znaleziono dokładne dopasowanie PO:', exactMatch.number);
-        await handlePoSelectionWithDetails(exactMatch);
+        await handlePoSelectionWithDetails(exactMatch, false);
       }
     };
 
@@ -170,7 +170,7 @@ const UnloadingReportFormPage = () => {
       );
       if (matchingPo) {
         console.log('Ładowanie pozycji PO w trybie edycji:', matchingPo.number);
-        handlePoSelectionWithDetails(matchingPo);
+        handlePoSelectionWithDetails(matchingPo, true);
       }
     }
   }, [isEditMode, formData.poNumber, purchaseOrders, poItems.length]);
@@ -281,10 +281,14 @@ const UnloadingReportFormPage = () => {
   };
 
   // Funkcja pomocnicza do pobierania pełnych danych PO
-  const handlePoSelectionWithDetails = async (basicPoData) => {
+  const handlePoSelectionWithDetails = async (basicPoData, preserveSelectedItems = false) => {
     try {
       setPoLoading(true);
       console.log('📦 Pobieranie szczegółów PO...', basicPoData);
+      
+      // Zachowaj aktualne wybrane pozycje jeśli to tryb edycji
+      const currentSelectedItems = preserveSelectedItems ? formData.selectedItems : [];
+      const currentSelectedPoItems = preserveSelectedItems ? selectedPoItems : [];
       
       // Pobierz pełne dane PO
       const fullPoData = await getPurchaseOrderById(basicPoData.id);
@@ -309,14 +313,28 @@ const UnloadingReportFormPage = () => {
       console.log('⚖️ Całkowita waga:', totalWeight);
       
       setPoItems(items);
-      setSelectedPoItems([]); // Wyczyść poprzednie wybory
-      setFormData(prev => ({
-        ...prev,
-        poNumber: fullPoData.number, // Tylko numer PO
-        supplierName: fullPoData.supplier?.name || '',
-        selectedItems: [],
-        weight: totalWeight > 0 ? `${totalWeight} kg` : ''
-      }));
+      
+      // W trybie edycji/odświeżania zachowaj poprzednie wybory, w przeciwnym razie wyczyść
+      if (preserveSelectedItems && currentSelectedItems.length > 0) {
+        console.log('🔄 Przywracanie wybranych pozycji w trybie edycji:', currentSelectedItems);
+        setSelectedPoItems(currentSelectedPoItems);
+        setFormData(prev => ({
+          ...prev,
+          poNumber: fullPoData.number,
+          supplierName: fullPoData.supplier?.name || prev.supplierName,
+          selectedItems: currentSelectedItems,
+          weight: prev.weight || (totalWeight > 0 ? `${totalWeight} kg` : '')
+        }));
+      } else {
+        setSelectedPoItems([]); // Wyczyść poprzednie wybory
+        setFormData(prev => ({
+          ...prev,
+          poNumber: fullPoData.number, // Tylko numer PO
+          supplierName: fullPoData.supplier?.name || '',
+          selectedItems: [],
+          weight: totalWeight > 0 ? `${totalWeight} kg` : ''
+        }));
+      }
       setPoSearchQuery(fullPoData.number); // Tylko numer PO
       
       console.log('✅ Pozycje PO załadowane:', items.length);
@@ -454,13 +472,19 @@ const UnloadingReportFormPage = () => {
       return;
     }
     
-    // Wyczyść poprzednie pozycje
+    // W trybie edycji zachowaj wybrane pozycje
+    const currentSelectedItems = isEditMode ? formData.selectedItems : [];
+    const currentSelectedPoItems = isEditMode ? selectedPoItems : [];
+    
+    // Wyczyść poprzednie pozycje PO (ale zachowaj wybrane w trybie edycji)
     setPoItems([]);
-    setSelectedPoItems([]);
-    setFormData(prev => ({
-      ...prev,
-      selectedItems: []
-    }));
+    if (!isEditMode) {
+      setSelectedPoItems([]);
+      setFormData(prev => ({
+        ...prev,
+        selectedItems: []
+      }));
+    }
     
          const matchingPo = purchaseOrders.find(po => {
        const matchByNumber = po.number?.toLowerCase() === formData.poNumber.toLowerCase();
@@ -473,7 +497,7 @@ const UnloadingReportFormPage = () => {
     
     if (matchingPo) {
       console.log('✅ Znaleziono PO:', matchingPo);
-      await handlePoSelectionWithDetails(matchingPo);
+      await handlePoSelectionWithDetails(matchingPo, isEditMode);
     } else {
       console.log('❌ Nie znaleziono PO o numerze:', formData.poNumber);
       console.log('📋 Wszystkie dostępne numery PO:', purchaseOrders.map(po => po.number));
@@ -815,7 +839,7 @@ const UnloadingReportFormPage = () => {
                       ...prev,
                       poNumber: newValue.number
                     }));
-                    handlePoSelectionWithDetails(newValue);
+                    handlePoSelectionWithDetails(newValue, false);
                   }
                 }}
                 loading={poLoading}

@@ -33,8 +33,9 @@ import {
 } from '@mui/material';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { db } from '../../services/firebase/config';
+import { db, storage } from '../../services/firebase/config';
 import { collection, getDocs, query, doc, deleteDoc } from 'firebase/firestore';
+import { ref, deleteObject } from 'firebase/storage';
 import { useNavigate } from 'react-router-dom';
 import { Delete as DeleteIcon, Edit as EditIcon, Search as SearchIcon, FilterList as FilterListIcon } from '@mui/icons-material';
 
@@ -177,6 +178,26 @@ const FormsResponsesPage = () => {
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
   };
+
+  // Funkcja do wyodrębniania ścieżki pliku z URL Firebase Storage
+  const extractStoragePathFromUrl = (url) => {
+    if (!url || !url.includes('firebase')) return null;
+    
+    try {
+      // Format URL: https://firebasestorage.googleapis.com/v0/b/{bucket}/o/{encodedPath}?alt=media
+      const pathStart = url.indexOf('/o/') + 3;
+      const pathEnd = url.indexOf('?');
+      
+      if (pathStart > 2 && pathEnd > pathStart) {
+        const encodedPath = url.substring(pathStart, pathEnd);
+        return decodeURIComponent(encodedPath);
+      }
+      return null;
+    } catch (error) {
+      console.error('Błąd podczas wyodrębniania ścieżki z URL:', error);
+      return null;
+    }
+  };
   
   const formatDateTime = (date) => {
     if (!date) return '-';
@@ -247,6 +268,40 @@ const FormsResponsesPage = () => {
           throw new Error('Nieznany typ formularza');
       }
       
+      // Usuń załączniki z Firebase Storage jeśli istnieją
+      const attachmentFields = [];
+      
+      switch (formType) {
+        case 'completedMO':
+          if (item.mixingPlanReportUrl) attachmentFields.push(item.mixingPlanReportUrl);
+          break;
+        case 'productionControl':
+          if (item.documentScansUrl) attachmentFields.push(item.documentScansUrl);
+          if (item.productPhoto1Url) attachmentFields.push(item.productPhoto1Url);
+          if (item.productPhoto2Url) attachmentFields.push(item.productPhoto2Url);
+          if (item.productPhoto3Url) attachmentFields.push(item.productPhoto3Url);
+          break;
+        case 'productionShift':
+          // Formularz zmian produkcji nie ma załączników
+          break;
+      }
+      
+      // Usuń wszystkie znalezione załączniki
+      for (const attachmentUrl of attachmentFields) {
+        try {
+          const storagePath = extractStoragePathFromUrl(attachmentUrl);
+          if (storagePath) {
+            const fileRef = ref(storage, storagePath);
+            await deleteObject(fileRef);
+            console.log(`Usunięto załącznik z Storage: ${storagePath}`);
+          }
+        } catch (storageError) {
+          console.warn('Nie można usunąć załącznika z Storage:', storageError);
+          // Kontynuuj mimo błędu usuwania załącznika
+        }
+      }
+      
+      // Usuń dokument z Firestore
       const docRef = doc(db, collectionPath, item.id);
       await deleteDoc(docRef);
       
