@@ -442,7 +442,7 @@ const TaskDetailsPage = () => {
         formType: 'productionShift'
       }));
 
-      console.log(`✅ Optymalizacja Etap 2: Pobrano odpowiedzi formularzy w 3 równoległych zapytaniach zamiast 3 sekwencyjnych`);
+
       
       // Sortowanie odpowiedzi od najnowszych (według daty wypełnienia)
       const sortByFillDate = (a, b) => {
@@ -511,7 +511,7 @@ const TaskDetailsPage = () => {
             }
           }
           
-          console.log(`✅ Optymalizacja Etap 1: Pobrano ${inventoryItemsMap.size} pozycji magazynowych w ${Math.ceil(inventoryItemIds.length / batchSize)} zapytaniach zamiast ${inventoryItemIds.length} osobnych zapytań`);
+
         }
         
         // Przygotuj listę materiałów z aktualnymi cenami
@@ -559,14 +559,14 @@ const TaskDetailsPage = () => {
       // KROK 2.5: ✅ Wzbogać dane skonsumowanych materiałów o informacje z partii magazynowych
       if (fetchedTask?.consumedMaterials?.length > 0) {
         try {
-          console.log('🔄 Wzbogacanie danych skonsumowanych materiałów...');
+
           const enrichedConsumedMaterials = await enrichConsumedMaterialsData(fetchedTask.consumedMaterials);
           fetchedTask.consumedMaterials = enrichedConsumedMaterials;
           setTask(prevTask => ({
             ...prevTask,
             consumedMaterials: enrichedConsumedMaterials
           }));
-          console.log('✅ Dane skonsumowanych materiałów zostały wzbogacone');
+
         } catch (error) {
           console.warn('⚠️ Nie udało się wzbogacić danych skonsumowanych materiałów:', error);
         }
@@ -644,7 +644,7 @@ const TaskDetailsPage = () => {
       if (dataLoadingPromises.length > 0) {
         const results = await Promise.all(dataLoadingPromises);
         
-        console.log(`✅ Optymalizacja Etap 2: Pobrano ${results.length} typów danych równolegle zamiast sekwencyjnie (historia produkcji, użytkownicy, wersja receptury, formularze, oczekujące zamówienia)`);
+
         
         // Przetwórz wyniki i ustaw stany
         results.forEach(result => {
@@ -669,7 +669,7 @@ const TaskDetailsPage = () => {
               break;
             case 'awaitingOrders':
               // Oczekujące zamówienia są już ustawione w funkcji fetchAwaitingOrdersForMaterials
-              console.log('✅ Oczekujące zamówienia załadowane równolegle');
+
               break;
           }
         });
@@ -773,34 +773,13 @@ const TaskDetailsPage = () => {
   useEffect(() => {
     if (!task?.id || !materials.length) return;
     
-    // Oblicz aktualne koszty tak samo jak w renderMaterialCostsSummary
-    const consumedCosts = calculateConsumedMaterialsCost();
-    const reservedCosts = calculateReservedMaterialsCost();
-    const totalMaterialCost = consumedCosts.totalCost + reservedCosts.totalCost;
-    const unitMaterialCost = task.quantity ? (totalMaterialCost / task.quantity) : 0;
-    
-    // Oblicz pełny koszt produkcji
-    const totalFullProductionCost = materials.reduce((sum, material) => {
-      const materialId = material.inventoryItemId || material.id;
-      const consumedForMaterial = consumedCosts.details[materialId];
-      let materialCost = consumedForMaterial ? consumedForMaterial.totalCost : 0;
-      
-      const reservedBatches = task.materialBatches && task.materialBatches[materialId];
-      if (reservedBatches && reservedBatches.length > 0) {
-        const consumedQuantity = getConsumedQuantityForMaterial(materialId);
-        const requiredQuantity = materialQuantities[material.id] || material.quantity || 0;
-        const remainingQuantity = Math.max(0, requiredQuantity - consumedQuantity);
-        
-        if (remainingQuantity > 0) {
-          const unitPrice = material.unitPrice || 0;
-          materialCost += remainingQuantity * unitPrice;
-        }
-      }
-      
-      return sum + materialCost;
-    }, 0);
-    
-    const unitFullProductionCost = task.quantity ? (totalFullProductionCost / task.quantity) : 0;
+    // Oblicz wszystkie koszty jedną funkcją
+    const {
+      totalMaterialCost,
+      unitMaterialCost,
+      totalFullProductionCost,
+      unitFullProductionCost
+    } = calculateAllCosts();
     
     // Sprawdź czy koszty się zmieniły
     const costChanged = 
@@ -810,14 +789,14 @@ const TaskDetailsPage = () => {
       Math.abs((task.unitFullProductionCost || 0) - unitFullProductionCost) > 0.01;
     
     if (costChanged) {
-      console.log('Wykryto różnicę kosztów - uruchamiam automatyczną aktualizację po 3 sekundach');
+              console.log('🔔 Wykryto różnicę kosztów (zarezerwowane + skonsumowane) - uruchamiam automatyczną aktualizację po 3 sekundach');
       const timer = setTimeout(() => {
         updateMaterialCostsAutomatically('Automatyczna aktualizacja po wykryciu różnicy kosztów');
       }, 3000);
       
       return () => clearTimeout(timer);
     }
-  }, [task?.totalMaterialCost, task?.unitMaterialCost, task?.totalFullProductionCost, task?.unitFullProductionCost, task?.consumedMaterials, task?.materialBatches, materialQuantities, includeInCosts, materials]);
+  }, [task?.totalMaterialCost, task?.unitMaterialCost, task?.totalFullProductionCost, task?.unitFullProductionCost, task?.consumedMaterials, task?.materialBatches, materialQuantities, includeInCosts, materials, consumedBatchPrices]);
 
   // Funkcja do pobierania magazynów
   const fetchWarehouses = async () => {
@@ -1363,7 +1342,7 @@ const TaskDetailsPage = () => {
         });
       });
       
-      console.log(`✅ SUPER OPTYMALIZACJA: Pobrano partie dla ${materialIds.length} materiałów w ${Math.ceil(materialIds.length / 10)} grupowych zapytaniach zamiast ${materialIds.length} osobnych zapytań`);
+
       
       // KROK 3: ✅ SUPER OPTYMALIZACJA - Grupowe pobieranie rezerwacji dla wszystkich partii JEDNOCZEŚNIE
       let allBatchReservationsMap = {};
@@ -1372,7 +1351,7 @@ const TaskDetailsPage = () => {
         // POJEDYNCZE GRUPOWE ZAPYTANIE dla wszystkich rezerwacji partii
         allBatchReservationsMap = await getReservationsForMultipleBatches(allBatchIds);
         
-        console.log(`✅ SUPER OPTYMALIZACJA: Pobrano rezerwacje dla ${allBatchIds.length} partii w ${Math.ceil(allBatchIds.length / 10) * 2} grupowych zapytaniach zamiast ${allBatchIds.length * 2} osobnych zapytań`);
+
       }
       
       // KROK 4: Przetwórz dane i stwórz finalne struktury
@@ -1452,18 +1431,7 @@ const TaskDetailsPage = () => {
       setBatches(batchesData);
       setSelectedBatches(initialSelectedBatches);
       
-      // Podsumowanie optymalizacji
-      const totalBatches = Object.values(batchesData).reduce((sum, batches) => sum + batches.length, 0);
-      const zapytaniaPrzed = materialIds.length + (allBatchIds.length * 2); // każdy materiał + każda partia 2x (batch+rezerwacje)
-      const zapytaniaPo = 1 + Math.ceil(materialIds.length / 10) + Math.ceil(allBatchIds.length / 10) * 2; // magazyny + grupowe partie + grupowe rezerwacje
-      
-      console.log(`🚀 SUPER OPTYMALIZACJA zakończona pomyślnie:`);
-      console.log(`- Materiały: ${materialIds.length}`);
-      console.log(`- Partie: ${totalBatches}`);
-      console.log(`- Zapytania PRZED: ${zapytaniaPrzed} (N + M×2 sekwencyjnych)`);
-      console.log(`- Zapytania PO: ${zapytaniaPo} (1 + grupowe)`);
-      console.log(`- Redukcja zapytań: ${Math.round((1 - zapytaniaPo / zapytaniaPrzed) * 100)}%`);
-      console.log(`- Przyspieszenie: ${Math.round(zapytaniaPrzed / zapytaniaPo)}x szybciej`);
+
       
     } catch (error) {
       console.error('Błąd podczas pobierania partii dla materiałów:', error);
@@ -3174,7 +3142,7 @@ const TaskDetailsPage = () => {
             if (Math.abs(material.unitPrice - averagePrice) > 0.001) {
             material.unitPrice = averagePrice;
               hasChanges = true;
-            console.log(`Zaktualizowano cenę dla ${material.name}: ${averagePrice.toFixed(2)} €`);
+            console.log(`🔄 [ZAREZERWOWANE] Zaktualizowano cenę dla ${material.name}: ${averagePrice.toFixed(2)} €`);
             }
           }
         }
@@ -3230,6 +3198,62 @@ const TaskDetailsPage = () => {
       console.error('Błąd podczas aktualizacji cen materiałów:', error);
     }
   }, [task, materials, materialQuantities, id, currentUser, showSuccess, showError, includeInCosts, consumedBatchPrices]);
+
+  // Funkcja do pobierania aktualnych cen skonsumowanych partii i aktualizacji cen w konsumpcjach
+  const updateConsumedMaterialPricesFromBatches = useCallback(async () => {
+    if (!task?.consumedMaterials || task.consumedMaterials.length === 0) return;
+    
+    try {
+      const { getInventoryBatch } = await import('../../services/inventoryService');
+      let hasChanges = false;
+      const updatedConsumedMaterials = [...task.consumedMaterials];
+
+      // Dla każdej konsumpcji, sprawdź aktualną cenę partii
+      for (let i = 0; i < updatedConsumedMaterials.length; i++) {
+        const consumed = updatedConsumedMaterials[i];
+        try {
+          const batchData = await getInventoryBatch(consumed.batchId);
+          if (batchData && batchData.unitPrice) {
+            const currentPrice = consumed.unitPrice || 0;
+            const newPrice = parseFloat(batchData.unitPrice) || 0;
+            
+            // Sprawdź czy cena się zmieniła przed aktualizacją
+            if (Math.abs(currentPrice - newPrice) > 0.001) {
+              updatedConsumedMaterials[i] = {
+                ...consumed,
+                unitPrice: newPrice,
+                priceUpdatedAt: new Date().toISOString(),
+                priceUpdatedFrom: 'batch-price-sync'
+              };
+              hasChanges = true;
+              console.log(`💰 [SKONSUMOWANE] Zaktualizowano cenę partii ${batchData.batchNumber || consumed.batchId}: ${currentPrice.toFixed(4)}€ -> ${newPrice.toFixed(4)}€`);
+            }
+          }
+        } catch (error) {
+          console.error(`Błąd podczas pobierania danych partii ${consumed.batchId}:`, error);
+        }
+      }
+
+      // Aktualizuj dane zadania tylko jeśli wykryto zmiany cen
+      if (hasChanges) {
+        await updateDoc(doc(db, 'productionTasks', id), {
+          consumedMaterials: updatedConsumedMaterials,
+          updatedAt: serverTimestamp()
+        });
+        
+        // Zaktualizuj lokalny stan
+        setTask(prevTask => ({
+          ...prevTask,
+          consumedMaterials: updatedConsumedMaterials
+        }));
+        
+        console.log('✅ [SKONSUMOWANE] Zaktualizowano ceny skonsumowanych partii - automatyczna aktualizacja kosztów zostanie uruchomiona');
+        // Automatyczna aktualizacja kosztów zostanie wywołana przez useEffect z dependency na task.consumedMaterials
+      }
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji cen skonsumowanych partii:', error);
+    }
+  }, [task?.consumedMaterials, id]);
   
   // Aktualizuj ceny materiałów przy każdym załadowaniu zadania lub zmianie zarezerwowanych partii
   useEffect(() => {
@@ -3249,6 +3273,25 @@ const TaskDetailsPage = () => {
       };
     }
   }, [task?.id, task?.materialBatches ? Object.keys(task.materialBatches).length : 0, updateMaterialPricesFromBatches]); // Uproszczone zależności
+
+  // Aktualizuj ceny skonsumowanych partii przy każdym załadowaniu zadania
+  useEffect(() => {
+    if (task?.consumedMaterials && task.consumedMaterials.length > 0) {
+      // Używamy referencji do funkcji z pamięcią podręczną useCallback
+      let isMounted = true;
+      const updateConsumedPrices = async () => {
+        if (isMounted) {
+          await updateConsumedMaterialPricesFromBatches();
+        }
+      };
+      
+      updateConsumedPrices();
+      
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [task?.id, task?.consumedMaterials ? task.consumedMaterials.length : 0, updateConsumedMaterialPricesFromBatches]); // Reaguje na zmiany liczby konsumpcji
 
   // Funkcja do aktualizacji związanych zamówień klientów po zmianie kosztów produkcji
   const updateRelatedCustomerOrders = async (taskData, totalMaterialCost, totalFullProductionCost, unitMaterialCost, unitFullProductionCost) => {
@@ -3390,40 +3433,13 @@ const TaskDetailsPage = () => {
     if (!task || !materials.length) return;
     
     try {
-      // Oblicz koszty używając nowych funkcji
-      const consumedCosts = calculateConsumedMaterialsCost();
-      const reservedCosts = calculateReservedMaterialsCost();
-      
-      // Całkowity koszt materiałów = skonsumowane + zarezerwowane (ale nieskonsumowane)
-      const totalMaterialCost = consumedCosts.totalCost + reservedCosts.totalCost;
-      
-      // Oblicz pełny koszt produkcji (wszystkie materiały niezależnie od flagi "wliczaj")
-      const totalFullProductionCost = materials.reduce((sum, material) => {
-        const materialId = material.inventoryItemId || material.id;
-        
-        // Koszty skonsumowanych materiałów dla tego materiału
-        const consumedForMaterial = consumedCosts.details[materialId];
-        let materialCost = consumedForMaterial ? consumedForMaterial.totalCost : 0;
-        
-        // Dodaj koszt zarezerwowanych (ale nieskonsumowanych) materiałów
-        const reservedBatches = task.materialBatches && task.materialBatches[materialId];
-        if (reservedBatches && reservedBatches.length > 0) {
-          const consumedQuantity = getConsumedQuantityForMaterial(materialId);
-          const requiredQuantity = materialQuantities[material.id] || material.quantity || 0;
-          const remainingQuantity = Math.max(0, requiredQuantity - consumedQuantity);
-          
-          if (remainingQuantity > 0) {
-          const unitPrice = material.unitPrice || 0;
-            materialCost += remainingQuantity * unitPrice;
-        }
-        }
-        
-        return sum + materialCost;
-      }, 0);
-      
-      // Oblicz koszty na jednostkę
-      const unitMaterialCost = task.quantity ? (totalMaterialCost / task.quantity) : 0;
-      const unitFullProductionCost = task.quantity ? (totalFullProductionCost / task.quantity) : 0;
+      // Oblicz wszystkie koszty jedną funkcją
+      const {
+        totalMaterialCost,
+        unitMaterialCost,
+        totalFullProductionCost,
+        unitFullProductionCost
+      } = calculateAllCosts();
       
       // Sprawdź czy koszty się rzeczywiście zmieniły
       if (
@@ -3465,7 +3481,6 @@ const TaskDetailsPage = () => {
       });
       
       console.log(`Zaktualizowano koszty materiałów w zadaniu: ${totalMaterialCost.toFixed(2)} € (${unitMaterialCost.toFixed(2)} €/${task.unit}) | Pełny koszt: ${totalFullProductionCost.toFixed(2)} € (${unitFullProductionCost.toFixed(2)} €/${task.unit})`);
-      console.log(`Podział kosztów - Skonsumowane: ${consumedCosts.totalCost.toFixed(2)} €, Zarezerwowane: ${reservedCosts.totalCost.toFixed(2)} €`);
       showSuccess('Koszty materiałów zostały zaktualizowane w bazie danych');
       
       // Aktualizuj związane zamówienia klientów
@@ -3485,40 +3500,15 @@ const TaskDetailsPage = () => {
     if (!task || !materials.length) return;
     
     try {
-      // Oblicz koszty używając nowych funkcji
-      const consumedCosts = calculateConsumedMaterialsCost();
-      const reservedCosts = calculateReservedMaterialsCost();
+      // Oblicz wszystkie koszty jedną funkcją
+      const {
+        totalMaterialCost,
+        unitMaterialCost,
+        totalFullProductionCost,
+        unitFullProductionCost
+      } = calculateAllCosts();
       
-      // Całkowity koszt materiałów = skonsumowane + zarezerwowane (ale nieskonsumowane)
-      const totalMaterialCost = consumedCosts.totalCost + reservedCosts.totalCost;
-      
-      // Oblicz pełny koszt produkcji (wszystkie materiały niezależnie od flagi "wliczaj")
-      const totalFullProductionCost = materials.reduce((sum, material) => {
-        const materialId = material.inventoryItemId || material.id;
-        
-        // Koszty skonsumowanych materiałów dla tego materiału
-        const consumedForMaterial = consumedCosts.details[materialId];
-        let materialCost = consumedForMaterial ? consumedForMaterial.totalCost : 0;
-        
-        // Dodaj koszt zarezerwowanych (ale nieskonsumowanych) materiałów
-        const reservedBatches = task.materialBatches && task.materialBatches[materialId];
-        if (reservedBatches && reservedBatches.length > 0) {
-          const consumedQuantity = getConsumedQuantityForMaterial(materialId);
-          const requiredQuantity = materialQuantities[material.id] || material.quantity || 0;
-          const remainingQuantity = Math.max(0, requiredQuantity - consumedQuantity);
-          
-          if (remainingQuantity > 0) {
-            const unitPrice = material.unitPrice || 0;
-            materialCost += remainingQuantity * unitPrice;
-          }
-        }
-        
-        return sum + materialCost;
-      }, 0);
-      
-      // Oblicz koszty na jednostkę
-      const unitMaterialCost = task.quantity ? (totalMaterialCost / task.quantity) : 0;
-      const unitFullProductionCost = task.quantity ? (totalFullProductionCost / task.quantity) : 0;
+
       
       // Sprawdź czy koszty się rzeczywiście zmieniły (niższy próg dla automatycznej aktualizacji)
       const costChanged = 
@@ -3583,126 +3573,162 @@ const TaskDetailsPage = () => {
     }
   };
 
-  // Funkcja do obliczania kosztów skonsumowanych materiałów
-  const calculateConsumedMaterialsCost = () => {
-    if (!task?.consumedMaterials || task.consumedMaterials.length === 0) {
-      return { totalCost: 0, details: [] };
-    }
+  // ZJEDNOCZONA FUNKCJA do obliczania wszystkich kosztów w jednym miejscu
+  const calculateAllCosts = (customConsumedMaterials = null, customMaterialBatches = null) => {
+    const currentConsumedMaterials = customConsumedMaterials || task?.consumedMaterials || [];
+    const currentMaterialBatches = customMaterialBatches || task?.materialBatches || {};
+    
 
+    
+    // ===== KOSZTY SKONSUMOWANYCH MATERIAŁÓW =====
     const consumedCostDetails = {};
     let totalConsumedCost = 0;
 
-    // Grupuj skonsumowane materiały według materialId
-    task.consumedMaterials.forEach((consumed, index) => {
-      const materialId = consumed.materialId;
-      const material = materials.find(m => (m.inventoryItemId || m.id) === materialId);
-      
-      if (!material) return;
+    if (currentConsumedMaterials.length > 0) {
+      // Grupuj skonsumowane materiały według materialId
+      currentConsumedMaterials.forEach((consumed, index) => {
+        const materialId = consumed.materialId;
+        const material = materials.find(m => (m.inventoryItemId || m.id) === materialId);
+        
+        if (!material) return;
 
-      if (!consumedCostDetails[materialId]) {
-        consumedCostDetails[materialId] = {
-          material,
-          totalQuantity: 0,
-          totalCost: 0,
-          batches: []
-        };
-      }
+        if (!consumedCostDetails[materialId]) {
+          consumedCostDetails[materialId] = {
+            material,
+            totalQuantity: 0,
+            totalCost: 0,
+            batches: []
+          };
+        }
 
-      // Pobierz cenę partii ze skonsumowanych danych lub z aktualnej ceny materiału
-      const batchPrice = consumedBatchPrices[consumed.batchId] || material.unitPrice || 0;
-      const quantity = Number(consumed.quantity) || 0;
-      const cost = quantity * batchPrice;
+        // Pobierz cenę partii ze skonsumowanych danych lub z aktualnej ceny materiału
+        const batchPrice = consumed.unitPrice || consumedBatchPrices[consumed.batchId] || material.unitPrice || 0;
+        const quantity = Number(consumed.quantity) || 0;
+        const cost = quantity * batchPrice;
 
-      consumedCostDetails[materialId].totalQuantity += quantity;
-      consumedCostDetails[materialId].totalCost += cost;
-      consumedCostDetails[materialId].batches.push({
-        batchId: consumed.batchId,
-        quantity,
-        unitPrice: batchPrice,
-        cost
+        consumedCostDetails[materialId].totalQuantity += quantity;
+        consumedCostDetails[materialId].totalCost += cost;
+        consumedCostDetails[materialId].batches.push({
+          batchId: consumed.batchId,
+          quantity,
+          unitPrice: batchPrice,
+          cost
+        });
+
+        // Sprawdź czy ta konkretna konsumpcja ma być wliczona do kosztów
+        const shouldIncludeInCosts = consumed.includeInCosts !== undefined 
+          ? consumed.includeInCosts 
+          : (includeInCosts[material.id] !== false); // fallback do ustawienia materiału
+
+        if (shouldIncludeInCosts) {
+          totalConsumedCost += cost;
+        }
       });
+    }
 
-      // Sprawdź czy ta konkretna konsumpcja ma być wliczona do kosztów
-      const shouldIncludeInCosts = consumed.includeInCosts !== undefined 
-        ? consumed.includeInCosts 
-        : (includeInCosts[material.id] !== false); // fallback do ustawienia materiału
+    // ===== KOSZTY ZAREZERWOWANYCH (NIESKONSUMOWANYCH) MATERIAŁÓW =====
+    const reservedCostDetails = {};
+    let totalReservedCost = 0;
 
-      if (shouldIncludeInCosts) {
-        totalConsumedCost += cost;
-      }
-    });
+    if (materials.length > 0) {
+      materials.forEach(material => {
+        const materialId = material.inventoryItemId || material.id;
+        const reservedBatches = currentMaterialBatches[materialId];
+        
+        if (reservedBatches && reservedBatches.length > 0) {
+          // Oblicz ile zostało skonsumowane z tego materiału
+          const consumedQuantity = getConsumedQuantityForMaterial(materialId);
+          const requiredQuantity = materialQuantities[material.id] || material.quantity || 0;
+          const remainingQuantity = Math.max(0, requiredQuantity - consumedQuantity);
+          
+          if (remainingQuantity > 0) {
+            const unitPrice = material.unitPrice || 0;
+            const cost = remainingQuantity * unitPrice;
+            
+            reservedCostDetails[materialId] = {
+              material,
+              quantity: remainingQuantity,
+              unitPrice,
+              cost
+            };
+            
+            // Sprawdź czy materiał ma być wliczony do kosztów
+            const shouldIncludeInCosts = includeInCosts[material.id] !== false;
+            if (shouldIncludeInCosts) {
+              totalReservedCost += cost;
+            }
+          }
+        }
+      });
+    }
 
-    return { totalCost: totalConsumedCost, details: consumedCostDetails };
+    // ===== OBLICZ WSZYSTKIE KOSZTY =====
+    const totalMaterialCost = totalConsumedCost + totalReservedCost;
+    const unitMaterialCost = task?.quantity ? (totalMaterialCost / task.quantity) : 0;
+
+    // ===== PEŁNY KOSZT PRODUKCJI (wszystkie materiały niezależnie od flagi "wliczaj") =====
+    let totalFullProductionCost = 0;
+    
+    if (materials.length > 0) {
+      totalFullProductionCost = materials.reduce((sum, material) => {
+        const materialId = material.inventoryItemId || material.id;
+        
+        // Koszty skonsumowanych materiałów dla tego materiału (niezależnie od flagi)
+        const consumedForMaterial = consumedCostDetails[materialId];
+        let materialCost = consumedForMaterial ? consumedForMaterial.totalCost : 0;
+        
+        // Dodaj koszt zarezerwowanych (ale nieskonsumowanych) materiałów
+        const reservedForMaterial = reservedCostDetails[materialId];
+        if (reservedForMaterial) {
+          materialCost += reservedForMaterial.cost;
+        }
+        
+        return sum + materialCost;
+      }, 0);
+    }
+    
+    const unitFullProductionCost = task?.quantity ? (totalFullProductionCost / task.quantity) : 0;
+
+    return {
+      // Szczegóły kosztów
+      consumed: {
+        totalCost: totalConsumedCost,
+        details: consumedCostDetails
+      },
+      reserved: {
+        totalCost: totalReservedCost,
+        details: reservedCostDetails
+      },
+      // Łączne koszty
+      totalMaterialCost,
+      unitMaterialCost,
+      totalFullProductionCost,
+      unitFullProductionCost
+    };
+  };
+
+  // Zachowane funkcje dla kompatybilności wstecznej (używają calculateAllCosts)
+  const calculateConsumedMaterialsCost = () => {
+    const costs = calculateAllCosts();
+    return costs.consumed;
   };
 
   // Funkcja do obliczania kosztów zarezerwowanych (ale nieskonsumowanych) materiałów
   const calculateReservedMaterialsCost = () => {
-    if (!materials || materials.length === 0) {
-      return { totalCost: 0, details: [] };
-    }
-
-    let totalReservedCost = 0;
-
-    materials.forEach(material => {
-      const materialId = material.inventoryItemId || material.id;
-      const reservedBatches = task.materialBatches && task.materialBatches[materialId];
-      
-      // Sprawdź czy materiał ma zarezerwowane partie
-      if (reservedBatches && reservedBatches.length > 0) {
-        // Oblicz ile zostało do skonsumowania
-        const consumedQuantity = getConsumedQuantityForMaterial(materialId);
-        const requiredQuantity = materialQuantities[material.id] || material.quantity || 0;
-        const remainingQuantity = Math.max(0, requiredQuantity - consumedQuantity);
-        
-        // Jeśli zostało coś do skonsumowania i materiał jest wliczany do kosztów
-        if (remainingQuantity > 0 && includeInCosts[material.id] !== false) {
-        const unitPrice = material.unitPrice || 0;
-          const cost = remainingQuantity * unitPrice;
-          totalReservedCost += cost;
-        }
-      }
-    });
-
-    return { totalCost: totalReservedCost };
+    const costs = calculateAllCosts();
+    return costs.reserved;
   };
 
   const renderMaterialCostsSummary = () => {
-    // Oblicz koszty skonsumowanych materiałów
-    const consumedCosts = calculateConsumedMaterialsCost();
-    
-    // Oblicz koszty zarezerwowanych (ale nieskonsumowanych) materiałów
-    const reservedCosts = calculateReservedMaterialsCost();
-    
-    // Całkowity koszt materiałów = skonsumowane + zarezerwowane (ale nieskonsumowane)
-    const totalMaterialCost = consumedCosts.totalCost + reservedCosts.totalCost;
-    
-    // Oblicz pełny koszt produkcji (wszystkie materiały niezależnie od flagi "wliczaj")
-    const totalFullProductionCost = materials.reduce((sum, material) => {
-      const materialId = material.inventoryItemId || material.id;
-      
-      // Koszty skonsumowanych materiałów dla tego materiału
-      const consumedForMaterial = consumedCosts.details[materialId];
-      let materialCost = consumedForMaterial ? consumedForMaterial.totalCost : 0;
-      
-      // Dodaj koszt zarezerwowanych (ale nieskonsumowanych) materiałów
-      const reservedBatches = task.materialBatches && task.materialBatches[materialId];
-      if (reservedBatches && reservedBatches.length > 0) {
-        const consumedQuantity = getConsumedQuantityForMaterial(materialId);
-        const requiredQuantity = materialQuantities[material.id] || material.quantity || 0;
-        const remainingQuantity = Math.max(0, requiredQuantity - consumedQuantity);
-        
-        if (remainingQuantity > 0) {
-        const unitPrice = material.unitPrice || 0;
-          materialCost += remainingQuantity * unitPrice;
-      }
-      }
-      
-      return sum + materialCost;
-    }, 0);
-    
-    // Oblicz koszty na jednostkę
-    const unitMaterialCost = task.quantity ? (totalMaterialCost / task.quantity) : 0;
-    const unitFullProductionCost = task.quantity ? (totalFullProductionCost / task.quantity) : 0;
+    // Oblicz wszystkie koszty jedną funkcją
+    const {
+      consumed: consumedCosts,
+      reserved: reservedCosts,
+      totalMaterialCost,
+      unitMaterialCost,
+      totalFullProductionCost,
+      unitFullProductionCost
+    } = calculateAllCosts();
     
     // Sprawdź czy koszty uległy zmianie
     const costChanged = 
@@ -3861,8 +3887,7 @@ const TaskDetailsPage = () => {
           const { getAwaitingOrdersForInventoryItem } = await import('../../services/inventoryService');
           const materialOrders = await getAwaitingOrdersForInventoryItem(materialId);
           
-          // Debugowanie struktury danych
-          console.log(`Oczekiwane zamówienia dla materiału ${materialId}:`, materialOrders);
+
           
           if (materialOrders.length > 0) {
             ordersData[materialId] = materialOrders;
@@ -4507,10 +4532,7 @@ const TaskDetailsPage = () => {
       ];
 
       // SPRAWDŹ CZY AKTUALIZOWAĆ KOSZTY (frontend vs backend)
-      const consumedCosts = calculateConsumedMaterialsCostForUpdateData(newConsumedMaterials);
-      const reservedCosts = calculateReservedMaterialsCostForUpdateData(updatedMaterialBatches);
-      const totalMaterialCost = consumedCosts + reservedCosts;
-      const unitMaterialCost = task.quantity ? (totalMaterialCost / task.quantity) : 0;
+      const { totalMaterialCost, unitMaterialCost } = calculateAllCosts(newConsumedMaterials, updatedMaterialBatches);
       
       // Sprawdź czy koszty się zmieniły (różnica > 0.001€)
       const costChanged = Math.abs((task.totalMaterialCost || 0) - totalMaterialCost) > 0.001 ||
@@ -4937,7 +4959,7 @@ const TaskDetailsPage = () => {
     }
   };
 
-  // Funkcja do pobierania cen skonsumowanych partii
+  // Funkcja do pobierania cen skonsumowanych partii i aktualizacji cen materiałów
   const fetchConsumedBatchPrices = async () => {
     if (!task?.consumedMaterials || task.consumedMaterials.length === 0) {
       return;
@@ -4947,6 +4969,7 @@ const TaskDetailsPage = () => {
       const { getInventoryBatch } = await import('../../services/inventoryService');
       const batchPrices = {};
       let needsTaskUpdate = false;
+      let needsCostUpdate = false;
       const updatedConsumedMaterials = [...task.consumedMaterials];
 
       for (let i = 0; i < task.consumedMaterials.length; i++) {
@@ -4956,6 +4979,22 @@ const TaskDetailsPage = () => {
           if (batch) {
             if (batch.unitPrice) {
               batchPrices[consumed.batchId] = batch.unitPrice;
+              
+              // Sprawdź czy cena w konsumpcji się zmieniła
+              const currentPrice = consumed.unitPrice || 0;
+              const newPrice = batch.unitPrice;
+              
+              if (Math.abs(currentPrice - newPrice) > 0.001) {
+                console.log(`Aktualizuję cenę dla skonsumowanej partii ${batch.batchNumber || consumed.batchId}: ${currentPrice.toFixed(4)}€ -> ${newPrice.toFixed(4)}€`);
+                updatedConsumedMaterials[i] = {
+                  ...consumed,
+                  unitPrice: newPrice,
+                  priceUpdatedAt: new Date().toISOString(),
+                  priceUpdatedFrom: 'batch-sync'
+                };
+                needsTaskUpdate = true;
+                needsCostUpdate = true;
+              }
             }
             
             // Jeśli konsumpcja nie ma zapisanego numeru partii, zaktualizuj go
@@ -4963,7 +5002,7 @@ const TaskDetailsPage = () => {
               const newBatchNumber = batch.lotNumber || batch.batchNumber;
               console.log(`Aktualizuję numer partii dla konsumpcji ${i}: ${consumed.batchId} -> ${newBatchNumber}`);
               updatedConsumedMaterials[i] = {
-                ...consumed,
+                ...updatedConsumedMaterials[i], // Zachowaj poprzednie zmiany
                 batchNumber: newBatchNumber
               };
               needsTaskUpdate = true;
@@ -4973,20 +5012,11 @@ const TaskDetailsPage = () => {
               if (newBatchNumber !== consumed.batchNumber) {
                 console.log(`Naprawiam błędny numer partii (ID jako numer): ${consumed.batchNumber} -> ${newBatchNumber}`);
                 updatedConsumedMaterials[i] = {
-                  ...consumed,
+                  ...updatedConsumedMaterials[i], // Zachowaj poprzednie zmiany
                   batchNumber: newBatchNumber
                 };
                 needsTaskUpdate = true;
               }
-            } else {
-              console.log(`Konsumpcja ${i} ma już poprawny numer partii:`, {
-                batchId: consumed.batchId,
-                savedBatchNumber: consumed.batchNumber,
-                batchFromDB: {
-                  lotNumber: batch.lotNumber,
-                  batchNumber: batch.batchNumber
-                }
-              });
             }
           }
         } catch (error) {
@@ -4996,7 +5026,7 @@ const TaskDetailsPage = () => {
 
       setConsumedBatchPrices(batchPrices);
       
-      // Jeśli trzeba zaktualizować dane zadania z numerami partii
+      // Jeśli trzeba zaktualizować dane zadania
       if (needsTaskUpdate) {
         try {
           await updateDoc(doc(db, 'productionTasks', id), {
@@ -5010,9 +5040,14 @@ const TaskDetailsPage = () => {
             consumedMaterials: updatedConsumedMaterials
           }));
           
-          console.log('Zaktualizowano numery partii w danych zadania');
+          if (needsCostUpdate) {
+            console.log('Wykryto zmiany cen skonsumowanych partii - zaktualizowano dane zadania');
+            // Automatyczna aktualizacja kosztów zostanie wywołana przez useEffect z dependency na task.consumedMaterials
+          } else {
+            console.log('Zaktualizowano numery partii w danych zadania');
+          }
         } catch (error) {
-          console.error('Błąd podczas aktualizacji numerów partii:', error);
+          console.error('Błąd podczas aktualizacji danych skonsumowanych partii:', error);
         }
       }
     } catch (error) {
@@ -5054,47 +5089,7 @@ const TaskDetailsPage = () => {
   };
 
   // Funkcja do wzbogacenia danych skonsumowanych materiałów o informacje z partii
-  // Funkcje pomocnicze do obliczania kosztów podczas aktualizacji
-  const calculateConsumedMaterialsCostForUpdateData = (consumedMaterials) => {
-    if (!consumedMaterials || consumedMaterials.length === 0) return 0;
-
-    return consumedMaterials.reduce((total, consumed) => {
-      const shouldIncludeInCosts = consumed.includeInCosts !== undefined 
-        ? consumed.includeInCosts 
-        : true; // domyślnie true dla nowych konsumpcji
-
-      if (shouldIncludeInCosts) {
-        const quantity = Number(consumed.quantity) || 0;
-        const unitPrice = Number(consumed.unitPrice) || 0;
-        return total + (quantity * unitPrice);
-      }
-      return total;
-    }, 0);
-  };
-
-  const calculateReservedMaterialsCostForUpdateData = (materialBatches) => {
-    if (!materialBatches || !materials || materials.length === 0) return 0;
-
-    return materials.reduce((total, material) => {
-      const materialId = material.inventoryItemId || material.id;
-      const reservedBatches = materialBatches[materialId];
-      
-      if (reservedBatches && reservedBatches.length > 0) {
-        const shouldIncludeInCosts = includeInCosts[material.id] !== false;
-        
-        if (shouldIncludeInCosts) {
-          const materialCost = reservedBatches.reduce((materialTotal, batch) => {
-            const quantity = Number(batch.quantity) || 0;
-            const unitPrice = batch.unitPrice || material.unitPrice || 0;
-            return materialTotal + (quantity * unitPrice);
-          }, 0);
-          
-          return total + materialCost;
-        }
-      }
-      return total;
-    }, 0);
-  };
+  // Funkcje pomocnicze zostały zastąpione przez calculateAllCosts()
 
   const enrichConsumedMaterialsData = async (consumedMaterials) => {
     if (!consumedMaterials || consumedMaterials.length === 0) {
@@ -5223,7 +5218,6 @@ const TaskDetailsPage = () => {
       }
       
       setIngredientAttachments(attachments);
-      console.log('Pobrano załączniki dla składników:', attachments);
     } catch (error) {
       console.warn('Błąd podczas pobierania załączników składników:', error);
     }
@@ -5585,7 +5579,6 @@ const TaskDetailsPage = () => {
       }
 
       setIngredientBatchAttachments(attachments);
-      console.log('Pobrano załączniki z partii dla składników:', attachments);
     } catch (error) {
       console.warn('Błąd podczas pobierania załączników z partii składników:', error);
     }

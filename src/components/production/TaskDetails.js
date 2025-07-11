@@ -83,7 +83,7 @@ const TaskDetails = ({ task }) => {
         
         // 1. Pobierz partie z materialBatches (partie zarezerwowane dla MO)
         if (task.materialBatches) {
-          console.log("Znaleziono zarezerwowane partie materiałów:", task.materialBatches);
+
           
           // Dla każdego materiału w materialBatches
           for (const [materialId, batches] of Object.entries(task.materialBatches)) {
@@ -118,7 +118,7 @@ const TaskDetails = ({ task }) => {
 
         // 1.5. Pobierz partie ze skonsumowanych materiałów (consumedMaterials)
         if (task.consumedMaterials && task.consumedMaterials.length > 0) {
-          console.log("Znaleziono skonsumowane materiały:", task.consumedMaterials);
+
           
           // Dla każdego skonsumowanego materiału
           for (const consumed of task.consumedMaterials) {
