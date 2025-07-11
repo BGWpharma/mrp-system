@@ -523,6 +523,195 @@ import {
     }
   };
 
+  // ✅ OPTYMALIZACJA: Grupowe pobieranie partii dla wielu pozycji magazynowych
+  export const getBatchesForMultipleItems = async (itemIds, warehouseId = null) => {
+    try {
+      if (!itemIds || itemIds.length === 0) {
+        return {};
+      }
+
+      console.log(`🚀 Grupowe pobieranie partii dla ${itemIds.length} pozycji magazynowych...`);
+      
+      // Firebase 'in' operator obsługuje maksymalnie 10 elementów na zapytanie
+      const batchSize = 10;
+      const resultMap = {};
+      
+      // Inicjalizuj wyniki dla wszystkich itemId
+      itemIds.forEach(itemId => {
+        resultMap[itemId] = [];
+      });
+
+      // Podziel itemIds na batche po 10
+      for (let i = 0; i < itemIds.length; i += batchSize) {
+        const batch = itemIds.slice(i, i + batchSize);
+        
+        try {
+          // Utwórz zapytanie dla batcha
+          let q;
+          
+          if (warehouseId) {
+            // Filtruj według ID pozycji i magazynu
+            q = query(
+              collection(db, INVENTORY_BATCHES_COLLECTION),
+              where('itemId', 'in', batch),
+              where('warehouseId', '==', warehouseId)
+            );
+          } else {
+            // Filtruj tylko według ID pozycji
+            q = query(
+              collection(db, INVENTORY_BATCHES_COLLECTION),
+              where('itemId', 'in', batch)
+            );
+          }
+          
+          // Wykonaj zapytanie
+          const querySnapshot = await getDocs(q);
+          
+          // Pogrupuj wyniki według itemId
+          querySnapshot.docs.forEach(doc => {
+            const batchData = {
+              id: doc.id,
+              ...doc.data()
+            };
+            
+            const itemId = batchData.itemId;
+            if (resultMap[itemId]) {
+              resultMap[itemId].push(batchData);
+            }
+          });
+          
+          console.log(`✅ Pobrano partie dla batcha ${i + 1}-${Math.min(i + batchSize, itemIds.length)} z ${itemIds.length}`);
+          
+        } catch (error) {
+          console.error(`Błąd podczas pobierania partii dla batcha ${i}-${i + batchSize}:`, error);
+          // Kontynuuj z następnym batchem, nie przerywaj całego procesu
+        }
+      }
+      
+      const totalBatches = Object.values(resultMap).reduce((sum, batches) => sum + batches.length, 0);
+      console.log(`✅ Optymalizacja: Pobrano ${totalBatches} partii w ${Math.ceil(itemIds.length / batchSize)} zapytaniach zamiast ${itemIds.length} osobnych zapytań`);
+      
+      return resultMap;
+      
+    } catch (error) {
+      console.error('Błąd podczas grupowego pobierania partii:', error);
+      throw error;
+    }
+  };
+
+  // ✅ OPTYMALIZACJA: Grupowe pobieranie rezerwacji dla wielu partii
+  export const getReservationsForMultipleBatches = async (batchIds) => {
+    try {
+      if (!batchIds || batchIds.length === 0) {
+        return {};
+      }
+
+      console.log(`🚀 Grupowe pobieranie rezerwacji dla ${batchIds.length} partii...`);
+      
+      // Firebase 'in' operator obsługuje maksymalnie 10 elementów na zapytanie
+      const batchSize = 10;
+      const resultMap = {};
+      
+      // Inicjalizuj wyniki dla wszystkich batchId
+      batchIds.forEach(batchId => {
+        resultMap[batchId] = [];
+      });
+
+      // Podziel batchIds na batche po 10
+      for (let i = 0; i < batchIds.length; i += batchSize) {
+        const batch = batchIds.slice(i, i + batchSize);
+        
+        try {
+          // Pobierz rezerwacje (booking) dla batcha partii
+          const bookingQuery = query(
+            collection(db, INVENTORY_TRANSACTIONS_COLLECTION),
+            where('batchId', 'in', batch),
+            where('type', '==', 'booking')
+          );
+          
+          // Pobierz anulowania rezerwacji (booking_cancel) dla batcha partii
+          const cancelQuery = query(
+            collection(db, INVENTORY_TRANSACTIONS_COLLECTION),
+            where('batchId', 'in', batch),
+            where('type', '==', 'booking_cancel')
+          );
+          
+          // Wykonaj oba zapytania równolegle
+          const [bookingSnapshot, cancelSnapshot] = await Promise.all([
+            getDocs(bookingQuery),
+            getDocs(cancelQuery)
+          ]);
+          
+          // Przygotuj mapę rezerwacji
+          const reservationsMap = {};
+          
+          // Dodaj rezerwacje
+          bookingSnapshot.docs.forEach(doc => {
+            const reservation = {
+              id: doc.id,
+              ...doc.data()
+            };
+            
+            const batchId = reservation.batchId;
+            if (!reservationsMap[batchId]) {
+              reservationsMap[batchId] = [];
+            }
+            reservationsMap[batchId].push(reservation);
+          });
+          
+          // Przygotuj mapę anulowań według taskId
+          const cancellationsByTaskAndBatch = {};
+          cancelSnapshot.docs.forEach(doc => {
+            const cancellation = doc.data();
+            const taskId = cancellation.taskId || cancellation.referenceId;
+            const batchId = cancellation.batchId;
+            
+            if (!taskId || !batchId) return;
+            
+            const key = `${taskId}_${batchId}`;
+            if (!cancellationsByTaskAndBatch[key]) {
+              cancellationsByTaskAndBatch[key] = 0;
+            }
+            cancellationsByTaskAndBatch[key] += cancellation.quantity || 0;
+          });
+          
+          // Aplikuj anulowania do rezerwacji i przenieś do resultMap
+          Object.entries(reservationsMap).forEach(([batchId, reservations]) => {
+            const processedReservations = reservations.map(reservation => {
+              const taskId = reservation.taskId || reservation.referenceId;
+              if (!taskId) return reservation;
+              
+              const key = `${taskId}_${batchId}`;
+              const cancelledQuantity = cancellationsByTaskAndBatch[key] || 0;
+              
+              return {
+                ...reservation,
+                quantity: Math.max(0, (reservation.quantity || 0) - cancelledQuantity)
+              };
+            }).filter(reservation => (reservation.quantity || 0) > 0); // Usuń rezerwacje o ilości 0
+            
+            resultMap[batchId] = processedReservations;
+          });
+          
+          console.log(`✅ Pobrano rezerwacje dla batcha ${i + 1}-${Math.min(i + batchSize, batchIds.length)} z ${batchIds.length}`);
+          
+        } catch (error) {
+          console.error(`Błąd podczas pobierania rezerwacji dla batcha ${i}-${i + batchSize}:`, error);
+          // Kontynuuj z następnym batchem, nie przerywaj całego procesu
+        }
+      }
+      
+      const totalReservations = Object.values(resultMap).reduce((sum, reservations) => sum + reservations.length, 0);
+      console.log(`✅ Optymalizacja: Pobrano ${totalReservations} rezerwacji w ${Math.ceil(batchIds.length / batchSize) * 2} zapytaniach zamiast ${batchIds.length * 2} osobnych zapytań`);
+      
+      return resultMap;
+      
+    } catch (error) {
+      console.error('Błąd podczas grupowego pobierania rezerwacji:', error);
+      throw error;
+    }
+  };
+
   // Pobieranie partii z krótkim terminem ważności (wygasające w ciągu określonej liczby dni)
   export const getExpiringBatches = async (daysThreshold = 30) => {
     const batchesRef = collection(db, INVENTORY_BATCHES_COLLECTION);
