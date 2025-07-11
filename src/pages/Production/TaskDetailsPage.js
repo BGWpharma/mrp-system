@@ -55,7 +55,8 @@ import {
   useMediaQuery,
   useTheme,
   Switch,
-  Autocomplete
+  Autocomplete,
+  Fade
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -99,6 +100,7 @@ import {
   Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession, addProductionSession, deleteProductionSession } from '../../services/productionService';
+import { getProductionDataForHistory, getAvailableMachines } from '../../services/machineDataService';
 import { getRecipeVersion, sortIngredientsByQuantity } from '../../services/recipeService';
 import { getItemBatches, bookInventoryForTask, cancelBooking, getBatchReservations, getAllInventoryItems, getInventoryItemById, getInventoryBatch, updateBatch } from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
@@ -165,6 +167,11 @@ const TaskDetailsPage = () => {
     startTime: new Date(),
     endTime: new Date(),
   });
+  
+  // Nowe stany dla danych z maszyn
+  const [availableMachines, setAvailableMachines] = useState([]);
+  const [selectedMachineId, setSelectedMachineId] = useState('');
+  const [enrichedProductionHistory, setEnrichedProductionHistory] = useState([]);
   const [addHistoryDialogOpen, setAddHistoryDialogOpen] = useState(false);
   const [reservingMaterials, setReservingMaterials] = useState(false);
 
@@ -340,6 +347,16 @@ const TaskDetailsPage = () => {
   useEffect(() => {
     fetchWarehouses();
   }, []);
+
+  // Pobieranie dostępnych maszyn
+  useEffect(() => {
+    fetchAvailableMachines();
+  }, []);
+
+  // Wzbogacanie historii produkcji o dane z maszyn
+  useEffect(() => {
+    enrichProductionHistoryWithMachineData();
+  }, [productionHistory, selectedMachineId]);
 
   // Zachowujemy useEffect dla synchronizacji formularza magazynu
   useEffect(() => {
@@ -767,6 +784,46 @@ const TaskDetailsPage = () => {
       console.error('Błąd podczas pobierania magazynów:', error);
     } finally {
       setWarehousesLoading(false);
+    }
+  };
+
+  // Funkcja do pobierania dostępnych maszyn
+  const fetchAvailableMachines = async () => {
+    try {
+      const machines = await getAvailableMachines();
+      setAvailableMachines(machines);
+      
+      // Jeśli zadanie ma workstationId, spróbuj znaleźć odpowiadającą maszynę
+      if (task?.workstationId && machines.length > 0) {
+        // Możemy użyć workstationId jako machineId lub znaleźć maszynę na podstawie nazwy
+        const machineForWorkstation = machines.find(machine => 
+          machine.id === task.workstationId || 
+          machine.name.toLowerCase().includes(task.workstationId.toLowerCase())
+        );
+        
+        if (machineForWorkstation) {
+          setSelectedMachineId(machineForWorkstation.id);
+        }
+      }
+    } catch (error) {
+      console.error('Błąd podczas pobierania maszyn:', error);
+    }
+  };
+
+  // Funkcja do wzbogacania historii produkcji o dane z maszyn
+  const enrichProductionHistoryWithMachineData = async () => {
+    if (!selectedMachineId || !productionHistory || productionHistory.length === 0) {
+      setEnrichedProductionHistory(productionHistory || []);
+      return;
+    }
+
+    try {
+      console.log(`Wzbogacanie historii produkcji danymi z maszyny ${selectedMachineId}`);
+      const enrichedHistory = await getProductionDataForHistory(selectedMachineId, productionHistory);
+      setEnrichedProductionHistory(enrichedHistory);
+    } catch (error) {
+      console.error('Błąd podczas wzbogacania historii produkcji:', error);
+      setEnrichedProductionHistory(productionHistory || []);
     }
   };
 
@@ -6146,23 +6203,54 @@ const TaskDetailsPage = () => {
               <Grid item xs={12}>
                 <Paper sx={{ p: 3 }}>
                   <Typography variant="h6" component="h2" gutterBottom>Historia produkcji</Typography>
-                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+                  
+                  {/* Selektor maszyny i przycisk dodawania */}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <FormControl size="small" sx={{ minWidth: 200 }}>
+                        <InputLabel>Maszyna dla odczytów</InputLabel>
+                        <Select
+                          value={selectedMachineId}
+                          label="Maszyna dla odczytów"
+                          onChange={(e) => setSelectedMachineId(e.target.value)}
+                        >
+                          <MenuItem value="">
+                            <em>Brak</em>
+                          </MenuItem>
+                          {availableMachines.map((machine) => (
+                            <MenuItem key={machine.id} value={machine.id}>
+                              {machine.name}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      
+                      {selectedMachineId && (
+                        <Chip 
+                          size="small" 
+                          label={`Wyświetlanie danych z ${availableMachines.find(m => m.id === selectedMachineId)?.name || selectedMachineId}`}
+                          color="info"
+                          variant="outlined"
+                        />
+                      )}
+                    </Box>
+                    
                     <Button variant="contained" color="primary" startIcon={<AddIcon />} onClick={() => { setEditedHistoryItem({ quantity: '', startTime: new Date(), endTime: new Date(), }); let expiryDate = null; if (task.expiryDate) { try { if (task.expiryDate instanceof Date) { expiryDate = task.expiryDate; } else if (task.expiryDate.toDate && typeof task.expiryDate.toDate === 'function') { expiryDate = task.expiryDate.toDate(); } else if (task.expiryDate.seconds) { expiryDate = new Date(task.expiryDate.seconds * 1000); } else if (typeof task.expiryDate === 'string') { expiryDate = new Date(task.expiryDate); } } catch (error) { console.error('Błąd konwersji daty ważności:', error); expiryDate = new Date(new Date().setFullYear(new Date().getFullYear() + 1)); } } else { expiryDate = new Date(new Date().setFullYear(new Date().getFullYear() + 1)); } setHistoryInventoryData({ expiryDate: expiryDate, lotNumber: task.lotNumber || `SN/${task.moNumber || ''}`, finalQuantity: '', warehouseId: task.warehouseId || (warehouses.length > 0 ? warehouses[0].id : '') }); setAddHistoryDialogOpen(true); }} size="small">Dodaj wpis</Button>
                   </Box>
                   {productionHistory.length === 0 ? (<Typography variant="body2" color="text.secondary">Brak historii produkcji dla tego zadania</Typography>) : (
                     <TableContainer>
-                      <Table><TableHead><TableRow><TableCell>Data rozpoczęcia</TableCell><TableCell>Data zakończenia</TableCell><TableCell>Czas trwania</TableCell><TableCell>Wyprodukowana ilość</TableCell><TableCell>Operator</TableCell><TableCell>Akcje</TableCell></TableRow></TableHead>
+                      <Table><TableHead><TableRow><TableCell>Data rozpoczęcia</TableCell><TableCell>Data zakończenia</TableCell><TableCell>Czas trwania</TableCell><TableCell>Wyprodukowana ilość</TableCell>{selectedMachineId && (<><TableCell>OK z maszyny</TableCell><TableCell>NOK z maszyny</TableCell><TableCell>Razem z maszyny</TableCell></>)}<TableCell>Operator</TableCell><TableCell>Akcje</TableCell></TableRow></TableHead>
                         <TableBody>
-                          {productionHistory.map((item) => (
+                          {enrichedProductionHistory.map((item) => (
                             <TableRow key={item.id}>
                               {editingHistoryItem === item.id ? (
-                                <><TableCell><TextField type="datetime-local" value={editedHistoryItem.startTime instanceof Date ? toLocalDateTimeString(editedHistoryItem.startTime) : ''} onChange={(e) => { const newDate = e.target.value ? fromLocalDateTimeString(e.target.value) : new Date(); setEditedHistoryItem(prev => ({ ...prev, startTime: newDate })); }} InputLabelProps={{ shrink: true }} fullWidth required /></TableCell><TableCell><TextField type="datetime-local" value={editedHistoryItem.endTime instanceof Date ? toLocalDateTimeString(editedHistoryItem.endTime) : ''} onChange={(e) => { const newDate = e.target.value ? fromLocalDateTimeString(e.target.value) : new Date(); setEditedHistoryItem(prev => ({ ...prev, endTime: newDate })); }} InputLabelProps={{ shrink: true }} fullWidth required /></TableCell><TableCell>{Math.round((editedHistoryItem.endTime.getTime() - editedHistoryItem.startTime.getTime()) / (1000 * 60))} min</TableCell><TableCell><TextField type="number" value={editedHistoryItem.quantity} onChange={(e) => setEditedHistoryItem(prev => ({ ...prev, quantity: e.target.value === '' ? '' : parseFloat(e.target.value) }))} inputProps={{ min: 0, step: 'any' }} size="small" fullWidth /></TableCell><TableCell>{getUserName(item.userId)}</TableCell><TableCell><Box sx={{ display: 'flex' }}><IconButton color="primary" onClick={() => handleSaveHistoryItemEdit(item.id)} title="Zapisz zmiany"><SaveIcon /></IconButton><IconButton color="error" onClick={handleCancelHistoryItemEdit} title="Anuluj edycję"><CancelIcon /></IconButton></Box></TableCell></>
+                                <><TableCell><TextField type="datetime-local" value={editedHistoryItem.startTime instanceof Date ? toLocalDateTimeString(editedHistoryItem.startTime) : ''} onChange={(e) => { const newDate = e.target.value ? fromLocalDateTimeString(e.target.value) : new Date(); setEditedHistoryItem(prev => ({ ...prev, startTime: newDate })); }} InputLabelProps={{ shrink: true }} fullWidth required /></TableCell><TableCell><TextField type="datetime-local" value={editedHistoryItem.endTime instanceof Date ? toLocalDateTimeString(editedHistoryItem.endTime) : ''} onChange={(e) => { const newDate = e.target.value ? fromLocalDateTimeString(e.target.value) : new Date(); setEditedHistoryItem(prev => ({ ...prev, endTime: newDate })); }} InputLabelProps={{ shrink: true }} fullWidth required /></TableCell><TableCell>{Math.round((editedHistoryItem.endTime.getTime() - editedHistoryItem.startTime.getTime()) / (1000 * 60))} min</TableCell><TableCell><TextField type="number" value={editedHistoryItem.quantity} onChange={(e) => setEditedHistoryItem(prev => ({ ...prev, quantity: e.target.value === '' ? '' : parseFloat(e.target.value) }))} inputProps={{ min: 0, step: 'any' }} size="small" fullWidth /></TableCell>{selectedMachineId && (<><TableCell>-</TableCell><TableCell>-</TableCell><TableCell>-</TableCell></>)}<TableCell>{getUserName(item.userId)}</TableCell><TableCell><Box sx={{ display: 'flex' }}><IconButton color="primary" onClick={() => handleSaveHistoryItemEdit(item.id)} title="Zapisz zmiany"><SaveIcon /></IconButton><IconButton color="error" onClick={handleCancelHistoryItemEdit} title="Anuluj edycję"><CancelIcon /></IconButton></Box></TableCell></>
                               ) : (
-                                <><TableCell>{item.startTime ? formatDateTime(item.startTime) : '-'}</TableCell><TableCell>{item.endTime ? formatDateTime(item.endTime) : '-'}</TableCell><TableCell>{item.timeSpent ? `${item.timeSpent} min` : '-'}</TableCell><TableCell>{item.quantity} {task.unit}</TableCell><TableCell>{getUserName(item.userId)}</TableCell><TableCell><IconButton color="primary" onClick={() => handleEditHistoryItem(item)} title="Edytuj sesję produkcyjną"><EditIcon /></IconButton><IconButton color="error" onClick={() => handleDeleteHistoryItem(item)} title="Usuń sesję produkcyjną"><DeleteIcon /></IconButton></TableCell></>
+                                <><TableCell>{item.startTime ? formatDateTime(item.startTime) : '-'}</TableCell><TableCell>{item.endTime ? formatDateTime(item.endTime) : '-'}</TableCell><TableCell>{item.timeSpent ? `${item.timeSpent} min` : '-'}</TableCell><TableCell>{item.quantity} {task.unit}</TableCell>{selectedMachineId && (<><TableCell>{item.machineData ? (<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Chip size="small" label={item.machineData.okProduced} color="success" variant="outlined" />{item.machineData.okProduced > 0 && (<Tooltip title={`Szczegóły produkcji: ${item.machineData.productionPeriods?.map(p => p.formattedPeriod).join(', ') || 'Brak szczegółów'}`}><InfoIcon fontSize="small" color="info" sx={{ cursor: 'help' }} /></Tooltip>)}</Box>) : '-'}</TableCell><TableCell>{item.machineData ? (<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Chip size="small" label={item.machineData.nokProduced} color="error" variant="outlined" />{item.machineData.nokProduced > 0 && (<Tooltip title={`Szczegóły produkcji: ${item.machineData.productionPeriods?.map(p => p.formattedPeriod).join(', ') || 'Brak szczegółów'}`}><InfoIcon fontSize="small" color="warning" sx={{ cursor: 'help' }} /></Tooltip>)}</Box>) : '-'}</TableCell><TableCell>{item.machineData ? (<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Chip size="small" label={item.machineData.totalProduced} color="primary" variant="outlined" />{item.machineData.totalProduced > 0 && (<Tooltip title={`Maszyna: ${item.machineData.machineId} | Okresy: ${item.machineData.productionPeriods?.map(p => `${p.formattedPeriod} (${p.production.okCount}/${p.production.nokCount})`).join(', ') || 'Brak szczegółów'}`}><InfoIcon fontSize="small" color="info" sx={{ cursor: 'help' }} /></Tooltip>)}</Box>) : '-'}</TableCell></>)}<TableCell>{getUserName(item.userId)}</TableCell><TableCell><IconButton color="primary" onClick={() => handleEditHistoryItem(item)} title="Edytuj sesję produkcyjną"><EditIcon /></IconButton><IconButton color="error" onClick={() => handleDeleteHistoryItem(item)} title="Usuń sesję produkcyjną"><DeleteIcon /></IconButton></TableCell></>
                               )}
                             </TableRow>
                           ))}
-                          <TableRow sx={{ '& td': { fontWeight: 'bold', bgcolor: 'rgba(0, 0, 0, 0.04)' } }}><TableCell colSpan={2} align="right">Suma:</TableCell><TableCell>{productionHistory.reduce((sum, item) => sum + (item.timeSpent || 0), 0)} min</TableCell><TableCell>{formatQuantityPrecision(productionHistory.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0), 3)} {task.unit}</TableCell><TableCell colSpan={2}></TableCell></TableRow>
+                          <TableRow sx={{ '& td': { fontWeight: 'bold', bgcolor: 'rgba(0, 0, 0, 0.04)' } }}><TableCell colSpan={2} align="right">Suma:</TableCell><TableCell>{enrichedProductionHistory.reduce((sum, item) => sum + (item.timeSpent || 0), 0)} min</TableCell><TableCell>{formatQuantityPrecision(enrichedProductionHistory.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0), 3)} {task.unit}</TableCell>{selectedMachineId && (<><TableCell>{enrichedProductionHistory.reduce((sum, item) => sum + (item.machineData?.okProduced || 0), 0)}</TableCell><TableCell>{enrichedProductionHistory.reduce((sum, item) => sum + (item.machineData?.nokProduced || 0), 0)}</TableCell><TableCell>{enrichedProductionHistory.reduce((sum, item) => sum + (item.machineData?.totalProduced || 0), 0)}</TableCell></>)}<TableCell colSpan={2}></TableCell></TableRow>
                         </TableBody>
                       </Table>
                     </TableContainer>
