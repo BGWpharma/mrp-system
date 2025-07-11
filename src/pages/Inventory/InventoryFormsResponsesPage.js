@@ -30,9 +30,11 @@ import { collection, getDocs, query, doc, deleteDoc } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
 import { useNavigate } from 'react-router-dom';
 import { Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
+import { useTheme } from '@mui/material/styles';
 
 // Komponent strony odpowiedzi formularzy magazynowych
 const InventoryFormsResponsesPage = () => {
+  const theme = useTheme();
   const [tabValue, setTabValue] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -353,7 +355,11 @@ const InventoryFormsResponsesPage = () => {
         <TableContainer component={Paper} sx={{ maxHeight: 600, overflowX: 'auto' }}>
           <Table size="small" stickyHeader>
             <TableHead>
-              <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
+              <TableRow sx={{ 
+                backgroundColor: theme.palette.mode === 'dark' 
+                  ? 'rgba(255, 255, 255, 0.05)' 
+                  : '#f5f5f5' 
+              }}>
                 <TableCell>Data wypełnienia</TableCell>
                 <TableCell>Godzina</TableCell>
                 <TableCell>Email</TableCell>
@@ -465,7 +471,11 @@ const InventoryFormsResponsesPage = () => {
         <TableContainer component={Paper} sx={{ maxHeight: 600, overflowX: 'auto' }}>
           <Table size="small" stickyHeader>
             <TableHead>
-              <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
+              <TableRow sx={{ 
+                backgroundColor: theme.palette.mode === 'dark' 
+                  ? 'rgba(255, 255, 255, 0.05)' 
+                  : '#f5f5f5' 
+              }}>
                 <TableCell>Data wypełnienia</TableCell>
                 <TableCell>Godzina</TableCell>
                 <TableCell>Email</TableCell>

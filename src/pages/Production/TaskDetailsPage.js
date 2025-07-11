@@ -274,6 +274,20 @@ const TaskDetailsPage = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
+  // Funkcja pomocnicza dla responsive kolory tła Paper
+  const getAdaptiveBackgroundStyle = (paletteColor, opacity = 0.8) => ({
+    backgroundColor: theme.palette.mode === 'dark' 
+      ? `rgba(${
+          paletteColor === 'info' ? '33, 150, 243' :
+          paletteColor === 'success' ? '76, 175, 80' :
+          paletteColor === 'warning' ? '255, 152, 0' :
+          paletteColor === 'secondary' ? '156, 39, 176' :
+          '33, 150, 243'
+        }, 0.15)` 
+      : `${paletteColor}.light`,
+    opacity: theme.palette.mode === 'dark' ? 1 : opacity
+  });
+
   // Funkcja pomocnicza do formatowania wartości liczbowych z precyzją
   const formatQuantityPrecision = (value, precision = 3) => {
     if (typeof value !== 'number' || isNaN(value)) return 0;
@@ -6442,7 +6456,7 @@ const TaskDetailsPage = () => {
                             </Table>
                           </TableContainer>
                         ) : (
-                          <Paper sx={{ p: 2, backgroundColor: 'warning.light', border: 1, borderColor: 'warning.main', borderStyle: 'dashed', opacity: 0.7 }}>
+                          <Paper sx={{ p: 2, ...getAdaptiveBackgroundStyle('warning', 0.7), border: 1, borderColor: 'warning.main', borderStyle: 'dashed' }}>
                             <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 1 }}>
                               Brak danych o mikroelementach w recepturze
                             </Typography>
@@ -7231,7 +7245,12 @@ const TaskDetailsPage = () => {
                       <Grid container spacing={3}>
                         {formResponses.completedMO.map((report, index) => (
                           <Grid item xs={12} key={index}>
-                            <Paper sx={{ p: 3, backgroundColor: 'info.light', border: 1, borderColor: 'info.main', opacity: 0.8 }}>
+                            <Paper sx={{ 
+                              p: 3, 
+                              ...getAdaptiveBackgroundStyle('info', 0.8),
+                              border: 1, 
+                              borderColor: 'info.main'
+                            }}>
                               <Typography variant="subtitle2" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
                                 Raport #{index + 1} - {formatDateTime(report.date)}
                               </Typography>
@@ -7344,7 +7363,13 @@ const TaskDetailsPage = () => {
                         ))}
                       </Grid>
                     ) : (
-                      <Paper sx={{ p: 3, backgroundColor: 'warning.light', border: 1, borderColor: 'warning.main', borderStyle: 'dashed', opacity: 0.7 }}>
+                      <Paper sx={{ 
+                        p: 3, 
+                        ...getAdaptiveBackgroundStyle('warning', 0.7),
+                        border: 1, 
+                        borderColor: 'warning.main', 
+                        borderStyle: 'dashed'
+                      }}>
                         <Typography variant="body2" color="text.secondary" align="center">
                           Brak raportów zakończonych MO dla tego zadania
                         </Typography>
@@ -7365,7 +7390,12 @@ const TaskDetailsPage = () => {
                       <Grid container spacing={3}>
                         {formResponses.productionControl.map((report, index) => (
                           <Grid item xs={12} key={index}>
-                            <Paper sx={{ p: 3, backgroundColor: 'success.light', border: 1, borderColor: 'success.main', opacity: 0.8 }}>
+                            <Paper sx={{ 
+                              p: 3, 
+                              ...getAdaptiveBackgroundStyle('success', 0.8),
+                              border: 1, 
+                              borderColor: 'success.main'
+                            }}>
                               <Typography variant="subtitle2" gutterBottom sx={{ color: 'success.main', fontWeight: 'bold' }}>
                                 Raport kontroli #{index + 1} - {formatDateTime(report.fillDate)}
                               </Typography>

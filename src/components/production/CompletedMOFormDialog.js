@@ -20,6 +20,7 @@ import {
   CircularProgress
 } from '@mui/material';
 import { Close as CloseIcon, Send as SendIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
+import { useTheme } from '@mui/material/styles';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -37,6 +38,7 @@ const CompletedMOFormDialog = ({
   onSuccess = null 
 }) => {
   const { currentUser } = useAuth();
+  const theme = useTheme();
 
   const [formData, setFormData] = useState({
     email: '',
@@ -241,11 +243,31 @@ const CompletedMOFormDialog = ({
         }
       }}
     >
-      <DialogTitle>
+      <DialogTitle sx={{ 
+        p: { xs: 2, sm: 3 },
+        borderBottom: '1px solid',
+        borderColor: 'divider'
+      }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h6">
-            Raport - Skończone MO
-          </Typography>
+          <Box sx={{ 
+            p: 2, 
+            borderRadius: 2, 
+            background: theme.palette.mode === 'dark' 
+            ? 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(76,175,80,0.1) 100%)'
+            : 'linear-gradient(135deg, #f5f5f5 0%, #e8f5e8 100%)',
+            border: '1px solid',
+            borderColor: 'primary.light',
+            flex: 1,
+            mr: 2
+          }}>
+            <Typography variant="h6" sx={{
+              fontSize: { xs: '1.1rem', sm: '1.25rem' },
+              color: 'primary.main',
+              fontWeight: 'bold'
+            }}>
+              📋 Raport - Skończone MO
+            </Typography>
+          </Box>
           <IconButton
             aria-label="close"
             onClick={handleClose}
@@ -257,12 +279,23 @@ const CompletedMOFormDialog = ({
           </IconButton>
         </Box>
       </DialogTitle>
-      <DialogContent sx={{ p: 3 }}>
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="body2" align="center" color="text.secondary" paragraph>
+      <DialogContent sx={{ p: { xs: 2, sm: 3 } }}>
+        <Box sx={{ 
+          mb: 2,
+          p: 2,
+          borderRadius: 2,
+          background: theme.palette.mode === 'dark'
+            ? 'linear-gradient(135deg, rgba(33,150,243,0.1) 0%, rgba(255,255,255,0.05) 100%)'
+            : 'linear-gradient(135deg, #f0f8ff 0%, #f5f5f5 100%)',
+          border: '1px solid',
+          borderColor: 'divider'
+        }}>
+          <Typography variant="body2" align="center" color="text.secondary" sx={{
+            fontSize: { xs: '0.75rem', sm: '0.875rem' },
+            mb: 0
+          }}>
             W razie awarii i pilnych zgłoszeń prosimy o kontakt: mateusz@bgwpharma.com
           </Typography>
-          <Divider />
         </Box>
 
         {submitted && (
@@ -272,7 +305,7 @@ const CompletedMOFormDialog = ({
         )}
         
         <Box component="form" onSubmit={handleSubmit}>
-          <Grid container spacing={3}>
+          <Grid container spacing={{ xs: 2, sm: 3 }}>
             <Grid item xs={12}>
               <TextField
                 required

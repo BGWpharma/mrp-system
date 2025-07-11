@@ -34,6 +34,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { pl } from 'date-fns/locale';
 import { Save as SaveIcon, ArrowBack as ArrowBackIcon, CloudUpload as CloudUploadIcon, Search as SearchIcon, AttachFile as AttachFileIcon, Delete as DeleteIcon, Visibility as VisibilityIcon, CheckBox, CheckBoxOutlineBlank, Refresh as RefreshIcon } from '@mui/icons-material';
+import { useTheme } from '@mui/material/styles';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useInventoryEmployeeOptions, useInventoryPositionOptions } from '../../hooks/useFormOptions';
 import { getAllPurchaseOrders, getPurchaseOrderById } from '../../services/purchaseOrderService';
@@ -46,6 +47,7 @@ const UnloadingReportFormPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser } = useAuth();
+  const theme = useTheme();
   
   // Sprawdź czy jesteśmy w trybie edycji
   const isEditMode = new URLSearchParams(location.search).get('edit') === 'true';
@@ -685,32 +687,60 @@ const UnloadingReportFormPage = () => {
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
-      <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
-        <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Button
-            startIcon={<ArrowBackIcon />}
-            onClick={handleBack}
-            variant="outlined"
-          >
-            Powrót
-          </Button>
-          <Box>
-            <Typography variant="h5" gutterBottom>
+      <Container maxWidth="md" sx={{ 
+        mt: { xs: 2, sm: 4 }, 
+        mb: { xs: 2, sm: 4 },
+        px: { xs: 1, sm: 3 }
+      }}>
+        <Paper sx={{ 
+          p: { xs: 2, sm: 4 },
+          borderRadius: { xs: 2, sm: 2 },
+          boxShadow: { xs: 2, sm: 3 }
+        }}>
+          {/* Nagłówek formularza */}
+          <Box sx={{ 
+            mb: { xs: 2, sm: 3 },
+            p: { xs: 2, sm: 3 },
+            borderRadius: 2,
+            background: theme.palette.mode === 'dark' 
+              ? 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(76,175,80,0.1) 100%)'
+              : 'linear-gradient(135deg, #f5f5f5 0%, #e8f5e8 100%)',
+            border: '1px solid',
+            borderColor: 'divider'
+          }}>
+            <Typography variant="h5" gutterBottom align="center" fontWeight="bold" sx={{
+              fontSize: { xs: '1.25rem', sm: '1.5rem' },
+              color: 'primary.main'
+            }}>
               {isEditMode ? 'EDYCJA RAPORTU - ROZŁADUNEK TOWARU' : 'RAPORT - ROZŁADUNEK TOWARU'}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" align="center" color="text.secondary" sx={{
+              fontSize: { xs: '0.75rem', sm: '0.875rem' },
+              mb: 2
+            }}>
               {isEditMode ? 'Edytuj wypełniony formularz rozładunku towaru' : 'Formularz dokumentujący proces rozładunku towaru'}
             </Typography>
+            <Typography variant="body2" align="center" color="text.secondary" sx={{
+              fontSize: { xs: '0.75rem', sm: '0.875rem' },
+              mb: 0
+            }}>
+              W razie awarii i pilnych zgłoszeń prosimy o kontakt: mateusz@bgwpharma.com
+            </Typography>
           </Box>
-        </Box>
 
-        {/* Informacja kontaktowa */}
-        <Alert severity="info" sx={{ mb: 3 }}>
-          W razie awarii i pilnych zgłoszeń prosimy o kontakt: <strong>mateusz@bgwpharma.com</strong>
-        </Alert>
+          {/* Przycisk powrotu */}
+          <Box sx={{ mb: 2 }}>
+            <Button
+              startIcon={<ArrowBackIcon />}
+              onClick={handleBack}
+              variant="outlined"
+            >
+              Powrót
+            </Button>
+          </Box>
 
-        <Paper component="form" onSubmit={handleSubmit} sx={{ p: 3 }}>
-          <Grid container spacing={3}>
+                  <Box component="form" onSubmit={handleSubmit} sx={{ px: { xs: 1, sm: 0 } }}>
+            <Grid container spacing={{ xs: 2, sm: 3 }}>
             {/* Email użytkownika */}
             <Grid item xs={12}>
               <TextField
@@ -730,9 +760,24 @@ const UnloadingReportFormPage = () => {
             
             {/* Sekcja 1: Identyfikacja */}
             <Grid item xs={12}>
-              <Typography variant="h6" gutterBottom>
-                Sekcja: Identyfikacja
-              </Typography>
+              <Box sx={{ 
+                mt: 2, 
+                mb: 2, 
+                p: 2, 
+                borderRadius: 2, 
+                background: theme.palette.mode === 'dark'
+                  ? 'linear-gradient(45deg, rgba(33,150,243,0.1) 30%, rgba(156,39,176,0.1) 90%)'
+                  : 'linear-gradient(45deg, #e3f2fd 30%, #f3e5f5 90%)',
+                border: '1px solid',
+                borderColor: 'primary.light'
+              }}>
+                <Typography variant="h6" gutterBottom sx={{ 
+                  color: 'primary.main',
+                  fontWeight: 'bold'
+                }}>
+                  👤 Sekcja: Identyfikacja
+                </Typography>
+              </Box>
             </Grid>
             
             <Grid item xs={12}>
@@ -885,10 +930,24 @@ const UnloadingReportFormPage = () => {
 
             {/* Sekcja 2: Informacje o rozładunku */}
             <Grid item xs={12}>
-              <Divider sx={{ my: 2 }} />
-              <Typography variant="h6" gutterBottom>
-                Sekcja: Informacje o rozładunku
-              </Typography>
+              <Box sx={{ 
+                mt: 2, 
+                mb: 2, 
+                p: 2, 
+                borderRadius: 2, 
+                background: theme.palette.mode === 'dark'
+                  ? 'linear-gradient(45deg, rgba(255,152,0,0.1) 30%, rgba(76,175,80,0.1) 90%)'
+                  : 'linear-gradient(45deg, #fff3e0 30%, #e8f5e8 90%)',
+                border: '1px solid',
+                borderColor: 'primary.light'
+              }}>
+                <Typography variant="h6" gutterBottom sx={{ 
+                  color: 'primary.main',
+                  fontWeight: 'bold'
+                }}>
+                  🚛 Sekcja: Informacje o rozładunku
+                </Typography>
+              </Box>
             </Grid>
             
             <Grid item xs={12} sm={6}>
@@ -1007,10 +1066,24 @@ const UnloadingReportFormPage = () => {
 
             {/* Sekcja 3: Informacje o towarze */}
             <Grid item xs={12}>
-              <Divider sx={{ my: 2 }} />
-              <Typography variant="h6" gutterBottom>
-                Sekcja: Informacje o towarze
-              </Typography>
+              <Box sx={{ 
+                mt: 2, 
+                mb: 2, 
+                p: 2, 
+                borderRadius: 2, 
+                background: theme.palette.mode === 'dark'
+                  ? 'linear-gradient(45deg, rgba(156,39,176,0.1) 30%, rgba(76,175,80,0.1) 90%)'
+                  : 'linear-gradient(45deg, #f3e5f5 30%, #e8f5e8 90%)',
+                border: '1px solid',
+                borderColor: 'primary.light'
+              }}>
+                <Typography variant="h6" gutterBottom sx={{ 
+                  color: 'primary.main',
+                  fontWeight: 'bold'
+                }}>
+                  📦 Sekcja: Informacje o towarze
+                </Typography>
+              </Box>
             </Grid>
             
             <Grid item xs={12} sm={6}>
@@ -1350,7 +1423,7 @@ const UnloadingReportFormPage = () => {
               </Box>
             </Grid>
           </Grid>
-        </Paper>
+          </Box>
 
         <Snackbar
           open={showSuccess}
@@ -1377,6 +1450,7 @@ const UnloadingReportFormPage = () => {
             Automatycznie uzupełniono dane na podstawie wybranego PO
           </Alert>
         </Snackbar>
+        </Paper>
       </Container>
     </LocalizationProvider>
   );

@@ -21,13 +21,18 @@ import {
   FormGroup,
   CircularProgress,
   Slider,
-  Stack
+  Stack,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { pl } from 'date-fns/locale';
-import { Send as SendIcon, ArrowBack as ArrowBackIcon, Delete as DeleteIcon, Visibility as VisibilityIcon, AttachFile as AttachFileIcon } from '@mui/icons-material';
+import { Send as SendIcon, ArrowBack as ArrowBackIcon, Delete as DeleteIcon, Visibility as VisibilityIcon, AttachFile as AttachFileIcon, Sensors as SensorsIcon } from '@mui/icons-material';
+import { useTheme } from '@mui/material/styles';
 import { getMONumbersForSelect } from '../../services/moService';
 import { formatDateForInput } from '../../utils/dateUtils';
 import { db, storage } from '../../services/firebase/config';
@@ -40,6 +45,13 @@ import { getAllOrders } from '../../services/orderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useStaffOptions, usePositionOptions } from '../../hooks/useFormOptions';
 import FileOrCameraInput from '../common/FileOrCameraInput';
+import { 
+  getSensors, 
+  getCurrentSensorData, 
+  getSensorDataForDateTime,
+  formatSensorTimestamp,
+  checkEnvironmentalNorms 
+} from '../../services/environmentalConditionsService';
 
 // Funkcja pomocnicza do formatowania daty w prawidłowym formacie dla pola expiryDate
 const formatExpiryDate = (dateValue) => {
@@ -306,6 +318,7 @@ const ProductionControlForm = ({
   prefilledData = {}, 
   onSuccess = null 
 }) => {
+  const theme = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
@@ -363,6 +376,20 @@ const ProductionControlForm = ({
   const [loadingMO, setLoadingMO] = useState(false);
   const [editId, setEditId] = useState(null);
   const [removedAttachments, setRemovedAttachments] = useState([]); // Śledzenie usuniętych załączników
+
+  // Stany dla czujników środowiskowych
+  const [sensors, setSensors] = useState([]);
+  const [selectedSensor, setSelectedSensor] = useState('');
+  const [loadingSensors, setLoadingSensors] = useState(false);
+  const [sensorData, setSensorData] = useState(null);
+
+  // Stany dla okienka dialogowego z informacjami o czujniku
+  const [sensorInfoDialog, setSensorInfoDialog] = useState({
+    open: false,
+    title: '',
+    message: '',
+    isError: false
+  });
 
   // Ref do timeoutów dla debounce'owania suwaków
   const sliderTimeoutRef = useRef(null);
@@ -427,6 +454,28 @@ const ProductionControlForm = ({
     fetchCustomerOrders();
   }, []);
 
+  // Pobierz listę dostępnych czujników
+  useEffect(() => {
+    const fetchSensors = async () => {
+      try {
+        setLoadingSensors(true);
+        const sensorsList = await getSensors();
+        setSensors(sensorsList);
+        
+        // Automatycznie wybierz pierwszy dostępny czujnik
+        if (sensorsList.length > 0) {
+          setSelectedSensor(sensorsList[0].id);
+        }
+      } catch (error) {
+        console.error('Błąd podczas pobierania listy czujników:', error);
+      } finally {
+        setLoadingSensors(false);
+      }
+    };
+
+    fetchSensors();
+  }, []);
+
   // Sprawdź, czy istnieją dane do edycji w sessionStorage
   useEffect(() => {
     if (isEditMode) {
@@ -481,6 +530,18 @@ const ProductionControlForm = ({
           }
         }
         
+        // Ustaw również dane czujnika w trybie edycji
+        if (editData.selectedSensor) {
+          setSelectedSensor(editData.selectedSensor);
+        }
+        if (editData.sensorDataTimestamp) {
+          setSensorData({
+            timestamp: editData.sensorDataTimestamp,
+            temperature: parseFloat(editData.temperature) || 20,
+            humidity: parseFloat(editData.humidity) || 45
+          });
+        }
+
         setFormData({
           email: editData.email || '',
           name: editData.name || '',
@@ -675,6 +736,77 @@ const ProductionControlForm = ({
     }, 10); // Opóźnienie 10ms
   };
 
+  // Funkcje obsługi czujników środowiskowych
+  const handleSensorChange = (e) => {
+    setSelectedSensor(e.target.value);
+  };
+
+  const showSensorInfoDialog = (title, message, isError = false) => {
+    setSensorInfoDialog({
+      open: true,
+      title,
+      message,
+      isError
+    });
+  };
+
+  const closeSensorInfoDialog = () => {
+    setSensorInfoDialog(prev => ({
+      ...prev,
+      open: false
+    }));
+  };
+
+  const handleLoadSensorData = async () => {
+    if (!selectedSensor) {
+      showSensorInfoDialog('Błąd', 'Proszę wybrać czujnik', true);
+      return;
+    }
+
+    if (!formData.readingDate || !formData.readingTime) {
+      showSensorInfoDialog('Błąd', 'Proszę podać datę i godzinę odczytu', true);
+      return;
+    }
+
+    try {
+      const data = await getSensorDataForDateTime(
+        selectedSensor, 
+        formData.readingDate, 
+        formData.readingTime
+      );
+      setSensorData(data);
+      
+      // Zaktualizuj tylko wartości temperatury i wilgotności
+      // (data i godzina już są ustawione przez użytkownika)
+      setFormData(prev => ({
+        ...prev,
+        temperature: Math.round(data.temperature * 10) / 10, // Zaokrąglij do jednego miejsca po przecinku
+        humidity: Math.round(data.humidity * 10) / 10
+      }));
+
+      // Pokaż komunikat o pomyślnym pobraniu danych
+      const norms = checkEnvironmentalNorms(data.temperature, data.humidity);
+      const temperatureStatus = norms.temperature.isInRange ? 'w normie' : norms.temperature.message.toLowerCase();
+      const humidityStatus = norms.humidity.isInRange ? 'w normie' : norms.humidity.message.toLowerCase();
+      const actualTimestamp = formatSensorTimestamp(data.timestamp);
+      
+      let message = `Dane pobrane pomyślnie z czujnika "${selectedSensor}":\n\n` +
+                   `🌡️ Temperatura: ${data.temperature.toFixed(1)}°C (${temperatureStatus})\n` +
+                   `💧 Wilgotność: ${data.humidity.toFixed(1)}% (${humidityStatus})\n` +
+                   `⏰ Rzeczywisty czas odczytu: ${actualTimestamp.full}`;
+      
+      if (data.timeDifference > 0) {
+        message += `\n\n⚠️ Różnica czasowa: ${data.timeDifference} minut od żądanego czasu`;
+      }
+      
+      showSensorInfoDialog('Dane z czujnika pobrane pomyślnie', message);
+            
+    } catch (error) {
+      console.error('Błąd podczas pobierania danych z czujnika:', error);
+      showSensorInfoDialog('Błąd pobierania danych', error.message, true);
+    }
+  };
+
   const validate = () => {
     const errors = {};
     
@@ -762,6 +894,9 @@ const ProductionControlForm = ({
           // Zapisz temperaturę i wilgotność w formacie z jednostką
           humidity: typeof formData.humidity === 'number' ? `${formData.humidity}%` : formData.humidity,
           temperature: typeof formData.temperature === 'number' ? `${formData.temperature}°C` : formData.temperature,
+          // Dodaj informacje o źródle danych środowiskowych
+          selectedSensor: selectedSensor,
+          sensorDataTimestamp: sensorData ? sensorData.timestamp : null,
           createdAt: serverTimestamp()
         };
         
@@ -917,14 +1052,28 @@ const ProductionControlForm = ({
   // Główny content formularza
   const formContent = (
     <>
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h5" gutterBottom align="center" fontWeight="bold">
+              <Box sx={{ 
+          mb: { xs: 2, sm: 3 },
+          p: { xs: 2, sm: 3 },
+          borderRadius: 2,
+          background: theme.palette.mode === 'dark' 
+          ? 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(76,175,80,0.1) 100%)'
+          : 'linear-gradient(135deg, #f5f5f5 0%, #e8f5e8 100%)',
+          border: '1px solid',
+          borderColor: 'divider'
+        }}>
+        <Typography variant="h5" gutterBottom align="center" fontWeight="bold" sx={{
+          fontSize: { xs: '1.25rem', sm: '1.5rem' },
+          color: 'primary.main'
+        }}>
           {isEditMode ? 'EDYCJA - RAPORT KONTROLA PRODUKCJI' : 'RAPORT - KONTROLA PRODUKCJI'}
         </Typography>
-        <Typography variant="body2" align="center" color="text.secondary" paragraph>
+        <Typography variant="body2" align="center" color="text.secondary" paragraph sx={{
+          fontSize: { xs: '0.75rem', sm: '0.875rem' },
+          mb: 0
+        }}>
           W razie awarii i pilnych zgłoszeń prosimy o kontakt: mateusz@bgwpharma.com
         </Typography>
-        <Divider />
       </Box>
 
         {submitted && (
@@ -934,7 +1083,7 @@ const ProductionControlForm = ({
         )}
         
         <Box component="form" onSubmit={handleSubmit}>
-          <Grid container spacing={3}>
+          <Grid container spacing={{ xs: 2, sm: 3 }}>
             <Grid item xs={12}>
               <TextField
                 required
@@ -1200,120 +1349,378 @@ const ProductionControlForm = ({
               />
             </Grid>
             
+            {/* Sekcja wyboru czujnika i pobierania danych środowiskowych */}
             <Grid item xs={12}>
-              <FormControl component="fieldset" fullWidth>
-                <FormLabel component="legend">Zmierzona wilgotność powietrza w pomieszczeniu</FormLabel>
-                <Box sx={{ px: 2, py: 3 }}>
-                  <Stack spacing={2} direction="row" alignItems="center" sx={{ mb: 1 }}>
-                    <Typography variant="body2" color="error">PONIŻEJ NORMY!</Typography>
-                    <Slider
-                  name="humidity"
-                      value={typeof formData.humidity === 'number' ? formData.humidity : 45}
-                      onChange={(e, newValue) => handleSliderChange(e, newValue, 'humidity')}
-                      min={20}
-                      max={70}
-                      step={1}
-                      marks={[
-                        { value: 20, label: '20%' },
-                        { value: 30, label: '30%' },
-                        { value: 40, label: '40%' },
-                        { value: 50, label: '50%' },
-                        { value: 60, label: '60%' },
-                        { value: 70, label: '70%' }
-                      ]}
-                      valueLabelDisplay="on"
-                      valueLabelFormat={(value) => `${value}%`}
-                      sx={{
-                        '& .MuiSlider-markLabel': { fontSize: '0.75rem' },
-                        '& .MuiSlider-track': { 
-                          background: (theme) => {
-                            const value = typeof formData.humidity === 'number' ? formData.humidity : 45;
-                            return value < 40 || value > 60 
-                              ? theme.palette.error.main 
-                              : theme.palette.success.main;
-                          }
-                        },
-                        '& .MuiSlider-rail': { opacity: 0.5 },
-                        '& .MuiSlider-thumb': {
-                          height: 24,
-                          width: 24,
-                          '&:hover': {
-                            boxShadow: '0 0 0 8px rgba(25, 118, 210, 0.16)'
-                          }
-                        }
-                      }}
-                    />
-                    <Typography variant="body2" color="error">POWYŻEJ NORMY!</Typography>
-                  </Stack>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 1 }}>
+              <Box sx={{ 
+                mt: 3, 
+                mb: 2, 
+                p: 2, 
+                borderRadius: 2, 
+                background: theme.palette.mode === 'dark'
+            ? 'linear-gradient(45deg, rgba(33,150,243,0.1) 30%, rgba(156,39,176,0.1) 90%)'
+            : 'linear-gradient(45deg, #e3f2fd 30%, #f3e5f5 90%)',
+                border: '1px solid',
+                borderColor: 'primary.light'
+              }}>
+                <Typography variant="h6" gutterBottom sx={{ 
+                  color: 'primary.main',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  fontWeight: 'bold'
+                }}>
+                  <SensorsIcon /> Warunki środowiskowe
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Wybierz czujnik i pobierz dane dla określonej daty i godziny odczytu
+                </Typography>
+              </Box>
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth>
+                <InputLabel>Wybierz czujnik</InputLabel>
+                <Select
+                  value={selectedSensor}
+                  onChange={handleSensorChange}
+                  label="Wybierz czujnik"
+                  disabled={loadingSensors}
+                  sx={{ 
+                    '& .MuiOutlinedInput-root': {
+                      backgroundColor: 'background.paper'
+                    }
+                  }}
+                >
+                  {sensors.map((sensor) => (
+                    <MenuItem key={sensor.id} value={sensor.id}>
+                      {sensor.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {loadingSensors && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, gap: 1 }}>
+                    <CircularProgress size={16} />
                     <Typography variant="caption" color="text.secondary">
-                      Prawidłowy zakres: 40-60%
-                    </Typography>
-                    <Typography variant="caption" fontWeight="bold">
-                      Wybrana wartość: {typeof formData.humidity === 'number' ? `${formData.humidity}%` : 'Nie wybrano'}
+                      Ładowanie czujników...
                     </Typography>
                   </Box>
-                </Box>
+                )}
+                {sensors.length === 0 && !loadingSensors && (
+                  <Alert severity="warning" sx={{ mt: 1 }}>
+                    <Typography variant="caption">
+                      Brak dostępnych czujników
+                    </Typography>
+                  </Alert>
+                )}
               </FormControl>
             </Grid>
             
-            <Grid item xs={12}>
-              <FormControl component="fieldset" fullWidth>
-                <FormLabel component="legend">Zmierzona temperatura powietrza w pomieszczeniu</FormLabel>
-                <Box sx={{ px: 2, py: 3 }}>
-                  <Stack spacing={2} direction="row" alignItems="center" sx={{ mb: 1 }}>
-                    <Typography variant="body2" color="error">PONIŻEJ NORMY!</Typography>
-                    <Slider
-                  name="temperature"
-                      value={typeof formData.temperature === 'number' ? formData.temperature : 20}
-                      onChange={(e, newValue) => handleSliderChange(e, newValue, 'temperature')}
-                      min={5}
-                      max={40}
-                      step={1}
-                      marks={[
-                        { value: 5, label: '5°C' },
-                        { value: 10, label: '10°C' },
-                        { value: 15, label: '15°C' },
-                        { value: 20, label: '20°C' },
-                        { value: 25, label: '25°C' },
-                        { value: 30, label: '30°C' },
-                        { value: 35, label: '35°C' },
-                        { value: 40, label: '40°C' }
-                      ]}
-                      valueLabelDisplay="on"
-                      valueLabelFormat={(value) => `${value}°C`}
-                      sx={{
-                        '& .MuiSlider-markLabel': { fontSize: '0.75rem' },
-                        '& .MuiSlider-track': { 
-                          background: (theme) => {
-                            const value = typeof formData.temperature === 'number' ? formData.temperature : 20;
-                            return value < 10 || value > 25 
-                              ? theme.palette.error.main 
-                              : theme.palette.success.main;
-                          }
-                        },
-                        '& .MuiSlider-rail': { opacity: 0.5 },
-                        '& .MuiSlider-thumb': {
-                          height: 24,
-                          width: 24,
-                          '&:hover': {
-                            boxShadow: '0 0 0 8px rgba(25, 118, 210, 0.16)'
-                          }
-                        }
-                      }}
-                    />
-                    <Typography variant="body2" color="error">POWYŻEJ NORMY!</Typography>
-                  </Stack>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 1 }}>
-                    <Typography variant="caption" color="text.secondary">
-                      Prawidłowy zakres: 10-25°C
-                    </Typography>
-                    <Typography variant="caption" fontWeight="bold">
-                      Wybrana wartość: {typeof formData.temperature === 'number' ? `${formData.temperature}°C` : 'Nie wybrano'}
-                    </Typography>
-                  </Box>
+            <Grid item xs={12} md={6}>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={handleLoadSensorData}
+                disabled={!selectedSensor || loadingSensors || !formData.readingDate || !formData.readingTime}
+                fullWidth
+                sx={{ 
+                  height: { xs: '48px', sm: '56px' },
+                  fontSize: { xs: '0.875rem', sm: '1rem' },
+                  px: { xs: 2, sm: 3 }
+                }}
+                startIcon={<SensorsIcon />}
+              >
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="body2" sx={{ 
+                    fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                    lineHeight: 1.2,
+                    display: { xs: 'block', sm: 'none' }
+                  }}>
+                    Pobierz dane
+                  </Typography>
+                  <Typography sx={{ 
+                    fontSize: { xs: '0.75rem', sm: '1rem' },
+                    display: { xs: 'none', sm: 'block' }
+                  }}>
+                    Pobierz dane dla określonej daty/godziny
+                  </Typography>
                 </Box>
-              </FormControl>
+              </Button>
+              
+              {sensorData && (
+                <Alert severity="success" sx={{ mt: 1, py: 0.5 }}>
+                  <Typography variant="caption" sx={{ fontSize: '0.75rem' }}>
+                    <strong>Ostatnio pobrano:</strong><br />
+                    {formatSensorTimestamp(sensorData.timestamp).full}
+                    {sensorData.timeDifference > 0 && (
+                      <span style={{ color: '#ff9800', fontWeight: 'bold' }}>
+                        <br />⚠️ Różnica: {sensorData.timeDifference} min
+                      </span>
+                    )}
+                  </Typography>
+                </Alert>
+              )}
+              
+              {(!formData.readingDate || !formData.readingTime) && (
+                <Alert severity="info" sx={{ mt: 1, py: 0.5 }}>
+                  <Typography variant="caption" sx={{ fontSize: '0.75rem' }}>
+                    Najpierw ustaw datę i godzinę odczytu powyżej
+                  </Typography>
+                </Alert>
+              )}
+            </Grid>
+            
+            <Grid item xs={12}>
+              <Paper sx={{ 
+                p: { xs: 2, sm: 3 }, 
+                borderRadius: 2,
+                background: theme.palette.mode === 'dark'
+            ? 'linear-gradient(135deg, rgba(76,175,80,0.1) 0%, rgba(33,150,243,0.1) 100%)'
+            : 'linear-gradient(135deg, #e8f5e8 0%, #f0f8ff 100%)',
+                border: '1px solid',
+                borderColor: 'divider'
+              }}>
+                <FormControl component="fieldset" fullWidth>
+                  <FormLabel component="legend" sx={{ 
+                    fontSize: { xs: '1rem', sm: '1.1rem' },
+                    fontWeight: 'bold',
+                    color: 'primary.main',
+                    mb: 2
+                  }}>
+                    💧 Zmierzona wilgotność powietrza w pomieszczeniu
+                  </FormLabel>
+                  
+                  <Box sx={{ mt: 2 }}>
+                    <Stack 
+                      spacing={2} 
+                      direction={{ xs: 'column', sm: 'row' }} 
+                      alignItems="center" 
+                      sx={{ mb: 2 }}
+                    >
+                      <Typography variant="body2" color="error" sx={{ 
+                        fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                        fontWeight: 'bold',
+                        minWidth: { sm: '120px' }
+                      }}>
+                        PONIŻEJ NORMY!
+                      </Typography>
+                      
+                      <Box sx={{ flex: 1, width: '100%', px: { xs: 0, sm: 2 } }}>
+                        <Slider
+                          name="humidity"
+                          value={typeof formData.humidity === 'number' ? formData.humidity : 45}
+                          onChange={(e, newValue) => handleSliderChange(e, newValue, 'humidity')}
+                          min={20}
+                          max={70}
+                          step={1}
+                          marks={[
+                            { value: 20, label: '20%' },
+                            { value: 30, label: '30%' },
+                            { value: 40, label: '40%' },
+                            { value: 50, label: '50%' },
+                            { value: 60, label: '60%' },
+                            { value: 70, label: '70%' }
+                          ]}
+                          valueLabelDisplay="on"
+                          valueLabelFormat={(value) => `${value}%`}
+                          sx={{
+                            '& .MuiSlider-markLabel': { 
+                              fontSize: { xs: '0.65rem', sm: '0.75rem' },
+                              '@media (max-width: 600px)': {
+                                '&:nth-of-type(even)': {
+                                  display: 'none'
+                                }
+                              }
+                            },
+                            '& .MuiSlider-track': { 
+                              background: (theme) => {
+                                const value = typeof formData.humidity === 'number' ? formData.humidity : 45;
+                                return value < 40 || value > 60 
+                                  ? theme.palette.error.main 
+                                  : theme.palette.success.main;
+                              },
+                              height: { xs: 6, sm: 8 }
+                            },
+                            '& .MuiSlider-rail': { 
+                              opacity: 0.5,
+                              height: { xs: 6, sm: 8 }
+                            },
+                            '& .MuiSlider-thumb': {
+                              height: { xs: 20, sm: 24 },
+                              width: { xs: 20, sm: 24 },
+                              '&:hover': {
+                                boxShadow: '0 0 0 8px rgba(25, 118, 210, 0.16)'
+                              }
+                            },
+                            '& .MuiSlider-valueLabel': {
+                              fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                            }
+                          }}
+                        />
+                      </Box>
+                      
+                      <Typography variant="body2" color="error" sx={{ 
+                        fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                        fontWeight: 'bold',
+                        minWidth: { sm: '120px' },
+                        textAlign: { sm: 'right' }
+                      }}>
+                        POWYŻEJ NORMY!
+                      </Typography>
+                    </Stack>
+                    
+                    <Box sx={{ 
+                      display: 'flex', 
+                      flexDirection: { xs: 'column', sm: 'row' },
+                      justifyContent: 'space-between', 
+                      gap: { xs: 1, sm: 0 },
+                      px: 1,
+                      mt: 2
+                    }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ 
+                        fontSize: { xs: '0.7rem', sm: '0.75rem' }
+                      }}>
+                        Prawidłowy zakres: 40-60%
+                      </Typography>
+                      <Typography variant="caption" fontWeight="bold" sx={{ 
+                        fontSize: { xs: '0.7rem', sm: '0.75rem' },
+                        color: (typeof formData.humidity === 'number' && formData.humidity >= 40 && formData.humidity <= 60) 
+                          ? 'success.main' 
+                          : 'error.main'
+                      }}>
+                        Wybrana wartość: {typeof formData.humidity === 'number' ? `${formData.humidity}%` : 'Nie wybrano'}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </FormControl>
+              </Paper>
+            </Grid>
+            
+            <Grid item xs={12}>
+              <Paper sx={{ 
+                p: { xs: 2, sm: 3 }, 
+                borderRadius: 2,
+                background: theme.palette.mode === 'dark'
+            ? 'linear-gradient(135deg, rgba(255,152,0,0.1) 0%, rgba(233,30,99,0.1) 100%)'
+            : 'linear-gradient(135deg, #fff3e0 0%, #fce4ec 100%)',
+                border: '1px solid',
+                borderColor: 'divider'
+              }}>
+                <FormControl component="fieldset" fullWidth>
+                  <FormLabel component="legend" sx={{ 
+                    fontSize: { xs: '1rem', sm: '1.1rem' },
+                    fontWeight: 'bold',
+                    color: 'primary.main',
+                    mb: 2
+                  }}>
+                    🌡️ Zmierzona temperatura powietrza w pomieszczeniu
+                  </FormLabel>
+                  
+                  <Box sx={{ mt: 2 }}>
+                    <Stack 
+                      spacing={2} 
+                      direction={{ xs: 'column', sm: 'row' }} 
+                      alignItems="center" 
+                      sx={{ mb: 2 }}
+                    >
+                      <Typography variant="body2" color="error" sx={{ 
+                        fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                        fontWeight: 'bold',
+                        minWidth: { sm: '120px' }
+                      }}>
+                        PONIŻEJ NORMY!
+                      </Typography>
+                      
+                      <Box sx={{ flex: 1, width: '100%', px: { xs: 0, sm: 2 } }}>
+                        <Slider
+                          name="temperature"
+                          value={typeof formData.temperature === 'number' ? formData.temperature : 20}
+                          onChange={(e, newValue) => handleSliderChange(e, newValue, 'temperature')}
+                          min={5}
+                          max={40}
+                          step={1}
+                          marks={[
+                            { value: 5, label: '5°C' },
+                            { value: 10, label: '10°C' },
+                            { value: 15, label: '15°C' },
+                            { value: 20, label: '20°C' },
+                            { value: 25, label: '25°C' },
+                            { value: 30, label: '30°C' },
+                            { value: 35, label: '35°C' },
+                            { value: 40, label: '40°C' }
+                          ]}
+                          valueLabelDisplay="on"
+                          valueLabelFormat={(value) => `${value}°C`}
+                          sx={{
+                            '& .MuiSlider-markLabel': { 
+                              fontSize: { xs: '0.65rem', sm: '0.75rem' },
+                              '@media (max-width: 600px)': {
+                                '&:nth-of-type(even)': {
+                                  display: 'none'
+                                }
+                              }
+                            },
+                            '& .MuiSlider-track': { 
+                              background: (theme) => {
+                                const value = typeof formData.temperature === 'number' ? formData.temperature : 20;
+                                return value < 10 || value > 25 
+                                  ? theme.palette.error.main 
+                                  : theme.palette.success.main;
+                              },
+                              height: { xs: 6, sm: 8 }
+                            },
+                            '& .MuiSlider-rail': { 
+                              opacity: 0.5,
+                              height: { xs: 6, sm: 8 }
+                            },
+                            '& .MuiSlider-thumb': {
+                              height: { xs: 20, sm: 24 },
+                              width: { xs: 20, sm: 24 },
+                              '&:hover': {
+                                boxShadow: '0 0 0 8px rgba(25, 118, 210, 0.16)'
+                              }
+                            },
+                            '& .MuiSlider-valueLabel': {
+                              fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                            }
+                          }}
+                        />
+                      </Box>
+                      
+                      <Typography variant="body2" color="error" sx={{ 
+                        fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                        fontWeight: 'bold',
+                        minWidth: { sm: '120px' },
+                        textAlign: { sm: 'right' }
+                      }}>
+                        POWYŻEJ NORMY!
+                      </Typography>
+                    </Stack>
+                    
+                    <Box sx={{ 
+                      display: 'flex', 
+                      flexDirection: { xs: 'column', sm: 'row' },
+                      justifyContent: 'space-between', 
+                      gap: { xs: 1, sm: 0 },
+                      px: 1,
+                      mt: 2
+                    }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ 
+                        fontSize: { xs: '0.7rem', sm: '0.75rem' }
+                      }}>
+                        Prawidłowy zakres: 10-25°C
+                      </Typography>
+                      <Typography variant="caption" fontWeight="bold" sx={{ 
+                        fontSize: { xs: '0.7rem', sm: '0.75rem' },
+                        color: (typeof formData.temperature === 'number' && formData.temperature >= 10 && formData.temperature <= 25) 
+                          ? 'success.main' 
+                          : 'error.main'
+                      }}>
+                        Wybrana wartość: {typeof formData.temperature === 'number' ? `${formData.temperature}°C` : 'Nie wybrano'}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </FormControl>
+              </Paper>
             </Grid>
             
             <Grid item xs={12}>
@@ -1564,17 +1971,91 @@ const ProductionControlForm = ({
     </>
   );
 
+  // Komponent okienka dialogowego z informacjami o czujniku
+  const SensorInfoDialog = () => (
+    <Dialog
+      open={sensorInfoDialog.open}
+      onClose={closeSensorInfoDialog}
+      maxWidth="sm"
+      fullWidth
+      fullScreen={false}
+      sx={{
+        '& .MuiDialog-paper': {
+          margin: { xs: 2, sm: 4 },
+          maxHeight: { xs: '90vh', sm: 'calc(100% - 64px)' },
+          borderRadius: { xs: 2, sm: 2 }
+        }
+      }}
+    >
+      <DialogTitle sx={{ 
+        color: sensorInfoDialog.isError ? 'error.main' : 'success.main',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1,
+        fontSize: { xs: '1.1rem', sm: '1.25rem' },
+        py: { xs: 2, sm: 3 },
+        borderBottom: '1px solid',
+        borderColor: 'divider'
+      }}>
+        <Box sx={{ fontSize: { xs: '1.2rem', sm: '1.5rem' } }}>
+          {sensorInfoDialog.isError ? '⚠️' : '✅'}
+        </Box>
+        <Box>{sensorInfoDialog.title}</Box>
+      </DialogTitle>
+      <DialogContent sx={{ py: { xs: 2, sm: 3 } }}>
+        <Typography sx={{ 
+          whiteSpace: 'pre-line', 
+          fontSize: { xs: '0.875rem', sm: '1rem' },
+          lineHeight: 1.6
+        }}>
+          {sensorInfoDialog.message}
+        </Typography>
+      </DialogContent>
+      <DialogActions sx={{ 
+        p: { xs: 2, sm: 3 },
+        borderTop: '1px solid',
+        borderColor: 'divider'
+      }}>
+        <Button 
+          onClick={closeSensorInfoDialog} 
+          variant="contained"
+          color={sensorInfoDialog.isError ? 'error' : 'primary'}
+          sx={{ 
+            minWidth: { xs: 80, sm: 120 },
+            py: { xs: 1, sm: 1.5 }
+          }}
+        >
+          OK
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+
   // W trybie dialogu zwróć tylko zawartość formularza
   if (isDialog) {
-    return formContent;
+    return (
+      <>
+        {formContent}
+        <SensorInfoDialog />
+      </>
+    );
   }
 
   // W trybie normalnym zwróć formularz w kontenerze
   return (
-    <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
-      <Paper sx={{ p: 4 }}>
+    <Container maxWidth="md" sx={{ 
+      mt: { xs: 2, sm: 4 }, 
+      mb: { xs: 2, sm: 4 },
+      px: { xs: 1, sm: 3 }
+    }}>
+      <Paper sx={{ 
+        p: { xs: 2, sm: 4 },
+        borderRadius: { xs: 2, sm: 2 },
+        boxShadow: { xs: 2, sm: 3 }
+      }}>
         {formContent}
       </Paper>
+      <SensorInfoDialog />
     </Container>
   );
 };
