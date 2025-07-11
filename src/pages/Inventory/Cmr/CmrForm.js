@@ -29,6 +29,7 @@ import {
   Chip,
   Collapse
 } from '@mui/material';
+import { useTheme as useMuiTheme } from '@mui/material/styles';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import pl from 'date-fns/locale/pl';
@@ -53,6 +54,7 @@ import { getCompanyData } from '../../../services/companyService';
 import BatchSelector from '../../../components/cmr/BatchSelector';
 import WeightCalculationDialog from '../../../components/cmr/WeightCalculationDialog';
 import { calculatePalletWeights, calculateBoxWeights, calculateCmrItemWeight, getInventoryDataFromBatches } from '../../../utils/cmrWeightCalculator';
+import { useTheme } from '../../../contexts/ThemeContext';
 
 /**
  * Komponent wyświetlający podsumowanie wagi i palet dla pojedynczej pozycji CMR
@@ -60,6 +62,7 @@ import { calculatePalletWeights, calculateBoxWeights, calculateCmrItemWeight, ge
 const ItemWeightSummary = ({ item, itemIndex, isCollapsed, onToggleCollapse }) => {
   const [weightDetails, setWeightDetails] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const muiTheme = useMuiTheme();
 
   // Cache dla danych magazynowych - używamy tego samego TTL co w głównym komponencie
   const CACHE_TTL = 5 * 60 * 1000; // 5 minut w milisekundach
@@ -107,19 +110,23 @@ const ItemWeightSummary = ({ item, itemIndex, isCollapsed, onToggleCollapse }) =
     try {
       const inventoryData = await getInventoryDataCached(item.linkedBatches);
       
-      if (inventoryData && inventoryData.itemsPerBox && inventoryData.boxesPerPallet) {
+      if (inventoryData) {
         const palletData = calculatePalletWeights({
           quantity: parseFloat(item.quantity) || 0,
           unitWeight: inventoryData.weight || 0,
-          itemsPerBox: inventoryData.itemsPerBox,
-          boxesPerPallet: inventoryData.boxesPerPallet
+          itemsPerBox: inventoryData.itemsPerBox || 0,
+          boxesPerPallet: inventoryData.boxesPerPallet || 0
         });
 
-        const boxData = calculateBoxWeights({
-          quantity: parseFloat(item.quantity) || 0,
-          unitWeight: inventoryData.weight || 0,
-          itemsPerBox: inventoryData.itemsPerBox
-        });
+        // Oblicz szczegóły kartonów tylko jeśli pozycja ma kartony
+        let boxData = { fullBox: null, partialBox: null, totalBoxes: 0 };
+        if (inventoryData.itemsPerBox && inventoryData.itemsPerBox > 0) {
+          boxData = calculateBoxWeights({
+            quantity: parseFloat(item.quantity) || 0,
+            unitWeight: inventoryData.weight || 0,
+            itemsPerBox: inventoryData.itemsPerBox
+          });
+        }
 
         setWeightDetails({
           hasDetailedData: true,
@@ -129,7 +136,8 @@ const ItemWeightSummary = ({ item, itemIndex, isCollapsed, onToggleCollapse }) =
           palletsCount: palletData.palletsCount,
           pallets: palletData.pallets,
           boxesCount: boxData.totalBoxes,
-          boxes: boxData
+          boxes: boxData,
+          hasBoxes: inventoryData.itemsPerBox && inventoryData.itemsPerBox > 0
         });
       } else {
         setWeightDetails({
@@ -163,7 +171,10 @@ const ItemWeightSummary = ({ item, itemIndex, isCollapsed, onToggleCollapse }) =
 
   return (
     <Grid item xs={12}>
-      <Card sx={{ mt: 2, bgcolor: 'grey.50' }}>
+      <Card sx={{ 
+        mt: 2, 
+        bgcolor: muiTheme.palette.mode === 'dark' ? 'background.paper' : 'grey.50' 
+      }}>
         <CardHeader
           title={
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -229,10 +240,10 @@ const ItemWeightSummary = ({ item, itemIndex, isCollapsed, onToggleCollapse }) =
                         <Grid item xs={12} sm={6}>
                           <Box sx={{ 
                             p: 1.5, 
-                            bgcolor: 'success.50',
+                            bgcolor: (theme) => theme.palette.mode === 'dark' ? 'success.dark' : 'success.light',
                             borderRadius: 1,
                             border: 1,
-                            borderColor: 'success.200'
+                            borderColor: 'success.main'
                           }}>
                             {(() => {
                               const fullPallet = weightDetails.pallets.find(p => p.isFull);
@@ -266,10 +277,10 @@ const ItemWeightSummary = ({ item, itemIndex, isCollapsed, onToggleCollapse }) =
                         <Grid item xs={12} sm={6}>
                           <Box sx={{ 
                             p: 1.5, 
-                            bgcolor: 'warning.50',
+                            bgcolor: (theme) => theme.palette.mode === 'dark' ? 'warning.dark' : 'warning.light',
                             borderRadius: 1,
                             border: 1,
-                            borderColor: 'warning.200'
+                            borderColor: 'warning.main'
                           }}>
                             {(() => {
                               const partialPallet = weightDetails.pallets.find(p => !p.isFull);
@@ -300,8 +311,8 @@ const ItemWeightSummary = ({ item, itemIndex, isCollapsed, onToggleCollapse }) =
                   </Grid>
                 )}
 
-                {/* Szczegóły kartonów */}
-                {weightDetails.hasDetailedData && weightDetails.boxes && (weightDetails.boxes.fullBox || weightDetails.boxes.partialBox) && (
+                {/* Szczegóły kartonów - tylko gdy pozycja ma kartony */}
+                {weightDetails.hasDetailedData && weightDetails.hasBoxes && weightDetails.boxes && (weightDetails.boxes.fullBox || weightDetails.boxes.partialBox) && (
                   <Grid item xs={12}>
                     <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1, mt: 1 }}>
                       Szczegóły kartonów:
@@ -312,10 +323,10 @@ const ItemWeightSummary = ({ item, itemIndex, isCollapsed, onToggleCollapse }) =
                         <Grid item xs={12} sm={6}>
                           <Box sx={{ 
                             p: 1.5, 
-                            bgcolor: 'info.50',
+                            bgcolor: (theme) => theme.palette.mode === 'dark' ? 'info.dark' : 'info.light',
                             borderRadius: 1,
                             border: 1,
-                            borderColor: 'info.200'
+                            borderColor: 'info.main'
                           }}>
                             <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
                               Pełny karton ({weightDetails.boxes.fullBoxesCount} szt.)
@@ -338,10 +349,10 @@ const ItemWeightSummary = ({ item, itemIndex, isCollapsed, onToggleCollapse }) =
                         <Grid item xs={12} sm={6}>
                           <Box sx={{ 
                             p: 1.5, 
-                            bgcolor: 'warning.50',
+                            bgcolor: (theme) => theme.palette.mode === 'dark' ? 'warning.dark' : 'warning.light',
                             borderRadius: 1,
                             border: 1,
-                            borderColor: 'warning.200'
+                            borderColor: 'warning.main'
                           }}>
                             <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
                               Niepełny karton (1 szt.)
@@ -383,6 +394,8 @@ const ItemWeightSummary = ({ item, itemIndex, isCollapsed, onToggleCollapse }) =
  * @returns {JSX.Element} Formularz CMR
  */
 const CmrForm = ({ initialData, onSubmit, onCancel }) => {
+  const muiTheme = useMuiTheme();
+  const { mode } = useTheme();
   const emptyItem = {
     description: '',
     quantity: '',
@@ -778,26 +791,31 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
     try {
       const inventoryData = await getInventoryDataCached(item.linkedBatches);
       
-      if (inventoryData && inventoryData.itemsPerBox && inventoryData.boxesPerPallet) {
+      if (inventoryData) {
         const palletData = calculatePalletWeights({
           quantity: parseFloat(item.quantity) || 0,
           unitWeight: inventoryData.weight || 0,
-          itemsPerBox: inventoryData.itemsPerBox,
-          boxesPerPallet: inventoryData.boxesPerPallet
+          itemsPerBox: inventoryData.itemsPerBox || 0,
+          boxesPerPallet: inventoryData.boxesPerPallet || 0
         });
 
-        const boxData = calculateBoxWeights({
-          quantity: parseFloat(item.quantity) || 0,
-          unitWeight: inventoryData.weight || 0,
-          itemsPerBox: inventoryData.itemsPerBox
-        });
+        // Oblicz szczegóły kartonów tylko jeśli pozycja ma kartony
+        let boxData = { fullBox: null, partialBox: null, totalBoxes: 0 };
+        if (inventoryData.itemsPerBox && inventoryData.itemsPerBox > 0) {
+          boxData = calculateBoxWeights({
+            quantity: parseFloat(item.quantity) || 0,
+            unitWeight: inventoryData.weight || 0,
+            itemsPerBox: inventoryData.itemsPerBox
+          });
+        }
 
         return {
           hasDetailedData: true,
           palletsCount: palletData.palletsCount,
           pallets: palletData.pallets,
           boxesCount: boxData.totalBoxes,
-          boxes: boxData
+          boxes: boxData,
+          hasBoxes: inventoryData.itemsPerBox && inventoryData.itemsPerBox > 0
         };
       }
     } catch (error) {
@@ -871,19 +889,23 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
         try {
           const inventoryData = await getInventoryDataCached(item.linkedBatches);
           
-          if (inventoryData && inventoryData.itemsPerBox && inventoryData.boxesPerPallet) {
+          if (inventoryData) {
             const palletData = calculatePalletWeights({
               quantity: parseFloat(item.quantity) || 0,
               unitWeight: inventoryData.weight || 0,
-              itemsPerBox: inventoryData.itemsPerBox,
-              boxesPerPallet: inventoryData.boxesPerPallet
+              itemsPerBox: inventoryData.itemsPerBox || 0,
+              boxesPerPallet: inventoryData.boxesPerPallet || 0
             });
 
-            const boxData = calculateBoxWeights({
-              quantity: parseFloat(item.quantity) || 0,
-              unitWeight: inventoryData.weight || 0,
-              itemsPerBox: inventoryData.itemsPerBox
-            });
+            // Oblicz szczegóły kartonów tylko jeśli pozycja ma kartony
+            let boxData = { fullBox: null, partialBox: null, totalBoxes: 0 };
+            if (inventoryData.itemsPerBox && inventoryData.itemsPerBox > 0) {
+              boxData = calculateBoxWeights({
+                quantity: parseFloat(item.quantity) || 0,
+                unitWeight: inventoryData.weight || 0,
+                itemsPerBox: inventoryData.itemsPerBox
+              });
+            }
 
             totalPallets += palletData.palletsCount;
 
@@ -898,10 +920,11 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
               boxesCount: boxData.totalBoxes,
               boxes: boxData,
               hasDetailedData: true,
+              hasBoxes: inventoryData.itemsPerBox && inventoryData.itemsPerBox > 0,
               linkedBatches: item.linkedBatches,
               inventoryData: {
-                itemsPerBox: inventoryData.itemsPerBox,
-                boxesPerPallet: inventoryData.boxesPerPallet,
+                itemsPerBox: inventoryData.itemsPerBox || 0,
+                boxesPerPallet: inventoryData.boxesPerPallet || 0,
                 unitWeight: inventoryData.weight,
                 barcode: inventoryData.barcode
               }
@@ -2570,7 +2593,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                                 title="Oblicz wagę na podstawie danych magazynowych"
                                 sx={{ 
                                   color: 'primary.main',
-                                  '&:hover': { bgcolor: 'primary.50' }
+                                  '&:hover': { bgcolor: (theme) => theme.palette.mode === 'dark' ? 'primary.dark' : 'primary.light' }
                                 }}
                               >
                                 <CalculateIcon fontSize="small" />
@@ -2695,7 +2718,12 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
               <CardContent>
                 <Grid container spacing={3}>
                   <Grid item xs={12} sm={6} md={3}>
-                    <Box sx={{ p: 2, bgcolor: 'primary.50', borderRadius: 1, textAlign: 'center' }}>
+                    <Box sx={{ 
+                      p: 2, 
+                      bgcolor: (theme) => theme.palette.mode === 'dark' ? 'primary.dark' : 'primary.light', 
+                      borderRadius: 1, 
+                      textAlign: 'center' 
+                    }}>
                       <Typography variant="h6" color="primary" gutterBottom>
                         Całkowita waga
                       </Typography>
@@ -2705,7 +2733,12 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                     </Box>
                   </Grid>
                   <Grid item xs={12} sm={6} md={3}>
-                    <Box sx={{ p: 2, bgcolor: 'success.50', borderRadius: 1, textAlign: 'center' }}>
+                    <Box sx={{ 
+                      p: 2, 
+                      bgcolor: (theme) => theme.palette.mode === 'dark' ? 'success.dark' : 'success.light', 
+                      borderRadius: 1, 
+                      textAlign: 'center' 
+                    }}>
                       <Typography variant="h6" color="success.main" gutterBottom>
                         Łączna liczba palet
                       </Typography>
@@ -2715,7 +2748,12 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                     </Box>
                   </Grid>
                   <Grid item xs={12} sm={6} md={3}>
-                    <Box sx={{ p: 2, bgcolor: 'info.50', borderRadius: 1, textAlign: 'center' }}>
+                    <Box sx={{ 
+                      p: 2, 
+                      bgcolor: (theme) => theme.palette.mode === 'dark' ? 'info.dark' : 'info.light', 
+                      borderRadius: 1, 
+                      textAlign: 'center' 
+                    }}>
                       <Typography variant="h6" color="info.main" gutterBottom>
                         Liczba pozycji
                       </Typography>
@@ -2725,7 +2763,12 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                     </Box>
                   </Grid>
                   <Grid item xs={12} sm={6} md={3}>
-                    <Box sx={{ p: 2, bgcolor: 'warning.50', borderRadius: 1, textAlign: 'center' }}>
+                    <Box sx={{ 
+                      p: 2, 
+                      bgcolor: (theme) => theme.palette.mode === 'dark' ? 'warning.dark' : 'warning.light', 
+                      borderRadius: 1, 
+                      textAlign: 'center' 
+                    }}>
                       <Typography variant="h6" color="warning.main" gutterBottom>
                         Pozycje z danymi
                       </Typography>
@@ -2911,7 +2954,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                     border: (theme) => `1px solid ${theme.palette.divider}`, 
                     borderRadius: 1, 
                     mb: 1,
-                    bgcolor: 'background.paper'
+                    bgcolor: mode === 'dark' ? 'background.default' : 'background.paper'
                   }}
                 >
                                      <Grid container spacing={2} alignItems="center">

@@ -18,6 +18,7 @@ import {
   Select,
   MenuItem,
   CircularProgress,
+  LinearProgress,
   Alert,
   Chip,
   Divider,
@@ -68,6 +69,27 @@ import { formatDateTime } from '../../utils/formatters';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import { toast } from 'react-hot-toast';
 
+// CACHE dla stabilnych danych - dodane dla optymalizacji
+const dataCache = {
+  inventoryItems: {
+    data: null,
+    timestamp: null,
+    ttl: 5 * 60 * 1000 // 5 minut
+  },
+  supplierPrices: {
+    data: new Map(),
+    timestamp: new Map(),
+    ttl: 10 * 60 * 1000 // 10 minut
+  }
+};
+
+// Funkcja pomocnicza do sprawdzania ważności cache
+const isCacheValid = (cacheKey) => {
+  const cache = dataCache[cacheKey];
+  if (!cache.data || !cache.timestamp) return false;
+  return (Date.now() - cache.timestamp) < cache.ttl;
+};
+
 const ForecastPage = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
@@ -82,6 +104,7 @@ const ForecastPage = () => {
   const [endDate, setEndDate] = useState(addDays(new Date(), 30));
   const [timeRange, setTimeRange] = useState('30days');
   const [calculatingForecast, setCalculatingForecast] = useState(false);
+  const [forecastProgress, setForecastProgress] = useState(0);
   
   // State dla animacji
   const [dataLoaded, setDataLoaded] = useState(false);
@@ -106,11 +129,21 @@ const ForecastPage = () => {
       setDataLoaded(false);
       setShowResults(false);
       
-      // Pobierz zadania produkcyjne z filtrowaniem po stronie serwera i materiały równocześnie
-      const [tasksData, items] = await Promise.all([
-        getTasksByDateRangeOptimized(startDate, endDate),
-        getAllInventoryItems()
-      ]);
+      // OPTYMALIZACJA: Użyj cache dla pozycji magazynowych jeśli są aktualne
+      let items;
+      if (isCacheValid('inventoryItems')) {
+        console.log('Używam zbuforowanych pozycji magazynowych');
+        items = dataCache.inventoryItems.data;
+      } else {
+        console.log('Pobieram pozycje magazynowe z serwera');
+        items = await getAllInventoryItems();
+        // Zapisz do cache
+        dataCache.inventoryItems.data = items;
+        dataCache.inventoryItems.timestamp = Date.now();
+      }
+
+      // Pobierz zadania produkcyjne z filtrowaniem po stronie serwera
+      const tasksData = await getTasksByDateRangeOptimized(startDate, endDate);
       
       console.log(`Pobrano ${tasksData.length} zadań produkcyjnych i ${items.length} pozycji magazynowych`);
       
@@ -152,6 +185,7 @@ const ForecastPage = () => {
   const calculateForecast = async (tasksData = tasks, itemsData = inventoryItems) => {
     try {
       setCalculatingForecast(true);
+      setForecastProgress(0);
       console.log('Rozpoczynam obliczanie prognozy zapotrzebowania dla okresu', 
         formatDateDisplay(startDate), '-', formatDateDisplay(endDate));
       
@@ -172,6 +206,8 @@ const ForecastPage = () => {
       itemsData.forEach(item => {
         inventoryItemsMap.set(item.id, item);
       });
+      
+      setForecastProgress(10); // 10% - przygotowanie danych
       
       // Oblicz potrzebne ilości materiałów na podstawie zadań produkcyjnych
       const materialRequirements = {};
@@ -198,7 +234,14 @@ const ForecastPage = () => {
       };
       
       // Optymalizacja: pierwsza pętla - zbieranie danych o wymaganiach materiałowych
-      for (const task of tasksData) {
+      const totalTasks = tasksData.length;
+      for (let taskIndex = 0; taskIndex < totalTasks; taskIndex++) {
+        const task = tasksData[taskIndex];
+        
+        // Aktualizuj progress co 10 zadań
+        if (taskIndex % 10 === 0) {
+          setForecastProgress(10 + (taskIndex / totalTasks) * 30); // 10-40% - przetwarzanie zadań
+        }
         // Upewnij się, że zadanie ma materiały
         if (!task.materials || task.materials.length === 0) continue;
         
@@ -249,10 +292,12 @@ const ForecastPage = () => {
         }
       }
       
+      setForecastProgress(40); // 40% - zakończono przetwarzanie zadań
+      
       // Optymalizacja: podziel pobieranie danych na partie (batch)
-      // Pobierz ceny domyślnych dostawców dla materiałów w mniejszych partiach
+      // Pobierz ceny domyślnych dostawców dla materiałów w większych partiach dla lepszej wydajności
       const materialIds = Object.keys(materialRequirements);
-      const batchSize = 20; // Pobierz ceny dla 20 materiałów na raz
+      const batchSize = 50; // Pobierz ceny dla 20 materiałów na raz
       
       try {
         const { getBestSupplierPricesForItems, getAwaitingOrdersForInventoryItem } = await import('../../services/inventoryService');
@@ -260,6 +305,9 @@ const ForecastPage = () => {
         // Obliczanie kosztów na podstawie cen domyślnych dostawców
         for (let i = 0; i < materialIds.length; i += batchSize) {
           const batchIds = materialIds.slice(i, i + batchSize);
+          
+          // Aktualizuj progress podczas pobierania cen
+          setForecastProgress(40 + ((i / materialIds.length) * 30)); // 40-70% - pobieranie cen
           
           // Przygotuj listę materiałów do sprawdzenia w tej partii
           const itemsToCheck = batchIds.map(id => ({
@@ -292,67 +340,77 @@ const ForecastPage = () => {
           }
         }
         
-        // Pobierz informacje o zamówieniach komponentów (PO) dla materiałów w partiach
-        const promises = materialIds.map(async (materialId) => {
-          try {
-            const purchaseOrders = await getAwaitingOrdersForInventoryItem(materialId);
-            
-            // Dodaj informacje o przyszłych dostawach do prognozy
-            if (purchaseOrders && purchaseOrders.length > 0) {
-              // Inicjalizuj tablicę przyszłych dostaw, jeśli nie istnieje
-              if (!materialRequirements[materialId].futureDeliveries) {
-                materialRequirements[materialId].futureDeliveries = [];
-              }
+        setForecastProgress(70); // 70% - zakończono pobieranie cen
+        
+        // OPTYMALIZACJA: Pobierz informacje o zamówieniach komponentów (PO) równolegle w mniejszych partiach
+        const purchaseOrderBatchSize = 20; // Przetwarzaj 20 materiałów naraz dla zamówień
+        
+        for (let i = 0; i < materialIds.length; i += purchaseOrderBatchSize) {
+          // Aktualizuj progress podczas pobierania zamówień
+          setForecastProgress(70 + ((i / materialIds.length) * 20)); // 70-90% - pobieranie zamówień
+          const batchMaterialIds = materialIds.slice(i, i + purchaseOrderBatchSize);
+          
+          const batchPromises = batchMaterialIds.map(async (materialId) => {
+            try {
+              const purchaseOrders = await getAwaitingOrdersForInventoryItem(materialId);
               
-              // Dodaj informacje o wszystkich przyszłych dostawach
-              for (const po of purchaseOrders) {
-                for (const item of po.items) {
-                  materialRequirements[materialId].futureDeliveries.push({
-                    poNumber: po.number || 'Brak numeru',
-                    poId: po.id,
-                    status: po.status,
-                    quantity: item.quantityRemaining,
-                    expectedDeliveryDate: item.expectedDeliveryDate || po.expectedDeliveryDate
-                  });
+              // Dodaj informacje o przyszłych dostawach do prognozy
+              if (purchaseOrders && purchaseOrders.length > 0) {
+                // Inicjalizuj tablicę przyszłych dostaw, jeśli nie istnieje
+                if (!materialRequirements[materialId].futureDeliveries) {
+                  materialRequirements[materialId].futureDeliveries = [];
                 }
+                
+                // Dodaj informacje o wszystkich przyszłych dostawach
+                for (const po of purchaseOrders) {
+                  for (const item of po.items) {
+                    materialRequirements[materialId].futureDeliveries.push({
+                      poNumber: po.number || 'Brak numeru',
+                      poId: po.id,
+                      status: po.status,
+                      quantity: item.quantityRemaining,
+                      expectedDeliveryDate: item.expectedDeliveryDate || po.expectedDeliveryDate
+                    });
+                  }
+                }
+                
+                // Sortuj dostawy według daty (od najwcześniejszej)
+                materialRequirements[materialId].futureDeliveries.sort((a, b) => {
+                  if (!a.expectedDeliveryDate) return 1;
+                  if (!b.expectedDeliveryDate) return -1;
+                  return new Date(a.expectedDeliveryDate) - new Date(b.expectedDeliveryDate);
+                });
+                
+                // Oblicz sumę przyszłych dostaw
+                const totalFutureDeliveries = materialRequirements[materialId].futureDeliveries.reduce(
+                  (sum, delivery) => sum + parseFloat(delivery.quantity || 0), 0
+                );
+                
+                materialRequirements[materialId].futureDeliveriesTotal = totalFutureDeliveries;
+                
+                // Zaktualizuj bilans uwzględniając przyszłe dostawy
+                materialRequirements[materialId].balanceWithFutureDeliveries = 
+                  materialRequirements[materialId].availableQuantity + 
+                  totalFutureDeliveries - 
+                  materialRequirements[materialId].requiredQuantity;
+              } else {
+                materialRequirements[materialId].futureDeliveriesTotal = 0;
+                materialRequirements[materialId].balanceWithFutureDeliveries = 
+                  materialRequirements[materialId].availableQuantity - 
+                  materialRequirements[materialId].requiredQuantity;
               }
-              
-              // Sortuj dostawy według daty (od najwcześniejszej)
-              materialRequirements[materialId].futureDeliveries.sort((a, b) => {
-                if (!a.expectedDeliveryDate) return 1;
-                if (!b.expectedDeliveryDate) return -1;
-                return new Date(a.expectedDeliveryDate) - new Date(b.expectedDeliveryDate);
-              });
-              
-              // Oblicz sumę przyszłych dostaw
-              const totalFutureDeliveries = materialRequirements[materialId].futureDeliveries.reduce(
-                (sum, delivery) => sum + parseFloat(delivery.quantity || 0), 0
-              );
-              
-              materialRequirements[materialId].futureDeliveriesTotal = totalFutureDeliveries;
-              
-              // Zaktualizuj bilans uwzględniając przyszłe dostawy
-              materialRequirements[materialId].balanceWithFutureDeliveries = 
-                materialRequirements[materialId].availableQuantity + 
-                totalFutureDeliveries - 
-                materialRequirements[materialId].requiredQuantity;
-            } else {
+            } catch (error) {
+              console.error(`Błąd podczas pobierania zamówień dla materiału ${materialId}:`, error);
               materialRequirements[materialId].futureDeliveriesTotal = 0;
               materialRequirements[materialId].balanceWithFutureDeliveries = 
                 materialRequirements[materialId].availableQuantity - 
                 materialRequirements[materialId].requiredQuantity;
             }
-          } catch (error) {
-            console.error(`Błąd podczas pobierania zamówień dla materiału ${materialId}:`, error);
-            materialRequirements[materialId].futureDeliveriesTotal = 0;
-            materialRequirements[materialId].balanceWithFutureDeliveries = 
-              materialRequirements[materialId].availableQuantity - 
-              materialRequirements[materialId].requiredQuantity;
-          }
-        });
-        
-        // Poczekaj na zakończenie wszystkich zapytań o zamówienia
-        await Promise.allSettled(promises);
+          });
+          
+          // Poczekaj na zakończenie bieżącej partii zapytań
+          await Promise.allSettled(batchPromises);
+        }
         
       } catch (error) {
         console.error('Błąd podczas pobierania cen lub zamówień:', error);
@@ -374,17 +432,21 @@ const ForecastPage = () => {
         };
       });
       
+      setForecastProgress(90); // 90% - finalizowanie wyników
+      
       // Posortuj według niedoboru (od największego) - uwzględniając przyszłe dostawy
       forecastResult.sort((a, b) => a.balanceWithFutureDeliveries - b.balanceWithFutureDeliveries);
       
       console.log(`Obliczono prognozę dla ${forecastResult.length} materiałów`);
       
+      setForecastProgress(100); // 100% - zakończono
       setForecastData(forecastResult);
       setCalculatingForecast(false);
     } catch (error) {
       console.error('Błąd podczas obliczania prognozy:', error);
       showError('Nie udało się obliczyć prognozy zapotrzebowania');
       setCalculatingForecast(false);
+      setForecastProgress(0);
     }
   };
   
@@ -1092,15 +1154,34 @@ const ForecastPage = () => {
                     }}
                   >
                     <Typography variant="caption" component="div" color="primary.main" sx={{ fontWeight: 'bold' }}>
-                      {Math.floor(Math.random() * 100)}%
+                      {Math.round(forecastProgress)}%
                     </Typography>
                   </Box>
                 </Box>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={forecastProgress} 
+                  sx={{ 
+                    width: 300, 
+                    mb: 2, 
+                    height: 8, 
+                    borderRadius: 4,
+                    bgcolor: 'grey.200',
+                    '& .MuiLinearProgress-bar': {
+                      borderRadius: 4,
+                      background: 'linear-gradient(90deg, #1976d2 0%, #42a5f5 100%)'
+                    }
+                  }} 
+                />
                 <Typography variant="h6" sx={{ mb: 1, fontWeight: 'medium' }}>
                   Obliczanie prognozy zapotrzebowania...
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', maxWidth: 400 }}>
-                  Analizujemy zadania produkcyjne, sprawdzamy stany magazynowe i obliczamy zapotrzebowanie na materiały
+                  {forecastProgress < 20 ? 'Przygotowywanie danych...' :
+                   forecastProgress < 50 ? 'Przetwarzanie zadań produkcyjnych...' :
+                   forecastProgress < 80 ? 'Pobieranie cen dostawców...' :
+                   forecastProgress < 95 ? 'Sprawdzanie zamówień...' :
+                   'Finalizowanie wyników...'}
                 </Typography>
               </Box>
             </Fade>

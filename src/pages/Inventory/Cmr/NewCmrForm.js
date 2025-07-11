@@ -1334,7 +1334,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                               title="Oblicz wagę na podstawie danych magazynowych"
                               sx={{ 
                                 color: 'primary.main',
-                                '&:hover': { bgcolor: 'primary.50' },
+                                '&:hover': { bgcolor: (theme) => theme.palette.mode === 'dark' ? 'primary.dark' : 'primary.light' },
                                 minWidth: 32,
                                 height: 32
                               }}

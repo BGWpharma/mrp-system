@@ -4301,7 +4301,7 @@ import {
   };
 
   /**
-   * Znajduje najlepsze ceny dostawców dla listy pozycji magazynowych
+   * Znajduje najlepsze ceny dostawców dla listy pozycji magazynowych - ZOPTYMALIZOWANA WERSJA
    * @param {Array} items - Lista obiektów zawierających itemId i quantity
    * @returns {Promise<Object>} - Mapa itemId -> najlepsza cena dostawcy
    */
@@ -4313,16 +4313,60 @@ import {
     try {
       const result = {};
       
-      // Dla każdej pozycji znajdź najlepszą cenę dostawcy
-      for (const item of items) {
-        if (item.itemId || item.id) {
-          const itemId = item.itemId || item.id;
-          const quantity = item.quantity || 1;
+      // OPTYMALIZACJA 1: Zbierz wszystkie unikalne itemId w jednej operacji
+      const uniqueItemIds = [...new Set(items.map(item => item.itemId || item.id).filter(Boolean))];
+      
+      if (uniqueItemIds.length === 0) {
+        return {};
+      }
+      
+      // OPTYMALIZACJA 2: Pobierz wszystkie ceny dostawców w batches (Firestore limit to 30 dla 'in' queries)
+      const batchSize = 30;
+      const allPrices = new Map(); // itemId -> array of prices
+      
+      for (let i = 0; i < uniqueItemIds.length; i += batchSize) {
+        const batchItemIds = uniqueItemIds.slice(i, i + batchSize);
+        
+        const pricesRef = collection(db, 'inventorySupplierPrices');
+        const q = query(pricesRef, where('itemId', 'in', batchItemIds));
+        const querySnapshot = await getDocs(q);
+        
+        // Grupuj ceny według itemId
+        querySnapshot.forEach(doc => {
+          const priceData = { id: doc.id, ...doc.data() };
+          const itemId = priceData.itemId;
           
-          const bestPrice = await getBestSupplierPriceForItem(itemId, quantity);
-          if (bestPrice) {
-            result[itemId] = bestPrice;
+          if (!allPrices.has(itemId)) {
+            allPrices.set(itemId, []);
           }
+          allPrices.get(itemId).push(priceData);
+        });
+      }
+      
+      // OPTYMALIZACJA 3: Dla każdej pozycji znajdź najlepszą cenę bez dodatkowych zapytań
+      for (const item of items) {
+        const itemId = item.itemId || item.id;
+        const quantity = item.quantity || 1;
+        
+        if (!itemId || !allPrices.has(itemId)) {
+          continue;
+        }
+        
+        const prices = allPrices.get(itemId);
+        
+        // Filtruj ceny według minimalnej ilości
+        const validPrices = prices.filter(price => {
+          const minQ = price.minQuantity || 0;
+          return minQ <= quantity;
+        });
+        
+        if (validPrices.length === 0 && prices.length > 0) {
+          // Jeśli nie znaleziono spełniających kryterium, użyj pierwszej dostępnej
+          result[itemId] = prices[0];
+        } else if (validPrices.length > 0) {
+          // Znajdź najniższą cenę
+          validPrices.sort((a, b) => (a.price || 0) - (b.price || 0));
+          result[itemId] = validPrices[0];
         }
       }
       

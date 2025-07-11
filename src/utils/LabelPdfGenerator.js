@@ -690,7 +690,8 @@ class LabelPdfGenerator {
     const promises = [];
     
     itemsWeightDetails.forEach(itemDetail => {
-      if (itemDetail.hasDetailedData && itemDetail.boxes) {
+      // Generuj etykiety kartonów tylko dla pozycji które mają kartony
+      if (itemDetail.hasDetailedData && itemDetail.hasBoxes && itemDetail.boxes) {
         let boxCounter = 1;
         
         // Etykiety dla pełnych kartonów

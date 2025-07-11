@@ -276,21 +276,24 @@ const CmrDetailsPage = () => {
           try {
             const inventoryData = await getInventoryDataFromBatches(item.linkedBatches);
             
-            if (inventoryData && inventoryData.itemsPerBox && inventoryData.boxesPerPallet) {
-              // Oblicz szczegóły palet
+            if (inventoryData) {
+              // Oblicz szczegóły palet - działa niezależnie od kartonów
               const palletData = calculatePalletWeights({
                 quantity: parseFloat(item.quantity) || 0,
                 unitWeight: inventoryData.weight || 0,
-                itemsPerBox: inventoryData.itemsPerBox,
-                boxesPerPallet: inventoryData.boxesPerPallet
+                itemsPerBox: inventoryData.itemsPerBox || 0,
+                boxesPerPallet: inventoryData.boxesPerPallet || 0
               });
 
-              // Oblicz szczegóły kartonów
-              const boxData = calculateBoxWeights({
-                quantity: parseFloat(item.quantity) || 0,
-                unitWeight: inventoryData.weight || 0,
-                itemsPerBox: inventoryData.itemsPerBox
-              });
+              // Oblicz szczegóły kartonów tylko jeśli pozycja ma kartony
+              let boxData = { fullBox: null, partialBox: null, totalBoxes: 0 };
+              if (inventoryData.itemsPerBox && inventoryData.itemsPerBox > 0) {
+                boxData = calculateBoxWeights({
+                  quantity: parseFloat(item.quantity) || 0,
+                  unitWeight: inventoryData.weight || 0,
+                  itemsPerBox: inventoryData.itemsPerBox
+                });
+              }
 
               totalPallets += palletData.palletsCount;
               totalBoxes += boxData.totalBoxes;
@@ -307,6 +310,7 @@ const CmrDetailsPage = () => {
                 pallets: palletData.pallets,
                 boxesCount: boxData.totalBoxes,
                 boxes: boxData,
+                hasBoxes: inventoryData.itemsPerBox && inventoryData.itemsPerBox > 0, // Dodaj flagę czy pozycja ma kartony
                 linkedBatches: item.linkedBatches.map(batch => ({
                   ...batch,
                   // Uzupełnij dane partii z pełnych danych z bazy jeśli są dostępne
@@ -318,8 +322,8 @@ const CmrDetailsPage = () => {
                   } : {})
                 })),
                 inventoryData: {
-                  itemsPerBox: inventoryData.itemsPerBox,
-                  boxesPerPallet: inventoryData.boxesPerPallet,
+                  itemsPerBox: inventoryData.itemsPerBox || 0,
+                  boxesPerPallet: inventoryData.boxesPerPallet || 0,
                   unitWeight: inventoryData.weight,
                   barcode: inventoryData.barcode
                 }
@@ -555,8 +559,8 @@ const CmrDetailsPage = () => {
   
   const handleEdit = () => {
     console.log('handleEdit wywołane z id:', id);
-    console.log('Próba nawigacji do:', `/inventory/cmr/edit/${id}`);
-    navigate(`/inventory/cmr/edit/${id}`);
+    console.log('Próba nawigacji do:', `/inventory/cmr/${id}/edit`);
+    navigate(`/inventory/cmr/${id}/edit`);
   };
   
   const handleBack = () => {
@@ -576,7 +580,18 @@ const CmrDetailsPage = () => {
       showError('Brak danych do wygenerowania etykiet kartonów');
       return;
     }
-    const labels = LabelGenerator.generateBoxLabels(cmrData, itemsWeightDetails);
+    
+    // Filtruj tylko pozycje które mają kartony
+    const itemsWithBoxes = itemsWeightDetails.filter(item => 
+      item.hasDetailedData && item.hasBoxes && item.boxesCount > 0
+    );
+    
+    if (itemsWithBoxes.length === 0) {
+      showError('Żadna z pozycji nie ma przypisanych kartonów');
+      return;
+    }
+    
+    const labels = LabelGenerator.generateBoxLabels(cmrData, itemsWithBoxes);
     setCurrentLabels(labels);
     setCurrentLabelType('box');
     setLabelsDialogOpen(true);
@@ -1576,7 +1591,7 @@ const CmrDetailsPage = () => {
                 onClick={handleBoxLabel}
                 size="small"
                 color="secondary"
-                  disabled={weightSummary.totalBoxes === 0}
+                disabled={weightSummary.totalBoxes === 0 || !itemsWeightDetails.some(item => item.hasDetailedData && item.hasBoxes)}
               >
                   Etykiety kartonów ({weightSummary.totalBoxes})
               </Button>
@@ -2088,8 +2103,8 @@ const CmrDetailsPage = () => {
                                         </Box>
                                       )}
                                       
-                                      {/* Szczegóły kartonów */}
-                                      {weightDetail.boxes && (weightDetail.boxes.fullBox || weightDetail.boxes.partialBox) && (
+                                      {/* Szczegóły kartonów - tylko gdy pozycja ma kartony */}
+                                      {weightDetail.hasBoxes && weightDetail.boxes && (weightDetail.boxes.fullBox || weightDetail.boxes.partialBox) && (
                                         <Box>
                                           <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'secondary.main' }}>
                                             Kartony:
@@ -2117,8 +2132,11 @@ const CmrDetailsPage = () => {
                                           color: 'text.secondary',
                                           mt: 0.5 
                                         }}>
-                                          {weightDetail.inventoryData.itemsPerBox} szt./karton, {' '}
-                                          {weightDetail.inventoryData.boxesPerPallet} kart./paleta
+                                          {weightDetail.hasBoxes ? (
+                                            `${weightDetail.inventoryData.itemsPerBox} szt./karton, ${weightDetail.inventoryData.boxesPerPallet} kart./paleta`
+                                          ) : (
+                                            'Pozycja bez kartonów - pakowanie bezpośrednio na palety'
+                                          )}
                                         </Typography>
                                       )}
                                     </Box>
@@ -2181,7 +2199,12 @@ const CmrDetailsPage = () => {
                     <Grid container spacing={3}>
                       {/* Podsumowanie główne */}
                       <Grid item xs={12} md={4}>
-                        <Paper sx={{ p: 2, bgcolor: 'info.50', border: 1, borderColor: 'info.200' }}>
+                        <Paper sx={{ 
+              p: 2, 
+              bgcolor: (theme) => theme.palette.mode === 'dark' ? 'info.dark' : 'info.light', 
+              border: 1, 
+              borderColor: 'info.main' 
+            }}>
                           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1, color: 'info.main' }}>
                             Łączne podsumowanie
                           </Typography>
@@ -2216,7 +2239,7 @@ const CmrDetailsPage = () => {
                         <TableContainer component={Paper} variant="outlined">
                           <Table size="small">
                             <TableHead>
-                              <TableRow sx={{ bgcolor: 'grey.50' }}>
+                              <TableRow sx={{ bgcolor: (theme) => theme.palette.mode === 'dark' ? 'background.paper' : 'grey.50' }}>
                                 <TableCell sx={{ fontWeight: 'bold' }}>Pozycja</TableCell>
                                 <TableCell sx={{ fontWeight: 'bold' }}>Waga (kg)</TableCell>
                                 <TableCell sx={{ fontWeight: 'bold' }}>Palety</TableCell>

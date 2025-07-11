@@ -246,11 +246,63 @@ export const calculatePalletWeights = ({
   palletWeight = 25
 }) => {
   // Walidacja danych wejściowych
-  if (!quantity || quantity <= 0 || !itemsPerBox || !boxesPerPallet) {
+  if (!quantity || quantity <= 0) {
     return {
       pallets: [],
       totalWeight: 0,
       palletsCount: 0
+    };
+  }
+
+  // Obsługa pozycji bez kartonów (itemsPerBox = 0 lub brak)
+  if (!itemsPerBox || itemsPerBox <= 0) {
+    // Załóż że wszystkie produkty idą na jedną paletę bez kartonów
+    const productWeight = quantity * unitWeight;
+    const palletTotalWeight = productWeight + palletWeight;
+    
+    return {
+      pallets: [{
+        palletNumber: 1,
+        itemsCount: quantity,
+        boxesCount: 0, // Brak kartonów
+        productWeight: Number(productWeight.toFixed(3)),
+        packagesWeight: 0, // Brak opakowań kartonowych
+        palletWeight: palletWeight,
+        totalWeight: Number(palletTotalWeight.toFixed(3)),
+        isFull: true
+      }],
+      totalWeight: Number(palletTotalWeight.toFixed(3)),
+      palletsCount: 1,
+      totalBoxes: 0,
+      fullPalletsCount: 1,
+      partialPalletsCount: 0
+    };
+  }
+
+  // Obsługa pozycji z kartonami ale bez informacji o paletach
+  if (!boxesPerPallet || boxesPerPallet <= 0) {
+    // Oblicz tylko kartony, nie ma informacji o paletach
+    const totalBoxesNeeded = calculateBoxesNeeded(quantity, itemsPerBox);
+    const productWeight = quantity * unitWeight;
+    const packagesWeight = totalBoxesNeeded * packageWeight;
+    const palletTotalWeight = productWeight + packagesWeight + palletWeight;
+    
+    return {
+      pallets: [{
+        palletNumber: 1,
+        itemsCount: quantity,
+        boxesCount: totalBoxesNeeded,
+        productWeight: Number(productWeight.toFixed(3)),
+        packagesWeight: Number(packagesWeight.toFixed(3)),
+        palletWeight: palletWeight,
+        totalWeight: Number(palletTotalWeight.toFixed(3)),
+        isFull: true
+      }],
+      totalWeight: Number(palletTotalWeight.toFixed(3)),
+      palletsCount: 1,
+      totalBoxes: totalBoxesNeeded,
+      fullPalletsCount: 1,
+      partialPalletsCount: 0
     };
   }
 
