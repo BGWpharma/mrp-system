@@ -109,8 +109,12 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
         batchNumber: initialData.lotNumber || initialData.batchNumber || ''
         };
         
-        // Jeśli mamy datę ważności, ustaw ją
-        if (initialData.expiryDate) {
+        // Obsłuż informacje o dacie ważności
+        if (initialData.noExpiryDate === true) {
+          console.log('Znaleziono "brak terminu ważności" w initialData');
+          newBatchData.expiryDate = null;
+          newBatchData.noExpiryDate = true;
+        } else if (initialData.expiryDate) {
           console.log('Znaleziono datę ważności w initialData:', initialData.expiryDate);
           newBatchData.expiryDate = new Date(initialData.expiryDate);
           newBatchData.noExpiryDate = false;

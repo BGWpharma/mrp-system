@@ -27,8 +27,9 @@ const ReceiveInventoryPage = () => {
     const moNumber = queryParams.get('moNumber');
     const orderNumber = queryParams.get('orderNumber');
     
-    // Pobierz datę ważności, jeśli jest dostępna
+    // Pobierz informacje o dacie ważności
     const expiryDate = queryParams.get('expiryDate');
+    const noExpiryDate = queryParams.get('noExpiryDate');
     
     if (poNumber || quantity || unitPrice || orderId) {
       // Przygotuj obiekt z danymi początkowymi
@@ -55,10 +56,17 @@ const ReceiveInventoryPage = () => {
         data.orderNumber = orderNumber;
       }
       
-      // Dodaj datę ważności, jeśli jest dostępna
-      if (expiryDate) {
+      // Obsłuż informacje o dacie ważności
+      if (noExpiryDate === 'true') {
+        // Jeśli w formularzu rozładunku zaznaczono "nie dotyczy"
+        data.noExpiryDate = true;
+        data.expiryDate = null;
+        console.log('Ustawiono "brak terminu ważności" z parametru URL');
+      } else if (expiryDate) {
+        // Jeśli jest określona data ważności
         try {
           data.expiryDate = new Date(expiryDate);
+          data.noExpiryDate = false;
           console.log('Ustawiono datę ważności z parametru URL:', data.expiryDate);
         } catch (e) {
           console.error('Błąd podczas parsowania daty ważności:', e);

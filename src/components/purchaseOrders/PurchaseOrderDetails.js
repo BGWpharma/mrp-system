@@ -32,7 +32,7 @@ import {
   Assignment as AssignmentIcon,
   LocalShipping as LocalShippingIcon
 } from '@mui/icons-material';
-import { format } from 'date-fns';
+import { format, parseISO, isValid } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import {
   getPurchaseOrderById,
@@ -241,11 +241,39 @@ const PurchaseOrderDetails = ({ orderId }) => {
               fillDate: data.fillDate?.toDate(),
               unloadingDate: data.unloadingDate?.toDate(),
               formType: 'unloading',
-              // Obsługa selectedItems z konwersją dat ważności
-              selectedItems: data.selectedItems?.map(item => ({
-                ...item,
-                expiryDate: item.expiryDate?.toDate ? item.expiryDate.toDate() : item.expiryDate
-              })) || []
+              // Obsługa selectedItems z bezpieczną konwersją dat ważności
+              selectedItems: data.selectedItems?.map(item => {
+                let convertedExpiryDate = item.expiryDate;
+                
+                // Bezpiecznie konwertuj datę ważności
+                if (item.expiryDate) {
+                  try {
+                    if (item.expiryDate.toDate && typeof item.expiryDate.toDate === 'function') {
+                      // Firestore Timestamp
+                      convertedExpiryDate = item.expiryDate.toDate();
+                    } else if (typeof item.expiryDate === 'string') {
+                      // String ISO lub inny format
+                      convertedExpiryDate = new Date(item.expiryDate);
+                      // Sprawdź czy data jest prawidłowa
+                      if (isNaN(convertedExpiryDate.getTime())) {
+                        console.warn('Nieprawidłowa data ważności:', item.expiryDate);
+                        convertedExpiryDate = null;
+                      }
+                    } else if (item.expiryDate instanceof Date) {
+                      // Już jest Date
+                      convertedExpiryDate = item.expiryDate;
+                    }
+                  } catch (error) {
+                    console.error('Błąd konwersji daty ważności:', error, item.expiryDate);
+                    convertedExpiryDate = null;
+                  }
+                }
+                
+                return {
+                  ...item,
+                  expiryDate: convertedExpiryDate
+                };
+              }) || []
             };
           });
           unloadingData.push(...variantData);
@@ -325,6 +353,138 @@ const PurchaseOrderDetails = ({ orderId }) => {
   
   const getUserName = (userId) => {
     return userNames[userId] || userId || 'System';
+  };
+  
+  // Funkcja do bezpiecznego formatowania dat - obsługuje różne formaty
+  const safeFormatDate = (date, formatString = 'dd.MM.yyyy') => {
+    if (!date) return 'Brak daty';
+    
+    try {
+      let dateObj;
+      
+      // Obsługa różnych typów dat
+      if (date instanceof Date) {
+        dateObj = date;
+      } else if (typeof date === 'string') {
+        // Dla stringów ISO
+        dateObj = parseISO(date);
+      } else if (date && typeof date === 'object' && date.toDate) {
+        // Dla Firestore Timestamp
+        dateObj = date.toDate();
+      } else if (date && typeof date === 'object' && date.seconds) {
+        // Dla Firestore Timestamp w formacie { seconds, nanoseconds }
+        dateObj = new Date(date.seconds * 1000);
+      } else {
+        // Próba konwersji bezpośredniej
+        dateObj = new Date(date);
+      }
+      
+      // Sprawdź czy data jest prawidłowa
+      if (!isValid(dateObj)) {
+        console.warn('Nieprawidłowa data:', date);
+        return 'Nieprawidłowa data';
+      }
+      
+      return format(dateObj, formatString, { locale: pl });
+    } catch (error) {
+      console.error('Błąd podczas formatowania daty:', error, 'Data:', date);
+      return 'Błąd daty';
+    }
+  };
+  
+  // Funkcja sprawdzająca czy pozycja PO znajduje się w odpowiedziach formularzy rozładunku
+  const isItemInUnloadingForms = (item) => {
+    if (!unloadingFormResponses || unloadingFormResponses.length === 0) {
+      return false;
+    }
+    
+    // Sprawdzamy wszystkie odpowiedzi formularzy rozładunku
+    for (const response of unloadingFormResponses) {
+      if (response.selectedItems && response.selectedItems.length > 0) {
+        // Sprawdzamy czy nazwa produktu z PO znajduje się w pozycjach dostarczonej w formularzu
+        const foundItem = response.selectedItems.find(selectedItem => {
+          // Porównujemy nazwy produktów (ignorując wielkość liter i białe znaki)
+          const itemName = (item.name || '').toLowerCase().trim();
+          const selectedItemName = (selectedItem.productName || '').toLowerCase().trim();
+          
+          return itemName && selectedItemName && itemName === selectedItemName;
+        });
+        
+        if (foundItem) {
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  };
+  
+  // Funkcja znajdująca informację o dacie ważności dla pozycji PO w odpowiedziach formularzy rozładunku
+  const getExpiryInfoFromUnloadingForms = (item) => {
+    if (!unloadingFormResponses || unloadingFormResponses.length === 0) {
+      return { expiryDate: null, noExpiryDate: false };
+    }
+    
+    // Sprawdzamy wszystkie odpowiedzi formularzy rozładunku od najnowszych
+    for (const response of unloadingFormResponses) {
+      if (response.selectedItems && response.selectedItems.length > 0) {
+        // Sprawdzamy czy nazwa produktu z PO znajduje się w pozycjach dostarczonej w formularzu
+        const foundItem = response.selectedItems.find(selectedItem => {
+          // Porównujemy nazwy produktów (ignorując wielkość liter i białe znaki)
+          const itemName = (item.name || '').toLowerCase().trim();
+          const selectedItemName = (selectedItem.productName || '').toLowerCase().trim();
+          
+          return itemName && selectedItemName && itemName === selectedItemName;
+        });
+        
+        // Jeśli znaleziono pozycję
+        if (foundItem) {
+          // Sprawdź czy zaznaczono "nie dotyczy"
+          if (foundItem.noExpiryDate === true) {
+            console.log(`🚫 Pozycja "${item.name}" ma zaznaczone "nie dotyczy" dla daty ważności`);
+            return { expiryDate: null, noExpiryDate: true };
+          }
+          
+          // Sprawdź czy ma datę ważności i czy jest prawidłowa
+          if (foundItem.expiryDate) {
+            // Walidacja daty ważności
+            let validDate = null;
+            try {
+              if (foundItem.expiryDate instanceof Date && !isNaN(foundItem.expiryDate.getTime())) {
+                validDate = foundItem.expiryDate;
+              } else if (typeof foundItem.expiryDate === 'string') {
+                const parsedDate = new Date(foundItem.expiryDate);
+                if (!isNaN(parsedDate.getTime())) {
+                  validDate = parsedDate;
+                }
+              } else if (foundItem.expiryDate.toDate && typeof foundItem.expiryDate.toDate === 'function') {
+                const convertedDate = foundItem.expiryDate.toDate();
+                if (!isNaN(convertedDate.getTime())) {
+                  validDate = convertedDate;
+                }
+              }
+            } catch (error) {
+              console.error('Błąd walidacji daty ważności:', error, foundItem.expiryDate);
+            }
+            
+            if (validDate) {
+              console.log(`📅 Znaleziono prawidłową datę ważności dla pozycji "${item.name}":`, validDate);
+              return { expiryDate: validDate, noExpiryDate: false };
+            } else {
+              console.warn(`⚠️ Nieprawidłowa data ważności dla pozycji "${item.name}":`, foundItem.expiryDate);
+            }
+          }
+        }
+      }
+    }
+    
+    return { expiryDate: null, noExpiryDate: false };
+  };
+
+  // Kompatybilność wsteczna - funkcja zwracająca tylko datę ważności
+  const getExpiryDateFromUnloadingForms = (item) => {
+    const expiryInfo = getExpiryInfoFromUnloadingForms(item);
+    return expiryInfo.expiryDate;
   };
   
   if (loading) {
@@ -409,6 +569,13 @@ const PurchaseOrderDetails = ({ orderId }) => {
       return;
     }
     
+    // Walidacja: sprawdź czy pozycja znajduje się w odpowiedziach formularzy rozładunku
+    if (!isItemInUnloadingForms(itemToReceive)) {
+      showError(`Nie można przyjąć towaru dla pozycji "${itemToReceive.name}". Pozycja nie została zgłoszona w żadnym raporcie rozładunku dla tego zamówienia.`);
+      setReceiveDialogOpen(false);
+      return;
+    }
+    
     const unitPrice = typeof itemToReceive.unitPrice === 'number' 
       ? itemToReceive.unitPrice 
       : parseFloat(itemToReceive.unitPrice || 0);
@@ -435,6 +602,22 @@ const PurchaseOrderDetails = ({ orderId }) => {
     queryParams.append('reference', purchaseOrder.number);
     
     queryParams.append('returnTo', `/purchase-orders/${orderId}`);
+    
+    // Pobierz informację o dacie ważności z odpowiedzi formularza rozładunku
+    const expiryInfo = getExpiryInfoFromUnloadingForms(itemToReceive);
+    
+    if (expiryInfo.noExpiryDate) {
+      // Jeśli zaznaczono "nie dotyczy" w formularzu rozładunku
+      queryParams.append('noExpiryDate', 'true');
+      console.log(`🚫 Przekazywanie informacji "brak terminu ważności" do formularza przyjmowania`);
+    } else if (expiryInfo.expiryDate) {
+      // Jeśli jest określona data ważności
+      const expiryDateString = expiryInfo.expiryDate instanceof Date 
+        ? expiryInfo.expiryDate.toISOString() 
+        : new Date(expiryInfo.expiryDate).toISOString();
+      queryParams.append('expiryDate', expiryDateString);
+      console.log(`📅 Przekazywanie daty ważności do formularza przyjmowania: ${expiryDateString}`);
+    }
     
     localStorage.setItem('refreshPurchaseOrder', orderId);
     
@@ -1136,14 +1319,43 @@ const PurchaseOrderDetails = ({ orderId }) => {
                             <TableCell align="right" sx={{ '@media print': { display: 'none' } }}>
                               {canReceiveItems && item.inventoryItemId && 
                                (parseFloat(item.received || 0) < parseFloat(item.quantity || 0)) && (
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  startIcon={<InventoryIcon />}
-                                  onClick={() => handleReceiveClick(item)}
-                                >
-                                  Przyjmij
-                                </Button>
+                                (() => {
+                                  const itemInUnloadingForm = isItemInUnloadingForms(item);
+                                  const expiryInfo = getExpiryInfoFromUnloadingForms(item);
+                                  
+                                  let tooltipText = "";
+                                  if (itemInUnloadingForm) {
+                                    tooltipText = "Pozycja została zgłoszona w raporcie rozładunku - można przyjąć towar";
+                                    if (expiryInfo.noExpiryDate) {
+                                      tooltipText += ` (brak terminu ważności)`;
+                                    } else if (expiryInfo.expiryDate) {
+                                      const expiryDateStr = expiryInfo.expiryDate instanceof Date 
+                                        ? expiryInfo.expiryDate.toLocaleDateString('pl-PL')
+                                        : new Date(expiryInfo.expiryDate).toLocaleDateString('pl-PL');
+                                      tooltipText += ` (data ważności: ${expiryDateStr})`;
+                                    }
+                                  } else {
+                                    tooltipText = "Pozycja nie została zgłoszona w raporcie rozładunku - nie można przyjąć towaru";
+                                  }
+                                  
+                                  return (
+                                    <Tooltip title={tooltipText}
+                                    >
+                                      <span>
+                                        <Button
+                                          size="small"
+                                          variant={itemInUnloadingForm ? "outlined" : "outlined"}
+                                          color={itemInUnloadingForm ? "primary" : "error"}
+                                          startIcon={<InventoryIcon />}
+                                          onClick={() => handleReceiveClick(item)}
+                                          disabled={!itemInUnloadingForm}
+                                        >
+                                          {itemInUnloadingForm ? "Przyjmij" : "Brak w raporcie"}
+                                        </Button>
+                                      </span>
+                                    </Tooltip>
+                                  );
+                                })()
                               )}
                             </TableCell>
                           </TableRow>
@@ -1517,7 +1729,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
           </Paper>
 
           {/* Sekcja odpowiedzi formularzy rozładunku */}
-          <Paper sx={{ mb: 3, p: 3, borderRadius: 2 }}>
+          <Paper sx={{ mb: 3, p: 2, borderRadius: 2 }}>
             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
               <LocalShippingIcon sx={{ mr: 1 }} />
               Raporty rozładunku towaru
@@ -1537,180 +1749,180 @@ const PurchaseOrderDetails = ({ orderId }) => {
                     key={report.id} 
                     variant="outlined" 
                     sx={{ 
-                      mb: 2, 
-                      p: 2, 
+                      mb: 1.5, 
+                      p: 1.5, 
                       border: '1px solid #e0e0e0',
-                      borderLeft: '4px solid #1976d2',
-                      backgroundColor: '#f8f9fa'
+                      borderLeft: '3px solid #1976d2',
+                      backgroundColor: '#fafafa'
                     }}
                   >
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                      <AssignmentIcon sx={{ mr: 1, color: 'primary.main' }} />
-                      <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
+                      <AssignmentIcon sx={{ mr: 1, color: 'primary.main', fontSize: '1.2rem' }} />
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                         Raport rozładunku #{index + 1}
                       </Typography>
-                      <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 0.5 }}>
                         <Chip 
-                          label={`Wypełniono: ${report.fillDate ? format(report.fillDate, 'dd.MM.yyyy HH:mm', { locale: pl }) : 'Brak daty'}`}
+                          label={`${report.fillDate ? safeFormatDate(report.fillDate, 'dd.MM HH:mm') : 'Brak daty'}`}
                           size="small"
                           color="primary"
                           variant="outlined"
+                          sx={{ fontSize: '0.7rem' }}
                         />
                         <IconButton
                           size="small"
                           color="primary"
                           onClick={() => handleEditUnloadingReport(report)}
                           title="Edytuj raport rozładunku"
+                          sx={{ p: 0.5 }}
                         >
                           <EditIcon fontSize="small" />
                         </IconButton>
                       </Box>
                     </Box>
                     
-                    <Grid container spacing={2}>
+                    <Grid container spacing={1}>
                       {/* Informacje podstawowe */}
-                      <Grid item xs={12} sm={6} md={3}>
-                        <Typography variant="caption" color="text.secondary">
+                      <Grid item xs={6} sm={4} md={2}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
                           Email pracownika
                         </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
                           {report.email || 'Nie podano'}
                         </Typography>
                       </Grid>
                       
-                      <Grid item xs={12} sm={6} md={3}>
-                        <Typography variant="caption" color="text.secondary">
+                      <Grid item xs={6} sm={4} md={2}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
                           Pracownik
                         </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
                           {report.employeeName || 'Nie podano'}
                         </Typography>
                       </Grid>
                       
-                      <Grid item xs={12} sm={6} md={3}>
-                        <Typography variant="caption" color="text.secondary">
+                      <Grid item xs={6} sm={4} md={2}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
                           Stanowisko
                         </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
                           {report.position || 'Nie podano'}
                         </Typography>
                       </Grid>
                       
-                      <Grid item xs={12} sm={6} md={3}>
-                        <Typography variant="caption" color="text.secondary">
+                      <Grid item xs={6} sm={4} md={2}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
                           Godzina wypełnienia
                         </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
                           {report.fillTime || 'Nie podano'}
                         </Typography>
                       </Grid>
                       
-                      {/* Informacje o rozładunku */}
-                      <Grid item xs={12} sm={6} md={3}>
-                        <Typography variant="caption" color="text.secondary">
+                      <Grid item xs={6} sm={4} md={2}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
                           Data rozładunku
                         </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                          {report.unloadingDate ? format(report.unloadingDate, 'dd.MM.yyyy', { locale: pl }) : 'Nie podano'}
+                        <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
+                          {report.unloadingDate ? safeFormatDate(report.unloadingDate, 'dd.MM.yyyy') : 'Nie podano'}
                         </Typography>
                       </Grid>
                       
-                      <Grid item xs={12} sm={6} md={3}>
-                        <Typography variant="caption" color="text.secondary">
+                      <Grid item xs={6} sm={4} md={2}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
                           Godzina rozładunku
                         </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
                           {report.unloadingTime || 'Nie podano'}
                         </Typography>
                       </Grid>
                       
-                      <Grid item xs={12} sm={6} md={3}>
-                        <Typography variant="caption" color="text.secondary">
+                      <Grid item xs={6} sm={4} md={2}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
                           Przewoźnik
                         </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
                           {report.carrierName || 'Nie podano'}
                         </Typography>
                       </Grid>
                       
-                      <Grid item xs={12} sm={6} md={3}>
-                        <Typography variant="caption" color="text.secondary">
-                          Nr rejestracyjny pojazdu
+                      <Grid item xs={6} sm={4} md={2}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                          Nr rejestracyjny
                         </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
                           {report.vehicleRegistration || 'Nie podano'}
                         </Typography>
                       </Grid>
                       
-                      <Grid item xs={12} sm={6} md={3}>
-                        <Typography variant="caption" color="text.secondary">
-                          Stan techniczny pojazdu
+                      <Grid item xs={6} sm={4} md={2}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                          Stan techniczny
                         </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
                           {report.vehicleTechnicalCondition || 'Nie podano'}
                         </Typography>
                       </Grid>
                       
-                      <Grid item xs={12} sm={6} md={3}>
-                        <Typography variant="caption" color="text.secondary">
+                      <Grid item xs={6} sm={4} md={2}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
                           Higiena transportu
                         </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
                           {report.transportHygiene || 'Nie podano'}
                         </Typography>
                       </Grid>
                       
-                      {/* Informacje o towarze */}
-                      <Grid item xs={12} sm={6} md={3}>
-                        <Typography variant="caption" color="text.secondary">
+                      <Grid item xs={6} sm={4} md={2}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
                           Dostawca
                         </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
                           {report.supplierName || 'Nie podano'}
                         </Typography>
                       </Grid>
                       
-                      <Grid item xs={12} sm={6} md={3}>
-                        <Typography variant="caption" color="text.secondary">
+                      <Grid item xs={6} sm={4} md={2}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
                           Ilość palet
                         </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
                           {report.palletQuantity || 'Nie podano'}
                         </Typography>
                       </Grid>
                       
-                      <Grid item xs={12} sm={6} md={3}>
-                        <Typography variant="caption" color="text.secondary">
-                          Ilość kartonów/tub
+                      <Grid item xs={6} sm={4} md={2}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                          Kartonów/tub
                         </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
                           {report.cartonsTubsQuantity || 'Nie podano'}
                         </Typography>
                       </Grid>
                       
-                      <Grid item xs={12} sm={6} md={3}>
-                        <Typography variant="caption" color="text.secondary">
+                      <Grid item xs={6} sm={4} md={2}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
                           Waga
                         </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
                           {report.weight || 'Nie podano'}
                         </Typography>
                       </Grid>
                       
-                      <Grid item xs={12} sm={6} md={4}>
-                        <Typography variant="caption" color="text.secondary">
-                          Ocena wizualna towaru
+                      <Grid item xs={6} sm={4} md={2}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                          Ocena wizualna
                         </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
                           {report.visualInspectionResult || 'Nie podano'}
                         </Typography>
                       </Grid>
                       
-                      <Grid item xs={12} sm={6} md={4}>
-                        <Typography variant="caption" color="text.secondary">
+                      <Grid item xs={6} sm={4} md={2}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
                           Nr certyfikatu eko
                         </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
                           {report.ecoCertificateNumber || 'Nie podano'}
                         </Typography>
                       </Grid>
@@ -1718,10 +1930,10 @@ const PurchaseOrderDetails = ({ orderId }) => {
                       {/* Pozycje dostarczone */}
                       {report.selectedItems && report.selectedItems.length > 0 && (
                         <Grid item xs={12}>
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', fontWeight: 600 }}>
                             Pozycje dostarczone
                           </Typography>
-                          <Box sx={{ mt: 1 }}>
+                          <Box sx={{ mt: 0.5 }}>
                             {report.selectedItems.map((item, itemIndex) => (
                               <Box 
                                 key={itemIndex} 
@@ -1729,23 +1941,23 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                   display: 'flex', 
                                   justifyContent: 'space-between', 
                                   alignItems: 'center',
-                                  p: 1, 
-                                  mb: 1, 
+                                  p: 0.5, 
+                                  mb: 0.5, 
                                   backgroundColor: 'white', 
-                                  borderRadius: 1,
+                                  borderRadius: 0.5,
                                   border: '1px solid #e0e0e0'
                                 }}
                               >
-                                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
                                   {item.productName || 'Nieznany produkt'}
                                 </Typography>
                                 <Box sx={{ textAlign: 'right' }}>
-                                  <Typography variant="body2" color="primary">
-                                    Dostarczone: {item.unloadedQuantity || 'Nie podano'} {item.unit || ''}
+                                  <Typography variant="body2" color="primary" sx={{ fontSize: '0.8rem' }}>
+                                    {item.unloadedQuantity || 'Nie podano'} {item.unit || ''}
                                   </Typography>
                                   {item.expiryDate && (
-                                    <Typography variant="caption" color="text.secondary">
-                                      Ważność: {format(item.expiryDate, 'dd.MM.yyyy', { locale: pl })}
+                                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                                      {safeFormatDate(item.expiryDate, 'dd.MM.yyyy')}
                                     </Typography>
                                   )}
                                 </Box>
@@ -1758,48 +1970,52 @@ const PurchaseOrderDetails = ({ orderId }) => {
                       {/* Uwagi */}
                       {(report.notes || report.goodsNotes) && (
                         <Grid item xs={12}>
-                          {report.notes && (
-                            <Box sx={{ mb: 1 }}>
-                              <Typography variant="caption" color="text.secondary">
-                                Uwagi rozładunku
-                              </Typography>
-                              <Typography variant="body2" sx={{ 
-                                fontStyle: 'italic', 
-                                p: 1, 
-                                backgroundColor: 'rgba(0, 0, 0, 0.04)', 
-                                borderRadius: 1,
-                                mt: 0.5
-                              }}>
-                                {report.notes}
-                              </Typography>
-                            </Box>
-                          )}
-                          {report.goodsNotes && (
-                            <Box>
-                              <Typography variant="caption" color="text.secondary">
-                                Uwagi towaru
-                              </Typography>
-                              <Typography variant="body2" sx={{ 
-                                fontStyle: 'italic', 
-                                p: 1, 
-                                backgroundColor: 'rgba(0, 0, 0, 0.04)', 
-                                borderRadius: 1,
-                                mt: 0.5
-                              }}>
-                                {report.goodsNotes}
-                              </Typography>
-                            </Box>
-                          )}
+                          <Box sx={{ display: 'flex', gap: 2 }}>
+                            {report.notes && (
+                              <Box sx={{ flex: 1 }}>
+                                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', fontWeight: 600 }}>
+                                  Uwagi rozładunku
+                                </Typography>
+                                <Typography variant="body2" sx={{ 
+                                  fontStyle: 'italic', 
+                                  p: 0.5, 
+                                  backgroundColor: 'rgba(0, 0, 0, 0.04)', 
+                                  borderRadius: 0.5,
+                                  mt: 0.25,
+                                  fontSize: '0.8rem'
+                                }}>
+                                  {report.notes}
+                                </Typography>
+                              </Box>
+                            )}
+                            {report.goodsNotes && (
+                              <Box sx={{ flex: 1 }}>
+                                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', fontWeight: 600 }}>
+                                  Uwagi towaru
+                                </Typography>
+                                <Typography variant="body2" sx={{ 
+                                  fontStyle: 'italic', 
+                                  p: 0.5, 
+                                  backgroundColor: 'rgba(0, 0, 0, 0.04)', 
+                                  borderRadius: 0.5,
+                                  mt: 0.25,
+                                  fontSize: '0.8rem'
+                                }}>
+                                  {report.goodsNotes}
+                                </Typography>
+                              </Box>
+                            )}
+                          </Box>
                         </Grid>
                       )}
                       
                       {/* Załącznik */}
                       {report.documentsUrl && (
                         <Grid item xs={12}>
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', fontWeight: 600 }}>
                             Załącznik
                           </Typography>
-                          <Box sx={{ mt: 1 }}>
+                          <Box sx={{ mt: 0.5 }}>
                             <Button 
                               size="small" 
                               variant="outlined"
@@ -1807,6 +2023,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                               target="_blank" 
                               rel="noopener noreferrer"
                               startIcon={<AttachFileIcon />}
+                              sx={{ fontSize: '0.75rem', py: 0.25 }}
                             >
                               {report.documentsName || 'Pobierz załącznik'}
                             </Button>
