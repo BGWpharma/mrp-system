@@ -6257,28 +6257,118 @@ const TaskDetailsPage = () => {
                   )}
                 </Paper>
               </Grid>
-              {/* Sekcja planu mieszań (checklista) */}
+              {/* Sekcja planu mieszań (checklista) - kompaktowa wersja */}
               {task?.mixingPlanChecklist && task.mixingPlanChecklist.length > 0 && (
                 <Grid item xs={12}>
                   <Paper sx={{ p: 2, mb: 2 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}><Typography variant="h6">Plan mieszań</Typography></Box>
-                    <TableContainer>
-                      <Table size="small"><TableHead><TableRow><TableCell width="25%">Mieszanie</TableCell><TableCell width="35%">Składniki</TableCell><TableCell width="40%" align="center">Status</TableCell></TableRow></TableHead>
-                        <TableBody>
-                          {task.mixingPlanChecklist.filter(item => item.type === 'header').map(headerItem => {
-                            const ingredients = task.mixingPlanChecklist.filter(item => item.parentId === headerItem.id && item.type === 'ingredient');
-                            const checkItems = task.mixingPlanChecklist.filter(item => item.parentId === headerItem.id && item.type === 'check');
-                            return (
-                              <TableRow key={headerItem.id} sx={{ '& td': { borderBottom: '1px solid rgba(224, 224, 224, 1)', verticalAlign: 'top', pt: 2, pb: 2 } }}>
-                                <TableCell><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>{headerItem.text}</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>{headerItem.details}</Typography></TableCell>
-                                <TableCell><Table size="small" sx={{ '& td': { border: 'none', pt: 0.5, pb: 0.5 } }}><TableBody>{ingredients.map((ingredient) => (<TableRow key={ingredient.id}><TableCell sx={{ pl: 0 }}><Typography variant="body2">{ingredient.text}</Typography><Typography variant="caption" color="text.secondary">{ingredient.details}</Typography></TableCell></TableRow>))}</TableBody></Table></TableCell>
-                                <TableCell align="center"><Grid container spacing={1} alignItems="center">{checkItems.map((item) => (<Grid item xs={12} key={item.id} sx={{ borderBottom: '1px solid rgba(224, 224, 224, 0.3)', pb: 1 }}><Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}><FormControlLabel control={<Checkbox checked={item.completed || false} onChange={async (e) => { try { const taskRef = doc(db, 'productionTasks', task.id); const updatedChecklist = task.mixingPlanChecklist.map(checkItem => { if (checkItem.id === item.id) { return { ...checkItem, completed: e.target.checked, completedAt: e.target.checked ? new Date().toISOString() : null, completedBy: e.target.checked ? currentUser.uid : null }; } return checkItem; }); await updateDoc(taskRef, { mixingPlanChecklist: updatedChecklist, updatedAt: serverTimestamp(), updatedBy: currentUser.uid }); setTask(prevTask => ({ ...prevTask, mixingPlanChecklist: updatedChecklist })); showSuccess('Zaktualizowano stan zadania'); } catch (error) { console.error('Błąd podczas aktualizacji stanu checklisty:', error); showError('Nie udało się zaktualizować stanu zadania'); } }} />} label={item.text} sx={{ width: '100%' }} />{item.completed && (<Chip size="small" label={item.completedAt ? new Date(item.completedAt).toLocaleDateString('pl-PL') : '-'} color="success" variant="outlined" sx={{ ml: 1 }} />)}</Box></Grid>))}</Grid></TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                      <Typography variant="h6">Plan mieszań</Typography>
+                    </Box>
+                    
+                    {task.mixingPlanChecklist.filter(item => item.type === 'header').map(headerItem => {
+                      const ingredients = task.mixingPlanChecklist.filter(item => item.parentId === headerItem.id && item.type === 'ingredient');
+                      const checkItems = task.mixingPlanChecklist.filter(item => item.parentId === headerItem.id && item.type === 'check');
+                      
+                      return (
+                        <Box key={headerItem.id} sx={{ mb: 2, border: '1px solid #e0e0e0', borderRadius: 1, p: 1.5 }}>
+                          {/* Nagłówek mieszania */}
+                          <Box sx={{ mb: 1.5 }}>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                              {headerItem.text}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {headerItem.details}
+                            </Typography>
+                          </Box>
+                          
+                          <Grid container spacing={2}>
+                            {/* Składniki - kompaktowe wyświetlanie */}
+                            <Grid item xs={12} md={6}>
+                              <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>
+                                Składniki:
+                              </Typography>
+                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                                {ingredients.map((ingredient) => (
+                                  <Box key={ingredient.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+                                      {ingredient.text}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                                      {ingredient.details}
+                                    </Typography>
+                                  </Box>
+                                ))}
+                              </Box>
+                            </Grid>
+                            
+                            {/* Status - kompaktowe checkboxy */}
+                            <Grid item xs={12} md={6}>
+                              <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>
+                                Status wykonania:
+                              </Typography>
+                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                                {checkItems.map((item) => (
+                                  <Box key={item.id} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <FormControlLabel 
+                                      control={
+                                        <Checkbox 
+                                          checked={item.completed || false}
+                                          size="small"
+                                          onChange={async (e) => {
+                                            try {
+                                              const taskRef = doc(db, 'productionTasks', task.id);
+                                              const updatedChecklist = task.mixingPlanChecklist.map(checkItem => {
+                                                if (checkItem.id === item.id) {
+                                                  return {
+                                                    ...checkItem,
+                                                    completed: e.target.checked,
+                                                    completedAt: e.target.checked ? new Date().toISOString() : null,
+                                                    completedBy: e.target.checked ? currentUser.uid : null
+                                                  };
+                                                }
+                                                return checkItem;
+                                              });
+                                              await updateDoc(taskRef, {
+                                                mixingPlanChecklist: updatedChecklist,
+                                                updatedAt: serverTimestamp(),
+                                                updatedBy: currentUser.uid
+                                              });
+                                              setTask(prevTask => ({
+                                                ...prevTask,
+                                                mixingPlanChecklist: updatedChecklist
+                                              }));
+                                              showSuccess('Zaktualizowano stan zadania');
+                                            } catch (error) {
+                                              console.error('Błąd podczas aktualizacji stanu checklisty:', error);
+                                              showError('Nie udało się zaktualizować stanu zadania');
+                                            }
+                                          }}
+                                        />
+                                      } 
+                                      label={
+                                        <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+                                          {item.text}
+                                        </Typography>
+                                      }
+                                      sx={{ margin: 0, '& .MuiFormControlLabel-label': { fontSize: '0.875rem' } }}
+                                    />
+                                    {item.completed && (
+                                      <Chip 
+                                        size="small" 
+                                        label={item.completedAt ? new Date(item.completedAt).toLocaleDateString('pl-PL') : '-'} 
+                                        color="success" 
+                                        variant="outlined" 
+                                        sx={{ height: 20, fontSize: '0.7rem' }}
+                                      />
+                                    )}
+                                  </Box>
+                                ))}
+                              </Box>
+                            </Grid>
+                          </Grid>
+                        </Box>
+                      );
+                    })}
                   </Paper>
                 </Grid>
               )}
