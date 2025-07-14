@@ -1241,6 +1241,12 @@ const ProductionCalendar = () => {
       return;
     }
 
+    // Zablokuj edycję zadań zakończonych
+    if (selectedEvent.extendedProps?.task?.status === 'Zakończone') {
+      showError('Nie można edytować zadań ze statusem "Zakończone"');
+      return;
+    }
+
     if (!editDateForm.scheduledDate || !(editDateForm.scheduledDate instanceof Date)) {
       showError('Data rozpoczęcia jest wymagana i musi być prawidłową datą');
       return;
@@ -2071,6 +2077,15 @@ const ProductionCalendar = () => {
       setLoading(true);
       const { event } = info;
       const taskId = event.id;
+      const taskData = event.extendedProps.task;
+      
+      // Zablokuj edycję zadań zakończonych
+      if (taskData?.status === 'Zakończone') {
+        showError('Nie można edytować zadań ze statusem "Zakończone"');
+        info.revert(); // Cofnij zmianę wizualnie
+        setLoading(false);
+        return;
+      }
       
       // Zapisz aktualną pozycję suwaka przed operacją
       const currentScrollLeft = calendarRef.current?.getApi().view.el?.querySelector('.fc-scroller-harness')?.scrollLeft || 0;
@@ -2158,6 +2173,14 @@ const ProductionCalendar = () => {
       const { event } = info;
       const taskId = event.id;
       const taskData = event.extendedProps.task;
+      
+      // Zablokuj edycję zadań zakończonych
+      if (taskData?.status === 'Zakończone') {
+        showError('Nie można edytować zadań ze statusem "Zakończone"');
+        info.revert(); // Cofnij zmianę wizualnie
+        setLoading(false);
+        return;
+      }
       
       // Zapisz aktualną pozycję suwaka przed operacją
       const currentScrollLeft = calendarRef.current?.getApi().view.el?.querySelector('.fc-scroller-harness')?.scrollLeft || 0;

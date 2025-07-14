@@ -899,14 +899,17 @@ const ProductionTimeline = React.memo(() => {
         }
       }
 
+      // Sprawdź czy zadanie można edytować - zablokuj edycję dla zadań zakończonych
+      const canEditTask = editMode && task.status !== 'Zakończone';
+
       return {
         id: task.id,
         group: groupId,
         title: task.name || `${task.productName} (${task.moNumber})`,
         start_time: startTime.getTime(),
         end_time: endTime.getTime(),
-        canMove: editMode,
-        canResize: editMode,
+        canMove: canEditTask,
+        canResize: canEditTask,
         canChangeGroup: false,
         // Dodatkowe dane
         task: taskForTooltip,
@@ -1047,6 +1050,12 @@ const ProductionTimeline = React.memo(() => {
       const item = items.find(i => i.id === itemId);
       if (!item) return;
 
+      // Zablokuj edycję zadań zakończonych
+      if (item.task?.status === 'Zakończone') {
+        showError('Nie można edytować zadań ze statusem "Zakończone"');
+        return;
+      }
+
       // Zapisz poprzedni stan zadania do undo stack
       const previousState = {
         type: 'move',
@@ -1117,6 +1126,12 @@ const ProductionTimeline = React.memo(() => {
       
       const item = items.find(i => i.id === itemId);
       if (!item) return;
+
+      // Zablokuj edycję zadań zakończonych
+      if (item.task?.status === 'Zakończone') {
+        showError('Nie można edytować zadań ze statusem "Zakończone"');
+        return;
+      }
 
       let newStartTime, newEndTime;
 
