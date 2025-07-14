@@ -595,6 +595,43 @@ const TaskList = () => {
     }
   };
 
+  // Nowa funkcja do bezpośredniego wstrzymywania produkcji bez dialogu
+  const handleStopProductionDirect = async (task) => {
+    try {
+      // Ustaw domyślne wartości dla wstrzymania produkcji
+      const currentTime = new Date();
+      const startTime = task.startDate ? (typeof task.startDate === 'object' && task.startDate.toDate ? task.startDate.toDate() : new Date(task.startDate)) : currentTime;
+      const endTime = currentTime;
+      
+      // Oblicz czas trwania w minutach
+      const durationMs = endTime.getTime() - startTime.getTime();
+      const durationMinutes = Math.max(1, Math.round(durationMs / (1000 * 60))); // Minimum 1 minuta
+      
+      // Ustaw domyślną ilość wyprodukowaną (można to dostosować według potrzeb)
+      const defaultQuantity = 0; // Użytkownik może później edytować sesję produkcyjną
+      
+      // Wywołaj funkcję zatrzymania produkcji z domyślnymi wartościami
+      const result = await stopProduction(
+        task.id, 
+        defaultQuantity, 
+        durationMinutes, 
+        currentUser.uid,
+        {
+          startTime: startTime.toISOString(),
+          endTime: endTime.toISOString()
+        }
+      );
+      
+      showSuccess('Produkcja została wstrzymana. Możesz kontynuować później lub edytować sesję produkcyjną.');
+      
+      // Odśwież listę zadań
+      fetchTasks();
+    } catch (error) {
+      showError('Błąd podczas wstrzymywania produkcji: ' + error.message);
+      console.error('Error stopping production directly:', error);
+    }
+  };
+
   const openStopProductionDialog = (task) => {
     setCurrentTaskId(task.id);
     
@@ -760,7 +797,7 @@ const TaskList = () => {
           <Tooltip title="Zatrzymaj produkcję">
             <IconButton 
               color="error" 
-              onClick={() => openStopProductionDialog(task)}
+              onClick={() => handleStopProductionDirect(task)}
               size="small"
             >
               <StopIcon fontSize="small" />
