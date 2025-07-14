@@ -1,4 +1,4 @@
-import { db } from './firebase/config';
+import { db, storage } from './firebase/config';
 import { 
   collection, 
   doc, 
@@ -13,6 +13,12 @@ import {
   serverTimestamp,
   Timestamp 
 } from 'firebase/firestore';
+import { 
+  ref, 
+  uploadBytes, 
+  getDownloadURL, 
+  deleteObject 
+} from 'firebase/storage';
 import { format } from 'date-fns';
 import { updateOrderItemShippedQuantity } from './orderService';
 import { createRealtimeStatusChangeNotification } from './notificationService';
@@ -1681,6 +1687,160 @@ export const cancelCmrReservations = async (cmrId, userId) => {
     };
   } catch (error) {
     console.error('Błąd podczas anulowania rezerwacji CMR:', error);
+    throw error;
+  }
+};
+
+// ========================
+// FUNKCJE ZAŁĄCZNIKÓW CMR
+// ========================
+
+/**
+ * Przesyła załącznik do CMR
+ * @param {File} file - Plik do przesłania
+ * @param {string} cmrId - ID dokumentu CMR
+ * @param {string} userId - ID użytkownika przesyłającego
+ * @returns {Promise<Object>} - Informacje o przesłanym pliku
+ */
+export const uploadCmrAttachment = async (file, cmrId, userId) => {
+  try {
+    if (!file || !cmrId || !userId) {
+      throw new Error('Brak wymaganych parametrów');
+    }
+
+    // Sprawdź rozmiar pliku (maksymalnie 20 MB)
+    const fileSizeInMB = file.size / (1024 * 1024);
+    if (fileSizeInMB > 20) {
+      throw new Error(`Plik jest zbyt duży (${fileSizeInMB.toFixed(2)} MB). Maksymalny rozmiar to 20 MB.`);
+    }
+
+    // Sprawdź typ pliku - dozwolone są wszystkie popularne typy dokumentów i obrazów
+    const allowedTypes = [
+      'text/plain',
+      'text/csv',
+      'application/json',
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'image/bmp',
+      'image/tiff'
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error(`Nieobsługiwany typ pliku: ${file.type}. Dozwolone są dokumenty i obrazy.`);
+    }
+
+    // Tworzymy ścieżkę do pliku w Firebase Storage
+    const timestamp = new Date().getTime();
+    const fileExtension = file.name.split('.').pop();
+    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const fileName = `${timestamp}_${sanitizedFileName}`;
+    const storagePath = `cmr-attachments/${cmrId}/${fileName}`;
+
+    // Przesyłamy plik do Firebase Storage
+    const fileRef = ref(storage, storagePath);
+    await uploadBytes(fileRef, file);
+
+    // Pobieramy URL do pobrania pliku
+    const downloadURL = await getDownloadURL(fileRef);
+
+    // Zapisujemy informacje o załączniku w Firestore
+    const attachmentData = {
+      fileName: file.name,
+      originalFileName: file.name,
+      storagePath,
+      downloadURL,
+      contentType: file.type,
+      size: file.size,
+      cmrId,
+      uploadedBy: userId,
+      uploadedAt: serverTimestamp()
+    };
+
+    const attachmentRef = await addDoc(collection(db, 'cmrAttachments'), attachmentData);
+
+    return {
+      id: attachmentRef.id,
+      ...attachmentData,
+      uploadedAt: new Date() // Konwertujemy na Date dla wyświetlenia
+    };
+  } catch (error) {
+    console.error('Błąd podczas przesyłania załącznika CMR:', error);
+    throw error;
+  }
+};
+
+/**
+ * Pobiera wszystkie załączniki dla danego CMR
+ * @param {string} cmrId - ID dokumentu CMR
+ * @returns {Promise<Array>} - Lista załączników
+ */
+export const getCmrAttachments = async (cmrId) => {
+  try {
+    const q = query(
+      collection(db, 'cmrAttachments'),
+      where('cmrId', '==', cmrId),
+      orderBy('uploadedAt', 'desc')
+    );
+
+    const snapshot = await getDocs(q);
+    const attachments = [];
+
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      attachments.push({
+        id: doc.id,
+        ...data,
+        uploadedAt: data.uploadedAt ? data.uploadedAt.toDate() : null
+      });
+    });
+
+    return attachments;
+  } catch (error) {
+    console.error('Błąd podczas pobierania załączników CMR:', error);
+    return [];
+  }
+};
+
+/**
+ * Usuwa załącznik CMR
+ * @param {string} attachmentId - ID załącznika w Firestore
+ * @param {string} userId - ID użytkownika usuwającego
+ * @returns {Promise<void>}
+ */
+export const deleteCmrAttachment = async (attachmentId, userId) => {
+  try {
+    // Pobierz informacje o załączniku
+    const attachmentDoc = await getDoc(doc(db, 'cmrAttachments', attachmentId));
+    
+    if (!attachmentDoc.exists()) {
+      throw new Error('Załącznik nie został znaleziony');
+    }
+
+    const attachmentData = attachmentDoc.data();
+
+    // Usuń plik z Firebase Storage
+    if (attachmentData.storagePath) {
+      const fileRef = ref(storage, attachmentData.storagePath);
+      try {
+        await deleteObject(fileRef);
+      } catch (storageError) {
+        console.warn('Nie udało się usunąć pliku z Storage (może już nie istnieć):', storageError);
+      }
+    }
+
+    // Usuń rekord z Firestore
+    await deleteDoc(doc(db, 'cmrAttachments', attachmentId));
+
+    console.log(`Załącznik ${attachmentData.fileName} został usunięty przez użytkownika ${userId}`);
+  } catch (error) {
+    console.error('Błąd podczas usuwania załącznika CMR:', error);
     throw error;
   }
 };
