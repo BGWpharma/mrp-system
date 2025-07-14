@@ -313,6 +313,123 @@ export const checkAndUpdateAIMessageQuota = async (userId) => {
   }
 };
 
+/**
+ * Aktualizuje listę ukrytych zakładek sidebara dla użytkownika
+ * @param {string} userId - ID użytkownika
+ * @param {Array<string>} hiddenTabs - Lista identyfikatorów ukrytych zakładek
+ * @param {string} adminId - ID administratora dokonującego zmiany
+ * @returns {Promise<boolean>} - Czy operacja zakończyła się sukcesem
+ */
+export const updateUserHiddenSidebarTabs = async (userId, hiddenTabs, adminId) => {
+  try {
+    // Sprawdź czy użytkownik dokonujący zmiany jest administratorem
+    const adminData = await getUserById(adminId);
+    if (!adminData || adminData.role !== 'administrator') {
+      throw new Error('Brak uprawnień do zarządzania zakładkami użytkowników');
+    }
+    
+    // Aktualizuj listę ukrytych zakładek
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, {
+      hiddenSidebarTabs: hiddenTabs || [],
+      updatedAt: new Date()
+    });
+    
+    // Wyczyść cache dla tego użytkownika
+    userCache.delete(userId);
+    
+    return true;
+  } catch (error) {
+    console.error('Błąd podczas aktualizacji ukrytych zakładek użytkownika:', error);
+    throw error;
+  }
+};
+
+/**
+ * Pobiera listę ukrytych zakładek sidebara dla użytkownika
+ * @param {string} userId - ID użytkownika
+ * @returns {Promise<Array<string>>} - Lista identyfikatorów ukrytych zakładek
+ */
+export const getUserHiddenSidebarTabs = async (userId) => {
+  try {
+    const userData = await getUserById(userId);
+    return userData?.hiddenSidebarTabs || [];
+  } catch (error) {
+    console.error('Błąd podczas pobierania ukrytych zakładek użytkownika:', error);
+    return [];
+  }
+};
+
+/**
+ * Edytuje dane profilu użytkownika - dostępne tylko dla administratorów
+ * @param {string} userId - ID użytkownika do edycji
+ * @param {Object} userProfile - Nowe dane profilu użytkownika
+ * @param {string} adminId - ID administratora dokonującego zmiany
+ * @returns {Promise<boolean>} - Czy operacja zakończyła się sukcesem
+ */
+export const updateUserProfile = async (userId, userProfile, adminId) => {
+  try {
+    // Sprawdź czy użytkownik dokonujący zmiany jest administratorem
+    const adminData = await getUserById(adminId);
+    if (!adminData || adminData.role !== 'administrator') {
+      throw new Error('Brak uprawnień do edycji danych użytkowników');
+    }
+    
+    // Walidacja danych
+    const allowedFields = ['displayName', 'email', 'photoURL', 'phone', 'position', 'department'];
+    const updateData = {};
+    
+    // Filtruj tylko dozwolone pola
+    for (const field of allowedFields) {
+      if (userProfile.hasOwnProperty(field)) {
+        updateData[field] = userProfile[field] || '';
+      }
+    }
+    
+    // Dodaj timestamp aktualizacji
+    updateData.updatedAt = new Date();
+    
+    // Sprawdź czy email jest unikalny (jeśli zmieniono)
+    if (updateData.email && updateData.email !== '') {
+      const existingUsers = await getAllUsers();
+      const emailExists = existingUsers.some(user => 
+        user.email === updateData.email && user.id !== userId
+      );
+      
+      if (emailExists) {
+        throw new Error('Podany adres email jest już używany przez innego użytkownika');
+      }
+    }
+    
+    // Aktualizuj dane użytkownika
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, updateData);
+    
+    // Wyczyść cache dla tego użytkownika
+    userCache.delete(userId);
+    
+    return true;
+  } catch (error) {
+    console.error('Błąd podczas aktualizacji profilu użytkownika:', error);
+    throw error;
+  }
+};
+
+/**
+ * Pobiera wszystkie dostępne zakładki sidebara z ich identyfikatorami
+ * @returns {Array<Object>} - Lista dostępnych zakładek z ich identyfikatorami i nazwami
+ */
+export const getAvailableSidebarTabs = () => {
+  return [
+    { id: 'ai-assistant', name: 'Asystent AI', path: '/ai-assistant' },
+    { id: 'dashboard', name: 'Dashboard', path: '/' },
+    { id: 'hall-data', name: 'Parametry hali', path: '/hall-data' },
+    { id: 'sales', name: 'Sprzedaż', path: '/customers' },
+    { id: 'production', name: 'Produkcja', path: '/production' },
+    { id: 'inventory', name: 'Stany', path: '/inventory' }
+  ];
+};
+
 export default {
   getUserById,
   updateUserData,
@@ -320,5 +437,9 @@ export default {
   changeUserRole,
   getAllUsers,
   getAllActiveUsers,
-  checkAndUpdateAIMessageQuota
+  checkAndUpdateAIMessageQuota,
+  updateUserHiddenSidebarTabs,
+  getUserHiddenSidebarTabs,
+  updateUserProfile,
+  getAvailableSidebarTabs
 }; 

@@ -27,11 +27,15 @@ import {
 import {
   Edit as EditIcon,
   Person as PersonIcon,
-  PersonOutline as PersonOutlineIcon
+  PersonOutline as PersonOutlineIcon,
+  Visibility as VisibilityIcon,
+  AccountBox as AccountBoxIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { getAllUsers, changeUserRole } from '../../services/userService';
+import SidebarTabsManager from '../../components/admin/SidebarTabsManager';
+import UserProfileEditor from '../../components/admin/UserProfileEditor';
 
 const UsersManagementPage = () => {
   const [users, setUsers] = useState([]);
@@ -40,6 +44,10 @@ const UsersManagementPage = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [newRole, setNewRole] = useState('');
   const [processing, setProcessing] = useState(false);
+  const [sidebarTabsDialogOpen, setSidebarTabsDialogOpen] = useState(false);
+  const [selectedUserForTabs, setSelectedUserForTabs] = useState(null);
+  const [profileEditorOpen, setProfileEditorOpen] = useState(false);
+  const [selectedUserForProfile, setSelectedUserForProfile] = useState(null);
   
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -70,6 +78,30 @@ const UsersManagementPage = () => {
   const handleCloseEditDialog = () => {
     setEditDialogOpen(false);
     setSelectedUser(null);
+  };
+  
+  const handleOpenSidebarTabsDialog = (user) => {
+    setSelectedUserForTabs(user);
+    setSidebarTabsDialogOpen(true);
+  };
+  
+  const handleCloseSidebarTabsDialog = () => {
+    setSidebarTabsDialogOpen(false);
+    setSelectedUserForTabs(null);
+  };
+  
+  const handleOpenProfileEditor = (user) => {
+    setSelectedUserForProfile(user);
+    setProfileEditorOpen(true);
+  };
+  
+  const handleCloseProfileEditor = () => {
+    setProfileEditorOpen(false);
+    setSelectedUserForProfile(null);
+  };
+  
+  const handleUserUpdated = () => {
+    fetchUsers(); // Odśwież listę użytkowników po edycji
   };
   
   const handleChangeRole = async () => {
@@ -125,10 +157,11 @@ const UsersManagementPage = () => {
                 <TableRow>
                   <TableCell>Użytkownik</TableCell>
                   <TableCell>Email</TableCell>
+                  <TableCell>Stanowisko</TableCell>
+                  <TableCell>Dział</TableCell>
                   <TableCell>Rola</TableCell>
-                  <TableCell>Limit wiadomości AI</TableCell>
+                  <TableCell>Limit AI</TableCell>
                   <TableCell>Wykorzystano</TableCell>
-                  <TableCell>Data utworzenia</TableCell>
                   <TableCell>Akcje</TableCell>
                 </TableRow>
               </TableHead>
@@ -151,31 +184,57 @@ const UsersManagementPage = () => {
                     </TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>
+                      <Typography variant="body2">
+                        {user.position || 'Nie określono'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2">
+                        {user.department || 'Nie określono'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
                       <Chip 
                         label={user.role === 'administrator' ? 'Administrator' : 'Pracownik'} 
                         color={user.role === 'administrator' ? 'primary' : 'default'}
                         variant={user.role === 'administrator' ? 'filled' : 'outlined'}
                         icon={<PersonIcon />}
+                        size="small"
                       />
                     </TableCell>
                     <TableCell>
-                      {user.aiMessagesLimit || (user.role === 'administrator' ? 250 : 50)}
+                      <Typography variant="body2">
+                        {user.aiMessagesLimit || (user.role === 'administrator' ? 250 : 50)}
+                      </Typography>
                     </TableCell>
                     <TableCell>
-                      {user.aiMessagesUsed || 0}
+                      <Typography variant="body2">
+                        {user.aiMessagesUsed || 0}
+                      </Typography>
                     </TableCell>
                     <TableCell>
-                      {user.createdAt 
-                        ? new Date(user.createdAt.seconds * 1000).toLocaleDateString('pl-PL')
-                        : 'Brak danych'}
-                    </TableCell>
-                    <TableCell>
+                      <IconButton 
+                        onClick={() => handleOpenProfileEditor(user)}
+                        title="Edytuj dane użytkownika"
+                        color="primary"
+                        sx={{ mr: 0.5 }}
+                      >
+                        <AccountBoxIcon />
+                      </IconButton>
                       <IconButton 
                         onClick={() => handleOpenEditDialog(user)}
                         disabled={currentUser.uid === user.id} // Nie pozwalaj na edycję własnego konta
                         title="Zmień rolę"
+                        sx={{ mr: 0.5 }}
                       >
                         <EditIcon />
+                      </IconButton>
+                      <IconButton 
+                        onClick={() => handleOpenSidebarTabsDialog(user)}
+                        title="Zarządzaj zakładkami sidebara"
+                        color="secondary"
+                      >
+                        <VisibilityIcon />
                       </IconButton>
                     </TableCell>
                   </TableRow>
@@ -223,6 +282,21 @@ const UsersManagementPage = () => {
           </Button>
         </DialogActions>
       </Dialog>
+      
+      {/* Dialog do zarządzania zakładkami sidebara */}
+      <SidebarTabsManager
+        open={sidebarTabsDialogOpen}
+        onClose={handleCloseSidebarTabsDialog}
+        selectedUser={selectedUserForTabs}
+      />
+      
+      {/* Dialog do edycji profilu użytkownika */}
+      <UserProfileEditor
+        open={profileEditorOpen}
+        onClose={handleCloseProfileEditor}
+        selectedUser={selectedUserForProfile}
+        onUserUpdated={handleUserUpdated}
+      />
     </Container>
   );
 };

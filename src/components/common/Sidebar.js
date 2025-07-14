@@ -64,6 +64,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import BugReportDialog from './BugReportDialog';
 import { useSidebar } from '../../contexts/SidebarContext';
+import { getUserHiddenSidebarTabs } from '../../services/userService';
 
 // Styled components
 const StyledListItemButton = styled(ListItemButton)(({ theme }) => ({
@@ -120,6 +121,7 @@ const Sidebar = ({ onToggle }) => {
   const { currentUser } = useAuth();
   const isAdmin = currentUser?.role === 'administrator';
   const [bugReportDialogOpen, setBugReportDialogOpen] = useState(false);
+  const [hiddenTabs, setHiddenTabs] = useState([]);
   
   // Używamy kontekstu sidebar
   const { isOpen, toggle, isMobile } = useSidebar();
@@ -166,6 +168,23 @@ const Sidebar = ({ onToggle }) => {
     }
   }, [location.pathname]);
   
+  // Ładowanie ukrytych zakładek użytkownika
+  useEffect(() => {
+    const loadUserHiddenTabs = async () => {
+      if (currentUser?.uid) {
+        try {
+          const userHiddenTabs = await getUserHiddenSidebarTabs(currentUser.uid);
+          setHiddenTabs(userHiddenTabs);
+        } catch (error) {
+          console.error('Błąd podczas ładowania ukrytych zakładek użytkownika:', error);
+          setHiddenTabs([]);
+        }
+      }
+    };
+
+    loadUserHiddenTabs();
+  }, [currentUser?.uid]);
+
   useEffect(() => {
     const fetchExpiringProducts = async () => {
       try {
@@ -217,13 +236,17 @@ const Sidebar = ({ onToggle }) => {
     setDrawerWidth(isDrawerOpen ? 60 : 200);
   };
   
-  const menuItems = [
-    { text: 'Asystent AI',
+  const allMenuItems = [
+    { 
+      id: 'ai-assistant',
+      text: 'Asystent AI',
       icon: <AIAssistantIcon />,
       path: '/ai-assistant',
       hasSubmenu: false
     },
-    { text: 'Dashboard', 
+    { 
+      id: 'dashboard',
+      text: 'Dashboard', 
       icon: <DashboardIcon />, 
       path: '/',
       hasSubmenu: true,
@@ -232,7 +255,9 @@ const Sidebar = ({ onToggle }) => {
         { text: 'Analityka', icon: <AnalyticsIcon />, path: '/analytics' },
       ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
     },
-    { text: 'Parametry hali',
+    { 
+      id: 'hall-data',
+      text: 'Parametry hali',
       icon: <FactoryIcon />,
       path: '/hall-data',
       hasSubmenu: true,
@@ -241,7 +266,9 @@ const Sidebar = ({ onToggle }) => {
         { text: 'Maszyny', icon: <PrecisionManufacturingIcon />, path: '/hall-data/machines' },
       ]
     },
-    { text: 'Sprzedaż',
+    { 
+      id: 'sales',
+      text: 'Sprzedaż',
       icon: <CustomersIcon />,
       path: '/customers',
       hasSubmenu: true,
@@ -254,7 +281,9 @@ const Sidebar = ({ onToggle }) => {
         { text: 'Zamówienia klientów', icon: <OrdersIcon />, path: '/orders' },
       ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
     },
-    { text: 'Produkcja',
+    { 
+      id: 'production',
+      text: 'Produkcja',
       icon: <ProductionIcon />,
       path: '/production',
       hasSubmenu: true,
@@ -267,7 +296,9 @@ const Sidebar = ({ onToggle }) => {
         { text: 'Timeline', icon: <AnalyticsIcon />, path: '/production/timeline' },
       ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
     },
-    { text: 'Stany', 
+    { 
+      id: 'inventory',
+      text: 'Stany', 
       icon: <InventoryIcon />, 
       path: '/inventory', 
       badge: expiringItemsCount > 0 ? expiringItemsCount : null,
@@ -284,6 +315,9 @@ const Sidebar = ({ onToggle }) => {
       ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
     }
   ].sort((a, b) => a.text.localeCompare(b.text, 'pl'));
+
+  // Filtrowanie menuItems na podstawie ukrytych zakładek użytkownika
+  const menuItems = allMenuItems.filter(item => !hiddenTabs.includes(item.id));
 
   return (
     <Drawer
