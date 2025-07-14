@@ -321,8 +321,8 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
     }));
   };
   
-  // Nowa funkcja do dodawania pozycji z zamówienia
-  const addItemFromOrder = (orderItem) => {
+  // Nowa funkcja do dodawania pozycji z zamówienia - z automatycznym wyszukiwaniem przez receptury
+  const addItemFromOrder = async (orderItem) => {
     const newItem = {
       marks: orderItem.productCode || '',
       numberOfPackages: orderItem.quantity || '',
@@ -330,15 +330,56 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
       description: orderItem.name || '',
       weight: orderItem.weight || '',
       volume: orderItem.volume || '',
-      linkedBatches: []
+      linkedBatches: [],
+      // Dodaj informacje o potencjalnej recepturze
+      originalOrderItem: orderItem
     };
+
+    // Spróbuj automatycznie znaleźć pozycję magazynową na podstawie receptury
+    try {
+      // Import potrzebnych funkcji
+      const { getAllRecipes } = await import('../../services/recipeService');
+      const { getInventoryItemByRecipeId } = await import('../../services/inventoryService');
+      
+      // Pobierz receptury
+      const recipes = await getAllRecipes();
+      
+      // Znajdź recepturę odpowiadającą nazwie pozycji z zamówienia
+      const matchingRecipe = recipes.find(recipe => {
+        const recipeName = recipe.name.toLowerCase();
+        const itemName = orderItem.name.toLowerCase();
+        
+        // Szukaj dokładnego dopasowania lub częściowego
+        return recipeName === itemName || 
+               recipeName.includes(itemName) || 
+               itemName.includes(recipeName);
+      });
+
+      if (matchingRecipe) {
+        // Sprawdź czy receptura ma powiązaną pozycję magazynową
+        const inventoryItem = await getInventoryItemByRecipeId(matchingRecipe.id);
+        
+        if (inventoryItem) {
+          newItem.suggestedInventoryItem = inventoryItem;
+          newItem.matchedRecipe = matchingRecipe;
+          
+          console.log(`Automatycznie dopasowano pozycję magazynową "${inventoryItem.name}" dla pozycji CMR "${orderItem.name}" na podstawie receptury "${matchingRecipe.name}"`);
+          showMessage(`Dodano pozycję "${orderItem.name}" z sugerowaną pozycją magazynową "${inventoryItem.name}" (z receptury)`, 'success');
+        } else {
+          showMessage(`Dodano pozycję "${orderItem.name}" z zamówienia. Znaleziono recepturę "${matchingRecipe.name}", ale brak powiązanej pozycji magazynowej`, 'info');
+        }
+      } else {
+        showMessage(`Dodano pozycję "${orderItem.name}" z zamówienia`, 'success');
+      }
+    } catch (error) {
+      console.error('Błąd podczas automatycznego dopasowywania pozycji magazynowej:', error);
+      showMessage(`Dodano pozycję "${orderItem.name}" z zamówienia`, 'success');
+    }
     
     setFormData(prev => ({
       ...prev,
       items: [...prev.items, newItem]
     }));
-    
-    showMessage(`Dodano pozycję "${orderItem.name}" z zamówienia`, 'success');
   };
   
   // Funkcja do usuwania powiązanego zamówienia
@@ -1309,14 +1350,27 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                           />
                         </TableCell>
                         <TableCell>
-                          <TextField
-                            value={item.description}
-                            onChange={(e) => handleItemChange(index, 'description', e.target.value)}
-                            fullWidth
-                            size="small"
-                            variant="outlined"
-                            error={formErrors.items && formErrors.items[index]?.description}
-                          />
+                          <Box>
+                            <TextField
+                              value={item.description}
+                              onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                              fullWidth
+                              size="small"
+                              variant="outlined"
+                              error={formErrors.items && formErrors.items[index]?.description}
+                            />
+                            {/* Informacja o sugerowanej pozycji magazynowej */}
+                            {item.suggestedInventoryItem && item.matchedRecipe && (
+                              <Chip 
+                                label={`🎯 ${item.suggestedInventoryItem.name}`}
+                                size="small"
+                                color="primary"
+                                variant="outlined"
+                                title={`Sugerowana pozycja magazynowa na podstawie receptury: ${item.matchedRecipe.name}`}
+                                sx={{ mt: 0.5, fontSize: '0.7rem' }}
+                              />
+                            )}
+                          </Box>
                         </TableCell>
                         <TableCell>
                           <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
@@ -1814,7 +1868,12 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                       <Button
                         variant="contained"
                         size="small"
-                        onClick={() => addItemFromOrder(orderItem)}
+                                                  onClick={() => {
+                            addItemFromOrder(orderItem).catch(error => {
+                              console.error('Błąd podczas dodawania pozycji z zamówienia:', error);
+                              showMessage('Błąd podczas dodawania pozycji z zamówienia', 'error');
+                            });
+                          }}
                         sx={{ width: '100%' }}
                       >
                         Dodaj
@@ -1868,6 +1927,8 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
           itemDescription={currentItemIndex !== null ? formData.items[currentItemIndex]?.description || '' : ''}
           itemMarks={currentItemIndex !== null ? formData.items[currentItemIndex]?.marks || '' : ''}
           itemCode={currentItemIndex !== null ? formData.items[currentItemIndex]?.marks || formData.items[currentItemIndex]?.productCode || '' : ''}
+          suggestedInventoryItem={currentItemIndex !== null ? formData.items[currentItemIndex]?.suggestedInventoryItem || null : null}
+          matchedRecipe={currentItemIndex !== null ? formData.items[currentItemIndex]?.matchedRecipe || null : null}
         />
 
         {/* Dialog kalkulatora wagi */}

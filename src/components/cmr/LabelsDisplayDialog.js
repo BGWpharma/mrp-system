@@ -13,10 +13,8 @@ import {
 } from '@mui/material';
 import {
   Close as CloseIcon,
-  Print as PrintIcon,
   PictureAsPdf as PdfIcon
 } from '@mui/icons-material';
-import { useReactToPrint } from 'react-to-print';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import LabelPdfGenerator from '../../utils/LabelPdfGenerator';
@@ -51,22 +49,7 @@ const LabelsDisplayDialog = ({
     return Promise.all(promises);
   };
 
-  const handlePrint = useReactToPrint({
-    content: () => componentRef.current,
-    documentTitle: `${title} - ${new Date().toLocaleDateString()}`,
-    pageStyle: `
-      @page {
-        size: auto;
-        margin: 0;
-      }
-      @media print {
-        body {
-          -webkit-print-color-adjust: exact;
-          color-adjust: exact;
-        }
-      }
-    `
-  });
+
 
   // Nowa funkcja generowania PDF z PDF-lib (znacznie szybsza)
   const generatePDFWithPdfLib = async () => {
@@ -124,7 +107,7 @@ const LabelsDisplayDialog = ({
       } catch (fallbackError) {
         console.error('❌ Wszystkie metody generowania PDF nie powiodły się:', fallbackError);
         setPdfProgress('Błąd generowania');
-        alert('Wystąpił błąd podczas generowania PDF. Spróbuj ponownie lub użyj funkcji drukowania.');
+        alert('Wystąpił błąd podczas generowania PDF. Spróbuj ponownie.');
       }
     } finally {
       setIsGeneratingPdf(false);
@@ -248,7 +231,7 @@ const LabelsDisplayDialog = ({
         } catch (reactPdfError) {
           console.error('Wszystkie metody generowania PDF nie powiodły się:', reactPdfError);
           setPdfProgress('Błąd generowania');
-          alert('Wystąpił błąd podczas generowania PDF. Spróbuj ponownie lub użyj funkcji drukowania.');
+          alert('Wystąpił błąd podczas generowania PDF. Spróbuj ponownie.');
         }
       }
     } finally {
@@ -276,7 +259,7 @@ const LabelsDisplayDialog = ({
       
       pdf.setFontSize(12);
       pdf.text('Uwaga: Nie udało się wygenerować graficznej reprezentacji etykiety.', 20, 40);
-      pdf.text('Użyj funkcji drukowania dla pełnej wersji etykiet.', 20, 50);
+      pdf.text('Pełna wersja etykiet dostępna w głównym widoku.', 20, 50);
       
       // Dodaj podstawowe informacje o etykiecie jeśli dostępne
       pdf.text(`Tytuł: ${title}`, 20, 70);
@@ -354,7 +337,7 @@ const LabelsDisplayDialog = ({
                 <Text style={styles.value}>{new Date().toLocaleDateString()}</Text>
               </View>
               <Text style={styles.note}>
-                To jest uproszczona wersja etykiety. Dla pełnej wersji z kodami kreskowymi użyj funkcji drukowania.
+                To jest uproszczona wersja etykiety. Pełna wersja z kodami kreskowymi dostępna w głównym widoku.
               </Text>
             </View>
           </Page>
@@ -394,21 +377,13 @@ const LabelsDisplayDialog = ({
         <Typography variant="h6">{title}</Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button
-            variant="outlined"
+            variant="contained"
             startIcon={isGeneratingPdf ? <CircularProgress size={16} /> : <PdfIcon />}
             onClick={generatePDFWithPdfLib}
             disabled={isGeneratingPdf || labels.length === 0}
-            color="secondary"
+            color="primary"
           >
             {isGeneratingPdf ? (pdfProgress || 'Generowanie PDF...') : 'Pobierz PDF'}
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<PrintIcon />}
-            onClick={handlePrint}
-            disabled={labels.length === 0}
-          >
-            Drukuj
           </Button>
           <IconButton onClick={onClose}>
             <CloseIcon />

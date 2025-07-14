@@ -61,7 +61,7 @@ import {
   Download as DownloadIcon,
   Sort as SortIcon
 } from '@mui/icons-material';
-import { getAllTasks, updateTaskStatus, deleteTask, addTaskProductToInventory, stopProduction, getTasksWithPagination } from '../../services/productionService';
+import { getAllTasks, updateTaskStatus, deleteTask, addTaskProductToInventory, stopProduction, getTasksWithPagination, startProduction } from '../../services/productionService';
 import { getAllWarehouses } from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -349,8 +349,16 @@ const TaskList = () => {
 
   const handleStatusChange = async (id, newStatus) => {
     try {
-      await updateTaskStatus(id, newStatus, currentUser.uid);
-      showSuccess(`Status zadania zmieniony na: ${newStatus}`);
+      // Jeśli status zmienia się na "W trakcie", użyj funkcji startProduction
+      if (newStatus === 'W trakcie') {
+        await startProduction(id, currentUser.uid);
+        showSuccess('Produkcja rozpoczęta - utworzono pustą partię produktu');
+      } else {
+        // Dla innych statusów użyj standardowej funkcji updateTaskStatus
+        await updateTaskStatus(id, newStatus, currentUser.uid);
+        showSuccess(`Status zadania zmieniony na: ${newStatus}`);
+      }
+      
       // Odśwież listę zadań
       fetchTasks();
     } catch (error) {

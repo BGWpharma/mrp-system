@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -22,7 +22,8 @@ import {
   Autocomplete,
   Grid
 } from '@mui/material';
-import { getItemBatches, getAllInventoryItems, getAllWarehouses } from '../../services/inventoryService';
+import { getItemBatches, getAllInventoryItems, getAllWarehouses, getInventoryItemByRecipeId } from '../../services/inventoryService';
+import { getAllRecipes } from '../../services/recipeService';
 
 /**
  * Komponent do wyboru partii magazynowych dla pozycji CMR
@@ -34,9 +35,12 @@ const BatchSelector = ({
   selectedBatches = [],
   itemDescription = '',
   itemMarks = '',
-  itemCode = ''
+  itemCode = '',
+  suggestedInventoryItem = null,
+  matchedRecipe = null
 }) => {
   const [inventoryItems, setInventoryItems] = useState([]);
+  const [recipes, setRecipes] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
   const [batches, setBatches] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
@@ -44,18 +48,169 @@ const BatchSelector = ({
   const [loading, setLoading] = useState(false);
   const [loadingBatches, setLoadingBatches] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [recipeSearchResults, setRecipeSearchResults] = useState([]);
+
+  // Ref do śledzenia czy automatyczne wyszukiwanie zostało już wykonane
+  const autoSearchPerformedRef = useRef(false);
+
+  // Funkcja znajdowania najlepszego dopasowania
+  const findBestMatch = useCallback((items) => {
+    if (!items || items.length === 0) return null;
+
+    const searchTerms = [
+      itemCode,           // Kod produktu ma najwyższy priorytet
+      itemMarks,          // Znaki i numery
+      itemDescription     // Opis
+    ].filter(Boolean);
+
+    if (searchTerms.length === 0) return null;
+
+    // Szukaj dokładnego dopasowania w pozycjach magazynowych
+    for (const term of searchTerms) {
+      const exactMatch = items.find(item => 
+        item.productCode?.toLowerCase() === term.toLowerCase() ||
+        item.name?.toLowerCase() === term.toLowerCase() ||
+        item.sku?.toLowerCase() === term.toLowerCase()
+      );
+      if (exactMatch) return exactMatch;
+    }
+
+    // Szukaj częściowego dopasowania w pozycjach magazynowych
+    for (const term of searchTerms) {
+      const partialMatch = items.find(item => {
+        const searchTerm = term.toLowerCase();
+        return (
+          item.name?.toLowerCase().includes(searchTerm) ||
+          item.productCode?.toLowerCase().includes(searchTerm) ||
+          item.sku?.toLowerCase().includes(searchTerm) ||
+          item.description?.toLowerCase().includes(searchTerm)
+        );
+      });
+      if (partialMatch) return partialMatch;
+    }
+
+    // Szukaj dopasowania słów kluczowych w pozycjach magazynowych
+    for (const term of searchTerms) {
+      const words = term.toLowerCase().split(' ').filter(word => word.length > 2);
+      const keywordMatch = items.find(item => {
+        const itemText = `${item.name || ''} ${item.productCode || ''} ${item.description || ''}`.toLowerCase();
+        return words.some(word => itemText.includes(word));
+      });
+      if (keywordMatch) return keywordMatch;
+    }
+
+    return null;
+  }, [itemCode, itemMarks, itemDescription]);
+
+  // Nowa funkcja wyszukiwania przez receptury
+  const searchThroughRecipes = useCallback(async (searchTerm, autoSelect = false) => {
+    if (!searchTerm || recipes.length === 0) {
+      setRecipeSearchResults([]);
+      return;
+    }
+
+    try {
+      const matchingRecipes = recipes.filter(recipe => {
+        const recipeName = recipe.name.toLowerCase();
+        const search = searchTerm.toLowerCase();
+        return recipeName.includes(search) || search.includes(recipeName);
+      });
+
+      const recipeResults = [];
+      
+      for (const recipe of matchingRecipes) {
+        try {
+          // Sprawdź czy receptura ma powiązaną pozycję magazynową
+          const inventoryItem = await getInventoryItemByRecipeId(recipe.id);
+          if (inventoryItem) {
+            recipeResults.push({
+              recipe: recipe,
+              inventoryItem: inventoryItem,
+              matchReason: `Receptura "${recipe.name}" ma powiązaną pozycję magazynową "${inventoryItem.name}"`
+            });
+          }
+        } catch (error) {
+          console.error(`Błąd podczas sprawdzania pozycji magazynowej dla receptury ${recipe.name}:`, error);
+        }
+      }
+
+      setRecipeSearchResults(recipeResults);
+      
+      // Automatycznie wybierz tylko podczas automatycznego wyszukiwania (nie podczas wpisywania przez użytkownika)
+      if (autoSelect && recipeResults.length === 1 && !autoSearchPerformedRef.current) {
+        setSelectedItem(recipeResults[0].inventoryItem);
+        setSearchTerm(recipeResults[0].inventoryItem.name);
+        autoSearchPerformedRef.current = true;
+      }
+    } catch (error) {
+      console.error('Błąd podczas wyszukiwania przez receptury:', error);
+    }
+  }, [recipes]);
+
+  // Funkcja automatycznego wyszukiwania pozycji - stabilna referencja dzięki useCallback
+  const autoSearchItem = useCallback(() => {
+    // Sprawdź czy automatyczne wyszukiwanie nie zostało już wykonane
+    if (autoSearchPerformedRef.current || inventoryItems.length === 0) {
+      return;
+    }
+
+    // Priorytetowo użyj sugerowanej pozycji magazynowej jeśli jest dostępna
+    if (suggestedInventoryItem && inventoryItems.length > 0) {
+      const suggestedItem = inventoryItems.find(item => item.id === suggestedInventoryItem.id);
+      if (suggestedItem) {
+        setSelectedItem(suggestedItem);
+        setSearchTerm(suggestedItem.name);
+        autoSearchPerformedRef.current = true;
+        return;
+      }
+    }
+
+    if (inventoryItems.length > 0) {
+      const matchedItem = findBestMatch(inventoryItems);
+      if (matchedItem) {
+        setSelectedItem(matchedItem);
+        setSearchTerm(matchedItem.name);
+        autoSearchPerformedRef.current = true;
+      } else {
+        // Ustaw wyszukiwanie na podstawie dostępnych danych
+        const searchTerms = [itemDescription, itemMarks, itemCode].filter(Boolean);
+        if (searchTerms.length > 0) {
+          setSearchTerm(searchTerms[0]);
+          // Spróbuj wyszukać przez receptury z automatycznym wyborem
+          searchThroughRecipes(searchTerms[0], true);
+          autoSearchPerformedRef.current = true;
+        }
+      }
+    }
+  }, [inventoryItems, suggestedInventoryItem, itemDescription, itemMarks, itemCode, findBestMatch, searchThroughRecipes]);
+
+  // Reset flagi automatycznego wyszukiwania gdy dialog się otwiera
+  useEffect(() => {
+    if (open) {
+      autoSearchPerformedRef.current = false;
+      setSelectedItem(null);
+      setSearchTerm('');
+      setRecipeSearchResults([]);
+    }
+  }, [open]);
 
   // Ładowanie pozycji magazynowych przy otwarciu dialogu
   useEffect(() => {
     if (open) {
       loadInventoryItems();
+      loadRecipes();
       loadWarehouses();
       // Ustawienie wybranych partii
       setSelectedBatchIds(selectedBatches.map(batch => batch.id) || []);
-      // Automatyczne wyszukiwanie na podstawie dostępnych danych
+    }
+  }, [open, selectedBatches]);
+
+  // Automatyczne wyszukiwanie po załadowaniu danych
+  useEffect(() => {
+    if (open && inventoryItems.length > 0 && !autoSearchPerformedRef.current) {
       autoSearchItem();
     }
-  }, [open, selectedBatches, itemDescription, itemMarks, itemCode]);
+  }, [open, inventoryItems, autoSearchItem]);
 
   // Ładowanie partii po wyborze pozycji magazynowej lub załadowaniu magazynów
   useEffect(() => {
@@ -71,19 +226,19 @@ const BatchSelector = ({
       setLoading(true);
       const items = await getAllInventoryItems();
       setInventoryItems(items);
-      
-      // Po załadowaniu pozycji spróbuj automatycznie znaleźć dopasowanie
-      if (items.length > 0) {
-        const matchedItem = findBestMatch(items);
-        if (matchedItem) {
-          setSelectedItem(matchedItem);
-          setSearchTerm(matchedItem.name);
-        }
-      }
     } catch (error) {
       console.error('Błąd podczas ładowania pozycji magazynowych:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadRecipes = async () => {
+    try {
+      const recipesData = await getAllRecipes();
+      setRecipes(recipesData);
+    } catch (error) {
+      console.error('Błąd podczas ładowania receptur:', error);
     }
   };
 
@@ -96,78 +251,24 @@ const BatchSelector = ({
     }
   };
 
-  // Funkcja automatycznego wyszukiwania pozycji
-  const autoSearchItem = () => {
-    if (inventoryItems.length > 0) {
-      const matchedItem = findBestMatch(inventoryItems);
-      if (matchedItem) {
-        setSelectedItem(matchedItem);
-        setSearchTerm(matchedItem.name);
-      } else {
-        // Ustaw wyszukiwanie na podstawie dostępnych danych
-        const searchTerms = [itemDescription, itemMarks, itemCode].filter(Boolean);
-        if (searchTerms.length > 0) {
-          setSearchTerm(searchTerms[0]);
-        }
-      }
-    }
-  };
-
-  // Funkcja znajdowania najlepszego dopasowania
-  const findBestMatch = (items) => {
-    if (!items || items.length === 0) return null;
-
-    const searchTerms = [
-      itemCode,           // Kod produktu ma najwyższy priorytet
-      itemMarks,          // Znaki i numery
-      itemDescription     // Opis
-    ].filter(Boolean);
-
-    if (searchTerms.length === 0) return null;
-
-    // Szukaj dokładnego dopasowania
-    for (const term of searchTerms) {
-      const exactMatch = items.find(item => 
-        item.productCode?.toLowerCase() === term.toLowerCase() ||
-        item.name?.toLowerCase() === term.toLowerCase() ||
-        item.sku?.toLowerCase() === term.toLowerCase()
-      );
-      if (exactMatch) return exactMatch;
-    }
-
-    // Szukaj częściowego dopasowania
-    for (const term of searchTerms) {
-      const partialMatch = items.find(item => {
-        const searchTerm = term.toLowerCase();
-        return (
-          item.name?.toLowerCase().includes(searchTerm) ||
-          item.productCode?.toLowerCase().includes(searchTerm) ||
-          item.sku?.toLowerCase().includes(searchTerm) ||
-          item.description?.toLowerCase().includes(searchTerm)
-        );
-      });
-      if (partialMatch) return partialMatch;
-    }
-
-    // Szukaj dopasowania słów kluczowych
-    for (const term of searchTerms) {
-      const words = term.toLowerCase().split(' ').filter(word => word.length > 2);
-      const keywordMatch = items.find(item => {
-        const itemText = `${item.name || ''} ${item.productCode || ''} ${item.description || ''}`.toLowerCase();
-        return words.some(word => itemText.includes(word));
-      });
-      if (keywordMatch) return keywordMatch;
-    }
-
-    return null;
-  };
-
   const loadBatches = async (itemId) => {
     try {
       setLoadingBatches(true);
       const batchesData = await getItemBatches(itemId);
-      // Filtruj tylko partie z dostępną ilością > 0
-      const availableBatches = batchesData.filter(batch => batch.quantity > 0);
+      
+      // Sprawdź czy wybrany produkt to gotowy produkt
+      const isFinishedProduct = selectedItem && (
+        selectedItem.category === 'Gotowe produkty' ||
+        selectedItem.category === 'Produkty gotowe' ||
+        selectedItem.type === 'finished' ||
+        selectedItem.id?.startsWith('FIN') ||
+        selectedItem.id?.startsWith('BWS')
+      );
+      
+      // Filtruj partie w zależności od typu produktu
+      const availableBatches = isFinishedProduct 
+        ? batchesData // Dla gotowych produktów - pokaż wszystkie partie (w tym puste)
+        : batchesData.filter(batch => batch.quantity > 0); // Dla innych produktów - tylko niepuste
       
       // Dodaj informacje o lokalizacji magazynu do każdej partii
       const enhancedBatches = availableBatches.map(batch => {
@@ -307,7 +408,19 @@ const BatchSelector = ({
                   value={selectedItem}
                   onChange={(event, newValue) => setSelectedItem(newValue)}
                   inputValue={searchTerm}
-                  onInputChange={(event, newInputValue) => setSearchTerm(newInputValue)}
+                  onInputChange={(event, newInputValue) => {
+                    setSearchTerm(newInputValue);
+                    // Resetuj flagę automatycznego wyszukiwania gdy użytkownik aktywnie wpisuje
+                    if (event && event.type === 'input') {
+                      autoSearchPerformedRef.current = true;
+                    }
+                    // Wyszukaj przez receptury gdy użytkownik wprowadza tekst
+                    if (newInputValue && newInputValue.length > 2 && event && event.type === 'input') {
+                      searchThroughRecipes(newInputValue);
+                    } else if (!newInputValue) {
+                      setRecipeSearchResults([]);
+                    }
+                  }}
                   renderInput={(params) => (
                     <TextField
                       {...params}
@@ -324,10 +437,37 @@ const BatchSelector = ({
           </Grid>
         </Box>
 
+        {/* Wyniki wyszukiwania przez receptury */}
+        {recipeSearchResults.length > 0 && !selectedItem && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              🔍 Znalezione pozycje magazynowe na podstawie receptur:
+            </Typography>
+            {recipeSearchResults.map((result, index) => (
+              <Box key={index} sx={{ mb: 1 }}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => {
+                    setSelectedItem(result.inventoryItem);
+                    setSearchTerm(result.inventoryItem.name);
+                  }}
+                  sx={{ mr: 1, mb: 0.5 }}
+                >
+                  Wybierz: {result.inventoryItem.name}
+                </Button>
+                <Typography variant="caption" color="text.secondary">
+                  {result.matchReason}
+                </Typography>
+              </Box>
+            ))}
+          </Alert>
+        )}
+
         {/* Informacja gdy nie znaleziono automatycznego dopasowania */}
-        {(itemDescription || itemMarks || itemCode) && !selectedItem && !loading && (
+        {(itemDescription || itemMarks || itemCode) && !selectedItem && !loading && recipeSearchResults.length === 0 && (
           <Alert severity="warning" sx={{ mb: 2 }}>
-            ⚠️ Nie znaleziono automatycznego dopasowania dla pozycji CMR. Wybierz produkt ręcznie z listy powyżej.
+            ⚠️ Nie znaleziono automatycznego dopasowania dla pozycji CMR. Sprawdzono również receptury bez powodzenia. Wybierz produkt ręcznie z listy powyżej.
             <br />
             <Typography variant="caption">
               Szukano dla: 
@@ -341,16 +481,35 @@ const BatchSelector = ({
         {selectedItem && (
           <Box>
             {/* Informacja o automatycznym dopasowaniu */}
-            {(itemDescription || itemMarks || itemCode) && (
+            {suggestedInventoryItem && matchedRecipe && selectedItem.id === suggestedInventoryItem.id && (
+              <Alert severity="success" sx={{ mb: 2 }}>
+                🎯 Automatycznie dopasowano pozycję magazynową "{selectedItem.name}" na podstawie receptury "{matchedRecipe.name}"
+              </Alert>
+            )}
+            {/* Informacja o automatycznym dopasowaniu z danych CMR (gdy nie ma receptury) */}
+            {(itemDescription || itemMarks || itemCode) && !suggestedInventoryItem && (
               <Alert severity="success" sx={{ mb: 2 }}>
                 ✅ Automatycznie dopasowano produkt "{selectedItem.name}" na podstawie danych z pozycji CMR
               </Alert>
             )}
             
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6">
-                Dostępne partie ({batches.length})
-              </Typography>
+              <Box>
+                <Typography variant="h6">
+                  Dostępne partie ({batches.length})
+                </Typography>
+                {selectedItem && (
+                  selectedItem.category === 'Gotowe produkty' ||
+                  selectedItem.category === 'Produkty gotowe' ||
+                  selectedItem.type === 'finished' ||
+                  selectedItem.id?.startsWith('FIN') ||
+                  selectedItem.id?.startsWith('BWS')
+                ) && (
+                  <Typography variant="caption" color="info.main" sx={{ display: 'block' }}>
+                    💡 Dla gotowych produktów pokazano wszystkie partie (w tym puste)
+                  </Typography>
+                )}
+              </Box>
               {batches.length > 0 && (
                 <Button
                   variant="outlined"
@@ -415,7 +574,17 @@ const BatchSelector = ({
                           {batch.batchNumber || batch.lotNumber || 'Bez numeru'}
                         </TableCell>
                         <TableCell>
-                          {batch.quantity} {selectedItem.unit || 'szt.'}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            {batch.quantity} {selectedItem.unit || 'szt.'}
+                            {batch.quantity <= 0 && (
+                              <Chip 
+                                label="Pusta" 
+                                size="small" 
+                                color="warning"
+                                variant="outlined"
+                              />
+                            )}
+                          </Box>
                         </TableCell>
                         <TableCell>
                           {formatDate(batch.expiryDate)}

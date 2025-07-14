@@ -1409,43 +1409,106 @@ import {
         sourceNotes += ` (CO: ${taskData.orderNumber})`;
       }
       
-      // Sprawdź czy istnieje już partia z tym samym numerem LOT w tym magazynie
-      const existingBatchQuery = query(
-        collection(db, 'inventoryBatches'),
-        where('itemId', '==', inventoryItemId),
-        where('lotNumber', '==', lotNumber),
-        where('warehouseId', '==', warehouseId || null)
-      );
-      
-      const existingBatchSnapshot = await getDocs(existingBatchQuery);
+      // Sprawdź czy zadanie ma już przypisaną partię (utworzoną przy rozpoczynaniu produkcji)
       let batchRef;
       let isNewBatch = true;
       
-      if (!existingBatchSnapshot.empty) {
-        // Znaleziono istniejącą partię - dodaj do niej ilość
-        const existingBatch = existingBatchSnapshot.docs[0];
-        batchRef = existingBatch.ref;
-        isNewBatch = false;
+      if (taskData.inventoryBatchId) {
+        // Zadanie ma już przypisaną partię - użyj jej
+        console.log(`Zadanie ma już przypisaną partię: ${taskData.inventoryBatchId}`);
+        batchRef = doc(db, 'inventoryBatches', taskData.inventoryBatchId);
         
-        // Aktualizuj istniejącą partię
-        await updateDoc(batchRef, {
-          quantity: increment(finalQuantity),
-          initialQuantity: increment(finalQuantity),
-          updatedAt: serverTimestamp(),
-          updatedBy: userId,
-          // Dodaj informacje o ostatnim dodaniu z produkcji
-          lastProductionUpdate: {
-            taskId: taskId,
-            taskName: taskData.name,
-            addedQuantity: finalQuantity,
-            addedAt: serverTimestamp(),
-            moNumber: taskData.moNumber || null,
-            orderNumber: taskData.orderNumber || null
+        // Sprawdź czy partia rzeczywiście istnieje
+        const existingBatchDoc = await getDoc(batchRef);
+        if (existingBatchDoc.exists()) {
+          isNewBatch = false;
+          
+          const existingBatchData = existingBatchDoc.data();
+          
+          // Aktualizuj istniejącą partię - dodaj ilość i ustaw magazyn jeśli był pusty
+          const updateData = {
+            quantity: increment(finalQuantity),
+            initialQuantity: increment(finalQuantity),
+            updatedAt: serverTimestamp(),
+            updatedBy: userId,
+            // Dodaj informacje o ostatnim dodaniu z produkcji
+            lastProductionUpdate: {
+              taskId: taskId,
+              taskName: taskData.name,
+              addedQuantity: finalQuantity,
+              addedAt: serverTimestamp(),
+              moNumber: taskData.moNumber || null,
+              orderNumber: taskData.orderNumber || null
+            },
+            // Zaktualizuj source z "Produkcja (pusta partia)" na "Produkcja"
+            source: 'Produkcja',
+            // Usuń flagę isEmpty
+            isEmpty: false
+          };
+          
+          // Jeśli podano magazyn i partia nie ma magazynu, ustaw go
+          if (warehouseId && !existingBatchData.warehouseId) {
+            updateData.warehouseId = warehouseId;
           }
-        });
+          
+          // Jeśli podano datę ważności i partia nie ma daty, ustaw ją
+          if (expiryDate && !existingBatchData.expiryDate) {
+            updateData.expiryDate = Timestamp.fromDate(expiryDate);
+          }
+          
+          await updateDoc(batchRef, updateData);
+          
+          console.log(`Dodano ${finalQuantity} do przypisanej partii zadania LOT: ${lotNumber}`);
+        } else {
+          console.warn(`Przypisana partia ${taskData.inventoryBatchId} nie istnieje - utworzę nową`);
+          // Partia nie istnieje, wyczyść powiązanie w zadaniu i utwórz nową partię
+          await updateDoc(doc(db, PRODUCTION_TASKS_COLLECTION, taskId), {
+            inventoryBatchId: null,
+            updatedAt: serverTimestamp(),
+            updatedBy: userId
+          });
+        }
+      }
+      
+      // Jeśli nie ma przypisanej partii lub przypisana partia nie istnieje, sprawdź według numeru LOT i magazynu
+      if (isNewBatch) {
+        const existingBatchQuery = query(
+          collection(db, 'inventoryBatches'),
+          where('itemId', '==', inventoryItemId),
+          where('lotNumber', '==', lotNumber),
+          where('warehouseId', '==', warehouseId || null)
+        );
         
-        console.log(`Dodano ${finalQuantity} do istniejącej partii LOT: ${lotNumber}`);
-      } else {
+        const existingBatchSnapshot = await getDocs(existingBatchQuery);
+        
+        if (!existingBatchSnapshot.empty) {
+          // Znaleziono istniejącą partię według LOT i magazynu - dodaj do niej ilość
+          const existingBatch = existingBatchSnapshot.docs[0];
+          batchRef = existingBatch.ref;
+          isNewBatch = false;
+          
+          // Aktualizuj istniejącą partię
+          await updateDoc(batchRef, {
+            quantity: increment(finalQuantity),
+            initialQuantity: increment(finalQuantity),
+            updatedAt: serverTimestamp(),
+            updatedBy: userId,
+            // Dodaj informacje o ostatnim dodaniu z produkcji
+            lastProductionUpdate: {
+              taskId: taskId,
+              taskName: taskData.name,
+              addedQuantity: finalQuantity,
+              addedAt: serverTimestamp(),
+              moNumber: taskData.moNumber || null,
+              orderNumber: taskData.orderNumber || null
+            }
+          });
+          
+          console.log(`Dodano ${finalQuantity} do istniejącej partii LOT: ${lotNumber}`);
+        }
+      }
+      
+      if (isNewBatch) {
         // Nie znaleziono istniejącej partii - utwórz nową
         batchRef = doc(collection(db, 'inventoryBatches'));
         const batchData = {
@@ -2918,13 +2981,30 @@ import {
   export const startProduction = async (taskId, userId) => {
     const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
     
-    await updateDoc(taskRef, {
-      status: 'W trakcie',
-      startDate: serverTimestamp(),
-      productionSessions: [],
-      updatedAt: serverTimestamp(),
-      updatedBy: userId
-    });
+    try {
+      // Zaktualizuj status zadania na "W trakcie"
+      await updateDoc(taskRef, {
+        status: 'W trakcie',
+        startDate: serverTimestamp(),
+        productionSessions: [],
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      });
+      
+      // Automatycznie utwórz pustą partię gotowego produktu
+      try {
+        const batchResult = await createEmptyProductBatch(taskId, userId);
+        console.log(`Utworzono pustą partię przy rozpoczynaniu produkcji: ${batchResult.message}`);
+      } catch (batchError) {
+        console.error('Błąd podczas tworzenia pustej partii:', batchError);
+        // Nie przerywamy głównego procesu rozpoczynania produkcji jeśli utworzenie partii się nie powiedzie
+        console.warn('Produkcja została rozpoczęta mimo błędu przy tworzeniu pustej partii');
+      }
+      
+    } catch (error) {
+      console.error('Błąd podczas rozpoczynania produkcji:', error);
+      throw error;
+    }
   };
 
   // Zatrzymanie produkcji
@@ -3973,5 +4053,290 @@ import {
     } catch (error) {
       console.error('[AUTO] Błąd podczas automatycznej aktualizacji kosztów:', error);
       return { success: false, message: error.message };
+    }
+  };
+
+  // Funkcja do tworzenia pustej partii produktu przy rozpoczynaniu zadania produkcyjnego
+  export const createEmptyProductBatch = async (taskId, userId) => {
+    try {
+      console.log(`Tworzenie pustej partii produktu dla zadania ${taskId}`);
+      
+      // Pobierz dane zadania
+      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+      const taskSnapshot = await getDoc(taskRef);
+      
+      if (!taskSnapshot.exists()) {
+        throw new Error(`Zadanie o ID ${taskId} nie istnieje`);
+      }
+      
+      const taskData = taskSnapshot.data();
+      
+      // Upewnij się, że zadanie posiada produkt
+      if (!taskData.productName) {
+        throw new Error('Zadanie nie zawiera informacji o produkcie');
+      }
+      
+      // Sprawdź, czy zadanie już ma utworzoną partię
+      if (taskData.inventoryBatchId) {
+        console.log(`Zadanie ${taskId} już ma utworzoną partię: ${taskData.inventoryBatchId}`);
+        return {
+          success: true,
+          message: 'Partia już istnieje',
+          inventoryBatchId: taskData.inventoryBatchId,
+          lotNumber: taskData.lotNumber
+        };
+      }
+      
+      // Sprawdź, czy zadanie ma powiązany produkt w magazynie
+      let inventoryItemId = taskData.inventoryProductId;
+      let inventoryItem = null;
+      
+      // Jeśli zadanie ma przypisane inventoryProductId, sprawdź czy pozycja rzeczywiście istnieje
+      if (inventoryItemId) {
+        try {
+          const { getInventoryItemById } = await import('./inventoryService');
+          inventoryItem = await getInventoryItemById(inventoryItemId);
+          
+          if (!inventoryItem) {
+            console.warn(`Pozycja magazynowa ${inventoryItemId} z zadania nie istnieje, będę szukać innej`);
+            inventoryItemId = null;
+          } else {
+            console.log(`Używam pozycji magazynowej z zadania: ${inventoryItem.name} (ID: ${inventoryItemId})`);
+          }
+        } catch (error) {
+          console.error('Błąd podczas sprawdzania pozycji magazynowej z zadania:', error);
+          inventoryItemId = null;
+        }
+      }
+      
+      if (!inventoryItemId) {
+        // Jeśli zadanie ma recepturę, sprawdź czy ta receptura ma już powiązaną pozycję magazynową
+        if (taskData.recipeId) {
+          console.log(`Sprawdzanie pozycji magazynowej powiązanej z recepturą ${taskData.recipeId}`);
+          
+          try {
+            const { getInventoryItemByRecipeId } = await import('./inventoryService');
+            const recipeInventoryItem = await getInventoryItemByRecipeId(taskData.recipeId);
+            
+            if (recipeInventoryItem) {
+              inventoryItemId = recipeInventoryItem.id;
+              inventoryItem = recipeInventoryItem;
+              
+              console.log(`Znaleziono pozycję magazynową powiązaną z recepturą: ${recipeInventoryItem.name} (ID: ${inventoryItemId})`);
+              
+              // Zaktualizuj zadanie z informacją o pozycji magazynowej z receptury
+              await updateDoc(taskRef, {
+                inventoryProductId: inventoryItemId,
+                updatedAt: serverTimestamp(),
+                updatedBy: userId
+              });
+            }
+          } catch (error) {
+            console.error('Błąd podczas pobierania pozycji magazynowej z receptury:', error);
+          }
+        }
+        
+        // Jeśli nie znaleziono pozycji przez recepturę, spróbuj znaleźć według nazwy
+        if (!inventoryItemId) {
+          const inventoryRef = collection(db, 'inventory');
+          const q = query(inventoryRef, where('name', '==', taskData.productName));
+          const querySnapshot = await getDocs(q);
+          
+          if (!querySnapshot.empty) {
+            // Użyj pierwszego znalezionego produktu
+            const doc = querySnapshot.docs[0];
+            inventoryItemId = doc.id;
+            inventoryItem = doc.data();
+            
+            console.log(`Znaleziono pozycję magazynową według nazwy: ${inventoryItem.name} (ID: ${inventoryItemId})`);
+            
+            // Zaktualizuj zadanie z informacją o znalezionym produkcie magazynowym
+            await updateDoc(taskRef, {
+              inventoryProductId: inventoryItemId,
+              updatedAt: serverTimestamp(),
+              updatedBy: userId
+            });
+          } else {
+            // Produkt nie istnieje, utwórz nowy
+            const newItemRef = doc(collection(db, 'inventory'));
+            const newItemData = {
+              name: taskData.productName,
+              category: 'Produkty gotowe',
+              unit: taskData.unit || 'szt.',
+              quantity: 0,
+              unitPrice: 0,
+              createdAt: serverTimestamp(),
+              createdBy: userId,
+              description: `Utworzony automatycznie z zadania produkcyjnego: ${taskData.name}`,
+              recipeId: taskData.recipeId || null
+            };
+            
+            await setDoc(newItemRef, newItemData);
+            inventoryItemId = newItemRef.id;
+            inventoryItem = newItemData;
+            
+            console.log(`Utworzono nową pozycję magazynową: ${taskData.productName} (ID: ${inventoryItemId})`);
+            
+            // Zaktualizuj zadanie z informacją o nowo utworzonej pozycji magazynowej
+            await updateDoc(taskRef, {
+              inventoryProductId: inventoryItemId,
+              updatedAt: serverTimestamp(),
+              updatedBy: userId
+            });
+          }
+        }
+      }
+      
+      // Sprawdź czy udało się znaleźć lub utworzyć pozycję magazynową
+      if (!inventoryItemId) {
+        throw new Error('Nie udało się znaleźć ani utworzyć pozycji magazynowej dla produktu');
+      }
+      
+      // Wygeneruj numer LOT na podstawie danych zadania
+      const lotNumber = taskData.lotNumber || 
+                        (taskData.moNumber ? `SN${taskData.moNumber.replace('MO', '')}` : `LOT-PROD-${taskId.substring(0, 6)}`);
+      
+      // Przygotuj datę ważności z zadania produkcyjnego
+      let expiryDate = null;
+      if (taskData.expiryDate) {
+        try {
+          if (taskData.expiryDate instanceof Date) {
+            expiryDate = taskData.expiryDate;
+          } else if (taskData.expiryDate.toDate) {
+            expiryDate = taskData.expiryDate.toDate();
+          } else {
+            expiryDate = new Date(taskData.expiryDate);
+          }
+        } catch (error) {
+          console.error('Błąd podczas konwersji daty ważności:', error);
+        }
+      }
+      
+      // Zbierz szczegóły dotyczące pochodzenia partii
+      const sourceDetails = {
+        moNumber: taskData.moNumber || null,
+        orderNumber: taskData.orderNumber || null,
+        orderId: taskData.orderId || null,
+        productionTaskName: taskData.name || null
+      };
+      
+      // Przygotuj opis pochodzenia partii
+      let sourceNotes = `Pusta partia utworzona przy rozpoczynaniu zadania produkcyjnego: ${taskData.name || ''}`;
+      
+      if (taskData.moNumber) {
+        sourceNotes += ` (MO: ${taskData.moNumber})`;
+      }
+      
+      if (taskData.orderNumber) {
+        sourceNotes += ` (CO: ${taskData.orderNumber})`;
+      }
+      
+      // Sprawdź czy istnieje już partia z tym samym numerem LOT (bez określonego magazynu)
+      const existingBatchQuery = query(
+        collection(db, 'inventoryBatches'),
+        where('itemId', '==', inventoryItemId),
+        where('lotNumber', '==', lotNumber)
+      );
+      
+      const existingBatchSnapshot = await getDocs(existingBatchQuery);
+      
+      if (!existingBatchSnapshot.empty) {
+        // Znaleziono istniejącą partię - użyj jej
+        const existingBatch = existingBatchSnapshot.docs[0];
+        const batchId = existingBatch.id;
+        
+        console.log(`Znaleziono istniejącą partię LOT: ${lotNumber} - używam jej jako partię dla zadania`);
+        
+        // Zaktualizuj zadanie z informacją o istniejącej partii
+        await updateDoc(taskRef, {
+          inventoryBatchId: batchId,
+          lotNumber: lotNumber,
+          inventoryItemId: inventoryItemId,
+          emptyBatchCreated: true,
+          updatedAt: serverTimestamp(),
+          updatedBy: userId
+        });
+        
+        return {
+          success: true,
+          inventoryItemId,
+          inventoryBatchId: batchId,
+          lotNumber: lotNumber,
+          isNewBatch: false,
+          message: `Znaleziono istniejącą partię LOT: ${lotNumber}`
+        };
+      }
+      
+      // Utwórz nową pustą partię
+      const batchRef = doc(collection(db, 'inventoryBatches'));
+      const batchData = {
+        itemId: inventoryItemId,
+        itemName: taskData.productName,
+        quantity: 0, // Ustawiam ilość na 0
+        initialQuantity: 0,
+        batchNumber: lotNumber,
+        receivedDate: serverTimestamp(),
+        expiryDate: expiryDate ? Timestamp.fromDate(expiryDate) : null,
+        lotNumber: lotNumber,
+        source: 'Produkcja (pusta partia)',
+        sourceId: taskId,
+        moNumber: taskData.moNumber || null,
+        orderNumber: taskData.orderNumber || null,
+        orderId: taskData.orderId || null,
+        sourceDetails: sourceDetails,
+        notes: sourceNotes,
+        unitPrice: 0,
+        warehouseId: null, // Brak magazynu dla pustej partii
+        createdAt: serverTimestamp(),
+        createdBy: userId,
+        isEmpty: true // Oznacz jako pustą partię
+      };
+      
+      await setDoc(batchRef, batchData);
+      console.log(`Utworzono pustą partię LOT: ${lotNumber} dla zadania produkcyjnego`);
+      
+      // Dodaj transakcję do historii (opcjonalnie, dla śledzenia)
+      const transactionRef = doc(collection(db, 'inventoryTransactions'));
+      const transactionData = {
+        itemId: inventoryItemId,
+        itemName: taskData.productName,
+        type: 'create_empty_batch',
+        quantity: 0,
+        date: serverTimestamp(),
+        reason: 'Utworzenie pustej partii przy rozpoczynaniu produkcji',
+        reference: `Zadanie: ${taskData.name} (ID: ${taskId})`,
+        notes: sourceNotes,
+        moNumber: taskData.moNumber || null,
+        orderNumber: taskData.orderNumber || null,
+        batchId: batchRef.id,
+        warehouseId: null,
+        createdBy: userId,
+        createdAt: serverTimestamp()
+      };
+      
+      await setDoc(transactionRef, transactionData);
+      
+      // Zaktualizuj zadanie z informacją o utworzonej partii
+      await updateDoc(taskRef, {
+        inventoryBatchId: batchRef.id,
+        lotNumber: lotNumber,
+        inventoryItemId: inventoryItemId,
+        emptyBatchCreated: true,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      });
+      
+      return {
+        success: true,
+        inventoryItemId,
+        inventoryBatchId: batchRef.id,
+        lotNumber: lotNumber,
+        isNewBatch: true,
+        message: `Utworzono pustą partię LOT: ${lotNumber}`
+      };
+      
+    } catch (error) {
+      console.error('Błąd podczas tworzenia pustej partii produktu:', error);
+      throw error;
     }
   };

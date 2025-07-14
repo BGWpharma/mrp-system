@@ -1180,8 +1180,8 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
     }));
   };
   
-  // Nowa funkcja do dodawania pozycji z zamówienia
-  const addItemFromOrder = (orderItem) => {
+  // Nowa funkcja do dodawania pozycji z zamówienia - z automatycznym wyszukiwaniem przez receptury
+  const addItemFromOrder = async (orderItem) => {
     const newItem = {
       description: orderItem.name || '',
       quantity: orderItem.quantity || '',
@@ -1189,15 +1189,57 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
       weight: orderItem.weight || '',
       volume: orderItem.volume || '',
       notes: `Importowano z zamówienia ${orderItem.orderNumber}`,
-      linkedBatches: []
+      linkedBatches: [],
+      // Dodaj informacje o potencjalnej recepturze
+      originalOrderItem: orderItem
     };
+
+    // Spróbuj automatycznie znaleźć pozycję magazynową na podstawie receptury
+    try {
+      // Import potrzebnych funkcji
+      const { getAllRecipes } = await import('../../../services/recipeService');
+      const { getInventoryItemByRecipeId } = await import('../../../services/inventoryService');
+      
+      // Pobierz receptury
+      const recipes = await getAllRecipes();
+      
+      // Znajdź recepturę odpowiadającą nazwie pozycji z zamówienia
+      const matchingRecipe = recipes.find(recipe => {
+        const recipeName = recipe.name.toLowerCase();
+        const itemName = orderItem.name.toLowerCase();
+        
+        // Szukaj dokładnego dopasowania lub częściowego
+        return recipeName === itemName || 
+               recipeName.includes(itemName) || 
+               itemName.includes(recipeName);
+      });
+
+      if (matchingRecipe) {
+        // Sprawdź czy receptura ma powiązaną pozycję magazynową
+        const inventoryItem = await getInventoryItemByRecipeId(matchingRecipe.id);
+        
+        if (inventoryItem) {
+          newItem.notes += ` | Znaleziono pozycję magazynową "${inventoryItem.name}" na podstawie receptury "${matchingRecipe.name}"`;
+          newItem.suggestedInventoryItem = inventoryItem;
+          newItem.matchedRecipe = matchingRecipe;
+          
+          console.log(`Automatycznie dopasowano pozycję magazynową "${inventoryItem.name}" dla pozycji CMR "${orderItem.name}" na podstawie receptury "${matchingRecipe.name}"`);
+          showMessage(`Dodano pozycję "${orderItem.name}" z sugerowaną pozycją magazynową "${inventoryItem.name}" (z receptury)`, 'success');
+        } else {
+          showMessage(`Dodano pozycję "${orderItem.name}" z zamówienia. Znaleziono recepturę "${matchingRecipe.name}", ale brak powiązanej pozycji magazynowej`, 'info');
+        }
+      } else {
+        showMessage(`Dodano pozycję "${orderItem.name}" z zamówienia`, 'success');
+      }
+    } catch (error) {
+      console.error('Błąd podczas automatycznego dopasowywania pozycji magazynowej:', error);
+      showMessage(`Dodano pozycję "${orderItem.name}" z zamówienia`, 'success');
+    }
     
     setFormData(prev => ({
       ...prev,
       items: [...prev.items, newItem]
     }));
-    
-    showMessage(`Dodano pozycję "${orderItem.name}" z zamówienia`, 'success');
   };
   
   // Funkcja do usuwania powiązanego zamówienia
@@ -2552,6 +2594,13 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                         error={formErrors.items && formErrors.items[index]?.description}
                         helperText={formErrors.items && formErrors.items[index]?.description}
                       />
+                      {/* Informacja o sugerowanej pozycji magazynowej */}
+                      {item.suggestedInventoryItem && item.matchedRecipe && (
+                        <Alert severity="info" sx={{ mt: 1, fontSize: '0.8rem' }}>
+                          🎯 Sugerowana pozycja magazynowa: <strong>{item.suggestedInventoryItem.name}</strong> 
+                          (na podstawie receptury: <em>{item.matchedRecipe.name}</em>)
+                        </Alert>
+                      )}
                     </Grid>
                     
                     <Grid item xs={12} sm={6} md={3}>
@@ -2980,7 +3029,12 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                       <Button
                         variant="contained"
                         size="small"
-                        onClick={() => addItemFromOrder(orderItem)}
+                                                  onClick={() => {
+                            addItemFromOrder(orderItem).catch(error => {
+                              console.error('Błąd podczas dodawania pozycji z zamówienia:', error);
+                              showMessage('Błąd podczas dodawania pozycji z zamówienia', 'error');
+                            });
+                          }}
                         sx={{ width: '100%' }}
                       >
                         Dodaj
@@ -3013,6 +3067,8 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
           itemDescription={currentItemIndex !== null ? formData.items[currentItemIndex]?.description || '' : ''}
           itemMarks={currentItemIndex !== null ? formData.items[currentItemIndex]?.marks || '' : ''}
           itemCode={currentItemIndex !== null ? formData.items[currentItemIndex]?.productCode || formData.items[currentItemIndex]?.marks || '' : ''}
+          suggestedInventoryItem={currentItemIndex !== null ? formData.items[currentItemIndex]?.suggestedInventoryItem || null : null}
+          matchedRecipe={currentItemIndex !== null ? formData.items[currentItemIndex]?.matchedRecipe || null : null}
         />
         
         {/* Dialog kalkulatora wagi */}
