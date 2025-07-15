@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Container, Typography, Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Button, TextField, Box, IconButton, Dialog,
@@ -10,6 +11,7 @@ import { getAllSuppliers, deleteSupplier } from '../../services/supplierService'
 import { useNotification } from '../../hooks/useNotification';
 
 const SuppliersList = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { showSuccess, showError } = useNotification();
   
@@ -37,7 +39,7 @@ const SuppliersList = () => {
       setLoading(false);
     } catch (error) {
       console.error('Błąd podczas pobierania dostawców:', error);
-      showError('Nie udało się pobrać listy dostawców');
+      showError(t('suppliers.notifications.loadFailed'));
       setLoading(false);
     }
   };
@@ -73,19 +75,19 @@ const SuppliersList = () => {
     try {
       await deleteSupplier(supplierToDelete.id);
       setSuppliers(suppliers.filter(s => s.id !== supplierToDelete.id));
-      showSuccess('Dostawca został usunięty');
+      showSuccess(t('suppliers.notifications.deleted'));
       setDeleteDialogOpen(false);
       setSupplierToDelete(null);
     } catch (error) {
       console.error('Błąd podczas usuwania dostawcy:', error);
-      showError('Nie udało się usunąć dostawcy');
+      showError(t('suppliers.notifications.deleteFailed'));
     }
   };
   
   if (loading) {
     return (
       <Container>
-        <Typography variant="h6">Ładowanie dostawców...</Typography>
+        <Typography variant="h6">{t('suppliers.loading')}</Typography>
       </Container>
     );
   }
@@ -99,13 +101,13 @@ const SuppliersList = () => {
           startIcon={<AddIcon />}
           onClick={() => navigate('/suppliers/new')}
         >
-          Nowy Dostawca
+          {t('suppliers.newSupplier')}
         </Button>
       </Box>
       
       <Box sx={{ mb: 3 }}>
         <TextField
-          label="Szukaj"
+          label={t('suppliers.search')}
           variant="outlined"
           size="small"
           value={searchTerm}
@@ -116,19 +118,19 @@ const SuppliersList = () => {
       
       {filteredSuppliers.length === 0 ? (
         <Paper sx={{ p: 3, textAlign: 'center' }}>
-          <Typography variant="body1">Brak dostawców spełniających kryteria wyszukiwania</Typography>
+          <Typography variant="body1">{t('suppliers.noResultsFound')}</Typography>
         </Paper>
       ) : (
         <TableContainer component={Paper}>
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Nazwa</TableCell>
-                <TableCell>Osoba kontaktowa</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell>Telefon</TableCell>
-                <TableCell>Adres</TableCell>
-                <TableCell>Akcje</TableCell>
+                <TableCell>{t('suppliers.table.name')}</TableCell>
+                <TableCell>{t('suppliers.table.contactPerson')}</TableCell>
+                <TableCell>{t('suppliers.table.email')}</TableCell>
+                <TableCell>{t('suppliers.table.phone')}</TableCell>
+                <TableCell>{t('suppliers.table.address')}</TableCell>
+                <TableCell>{t('suppliers.table.actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -141,17 +143,17 @@ const SuppliersList = () => {
                   <TableCell>
                     {supplier.addresses && supplier.addresses.length > 0 
                       ? supplier.addresses.find(a => a.isMain)?.street || supplier.addresses[0].street
-                      : 'Brak adresu'
+                      : t('suppliers.noAddress')
                     }
                   </TableCell>
                   <TableCell>
-                    <IconButton color="primary" onClick={() => navigate(`/suppliers/${supplier.id}/view`)} title="Podgląd">
+                    <IconButton color="primary" onClick={() => navigate(`/suppliers/${supplier.id}/view`)} title={t('suppliers.actions.view')}>
                       <ViewIcon />
                     </IconButton>
-                    <IconButton color="secondary" onClick={() => navigate(`/suppliers/${supplier.id}/edit`)} title="Edytuj">
+                    <IconButton color="secondary" onClick={() => navigate(`/suppliers/${supplier.id}/edit`)} title={t('suppliers.actions.edit')}>
                       <EditIcon />
                     </IconButton>
-                    <IconButton color="error" onClick={() => handleDeleteClick(supplier)} title="Usuń">
+                    <IconButton color="error" onClick={() => handleDeleteClick(supplier)} title={t('suppliers.actions.delete')}>
                       <DeleteIcon />
                     </IconButton>
                   </TableCell>
@@ -167,15 +169,15 @@ const SuppliersList = () => {
         open={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
       >
-        <DialogTitle>Potwierdź usunięcie</DialogTitle>
+        <DialogTitle>{t('suppliers.confirmDelete.title')}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Czy na pewno chcesz usunąć dostawcę {supplierToDelete?.name}? Tej operacji nie można cofnąć.
+            {t('suppliers.confirmDelete.message', { name: supplierToDelete?.name })}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>Anuluj</Button>
-          <Button onClick={handleDeleteConfirm} color="error">Usuń</Button>
+          <Button onClick={() => setDeleteDialogOpen(false)}>{t('suppliers.confirmDelete.cancel')}</Button>
+          <Button onClick={handleDeleteConfirm} color="error">{t('suppliers.confirmDelete.confirm')}</Button>
         </DialogActions>
       </Dialog>
     </Container>

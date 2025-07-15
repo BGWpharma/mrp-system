@@ -5,6 +5,7 @@ import {
   Grid, Divider, Alert, TextField, IconButton, Tooltip,
   Dialog, DialogTitle, DialogContent, DialogActions
 } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import { ArrowBack, Save, Delete, Add, ProductionQuantityLimits } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
@@ -16,17 +17,18 @@ import {
 import { getSuppliers } from '../../services/supplierService';
 import { getWarehouseLocations } from '../../services/warehouseService';
 import { searchItems } from '../../services/inventoryService';
-import PurchaseOrderItemsTable from '../../components/PurchaseOrders/PurchaseOrderItemsTable';
-import PurchaseOrderForm from '../../components/PurchaseOrders/PurchaseOrderForm';
+import PurchaseOrderItemsTable from '../../components/purchaseOrders/PurchaseOrderItemsTable';
+import PurchaseOrderForm from '../../components/purchaseOrders/PurchaseOrderForm';
 import ConfirmationDialog from '../../components/common/ConfirmationDialog';
 import useNotification from '../../hooks/useNotification';
 import { formatCurrency } from '../../utils/formatters';
-import AdditionalCostsForm from '../../components/PurchaseOrders/AdditionalCostsForm';
-import ReceiveItemsDialog from '../../components/PurchaseOrders/ReceiveItemsDialog';
+import AdditionalCostsForm from '../../components/purchaseOrders/AdditionalCostsForm';
+import ReceiveItemsDialog from '../../components/purchaseOrders/ReceiveItemsDialog';
 import { getSupplierProducts } from '../../services/supplierProductService';
 import LoadingScreen from '../../components/common/LoadingScreen';
 
 const EditPurchaseOrderPage = () => {
+  const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
@@ -304,7 +306,7 @@ const EditPurchaseOrderPage = () => {
       <Grid container spacing={3}>
         <Grid item xs={12} md={6}>
           <Paper sx={{ p: 3, mb: 3 }}>
-            <Typography variant="h6" gutterBottom>Dane zamówienia</Typography>
+            <Typography variant="h6" gutterBottom>{t('purchaseOrders.editPage.orderData')}</Typography>
             <PurchaseOrderForm 
               purchaseOrder={purchaseOrder} 
               setPurchaseOrder={setPurchaseOrder}
@@ -317,7 +319,7 @@ const EditPurchaseOrderPage = () => {
 
         <Grid item xs={12} md={6}>
           <Paper sx={{ p: 3, mb: 3 }}>
-            <Typography variant="h6" gutterBottom>Dodatkowe koszty</Typography>
+            <Typography variant="h6" gutterBottom>{t('purchaseOrders.editPage.additionalCosts')}</Typography>
             <AdditionalCostsForm 
               additionalCostsItems={purchaseOrder.additionalCostsItems || []}
               additionalCosts={purchaseOrder.additionalCosts || 0}
@@ -330,7 +332,7 @@ const EditPurchaseOrderPage = () => {
         <Grid item xs={12}>
           <Paper sx={{ p: 3 }}>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-              <Typography variant="h6">Przedmioty w zamówieniu</Typography>
+              <Typography variant="h6">{t('purchaseOrders.itemsInOrder')}</Typography>
               <Button 
                 variant="outlined" 
                 color="primary" 
@@ -338,7 +340,7 @@ const EditPurchaseOrderPage = () => {
                 onClick={() => handleReceiveItems(purchaseOrder.items)}
                 disabled={saving || !purchaseOrder.items || purchaseOrder.items.length === 0}
               >
-                Przyjmij towary
+                {t('purchaseOrders.receiveGoods')}
               </Button>
             </Box>
             <PurchaseOrderItemsTable 

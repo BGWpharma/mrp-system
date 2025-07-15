@@ -35,7 +35,7 @@ import {
   Brightness4 as DarkModeIcon,
   Brightness7 as LightModeIcon,
   Apps as AppsIcon,
-  Translate as TranslateIcon,
+
   People as PeopleIcon,
   AdminPanelSettings as AdminIcon,
   BugReport as BugReportIcon,
@@ -56,6 +56,7 @@ import { getDocs, collection } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 import BugReportDialog from './BugReportDialog';
 import { useSidebar } from '../../contexts/SidebarContext';
+import LanguageSwitcher from './LanguageSwitcher';
 
 // Funkcja zwracająca kolor dla danego typu wyszukiwania
 const getTypeColor = (type) => {
@@ -114,7 +115,7 @@ const Navbar = () => {
   const muiTheme = useMuiTheme();
   const isMobile = useMediaQuery(muiTheme.breakpoints.down('md'));
   const [anchorEl, setAnchorEl] = useState(null);
-  const [isTranslateVisible, setIsTranslateVisible] = useState(false);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
@@ -157,92 +158,7 @@ const Navbar = () => {
   };
 
   // Funkcja do usuwania widgetu tłumaczenia
-  const removeTranslateWidget = () => {
-    // Usuń kontener widgetu, jeśli istnieje
-    const translateDiv = document.getElementById('google-translate-element');
-    if (translateDiv) {
-      translateDiv.innerHTML = '';
-      translateDiv.style.display = 'none';
-    }
-    
-    // Usuń iframe tłumaczenia Google
-    const iframes = document.querySelectorAll('iframe.goog-te-menu-frame');
-    iframes.forEach(iframe => iframe.remove());
-    
-    // Usuń pasek tłumaczenia Google na górze strony
-    const gtBanners = document.querySelectorAll('.skiptranslate');
-    gtBanners.forEach(banner => banner.remove());
-    
-    // Przywróć normalny widok strony
-    if (document.body.style.top) {
-      document.body.style.top = '';
-    }
-    
-    // Usuń klasy dodane przez Google Translate
-    document.body.classList.remove('translated-ltr');
-    document.documentElement.classList.remove('translated-ltr');
-    
-    // Usuń cookie Google Translate
-    document.cookie = 'googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-  };
 
-  const handleTranslate = () => {
-    // Przełączanie stanu widoczności widgetu
-    setIsTranslateVisible(prevState => !prevState);
-    
-    // Jeśli widget jest już widoczny, usuń go
-    if (isTranslateVisible) {
-      removeTranslateWidget();
-      // Usuń skrypt Google Translate
-      const script = document.querySelector('script[src*="translate.google.com"]');
-      if (script) {
-        script.remove();
-      }
-      return;
-    }
-    
-    // Dodanie oficjalnego widgetu Google Translate do strony
-    // Funkcja, która zostanie wywołana po załadowaniu skryptu Google Translate
-    const googleTranslateElementInit = () => {
-      new window.google.translate.TranslateElement({
-        pageLanguage: 'pl',
-        includedLanguages: 'en',
-        layout: window.google.translate.TranslateElement.InlineLayout.SIMPLE
-      }, 'google-translate-element');
-    };
-    
-    // Dodanie elementu kontenera, jeśli nie istnieje
-    let translateDiv = document.getElementById('google-translate-element');
-    if (!translateDiv) {
-      translateDiv = document.createElement('div');
-      translateDiv.id = 'google-translate-element';
-      translateDiv.style.position = 'absolute';
-      translateDiv.style.top = '60px';
-      translateDiv.style.right = '10px';
-      translateDiv.style.zIndex = '9999';
-      document.body.appendChild(translateDiv);
-    } else {
-      translateDiv.style.display = 'block';
-      translateDiv.innerHTML = '';
-    }
-    
-    // Dodanie skryptu Google Translate, jeśli jeszcze nie został dodany
-    if (!document.querySelector('script[src*="translate.google.com"]')) {
-      // Dodanie funkcji inicjującej do globalnego obiektu window
-      window.googleTranslateElementInit = googleTranslateElementInit;
-      
-      // Utworzenie i dodanie skryptu
-      const script = document.createElement('script');
-      script.src = '//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
-      script.async = true;
-      document.head.appendChild(script);
-    } else {
-      // Jeśli skrypt już istnieje, spróbuj ponownie wywołać funkcję inicjującą
-      if (window.google && window.google.translate) {
-        googleTranslateElementInit();
-      }
-    }
-  };
 
   const handleLogout = async () => {
     try {
@@ -721,16 +637,7 @@ const Navbar = () => {
             
             {/* Na urządzeniach mobilnych ukryjemy przycisk tłumaczenia */}
             {!isMobile && (
-              <Tooltip title="Przetłumacz na angielski">
-                <IconButton 
-                  color="inherit" 
-                  sx={{ ml: 1 }}
-                  onClick={handleTranslate}
-                  aria-label="Przetłumacz na angielski"
-                >
-                  <TranslateIcon />
-                </IconButton>
-              </Tooltip>
+              <LanguageSwitcher />
             )}
             
             {/* Kompaktowa wersja na urządzeniach mobilnych */}
@@ -833,13 +740,7 @@ const Navbar = () => {
                   Historia powiadomień
                 </MenuItem>
                 
-                {/* Na urządzeniach mobilnych dodajmy opcję tłumaczenia w menu */}
-                {isMobile && (
-                  <MenuItem onClick={() => { handleClose(); handleTranslate(); }}>
-                    <ListItemIcon><TranslateIcon fontSize="small" /></ListItemIcon>
-                    Przetłumacz stronę
-                  </MenuItem>
-                )}
+
                 
                 <MenuItem onClick={handleLogout}>
                   <ListItemIcon><ExitToApp fontSize="small" /></ListItemIcon>

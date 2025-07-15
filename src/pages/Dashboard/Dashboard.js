@@ -57,6 +57,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { formatDate } from '../../utils/formatters';
 import { formatCurrency } from '../../utils/formatUtils';
 import { formatTimestamp } from '../../utils/dateUtils';
+import { useTranslation } from 'react-i18next';
 import { db } from '../../services/firebase/config';
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { createRealtimeNotification } from '../../services/notificationService';
@@ -259,6 +260,7 @@ const AnimatedButton = ({ children, delay = 0, ...props }) => {
 
 const Dashboard = () => {
   const { currentUser } = useAuth();
+  const { t } = useTranslation();
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === 'dark';
   const [loading, setLoading] = useState(false);
@@ -691,15 +693,21 @@ const Dashboard = () => {
 
   // Mapowanie statusów zamówień na kolory
   const getStatusColor = useMemo(() => (status) => {
-    switch (status) {
-      case 'Nowe': return 'info';
-      case 'W realizacji': return 'warning';
-      case 'Gotowe do wysyłki': return 'success';
-      case 'Wysłane': return 'primary';
-      case 'Dostarczone': return 'success';
-      case 'Anulowane': return 'error';
-      default: return 'default';
-    }
+    const statusMap = {
+      'Nowe': 'info',
+      'New': 'info',
+      'W realizacji': 'warning', 
+      'In Progress': 'warning',
+      'Gotowe do wysyłki': 'success',
+      'Ready to Ship': 'success',
+      'Wysłane': 'primary',
+      'Shipped': 'primary',
+      'Dostarczone': 'success',
+      'Delivered': 'success',
+      'Anulowane': 'error',
+      'Cancelled': 'error'
+    };
+    return statusMap[status] || 'default';
   }, []);
 
   // Komponent dla karty z przyciskiem odświeżania
@@ -714,7 +722,7 @@ const Dashboard = () => {
           onClick={() => onRefresh(section)}
           startIcon={<RefreshIcon />}
         >
-          Odśwież
+          {t('dashboard.refresh')}
         </Button>
       )}
     </Box>
@@ -728,10 +736,13 @@ const Dashboard = () => {
       ? formatTimestamp(announcementMeta.updatedAt, true) 
       : '';
       
+    const authorText = announcementMeta.updatedByName 
+      ? t('dashboard.by', { name: announcementMeta.updatedByName })
+      : '';
+      
     return (
       <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block', textAlign: 'right' }}>
-        Ostatnia aktualizacja: {formattedDate}
-        {announcementMeta.updatedByName && ` przez ${announcementMeta.updatedByName}`}
+        {t('dashboard.lastUpdate', { date: formattedDate, author: authorText })}
       </Typography>
     );
   };
@@ -741,7 +752,7 @@ const Dashboard = () => {
       <AnimatedContainer delay={0}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Typography variant="h4" gutterBottom>
-            Dashboard
+            {t('dashboard.title')}
           </Typography>
           <Button 
             startIcon={<RefreshIcon />}
@@ -749,12 +760,12 @@ const Dashboard = () => {
             variant="outlined"
             disabled={loading}
           >
-            {loading ? 'Odświeżanie...' : 'Odśwież wszystko'}
+            {loading ? t('dashboard.refreshing') : t('dashboard.refreshAll')}
             {loading && <CircularProgress size={16} sx={{ ml: 1 }} />}
           </Button>
         </Box>
         <Typography variant="subtitle1" sx={{ mb: 2 }}>
-          Witaj, {currentUser.displayName || currentUser.email}
+          {t('dashboard.welcome', { name: currentUser.displayName || currentUser.email })}
         </Typography>
       </AnimatedContainer>
 
@@ -772,13 +783,13 @@ const Dashboard = () => {
         }}>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
             <AnnouncementIcon sx={{ mr: 1, color: 'primary.main' }} />
-            <Typography variant="h6">Ogłoszenia</Typography>
+            <Typography variant="h6">{t('dashboard.announcements')}</Typography>
             {!isEditingAnnouncement && (
               <IconButton 
                 size="small" 
                 onClick={startEditingAnnouncement}
                 sx={{ ml: 'auto' }}
-                title="Edytuj ogłoszenie"
+                title={t('dashboard.editAnnouncement')}
               >
                 <EditIcon fontSize="small" />
               </IconButton>
@@ -788,7 +799,7 @@ const Dashboard = () => {
           {!announcementInitialized ? (
             <Fade in timeout={1000}>
               <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic', color: 'text.secondary', opacity: 0.7 }}>
-                Ładowanie ogłoszeń...
+                {t('dashboard.loadingAnnouncements')}
               </Typography>
             </Fade>
           ) : announcementLoading ? (
@@ -800,11 +811,11 @@ const Dashboard = () => {
                 multiline
                 rows={3}
                 variant="outlined"
-                placeholder="Wpisz treść ogłoszenia dla wszystkich użytkowników..."
+                placeholder={t('dashboard.announcementPlaceholder')}
                 value={editedAnnouncement}
                 onChange={(e) => setEditedAnnouncement(e.target.value)}
                 onKeyDown={handleKeyDown}
-                helperText="Naciśnij Ctrl+Enter, aby zatwierdzić"
+                helperText={t('dashboard.announcementHelper')}
                 sx={{
                   '& .MuiOutlinedInput-root': {
                     '& fieldset': {
@@ -828,7 +839,7 @@ const Dashboard = () => {
                   startIcon={<CancelIcon />}
                   onClick={cancelEditingAnnouncement}
                 >
-                  Anuluj
+                  {t('dashboard.cancel')}
                 </Button>
                 <Button 
                   variant="contained" 
@@ -836,7 +847,7 @@ const Dashboard = () => {
                   startIcon={<SaveIcon />}
                   onClick={saveAnnouncement}
                 >
-                  Zapisz
+                  {t('dashboard.save')}
                 </Button>
               </Box>
             </Box>
@@ -850,7 +861,7 @@ const Dashboard = () => {
           ) : (
             <>
               <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic', color: isDarkMode ? 'text.secondary' : 'text.secondary' }}>
-                Brak ogłoszeń. Kliknij ikonę edycji, aby dodać ogłoszenie.
+                {t('dashboard.noAnnouncements')}
               </Typography>
               {renderLastUpdatedInfo()}
             </>
@@ -881,7 +892,7 @@ const Dashboard = () => {
           <AnimatedCard index={0} delay={400} sx={{ borderRadius: 2, boxShadow: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
             <CardContent sx={{ textAlign: 'center', p: 3, flexGrow: 1 }}>
               <RecipesIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
-              <Typography variant="h6">Receptury</Typography>
+              <Typography variant="h6">{t('dashboard.cards.recipes.title')}</Typography>
               <AnimatedCounter 
                 value={recipes?.length || 0} 
                 loading={recipesLoading} 
@@ -889,13 +900,13 @@ const Dashboard = () => {
               />
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Typography variant="body2" color="text.secondary">
-                  Zarządzaj recepturami i składnikami
+                  {t('dashboard.cards.recipes.description')}
                 </Typography>
               </Box>
             </CardContent>
             <CardActions sx={{ p: 2, pt: 0, justifyContent: 'center' }}>
               <AnimatedButton component={Link} to="/recipes" sx={{ flexGrow: 1 }} delay={800}>
-                Przejdź
+                {t('dashboard.cards.recipes.goTo')}
               </AnimatedButton>
             </CardActions>
           </AnimatedCard>
@@ -905,22 +916,24 @@ const Dashboard = () => {
           <AnimatedCard index={1} delay={400} sx={{ borderRadius: 2, boxShadow: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
             <CardContent sx={{ textAlign: 'center', p: 3, flexGrow: 1 }}>
               <ProductionIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
-              <Typography variant="h6">Produkcja</Typography>
+              <Typography variant="h6">{t('dashboard.cards.production.title')}</Typography>
               <AnimatedCounter 
                 value={analyticsData?.production?.tasksInProgress || 0} 
                 loading={analyticsLoading} 
                 delay={700}
-                suffix=" aktywnych zadań"
               />
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                {t('dashboard.cards.production.activeTasks', { count: analyticsData?.production?.tasksInProgress || 0 })}
+              </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Typography variant="body2" color="text.secondary">
-                  Planuj i zarządzaj produkcją
+                  {t('dashboard.cards.production.description')}
                 </Typography>
               </Box>
             </CardContent>
             <CardActions sx={{ p: 2, pt: 0, justifyContent: 'center' }}>
               <AnimatedButton component={Link} to="/production" sx={{ flexGrow: 1 }} delay={900}>
-                Przejdź
+                {t('dashboard.cards.production.goTo')}
               </AnimatedButton>
             </CardActions>
           </AnimatedCard>
@@ -930,7 +943,7 @@ const Dashboard = () => {
           <AnimatedCard index={2} delay={400} sx={{ borderRadius: 2, boxShadow: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
             <CardContent sx={{ textAlign: 'center', p: 3, flexGrow: 1 }}>
               <InventoryIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
-              <Typography variant="h6">Stany Magazynowe</Typography>
+              <Typography variant="h6">{t('dashboard.cards.inventory.title')}</Typography>
               <AnimatedCounter 
                 value={analyticsData?.inventory?.totalItems || 0} 
                 loading={analyticsLoading} 
@@ -939,13 +952,13 @@ const Dashboard = () => {
               />
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Typography variant="body2" color="text.secondary">
-                  Zarządzaj stanami magazynowymi
+                  {t('dashboard.cards.inventory.description')}
                 </Typography>
               </Box>
             </CardContent>
             <CardActions sx={{ p: 2, pt: 0, justifyContent: 'center' }}>
               <AnimatedButton component={Link} to="/inventory" sx={{ flexGrow: 1 }} delay={1000}>
-                Przejdź
+                {t('dashboard.cards.inventory.goTo')}
               </AnimatedButton>
             </CardActions>
           </AnimatedCard>
@@ -955,21 +968,21 @@ const Dashboard = () => {
           <AnimatedCard index={3} delay={400} sx={{ borderRadius: 2, boxShadow: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
             <CardContent sx={{ textAlign: 'center', p: 3, flexGrow: 1 }}>
               <FormsIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
-              <Typography variant="h6">Formularze</Typography>
+              <Typography variant="h6">{t('dashboard.cards.forms.title')}</Typography>
               <Fade in={!analyticsLoading} timeout={1000}>
                 <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
-                  Formularze produkcyjne
+                  {t('dashboard.cards.forms.subtitle')}
                 </Typography>
               </Fade>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Typography variant="body2" color="text.secondary">
-                  Zarządzaj formularzami produkcyjnymi
+                  {t('dashboard.cards.forms.description')}
                 </Typography>
               </Box>
             </CardContent>
             <CardActions sx={{ p: 2, pt: 0, justifyContent: 'center' }}>
               <AnimatedButton component={Link} to="/production/forms" sx={{ flexGrow: 1 }} delay={1100}>
-                Przejdź
+                {t('dashboard.cards.forms.goTo')}
               </AnimatedButton>
             </CardActions>
           </AnimatedCard>
@@ -980,7 +993,7 @@ const Dashboard = () => {
           <AnimatedCard index={4} delay={600} sx={{ borderRadius: 2, boxShadow: 3 }}>
             <CardContent sx={{ textAlign: 'center', p: 3 }}>
               <OrdersIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
-              <Typography variant="h6">Zamówienia klientów</Typography>
+              <Typography variant="h6">{t('dashboard.cards.orders.title')}</Typography>
               
               {ordersLoading ? (
                 <SectionLoading />
@@ -988,18 +1001,21 @@ const Dashboard = () => {
                 <Fade in={!ordersLoading} timeout={1200}>
                   <Box>
                     <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
-                      {orderStats?.total || 0} zamówień ({orderStats?.totalValue ? formatCurrency(orderStats.totalValue) : '0,00 EUR'})
+                      {t('dashboard.cards.orders.ordersCount', { 
+                        count: orderStats?.total || 0, 
+                        value: orderStats?.totalValue ? formatCurrency(orderStats.totalValue) : '0,00 EUR'
+                      })}
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <Typography variant="body2" color="text.secondary">
-                        Zarządzaj zamówieniami klientów
+                        {t('dashboard.cards.orders.description')}
                       </Typography>
                     </Box>
                     
                     {orderStats?.recentOrders && orderStats.recentOrders.length > 0 && (
                       <Box sx={{ mt: 3, textAlign: 'left' }}>
                         <Typography variant="subtitle2" gutterBottom>
-                          Ostatnie zamówienia:
+                          {t('dashboard.cards.orders.recentOrders')}
                         </Typography>
                         <List sx={{ maxHeight: '150px', overflow: 'auto' }}>
                           {orderStats.recentOrders.slice(0, 3).map((order, index) => (
@@ -1052,7 +1068,7 @@ const Dashboard = () => {
             <CardContent sx={{ p: 3 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Typography variant="h6">
-                  Zadania produkcyjne w trakcie
+                  {t('dashboard.production.tasksInProgress')}
                 </Typography>
                 <Button 
                   component={Link} 
@@ -1060,7 +1076,7 @@ const Dashboard = () => {
                   variant="outlined"
                   size="small"
                 >
-                  Zobacz wszystkie
+                  {t('dashboard.production.seeAll')}
                 </Button>
               </Box>
               <Divider sx={{ mb: 2 }} />
@@ -1076,7 +1092,7 @@ const Dashboard = () => {
                         variant="h3"
                       />
                       <Typography variant="body1">
-                        W trakcie
+                        {t('dashboard.production.inProgress')}
                       </Typography>
                     </Box>
                   </Grow>
@@ -1092,7 +1108,7 @@ const Dashboard = () => {
                         variant="h3"
                       />
                       <Typography variant="body1">
-                        Ukończone
+                        {t('dashboard.production.completed')}
                       </Typography>
                     </Box>
                   </Grow>
@@ -1108,7 +1124,7 @@ const Dashboard = () => {
                         variant="h3"
                       />
                       <Typography variant="body1">
-                        Zamówienia
+                        {t('dashboard.production.orders')}
                       </Typography>
                     </Box>
                   </Grow>
@@ -1140,7 +1156,7 @@ const Dashboard = () => {
                               secondary={`${task.productName} - ${task.quantity} ${task.unit}`}
                             />
                             <Chip 
-                              label="W trakcie" 
+                              label={t('dashboard.production.inProgress')} 
                               color="warning" 
                               size="small" 
                             />
@@ -1186,13 +1202,12 @@ const Dashboard = () => {
               <Fade in timeout={1500}>
                 <Box>
                   <Typography variant="body1" gutterBottom>
-                    Sprawdź szczegółową analitykę systemu w nowym, uproszczonym widoku. 
-                    Monitoruj kluczowe wskaźniki dla magazynu, produkcji i zamówień.
+                    {t('dashboard.analytics.description')}
                   </Typography>
                   
                   <Box sx={{ mt: 2, p: 2, bgcolor: 'background.paper', borderRadius: 2, border: '1px dashed', borderColor: 'divider' }}>
                     <Typography variant="subtitle2" gutterBottom>
-                      Dostępne statystyki:
+                      {t('dashboard.analytics.availableStats')}
                     </Typography>
                     <Grid container spacing={2}>
                       <Grid item xs={12} md={4}>
@@ -1200,7 +1215,7 @@ const Dashboard = () => {
                           <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             <OrdersIcon sx={{ mr: 1, color: 'primary.main' }} />
                             <Typography variant="body2">
-                              Zamówienia i sprzedaż
+                              {t('dashboard.analytics.ordersAndSales')}
                             </Typography>
                           </Box>
                         </Slide>
@@ -1210,7 +1225,7 @@ const Dashboard = () => {
                           <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             <InventoryIcon sx={{ mr: 1, color: 'primary.main' }} />
                             <Typography variant="body2">
-                              Stany magazynowe
+                              {t('dashboard.analytics.inventoryLevels')}
                             </Typography>
                           </Box>
                         </Slide>
@@ -1220,7 +1235,7 @@ const Dashboard = () => {
                           <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             <ProductionIcon sx={{ mr: 1, color: 'primary.main' }} />
                             <Typography variant="body2">
-                              Zadania produkcyjne
+                              {t('dashboard.analytics.productionTasks')}
                             </Typography>
                           </Box>
                         </Slide>

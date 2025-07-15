@@ -1,0 +1,931 @@
+{
+  "common": {
+    "save": "Zapisz",
+    "cancel": "Anuluj",
+    "delete": "Usuń",
+    "edit": "Edytuj",
+    "add": "Dodaj",
+    "close": "Zamknij",
+    "back": "Wróć",
+    "next": "Dalej",
+    "previous": "Poprzedni",
+    "search": "Szukaj",
+    "filter": "Filtruj",
+    "loading": "Ładowanie...",
+    "error": "Błąd",
+    "success": "Sukces",
+    "warning": "Ostrzeżenie",
+    "info": "Informacja",
+    "yes": "Tak",
+    "no": "Nie",
+    "confirm": "Potwierdź",
+    "update": "Aktualizuj",
+    "actions": "Akcje",
+    "status": "Status",
+    "date": "Data",
+    "name": "Nazwa",
+    "description": "Opis",
+    "type": "Typ",
+    "category": "Kategoria",
+    "quantity": "Ilość",
+    "price": "Cena",
+    "total": "Suma",
+    "language": "Język"
+  },
+  "navigation": {
+    "dashboard": "Dashboard",
+    "inventory": "Magazyn",
+    "production": "Produkcja",
+    "orders": "Zamówienia",
+    "customers": "Klienci",
+    "recipes": "Receptury",
+    "quality": "Jakość",
+    "reports": "Raporty",
+    "settings": "Ustawienia",
+    "logout": "Wyloguj"
+  },
+  "sidebar": {
+    "aiAssistant": "Asystent AI",
+    "dashboard": "Dashboard",
+    "hallData": "Parametry hali",
+    "sales": "Sprzedaż",
+    "production": "Produkcja",
+    "inventory": "Stany",
+    "reportBug": "Zgłoś błąd",
+    "submenu": {
+      "dashboard": {
+        "main": "Główny",
+        "analytics": "Analityka"
+      },
+      "hallData": {
+        "environmentalConditions": "Warunki środowiskowe",
+        "machines": "Maszyny"
+      },
+      "sales": {
+        "invoices": "Faktury",
+        "customers": "Klienci",
+        "priceLists": "Listy cenowe",
+        "newProductionTask": "Nowe zadanie produkcyjne",
+        "coReports": "Raporty CO",
+        "customerOrders": "Zamówienia klientów"
+      },
+      "production": {
+        "forms": "Formularze",
+        "calculator": "Kalkulator",
+        "forecast": "Prognoza",
+        "productionTasks": "Zadania produkcyjne",
+        "recipes": "Receptury",
+        "timeline": "Timeline"
+      },
+      "inventory": {
+        "cmr": "CMR",
+        "suppliers": "Dostawcy",
+        "forms": "Formularze",
+        "purchaseInteractions": "Interakcje zakupowe",
+        "stocktaking": "Inwentaryzacja",
+        "status": "Stan",
+        "expiryDates": "Terminy ważności",
+        "componentOrders": "Zamówienia komponentów"
+      }
+    }
+  },
+  "auth": {
+    "login": "Zaloguj się",
+    "register": "Zarejestruj się",
+    "email": "Email",
+    "password": "Hasło",
+    "forgotPassword": "Zapomniałeś hasła?",
+    "loginButton": "Zaloguj",
+    "registerButton": "Zarejestruj",
+    "loginSuccess": "Zalogowano pomyślnie",
+    "loginError": "Błąd logowania",
+    "logoutSuccess": "Wylogowano pomyślnie"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Witaj, {{name}}",
+    "overview": "Przegląd",
+    "recentActivity": "Ostatnia aktywność",
+    "quickActions": "Szybkie akcje",
+    "refreshAll": "Odśwież wszystko",
+    "refreshing": "Odświeżanie...",
+    "refresh": "Odśwież",
+    "announcements": "Ogłoszenia",
+    "editAnnouncement": "Edytuj ogłoszenie",
+    "loadingAnnouncements": "Ładowanie ogłoszeń...",
+    "announcementPlaceholder": "Wpisz treść ogłoszenia dla wszystkich użytkowników...",
+    "announcementHelper": "Naciśnij Ctrl+Enter, aby zatwierdzić",
+    "save": "Zapisz",
+    "cancel": "Anuluj",
+    "noAnnouncements": "Brak ogłoszeń. Kliknij ikonę edycji, aby dodać ogłoszenie.",
+    "lastUpdate": "Ostatnia aktualizacja: {{date}}{{author}}",
+    "by": " przez {{name}}",
+    "cards": {
+      "recipes": {
+        "title": "Receptury",
+        "description": "Zarządzaj recepturami i składnikami",
+        "goTo": "Przejdź"
+      },
+      "production": {
+        "title": "Produkcja",
+        "description": "Planuj i zarządzaj produkcją",
+        "activeTasks": "{{count}} aktywnych zadań",
+        "goTo": "Przejdź"
+      },
+      "inventory": {
+        "title": "Magazyn",
+        "description": "Zarządzaj stanem magazynowym",
+        "goTo": "Przejdź"
+      },
+      "quality": {
+        "title": "Jakość",
+        "description": "Kontrola jakości produktów",
+        "goTo": "Przejdź"
+      },
+             "orders": {
+         "title": "Zamówienia klientów",
+         "description": "Zarządzaj zamówieniami klientów",
+         "ordersCount": "{{count}} zamówień ({{value}})",
+         "recentOrders": "Ostatnie zamówienia:"
+       },
+       "forms": {
+         "title": "Formularze",
+         "subtitle": "Formularze produkcyjne",
+         "description": "Zarządzaj formularzami produkcyjnymi",
+         "goTo": "Przejdź"
+       }
+    },
+    "production": {
+      "tasksInProgress": "Zadania produkcyjne w trakcie",
+      "seeAll": "Zobacz wszystkie",
+      "inProgress": "W trakcie",
+      "completed": "Ukończone",
+      "orders": "Zamówienia"
+    },
+    "analytics": {
+      "title": "Analityka",
+      "description": "Sprawdź szczegółową analitykę systemu w nowym, uproszczonym widoku. Monitoruj kluczowe wskaźniki dla magazynu, produkcji i zamówień.",
+      "availableStats": "Dostępne statystyki:",
+      "ordersAndSales": "Zamówienia i sprzedaż",
+      "inventoryLevels": "Stany magazynowe",
+      "productionTasks": "Zadania produkcyjne",
+      "goTo": "Przejdź"
+    },
+    "statuses": {
+      "new": "Nowe",
+      "inProgress": "W realizacji",
+      "readyToShip": "Gotowe do wysyłki",
+      "shipped": "Wysłane",
+      "delivered": "Dostarczone",
+      "cancelled": "Anulowane"
+    }
+  },
+  "analytics": {
+    "title": "Analityka",
+    "subtitle": "Podgląd kluczowych wskaźników działania systemu",
+    "lastUpdate": "Ostatnia aktualizacja",
+    "refreshData": "Odśwież dane",
+    "refreshing": "Odświeżanie...",
+    "refresh": "Odśwież",
+    "cacheExpired": " (cache wygasł)",
+    "tabs": {
+      "statistics": "Statystyki",
+      "charts": "Wykresy"
+    },
+    "cards": {
+      "sales": {
+        "title": "Sprzedaż",
+        "orders": "Zamówienia",
+        "inProgress": "W realizacji"
+      },
+      "inventory": {
+        "title": "Magazyn",
+        "totalValue": "Całkowita wartość"
+      },
+      "production": {
+        "title": "Produkcja",
+        "completedTasks": "Ukończone zadania"
+      }
+    },
+    "sections": {
+      "recentOrders": {
+        "title": "Ostatnie zamówienia (CO)",
+        "noData": "Brak danych o zamówieniach klientów",
+        "orderPrefix": "Zamówienie"
+      },
+      "activeTasks": {
+        "title": "Aktywne zadania produkcyjne",
+        "noData": "Brak aktywnych zadań produkcyjnych",
+        "inProgress": "W trakcie"
+      },
+      "purchaseOrders": {
+        "title": "Zamówienia zakupowe (PO)",
+        "noData": "Brak danych o zamówieniach zakupowych"
+      }
+    },
+    "status": {
+      "noStatus": "Brak statusu"
+    }
+  },
+  "environmentalConditions": {
+    "title": "Warunki środowiskowe",
+    "sensor": "Czujnik",
+    "timeRange": "Zakres czasu",
+    "view": "Widok",
+    "refreshData": "Odśwież dane",
+    "temperature": "Temperatura",
+    "humidity": "Wilgotność",
+    "dataRange": "Zakres danych",
+    "chartHistory": "Historia odczytów",
+    "lastReading": "Ostatni odczyt",
+    "noHistoricalData": "Brak danych historycznych",
+    "startDate": "Data początkowa",
+    "endDate": "Data końcowa",
+    "timeRanges": {
+      "lastHour": "Ostatnia godzina",
+      "last6Hours": "Ostatnie 6 godzin",
+      "last12Hours": "Ostatnie 12 godzin",
+      "today": "Dzisiaj",
+      "lastDay": "Ostatni dzień",
+      "lastWeek": "Ostatni tydzień",
+      "lastMonth": "Ostatni miesiąc",
+      "custom": "Niestandardowy"
+    },
+    "chartTypes": {
+      "line": "Linia",
+      "area": "Obszar"
+    },
+    "errors": {
+      "permissionDenied": "Brak uprawnień do bazy danych Firebase",
+      "permissionDeniedDescription": "Wykryto błąd \"permission_denied\" podczas dostępu do danych w Realtime Database.",
+      "troubleshooting": "Aby rozwiązać ten problem:",
+      "loginToConsole": "Zaloguj się do konsoli Firebase:",
+      "selectProject": "Wybierz projekt \"bgw-mrp-system\"",
+      "goToRealtimeDb": "Przejdź do sekcji \"Realtime Database\"",
+      "clickRulesTab": "Kliknij zakładkę \"Reguły\"",
+      "changeRules": "Zmień reguły, aby umożliwić odczyt danych (na potrzeby testów możesz ustawić dostęp publiczny):",
+      "productionWarning": "W środowisku produkcyjnym zaleca się bardziej rygorystyczne reguły bezpieczeństwa.",
+      "noSensorData": "Brak danych z czujników w bazie Firebase. Upewnij się, że:",
+      "checkRealtimeDb": "Masz skonfigurowaną bazę Firebase Realtime Database",
+      "checkDataStructure": "Dane są zapisywane w strukturze sensors/{device_id}",
+      "checkHistoryStructure": "Dane historyczne są zapisywane w history/{device_id}",
+      "exampleDataStructure": "Przykładowa struktura danych:"
+    }
+  },
+  "machines": {
+    "title": "Maszyny - monitoring",
+    "refreshData": "Odśwież dane",
+    "availableMachines": "Dostępne maszyny",
+    "noAvailableMachines": "Brak dostępnych maszyn",
+    "lastMeasurement": "Ostatni pomiar",
+    "selectMachine": "Wybierz maszynę, aby zobaczyć szczegóły",
+    "machineNotFound": "Nie znaleziono danych dla wybranej maszyny",
+    "unidentifiedMachine": "Niezidentyfikowana maszyna",
+    "tabs": {
+      "details": "Szczegóły",
+      "history": "Historia"
+    },
+    "status": {
+      "ok": "OK",
+      "errors": "Błędy",
+      "noData": "Brak danych"
+    },
+    "fields": {
+      "duration": "Czas trwania",
+      "totalReadings": "Całkowita ilość odczytów",
+      "nonEmptyReadings": "Niepuste odczyty",
+      "uniqueProducts": "Unikalne produkty",
+      "startTime": "Czas rozpoczęcia",
+      "endTime": "Czas zakończenia",
+      "time": "Czas",
+      "readings": "Odczyty",
+      "averageWeight": "Średnia waga produktu",
+      "okNokProducts": "OK/NOK produktów",
+      "status": "Status"
+    },
+    "weightStats": {
+      "title": "Statystyki wagi",
+      "averageWeight": "Średnia waga",
+      "minWeight": "Min. waga",
+      "maxWeight": "Max. waga",
+      "median": "Mediana",
+      "stdDev": "Odchylenie std.",
+      "count": "Ilość",
+      "rawReadings": "Surowe odczyty wagi",
+      "productInfo": "Informacje o produkcie (waga)",
+      "okReadings": "OK",
+      "nokReadings": "NOK",
+      "readings": "odczytów",
+      "products": "produktów"
+    },
+    "history": {
+      "filterByDate": "Filtruj według daty",
+      "selectDate": "Wybierz datę",
+      "reset": "Resetuj",
+      "filter": "Filtruj",
+      "date": "Data",
+      "noData": "Brak danych historycznych dla tej maszyny",
+      "noDataForDate": "Brak danych historycznych dla {{date}}",
+      "tableLabel": "tabela historii"
+    },
+    "formats": {
+      "noData": "Brak danych",
+      "invalidDate": "Nieprawidłowa data",
+      "grams": "g",
+      "hours": "h",
+      "minutes": "min"
+    },
+    "permissions": {
+      "denied": "Brak uprawnień do odczytu danych z bazy. Skontaktuj się z administratorem systemu."
+    },
+    "errors": {
+      "loadingError": "Wystąpił błąd podczas pobierania danych historycznych"
+    }
+  },
+  "purchaseOrders": {
+    "title": "Zamówienia Komponentów",
+    "detailsTitle": "Szczegóły Zamówienia Komponentów",
+    "newOrder": "Nowe zamówienie",
+    "editOrder": "Edytuj zamówienie",
+    "deleteOrder": "Usuń zamówienie",
+    "backToList": "Powrót do listy",
+    "downloadPdf": "Pobierz PDF",
+    "receiveGoods": "Przyjmij towary",
+    "orderData": "Dane zamówienia",
+    "additionalCosts": "Dodatkowe koszty",
+    "itemsInOrder": "Przedmioty w zamówieniu",
+    "noOrdersFound": "Nie znaleziono zamówień zakupu",
+    "loadingOrders": "Ładowanie zamówień...",
+    "orderSaved": "Zamówienie zakupu zostało zapisane!",
+    "orderDeleted": "Zamówienie zostało usunięte",
+    "statusUpdated": "Status zamówienia został zaktualizowany",
+    "paymentStatusUpdated": "Status płatności został zaktualizowany",
+    "selectSupplier": "Wybierz dostawcę",
+    "table": {
+      "number": "Numer",
+      "supplier": "Dostawca",
+      "status": "Status",
+      "paymentStatus": "Status płatności",
+      "orderDate": "Data zamówienia",
+      "totalValue": "Wartość całkowita",
+      "actions": "Akcje"
+    },
+    "filters": {
+      "search": "Szukaj zamówień...",
+      "status": "Status",
+      "all": "Wszystkie",
+      "clear": "Wyczyść",
+      "refresh": "Odśwież"
+    },
+    "actions": {
+      "view": "Podgląd",
+      "edit": "Edytuj",
+      "delete": "Usuń",
+      "updateStatus": "Zmień status",
+      "updatePaymentStatus": "Zmień status płatności"
+    },
+    "dialogs": {
+      "deleteConfirm": {
+        "title": "Potwierdzenie usunięcia",
+        "message": "Czy na pewno chcesz usunąć to zamówienie zakupu?",
+        "warning": "Ta operacja jest nieodwracalna."
+      },
+      "statusUpdate": {
+        "title": "Zmiana statusu zamówienia",
+        "newStatus": "Nowy status"
+      },
+      "paymentStatusUpdate": {
+        "title": "Zmiana statusu płatności",
+        "newPaymentStatus": "Nowy status płatności"
+      }
+    },
+    "statuses": {
+      "new": "Nowe",
+      "pending": "Oczekujące",
+      "confirmed": "Potwierdzone",
+      "shipped": "Wysłane",
+      "delivered": "Dostarczone",
+      "cancelled": "Anulowane"
+    },
+    "paymentStatuses": {
+      "unpaid": "Nieopłacone",
+      "partiallyPaid": "Częściowo opłacone",
+      "paid": "Opłacone",
+      "overdue": "Przeterminowane"
+    },
+    "form": {
+      "createTitle": "Utwórz Zamówienie Zakupu",
+      "editTitle": "Edycja Zamówienia Zakupu",
+      "loadingData": "Ładowanie danych zamówienia...",
+      "poNumber": "Numer PO: {{number}}",
+      "supplier": "Dostawca",
+      "targetWarehouse": "Magazyn docelowy",
+      "selectWarehouse": "Wybierz magazyn",
+      "currency": "Waluta",
+      "orderDate": "Data zamówienia",
+      "expectedDeliveryDate": "Planowana data dostawy",
+      "supplierAddress": "Adres dostawcy",
+      "selectSupplierAddress": "Wybierz adres dostawcy:",
+      "mainAddress": "(główny)",
+      "notes": "Uwagi",
+      "additionalCosts": {
+        "title": "Dodatkowe koszty",
+        "addCost": "Dodaj koszt",
+        "description": "Opis",
+        "amount": "Kwota",
+        "vatRate": "VAT",
+        "noCosts": "Brak dodatkowych kosztów. Kliknij \"Dodaj koszt\", aby dodać opłaty jak cła, transport, ubezpieczenie itp.",
+        "placeholder": "Np. cła, transport, ubezpieczenie",
+        "originalAmount": "Kwota oryginalna",
+        "exchangeRate": "Kurs wymiany",
+        "amountInOrderCurrency": "Kwota w walucie PO",
+        "expandFields": "Rozwiń dodatkowe pola"
+      },
+      "orderItems": {
+        "title": "Pozycje zamówienia",
+        "addItem": "Dodaj pozycję",
+        "fillMinimumQuantities": "Uzupełnij minimalne ilości",
+        "findBestPrices": "Znajdź najlepsze ceny",
+        "applyBestPrices": "Zastosuj najlepsze ceny",
+        "product": "Produkt",
+        "quantity": "Ilość",
+        "unit": "Jedn.",
+        "unitPrice": "Cena jedn.",
+        "discount": "Rabat %",
+        "vatRate": "VAT",
+        "amountAfterConversion": "Kwota po przew.",
+        "defaultSupplierPrice": "Domyślna cena dostawcy"
+      },
+      "summary": {
+        "itemsValue": "Wartość pozycji",
+        "additionalCostsNet": "Dodatkowe koszty netto",
+        "additionalCostsVat": "VAT od dodatkowych kosztów",
+        "vatRateBreakdown": "Stawka {{rate}}%",
+        "beforeDiscount": "Wartość przed rabatem",
+        "netValueTotal": "Wartość netto razem",
+        "vatTotal": "Suma podatku VAT",
+        "globalDiscount": "Rabat globalny",
+        "savings": "Oszczędność",
+        "grossValue": "Wartość brutto",
+        "exchangeRateInfo": "Wartości w walutach obcych zostały przeliczone według kursów z dnia poprzedzającego datę faktury lub z dnia utworzenia PO (jeśli brak daty faktury)."
+      },
+      "invoices": {
+        "title": "Faktury",
+        "addInvoice": "Dodaj fakturę",
+        "description": "Opis",
+        "link": "Link do faktury",
+        "noInvoices": "Brak faktur. Kliknij \"Dodaj fakturę\", aby dodać link do faktury.",
+        "descriptionPlaceholder": "Opis faktury, np. Faktura główna, Faktura transportowa itp.",
+        "linkPlaceholder": "https://drive.google.com/file/d/..."
+      },
+      "attachments": "Załączniki",
+      "actions": {
+        "cancel": "Anuluj",
+        "save": "Zapisz",
+        "saving": "Zapisywanie..."
+      }
+    },
+    "editPage": {
+      "orderData": "Dane zamówienia",
+      "additionalCosts": "Dodatkowe koszty",
+      "orderItems": "Przedmioty w zamówieniu",
+      "receiveItems": "Przyjmij towary"
+    },
+    "errors": {
+      "loadFailed": "Nie udało się pobrać listy zamówień zakupu",
+      "saveFailed": "Nie udało się zapisać zamówienia",
+      "deleteFailed": "Nie udało się usunąć zamówienia",
+      "statusUpdateFailed": "Nie udało się zaktualizować statusu",
+      "productNotLinked": "Ten produkt nie jest powiązany z pozycją magazynową"
+    },
+    "details": {
+      "orderNumber": "Zamówienie {{number}}",
+      "orderDate": "Data zamówienia",
+      "expectedDeliveryDate": "Oczekiwana data dostawy",
+      "deliveryDate": "Data dostawy",
+      "invoice": "Faktura",
+      "invoices": "Faktury",
+      "viewInvoice": "Zobacz fakturę",
+      "supplier": "Dostawca",
+      "noSupplierData": "Brak danych dostawcy",
+      "statusHistory": "Historia zmian statusu",
+      "orderElements": "Elementy zamówienia",
+      "additionalCostsDetails": "Dodatkowe koszty",
+      "relatedBatches": "Powiązane partie",
+      "unloadingReports": "Raporty rozładunku",
+      "deleteOrder": "Usuń zamówienie",
+      "receive": "Przyjmij",
+      "notInReport": "Brak w raporcie",
+      "itemReportedInUnloading": "Pozycja została zgłoszona w raporcie rozładunku - można przyjąć towar",
+      "itemNotReportedInUnloading": "Pozycja nie została zgłoszona w raporcie rozładunku - nie można przyjąć towaru",
+      "batchesAssignedToItem": "Partie (LOT) przypisane do tej pozycji",
+      "noData": "Nie określono",
+      "noAddress": "Brak adresu",
+      "dateReadError": "Błąd odczytu daty",
+      "invalidDate": "Nieprawidłowa wartość daty",
+      "noPdfData": "Brak danych zamówienia do wygenerowania PDF",
+      "table": {
+        "productName": "Nazwa produktu",
+        "quantity": "Ilość",
+        "unit": "Jednostka",
+        "unitPrice": "Cena jedn.",
+        "netValue": "Wartość netto",
+        "originalAmount": "Kwota oryg.",
+        "plannedDeliveryDate": "Plan. data dost.",
+        "actualDeliveryDate": "Rzecz. data dost.",
+        "received": "Odebrano",
+        "dateTime": "Data i godzina",
+        "previousStatus": "Poprzedni status",
+        "newStatus": "Nowy status",
+        "changedBy": "Kto zmienił",
+        "batchNumber": "Numer partii",
+        "expiryDate": "Data ważności",
+        "warehouse": "Magazyn",
+        "location": "Lokalizacja",
+        "details": "Szczegóły",
+        "actions": "Akcje",
+        "notes": "Uwagi"
+      },
+      "summary": {
+        "netValue": "Wartość netto razem",
+        "totalVAT": "Suma podatku VAT",
+        "grossValue": "Wartość brutto",
+        "productsNetValue": "Wartość produktów netto",
+        "vatFromProducts": "VAT od produktów",
+        "vatRate": "Stawka {{rate}}%",
+        "from": "od"
+      },
+      "batches": {
+        "allRelatedBatches": "Wszystkie partie (LOT) powiązane z zamówieniem",
+        "lotNumber": "Numer LOT",
+        "product": "Produkt",
+        "receivedDate": "Data przyjęcia",
+        "value": "Wartość",
+        "noLotNumber": "Brak numeru",
+        "unknownProduct": "Nieznany produkt",
+        "mainWarehouse": "Główny magazyn",
+        "unknownDate": "Nieznana data",
+        "noBatchesAssigned": "Brak przypisanych partii dla tej pozycji",
+        "received": "Przyjęto"
+      }
+    }
+  },
+  "cmr": {
+    "title": "Dokumenty CMR",
+    "newDocument": "Nowy dokument CMR",
+    "generateReport": "Generuj raport",
+    "noDocuments": "Brak dokumentów CMR w systemie. Kliknij \"Nowy dokument CMR\", aby dodać pierwszy.",
+    "sorting": {
+      "oldestToNewest": "od najstarszej do najnowszej",
+      "newestToOldest": "od najnowszej do najstarszej",
+      "sortBy": "Sortuj",
+      "byIssueDate": "daty wystawienia"
+    },
+    "table": {
+      "cmrNumber": "Numer CMR",
+      "issueDate": "Data wystawienia",
+      "sender": "Nadawca",
+      "recipient": "Odbiorca",
+      "status": "Status",
+      "paymentStatus": "Status płatności",
+      "actions": "Akcje"
+    },
+    "actions": {
+      "view": "Podgląd",
+      "edit": "Edytuj",
+      "delete": "Usuń"
+    },
+    "dialogs": {
+      "deleteConfirmation": "Potwierdzenie usunięcia",
+      "deleteMessage": "Czy na pewno chcesz usunąć dokument CMR {{cmrNumber}}? Ta operacja jest nieodwracalna.",
+      "cancel": "Anuluj",
+      "delete": "Usuń",
+      "close": "Zamknij",
+      "changePaymentStatus": "Zmiana statusu płatności",
+      "selectNewPaymentStatus": "Wybierz nowy status płatności dla dokumentu CMR:",
+      "update": "Zaktualizuj"
+    },
+    "report": {
+      "title": "Raport CMR",
+      "generate": "Generuj raport z dokumentów CMR",
+      "results": "Wyniki raportu",
+      "generating": "Generuj raport",
+      "exportToCsv": "Eksportuj do CSV",
+      "fields": {
+        "cmrNumber": "Numer CMR",
+        "issueDate": "Data wystawienia",
+        "sender": "Nadawca",
+        "recipient": "Odbiorca",
+        "loadingPlace": "Miejsce załadunku",
+        "deliveryPlace": "Miejsce dostawy",
+        "status": "Status"
+      },
+      "items": {
+        "id": "Lp.",
+        "description": "Opis towaru",
+        "quantity": "Ilość",
+        "unit": "Jednostka",
+        "weight": "Waga (kg)",
+        "volume": "Objętość (m³)"
+      },
+      "summary": {
+        "title": "Podsumowanie",
+        "totalDocuments": "Całkowita liczba dokumentów",
+        "reportPeriod": "Okres raportu",
+        "includeItems": "Uwzględniono pozycje",
+        "statusStatistics": "Statystyki według statusu",
+        "documentCount": "Liczba dokumentów",
+        "documentsInReport": "Dokumenty w raporcie"
+      },
+      "common": {
+        "yes": "Tak",
+        "no": "Nie",
+        "by": "według"
+      }
+    },
+    "statuses": {
+      "draft": "Szkic",
+      "issued": "Wystawiony",
+      "inTransit": "W transporcie",
+      "delivered": "Dostarczone",
+      "completed": "Zakończony",
+      "canceled": "Anulowany"
+    },
+    "paymentStatuses": {
+      "unpaid": "Nieopłacone",
+      "paid": "Opłacone"
+    }
+  },
+  "suppliers": {
+    "title": "Dostawcy",
+    "newSupplier": "Nowy Dostawca",
+    "editSupplier": "Edytuj Dostawcę",
+    "supplierDetails": "Szczegóły Dostawcy",
+    "loading": "Ładowanie dostawców...",
+    "search": "Szukaj",
+    "noResultsFound": "Brak dostawców spełniających kryteria wyszukiwania",
+    "noAddress": "Brak adresu",
+    "table": {
+      "name": "Nazwa",
+      "contactPerson": "Osoba kontaktowa",
+      "email": "Email",
+      "phone": "Telefon",
+      "address": "Adres",
+      "actions": "Akcje"
+    },
+    "actions": {
+      "view": "Podgląd",
+      "edit": "Edytuj",
+      "delete": "Usuń",
+      "cancel": "Anuluj",
+      "save": "Zapisz",
+      "saving": "Zapisywanie...",
+      "add": "Dodaj",
+      "back": "Wróć do listy"
+    },
+    "confirmDelete": {
+      "title": "Potwierdź usunięcie",
+      "message": "Czy na pewno chcesz usunąć dostawcę {{name}}? Tej operacji nie można cofnąć.",
+      "confirm": "Usuń",
+      "cancel": "Anuluj"
+    },
+    "form": {
+      "basicInfo": "Podstawowe informacje",
+      "name": "Nazwa firmy",
+      "contactPerson": "Osoba kontaktowa",
+      "email": "Email",
+      "phone": "Telefon",
+      "taxId": "NIP",
+      "vatEu": "VAT EU",
+      "notes": "Notatki",
+      "verifyNip": "Zweryfikuj NIP",
+      "verifying": "Weryfikowanie...",
+      "nipFormat": "Format: 0000000000 (bez myślników)",
+      "loadingData": "Ładowanie danych dostawcy...",
+      "addresses": {
+        "title": "Adresy",
+        "addAddress": "Dodaj adres",
+        "editAddress": "Edytuj adres",
+        "addNewAddress": "Dodaj nowy adres",
+        "noAddresses": "Brak adresów",
+        "name": "Nazwa adresu",
+        "street": "Ulica i numer",
+        "city": "Miasto",
+        "postalCode": "Kod pocztowy",
+        "country": "Kraj",
+        "isMain": "Adres główny",
+        "mainAddress": "Główny",
+        "confirmDelete": "Czy na pewno chcesz usunąć ten adres?"
+      },
+      "validation": {
+        "nameRequired": "Nazwa dostawcy jest wymagana",
+        "fillAllAddressFields": "Wypełnij wszystkie wymagane pola adresu",
+        "enterNipToVerify": "Wprowadź numer NIP do weryfikacji",
+        "invalidNipFormat": "Niepoprawny format numeru NIP",
+        "nipNotFound": "Nie znaleziono firmy o podanym numerze NIP",
+        "nipVerificationError": "Wystąpił błąd podczas weryfikacji NIP"
+      }
+    },
+    "notifications": {
+      "deleted": "Dostawca został usunięty",
+      "deleteFailed": "Nie udało się usunąć dostawcy",
+      "updated": "Dostawca został zaktualizowany", 
+      "created": "Dostawca został utworzony",
+      "saveFailed": "Nie udało się zapisać dostawcy",
+      "loadFailed": "Nie udało się załadować listy dostawców",
+      "dataLoadFailed": "Nie udało się pobrać danych dostawcy",
+      "nipVerified": "Pomyślnie zweryfikowano NIP i zaktualizowano dane"
+    }
+  },
+  "expiryDates": {
+    "title": "Daty ważności produktów",
+    "backToInventory": "Powrót",
+    "loading": "Ładowanie...",
+    "expiredProducts": {
+      "title": "Przeterminowane produkty",
+      "alertMessage": "W magazynie znajduje się {{count}} {{count, plural, one {przeterminowana partia} few {przeterminowane partie} many {przeterminowanych partii} other {przeterminowanych partii}}} produktów."
+    },
+    "thresholdSettings": {
+      "label": "Próg dni do wygaśnięcia",
+      "description": "Pokazuje produkty wygasające w ciągu {{days}} dni"
+    },
+    "search": {
+      "label": "Szukaj",
+      "clear": "Wyczyść"
+    },
+    "tabs": {
+      "expiring": "Wkrótce wygasające ({{count}})",
+      "expired": "Przeterminowane ({{count}})"
+    },
+    "table": {
+      "headers": {
+        "product": "Produkt",
+        "batchNumber": "Numer partii",
+        "expiryDate": "Data ważności",
+        "status": "Status",
+        "quantity": "Ilość",
+        "actions": "Akcje"
+      },
+      "noData": "-",
+      "actions": {
+        "manageBatches": "Zarządzaj partiami",
+        "dispose": "Utylizuj"
+      }
+    },
+    "status": {
+      "noDate": "Brak daty",
+      "expired": "Przeterminowana",
+      "expiringSoon": "Wygasa wkrótce",
+      "current": "Aktualna"
+    },
+    "noResults": {
+      "expiring": {
+        "withSearch": "Brak wyników wyszukiwania dla produktów wkrótce wygasających.",
+        "withoutSearch": "Brak produktów wkrótce wygasających."
+      },
+      "expired": {
+        "withSearch": "Brak wyników wyszukiwania dla przeterminowanych produktów.",
+        "withoutSearch": "Brak przeterminowanych produktów."
+      }
+    },
+    "errors": {
+      "fetchData": "Błąd podczas pobierania danych: {{message}}"
+    }
+  },
+  "purchaseInteractions": {
+    "title": "Interakcje zakupowe",
+    "newInteraction": "Nowa interakcja",
+    "editInteraction": "Edytuj interakcję",
+    "interactionDetails": "Szczegóły interakcji",
+    "backToList": "Wróć do listy",
+    "loading": "Ładowanie...",
+    "search": {
+      "placeholder": "Szukaj interakcji...",
+      "clear": "Wyczyść wyszukiwanie"
+    },
+    "summary": {
+      "total": "Łącznie: {{count}} interakcji"
+    },
+    "table": {
+      "headers": {
+        "type": "Typ",
+        "subject": "Temat",
+        "date": "Data",
+        "supplier": "Dostawca",
+        "phone": "Telefon",
+        "email": "Email",
+        "address": "Adres",
+        "status": "Status",
+        "actions": "Akcje"
+      },
+      "noData": "Brak danych",
+      "clickForDetails": "Kliknij, aby zobaczyć szczegóły"
+    },
+    "actions": {
+      "view": "Podgląd",
+      "edit": "Edytuj",
+      "delete": "Usuń",
+      "changeStatus": "Zmień status",
+      "cancel": "Anuluj",
+      "save": "Zapisz",
+      "update": "Aktualizuj"
+    },
+    "form": {
+      "selectSupplier": "Wybierz dostawcę",
+      "supplierRequired": "Dostawca jest wymagany",
+      "type": "Typ interakcji",
+      "typeRequired": "Typ interakcji jest wymagany",
+      "subject": "Temat",
+      "subjectRequired": "Temat jest wymagany",
+      "subjectPlaceholder": "Wprowadź temat interakcji",
+      "date": "Data i godzina",
+      "dateRequired": "Data jest wymagana",
+      "status": "Status",
+      "statusRequired": "Status jest wymagany",
+      "notes": "Notatki",
+      "notesPlaceholder": "Dodatkowe informacje dotyczące interakcji",
+      "validation": {
+        "supplierRequired": "Wybierz dostawcę",
+        "typeRequired": "Wybierz typ interakcji",
+        "subjectRequired": "Wprowadź temat interakcji",
+        "dateRequired": "Wybierz datę i godzinę"
+      }
+    },
+    "types": {
+      "call": "Rozmowa telefoniczna",
+      "email": "Email",
+      "meeting": "Spotkanie",
+      "note": "Notatka"
+    },
+    "statuses": {
+      "planned": "Zaplanowana",
+      "inProgress": "W trakcie",
+      "completed": "Zakończona",
+      "cancelled": "Anulowana"
+    },
+    "details": {
+      "basicInfo": "Informacje podstawowe",
+      "supplier": "Dostawca",
+      "contact": "Kontakt",
+      "unknownSupplier": "Nieznany dostawca",
+      "noName": "Brak nazwy",
+      "phone": "Telefon",
+      "email": "Email",
+      "address": "Adres",
+      "noAddress": "Brak adresu",
+      "interactionInfo": "Informacje o interakcji",
+      "type": "Typ",
+      "subject": "Temat",
+      "dateTime": "Data i godzina",
+      "status": "Status",
+      "notes": "Notatki",
+      "noNotes": "Brak notatek",
+      "metadata": "Metadane",
+      "createdBy": "Utworzono przez",
+      "createdAt": "Data utworzenia",
+      "updatedBy": "Zaktualizowano przez",
+      "updatedAt": "Data aktualizacji",
+      "history": "Historia",
+      "relatedInteractions": "Powiązane interakcje"
+    },
+    "dialogs": {
+      "deleteConfirm": {
+        "title": "Potwierdzenie usunięcia",
+        "message": "Czy na pewno chcesz usunąć tę interakcję? Ta operacja jest nieodwracalna.",
+        "confirm": "Usuń",
+        "cancel": "Anuluj"
+      },
+      "statusChange": {
+        "title": "Zmiana statusu interakcji",
+        "newStatus": "Nowy status",
+        "selectStatus": "Wybierz nowy status"
+      },
+      "details": {
+        "title": "Szczegóły interakcji",
+        "close": "Zamknij"
+      }
+    },
+    "notifications": {
+      "created": "Interakcja została utworzona",
+      "updated": "Interakcja została zaktualizowana", 
+      "deleted": "Interakcja została usunięta",
+      "statusUpdated": "Status interakcji został zaktualizowany",
+      "createFailed": "Nie udało się utworzyć interakcji",
+      "updateFailed": "Nie udało się zaktualizować interakcji",
+      "deleteFailed": "Nie udało się usunąć interakcji",
+      "loadFailed": "Nie udało się załadować interakcji",
+      "loadSuppliersFailed": "Nie udało się pobrać listy dostawców",
+      "loadSupplierFailed": "Nie udało się pobrać danych dostawcy",
+      "statusUpdateFailed": "Nie udało się zaktualizować statusu"
+    },
+    "pagination": {
+      "rowsPerPage": "Wierszy na stronie:",
+      "of": "z"
+    },
+    "noResults": {
+      "title": "Brak interakcji",
+      "description": "Nie znaleziono żadnych interakcji spełniających kryteria.",
+      "createFirst": "Kliknij \"Nowa interakcja\", aby utworzyć pierwszą interakcję."
+    }
+  }
+} 

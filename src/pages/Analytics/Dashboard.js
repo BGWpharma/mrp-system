@@ -40,6 +40,7 @@ import { getAllPurchaseOrders } from '../../services/purchaseOrderService';
 import { formatCurrency } from '../../utils/formatUtils';
 import { formatTimestamp } from '../../utils/dateUtils';
 import Charts from './Charts';
+import { useTranslation } from 'react-i18next';
 
 // ✅ OPTYMALIZACJA: Cache dla danych analitycznych
 const analyticsCache = {
@@ -72,6 +73,7 @@ const analyticsCache = {
 };
 
 const Dashboard = () => {
+  const { t, i18n } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [data, setData] = useState({});
@@ -89,7 +91,7 @@ const Dashboard = () => {
       if (!forceRefresh) {
         const cachedData = analyticsCache.get();
         if (cachedData) {
-          console.log('✅ Ładowanie danych analitycznych z cache');
+          console.log('✅ Loading analytics data from cache');
           setData(cachedData.kpiData || {});
           setActiveTasks(cachedData.tasks || []);
           setRecentOrders(cachedData.orderStats?.recentOrders || []);
@@ -99,7 +101,7 @@ const Dashboard = () => {
         }
       }
       
-      console.log('🔄 Pobieranie świeżych danych analitycznych...');
+      console.log('🔄 Fetching fresh analytics data...');
       
       // Równoległe pobieranie danych
       const [kpiData, tasks, orderStats, poList] = await Promise.all([
@@ -119,7 +121,7 @@ const Dashboard = () => {
       setRecentOrders(orderStats?.recentOrders || []);
       setPurchaseOrders(poList || []);
       
-      console.log('✅ Dane analityczne zostały załadowane i zapisane w cache');
+      console.log('✅ Analytics data loaded and cached');
     } catch (err) {
       console.error('Błąd podczas ładowania danych analitycznych:', err);
       setError('Wystąpił błąd podczas ładowania danych. Spróbuj odświeżyć stronę.');
@@ -170,18 +172,18 @@ const Dashboard = () => {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Box>
           <Typography variant="h4" gutterBottom>
-            Analityka
+            {t('analytics.title')}
           </Typography>
           <Typography variant="subtitle1" color="text.secondary">
-            Podgląd kluczowych wskaźników działania systemu
+            {t('analytics.subtitle')}
             {analyticsCache.timestamp && (
               <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
-                Ostatnia aktualizacja: {new Date(analyticsCache.timestamp).toLocaleTimeString('pl-PL')}
+                {t('analytics.lastUpdate')}: {new Date(analyticsCache.timestamp).toLocaleTimeString(i18n.language)}
               </Typography>
             )}
           </Typography>
         </Box>
-        <Tooltip title={`Odśwież dane${analyticsCache.isExpired() ? ' (cache wygasł)' : ''}`}>
+        <Tooltip title={`${t('analytics.refreshData')}${analyticsCache.isExpired() ? t('analytics.cacheExpired') : ''}`}>
           <Button
             variant="outlined"
             startIcon={<RefreshIcon />}
@@ -189,15 +191,15 @@ const Dashboard = () => {
             disabled={loading}
             color={analyticsCache.isExpired() ? 'warning' : 'primary'}
           >
-            {loading ? 'Odświeżanie...' : 'Odśwież'}
+            {loading ? t('analytics.refreshing') : t('analytics.refresh')}
           </Button>
         </Tooltip>
       </Box>
       
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 4 }}>
         <Tabs value={activeTab} onChange={handleTabChange}>
-          <Tab label="Statystyki" />
-          <Tab label="Wykresy" />
+          <Tab label={t('analytics.tabs.statistics')} />
+          <Tab label={t('analytics.tabs.charts')} />
         </Tabs>
       </Box>
       
@@ -208,7 +210,7 @@ const Dashboard = () => {
             <Grid item xs={12} md={4}>
               <Card sx={{ height: '100%' }}>
                 <CardHeader 
-                  title="Sprzedaż" 
+                  title={t('analytics.cards.sales.title')} 
                   avatar={<OrdersIcon color="primary" />}
                   titleTypographyProps={{ variant: 'h6' }}
                 />
@@ -220,13 +222,13 @@ const Dashboard = () => {
                   <Grid container spacing={2}>
                     <Grid item xs={6}>
                       <Paper sx={{ p: 1.5, textAlign: 'center' }}>
-                        <Typography variant="body2" color="textSecondary">Zamówienia</Typography>
+                        <Typography variant="body2" color="textSecondary">{t('analytics.cards.sales.orders')}</Typography>
                         <Typography variant="h6">{data?.sales?.totalOrders || 0}</Typography>
                       </Paper>
         </Grid>
                     <Grid item xs={6}>
                       <Paper sx={{ p: 1.5, textAlign: 'center' }}>
-                        <Typography variant="body2" color="textSecondary">W realizacji</Typography>
+                        <Typography variant="body2" color="textSecondary">{t('analytics.cards.sales.inProgress')}</Typography>
                         <Typography variant="h6">{data?.sales?.ordersInProgress || 0}</Typography>
                       </Paper>
         </Grid>
@@ -238,7 +240,7 @@ const Dashboard = () => {
             <Grid item xs={12} md={4}>
               <Card sx={{ height: '100%' }}>
             <CardHeader 
-                  title="Magazyn" 
+                  title={t('analytics.cards.inventory.title')} 
                   avatar={<InventoryIcon color="primary" />}
                   titleTypographyProps={{ variant: 'h6' }}
                 />
@@ -248,7 +250,7 @@ const Dashboard = () => {
                     {data?.inventory?.totalItems || 0}
                   </Typography>
                   <Paper sx={{ p: 1.5, textAlign: 'center' }}>
-                    <Typography variant="body2" color="textSecondary">Całkowita wartość</Typography>
+                    <Typography variant="body2" color="textSecondary">{t('analytics.cards.inventory.totalValue')}</Typography>
                     <Typography variant="h6">{formatCurrency(data?.inventory?.totalValue || 0)}</Typography>
                   </Paper>
             </CardContent>
@@ -258,7 +260,7 @@ const Dashboard = () => {
             <Grid item xs={12} md={4}>
               <Card sx={{ height: '100%' }}>
             <CardHeader 
-                  title="Produkcja" 
+                  title={t('analytics.cards.production.title')} 
                   avatar={<ProductionIcon color="primary" />}
                   titleTypographyProps={{ variant: 'h6' }}
                 />
@@ -270,7 +272,7 @@ const Dashboard = () => {
                   <Grid container spacing={2}>
                     <Grid item xs={12}>
                       <Paper sx={{ p: 1.5, textAlign: 'center' }}>
-                        <Typography variant="body2" color="textSecondary">Ukończone zadania</Typography>
+                        <Typography variant="body2" color="textSecondary">{t('analytics.cards.production.completedTasks')}</Typography>
                         <Typography variant="h6">{data?.production?.completedTasks || 0}</Typography>
                       </Paper>
                     </Grid>
@@ -285,7 +287,7 @@ const Dashboard = () => {
         <Grid item xs={12} md={6}>
               <Card>
             <CardHeader 
-                  title="Ostatnie zamówienia (CO)" 
+                  title={t('analytics.sections.recentOrders.title')} 
                   titleTypographyProps={{ variant: 'h6' }}
                 />
                 <Divider />
@@ -300,11 +302,11 @@ const Dashboard = () => {
                              <PendingIcon color="warning" />}
                           </ListItemIcon>
                           <ListItemText
-                            primary={String(order.orderNumber || `Zamówienie ${order.id ? order.id.substring(0, 8) : ''}`)}
+                            primary={String(order.orderNumber || `${t('analytics.sections.recentOrders.orderPrefix')} ${order.id ? order.id.substring(0, 8) : ''}`)}
                             secondary={`${formatCurrency(order.totalValue || 0)} - ${formatTimestamp(order.date, false)}`}
                           />
                           <Chip
-                            label={String(order.status || 'Brak statusu')}
+                            label={String(order.status || t('analytics.status.noStatus'))}
                             color={getStatusColor(order.status)}
                             size="small"
                             sx={{ ml: 1 }}
@@ -315,7 +317,7 @@ const Dashboard = () => {
                   ) : (
                     <Box sx={{ p: 3, textAlign: 'center' }}>
                       <Typography variant="body2" color="textSecondary">
-                        Brak danych o zamówieniach klientów
+                        {t('analytics.sections.recentOrders.noData')}
                       </Typography>
               </Box>
                   )}
@@ -327,7 +329,7 @@ const Dashboard = () => {
         <Grid item xs={12} md={6}>
               <Card>
             <CardHeader 
-                  title="Aktywne zadania produkcyjne" 
+                  title={t('analytics.sections.activeTasks.title')} 
                   titleTypographyProps={{ variant: 'h6' }}
                 />
                 <Divider />
@@ -344,7 +346,7 @@ const Dashboard = () => {
                             secondary={`${task.productName} - ${task.quantity} ${task.unit || 'szt.'}`}
                           />
                           <Chip
-                            label="W trakcie"
+                            label={t('analytics.sections.activeTasks.inProgress')}
                             color="warning"
                             size="small"
                             sx={{ ml: 1 }}
@@ -355,7 +357,7 @@ const Dashboard = () => {
                   ) : (
                     <Box sx={{ p: 3, textAlign: 'center' }}>
                       <Typography variant="body2" color="textSecondary">
-                        Brak aktywnych zadań produkcyjnych
+                        {t('analytics.sections.activeTasks.noData')}
                       </Typography>
               </Box>
                   )}
@@ -367,7 +369,7 @@ const Dashboard = () => {
             <Grid item xs={12}>
               <Card>
                 <CardHeader 
-                  title="Zamówienia zakupowe (PO)" 
+                  title={t('analytics.sections.purchaseOrders.title')} 
                   titleTypographyProps={{ variant: 'h6' }}
                 />
                 <Divider />
@@ -384,7 +386,7 @@ const Dashboard = () => {
                             secondary={`${formatCurrency(po.totalGross || po.totalValue || 0)} - ${formatTimestamp(po.date, false)}`}
                           />
                           <Chip
-                            label={String(po.status || 'Brak statusu')}
+                            label={String(po.status || t('analytics.status.noStatus'))}
                             color={getStatusColor(po.status)}
                             size="small"
                             sx={{ ml: 1 }}
@@ -395,7 +397,7 @@ const Dashboard = () => {
                   ) : (
                     <Box sx={{ p: 3, textAlign: 'center' }}>
                       <Typography variant="body2" color="textSecondary">
-                        Brak danych o zamówieniach zakupowych
+                        {t('analytics.sections.purchaseOrders.noData')}
                       </Typography>
                     </Box>
                   )}

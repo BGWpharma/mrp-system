@@ -7,18 +7,15 @@ import {
   ListItem, 
   ListItemIcon, 
   ListItemText, 
-  Divider,
   Typography,
   Box,
   Collapse,
   ListItemButton,
   alpha,
   styled,
-  Avatar,
   Tooltip,
   Badge,
-  IconButton,
-  ListSubheader
+  IconButton
 } from '@mui/material';
 import { 
   Dashboard as DashboardIcon, 
@@ -37,24 +34,17 @@ import {
   Store as WarehouseIcon,
   List as ListIcon,
   BarChart as ReportsIcon,
-  Bolt as ConsumptionIcon,
   FormatListNumbered as ForecastIcon,
-  Assignment as TestsIcon,
   AssessmentOutlined as QualityReportsIcon,
-  Inventory2 as WaybillIcon,
   Receipt as InvoicesIcon,
   Add as AddIcon,
   Phone as CallIcon,
-  Email as EmailIcon,
-  EventNote as MeetingIcon,
   ListAlt as ListAltIcon,
   ChevronLeft as ChevronLeftIcon,
   Menu as MenuIcon,
   LocalShipping as ShippingIcon,
   SmartToy as AIAssistantIcon,
   Calculate as CalculateIcon,
-  People as PeopleIcon,
-  Settings as SettingsIcon,
   Factory as FactoryIcon,
   PrecisionManufacturing as PrecisionManufacturingIcon,
   BugReport as BugReportIcon
@@ -64,6 +54,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import BugReportDialog from './BugReportDialog';
 import { useSidebar } from '../../contexts/SidebarContext';
+import { useTranslation } from 'react-i18next';
 import { getUserHiddenSidebarTabs } from '../../services/userService';
 
 // Styled components
@@ -114,12 +105,12 @@ const StyledBadge = styled(Badge)(({ theme }) => ({
 const Sidebar = ({ onToggle }) => {
   const location = useLocation();
   const { mode } = useTheme();
+  const { t } = useTranslation();
   const [drawerWidth, setDrawerWidth] = useState(200);
   const [isDrawerOpen, setIsDrawerOpen] = useState(true);
   const [openSubmenu, setOpenSubmenu] = useState('');
   const [expiringItemsCount, setExpiringItemsCount] = useState(0);
   const { currentUser } = useAuth();
-  const isAdmin = currentUser?.role === 'administrator';
   const [bugReportDialogOpen, setBugReportDialogOpen] = useState(false);
   const [hiddenTabs, setHiddenTabs] = useState([]);
   
@@ -156,17 +147,17 @@ const Sidebar = ({ onToggle }) => {
   useEffect(() => {
     // Ustawia początkowy stan submenu na podstawie aktualnej ścieżki
     if (location.pathname.startsWith('/production')) {
-      setOpenSubmenu('Produkcja');
+      setOpenSubmenu(t('sidebar.production'));
     } else if (location.pathname.startsWith('/orders') || location.pathname.startsWith('/customers')) {
-      setOpenSubmenu('Sprzedaż');
+      setOpenSubmenu(t('sidebar.sales'));
     } else if (location.pathname.startsWith('/inventory') || location.pathname.startsWith('/purchase-orders')) {
-      setOpenSubmenu('Stany');
+      setOpenSubmenu(t('sidebar.inventory'));
     } else if (location.pathname === '/' || location.pathname.startsWith('/analytics')) {
-      setOpenSubmenu('Dashboard');
+      setOpenSubmenu(t('sidebar.dashboard'));
     } else if (location.pathname.startsWith('/hall-data')) {
-      setOpenSubmenu('Parametry hali');
+      setOpenSubmenu(t('sidebar.hallData'));
     }
-  }, [location.pathname]);
+  }, [location.pathname, t]);
   
   // Ładowanie ukrytych zakładek użytkownika
   useEffect(() => {
@@ -239,82 +230,82 @@ const Sidebar = ({ onToggle }) => {
   const allMenuItems = [
     { 
       id: 'ai-assistant',
-      text: 'Asystent AI',
+      text: t('sidebar.aiAssistant'),
       icon: <AIAssistantIcon />,
       path: '/ai-assistant',
       hasSubmenu: false
     },
     { 
       id: 'dashboard',
-      text: 'Dashboard', 
+      text: t('sidebar.dashboard'), 
       icon: <DashboardIcon />, 
       path: '/',
       hasSubmenu: true,
       children: [
-        { text: 'Główny', icon: <DashboardIcon />, path: '/' },
-        { text: 'Analityka', icon: <AnalyticsIcon />, path: '/analytics' },
-      ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
+        { text: t('sidebar.submenu.dashboard.main'), icon: <DashboardIcon />, path: '/' },
+        { text: t('sidebar.submenu.dashboard.analytics'), icon: <AnalyticsIcon />, path: '/analytics' },
+      ].sort((a, b) => a.text.localeCompare(b.text))
     },
     { 
       id: 'hall-data',
-      text: 'Parametry hali',
+      text: t('sidebar.hallData'),
       icon: <FactoryIcon />,
       path: '/hall-data',
       hasSubmenu: true,
       children: [
-        { text: 'Warunki środowiskowe', icon: <FactoryIcon />, path: '/hall-data/conditions' },
-        { text: 'Maszyny', icon: <PrecisionManufacturingIcon />, path: '/hall-data/machines' },
+        { text: t('sidebar.submenu.hallData.environmentalConditions'), icon: <FactoryIcon />, path: '/hall-data/conditions' },
+        { text: t('sidebar.submenu.hallData.machines'), icon: <PrecisionManufacturingIcon />, path: '/hall-data/machines' },
       ]
     },
     { 
       id: 'sales',
-      text: 'Sprzedaż',
+      text: t('sidebar.sales'),
       icon: <CustomersIcon />,
       path: '/customers',
       hasSubmenu: true,
       children: [
-        { text: 'Faktury', icon: <InvoicesIcon />, path: '/invoices' },
-        { text: 'Klienci', icon: <CustomersIcon />, path: '/customers' },
-        { text: 'Listy cenowe', icon: <ListAltIcon />, path: '/sales/price-lists' },
-        { text: 'Nowe zadanie produkcyjne', icon: <AddIcon />, path: '/production/create-from-order' },
-        { text: 'Raporty CO', icon: <ReportsIcon />, path: '/sales/co-reports' },
-        { text: 'Zamówienia klientów', icon: <OrdersIcon />, path: '/orders' },
-      ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
+        { text: t('sidebar.submenu.sales.invoices'), icon: <InvoicesIcon />, path: '/invoices' },
+        { text: t('sidebar.submenu.sales.customers'), icon: <CustomersIcon />, path: '/customers' },
+        { text: t('sidebar.submenu.sales.priceLists'), icon: <ListAltIcon />, path: '/sales/price-lists' },
+        { text: t('sidebar.submenu.sales.newProductionTask'), icon: <AddIcon />, path: '/production/create-from-order' },
+        { text: t('sidebar.submenu.sales.coReports'), icon: <ReportsIcon />, path: '/sales/co-reports' },
+        { text: t('sidebar.submenu.sales.customerOrders'), icon: <OrdersIcon />, path: '/orders' },
+      ].sort((a, b) => a.text.localeCompare(b.text))
     },
     { 
       id: 'production',
-      text: 'Produkcja',
+      text: t('sidebar.production'),
       icon: <ProductionIcon />,
       path: '/production',
       hasSubmenu: true,
       children: [
-        { text: 'Formularze', icon: <ListAltIcon />, path: '/production/forms' },
-        { text: 'Kalkulator', icon: <CalculateIcon />, path: '/production/calculator' },
-        { text: 'Prognoza', icon: <ForecastIcon />, path: '/production/forecast' },
-        { text: 'Zadania produkcyjne', icon: <ListIcon />, path: '/production' },
-        { text: 'Receptury', icon: <RecipesIcon />, path: '/recipes' },
-        { text: 'Timeline', icon: <AnalyticsIcon />, path: '/production/timeline' },
-      ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
+        { text: t('sidebar.submenu.production.forms'), icon: <ListAltIcon />, path: '/production/forms' },
+        { text: t('sidebar.submenu.production.calculator'), icon: <CalculateIcon />, path: '/production/calculator' },
+        { text: t('sidebar.submenu.production.forecast'), icon: <ForecastIcon />, path: '/production/forecast' },
+        { text: t('sidebar.submenu.production.productionTasks'), icon: <ListIcon />, path: '/production' },
+        { text: t('sidebar.submenu.production.recipes'), icon: <RecipesIcon />, path: '/recipes' },
+        { text: t('sidebar.submenu.production.timeline'), icon: <AnalyticsIcon />, path: '/production/timeline' },
+      ].sort((a, b) => a.text.localeCompare(b.text))
     },
     { 
       id: 'inventory',
-      text: 'Stany', 
+      text: t('sidebar.inventory'), 
       icon: <InventoryIcon />, 
       path: '/inventory', 
       badge: expiringItemsCount > 0 ? expiringItemsCount : null,
       hasSubmenu: true,
       children: [
-        { text: 'CMR', icon: <ShippingIcon />, path: '/inventory/cmr' },
-        { text: 'Dostawcy', icon: <SuppliersIcon />, path: '/suppliers' },
-        { text: 'Formularze', icon: <ListAltIcon />, path: '/inventory/forms' },
-        { text: 'Interakcje zakupowe', icon: <CallIcon />, path: '/crm/interactions' },
-        { text: 'Inwentaryzacja', icon: <QualityReportsIcon />, path: '/inventory/stocktaking' },
-        { text: 'Stan', icon: <WarehouseIcon />, path: '/inventory' },
-        { text: 'Terminy ważności', icon: <CalendarIcon />, path: '/inventory/expiry-dates' },
-        { text: 'Zamówienia komponentów', icon: <PurchaseOrdersIcon />, path: '/purchase-orders' },
-      ].sort((a, b) => a.text.localeCompare(b.text, 'pl'))
+        { text: t('sidebar.submenu.inventory.cmr'), icon: <ShippingIcon />, path: '/inventory/cmr' },
+        { text: t('sidebar.submenu.inventory.suppliers'), icon: <SuppliersIcon />, path: '/suppliers' },
+        { text: t('sidebar.submenu.inventory.forms'), icon: <ListAltIcon />, path: '/inventory/forms' },
+        { text: t('sidebar.submenu.inventory.purchaseInteractions'), icon: <CallIcon />, path: '/crm/interactions' },
+        { text: t('sidebar.submenu.inventory.stocktaking'), icon: <QualityReportsIcon />, path: '/inventory/stocktaking' },
+        { text: t('sidebar.submenu.inventory.status'), icon: <WarehouseIcon />, path: '/inventory' },
+        { text: t('sidebar.submenu.inventory.expiryDates'), icon: <CalendarIcon />, path: '/inventory/expiry-dates' },
+        { text: t('sidebar.submenu.inventory.componentOrders'), icon: <PurchaseOrdersIcon />, path: '/purchase-orders' },
+      ].sort((a, b) => a.text.localeCompare(b.text))
     }
-  ].sort((a, b) => a.text.localeCompare(b.text, 'pl'));
+  ].sort((a, b) => a.text.localeCompare(b.text));
 
   // Filtrowanie menuItems na podstawie ukrytych zakładek użytkownika
   const menuItems = allMenuItems.filter(item => !hiddenTabs.includes(item.id));
@@ -552,14 +543,14 @@ const Sidebar = ({ onToggle }) => {
           }}
           onClick={() => setBugReportDialogOpen(true)}
         >
-          <Tooltip title="Zgłoś błąd" placement="right" arrow>
+          <Tooltip title={t('sidebar.reportBug')} placement="right" arrow>
             <ListItemIcon sx={{ minWidth: 36, color: 'error.main' }}>
               <BugReportIcon />
             </ListItemIcon>
           </Tooltip>
           {isDrawerOpen && (
             <ListItemText 
-              primary="Zgłoś błąd" 
+              primary={t('sidebar.reportBug')} 
               primaryTypographyProps={{ 
                 fontSize: '0.875rem',
                 fontWeight: 'medium',

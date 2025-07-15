@@ -57,20 +57,10 @@ import {
   Timeline as TimelineIcon
 } from '@mui/icons-material';
 import { format, subHours, subDays, subWeeks, subMonths, isValid } from 'date-fns';
-
-// Predefiniowane zakresy czasu
-const TIME_RANGES = [
-  { label: 'Ostatnia godzina', value: 'hour', fn: () => subHours(new Date(), 1) },
-  { label: 'Ostatnie 6 godzin', value: '6hours', fn: () => subHours(new Date(), 6) },
-  { label: 'Ostatnie 12 godzin', value: '12hours', fn: () => subHours(new Date(), 12) },
-  { label: 'Dzisiaj', value: 'today', fn: () => new Date(new Date().setHours(0, 0, 0, 0)) },
-  { label: 'Ostatni dzień', value: 'day', fn: () => subDays(new Date(), 1) },
-  { label: 'Ostatni tydzień', value: 'week', fn: () => subWeeks(new Date(), 1) },
-  { label: 'Ostatni miesiąc', value: 'month', fn: () => subMonths(new Date(), 1) },
-  { label: 'Niestandardowy', value: 'custom', fn: () => null }
-];
+import { useTranslation } from 'react-i18next';
 
 const HallDataConditionsPage = () => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [loading, setLoading] = useState(true);
@@ -97,6 +87,18 @@ const HallDataConditionsPage = () => {
   const [tempMinMax, setTempMinMax] = useState({ min: 15, max: 30 });
   // Wykres - oś Y - min/max wilgotność
   const [humidityMinMax, setHumidityMinMax] = useState({ min: 20, max: 50 });
+
+  // Predefiniowane zakresy czasu z tłumaczeniami
+  const TIME_RANGES = [
+    { label: t('environmentalConditions.timeRanges.lastHour'), value: 'hour', fn: () => subHours(new Date(), 1) },
+    { label: t('environmentalConditions.timeRanges.last6Hours'), value: '6hours', fn: () => subHours(new Date(), 6) },
+    { label: t('environmentalConditions.timeRanges.last12Hours'), value: '12hours', fn: () => subHours(new Date(), 12) },
+    { label: t('environmentalConditions.timeRanges.today'), value: 'today', fn: () => new Date(new Date().setHours(0, 0, 0, 0)) },
+    { label: t('environmentalConditions.timeRanges.lastDay'), value: 'day', fn: () => subDays(new Date(), 1) },
+    { label: t('environmentalConditions.timeRanges.lastWeek'), value: 'week', fn: () => subWeeks(new Date(), 1) },
+    { label: t('environmentalConditions.timeRanges.lastMonth'), value: 'month', fn: () => subMonths(new Date(), 1) },
+    { label: t('environmentalConditions.timeRanges.custom'), value: 'custom', fn: () => null }
+  ];
 
   // Pobieranie listy dostępnych czujników
   useEffect(() => {
@@ -311,10 +313,10 @@ const HallDataConditionsPage = () => {
   // Formatowanie etykiety dla tooltipa na wykresie
   const formatTooltipLabel = (value, name) => {
     if (name === 'temperature') {
-      return [`${Number(value).toFixed(1)}°C`, 'Temperatura'];
+      return [`${Number(value).toFixed(1)}°C`, t('environmentalConditions.temperature')];
     }
     if (name === 'humidity') {
-      return [`${Number(value).toFixed(1)}%`, 'Wilgotność'];
+      return [`${Number(value).toFixed(1)}%`, t('environmentalConditions.humidity')];
     }
     return [value, name];
   };
@@ -350,22 +352,22 @@ const HallDataConditionsPage = () => {
   if (permissionError) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Typography variant="h4" gutterBottom>Warunki środowiskowe</Typography>
+        <Typography variant="h4" gutterBottom>{t('environmentalConditions.title')}</Typography>
         <Paper elevation={3} sx={{ p: 3 }}>
           <Alert severity="error" sx={{ mb: 3 }}>
-            <Typography variant="h6">Brak uprawnień do bazy danych Firebase</Typography>
+            <Typography variant="h6">{t('environmentalConditions.errors.permissionDenied')}</Typography>
             <Typography paragraph>
-              Wykryto błąd "permission_denied" podczas dostępu do danych w Realtime Database.
+              {t('environmentalConditions.errors.permissionDeniedDescription')}
             </Typography>
             <Typography variant="body2" paragraph>
-              Aby rozwiązać ten problem:
+              {t('environmentalConditions.errors.troubleshooting')}
             </Typography>
             <ol>
-              <li>Zaloguj się do konsoli Firebase: <Link href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer">https://console.firebase.google.com/</Link></li>
-              <li>Wybierz projekt "bgw-mrp-system"</li>
-              <li>Przejdź do sekcji "Realtime Database"</li>
-              <li>Kliknij zakładkę "Reguły"</li>
-              <li>Zmień reguły, aby umożliwić odczyt danych (na potrzeby testów możesz ustawić dostęp publiczny):</li>
+              <li>{t('environmentalConditions.errors.loginToConsole')} <Link href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer">https://console.firebase.google.com/</Link></li>
+              <li>{t('environmentalConditions.errors.selectProject')}</li>
+              <li>{t('environmentalConditions.errors.goToRealtimeDb')}</li>
+              <li>{t('environmentalConditions.errors.clickRulesTab')}</li>
+              <li>{t('environmentalConditions.errors.changeRules')}</li>
             </ol>
             <Box sx={{ bgcolor: 'background.paper', p: 2, borderRadius: 1, mb: 2 }}>
               <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
@@ -378,7 +380,7 @@ const HallDataConditionsPage = () => {
               </pre>
             </Box>
             <Typography variant="body2">
-              W środowisku produkcyjnym zaleca się bardziej rygorystyczne reguły bezpieczeństwa.
+              {t('environmentalConditions.errors.productionWarning')}
             </Typography>
           </Alert>
         </Paper>
@@ -389,7 +391,7 @@ const HallDataConditionsPage = () => {
   if (error) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Typography variant="h4" gutterBottom>Warunki środowiskowe</Typography>
+        <Typography variant="h4" gutterBottom>{t('environmentalConditions.title')}</Typography>
         <Paper elevation={3} sx={{ p: 3, textAlign: 'center' }}>
           <Typography color="error">{error}</Typography>
         </Paper>
@@ -407,21 +409,21 @@ const HallDataConditionsPage = () => {
         display: 'flex',
         alignItems: 'center'
       }}>
-        <ThermostatIcon sx={{ mr: 1 }} /> Warunki środowiskowe
+        <ThermostatIcon sx={{ mr: 1 }} /> {t('environmentalConditions.title')}
       </Typography>
       
       {sensors.length === 0 && !loading ? (
         <Alert severity="info" sx={{ mb: 3 }}>
           <Typography paragraph>
-            Brak danych z czujników w bazie Firebase. Upewnij się, że:
+            {t('environmentalConditions.errors.noSensorData')}
           </Typography>
           <ul>
-            <li>Masz skonfigurowaną bazę Firebase Realtime Database</li>
-            <li>Dane są zapisywane w strukturze <code>sensors/&#123;device_id&#125;</code></li>
-            <li>Dane historyczne są zapisywane w <code>history/&#123;device_id&#125;</code></li>
+            <li>{t('environmentalConditions.errors.checkRealtimeDb')}</li>
+            <li>{t('environmentalConditions.errors.checkDataStructure')}</li>
+            <li>{t('environmentalConditions.errors.checkHistoryStructure')}</li>
           </ul>
           <Typography variant="body2">
-            Przykładowa struktura danych:
+            {t('environmentalConditions.errors.exampleDataStructure')}
           </Typography>
           <Box sx={{ bgcolor: 'background.paper', p: 2, borderRadius: 1, my: 1, overflowX: 'auto' }}>
             <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
@@ -473,7 +475,7 @@ const HallDataConditionsPage = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 'medium', display: 'flex', alignItems: 'center' }}>
             <DataUsageIcon sx={{ mr: 0.5, fontSize: 20, color: 'primary.main' }} />
-            Czujnik:
+            {t('environmentalConditions.sensor')}:
           </Typography>
           
           {sensors.length > 0 && (
@@ -502,7 +504,7 @@ const HallDataConditionsPage = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 'medium', display: 'flex', alignItems: 'center' }}>
             <AccessTimeIcon sx={{ mr: 0.5, fontSize: 20, color: 'primary.main' }} />
-            Zakres czasu:
+            {t('environmentalConditions.timeRange')}:
           </Typography>
           
           <FormControl size="small" sx={{ minWidth: 180 }}>
@@ -529,7 +531,7 @@ const HallDataConditionsPage = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 'medium', display: 'flex', alignItems: 'center' }}>
             <ShowChartIcon sx={{ mr: 0.5, fontSize: 20, color: 'primary.main' }} />
-            Widok:
+            {t('environmentalConditions.view')}:
           </Typography>
           
           <ToggleButtonGroup
@@ -542,17 +544,17 @@ const HallDataConditionsPage = () => {
               borderRadius: '20px'
             }}
           >
-            <ToggleButton value="line" aria-label="Linia">
+            <ToggleButton value="line" aria-label={t('environmentalConditions.chartTypes.line')}>
               <TimelineIcon fontSize="small" />
-              <Typography variant="caption" sx={{ ml: 0.5 }}>Linia</Typography>
+              <Typography variant="caption" sx={{ ml: 0.5 }}>{t('environmentalConditions.chartTypes.line')}</Typography>
             </ToggleButton>
-            <ToggleButton value="area" aria-label="Obszar">
+            <ToggleButton value="area" aria-label={t('environmentalConditions.chartTypes.area')}>
               <ShowChartIcon fontSize="small" />
-              <Typography variant="caption" sx={{ ml: 0.5 }}>Obszar</Typography>
+              <Typography variant="caption" sx={{ ml: 0.5 }}>{t('environmentalConditions.chartTypes.area')}</Typography>
             </ToggleButton>
           </ToggleButtonGroup>
           
-          <Tooltip title="Odśwież dane">
+          <Tooltip title={t('environmentalConditions.refreshData')}>
             <IconButton 
               onClick={handleRefresh} 
               color="primary"
@@ -591,7 +593,7 @@ const HallDataConditionsPage = () => {
                 pb: 1
               }}>
                 <ThermostatIcon sx={{ mr: 1, color: '#e91e63' }} /> 
-                Temperatura
+                {t('environmentalConditions.temperature')}
               </Typography>
               
               {loading ? (
@@ -610,7 +612,7 @@ const HallDataConditionsPage = () => {
                   
                   {currentData.timestamp && (
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                      Ostatni odczyt: {formatDate(currentData.timestamp)}
+                      {t('environmentalConditions.lastReading')}: {formatDate(currentData.timestamp)}
                     </Typography>
                   )}
                 </Box>
@@ -639,7 +641,7 @@ const HallDataConditionsPage = () => {
                 pb: 1
               }}>
                 <OpacityIcon sx={{ mr: 1, color: '#2196f3' }} /> 
-                Wilgotność
+                {t('environmentalConditions.humidity')}
               </Typography>
               
               {loading ? (
@@ -658,7 +660,7 @@ const HallDataConditionsPage = () => {
                   
                   {currentData.timestamp && (
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                      Ostatni odczyt: {formatDate(currentData.timestamp)}
+                      {t('environmentalConditions.lastReading')}: {formatDate(currentData.timestamp)}
                     </Typography>
                   )}
                 </Box>
@@ -687,21 +689,21 @@ const HallDataConditionsPage = () => {
                 pb: 1
               }}>
                 <DateRangeIcon sx={{ mr: 1 }} /> 
-                Zakres danych
+                {t('environmentalConditions.dataRange')}
               </Typography>
               
               <Box sx={{ mt: 2 }}>
                 <LocalizationProvider dateAdapter={AdapterDateFns} locale={pl}>
                   <Stack spacing={3}>
                     <DateTimePicker
-                      label="Data początkowa"
+                      label={t('environmentalConditions.startDate')}
                       value={startDate}
                       onChange={(newValue) => setStartDate(newValue)}
                       disabled={!isCustomRange}
                       slotProps={{ textField: { size: 'small', fullWidth: true } }}
                     />
                     <DateTimePicker
-                      label="Data końcowa"
+                      label={t('environmentalConditions.endDate')}
                       value={endDate}
                       onChange={(newValue) => setEndDate(newValue)}
                       disabled={!isCustomRange}
@@ -727,7 +729,7 @@ const HallDataConditionsPage = () => {
         }}
       >
         <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', mb: 3, display: 'flex', alignItems: 'center' }}>
-          <ShowChartIcon sx={{ mr: 1 }} /> Historia odczytów
+          <ShowChartIcon sx={{ mr: 1 }} /> {t('environmentalConditions.chartHistory')}
         </Typography>
         
         {loading ? (
@@ -745,7 +747,7 @@ const HallDataConditionsPage = () => {
             borderRadius: 1 
           }}>
             <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-              Brak danych historycznych
+              {t('environmentalConditions.noHistoricalData')}
             </Typography>
             {selectedSensor && (
               <Typography variant="body2" color="text.secondary">
@@ -764,7 +766,7 @@ const HallDataConditionsPage = () => {
               alignItems: 'center',
               color: '#e91e63'
             }}>
-              <ThermostatIcon sx={{ mr: 1 }} /> Temperatura
+              <ThermostatIcon sx={{ mr: 1 }} /> {t('environmentalConditions.temperature')}
             </Typography>
             <ResponsiveContainer width="100%" height={300}>
               {chartType === 'line' ? (
@@ -851,7 +853,7 @@ const HallDataConditionsPage = () => {
               alignItems: 'center',
               color: '#2196f3'
             }}>
-              <OpacityIcon sx={{ mr: 1 }} /> Wilgotność
+              <OpacityIcon sx={{ mr: 1 }} /> {t('environmentalConditions.humidity')}
             </Typography>
             <ResponsiveContainer width="100%" height={300}>
               {chartType === 'line' ? (

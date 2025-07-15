@@ -13,8 +13,10 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
 import { usePurchaseOrderListState } from '../../contexts/PurchaseOrderListStateContext';
+import { useTranslation } from 'react-i18next';
 
 const PurchaseOrderList = () => {
+  const { t } = useTranslation();
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
   const navigate = useNavigate();
@@ -96,7 +98,7 @@ const PurchaseOrderList = () => {
       }, 300);
     } catch (error) {
       console.error('Błąd podczas pobierania zamówień zakupu:', error);
-      showError('Nie udało się pobrać listy zamówień zakupu');
+      showError(t('purchaseOrders.errors.loadFailed'));
       setLoading(false);
     }
   }, [page, pageSize, tableSort.field, tableSort.order, statusFilter, debouncedSearchTerm, showError]);
@@ -199,12 +201,12 @@ const PurchaseOrderList = () => {
       await deletePurchaseOrder(poToDelete.id);
       // Po usunięciu odświeżamy listę
       fetchPurchaseOrders();
-      showSuccess('Zamówienie zakupu zostało usunięte');
+      showSuccess(t('purchaseOrders.orderDeleted'));
       setDeleteDialogOpen(false);
       setPoToDelete(null);
     } catch (error) {
       console.error('Błąd podczas usuwania zamówienia zakupu:', error);
-      showError('Nie udało się usunąć zamówienia zakupu');
+      showError(t('purchaseOrders.errors.deleteFailed'));
     }
   };
   
@@ -239,12 +241,12 @@ const PurchaseOrderList = () => {
       // Po aktualizacji odświeżamy listę
       fetchPurchaseOrders();
       
-      showSuccess('Status zamówienia zakupu został zaktualizowany');
+      showSuccess(t('purchaseOrders.statusUpdated'));
       setStatusDialogOpen(false);
       setPoToUpdateStatus(null);
     } catch (error) {
       console.error('Błąd podczas aktualizacji statusu zamówienia:', error);
-      showError('Nie udało się zaktualizować statusu zamówienia');
+      showError(t('purchaseOrders.errors.statusUpdateFailed'));
     }
   };
 
@@ -261,12 +263,12 @@ const PurchaseOrderList = () => {
       // Po aktualizacji odświeżamy listę
       fetchPurchaseOrders();
       
-      showSuccess('Status płatności został zaktualizowany');
+      showSuccess(t('purchaseOrders.paymentStatusUpdated'));
       setPaymentStatusDialogOpen(false);
       setPoToUpdatePaymentStatus(null);
     } catch (error) {
       console.error('Błąd podczas aktualizacji statusu płatności:', error);
-      showError('Nie udało się zaktualizować statusu płatności');
+      showError(t('purchaseOrders.errors.statusUpdateFailed'));
     }
   };
 
@@ -475,21 +477,21 @@ const PurchaseOrderList = () => {
   return (
     <Container>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-        <Typography variant="h5">Zamówienia Zakupu</Typography>
+        <Typography variant="h5">{t('purchaseOrders.title')}</Typography>
         <Button
           variant="contained"
           color="primary"
           startIcon={<AddIcon />}
           onClick={() => navigate('/purchase-orders/new')}
         >
-          Nowe Zamówienie
+          {t('purchaseOrders.newOrder')}
         </Button>
       </Box>
       
       <Paper sx={{ mb: 1, p: 1 }}>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2 }}>
           <TextField
-            label="Szukaj"
+            label={t('purchaseOrders.filters.search')}
             variant="outlined"
             size="small"
             value={searchTerm}
@@ -498,14 +500,14 @@ const PurchaseOrderList = () => {
           />
           
           <FormControl variant="outlined" size="small" sx={{ minWidth: '200px' }}>
-            <InputLabel id="status-filter-label">Status</InputLabel>
+            <InputLabel id="status-filter-label">{t('purchaseOrders.filters.status')}</InputLabel>
             <Select
               labelId="status-filter-label"
               value={statusFilter}
               onChange={handleStatusFilterChange}
-              label="Status"
+              label={t('purchaseOrders.filters.status')}
             >
-              <MenuItem value="all">Wszystkie statusy</MenuItem>
+              <MenuItem value="all">{t('purchaseOrders.filters.all')}</MenuItem>
               {['draft', 'ordered', 'shipped', 'partial', 'delivered', 'completed', 'cancelled'].map((status) => (
                 <MenuItem key={status} value={status}>
                   {translateStatus(status)}
@@ -514,7 +516,7 @@ const PurchaseOrderList = () => {
             </Select>
           </FormControl>
           
-          <Tooltip title="Wyczyść filtry">
+          <Tooltip title={t('purchaseOrders.filters.clear')}>
             <IconButton 
               color="secondary" 
               onClick={handleClearFilters}
@@ -546,15 +548,15 @@ const PurchaseOrderList = () => {
           </MenuItem>
           <MenuItem onClick={() => toggleColumnVisibility('number')}>
             <Checkbox checked={!!visibleColumns['number']} />
-            <ListItemText primary="Numer PO" />
+            <ListItemText primary={t('purchaseOrders.table.number')} />
           </MenuItem>
           <MenuItem onClick={() => toggleColumnVisibility('supplier')}>
             <Checkbox checked={!!visibleColumns['supplier']} />
-            <ListItemText primary="Dostawca" />
+            <ListItemText primary={t('purchaseOrders.table.supplier')} />
           </MenuItem>
           <MenuItem onClick={() => toggleColumnVisibility('orderDate')}>
             <Checkbox checked={!!visibleColumns['orderDate']} />
-            <ListItemText primary="Data zamówienia" />
+            <ListItemText primary={t('purchaseOrders.table.orderDate')} />
           </MenuItem>
           <MenuItem onClick={() => toggleColumnVisibility('expectedDeliveryDate')}>
             <Checkbox checked={!!visibleColumns['expectedDeliveryDate']} />
@@ -562,15 +564,15 @@ const PurchaseOrderList = () => {
           </MenuItem>
           <MenuItem onClick={() => toggleColumnVisibility('value')}>
             <Checkbox checked={!!visibleColumns['value']} />
-            <ListItemText primary="Wartość" />
+            <ListItemText primary={t('purchaseOrders.table.totalValue')} />
           </MenuItem>
           <MenuItem onClick={() => toggleColumnVisibility('status')}>
             <Checkbox checked={!!visibleColumns['status']} />
-            <ListItemText primary="Status" />
+            <ListItemText primary={t('purchaseOrders.table.status')} />
           </MenuItem>
           <MenuItem onClick={() => toggleColumnVisibility('paymentStatus')}>
             <Checkbox checked={!!visibleColumns['paymentStatus']} />
-            <ListItemText primary="Status płatności" />
+            <ListItemText primary={t('purchaseOrders.table.paymentStatus')} />
           </MenuItem>
         </Menu>
       </Paper>
@@ -581,14 +583,14 @@ const PurchaseOrderList = () => {
             <Table>
               <TableHead>
                 <TableRow>
-                  {visibleColumns['number'] && <SortableTableCell id="number" label="Numer PO" sx={{ width: '120px', minWidth: '100px' }} />}
-                  {visibleColumns['supplier'] && <SortableTableCell id="supplier" label="Dostawca" />}
-                  {visibleColumns['orderDate'] && <SortableTableCell id="orderDate" label="Data zamówienia" sx={{ width: '130px', minWidth: '120px' }} />}
+                  {visibleColumns['number'] && <SortableTableCell id="number" label={t('purchaseOrders.table.number')} sx={{ width: '120px', minWidth: '100px' }} />}
+                  {visibleColumns['supplier'] && <SortableTableCell id="supplier" label={t('purchaseOrders.table.supplier')} />}
+                  {visibleColumns['orderDate'] && <SortableTableCell id="orderDate" label={t('purchaseOrders.table.orderDate')} sx={{ width: '130px', minWidth: '120px' }} />}
                   {visibleColumns['expectedDeliveryDate'] && <SortableTableCell id="expectedDeliveryDate" label="Oczekiwana dostawa" sx={{ width: '140px', minWidth: '130px' }} />}
-                  {visibleColumns['value'] && <SortableTableCell id="value" label="Wartość" />}
-                  {visibleColumns['status'] && <SortableTableCell id="status" label="Status" />}
-                  {visibleColumns['paymentStatus'] && <SortableTableCell id="paymentStatus" label="Status płatności" />}
-                  <TableCell align="right">Akcje</TableCell>
+                  {visibleColumns['value'] && <SortableTableCell id="value" label={t('purchaseOrders.table.totalValue')} />}
+                  {visibleColumns['status'] && <SortableTableCell id="status" label={t('purchaseOrders.table.status')} />}
+                  {visibleColumns['paymentStatus'] && <SortableTableCell id="paymentStatus" label={t('purchaseOrders.table.paymentStatus')} />}
+                  <TableCell align="right">{t('purchaseOrders.table.actions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -643,7 +645,7 @@ const PurchaseOrderList = () => {
                 ) : filteredPOs.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} align="center">
-                      <Typography variant="body1">Brak zamówień zakupowych</Typography>
+                      <Typography variant="body1">{t('purchaseOrders.noOrdersFound')}</Typography>
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -702,7 +704,7 @@ const PurchaseOrderList = () => {
                       
                       <TableCell align="right">
                         <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                          <Tooltip title="Podgląd">
+                          <Tooltip title={t('purchaseOrders.actions.view')}>
                             <IconButton 
                               size="small" 
                               component={Link}
@@ -712,7 +714,7 @@ const PurchaseOrderList = () => {
                             </IconButton>
                           </Tooltip>
                           
-                          <Tooltip title="Edytuj">
+                          <Tooltip title={t('purchaseOrders.actions.edit')}>
                             <IconButton 
                               size="small" 
                               component={Link}
@@ -722,7 +724,7 @@ const PurchaseOrderList = () => {
                             </IconButton>
                           </Tooltip>
                           
-                          <Tooltip title="Usuń">
+                          <Tooltip title={t('purchaseOrders.actions.delete')}>
                             <IconButton 
                               size="small" 
                               color="error"
@@ -782,10 +784,10 @@ const PurchaseOrderList = () => {
         open={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
       >
-        <DialogTitle>Potwierdzenie usunięcia</DialogTitle>
+        <DialogTitle>{t('purchaseOrders.dialogs.deleteConfirm.title')}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Czy na pewno chcesz usunąć zamówienie zakupowe?
+            {t('purchaseOrders.dialogs.deleteConfirm.message')}
             {poToDelete && (
               <>
                 <br />
@@ -797,8 +799,8 @@ const PurchaseOrderList = () => {
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>Anuluj</Button>
-          <Button color="error" onClick={handleDeleteConfirm}>Usuń</Button>
+          <Button onClick={() => setDeleteDialogOpen(false)}>{t('common.cancel')}</Button>
+          <Button color="error" onClick={handleDeleteConfirm}>{t('common.delete')}</Button>
         </DialogActions>
       </Dialog>
 
@@ -807,10 +809,10 @@ const PurchaseOrderList = () => {
         open={statusDialogOpen}
         onClose={() => setStatusDialogOpen(false)}
       >
-        <DialogTitle>Zmiana statusu zamówienia</DialogTitle>
+        <DialogTitle>{t('purchaseOrders.dialogs.statusUpdate.title')}</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
-            Wybierz nowy status dla zamówienia:
+            {t('purchaseOrders.dialogs.statusUpdate.newStatus')}:
             {poToUpdateStatus && (
               <>
                 <br />
@@ -819,12 +821,12 @@ const PurchaseOrderList = () => {
             )}
           </DialogContentText>
           <FormControl fullWidth>
-            <InputLabel id="new-status-label">Status</InputLabel>
+            <InputLabel id="new-status-label">{t('purchaseOrders.table.status')}</InputLabel>
             <Select
               labelId="new-status-label"
               value={newStatus}
               onChange={(e) => setNewStatus(e.target.value)}
-              label="Status"
+              label={t('purchaseOrders.table.status')}
             >
               {['draft', 'ordered', 'shipped', 'partial', 'delivered', 'completed', 'cancelled'].map((status) => (
                 <MenuItem key={status} value={status}>
@@ -835,8 +837,8 @@ const PurchaseOrderList = () => {
           </FormControl>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setStatusDialogOpen(false)}>Anuluj</Button>
-          <Button color="primary" onClick={handleStatusUpdate}>Zaktualizuj</Button>
+          <Button onClick={() => setStatusDialogOpen(false)}>{t('common.cancel')}</Button>
+          <Button color="primary" onClick={handleStatusUpdate}>{t('common.update')}</Button>
         </DialogActions>
       </Dialog>
 
@@ -890,10 +892,10 @@ const PurchaseOrderList = () => {
         open={paymentStatusDialogOpen}
         onClose={() => setPaymentStatusDialogOpen(false)}
       >
-        <DialogTitle>Zmiana statusu płatności</DialogTitle>
+        <DialogTitle>{t('purchaseOrders.dialogs.paymentStatusUpdate.title')}</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
-            Wybierz nowy status płatności dla zamówienia:
+            {t('purchaseOrders.dialogs.paymentStatusUpdate.newPaymentStatus')}:
             {poToUpdatePaymentStatus && (
               <>
                 <br />
@@ -902,12 +904,12 @@ const PurchaseOrderList = () => {
             )}
           </DialogContentText>
           <FormControl fullWidth>
-            <InputLabel id="new-payment-status-label">Status płatności</InputLabel>
+            <InputLabel id="new-payment-status-label">{t('purchaseOrders.table.paymentStatus')}</InputLabel>
             <Select
               labelId="new-payment-status-label"
               value={newPaymentStatus}
               onChange={(e) => setNewPaymentStatus(e.target.value)}
-              label="Status płatności"
+              label={t('purchaseOrders.table.paymentStatus')}
             >
               <MenuItem value={PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID}>
                 {translatePaymentStatus(PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID)}
@@ -919,8 +921,8 @@ const PurchaseOrderList = () => {
           </FormControl>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setPaymentStatusDialogOpen(false)}>Anuluj</Button>
-          <Button color="primary" onClick={handlePaymentStatusUpdate}>Zaktualizuj</Button>
+          <Button onClick={() => setPaymentStatusDialogOpen(false)}>{t('common.cancel')}</Button>
+          <Button color="primary" onClick={handlePaymentStatusUpdate}>{t('common.update')}</Button>
         </DialogActions>
       </Dialog>
     </Container>

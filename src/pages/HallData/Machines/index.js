@@ -68,8 +68,10 @@ import {
 } from 'firebase/database';
 import { getFirestore } from 'firebase/firestore';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 const HallDataMachinesPage = () => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { currentUser } = useAuth();
@@ -212,7 +214,7 @@ const HallDataMachinesPage = () => {
       } catch (error) {
         console.error("Błąd podczas pobierania historii:", error);
         setLoading(false);
-        setError("Wystąpił błąd podczas pobierania danych historycznych");
+        setError(t('machines.errors.loadingError'));
       }
     };
     
@@ -249,37 +251,37 @@ const HallDataMachinesPage = () => {
     setSelectedMachine(machineId);
   };
   
-  // Formatowanie daty
+  // Formatowanie daty - ZACHOWANIE ORYGINALNEGO FORMATU
   const formatDate = (dateString) => {
-    if (!dateString) return 'Brak danych';
+    if (!dateString) return t('machines.formats.noData');
     try {
       return format(new Date(dateString), 'dd.MM.yyyy HH:mm:ss', { locale: pl });
     } catch (error) {
-      return 'Nieprawidłowa data';
+      return t('machines.formats.invalidDate');
     }
   };
   
-  // Formatowanie samej daty bez czasu
+  // Formatowanie samej daty bez czasu - ZACHOWANIE ORYGINALNEGO FORMATU
   const formatDateOnly = (date) => {
-    if (!date || !isValid(date)) return 'Brak danych';
+    if (!date || !isValid(date)) return t('machines.formats.noData');
     try {
       return format(date, 'dd.MM.yyyy', { locale: pl });
     } catch (error) {
-      return 'Nieprawidłowa data';
+      return t('machines.formats.invalidDate');
     }
   };
   
   // Formatowanie czasu trwania (w minutach)
   const formatDuration = (minutes) => {
-    if (!minutes && minutes !== 0) return 'Brak danych';
+    if (!minutes && minutes !== 0) return t('machines.formats.noData');
     
     const hours = Math.floor(minutes / 60);
     const mins = Math.round(minutes % 60);
     
     if (hours > 0) {
-      return `${hours}h ${mins}min`;
+      return `${hours}${t('machines.formats.hours')} ${mins}${t('machines.formats.minutes')}`;
     } else {
-      return `${mins}min`;
+      return `${mins}${t('machines.formats.minutes')}`;
     }
   };
   
@@ -296,7 +298,7 @@ const HallDataMachinesPage = () => {
       case 'ok':
         return <Chip 
           icon={<CheckCircleOutlineIcon />} 
-          label="OK" 
+          label={t('machines.status.ok')} 
           color="success" 
           size="small" 
           variant="outlined"
@@ -304,7 +306,7 @@ const HallDataMachinesPage = () => {
       case 'error':
         return <Chip 
           icon={<ErrorIcon />} 
-          label="Błędy" 
+          label={t('machines.status.errors')} 
           color="error" 
           size="small" 
           variant="outlined"
@@ -312,7 +314,7 @@ const HallDataMachinesPage = () => {
       default:
         return <Chip 
           icon={<InfoIcon />} 
-          label="Brak danych" 
+          label={t('machines.status.noData')} 
           color="default" 
           size="small" 
           variant="outlined"
@@ -324,7 +326,7 @@ const HallDataMachinesPage = () => {
   const renderMachineDetail = () => {
     if (!selectedMachine) {
       return (
-        <Alert severity="info">Wybierz maszynę, aby zobaczyć szczegóły</Alert>
+        <Alert severity="info">{t('machines.selectMachine')}</Alert>
       );
     }
     
@@ -332,7 +334,7 @@ const HallDataMachinesPage = () => {
     
     if (!machine) {
       return (
-        <Alert severity="warning">Nie znaleziono danych dla wybranej maszyny</Alert>
+        <Alert severity="warning">{t('machines.machineNotFound')}</Alert>
       );
     }
     
@@ -343,7 +345,7 @@ const HallDataMachinesPage = () => {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h5" component="div" sx={{ display: 'flex', alignItems: 'center' }}>
                 <FactoryIcon sx={{ mr: 1 }} />
-                {machine.machine_id || 'Niezidentyfikowana maszyna'}
+                {machine.machine_id || t('machines.unidentifiedMachine')}
               </Typography>
               {renderStatusChip(getMachineStatus(machine.errors_count))}
             </Box>
@@ -353,28 +355,28 @@ const HallDataMachinesPage = () => {
             <Grid container spacing={3}>
               <Grid item xs={12} sm={6} md={3}>
                 <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                  <Typography variant="subtitle2" color="text.secondary">Czas trwania</Typography>
+                  <Typography variant="subtitle2" color="text.secondary">{t('machines.fields.duration')}</Typography>
                   <Typography variant="h6">{formatDuration(machine.duration_minutes)}</Typography>
                 </Box>
               </Grid>
               
               <Grid item xs={12} sm={6} md={3}>
                 <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                  <Typography variant="subtitle2" color="text.secondary">Całkowita ilość odczytów</Typography>
+                  <Typography variant="subtitle2" color="text.secondary">{t('machines.fields.totalReadings')}</Typography>
                   <Typography variant="h6">{machine.total_readings || 0}</Typography>
                 </Box>
               </Grid>
               
               <Grid item xs={12} sm={6} md={3}>
                 <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                  <Typography variant="subtitle2" color="text.secondary">Niepuste odczyty</Typography>
+                  <Typography variant="subtitle2" color="text.secondary">{t('machines.fields.nonEmptyReadings')}</Typography>
                   <Typography variant="h6">{machine.non_empty_readings || 0}</Typography>
                 </Box>
               </Grid>
               
               <Grid item xs={12} sm={6} md={3}>
                 <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                  <Typography variant="subtitle2" color="text.secondary">Unikalne produkty</Typography>
+                  <Typography variant="subtitle2" color="text.secondary">{t('machines.fields.uniqueProducts')}</Typography>
                   <Typography variant="h6">{machine.unique_products_count || 0}</Typography>
                 </Box>
               </Grid>
@@ -385,14 +387,14 @@ const HallDataMachinesPage = () => {
             <Grid container spacing={3}>
               <Grid item xs={12} sm={6}>
                 <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                  <Typography variant="subtitle2" color="text.secondary">Czas rozpoczęcia</Typography>
+                  <Typography variant="subtitle2" color="text.secondary">{t('machines.fields.startTime')}</Typography>
                   <Typography variant="body1">{formatDate(machine.start_time)}</Typography>
                 </Box>
               </Grid>
               
               <Grid item xs={12} sm={6}>
                 <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                  <Typography variant="subtitle2" color="text.secondary">Czas zakończenia</Typography>
+                  <Typography variant="subtitle2" color="text.secondary">{t('machines.fields.endTime')}</Typography>
                   <Typography variant="body1">{formatDate(machine.end_time)}</Typography>
                 </Box>
               </Grid>
@@ -405,48 +407,48 @@ const HallDataMachinesPage = () => {
             <CardContent>
               <Typography variant="h6" component="div" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
                 <SpeedIcon sx={{ mr: 1 }} />
-                Statystyki wagi
+                {t('machines.weightStats.title')}
               </Typography>
               
               <Grid container spacing={3}>
                 <Grid item xs={6} sm={4} md={2}>
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                    <Typography variant="subtitle2" color="text.secondary">Średnia waga</Typography>
-                    <Typography variant="h6">{machine.weight_stats.avg_weight ? machine.weight_stats.avg_weight.toFixed(2) : 'N/A'} g</Typography>
+                    <Typography variant="subtitle2" color="text.secondary">{t('machines.weightStats.averageWeight')}</Typography>
+                    <Typography variant="h6">{machine.weight_stats.avg_weight ? machine.weight_stats.avg_weight.toFixed(2) : 'N/A'} {t('machines.formats.grams')}</Typography>
                   </Box>
                 </Grid>
                 
                 <Grid item xs={6} sm={4} md={2}>
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                    <Typography variant="subtitle2" color="text.secondary">Min. waga</Typography>
-                    <Typography variant="h6">{machine.weight_stats.min_weight || 'N/A'} g</Typography>
+                    <Typography variant="subtitle2" color="text.secondary">{t('machines.weightStats.minWeight')}</Typography>
+                    <Typography variant="h6">{machine.weight_stats.min_weight || 'N/A'} {t('machines.formats.grams')}</Typography>
                   </Box>
                 </Grid>
                 
                 <Grid item xs={6} sm={4} md={2}>
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                    <Typography variant="subtitle2" color="text.secondary">Max. waga</Typography>
-                    <Typography variant="h6">{machine.weight_stats.max_weight || 'N/A'} g</Typography>
+                    <Typography variant="subtitle2" color="text.secondary">{t('machines.weightStats.maxWeight')}</Typography>
+                    <Typography variant="h6">{machine.weight_stats.max_weight || 'N/A'} {t('machines.formats.grams')}</Typography>
                   </Box>
                 </Grid>
                 
                 <Grid item xs={6} sm={4} md={2}>
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                    <Typography variant="subtitle2" color="text.secondary">Mediana</Typography>
-                    <Typography variant="h6">{machine.weight_stats.median_weight || 'N/A'} g</Typography>
+                    <Typography variant="subtitle2" color="text.secondary">{t('machines.weightStats.median')}</Typography>
+                    <Typography variant="h6">{machine.weight_stats.median_weight || 'N/A'} {t('machines.formats.grams')}</Typography>
                   </Box>
                 </Grid>
                 
                 <Grid item xs={6} sm={4} md={2}>
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                    <Typography variant="subtitle2" color="text.secondary">Odchylenie std.</Typography>
+                    <Typography variant="subtitle2" color="text.secondary">{t('machines.weightStats.stdDev')}</Typography>
                     <Typography variant="h6">{machine.weight_stats.std_dev ? machine.weight_stats.std_dev.toFixed(2) : 'N/A'}</Typography>
                   </Box>
                 </Grid>
                 
                 <Grid item xs={6} sm={4} md={2}>
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                    <Typography variant="subtitle2" color="text.secondary">Ilość</Typography>
+                    <Typography variant="subtitle2" color="text.secondary">{t('machines.weightStats.count')}</Typography>
                     <Typography variant="h6">{machine.weight_stats.count || 0}</Typography>
                   </Box>
                 </Grid>
@@ -455,20 +457,20 @@ const HallDataMachinesPage = () => {
               <Divider sx={{ my: 2 }} />
               
               <Typography variant="subtitle1" sx={{ mb: 2 }}>
-                Surowe odczyty wagi
+                {t('machines.weightStats.rawReadings')}
               </Typography>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                    <Typography variant="subtitle2" color="text.secondary">OK</Typography>
-                    <Typography variant="h6">{machine.weight_stats.ok_count || 0} odczytów</Typography>
+                    <Typography variant="subtitle2" color="text.secondary">{t('machines.weightStats.okReadings')}</Typography>
+                    <Typography variant="h6">{machine.weight_stats.ok_count || 0} {t('machines.weightStats.readings')}</Typography>
                   </Box>
                 </Grid>
                 
                 <Grid item xs={12} sm={6}>
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                    <Typography variant="subtitle2" color="text.secondary">NOK</Typography>
-                    <Typography variant="h6">{machine.weight_stats.nok_count || 0} odczytów</Typography>
+                    <Typography variant="subtitle2" color="text.secondary">{t('machines.weightStats.nokReadings')}</Typography>
+                    <Typography variant="h6">{machine.weight_stats.nok_count || 0} {t('machines.weightStats.readings')}</Typography>
                   </Box>
                 </Grid>
               </Grid>
@@ -477,40 +479,40 @@ const HallDataMachinesPage = () => {
               <Divider sx={{ my: 2 }} />
               
               <Typography variant="subtitle1" sx={{ mb: 2 }}>
-                Informacje o produkcie (waga)
+                {t('machines.weightStats.productInfo')}
               </Typography>
               <Grid container spacing={3}>
                 <Grid item xs={6} sm={4} md={2}>
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                    <Typography variant="subtitle2" color="text.secondary">Średnia waga</Typography>
-                    <Typography variant="h6">{machine.weight_stats.final_avg_weight ? machine.weight_stats.final_avg_weight.toFixed(2) : 'N/A'} g</Typography>
+                    <Typography variant="subtitle2" color="text.secondary">{t('machines.weightStats.averageWeight')}</Typography>
+                    <Typography variant="h6">{machine.weight_stats.final_avg_weight ? machine.weight_stats.final_avg_weight.toFixed(2) : 'N/A'} {t('machines.formats.grams')}</Typography>
                   </Box>
                 </Grid>
                 
                 <Grid item xs={6} sm={4} md={2}>
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                    <Typography variant="subtitle2" color="text.secondary">Min. waga</Typography>
-                    <Typography variant="h6">{machine.weight_stats.final_min_weight || 'N/A'} g</Typography>
+                    <Typography variant="subtitle2" color="text.secondary">{t('machines.weightStats.minWeight')}</Typography>
+                    <Typography variant="h6">{machine.weight_stats.final_min_weight || 'N/A'} {t('machines.formats.grams')}</Typography>
                   </Box>
                 </Grid>
                 
                 <Grid item xs={6} sm={4} md={2}>
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                    <Typography variant="subtitle2" color="text.secondary">Max. waga</Typography>
-                    <Typography variant="h6">{machine.weight_stats.final_max_weight || 'N/A'} g</Typography>
+                    <Typography variant="subtitle2" color="text.secondary">{t('machines.weightStats.maxWeight')}</Typography>
+                    <Typography variant="h6">{machine.weight_stats.final_max_weight || 'N/A'} {t('machines.formats.grams')}</Typography>
                   </Box>
                 </Grid>
                 
                 <Grid item xs={6} sm={4} md={2}>
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                    <Typography variant="subtitle2" color="text.secondary">Mediana</Typography>
-                    <Typography variant="h6">{machine.weight_stats.final_median_weight || 'N/A'} g</Typography>
+                    <Typography variant="subtitle2" color="text.secondary">{t('machines.weightStats.median')}</Typography>
+                    <Typography variant="h6">{machine.weight_stats.final_median_weight || 'N/A'} {t('machines.formats.grams')}</Typography>
                   </Box>
                 </Grid>
                 
                 <Grid item xs={6} sm={4} md={2}>
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                    <Typography variant="subtitle2" color="text.secondary">Odchylenie std.</Typography>
+                    <Typography variant="subtitle2" color="text.secondary">{t('machines.weightStats.stdDev')}</Typography>
                     <Typography variant="h6">{machine.weight_stats.final_std_dev ? machine.weight_stats.final_std_dev.toFixed(2) : 'N/A'}</Typography>
                   </Box>
                 </Grid>
@@ -519,15 +521,15 @@ const HallDataMachinesPage = () => {
               <Grid container spacing={2} sx={{ mt: 1 }}>
                 <Grid item xs={12} sm={6}>
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                    <Typography variant="subtitle2" color="text.secondary">OK</Typography>
-                    <Typography variant="h6">{machine.weight_stats.final_ok_count || 0} produktów</Typography>
+                    <Typography variant="subtitle2" color="text.secondary">{t('machines.weightStats.okReadings')}</Typography>
+                    <Typography variant="h6">{machine.weight_stats.final_ok_count || 0} {t('machines.weightStats.products')}</Typography>
                   </Box>
                 </Grid>
                 
                 <Grid item xs={12} sm={6}>
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                    <Typography variant="subtitle2" color="text.secondary">NOK</Typography>
-                    <Typography variant="h6">{machine.weight_stats.final_nok_count || 0} produktów</Typography>
+                    <Typography variant="subtitle2" color="text.secondary">{t('machines.weightStats.nokReadings')}</Typography>
+                    <Typography variant="h6">{machine.weight_stats.final_nok_count || 0} {t('machines.weightStats.products')}</Typography>
                   </Box>
                 </Grid>
               </Grid>
@@ -542,7 +544,7 @@ const HallDataMachinesPage = () => {
   const renderMachineHistory = () => {
     if (!selectedMachine) {
       return (
-        <Alert severity="info">Wybierz maszynę, aby zobaczyć historię</Alert>
+        <Alert severity="info">{t('machines.selectMachine')}</Alert>
       );
     }
     
@@ -554,13 +556,13 @@ const HallDataMachinesPage = () => {
         <Card elevation={2} sx={{ mb: 3, borderRadius: 2, p: 2 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
             <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', mb: { xs: 2, md: 0 } }}>
-              <FilterAltIcon sx={{ mr: 1 }} /> Filtry
+              <FilterAltIcon sx={{ mr: 1 }} /> {t('machines.history.filterByDate')}
             </Typography>
             
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                 <DatePicker
-                  label="Wybierz datę"
+                  label={t('machines.history.selectDate')}
                   value={selectedDate}
                   onChange={handleDateFilterChange}
                   format="dd.MM.yyyy"
@@ -590,7 +592,7 @@ const HallDataMachinesPage = () => {
                 startIcon={<SearchIcon />}
                 size="small"
               >
-                Filtruj
+                {t('machines.history.filter')}
               </Button>
               
               <Button 
@@ -600,7 +602,7 @@ const HallDataMachinesPage = () => {
                 disabled={!isFilteringByDate}
                 size="small"
               >
-                Resetuj
+                {t('machines.history.reset')}
               </Button>
             </Box>
           </Box>
@@ -608,7 +610,7 @@ const HallDataMachinesPage = () => {
           {isFilteringByDate && (
             <Box sx={{ mt: 2 }}>
               <Chip 
-                label={`Data: ${formatDateOnly(selectedDate)}`}
+                label={`${t('machines.history.date')}: ${formatDateOnly(selectedDate)}`}
                 onDelete={handleResetDateFilter}
                 color="primary"
                 variant="outlined"
@@ -624,15 +626,15 @@ const HallDataMachinesPage = () => {
           </Box>
         ) : history.length > 0 ? (
           <TableContainer component={Paper} sx={{ mb: 4, maxHeight: 440, borderRadius: 2 }}>
-            <Table stickyHeader aria-label="tabela historii">
+            <Table stickyHeader aria-label={t('machines.history.tableLabel')}>
               <TableHead>
                 <TableRow>
-                  <TableCell>Czas</TableCell>
-                  <TableCell>Czas trwania</TableCell>
-                  <TableCell>Odczyty</TableCell>
-                  <TableCell>Średnia waga produktu</TableCell>
-                  <TableCell>OK/NOK produktów</TableCell>
-                  <TableCell>Status</TableCell>
+                  <TableCell>{t('machines.fields.time')}</TableCell>
+                  <TableCell>{t('machines.fields.duration')}</TableCell>
+                  <TableCell>{t('machines.fields.readings')}</TableCell>
+                  <TableCell>{t('machines.fields.averageWeight')}</TableCell>
+                  <TableCell>{t('machines.fields.okNokProducts')}</TableCell>
+                  <TableCell>{t('machines.fields.status')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -643,9 +645,9 @@ const HallDataMachinesPage = () => {
                     <TableCell>{record.total_readings || 0}</TableCell>
                     <TableCell>
                       {record.weight_stats?.final_avg_weight 
-                        ? `${record.weight_stats.final_avg_weight.toFixed(2)} g` 
+                        ? `${record.weight_stats.final_avg_weight.toFixed(2)} ${t('machines.formats.grams')}` 
                         : record.weight_stats?.avg_weight 
-                          ? `${record.weight_stats.avg_weight.toFixed(2)} g`
+                          ? `${record.weight_stats.avg_weight.toFixed(2)} ${t('machines.formats.grams')}`
                           : 'N/A'}
                     </TableCell>
                     <TableCell>
@@ -664,8 +666,8 @@ const HallDataMachinesPage = () => {
         ) : (
           <Alert severity="info">
             {isFilteringByDate
-              ? `Brak danych historycznych dla ${formatDateOnly(selectedDate)}`
-              : 'Brak danych historycznych dla tej maszyny'}
+              ? t('machines.history.noDataForDate', { date: formatDateOnly(selectedDate) })
+              : t('machines.history.noData')}
           </Alert>
         )}
       </Box>
@@ -676,13 +678,13 @@ const HallDataMachinesPage = () => {
   const renderMachineList = () => {
     if (machineSummaries.length === 0) {
       return (
-        <Alert severity="info">Brak dostępnych maszyn</Alert>
+        <Alert severity="info">{t('machines.noAvailableMachines')}</Alert>
       );
     }
     
     return (
       <Box sx={{ mb: 3 }}>
-        <Typography variant="h6" sx={{ mb: 1 }}>Dostępne maszyny</Typography>
+        <Typography variant="h6" sx={{ mb: 1 }}>{t('machines.availableMachines')}</Typography>
         <Grid container spacing={2}>
           {machineSummaries.map(machine => (
             <Grid item xs={12} sm={6} md={4} lg={3} key={machine.id}>
@@ -705,12 +707,12 @@ const HallDataMachinesPage = () => {
                 <CardContent>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                     <Typography variant="subtitle1" component="div">
-                      {machine.machine_id || 'Niezidentyfikowana maszyna'}
+                      {machine.machine_id || t('machines.unidentifiedMachine')}
                     </Typography>
                     {renderStatusChip(getMachineStatus(machine.errors_count))}
                   </Box>
                   <Typography variant="body2" color="text.secondary">
-                    Ostatni pomiar: {formatDate(machine.end_time)}
+                    {t('machines.lastMeasurement')}: {formatDate(machine.end_time)}
                   </Typography>
                   <Box sx={{ mt: 1 }}>
                     <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center' }}>
@@ -731,7 +733,7 @@ const HallDataMachinesPage = () => {
     return (
       <Box sx={{ p: 3 }}>
         <Alert severity="error">
-          Brak uprawnień do odczytu danych z bazy. Skontaktuj się z administratorem systemu.
+          {t('machines.permissions.denied')}
         </Alert>
       </Box>
     );
@@ -759,9 +761,9 @@ const HallDataMachinesPage = () => {
     <Box sx={{ p: 3 }}>
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
-          <PrecisionManufacturingIcon sx={{ mr: 1 }} /> Maszyny - monitoring
+          <PrecisionManufacturingIcon sx={{ mr: 1 }} /> {t('machines.title')}
         </Typography>
-        <Tooltip title="Odśwież dane">
+        <Tooltip title={t('machines.refreshData')}>
           <IconButton 
             onClick={() => window.location.reload()}
             color="primary"
@@ -785,8 +787,8 @@ const HallDataMachinesPage = () => {
             borderBottom: `1px solid ${theme.palette.divider}`,
           }}
         >
-          <Tab label="Szczegóły" icon={<InfoIcon />} />
-          <Tab label="Historia" icon={<ScheduleIcon />} />
+          <Tab label={t('machines.tabs.details')} icon={<InfoIcon />} />
+          <Tab label={t('machines.tabs.history')} icon={<ScheduleIcon />} />
         </Tabs>
         
         <Box role="tabpanel" hidden={activeTab !== 0}>

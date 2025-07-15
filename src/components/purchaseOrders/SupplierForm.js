@@ -16,10 +16,12 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from 'react-i18next';
 import { getSupplierById, createSupplier, updateSupplier } from '../../services/supplierService';
 import { validateNipFormat, getBasicCompanyDataByNip } from '../../services/nipValidationService';
 
 const SupplierForm = ({ viewOnly = false, supplierId }) => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -66,7 +68,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
         setLoading(false);
       } catch (error) {
         console.error('Błąd podczas pobierania danych dostawcy:', error);
-        showError('Nie udało się pobrać danych dostawcy');
+        showError(t('suppliers.notifications.dataLoadFailed'));
         setLoading(false);
       }
     };
@@ -84,12 +86,12 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
   const verifyNip = async () => {
     try {
       if (!supplierData.taxId) {
-        showError('Wprowadź numer NIP do weryfikacji');
+        showError(t('suppliers.form.validation.enterNipToVerify'));
         return;
       }
       
       if (!validateNipFormat(supplierData.taxId)) {
-        showError('Niepoprawny format numeru NIP');
+        showError(t('suppliers.form.validation.invalidNipFormat'));
         return;
       }
       
@@ -98,7 +100,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
       const companyData = await getBasicCompanyDataByNip(supplierData.taxId);
       
       if (!companyData) {
-        showError('Nie znaleziono firmy o podanym numerze NIP');
+        showError(t('suppliers.form.validation.nipNotFound'));
         setVerifyingNip(false);
         return;
       }
@@ -126,7 +128,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
         
         const newAddress = {
           id: `api_${Date.now()}`,
-          name: 'Adres główny',
+          name: t('suppliers.form.addresses.mainAddress'),
           street: streetPart,
           city: city,
           postalCode: postalCode,
@@ -138,11 +140,11 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
       }
       
       setSupplierData(updatedSupplierData);
-      showSuccess('Pomyślnie zweryfikowano NIP i zaktualizowano dane');
+      showSuccess(t('suppliers.notifications.nipVerified'));
       
     } catch (error) {
       console.error('Błąd podczas weryfikacji NIP:', error);
-      showError('Wystąpił błąd podczas weryfikacji NIP: ' + error.message);
+      showError(t('suppliers.form.validation.nipVerificationError') + ': ' + error.message);
     } finally {
       setVerifyingNip(false);
     }
@@ -182,7 +184,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
   const handleSaveAddress = () => {
     // Walidacja danych adresu
     if (!addressFormData.name || !addressFormData.street || !addressFormData.city || !addressFormData.postalCode) {
-      showError('Wypełnij wszystkie wymagane pola adresu');
+      showError(t('suppliers.form.validation.fillAllAddressFields'));
       return;
     }
     
@@ -219,7 +221,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
   
   const handleDeleteAddress = (index) => {
     if (viewOnly) return;
-    if (!window.confirm('Czy na pewno chcesz usunąć ten adres?')) {
+    if (!window.confirm(t('suppliers.form.addresses.confirmDelete'))) {
       return;
     }
     
@@ -246,7 +248,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
       
       // Walidacja
       if (!supplierData.name) {
-        showError('Nazwa dostawcy jest wymagana');
+        showError(t('suppliers.form.validation.nameRequired'));
         setSaving(false);
         return;
       }
@@ -256,17 +258,17 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
       if (supplierId) {
         // Aktualizacja istniejącego dostawcy
         result = await updateSupplier(supplierId, supplierData, currentUser.uid);
-        showSuccess('Dostawca został zaktualizowany');
+        showSuccess(t('suppliers.notifications.updated'));
       } else {
         // Utworzenie nowego dostawcy
         result = await createSupplier(supplierData, currentUser.uid);
-        showSuccess('Dostawca został utworzony');
+        showSuccess(t('suppliers.notifications.created'));
       }
       
       navigate('/suppliers');
     } catch (error) {
       console.error('Błąd podczas zapisywania dostawcy:', error);
-      showError('Nie udało się zapisać dostawcy');
+      showError(t('suppliers.notifications.saveFailed'));
       setSaving(false);
     }
   };
@@ -274,7 +276,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
   if (loading) {
     return (
       <Container>
-        <Typography variant="h6">Ładowanie danych dostawcy...</Typography>
+        <Typography variant="h6">{t('suppliers.form.loadingData')}</Typography>
       </Container>
     );
   }
@@ -287,8 +289,8 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
             startIcon={<ArrowBackIcon />}
             onClick={() => navigate('/suppliers')}
             sx={{ mb: 2 }}
-          >
-            Powrót do listy
+                      >
+              {t('suppliers.actions.back')}
           </Button>
         )}
       </Box>
@@ -300,7 +302,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
             <Grid item xs={12}>
               <TextField
                 name="name"
-                label="Nazwa dostawcy"
+                                  label={t('suppliers.form.name')}
                 value={supplierData.name}
                 onChange={handleChange}
                 fullWidth
@@ -316,7 +318,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
             <Grid item xs={12} md={6}>
               <TextField
                 name="contactPerson"
-                label="Osoba kontaktowa"
+                                  label={t('suppliers.form.contactPerson')}
                 value={supplierData.contactPerson}
                 onChange={handleChange}
                 fullWidth
@@ -331,7 +333,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
             <Grid item xs={12} md={6}>
               <TextField
                 name="email"
-                label="Email"
+                                  label={t('suppliers.form.email')}
                 type="email"
                 value={supplierData.email}
                 onChange={handleChange}
@@ -347,7 +349,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
             <Grid item xs={12} md={6}>
               <TextField
                 name="phone"
-                label="Telefon"
+                                  label={t('suppliers.form.phone')}
                 value={supplierData.phone}
                 onChange={handleChange}
                 fullWidth
@@ -362,7 +364,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
             <Grid item xs={12} md={6}>
               <TextField
                 name="taxId"
-                label="NIP"
+                                  label={t('suppliers.form.taxId')}
                 value={supplierData.taxId}
                 onChange={handleChange}
                 fullWidth
@@ -375,14 +377,14 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
                         edge="end"
                         onClick={verifyNip}
                         disabled={verifyingNip || !supplierData.taxId}
-                        title="Zweryfikuj NIP"
+                                                  title={t('suppliers.form.verifyNip')}
                       >
                         {verifyingNip ? <CircularProgress size={24} /> : <SearchIcon />}
                       </IconButton>
                     </InputAdornment>
                   )
                 }}
-                helperText="Format: 0000000000 (bez myślników)"
+                                  helperText={t('suppliers.form.nipFormat')}
               />
             </Grid>
             
@@ -390,7 +392,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
             <Grid item xs={12} md={6}>
               <TextField
                 name="vatEu"
-                label="VAT-EU"
+                                  label={t('suppliers.form.vatEu')}
                 value={supplierData.vatEu}
                 onChange={handleChange}
                 fullWidth
@@ -405,7 +407,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
             <Grid item xs={12}>
               <TextField
                 name="notes"
-                label="Notatki"
+                                  label={t('suppliers.form.notes')}
                 value={supplierData.notes}
                 onChange={handleChange}
                 fullWidth
@@ -421,14 +423,14 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
             {/* Adresy */}
             <Grid item xs={12}>
               <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="h6">Adresy</Typography>
+                                  <Typography variant="h6">{t('suppliers.form.addresses.title')}</Typography>
                 {!viewOnly && (
                   <Button
                     startIcon={<AddIcon />}
                     onClick={() => openAddressDialog()}
                     disabled={saving}
                   >
-                    Dodaj adres
+                                          {t('suppliers.form.addresses.addAddress')}
                   </Button>
                 )}
               </Box>
@@ -438,7 +440,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
                   {supplierData.addresses.map((address, index) => (
                     <Card key={address.id || index} sx={{ mb: 2 }}>
                       <CardHeader
-                        title={address.name + (address.isMain ? ' (Główny)' : '')}
+                                                  title={address.name + (address.isMain ? ' (' + t('suppliers.form.addresses.mainAddress') + ')' : '')}
                         action={
                           !viewOnly && (
                             <Box>
@@ -462,22 +464,20 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
                   ))}
                 </List>
               ) : (
-                <Typography variant="body2" color="textSecondary">
-                  Brak adresów
-                </Typography>
+                                  <Typography variant="body2" color="textSecondary">{t('suppliers.form.addresses.noAddresses')}</Typography>
               )}
             </Grid>
             
             {/* Przyciski formularza */}
             {!viewOnly && (
               <Grid item xs={12} sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-                <Button
-                  type="button"
-                  onClick={() => navigate('/suppliers')}
-                  sx={{ mr: 2 }}
-                  disabled={saving}
-                >
-                  Anuluj
+                                  <Button
+                    type="button"
+                    onClick={() => navigate('/suppliers')}
+                    sx={{ mr: 2 }}
+                    disabled={saving}
+                  >
+                    {t('suppliers.actions.cancel')}
                 </Button>
                 <Button
                   type="submit"
@@ -486,7 +486,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
                   disabled={saving}
                   startIcon={saving && <CircularProgress size={24} color="inherit" />}
                 >
-                  {saving ? 'Zapisywanie...' : 'Zapisz'}
+                                      {saving ? t('suppliers.actions.saving') : t('suppliers.actions.save')}
                 </Button>
               </Grid>
             )}
@@ -497,14 +497,14 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
       {/* Dialog dodawania/edycji adresu */}
       <Dialog open={addressDialogOpen} onClose={() => setAddressDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>
-          {editingAddressIndex >= 0 ? 'Edytuj adres' : 'Dodaj nowy adres'}
+                      {editingAddressIndex >= 0 ? t('suppliers.form.addresses.editAddress') : t('suppliers.form.addresses.addNewAddress')}
         </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12}>
               <TextField
                 name="name"
-                label="Nazwa adresu"
+                                  label={t('suppliers.form.addresses.name')}
                 value={addressFormData.name}
                 onChange={handleAddressChange}
                 fullWidth
@@ -514,7 +514,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
             <Grid item xs={12}>
               <TextField
                 name="street"
-                label="Ulica i numer"
+                                  label={t('suppliers.form.addresses.street')}
                 value={addressFormData.street}
                 onChange={handleAddressChange}
                 fullWidth
@@ -524,7 +524,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
             <Grid item xs={12} md={6}>
               <TextField
                 name="postalCode"
-                label="Kod pocztowy"
+                                  label={t('suppliers.form.addresses.postalCode')}
                 value={addressFormData.postalCode}
                 onChange={handleAddressChange}
                 fullWidth
@@ -534,7 +534,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
             <Grid item xs={12} md={6}>
               <TextField
                 name="city"
-                label="Miasto"
+                                  label={t('suppliers.form.addresses.city')}
                 value={addressFormData.city}
                 onChange={handleAddressChange}
                 fullWidth
@@ -544,7 +544,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
             <Grid item xs={12}>
               <TextField
                 name="country"
-                label="Kraj"
+                                  label={t('suppliers.form.addresses.country')}
                 value={addressFormData.country}
                 onChange={handleAddressChange}
                 fullWidth
@@ -560,19 +560,19 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
                     onChange={handleAddressChange}
                   />
                 }
-                label="Adres główny"
+                                  label={t('suppliers.form.addresses.isMain')}
               />
             </Grid>
           </Grid>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAddressDialogOpen(false)}>
-            Anuluj
-          </Button>
-          <Button onClick={handleSaveAddress} variant="contained" color="primary">
-            Zapisz
-          </Button>
-        </DialogActions>
+                  <DialogActions>
+            <Button onClick={() => setAddressDialogOpen(false)}>
+              {t('suppliers.actions.cancel')}
+            </Button>
+            <Button onClick={handleSaveAddress} variant="contained" color="primary">
+              {t('suppliers.actions.save')}
+            </Button>
+          </DialogActions>
       </Dialog>
     </Container>
   );

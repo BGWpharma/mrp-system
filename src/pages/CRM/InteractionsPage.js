@@ -45,6 +45,7 @@ import { Link } from 'react-router-dom';
 import { getAllInteractions, deleteInteraction, updateInteraction, getInteractionById } from '../../services/crmService';
 import { getAllSuppliers } from '../../services/supplierService';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from 'react-i18next';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { INTERACTION_TYPES, INTERACTION_STATUSES } from '../../utils/constants';
@@ -69,6 +70,7 @@ const InteractionsPage = () => {
   
   const { showSuccess, showError } = useNotification();
   const { currentUser } = useAuth();
+  const { t } = useTranslation();
   
   useEffect(() => {
     fetchInteractions();
@@ -106,13 +108,13 @@ const InteractionsPage = () => {
       // Tworzymy mapę nazw dostawców
       const supplierNamesObj = {};
       suppliersData.forEach(supplier => {
-        supplierNamesObj[supplier.id] = supplier.name || 'Nieznany dostawca';
+        supplierNamesObj[supplier.id] = supplier.name || t('purchaseInteractions.details.unknownSupplier');
       });
       
       setSupplierNames(supplierNamesObj);
     } catch (error) {
       console.error('Błąd podczas pobierania interakcji:', error);
-      showError('Nie udało się pobrać interakcji: ' + error.message);
+      showError(t('purchaseInteractions.notifications.loadFailed') + ': ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -144,12 +146,12 @@ const InteractionsPage = () => {
   const handleDeleteConfirm = async () => {
     try {
       await deleteInteraction(interactionToDelete.id);
-      showSuccess('Interakcja została usunięta');
+      showSuccess(t('purchaseInteractions.notifications.deleted'));
       setInteractions(interactions.filter(i => i.id !== interactionToDelete.id));
       setFilteredInteractions(filteredInteractions.filter(i => i.id !== interactionToDelete.id));
     } catch (error) {
       console.error('Błąd podczas usuwania interakcji:', error);
-      showError('Nie udało się usunąć interakcji: ' + error.message);
+      showError(t('purchaseInteractions.notifications.deleteFailed') + ': ' + error.message);
     } finally {
       setDeleteDialogOpen(false);
       setInteractionToDelete(null);
@@ -240,10 +242,10 @@ const InteractionsPage = () => {
       );
       setFilteredInteractions(updatedFilteredInteractions);
       
-      showSuccess('Status interakcji został zaktualizowany');
+      showSuccess(t('purchaseInteractions.notifications.statusUpdated'));
     } catch (error) {
       console.error('Błąd podczas aktualizacji statusu:', error);
-      showError('Nie udało się zaktualizować statusu interakcji: ' + error.message);
+      showError(t('purchaseInteractions.notifications.statusUpdateFailed') + ': ' + error.message);
     } finally {
       setStatusDialogOpen(false);
       setInteractionToEdit(null);
@@ -266,25 +268,25 @@ const InteractionsPage = () => {
   return (
     <Container maxWidth="xl">
       <Box mt={4} mb={4} display="flex" justifyContent="space-between" alignItems="center">
-        <Typography variant="h4" component="h1">
-          Interakcje zakupowe
-        </Typography>
+                  <Typography variant="h4" component="h1">
+            {t('purchaseInteractions.title')}
+          </Typography>
         <Button 
           variant="contained" 
           color="primary" 
           startIcon={<AddIcon />}
           component={Link}
           to="/inventory/interactions/new"
-        >
-          Nowa interakcja
-        </Button>
+                  >
+            {t('purchaseInteractions.newInteraction')}
+          </Button>
       </Box>
       
       <Paper sx={{ mb: 4 }}>
         <Box p={2} display="flex" justifyContent="space-between" alignItems="center">
           <TextField
             variant="outlined"
-            placeholder="Szukaj interakcji..."
+            placeholder={t('purchaseInteractions.search.placeholder')}
             size="small"
             value={searchTerm}
             onChange={handleSearchChange}
@@ -308,24 +310,24 @@ const InteractionsPage = () => {
             }}
             sx={{ width: 300 }}
           />
-          <Typography variant="body2" color="textSecondary">
-            Łącznie: {filteredInteractions.length} interakcji
-          </Typography>
+                      <Typography variant="body2" color="textSecondary">
+              {t('purchaseInteractions.summary.total', { count: filteredInteractions.length })}
+            </Typography>
         </Box>
         
         <TableContainer>
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell width="5%">Typ</TableCell>
-                <TableCell width="15%">Temat</TableCell>
-                <TableCell width="10%">Data</TableCell>
-                <TableCell width="12%">Dostawca</TableCell>
-                <TableCell width="10%">Telefon</TableCell>
-                <TableCell width="15%">Email</TableCell>
-                <TableCell width="13%">Adres</TableCell>
-                <TableCell width="10%">Status</TableCell>
-                <TableCell width="10%" align="right">Akcje</TableCell>
+                                  <TableCell width="5%">{t('purchaseInteractions.table.headers.type')}</TableCell>
+                  <TableCell width="15%">{t('purchaseInteractions.table.headers.subject')}</TableCell>
+                  <TableCell width="10%">{t('purchaseInteractions.table.headers.date')}</TableCell>
+                  <TableCell width="12%">{t('purchaseInteractions.table.headers.supplier')}</TableCell>
+                  <TableCell width="10%">{t('purchaseInteractions.table.headers.phone')}</TableCell>
+                  <TableCell width="15%">{t('purchaseInteractions.table.headers.email')}</TableCell>
+                  <TableCell width="13%">{t('purchaseInteractions.table.headers.address')}</TableCell>
+                  <TableCell width="10%">{t('purchaseInteractions.table.headers.status')}</TableCell>
+                  <TableCell width="10%" align="right">{t('purchaseInteractions.table.headers.actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -341,7 +343,7 @@ const InteractionsPage = () => {
                       </Tooltip>
                     </TableCell>
                     <TableCell>
-                      <Tooltip title="Kliknij, aby zobaczyć szczegóły">
+                                              <Tooltip title={t('purchaseInteractions.table.clickForDetails')}>
                         <Box 
                           onClick={() => handleDetailsClick(interaction)}
                           style={{ 
@@ -396,7 +398,7 @@ const InteractionsPage = () => {
                       })()}
                     </TableCell>
                     <TableCell>
-                      <Tooltip title="Kliknij, aby zobaczyć szczegóły lub edytować status">
+                                              <Tooltip title={t('purchaseInteractions.table.clickForDetails')}>
                         <Chip 
                           label={interaction.status} 
                           size="small" 
@@ -409,7 +411,7 @@ const InteractionsPage = () => {
                     </TableCell>
                     <TableCell align="right">
                       <Box display="flex" justifyContent="flex-end">
-                        <Tooltip title="Edytuj">
+                        <Tooltip title={t('purchaseInteractions.actions.edit')}>
                           <IconButton 
                             size="small"
                             component={Link}
@@ -418,7 +420,7 @@ const InteractionsPage = () => {
                             <EditIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title="Szczegóły">
+                        <Tooltip title={t('purchaseInteractions.actions.view')}>
                           <IconButton 
                             size="small"
                             color="primary"
@@ -428,7 +430,7 @@ const InteractionsPage = () => {
                             <ViewIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title="Usuń">
+                        <Tooltip title={t('purchaseInteractions.actions.delete')}>
                           <IconButton 
                             size="small"
                             color="error"
@@ -445,7 +447,7 @@ const InteractionsPage = () => {
                 <TableRow>
                   <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
                     <Typography variant="body1" color="textSecondary">
-                      {searchTerm ? 'Nie znaleziono interakcji spełniających kryteria wyszukiwania' : 'Brak interakcji'}
+                                              {searchTerm ? t('purchaseInteractions.noResults.description') : t('purchaseInteractions.noResults.title')}
                     </Typography>
                     <Button 
                       variant="contained" 
@@ -454,7 +456,7 @@ const InteractionsPage = () => {
                       to="/inventory/interactions/new"
                       sx={{ mt: 2 }}
                     >
-                      Dodaj pierwszą interakcję
+                                              {t('purchaseInteractions.noResults.createFirst')}
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -472,8 +474,8 @@ const InteractionsPage = () => {
             page={page}
             onPageChange={handleChangePage}
             onRowsPerPageChange={handleChangeRowsPerPage}
-            labelRowsPerPage="Wierszy na stronę:"
-            labelDisplayedRows={({ from, to, count }) => `${from}-${to} z ${count}`}
+            labelRowsPerPage={t('purchaseInteractions.pagination.rowsPerPage')}
+            labelDisplayedRows={({ from, to, count }) => `${from}-${to} ${t('purchaseInteractions.pagination.of')}`}
           />
         )}
       </Paper>
@@ -483,20 +485,15 @@ const InteractionsPage = () => {
         open={deleteDialogOpen}
         onClose={handleDeleteCancel}
       >
-        <DialogTitle>Usuń interakcję</DialogTitle>
+        <DialogTitle>{t('purchaseInteractions.dialogs.deleteConfirm.title')}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Czy na pewno chcesz usunąć interakcję "{interactionToDelete?.subject}"?
-            Tej operacji nie można cofnąć.
+            {t('purchaseInteractions.dialogs.deleteConfirm.message')}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleDeleteCancel} color="primary">
-            Anuluj
-          </Button>
-          <Button onClick={handleDeleteConfirm} color="error">
-            Usuń
-          </Button>
+          <Button onClick={handleDeleteCancel} color="primary">{t('purchaseInteractions.dialogs.deleteConfirm.cancel')}</Button>
+          <Button onClick={handleDeleteConfirm} color="error">{t('purchaseInteractions.dialogs.deleteConfirm.confirm')}</Button>
         </DialogActions>
       </Dialog>
 
@@ -505,32 +502,32 @@ const InteractionsPage = () => {
         open={statusDialogOpen}
         onClose={() => setStatusDialogOpen(false)}
       >
-        <DialogTitle>Zmień status interakcji</DialogTitle>
+        <DialogTitle>{t('InteractionsPage.changeStatusDialogTitle')}</DialogTitle>
         <DialogContent>
           {interactionToEdit && (
             <>
               <DialogContentText>
-                Zmień status interakcji "{interactionToEdit.subject}"
+                {t('InteractionsPage.changeStatusDialogContent', { subject: interactionToEdit.subject })}
               </DialogContentText>
               <FormControl fullWidth sx={{ mt: 2 }}>
-                <InputLabel>Status</InputLabel>
+                <InputLabel>{t('InteractionsPage.statusLabel')}</InputLabel>
                 <Select
                   value={newStatus}
                   onChange={(e) => setNewStatus(e.target.value)}
-                  label="Status"
+                  label={t('InteractionsPage.statusLabel')}
                 >
-                  <MenuItem value={INTERACTION_STATUSES.PLANNED}>Zaplanowana</MenuItem>
-                  <MenuItem value={INTERACTION_STATUSES.IN_PROGRESS}>W trakcie</MenuItem>
-                  <MenuItem value={INTERACTION_STATUSES.COMPLETED}>Zakończona</MenuItem>
-                  <MenuItem value={INTERACTION_STATUSES.CANCELLED}>Anulowana</MenuItem>
+                  <MenuItem value={INTERACTION_STATUSES.PLANNED}>{t('InteractionsPage.plannedStatus')}</MenuItem>
+                  <MenuItem value={INTERACTION_STATUSES.IN_PROGRESS}>{t('InteractionsPage.inProgressStatus')}</MenuItem>
+                  <MenuItem value={INTERACTION_STATUSES.COMPLETED}>{t('InteractionsPage.completedStatus')}</MenuItem>
+                  <MenuItem value={INTERACTION_STATUSES.CANCELLED}>{t('InteractionsPage.cancelledStatus')}</MenuItem>
                 </Select>
               </FormControl>
             </>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setStatusDialogOpen(false)}>Anuluj</Button>
-          <Button onClick={handleStatusUpdate} color="primary">Zapisz</Button>
+          <Button onClick={() => setStatusDialogOpen(false)}>{t('InteractionsPage.changeStatusDialogCancel')}</Button>
+          <Button onClick={handleStatusUpdate} color="primary">{t('InteractionsPage.changeStatusDialogSave')}</Button>
         </DialogActions>
       </Dialog>
 
@@ -542,7 +539,7 @@ const InteractionsPage = () => {
         fullWidth
       >
         <DialogTitle>
-          Szczegóły interakcji
+          {t('InteractionsPage.detailsDialogTitle')}
           <IconButton
             aria-label="close"
             onClick={() => setDetailsDialogOpen(false)}
@@ -569,12 +566,12 @@ const InteractionsPage = () => {
               </Grid>
               
               <Grid item xs={12} sm={6}>
-                <Typography variant="subtitle2">Data i godzina:</Typography>
+                <Typography variant="subtitle2">{t('InteractionsPage.dateTimeLabel')}</Typography>
                 <Typography variant="body1">{formatDate(selectedInteraction.date)}</Typography>
               </Grid>
               
               <Grid item xs={12} sm={6}>
-                <Typography variant="subtitle2">Status:</Typography>
+                <Typography variant="subtitle2">{t('InteractionsPage.statusLabel')}</Typography>
                 <Chip 
                   label={selectedInteraction.status} 
                   size="small" 
@@ -588,7 +585,7 @@ const InteractionsPage = () => {
               </Grid>
               
               <Grid item xs={12}>
-                <Typography variant="subtitle2">Dostawca:</Typography>
+                <Typography variant="subtitle2">{t('InteractionsPage.supplierLabel')}</Typography>
                 <Typography variant="body1">
                   {supplierNames[selectedInteraction.contactId] || 'Nieznany dostawca'}
                 </Typography>
@@ -596,7 +593,7 @@ const InteractionsPage = () => {
               
               {selectedInteraction.notes && (
                 <Grid item xs={12}>
-                  <Typography variant="subtitle2">Notatki:</Typography>
+                  <Typography variant="subtitle2">{t('InteractionsPage.notesLabel')}</Typography>
                   <Paper variant="outlined" sx={{ p: 2, mt: 1, bgcolor: 'background.default' }}>
                     <Typography variant="body2" style={{ whiteSpace: 'pre-wrap' }}>
                       {selectedInteraction.notes}
@@ -614,7 +611,7 @@ const InteractionsPage = () => {
                     to={`/inventory/interactions/${selectedInteraction.id}/edit`}
                     onClick={() => setDetailsDialogOpen(false)}
                   >
-                    Edytuj
+                    {t('InteractionsPage.editButton')}
                   </Button>
                   <Button 
                     variant="outlined" 
@@ -625,7 +622,7 @@ const InteractionsPage = () => {
                       handleDeleteClick(selectedInteraction);
                     }}
                   >
-                    Usuń
+                    {t('InteractionsPage.deleteButton')}
                   </Button>
                 </Box>
               </Grid>

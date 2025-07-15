@@ -48,6 +48,7 @@ import {
   updateCmrPaymentStatus
 } from '../../../services/cmrService';
 import { getAllCustomers } from '../../../services/customerService';
+import { useTranslation } from 'react-i18next';
 
 // Ikony
 import AddIcon from '@mui/icons-material/Add';
@@ -133,6 +134,7 @@ const statusTranslations = {
 };
 
 const CmrListPage = () => {
+  const { t: translate } = useTranslation();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -533,11 +535,11 @@ const CmrListPage = () => {
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: { xs: 'column', sm: 'row' } }}>
         <Box>
           <Typography variant="h5">
-            Dokumenty CMR
+            {translate('cmr.title')}
           </Typography>
           {cmrDocuments.length > 0 && (
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              Sortowanie: {sortOrder === 'asc' ? 'od najstarszej do najnowszej' : 'od najnowszej do najstarszej'} daty wystawienia
+              Sortowanie: {sortOrder === 'asc' ? translate('cmr.sorting.oldestToNewest') : translate('cmr.sorting.newestToOldest')} {translate('cmr.sorting.byIssueDate')}
             </Typography>
           )}
         </Box>
@@ -555,7 +557,7 @@ const CmrListPage = () => {
             sx={{ mr: { sm: 1 }, flex: { xs: 1, sm: 'auto' } }}
             size="small"
           >
-            Generuj raport
+            {translate('cmr.generateReport')}
           </Button>
           <Button
             variant="contained"
@@ -565,7 +567,7 @@ const CmrListPage = () => {
             sx={{ flex: { xs: 1, sm: 'auto' } }}
             size="small"
           >
-            Nowy dokument CMR
+            {translate('cmr.newDocument')}
           </Button>
         </Box>
       </Box>
@@ -576,18 +578,18 @@ const CmrListPage = () => {
         </Box>
       ) : cmrDocuments.length === 0 ? (
         <Alert severity="info">
-          Brak dokumentów CMR w systemie. Kliknij "Nowy dokument CMR", aby dodać pierwszy.
+          {translate('cmr.noDocuments')}
         </Alert>
       ) : (
         <TableContainer component={Paper}>
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Numer CMR</TableCell>
+                <TableCell>{translate('cmr.table.cmrNumber')}</TableCell>
                 <TableCell>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    Data wystawienia
-                    <Tooltip title={`Sortuj ${sortOrder === 'asc' ? 'od najnowszej' : 'od najstarszej'}`}>
+                    {translate('cmr.table.issueDate')}
+                    <Tooltip title={`${translate('cmr.sorting.sortBy')} ${sortOrder === 'asc' ? 'od najnowszej' : 'od najstarszej'}`}>
                       <IconButton 
                         size="small" 
                         onClick={handleToggleSort}
@@ -598,11 +600,11 @@ const CmrListPage = () => {
                     </Tooltip>
                   </Box>
                 </TableCell>
-                <TableCell>Nadawca</TableCell>
-                <TableCell>Odbiorca</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Status płatności</TableCell>
-                <TableCell>Akcje</TableCell>
+                <TableCell>{translate('cmr.table.sender')}</TableCell>
+                <TableCell>{translate('cmr.table.recipient')}</TableCell>
+                <TableCell>{translate('cmr.table.status')}</TableCell>
+                <TableCell>{translate('cmr.table.paymentStatus')}</TableCell>
+                <TableCell>{translate('cmr.table.actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -618,7 +620,7 @@ const CmrListPage = () => {
                     <IconButton
                       size="small"
                       onClick={() => handleViewCmr(cmr.id)}
-                      title="Podgląd"
+                      title={translate('cmr.actions.view')}
                     >
                       <VisibilityIcon fontSize="small" />
                     </IconButton>
@@ -627,7 +629,7 @@ const CmrListPage = () => {
                       <IconButton
                         size="small"
                         onClick={() => handleEditCmr(cmr.id)}
-                        title="Edytuj"
+                        title={translate('cmr.actions.edit')}
                       >
                         <EditIcon fontSize="small" />
                       </IconButton>
@@ -636,7 +638,7 @@ const CmrListPage = () => {
                     <IconButton
                       size="small"
                       onClick={() => handleDeleteClick(cmr)}
-                      title="Usuń"
+                      title={translate('cmr.actions.delete')}
                       color="error"
                     >
                       <DeleteIcon fontSize="small" />
@@ -654,19 +656,18 @@ const CmrListPage = () => {
         open={deleteDialogOpen}
         onClose={handleDeleteCancel}
       >
-        <DialogTitle>Potwierdzenie usunięcia</DialogTitle>
+        <DialogTitle>{translate('cmr.dialogs.deleteConfirmation')}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Czy na pewno chcesz usunąć dokument CMR {documentToDelete?.cmrNumber}?
-            Ta operacja jest nieodwracalna.
+            {translate('cmr.dialogs.deleteMessage', { cmrNumber: documentToDelete?.cmrNumber })}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleDeleteCancel} color="primary">
-            Anuluj
+            {translate('cmr.dialogs.cancel')}
           </Button>
           <Button onClick={handleDeleteConfirm} color="error" variant="contained">
-            Usuń
+            {translate('cmr.dialogs.delete')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -945,10 +946,10 @@ const CmrListPage = () => {
         open={paymentStatusDialogOpen}
         onClose={() => setPaymentStatusDialogOpen(false)}
       >
-        <DialogTitle>Zmiana statusu płatności</DialogTitle>
+        <DialogTitle>{translate('cmr.dialogs.changePaymentStatus')}</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
-            Wybierz nowy status płatności dla dokumentu CMR:
+            {translate('cmr.dialogs.selectNewPaymentStatus')}
             {cmrToUpdatePaymentStatus && (
               <>
                 <br />
@@ -957,12 +958,12 @@ const CmrListPage = () => {
             )}
           </DialogContentText>
           <FormControl fullWidth>
-            <InputLabel id="new-payment-status-label">Status płatności</InputLabel>
+            <InputLabel id="new-payment-status-label">{translate('cmr.table.paymentStatus')}</InputLabel>
             <Select
               labelId="new-payment-status-label"
               value={newPaymentStatus}
               onChange={(e) => setNewPaymentStatus(e.target.value)}
-              label="Status płatności"
+              label={translate('cmr.table.paymentStatus')}
             >
               <MenuItem value={CMR_PAYMENT_STATUSES.UNPAID}>
                 {translatePaymentStatus(CMR_PAYMENT_STATUSES.UNPAID)}
@@ -974,8 +975,8 @@ const CmrListPage = () => {
           </FormControl>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setPaymentStatusDialogOpen(false)}>Anuluj</Button>
-          <Button color="primary" onClick={handlePaymentStatusUpdate}>Zaktualizuj</Button>
+          <Button onClick={() => setPaymentStatusDialogOpen(false)}>{translate('cmr.dialogs.cancel')}</Button>
+          <Button color="primary" onClick={handlePaymentStatusUpdate}>{translate('cmr.dialogs.update')}</Button>
         </DialogActions>
       </Dialog>
     </Container>

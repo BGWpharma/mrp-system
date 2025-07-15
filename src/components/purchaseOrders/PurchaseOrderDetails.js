@@ -7,6 +7,7 @@ import {
   FormControl, InputLabel, Select, MenuItem, TextField, CircularProgress, IconButton,
   List, ListItem, ListItemText, ListItemIcon, Collapse, Tooltip, Menu
 } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import { 
   Edit as EditIcon, 
   Delete as DeleteIcon, 
@@ -57,6 +58,7 @@ import { getUsersDisplayNames } from '../../services/userService';
 import { createPurchaseOrderPdfGenerator } from './PurchaseOrderPdfGenerator';
 
 const PurchaseOrderDetails = ({ orderId }) => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -547,10 +549,10 @@ const PurchaseOrderDetails = ({ orderId }) => {
       const updatedOrder = await getPurchaseOrderById(orderId);
       setPurchaseOrder(updatedOrder);
       
-      showSuccess('Status zamówienia został zaktualizowany');
-    } catch (error) {
-      console.error('Błąd podczas aktualizacji statusu:', error);
-      showError('Nie udało się zaktualizować statusu zamówienia');
+                      showSuccess(t('purchaseOrders.statusUpdated'));
+      } catch (error) {
+        console.error('Błąd podczas aktualizacji statusu:', error);
+        showError(t('purchaseOrders.errors.statusUpdateFailed'));
     } finally {
       setNewStatus('');
       setStatusDialogOpen(false);
@@ -564,7 +566,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
   
   const handleReceiveItem = () => {
     if (!itemToReceive || !itemToReceive.inventoryItemId) {
-      showError('Ten produkt nie jest powiązany z pozycją magazynową');
+      showError(t('purchaseOrders.errors.productNotLinked'));
       setReceiveDialogOpen(false);
       return;
     }
@@ -1008,7 +1010,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
               startIcon={<ArrowBackIcon />}
               variant="outlined"
             >
-              Powrót do listy
+              {t('purchaseOrders.backToList')}
             </Button>
             <Typography variant="h4" component="h1">
               Zamówienie {purchaseOrder.number}
@@ -1020,7 +1022,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                 startIcon={<DownloadIcon />}
                 sx={{ mr: 1 }}
               >
-                Pobierz PDF
+                {t('purchaseOrders.downloadPdf')}
               </Button>
               
 
@@ -1032,7 +1034,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                 startIcon={<EditIcon />}
                 sx={{ mr: 1 }}
               >
-                Edytuj
+                {t('purchaseOrders.editOrder')}
               </Button>
               
               <IconButton
@@ -1099,7 +1101,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                 
                 <MenuItem onClick={handleDeleteClick} sx={{ color: 'error.main' }}>
                   <DeleteIcon sx={{ mr: 1 }} />
-                  Usuń zamówienie
+                  {t('purchaseOrders.details.deleteOrder')}
                 </MenuItem>
               </Menu>
             </Box>
@@ -1115,7 +1117,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                 <Grid item xs={12} md={6}>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="h5" component="h1">
-                      Zamówienie {purchaseOrder.number}
+                      {t('purchaseOrders.details.orderNumber', { number: purchaseOrder.number })}
                       <Box component="span" sx={{ ml: 2 }}>
                         {getStatusChip(purchaseOrder.status)}
                       </Box>
@@ -1126,24 +1128,24 @@ const PurchaseOrderDetails = ({ orderId }) => {
                   </Box>
                   
                   <Typography variant="body1" gutterBottom>
-                    <strong>Data zamówienia:</strong> {formatDate(purchaseOrder.orderDate)}
+                    <strong>{t('purchaseOrders.details.orderDate')}:</strong> {formatDate(purchaseOrder.orderDate)}
                   </Typography>
                   
                   <Typography variant="body1" gutterBottom>
-                    <strong>Oczekiwana data dostawy:</strong> {formatDate(purchaseOrder.expectedDeliveryDate)}
+                    <strong>{t('purchaseOrders.details.expectedDeliveryDate')}:</strong> {formatDate(purchaseOrder.expectedDeliveryDate)}
                   </Typography>
                   
                   {purchaseOrder.status === PURCHASE_ORDER_STATUSES.DELIVERED && (
                     <Typography variant="body1" gutterBottom>
-                      <strong>Data dostawy:</strong> {formatDate(purchaseOrder.deliveredAt)}
+                      <strong>{t('purchaseOrders.details.deliveryDate')}:</strong> {formatDate(purchaseOrder.deliveredAt)}
                     </Typography>
                   )}
                   
                   {purchaseOrder.invoiceLink && (!purchaseOrder.invoiceLinks || purchaseOrder.invoiceLinks.length === 0) && (
                     <Typography variant="body1" gutterBottom>
-                      <strong>Faktura:</strong>{' '}
+                      <strong>{t('purchaseOrders.details.invoice')}:</strong>{' '}
                       <a href={purchaseOrder.invoiceLink} target="_blank" rel="noopener noreferrer">
-                        Zobacz fakturę
+                        {t('purchaseOrders.details.viewInvoice')}
                       </a>
                     </Typography>
                   )}
@@ -1151,7 +1153,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                   {purchaseOrder.invoiceLinks && purchaseOrder.invoiceLinks.length > 0 && (
                     <>
                       <Typography variant="body1" gutterBottom>
-                        <strong>Faktury:</strong>
+                        <strong>{t('purchaseOrders.details.invoices')}:</strong>
                       </Typography>
                       <Box component="ul" sx={{ pl: 4, mt: 0 }}>
                         {purchaseOrder.invoiceLinks.map((invoice, index) => (
@@ -1167,7 +1169,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                 </Grid>
                 
                 <Grid item xs={12} md={6}>
-                  <Typography variant="h6" gutterBottom>Dostawca</Typography>
+                  <Typography variant="h6" gutterBottom>{t('purchaseOrders.details.supplier')}</Typography>
                   
                   {purchaseOrder.supplier ? (
                     <>
@@ -1206,7 +1208,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                     </>
                   ) : (
                     <Typography variant="body2">
-                      Brak danych dostawcy
+                      {t('purchaseOrders.details.noSupplierData')}
                     </Typography>
                   )}
                 </Grid>
@@ -1216,16 +1218,16 @@ const PurchaseOrderDetails = ({ orderId }) => {
             {purchaseOrder.statusHistory && purchaseOrder.statusHistory.length > 0 && (
               <Paper sx={{ p: 3, mb: 3 }}>
                 <Typography variant="h6" gutterBottom>
-                  Historia zmian statusu
+                  {t('purchaseOrders.details.statusHistory')}
                 </Typography>
                 
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell>Data i godzina</TableCell>
-                      <TableCell>Poprzedni status</TableCell>
-                      <TableCell>Nowy status</TableCell>
-                      <TableCell>Kto zmienił</TableCell>
+                      <TableCell>{t('purchaseOrders.details.table.dateTime')}</TableCell>
+                      <TableCell>{t('purchaseOrders.details.table.previousStatus')}</TableCell>
+                      <TableCell>{t('purchaseOrders.details.table.newStatus')}</TableCell>
+                      <TableCell>{t('purchaseOrders.details.table.changedBy')}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -1245,21 +1247,21 @@ const PurchaseOrderDetails = ({ orderId }) => {
             )}
             
             <Paper sx={{ p: 3, mb: 3 }}>
-              <Typography variant="h6" gutterBottom>Elementy zamówienia</Typography>
+              <Typography variant="h6" gutterBottom>{t('purchaseOrders.details.orderElements')}</Typography>
               
               <TableContainer sx={{ mb: 3 }}>
                 <Table>
                   <TableHead>
                     <TableRow>
-                      <TableCell>Nazwa produktu</TableCell>
-                      <TableCell align="right">Ilość</TableCell>
-                      <TableCell>Jednostka</TableCell>
-                      <TableCell align="right">Cena jedn.</TableCell>
-                      <TableCell align="right">Wartość netto</TableCell>
-                      <TableCell align="right">Kwota oryg.</TableCell>
-                      <TableCell align="right">Plan. data dost.</TableCell>
-                      <TableCell align="right">Rzecz. data dost.</TableCell>
-                      <TableCell align="right">Odebrano</TableCell>
+                      <TableCell>{t('purchaseOrders.details.table.productName')}</TableCell>
+                      <TableCell align="right">{t('purchaseOrders.details.table.quantity')}</TableCell>
+                      <TableCell>{t('purchaseOrders.details.table.unit')}</TableCell>
+                      <TableCell align="right">{t('purchaseOrders.details.table.unitPrice')}</TableCell>
+                      <TableCell align="right">{t('purchaseOrders.details.table.netValue')}</TableCell>
+                      <TableCell align="right">{t('purchaseOrders.details.table.originalAmount')}</TableCell>
+                      <TableCell align="right">{t('purchaseOrders.details.table.plannedDeliveryDate')}</TableCell>
+                      <TableCell align="right">{t('purchaseOrders.details.table.actualDeliveryDate')}</TableCell>
+                      <TableCell align="right">{t('purchaseOrders.details.table.received')}</TableCell>
                       {/* Ukrywamy kolumnę akcji przy drukowaniu */}
                       <TableCell sx={{ '@media print': { display: 'none' } }}></TableCell>
                     </TableRow>
@@ -1325,7 +1327,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                   
                                   let tooltipText = "";
                                   if (itemInUnloadingForm) {
-                                    tooltipText = "Pozycja została zgłoszona w raporcie rozładunku - można przyjąć towar";
+                                    tooltipText = t('purchaseOrders.details.itemReportedInUnloading');
                                     if (expiryInfo.noExpiryDate) {
                                       tooltipText += ` (brak terminu ważności)`;
                                     } else if (expiryInfo.expiryDate) {
@@ -1335,7 +1337,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                       tooltipText += ` (data ważności: ${expiryDateStr})`;
                                     }
                                   } else {
-                                    tooltipText = "Pozycja nie została zgłoszona w raporcie rozładunku - nie można przyjąć towaru";
+                                    tooltipText = t('purchaseOrders.details.itemNotReportedInUnloading');
                                   }
                                   
                                   return (
@@ -1350,7 +1352,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                           onClick={() => handleReceiveClick(item)}
                                           disabled={!itemInUnloadingForm}
                                         >
-                                          {itemInUnloadingForm ? "Przyjmij" : "Brak w raporcie"}
+                                          {itemInUnloadingForm ? t('purchaseOrders.details.receive') : t('purchaseOrders.details.notInReport')}
                                         </Button>
                                       </span>
                                     </Tooltip>
@@ -1367,7 +1369,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                 <Collapse in={expandedItems[item.id]} timeout="auto" unmountOnExit>
                                   <Box sx={{ m: 2 }}>
                                     <Typography variant="subtitle2" gutterBottom component="div">
-                                      Partie (LOT) przypisane do tej pozycji
+                                      {t('purchaseOrders.details.batchesAssignedToItem')}
                                     </Typography>
                                     {getBatchesByItemId(item.id).length > 0 ? (
                                       <List dense>
@@ -1400,7 +1402,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                                   )}
                                                   {batch.warehouseId && (
                                                     <Typography component="span" variant="body2" display="block" color="text.secondary">
-                                                      Magazyn: {batch.warehouseName || warehouseNames[batch.warehouseId] || batch.warehouseId}
+                                                      {t('purchaseOrders.details.batches.warehouse')}: {batch.warehouseName || warehouseNames[batch.warehouseId] || batch.warehouseId}
                                                     </Typography>
                                                   )}
                                                 </React.Fragment>
@@ -1416,14 +1418,14 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                                 handleBatchClick(batch.id, batch.itemId || item.inventoryItemId);
                                               }}
                                             >
-                                              Szczegóły
+                                              {t('purchaseOrders.details.table.details')}
                                             </Button>
                                           </ListItem>
                                         ))}
                                       </List>
                                     ) : (
                                       <Typography variant="body2" color="text.secondary">
-                                        Brak przypisanych partii dla tej pozycji
+                                        {t('purchaseOrders.details.batches.noBatchesAssigned')}
                                       </Typography>
                                     )}
                                   </Box>
@@ -1442,7 +1444,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                 <Grid item xs={12} md={6}>
                   {purchaseOrder.notes && (
                     <>
-                      <Typography variant="subtitle1" gutterBottom>Uwagi:</Typography>
+                      <Typography variant="subtitle1" gutterBottom>{t('purchaseOrders.details.table.notes')}:</Typography>
                       <Paper variant="outlined" sx={{ p: 2, bgcolor: 'background.paper' }}>
                         <Typography variant="body2">
                           {purchaseOrder.notes}
@@ -1454,14 +1456,14 @@ const PurchaseOrderDetails = ({ orderId }) => {
                 <Grid item xs={12} md={6}>
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                     <Typography variant="body1" gutterBottom>
-                      <strong>Wartość produktów netto:</strong> {formatCurrency(purchaseOrder.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0), purchaseOrder.currency)}
+                      <strong>{t('purchaseOrders.details.summary.productsNetValue')}:</strong> {formatCurrency(purchaseOrder.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0), purchaseOrder.currency)}
                     </Typography>
                     
                     {/* Sekcja VAT dla produktów */}
                     {purchaseOrder.items.length > 0 && (
                       <>
                         <Typography variant="subtitle2" gutterBottom>
-                          VAT od produktów:
+                          {t('purchaseOrders.details.summary.vatFromProducts')}:
                         </Typography>
                         {/* Grupowanie pozycji według stawki VAT */}
                         {Array.from(new Set(purchaseOrder.items.map(item => item.vatRate))).sort((a, b) => a - b).map(vatRate => {
@@ -1473,7 +1475,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                           
                           return (
                             <Typography key={vatRate} variant="body2" gutterBottom sx={{ pl: 2 }}>
-                              Stawka {vatRate}%: <strong>{formatCurrency(vatValue, purchaseOrder.currency)}</strong> (od {formatCurrency(sumNet, purchaseOrder.currency)})
+                              {t('purchaseOrders.details.summary.vatRate', { rate: vatRate })}: <strong>{formatCurrency(vatValue, purchaseOrder.currency)}</strong> ({t('purchaseOrders.details.summary.from')} {formatCurrency(sumNet, purchaseOrder.currency)})
                             </Typography>
                           );
                         })}
@@ -1484,7 +1486,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                     {purchaseOrder.additionalCostsItems?.length > 0 && (
                       <>
                         <Typography variant="subtitle1" gutterBottom>
-                          <strong>Dodatkowe koszty:</strong>
+                          <strong>{t('purchaseOrders.details.additionalCostsDetails')}:</strong>
                         </Typography>
                         {purchaseOrder.additionalCostsItems.map((cost, index) => (
                           <Typography key={index} variant="body2" gutterBottom sx={{ pl: 2 }}>
@@ -1503,13 +1505,13 @@ const PurchaseOrderDetails = ({ orderId }) => {
                       return (
                         <>
                           <Typography variant="subtitle1" gutterBottom>
-                            <strong>Wartość netto razem:</strong> {formatCurrency(vatValues.totalNet, purchaseOrder.currency)}
+                            <strong>{t('purchaseOrders.details.summary.netValue')}:</strong> {formatCurrency(vatValues.totalNet, purchaseOrder.currency)}
                           </Typography>
                           <Typography variant="subtitle1" gutterBottom>
-                            <strong>Suma podatku VAT:</strong> {formatCurrency(vatValues.totalVat, purchaseOrder.currency)}
+                            <strong>{t('purchaseOrders.details.summary.totalVAT')}:</strong> {formatCurrency(vatValues.totalVat, purchaseOrder.currency)}
                           </Typography>
                           <Typography variant="h6" sx={{ mt: 1 }}>
-                            <strong>Wartość brutto:</strong> {formatCurrency(vatValues.totalGross, purchaseOrder.currency)}
+                            <strong>{t('purchaseOrders.details.summary.grossValue')}:</strong> {formatCurrency(vatValues.totalGross, purchaseOrder.currency)}
                           </Typography>
                         </>
                       );
@@ -1524,20 +1526,20 @@ const PurchaseOrderDetails = ({ orderId }) => {
           {relatedBatches.length > 0 && (
             <Paper sx={{ p: 3, mb: 3 }}>
               <Typography variant="h6" gutterBottom>
-                Wszystkie partie (LOT) powiązane z zamówieniem
+                {t('purchaseOrders.details.batches.allRelatedBatches')}
               </Typography>
               
               <TableContainer>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell>Numer LOT</TableCell>
-                      <TableCell>Produkt</TableCell>
-                      <TableCell align="right">Ilość</TableCell>
-                      <TableCell>Magazyn</TableCell>
-                      <TableCell>Data przyjęcia</TableCell>
-                      <TableCell>Wartość</TableCell>
-                      <TableCell>Akcje</TableCell>
+                      <TableCell>{t('purchaseOrders.details.batches.lotNumber')}</TableCell>
+                      <TableCell>{t('purchaseOrders.details.batches.product')}</TableCell>
+                      <TableCell align="right">{t('purchaseOrders.details.table.quantity')}</TableCell>
+                      <TableCell>{t('purchaseOrders.details.table.warehouse')}</TableCell>
+                      <TableCell>{t('purchaseOrders.details.batches.receivedDate')}</TableCell>
+                      <TableCell>{t('purchaseOrders.details.batches.value')}</TableCell>
+                      <TableCell>{t('purchaseOrders.details.table.actions')}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -1551,23 +1553,23 @@ const PurchaseOrderDetails = ({ orderId }) => {
                         }}
                       >
                         <TableCell sx={{ fontWeight: 'medium' }}>
-                          {batch.lotNumber || batch.batchNumber || "Brak numeru"}
+                          {batch.lotNumber || batch.batchNumber || t('purchaseOrders.details.batches.noLotNumber')}
                         </TableCell>
                         <TableCell>
-                          {batch.itemName || "Nieznany produkt"}
+                          {batch.itemName || t('purchaseOrders.details.batches.unknownProduct')}
                         </TableCell>
                         <TableCell align="right">
                           {batch.quantity || 0} {batch.unit || 'szt.'}
                         </TableCell>
                         <TableCell>
-                          {batch.warehouseName || batch.warehouseId || "Główny magazyn"}
+                          {batch.warehouseName || batch.warehouseId || t('purchaseOrders.details.batches.mainWarehouse')}
                         </TableCell>
                         <TableCell>
                           {batch.receivedDate ? 
                             (typeof batch.receivedDate === 'object' && batch.receivedDate.seconds ? 
                               new Date(batch.receivedDate.seconds * 1000).toLocaleDateString('pl-PL') : 
                               new Date(batch.receivedDate).toLocaleDateString('pl-PL')) : 
-                            "Nieznana data"}
+                            t('purchaseOrders.details.batches.unknownDate')}
                         </TableCell>
                         <TableCell>
                           {formatCurrency(batch.unitPrice * batch.quantity, purchaseOrder.currency)}
@@ -1578,7 +1580,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                             variant="outlined"
                             onClick={() => handleBatchClick(batch.id, batch.itemId)}
                           >
-                            Szczegóły
+                            {t('purchaseOrders.details.table.details')}
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -1591,7 +1593,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
           
           <Paper sx={{ mb: 3, p: 3, borderRadius: 2 }}>
             <Typography variant="h6" gutterBottom>
-              Dodatkowe koszty
+              {t('purchaseOrders.additionalCosts')}
             </Typography>
             
             {purchaseOrder.additionalCostsItems && purchaseOrder.additionalCostsItems.length > 0 ? (

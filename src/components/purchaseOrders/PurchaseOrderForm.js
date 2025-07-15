@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Box,
   Button,
@@ -75,6 +76,7 @@ import { getExchangeRate, getExchangeRates } from '../../services/exchangeRateSe
 import PurchaseOrderFileUpload from './PurchaseOrderFileUpload';
 
 const PurchaseOrderForm = ({ orderId }) => {
+  const { t } = useTranslation();
   const { poId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -2181,7 +2183,7 @@ const PurchaseOrderForm = ({ orderId }) => {
   if (loading) {
     return (
       <Container maxWidth="xl">
-        <Typography variant="h6">Ładowanie danych zamówienia...</Typography>
+        <Typography variant="h6">{t('purchaseOrders.form.loadingData')}</Typography>
       </Container>
     );
   }
@@ -2190,14 +2192,14 @@ const PurchaseOrderForm = ({ orderId }) => {
     <Container maxWidth="xl">
       <Box sx={{ mb: 3 }}>
         <Typography variant="h5">
-          {currentOrderId && currentOrderId !== 'new' ? 'Edycja Zamówienia Zakupu' : 'Utwórz Zamówienie Zakupu'}
+          {currentOrderId && currentOrderId !== 'new' ? t('purchaseOrders.form.editTitle') : t('purchaseOrders.form.createTitle')}
         </Typography>
         
         {/* Wyświetlanie numeru PO w trybie edycji */}
         {currentOrderId && currentOrderId !== 'new' && poData.number && (
           <Alert severity="info" sx={{ mt: 2 }}>
             <Typography variant="h6" component="span" sx={{ fontWeight: 'bold' }}>
-              Numer PO: {poData.number}
+              {t('purchaseOrders.form.poNumber', { number: poData.number })}
             </Typography>
           </Alert>
         )}
@@ -2211,7 +2213,7 @@ const PurchaseOrderForm = ({ orderId }) => {
             onClick={handleCancel}
             disabled={saving}
           >
-            Anuluj
+            {t('purchaseOrders.form.actions.cancel')}
           </Button>
           <Button
             type="submit"
@@ -2220,7 +2222,7 @@ const PurchaseOrderForm = ({ orderId }) => {
             disabled={saving}
             onClick={handleSubmit}
           >
-            {saving ? 'Zapisywanie...' : 'Zapisz'}
+            {saving ? t('purchaseOrders.form.actions.saving') : t('purchaseOrders.form.actions.save')}
           </Button>
         </Box>
         
@@ -2236,7 +2238,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Dostawca"
+                    label={t('purchaseOrders.form.supplier')}
                     required
                     fullWidth
                   />
@@ -2247,14 +2249,14 @@ const PurchaseOrderForm = ({ orderId }) => {
             {/* Magazyn docelowy */}
             <Grid item xs={12} md={6}>
               <FormControl fullWidth required>
-                <InputLabel>Magazyn docelowy</InputLabel>
+                <InputLabel>{t('purchaseOrders.form.targetWarehouse')}</InputLabel>
                 <Select
                   name="targetWarehouseId"
                   value={poData.targetWarehouseId}
                   onChange={handleChange}
-                  label="Magazyn docelowy"
+                  label={t('purchaseOrders.form.targetWarehouse')}
                 >
-                  <MenuItem value=""><em>Wybierz magazyn</em></MenuItem>
+                  <MenuItem value=""><em>{t('purchaseOrders.form.selectWarehouse')}</em></MenuItem>
                   {warehouses.map((warehouse) => (
                     <MenuItem key={warehouse.id} value={warehouse.id}>
                       {warehouse.name}
@@ -2267,12 +2269,12 @@ const PurchaseOrderForm = ({ orderId }) => {
             {/* Waluta */}
             <Grid item xs={12} md={3} style={{display: 'none'}}>
               <FormControl fullWidth>
-                <InputLabel>Waluta</InputLabel>
+                <InputLabel>{t('purchaseOrders.form.currency')}</InputLabel>
                 <Select
                   name="currency"
                   value={poData.currency}
                   onChange={handleChange}
-                  label="Waluta"
+                  label={t('purchaseOrders.form.currency')}
                 >
                   <MenuItem value="EUR">EUR</MenuItem>
                   <MenuItem value="PLN">PLN</MenuItem>
@@ -2285,7 +2287,7 @@ const PurchaseOrderForm = ({ orderId }) => {
             <Grid item xs={12} md={6}>
               <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                 <DatePicker
-                  label="Data zamówienia"
+                  label={t('purchaseOrders.form.orderDate')}
                   value={poData.orderDate ? new Date(poData.orderDate) : null}
                   onChange={(date) => handleDateChange('orderDate', date)}
                   slotProps={{ textField: { fullWidth: true } }}
@@ -2297,7 +2299,7 @@ const PurchaseOrderForm = ({ orderId }) => {
             <Grid item xs={12} md={6}>
               <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                 <DatePicker
-                  label="Planowana data dostawy"
+                  label={t('purchaseOrders.form.expectedDeliveryDate')}
                   value={poData.expectedDeliveryDate ? new Date(poData.expectedDeliveryDate) : null}
                   onChange={(date) => handleDateChange('expectedDeliveryDate', date)}
                   slotProps={{ textField: { fullWidth: true, required: true } }}
@@ -2309,7 +2311,7 @@ const PurchaseOrderForm = ({ orderId }) => {
             <Grid item xs={12}>
               <TextField
                 name="deliveryAddress"
-                label="Adres dostawcy"
+                label={t('purchaseOrders.form.supplierAddress')}
                 value={poData.deliveryAddress}
                 onChange={handleChange}
                 fullWidth
@@ -2321,7 +2323,7 @@ const PurchaseOrderForm = ({ orderId }) => {
               {poData.supplier && poData.supplier.addresses && poData.supplier.addresses.length > 0 && (
                 <Box sx={{ mt: 2 }}>
                   <Typography variant="subtitle2" gutterBottom>
-                    Wybierz adres dostawcy:
+                    {t('purchaseOrders.form.selectSupplierAddress')}
                   </Typography>
                   <Grid container spacing={1}>
                     {poData.supplier.addresses.map((address, idx) => (
@@ -2335,7 +2337,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                         >
                           <Box>
                             <Typography variant="body2" fontWeight="bold">
-                              {address.name} {address.isMain && '(główny)'}
+                              {address.name} {address.isMain && t('purchaseOrders.form.mainAddress')}
                             </Typography>
                             <Typography variant="body2">{formatAddress(address)}</Typography>
                           </Box>
@@ -2351,7 +2353,7 @@ const PurchaseOrderForm = ({ orderId }) => {
             <Grid item xs={12}>
               <TextField
                 name="notes"
-                label="Uwagi"
+                label={t('purchaseOrders.form.notes')}
                 value={poData.notes}
                 onChange={handleChange}
                 fullWidth
@@ -2367,7 +2369,7 @@ const PurchaseOrderForm = ({ orderId }) => {
               <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
                   <Typography variant="subtitle1">
-                    Dodatkowe koszty
+                    {t('purchaseOrders.form.additionalCosts.title')}
                   </Typography>
                 </Box>
                 <Button
@@ -2376,23 +2378,23 @@ const PurchaseOrderForm = ({ orderId }) => {
                   variant="outlined"
                   size="small"
                 >
-                  Dodaj koszt
+                  {t('purchaseOrders.form.additionalCosts.addCost')}
                 </Button>
               </Box>
               
               {poData.additionalCostsItems.length === 0 ? (
                 <Typography variant="body2" color="text.secondary" sx={{ my: 2 }}>
-                  Brak dodatkowych kosztów. Kliknij "Dodaj koszt", aby dodać opłaty jak cła, transport, ubezpieczenie itp.
+                  {t('purchaseOrders.form.additionalCosts.noCosts')}
                 </Typography>
               ) : (
                 <TableContainer component={Paper} sx={{ mb: 2 }}>
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell>Opis</TableCell>
-                        <TableCell align="right">Kwota</TableCell>
-                        <TableCell align="right">Waluta</TableCell>
-                        <TableCell align="right">VAT</TableCell>
+                        <TableCell>{t('purchaseOrders.form.additionalCosts.description')}</TableCell>
+                        <TableCell align="right">{t('purchaseOrders.form.additionalCosts.amount')}</TableCell>
+                        <TableCell align="right">{t('purchaseOrders.form.currency')}</TableCell>
+                        <TableCell align="right">{t('purchaseOrders.form.additionalCosts.vatRate')}</TableCell>
                         <TableCell width="50px"></TableCell>
                       </TableRow>
                     </TableHead>
@@ -2406,7 +2408,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                                 size="small"
                                 value={cost.description}
                                 onChange={(e) => handleAdditionalCostChange(cost.id, 'description', e.target.value)}
-                                placeholder="Np. cła, transport, ubezpieczenie"
+                                placeholder={t('purchaseOrders.form.additionalCosts.placeholder')}
                                 sx={{ minWidth: '250px' }}
                               />
                             </TableCell>
@@ -2466,7 +2468,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                             </TableCell>
                             <TableCell>
                               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                                <Tooltip title="Rozwiń dodatkowe pola">
+                                <Tooltip title={t('purchaseOrders.form.additionalCosts.expandFields')}>
                                   <IconButton 
                                     size="small" 
                                     onClick={() => {
@@ -2496,7 +2498,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                                 <Grid container spacing={2} sx={{ py: 1 }}>
                                   <Grid item xs={12} sm={4}>
                                     <Typography variant="caption" display="block" gutterBottom>
-                                      Kwota oryginalna
+                                      {t('purchaseOrders.form.additionalCosts.originalAmount')}
                                     </Typography>
                                     {cost.currency !== poData.currency ? (
                                       <Tooltip title={`Oryginalnie w ${cost.currency}`}>
@@ -2664,7 +2666,7 @@ const PurchaseOrderForm = ({ orderId }) => {
           
           {/* Pozycje zamówienia */}
           <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="h6">Pozycje zamówienia</Typography>
+            <Typography variant="h6">{t('purchaseOrders.form.orderItems.title')}</Typography>
             <Box sx={{ display: 'flex', gap: 2 }}>
               <Button
                 variant="outlined"
@@ -2672,7 +2674,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                 onClick={handleAddItem}
                 size="small"
               >
-                Dodaj pozycję
+                {t('purchaseOrders.form.orderItems.addItem')}
               </Button>
               
               <Button
@@ -2682,7 +2684,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                 onClick={fillMinimumOrderQuantities}
                 size="small"
               >
-                Uzupełnij minimalne ilości
+                {t('purchaseOrders.form.orderItems.fillMinimumQuantities')}
               </Button>
               
               <Button
@@ -2693,7 +2695,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                 disabled={loadingSupplierSuggestions}
                 size="small"
               >
-                Znajdź najlepsze ceny
+                {t('purchaseOrders.form.orderItems.findBestPrices')}
               </Button>
 
               {Object.keys(supplierSuggestions).length > 0 && (
@@ -2704,7 +2706,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                   onClick={applyBestSupplierPrices}
                   size="small"
                 >
-                  Zastosuj najlepsze ceny
+                  {t('purchaseOrders.form.orderItems.applyBestPrices')}
                 </Button>
               )}
             </Box>
@@ -2715,14 +2717,14 @@ const PurchaseOrderForm = ({ orderId }) => {
               <TableHead>
                 <TableRow>
                   {/* Podstawowe kolumny - zawsze widoczne */}
-                  <TableCell width="20%">Produkt</TableCell>
-                  <TableCell width="10%">Ilość</TableCell>
-                  <TableCell width="7%">Jedn.</TableCell>
-                  <TableCell width="15%">Cena jedn.</TableCell>
-                  <TableCell width="8%">Rabat %</TableCell>
-                  <TableCell width="7%">Waluta</TableCell>
-                  <TableCell width="5%">VAT</TableCell>
-                  <TableCell width="15%">Kwota po przew.</TableCell>
+                  <TableCell width="20%">{t('purchaseOrders.form.orderItems.product')}</TableCell>
+                  <TableCell width="10%">{t('purchaseOrders.form.orderItems.quantity')}</TableCell>
+                  <TableCell width="7%">{t('purchaseOrders.form.orderItems.unit')}</TableCell>
+                  <TableCell width="15%">{t('purchaseOrders.form.orderItems.unitPrice')}</TableCell>
+                  <TableCell width="8%">{t('purchaseOrders.form.orderItems.discount')}</TableCell>
+                  <TableCell width="7%">{t('purchaseOrders.form.currency')}</TableCell>
+                  <TableCell width="5%">{t('purchaseOrders.form.orderItems.vatRate')}</TableCell>
+                  <TableCell width="15%">{t('purchaseOrders.form.orderItems.amountAfterConversion')}</TableCell>
                   <TableCell width="5%"></TableCell>
                 </TableRow>
               </TableHead>
@@ -2740,7 +2742,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                           renderInput={(params) => (
                             <TextField
                               {...params}
-                              label="Produkt"
+                              label={t('purchaseOrders.form.orderItems.product')}
                               required
                               size="small"
                             />
@@ -2782,7 +2784,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
                           {supplierSuggestions[item.inventoryItemId]?.isDefault && (
-                            <Tooltip title="Domyślna cena dostawcy">
+                            <Tooltip title={t('purchaseOrders.form.orderItems.defaultSupplierPrice')}>
                               <StarIcon color="primary" sx={{ mr: 1 }} />
                             </Tooltip>
                           )}
@@ -3056,20 +3058,20 @@ const PurchaseOrderForm = ({ orderId }) => {
                     : 'grey.50' 
                 }}>
                   <Typography variant="h6" gutterBottom sx={{ mb: 2, fontWeight: 'bold' }}>
-                    Podsumowanie kosztów
+                    {t('purchaseOrders.form.summary.title', 'Podsumowanie kosztów')}
                   </Typography>
                   
                   {/* Sekcja produktów */}
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'medium', color: 'text.primary' }}>
-                      Wartość produktów netto: <strong>{formatNumberClean(poData.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0))} {poData.currency}</strong>
+                      {t('purchaseOrders.form.summary.itemsValue')}: <strong>{formatNumberClean(poData.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0))} {poData.currency}</strong>
                     </Typography>
                     
                     {/* Sekcja VAT dla produktów */}
                     {poData.items.length > 0 && (
                       <Box sx={{ ml: 2, mt: 1 }}>
                         <Typography variant="body2" color="text.secondary" gutterBottom>
-                          VAT od produktów:
+                          {t('purchaseOrders.form.summary.additionalCostsVat', 'VAT od produktów')}:
                         </Typography>
                         {/* Grupowanie pozycji według stawki VAT */}
                         {Array.from(new Set(poData.items.map(item => item.vatRate))).sort((a, b) => a - b).map(vatRate => {
@@ -3093,12 +3095,12 @@ const PurchaseOrderForm = ({ orderId }) => {
                   {poData.additionalCostsItems.length > 0 && (
                     <Box sx={{ mb: 2 }}>
                       <Typography variant="subtitle1" sx={{ fontWeight: 'medium', color: 'text.primary' }}>
-                        Suma dodatkowych kosztów: <strong>{formatNumberClean(poData.additionalCostsNetTotal || 0)} {poData.currency}</strong>
+                        {t('purchaseOrders.form.summary.additionalCostsNet')}: <strong>{formatNumberClean(poData.additionalCostsNetTotal || 0)} {poData.currency}</strong>
                       </Typography>
                       
                       <Box sx={{ ml: 2, mt: 1 }}>
                         <Typography variant="body2" color="text.secondary" gutterBottom>
-                          VAT od dodatkowych kosztów: <strong>{formatNumberClean(poData.additionalCostsVatTotal || 0)} {poData.currency}</strong>
+                          {t('purchaseOrders.form.summary.additionalCostsVat')}: <strong>{formatNumberClean(poData.additionalCostsVatTotal || 0)} {poData.currency}</strong>
                         </Typography>
                         {/* Grupowanie kosztów według stawki VAT */}
                         {Array.from(new Set(poData.additionalCostsItems.map(cost => cost.vatRate))).sort((a, b) => a - b).map(vatRate => {
@@ -3132,7 +3134,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                               ? theme.palette.info.light 
                               : 'info.dark' 
                           }} className="exchange-rate-info">
-                            Wartości w walutach obcych zostały przeliczone według kursów z dnia poprzedzającego datę faktury lub z dnia utworzenia PO (jeśli brak daty faktury).
+                            {t('purchaseOrders.form.summary.exchangeRateInfo')}
                           </Typography>
                         </Box>
                       )}
@@ -3145,27 +3147,27 @@ const PurchaseOrderForm = ({ orderId }) => {
                   {parseFloat(poData.globalDiscount || 0) > 0 && (
                     <Box sx={{ mb: 1 }}>
                       <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                        Wartość przed rabatem: <strong>{formatNumberClean(poData.totalGrossBeforeDiscount || 0)} {poData.currency}</strong>
+                        {t('purchaseOrders.form.summary.beforeDiscount')}: <strong>{formatNumberClean(poData.totalGrossBeforeDiscount || 0)} {poData.currency}</strong>
                       </Typography>
                     </Box>
                   )}
                   
                   <Box sx={{ mb: 1 }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'medium' }}>
-                      Wartość netto razem: <strong>{formatNumberClean(poData.totalValue || 0)} {poData.currency}</strong>
+                      {t('purchaseOrders.form.summary.netValueTotal')}: <strong>{formatNumberClean(poData.totalValue || 0)} {poData.currency}</strong>
                     </Typography>
                   </Box>
                   
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'medium' }}>
-                      Suma podatku VAT: <strong>{formatNumberClean(poData.totalVat || 0)} {poData.currency}</strong>
+                      {t('purchaseOrders.form.summary.vatTotal')}: <strong>{formatNumberClean(poData.totalVat || 0)} {poData.currency}</strong>
                     </Typography>
                   </Box>
                   
                   {/* Rabat globalny */}
                   <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'medium', minWidth: '150px' }}>
-                      Rabat globalny:
+                      {t('purchaseOrders.form.summary.globalDiscount')}:
                     </Typography>
                     <TextField
                       type="number"
@@ -3196,11 +3198,11 @@ const PurchaseOrderForm = ({ orderId }) => {
                         endAdornment: <Typography variant="body2" sx={{ color: 'text.secondary' }}>%</Typography>
                       }}
                     />
-                    {parseFloat(poData.globalDiscount || 0) > 0 && (
-                      <Typography variant="body2" sx={{ color: 'success.main', fontWeight: 'medium' }}>
-                        Oszczędność: -{formatNumberClean(poData.discountAmount || 0)} {poData.currency}
-                      </Typography>
-                    )}
+                                          {parseFloat(poData.globalDiscount || 0) > 0 && (
+                        <Typography variant="body2" sx={{ color: 'success.main', fontWeight: 'medium' }}>
+                          {t('purchaseOrders.form.summary.savings')}: -{formatNumberClean(poData.discountAmount || 0)} {poData.currency}
+                        </Typography>
+                      )}
                   </Box>
                   
                   <Box sx={{ 
@@ -3216,7 +3218,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                         ? theme.palette.primary.light 
                         : 'primary.dark' 
                     }}>
-                      Wartość brutto: <strong>{formatNumberClean(poData.totalGross || 0)} {poData.currency}</strong>
+                      {t('purchaseOrders.form.summary.grossValue')}: <strong>{formatNumberClean(poData.totalGross || 0)} {poData.currency}</strong>
                     </Typography>
                   </Box>
                 </Paper>
@@ -3230,28 +3232,28 @@ const PurchaseOrderForm = ({ orderId }) => {
           <Grid container spacing={3}>
             <Grid item xs={12}>
               <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="subtitle1">Faktury</Typography>
+                <Typography variant="subtitle1">{t('purchaseOrders.form.invoices.title')}</Typography>
                 <Button
                   startIcon={<AddIcon />}
                   onClick={handleAddInvoiceLink}
                   variant="outlined"
                   size="small"
                 >
-                  Dodaj fakturę
+                  {t('purchaseOrders.form.invoices.addInvoice')}
                 </Button>
               </Box>
               
               {!poData.invoiceLinks || poData.invoiceLinks.length === 0 ? (
                 <Typography variant="body2" color="text.secondary" sx={{ my: 2 }}>
-                  Brak faktur. Kliknij "Dodaj fakturę", aby dodać link do faktury.
+                  {t('purchaseOrders.form.invoices.noInvoices')}
                 </Typography>
               ) : (
                 <TableContainer component={Paper} sx={{ mb: 2 }}>
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell>Opis</TableCell>
-                        <TableCell>Link do faktury</TableCell>
+                        <TableCell>{t('purchaseOrders.form.invoices.description')}</TableCell>
+                        <TableCell>{t('purchaseOrders.form.invoices.link')}</TableCell>
                         <TableCell width="100px"></TableCell>
                       </TableRow>
                     </TableHead>
@@ -3264,7 +3266,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                               size="small"
                               value={invoice.description}
                               onChange={(e) => handleInvoiceLinkChange(invoice.id, 'description', e.target.value)}
-                              placeholder="Opis faktury, np. Faktura główna, Faktura transportowa itp."
+                              placeholder={t('purchaseOrders.form.invoices.descriptionPlaceholder')}
                             />
                           </TableCell>
                           <TableCell>
@@ -3273,7 +3275,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                               size="small"
                               value={invoice.url}
                               onChange={(e) => handleInvoiceLinkChange(invoice.id, 'url', e.target.value)}
-                              placeholder="https://drive.google.com/file/d/..."
+                              placeholder={t('purchaseOrders.form.invoices.linkPlaceholder')}
                             />
                           </TableCell>
                           <TableCell>
@@ -3303,7 +3305,7 @@ const PurchaseOrderForm = ({ orderId }) => {
             {/* Załączniki */}
             <Grid item xs={12}>
               <Typography variant="subtitle1" gutterBottom>
-                Załączniki
+                {t('purchaseOrders.form.attachments')}
               </Typography>
               <PurchaseOrderFileUpload
                 orderId={currentOrderId || 'temp'}
@@ -3321,7 +3323,7 @@ const PurchaseOrderForm = ({ orderId }) => {
               disabled={saving}
               sx={{ mr: 2 }}
             >
-              Anuluj
+              {t('purchaseOrders.form.actions.cancel')}
             </Button>
             <Button
               type="submit"
@@ -3329,7 +3331,7 @@ const PurchaseOrderForm = ({ orderId }) => {
               color="primary"
               disabled={saving}
             >
-              {saving ? 'Zapisywanie...' : 'Zapisz'}
+              {saving ? t('purchaseOrders.form.actions.saving') : t('purchaseOrders.form.actions.save')}
             </Button>
           </Box>
         </form>

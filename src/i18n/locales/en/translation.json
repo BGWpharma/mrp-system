@@ -1,0 +1,931 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "close": "Close",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "search": "Search",
+    "filter": "Filter",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "warning": "Warning",
+    "info": "Information",
+    "yes": "Yes",
+    "no": "No",
+    "confirm": "Confirm",
+    "update": "Update",
+    "actions": "Actions",
+    "status": "Status",
+    "date": "Date",
+    "name": "Name",
+    "description": "Description",
+    "type": "Type",
+    "category": "Category",
+    "quantity": "Quantity",
+    "price": "Price",
+    "total": "Total",
+    "language": "Language"
+  },
+  "navigation": {
+    "dashboard": "Dashboard",
+    "inventory": "Inventory",
+    "production": "Production",
+    "orders": "Orders",
+    "customers": "Customers",
+    "recipes": "Recipes",
+    "quality": "Quality",
+    "reports": "Reports",
+    "settings": "Settings",
+    "logout": "Logout"
+  },
+  "sidebar": {
+    "aiAssistant": "AI Assistant",
+    "dashboard": "Dashboard",
+    "hallData": "Hall Parameters",
+    "sales": "Sales",
+    "production": "Production",
+    "inventory": "Inventory",
+    "reportBug": "Report Bug",
+    "submenu": {
+      "dashboard": {
+        "main": "Main",
+        "analytics": "Analytics"
+      },
+      "hallData": {
+        "environmentalConditions": "Environmental Conditions",
+        "machines": "Machines"
+      },
+      "sales": {
+        "invoices": "Invoices",
+        "customers": "Customers",
+        "priceLists": "Price Lists",
+        "newProductionTask": "New Production Task",
+        "coReports": "CO Reports",
+        "customerOrders": "Customer Orders"
+      },
+      "production": {
+        "forms": "Forms",
+        "calculator": "Calculator",
+        "forecast": "Forecast",
+        "productionTasks": "Production Tasks",
+        "recipes": "Recipes",
+        "timeline": "Timeline"
+      },
+      "inventory": {
+        "cmr": "CMR",
+        "suppliers": "Suppliers",
+        "forms": "Forms",
+        "purchaseInteractions": "Purchase Interactions",
+        "stocktaking": "Stocktaking",
+        "status": "Stock",
+        "expiryDates": "Expiry Dates",
+        "componentOrders": "Component Orders"
+      }
+    }
+  },
+  "auth": {
+    "login": "Sign In",
+    "register": "Sign Up",
+    "email": "Email",
+    "password": "Password",
+    "forgotPassword": "Forgot password?",
+    "loginButton": "Login",
+    "registerButton": "Register",
+    "loginSuccess": "Logged in successfully",
+    "loginError": "Login error",
+    "logoutSuccess": "Logged out successfully"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome, {{name}}",
+    "overview": "Overview",
+    "recentActivity": "Recent Activity",
+    "quickActions": "Quick Actions",
+    "refreshAll": "Refresh All",
+    "refreshing": "Refreshing...",
+    "refresh": "Refresh",
+    "announcements": "Announcements",
+    "editAnnouncement": "Edit Announcement",
+    "loadingAnnouncements": "Loading announcements...",
+    "announcementPlaceholder": "Enter announcement content for all users...",
+    "announcementHelper": "Press Ctrl+Enter to confirm",
+    "save": "Save",
+    "cancel": "Cancel",
+    "noAnnouncements": "No announcements. Click the edit icon to add an announcement.",
+    "lastUpdate": "Last updated: {{date}}{{author}}",
+    "by": " by {{name}}",
+    "cards": {
+      "recipes": {
+        "title": "Recipes",
+        "description": "Manage recipes and ingredients",
+        "goTo": "Go"
+      },
+      "production": {
+        "title": "Production",
+        "description": "Plan and manage production",
+        "activeTasks": "{{count}} active tasks",
+        "goTo": "Go"
+      },
+      "inventory": {
+        "title": "Inventory",
+        "description": "Manage inventory levels",
+        "goTo": "Go"
+      },
+      "quality": {
+        "title": "Quality",
+        "description": "Product quality control",
+        "goTo": "Go"
+      },
+             "orders": {
+         "title": "Customer Orders",
+         "description": "Manage customer orders",
+         "ordersCount": "{{count}} orders ({{value}})",
+         "recentOrders": "Recent orders:"
+       },
+       "forms": {
+         "title": "Forms",
+         "subtitle": "Production forms",
+         "description": "Manage production forms",
+         "goTo": "Go"
+       }
+    },
+    "production": {
+      "tasksInProgress": "Production Tasks in Progress",
+      "seeAll": "See All",
+      "inProgress": "In Progress",
+      "completed": "Completed",
+      "orders": "Orders"
+    },
+    "analytics": {
+      "title": "Analytics",
+      "description": "Check detailed system analytics in a new, simplified view. Monitor key indicators for inventory, production, and orders.",
+      "availableStats": "Available statistics:",
+      "ordersAndSales": "Orders and sales",
+      "inventoryLevels": "Inventory levels",
+      "productionTasks": "Production tasks",
+      "goTo": "Go"
+    },
+    "statuses": {
+      "new": "New",
+      "inProgress": "In Progress",
+      "readyToShip": "Ready to Ship",
+      "shipped": "Shipped",
+      "delivered": "Delivered",
+      "cancelled": "Cancelled"
+    }
+  },
+  "analytics": {
+    "title": "Analytics",
+    "subtitle": "Overview of key system performance indicators",
+    "lastUpdate": "Last update",
+    "refreshData": "Refresh data",
+    "refreshing": "Refreshing...",
+    "refresh": "Refresh",
+    "cacheExpired": " (cache expired)",
+    "tabs": {
+      "statistics": "Statistics",
+      "charts": "Charts"
+    },
+    "cards": {
+      "sales": {
+        "title": "Sales",
+        "orders": "Orders",
+        "inProgress": "In Progress"
+      },
+      "inventory": {
+        "title": "Inventory",
+        "totalValue": "Total value"
+      },
+      "production": {
+        "title": "Production",
+        "completedTasks": "Completed tasks"
+      }
+    },
+    "sections": {
+      "recentOrders": {
+        "title": "Recent orders (CO)",
+        "noData": "No customer order data",
+        "orderPrefix": "Order"
+      },
+      "activeTasks": {
+        "title": "Active production tasks",
+        "noData": "No active production tasks",
+        "inProgress": "In progress"
+      },
+      "purchaseOrders": {
+        "title": "Purchase orders (PO)",
+        "noData": "No purchase order data"
+      }
+    },
+    "status": {
+      "noStatus": "No status"
+    }
+  },
+  "environmentalConditions": {
+    "title": "Environmental Conditions",
+    "sensor": "Sensor",
+    "timeRange": "Time Range",
+    "view": "View",
+    "refreshData": "Refresh data",
+    "temperature": "Temperature",
+    "humidity": "Humidity",
+    "dataRange": "Data Range",
+    "chartHistory": "Reading History",
+    "lastReading": "Last reading",
+    "noHistoricalData": "No historical data",
+    "startDate": "Start date",
+    "endDate": "End date",
+    "timeRanges": {
+      "lastHour": "Last hour",
+      "last6Hours": "Last 6 hours",
+      "last12Hours": "Last 12 hours",
+      "today": "Today",
+      "lastDay": "Last day",
+      "lastWeek": "Last week",
+      "lastMonth": "Last month",
+      "custom": "Custom"
+    },
+    "chartTypes": {
+      "line": "Line",
+      "area": "Area"
+    },
+    "errors": {
+      "permissionDenied": "No Firebase database permissions",
+      "permissionDeniedDescription": "Detected \"permission_denied\" error when accessing Realtime Database data.",
+      "troubleshooting": "To solve this problem:",
+      "loginToConsole": "Log in to Firebase console:",
+      "selectProject": "Select project \"bgw-mrp-system\"",
+      "goToRealtimeDb": "Go to \"Realtime Database\" section",
+      "clickRulesTab": "Click \"Rules\" tab",
+      "changeRules": "Change rules to allow data reading (for testing you can set public access):",
+      "productionWarning": "In production environment, more strict security rules are recommended.",
+      "noSensorData": "No sensor data in Firebase database. Make sure that:",
+      "checkRealtimeDb": "You have configured Firebase Realtime Database",
+      "checkDataStructure": "Data is saved in sensors/{device_id} structure",
+      "checkHistoryStructure": "Historical data is saved in history/{device_id}",
+      "exampleDataStructure": "Example data structure:"
+    }
+  },
+  "machines": {
+    "title": "Machines - monitoring",
+    "refreshData": "Refresh data",
+    "availableMachines": "Available machines",
+    "noAvailableMachines": "No available machines",
+    "lastMeasurement": "Last measurement",
+    "selectMachine": "Select a machine to see details",
+    "machineNotFound": "No data found for selected machine",
+    "unidentifiedMachine": "Unidentified machine",
+    "tabs": {
+      "details": "Details",
+      "history": "History"
+    },
+    "status": {
+      "ok": "OK",
+      "errors": "Errors",
+      "noData": "No data"
+    },
+    "fields": {
+      "duration": "Duration",
+      "totalReadings": "Total readings",
+      "nonEmptyReadings": "Non-empty readings",
+      "uniqueProducts": "Unique products",
+      "startTime": "Start time",
+      "endTime": "End time",
+      "time": "Time",
+      "readings": "Readings",
+      "averageWeight": "Average product weight",
+      "okNokProducts": "OK/NOK products",
+      "status": "Status"
+    },
+    "weightStats": {
+      "title": "Weight statistics",
+      "averageWeight": "Average weight",
+      "minWeight": "Min. weight",
+      "maxWeight": "Max. weight",
+      "median": "Median",
+      "stdDev": "Std. deviation",
+      "count": "Count",
+      "rawReadings": "Raw weight readings",
+      "productInfo": "Product information (weight)",
+      "okReadings": "OK",
+      "nokReadings": "NOK",
+      "readings": "readings",
+      "products": "products"
+    },
+    "history": {
+      "filterByDate": "Filter by date",
+      "selectDate": "Select date",
+      "reset": "Reset",
+      "filter": "Filter",
+      "date": "Date",
+      "noData": "No historical data for this machine",
+      "noDataForDate": "No historical data for {{date}}",
+      "tableLabel": "history table"
+    },
+    "formats": {
+      "noData": "No data",
+      "invalidDate": "Invalid date",
+      "grams": "g",
+      "hours": "h",
+      "minutes": "min"
+    },
+    "permissions": {
+      "denied": "No permissions to read data from database. Contact system administrator."
+    },
+    "errors": {
+      "loadingError": "An error occurred while loading historical data"
+    }
+  },
+  "purchaseOrders": {
+    "title": "Component Orders",
+    "detailsTitle": "Component Order Details",
+    "newOrder": "New order",
+    "editOrder": "Edit order",
+    "deleteOrder": "Delete order",
+    "backToList": "Back to list",
+    "downloadPdf": "Download PDF",
+    "receiveGoods": "Receive goods",
+    "orderData": "Order data",
+    "additionalCosts": "Additional costs",
+    "itemsInOrder": "Items in order",
+    "noOrdersFound": "No purchase orders found",
+    "loadingOrders": "Loading orders...",
+    "orderSaved": "Purchase order has been saved!",
+    "orderDeleted": "Order has been deleted",
+    "statusUpdated": "Order status has been updated",
+    "paymentStatusUpdated": "Payment status has been updated",
+    "selectSupplier": "Select supplier",
+    "table": {
+      "number": "Number",
+      "supplier": "Supplier",
+      "status": "Status",
+      "paymentStatus": "Payment Status",
+      "orderDate": "Order Date",
+      "totalValue": "Total Value",
+      "actions": "Actions"
+    },
+    "filters": {
+      "search": "Search orders...",
+      "status": "Status",
+      "all": "All",
+      "clear": "Clear",
+      "refresh": "Refresh"
+    },
+    "actions": {
+      "view": "View",
+      "edit": "Edit",
+      "delete": "Delete",
+      "updateStatus": "Update status",
+      "updatePaymentStatus": "Update payment status"
+    },
+    "dialogs": {
+      "deleteConfirm": {
+        "title": "Delete Confirmation",
+        "message": "Are you sure you want to delete this purchase order?",
+        "warning": "This operation is irreversible."
+      },
+      "statusUpdate": {
+        "title": "Update Order Status",
+        "newStatus": "New status"
+      },
+      "paymentStatusUpdate": {
+        "title": "Update Payment Status",
+        "newPaymentStatus": "New payment status"
+      }
+    },
+    "statuses": {
+      "new": "New",
+      "pending": "Pending",
+      "confirmed": "Confirmed",
+      "shipped": "Shipped",
+      "delivered": "Delivered",
+      "cancelled": "Cancelled"
+    },
+    "paymentStatuses": {
+      "unpaid": "Unpaid",
+      "partiallyPaid": "Partially Paid",
+      "paid": "Paid",
+      "overdue": "Overdue"
+    },
+    "form": {
+      "createTitle": "Create Purchase Order",
+      "editTitle": "Edit Purchase Order",
+      "loadingData": "Loading order data...",
+      "poNumber": "PO Number: {{number}}",
+      "supplier": "Supplier",
+      "targetWarehouse": "Target warehouse",
+      "selectWarehouse": "Select warehouse",
+      "currency": "Currency",
+      "orderDate": "Order date",
+      "expectedDeliveryDate": "Expected delivery date",
+      "supplierAddress": "Supplier address",
+      "selectSupplierAddress": "Select supplier address:",
+      "mainAddress": "(main)",
+      "notes": "Notes",
+      "additionalCosts": {
+        "title": "Additional costs",
+        "addCost": "Add cost",
+        "description": "Description",
+        "amount": "Amount",
+        "vatRate": "VAT",
+        "noCosts": "No additional costs. Click \"Add cost\" to add fees like customs, transport, insurance etc.",
+        "placeholder": "E.g. customs, transport, insurance",
+        "originalAmount": "Original amount",
+        "exchangeRate": "Exchange rate",
+        "amountInOrderCurrency": "Amount in PO currency",
+        "expandFields": "Expand additional fields"
+      },
+      "orderItems": {
+        "title": "Order items",
+        "addItem": "Add item",
+        "fillMinimumQuantities": "Fill minimum quantities",
+        "findBestPrices": "Find best prices",
+        "applyBestPrices": "Apply best prices",
+        "product": "Product",
+        "quantity": "Quantity",
+        "unit": "Unit",
+        "unitPrice": "Unit price",
+        "discount": "Discount %",
+        "vatRate": "VAT",
+        "amountAfterConversion": "Amount after conversion",
+        "defaultSupplierPrice": "Default supplier price"
+      },
+      "summary": {
+        "itemsValue": "Items value",
+        "additionalCostsNet": "Additional costs net",
+        "additionalCostsVat": "VAT from additional costs",
+        "vatRateBreakdown": "Rate {{rate}}%",
+        "beforeDiscount": "Value before discount",
+        "netValueTotal": "Net value total",
+        "vatTotal": "VAT total",
+        "globalDiscount": "Global discount",
+        "savings": "Savings",
+        "grossValue": "Gross value",
+        "exchangeRateInfo": "Values in foreign currencies were converted using exchange rates from the day preceding the invoice date or from the PO creation date (if no invoice date)."
+      },
+      "invoices": {
+        "title": "Invoices",
+        "addInvoice": "Add invoice",
+        "description": "Description",
+        "link": "Invoice link",
+        "noInvoices": "No invoices. Click \"Add invoice\" to add a link to an invoice.",
+        "descriptionPlaceholder": "Invoice description, e.g. Main invoice, Transport invoice etc.",
+        "linkPlaceholder": "https://drive.google.com/file/d/..."
+      },
+      "attachments": "Attachments",
+      "actions": {
+        "cancel": "Cancel",
+        "save": "Save",
+        "saving": "Saving..."
+      }
+    },
+    "editPage": {
+      "orderData": "Order data",
+      "additionalCosts": "Additional costs",
+      "orderItems": "Order items",
+      "receiveItems": "Receive items"
+    },
+    "errors": {
+      "loadFailed": "Failed to load purchase orders list",
+      "saveFailed": "Failed to save order",
+      "deleteFailed": "Failed to delete order",
+      "statusUpdateFailed": "Failed to update status",
+      "productNotLinked": "This product is not linked to an inventory item"
+    },
+    "details": {
+      "orderNumber": "Order {{number}}",
+      "orderDate": "Order date",
+      "expectedDeliveryDate": "Expected delivery date",
+      "deliveryDate": "Delivery date",
+      "invoice": "Invoice",
+      "invoices": "Invoices",
+      "viewInvoice": "View invoice",
+      "supplier": "Supplier",
+      "noSupplierData": "No supplier data",
+      "statusHistory": "Status change history",
+      "orderElements": "Order elements",
+      "additionalCostsDetails": "Additional costs",
+      "relatedBatches": "Related batches",
+      "unloadingReports": "Unloading reports",
+      "deleteOrder": "Delete order",
+      "receive": "Receive",
+      "notInReport": "Not in report",
+      "itemReportedInUnloading": "Item has been reported in unloading report - can receive goods",
+      "itemNotReportedInUnloading": "Item has not been reported in unloading report - cannot receive goods",
+      "batchesAssignedToItem": "Batches (LOT) assigned to this item",
+      "noData": "Not specified",
+      "noAddress": "No address",
+      "dateReadError": "Date read error",
+      "invalidDate": "Invalid date value",
+      "noPdfData": "No order data available to generate PDF",
+      "table": {
+        "productName": "Product name",
+        "quantity": "Quantity",
+        "unit": "Unit",
+        "unitPrice": "Unit price",
+        "netValue": "Net value",
+        "originalAmount": "Original amount",
+        "plannedDeliveryDate": "Planned delivery date",
+        "actualDeliveryDate": "Actual delivery date",
+        "received": "Received",
+        "dateTime": "Date and time",
+        "previousStatus": "Previous status",
+        "newStatus": "New status",
+        "changedBy": "Changed by",
+        "batchNumber": "Batch number",
+        "expiryDate": "Expiry date",
+        "warehouse": "Warehouse",
+        "location": "Location",
+        "details": "Details",
+        "actions": "Actions",
+        "notes": "Notes"
+      },
+      "summary": {
+        "netValue": "Total net value",
+        "totalVAT": "Total VAT",
+        "grossValue": "Gross value",
+        "productsNetValue": "Products net value",
+        "vatFromProducts": "VAT from products",
+        "vatRate": "Rate {{rate}}%",
+        "from": "from"
+      },
+      "batches": {
+        "allRelatedBatches": "All batches (LOT) related to order",
+        "lotNumber": "LOT number",
+        "product": "Product",
+        "receivedDate": "Received date",
+        "value": "Value",
+        "noLotNumber": "No number",
+        "unknownProduct": "Unknown product",
+        "mainWarehouse": "Main warehouse",
+        "unknownDate": "Unknown date",
+        "noBatchesAssigned": "No batches assigned to this item",
+        "received": "Received"
+      }
+    }
+  },
+  "cmr": {
+    "title": "CMR Documents",
+    "newDocument": "New CMR document",
+    "generateReport": "Generate report",
+    "noDocuments": "No CMR documents in system. Click \"New CMR document\" to add the first one.",
+    "sorting": {
+      "oldestToNewest": "from oldest to newest",
+      "newestToOldest": "from newest to oldest",
+      "sortBy": "Sort",
+      "byIssueDate": "issue date"
+    },
+    "table": {
+      "cmrNumber": "CMR Number",
+      "issueDate": "Issue Date",
+      "sender": "Sender",
+      "recipient": "Recipient",
+      "status": "Status",
+      "paymentStatus": "Payment Status",
+      "actions": "Actions"
+    },
+    "actions": {
+      "view": "View",
+      "edit": "Edit",
+      "delete": "Delete"
+    },
+    "dialogs": {
+      "deleteConfirmation": "Delete Confirmation",
+      "deleteMessage": "Are you sure you want to delete CMR document {{cmrNumber}}? This operation is irreversible.",
+      "cancel": "Cancel",
+      "delete": "Delete",
+      "close": "Close",
+      "changePaymentStatus": "Change Payment Status",
+      "selectNewPaymentStatus": "Select new payment status for CMR document:",
+      "update": "Update"
+    },
+    "report": {
+      "title": "CMR Report",
+      "generate": "Generate CMR Documents Report",
+      "results": "Report Results",
+      "generating": "Generate Report",
+      "exportToCsv": "Export to CSV",
+      "fields": {
+        "cmrNumber": "CMR Number",
+        "issueDate": "Issue Date",
+        "sender": "Sender",
+        "recipient": "Recipient",
+        "loadingPlace": "Loading Place",
+        "deliveryPlace": "Delivery Place",
+        "status": "Status"
+      },
+      "items": {
+        "id": "No.",
+        "description": "Item Description",
+        "quantity": "Quantity",
+        "unit": "Unit",
+        "weight": "Weight (kg)",
+        "volume": "Volume (m³)"
+      },
+      "summary": {
+        "title": "Summary",
+        "totalDocuments": "Total Documents",
+        "reportPeriod": "Report Period",
+        "includeItems": "Items Included",
+        "statusStatistics": "Status Statistics",
+        "documentCount": "Document Count",
+        "documentsInReport": "Documents in Report"
+      },
+      "common": {
+        "yes": "Yes",
+        "no": "No",
+        "by": "by"
+      }
+    },
+    "statuses": {
+      "draft": "Draft",
+      "issued": "Issued",
+      "inTransit": "In Transit",
+      "delivered": "Delivered",
+      "completed": "Completed",
+      "canceled": "Canceled"
+    },
+    "paymentStatuses": {
+      "unpaid": "Unpaid",
+      "paid": "Paid"
+    }
+  },
+  "suppliers": {
+    "title": "Suppliers",
+    "newSupplier": "New Supplier",
+    "editSupplier": "Edit Supplier",
+    "supplierDetails": "Supplier Details",
+    "loading": "Loading suppliers...",
+    "search": "Search",
+    "noResultsFound": "No suppliers match the search criteria",
+    "noAddress": "No address",
+    "table": {
+      "name": "Name",
+      "contactPerson": "Contact person",
+      "email": "Email",
+      "phone": "Phone",
+      "address": "Address",
+      "actions": "Actions"
+    },
+    "actions": {
+      "view": "View",
+      "edit": "Edit",
+      "delete": "Delete",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving...",
+      "add": "Add",
+      "back": "Back to list"
+    },
+    "confirmDelete": {
+      "title": "Confirm deletion",
+      "message": "Are you sure you want to delete supplier {{name}}? This operation cannot be undone.",
+      "confirm": "Delete",
+      "cancel": "Cancel"
+    },
+    "form": {
+      "basicInfo": "Basic information",
+      "name": "Company name",
+      "contactPerson": "Contact person",
+      "email": "Email",
+      "phone": "Phone",
+      "taxId": "Tax ID",
+      "vatEu": "VAT EU",
+      "notes": "Notes",
+      "verifyNip": "Verify Tax ID",
+      "verifying": "Verifying...",
+      "nipFormat": "Format: 0000000000 (without dashes)",
+      "loadingData": "Loading supplier data...",
+      "addresses": {
+        "title": "Addresses",
+        "addAddress": "Add address",
+        "editAddress": "Edit address",
+        "addNewAddress": "Add new address",
+        "noAddresses": "No addresses",
+        "name": "Address name",
+        "street": "Street and number",
+        "city": "City",
+        "postalCode": "Postal code",
+        "country": "Country",
+        "isMain": "Main address",
+        "mainAddress": "Main",
+        "confirmDelete": "Are you sure you want to delete this address?"
+      },
+      "validation": {
+        "nameRequired": "Company name is required",
+        "fillAllAddressFields": "Fill in all required address fields",
+        "enterNipToVerify": "Enter Tax ID number to verify",
+        "invalidNipFormat": "Invalid Tax ID format",
+        "nipNotFound": "No company found with the given Tax ID",
+        "nipVerificationError": "An error occurred while verifying Tax ID"
+      }
+    },
+    "notifications": {
+      "deleted": "Supplier has been deleted",
+      "deleteFailed": "Failed to delete supplier",
+      "updated": "Supplier has been updated",
+      "created": "Supplier has been created",
+      "saveFailed": "Failed to save supplier",
+      "loadFailed": "Failed to load suppliers list",
+      "dataLoadFailed": "Failed to load supplier data",
+      "nipVerified": "Successfully verified Tax ID and updated data"
+    }
+  },
+  "expiryDates": {
+    "title": "Product Expiry Dates",
+    "backToInventory": "Back",
+    "loading": "Loading...",
+    "expiredProducts": {
+      "title": "Expired Products",
+      "alertMessage": "There {{count, plural, one {is} other {are}}} {{count}} expired {{count, plural, one {batch} other {batches}}} in the warehouse."
+    },
+    "thresholdSettings": {
+      "label": "Days threshold for expiry",
+      "description": "Shows products expiring within {{days}} days"
+    },
+    "search": {
+      "label": "Search",
+      "clear": "Clear"
+    },
+    "tabs": {
+      "expiring": "Expiring Soon ({{count}})",
+      "expired": "Expired ({{count}})"
+    },
+    "table": {
+      "headers": {
+        "product": "Product",
+        "batchNumber": "Batch Number",
+        "expiryDate": "Expiry Date",
+        "status": "Status",
+        "quantity": "Quantity",
+        "actions": "Actions"
+      },
+      "noData": "-",
+      "actions": {
+        "manageBatches": "Manage Batches",
+        "dispose": "Dispose"
+      }
+    },
+    "status": {
+      "noDate": "No Date",
+      "expired": "Expired",
+      "expiringSoon": "Expiring Soon",
+      "current": "Current"
+    },
+    "noResults": {
+      "expiring": {
+        "withSearch": "No search results for products expiring soon.",
+        "withoutSearch": "No products expiring soon."
+      },
+      "expired": {
+        "withSearch": "No search results for expired products.",
+        "withoutSearch": "No expired products."
+      }
+    },
+    "errors": {
+      "fetchData": "Error loading data: {{message}}"
+    }
+  },
+  "purchaseInteractions": {
+    "title": "Purchase Interactions",
+    "newInteraction": "New Interaction",
+    "editInteraction": "Edit Interaction",
+    "interactionDetails": "Interaction Details",
+    "backToList": "Back to List",
+    "loading": "Loading...",
+    "search": {
+      "placeholder": "Search interactions...",
+      "clear": "Clear search"
+    },
+    "summary": {
+      "total": "Total: {{count}} interactions"
+    },
+    "table": {
+      "headers": {
+        "type": "Type",
+        "subject": "Subject",
+        "date": "Date",
+        "supplier": "Supplier",
+        "phone": "Phone",
+        "email": "Email",
+        "address": "Address",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "noData": "No data",
+      "clickForDetails": "Click to view details"
+    },
+    "actions": {
+      "view": "View",
+      "edit": "Edit",
+      "delete": "Delete",
+      "changeStatus": "Change Status",
+      "cancel": "Cancel",
+      "save": "Save",
+      "update": "Update"
+    },
+    "form": {
+      "selectSupplier": "Select supplier",
+      "supplierRequired": "Supplier is required",
+      "type": "Interaction type",
+      "typeRequired": "Interaction type is required",
+      "subject": "Subject",
+      "subjectRequired": "Subject is required",
+      "subjectPlaceholder": "Enter interaction subject",
+      "date": "Date and time",
+      "dateRequired": "Date is required",
+      "status": "Status",
+      "statusRequired": "Status is required",
+      "notes": "Notes",
+      "notesPlaceholder": "Additional information about the interaction",
+      "validation": {
+        "supplierRequired": "Select a supplier",
+        "typeRequired": "Select interaction type",
+        "subjectRequired": "Enter interaction subject",
+        "dateRequired": "Select date and time"
+      }
+    },
+    "types": {
+      "call": "Phone Call",
+      "email": "Email",
+      "meeting": "Meeting",
+      "note": "Note"
+    },
+    "statuses": {
+      "planned": "Planned",
+      "inProgress": "In Progress",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "details": {
+      "basicInfo": "Basic Information",
+      "supplier": "Supplier",
+      "contact": "Contact",
+      "unknownSupplier": "Unknown supplier",
+      "noName": "No name",
+      "phone": "Phone",
+      "email": "Email",
+      "address": "Address",
+      "noAddress": "No address",
+      "interactionInfo": "Interaction Information",
+      "type": "Type",
+      "subject": "Subject",
+      "dateTime": "Date and time",
+      "status": "Status",
+      "notes": "Notes",
+      "noNotes": "No notes",
+      "metadata": "Metadata",
+      "createdBy": "Created by",
+      "createdAt": "Created at",
+      "updatedBy": "Updated by",
+      "updatedAt": "Updated at",
+      "history": "History",
+      "relatedInteractions": "Related interactions"
+    },
+    "dialogs": {
+      "deleteConfirm": {
+        "title": "Delete Confirmation",
+        "message": "Are you sure you want to delete this interaction? This operation is irreversible.",
+        "confirm": "Delete",
+        "cancel": "Cancel"
+      },
+      "statusChange": {
+        "title": "Change Interaction Status",
+        "newStatus": "New status",
+        "selectStatus": "Select new status"
+      },
+      "details": {
+        "title": "Interaction Details",
+        "close": "Close"
+      }
+    },
+    "notifications": {
+      "created": "Interaction has been created",
+      "updated": "Interaction has been updated",
+      "deleted": "Interaction has been deleted",
+      "statusUpdated": "Interaction status has been updated",
+      "createFailed": "Failed to create interaction",
+      "updateFailed": "Failed to update interaction",
+      "deleteFailed": "Failed to delete interaction",
+      "loadFailed": "Failed to load interactions",
+      "loadSuppliersFailed": "Failed to load suppliers list",
+      "loadSupplierFailed": "Failed to load supplier data",
+      "statusUpdateFailed": "Failed to update status"
+    },
+    "pagination": {
+      "rowsPerPage": "Rows per page:",
+      "of": "of"
+    },
+    "noResults": {
+      "title": "No interactions",
+      "description": "No interactions found matching the criteria.",
+      "createFirst": "Click \"New Interaction\" to create the first interaction."
+    }
+  }
+} 

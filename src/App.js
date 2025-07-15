@@ -15,6 +15,9 @@ import { ref, onValue } from 'firebase/database';
 // Inicjujemy przechwytywanie logów konsoli
 import './services/logsCaptureService';
 
+// Inicjalizacja i18next
+import './i18n';
+
 // Pages
 import Login from './pages/Auth/Login';
 import Register from './pages/Auth/Register';
