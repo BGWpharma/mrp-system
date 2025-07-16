@@ -46,6 +46,7 @@ import { getRecipeById, getRecipeVersions, getRecipeVersion, restoreRecipeVersio
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
 import { useAuth } from '../../hooks/useAuth';
+import { useTranslation } from '../../hooks/useTranslation';
 import RecipeVersionComparison from '../../components/recipes/RecipeVersionComparison';
 import { createInventoryItem, getAllInventoryItems, getInventoryItemByRecipeId } from '../../services/inventoryService';
 import { db } from '../../services/firebase/config';
@@ -79,6 +80,7 @@ const RecipeDetailsPage = () => {
   const navigate = useNavigate();
   const { showError, showSuccess, showWarning, showInfo } = useNotification();
   const { currentUser } = useAuth();
+  const { t } = useTranslation();
   const [recipe, setRecipe] = useState(null);
   const [versions, setVersions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -210,12 +212,12 @@ const RecipeDetailsPage = () => {
       const versionsData = await getRecipeVersions(id);
       setVersions(versionsData);
       
-      showSuccess(`Przywrócono recepturę do wersji ${versionToRestore.version}`);
+      showSuccess(t('recipes.details.messages.versionRestored', { version: versionToRestore.version }));
       setRestoreDialogOpen(false);
       setVersionToRestore(null);
       setSelectedVersions([]);
     } catch (error) {
-      showError('Błąd podczas przywracania wersji: ' + error.message);
+      showError(t('recipes.details.messages.restoreError', { error: error.message }));
       console.error('Error restoring version:', error);
     } finally {
       setRestoringVersion(false);
@@ -301,17 +303,17 @@ const RecipeDetailsPage = () => {
       link.click();
       document.body.removeChild(link);
 
-      showSuccess('Recipe exported to CSV successfully');
+      showSuccess(t('recipes.details.messages.exportSuccess'));
     } catch (error) {
       console.error('Error exporting recipe to CSV:', error);
-      showError('Failed to export recipe to CSV');
+      showError(t('recipes.details.messages.exportError'));
     }
   };
 
   // Funkcja do linkowania składników receptury z magazynem
   const linkIngredientsWithInventory = async (resetLinks = false) => {
     if (!recipe || !recipe.ingredients || recipe.ingredients.length === 0) {
-      showWarning('Receptura nie zawiera składników do powiązania');
+      showWarning(t('recipes.details.messages.noIngredientsToLink'));
       return;
     }
     
@@ -340,7 +342,7 @@ const RecipeDetailsPage = () => {
         });
         
         if (resetCount > 0) {
-          showInfo(`Usunięto powiązania dla ${resetCount} składników`);
+          showInfo(t('recipes.details.messages.linksReset', { count: resetCount }));
           
           // Zaktualizuj recepturę w stanie lokalnym i w bazie danych
           const updatedRecipe = {
@@ -388,19 +390,19 @@ const RecipeDetailsPage = () => {
         // Zapisz zmiany w bazie danych
         await updateRecipe(id, updatedRecipe, currentUser.uid);
         
-        showSuccess(`Powiązano ${linkedCount} składników z magazynem`);
+        showSuccess(t('recipes.details.messages.ingredientsLinked', { count: linkedCount }));
       }
       
       if (notFoundCount > 0) {
-        showWarning(`Dla ${notFoundCount} składników nie znaleziono odpowiedników w magazynie`);
+        showWarning(t('recipes.details.messages.ingredientsNotFound', { count: notFoundCount }));
       }
       
       if (linkedCount === 0 && notFoundCount === 0 && !resetLinks) {
-        showInfo('Wszystkie składniki są już powiązane z magazynem lub nie można znaleźć dopasowań');
+        showInfo(t('recipes.details.messages.allLinked'));
       }
       
     } catch (error) {
-      showError('Błąd podczas linkowania składników: ' + error.message);
+      showError(t('recipes.details.messages.linkError', { error: error.message }));
       console.error('Error linking ingredients:', error);
     } finally {
       setLinking(false);
@@ -408,13 +410,13 @@ const RecipeDetailsPage = () => {
   };
 
   if (loading) {
-    return <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>Ładowanie receptury...</Container>;
+    return <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>{t('recipes.details.loading')}</Container>;
   }
 
   if (!recipe) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Typography variant="h5">Receptura nie została znaleziona</Typography>
+        <Typography variant="h5">{t('recipes.details.notFound')}</Typography>
         <Button 
           variant="contained" 
           component={Link} 
@@ -422,7 +424,7 @@ const RecipeDetailsPage = () => {
           startIcon={<ArrowBackIcon />}
           sx={{ mt: 2 }}
         >
-          Powrót do listy receptur
+          {t('recipes.details.backToList')}
         </Button>
       </Container>
     );
@@ -436,10 +438,10 @@ const RecipeDetailsPage = () => {
           onClick={() => navigate('/recipes')}
           sx={{ mb: { xs: 2, sm: 0 } }}
         >
-          Powrót
+          {t('recipes.details.back')}
         </Button>
         <Typography variant="h5" sx={{ mb: { xs: 2, sm: 0 } }}>
-          Szczegóły receptury
+          {t('recipes.details.title')}
         </Typography>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: 'center' }}>
           <Button 
@@ -447,14 +449,14 @@ const RecipeDetailsPage = () => {
             startIcon={<PrintIcon />}
             onClick={() => window.print()}
           >
-            Drukuj
+            {t('recipes.details.print')}
           </Button>
           <Button 
             variant="outlined" 
             startIcon={<DownloadIcon />}
             onClick={handleExportCSV}
           >
-            Export CSV
+            {t('recipes.details.exportCSV')}
           </Button>
           <Button 
             variant="contained" 
@@ -463,7 +465,7 @@ const RecipeDetailsPage = () => {
             to={`/recipes/${id}/edit`}
             startIcon={<EditIcon />}
           >
-            Edytuj
+            {t('recipes.details.edit')}
           </Button>
           
           <Button
@@ -472,7 +474,7 @@ const RecipeDetailsPage = () => {
             onClick={() => linkIngredientsWithInventory(false)}
             disabled={linking}
           >
-            {linking ? 'Powiązywanie...' : 'Powiąż składniki'}
+            {linking ? t('recipes.details.linking') : t('recipes.details.linkIngredients')}
           </Button>
           
           <Button
@@ -481,7 +483,7 @@ const RecipeDetailsPage = () => {
             onClick={() => linkIngredientsWithInventory(true)}
             disabled={linking}
           >
-            Resetuj powiązania
+            {t('recipes.details.resetLinks')}
           </Button>
         </Box>
       </Box>
@@ -498,7 +500,7 @@ const RecipeDetailsPage = () => {
               sx={{ mr: { sm: 2 }, mb: { xs: 1, sm: 0 } }}
             />
             <Typography variant="subtitle1" color="text.secondary">
-              Wersja: {recipe.version || 1} | Ostatnia aktualizacja: {formatDate(recipe.updatedAt)}
+              {t('recipes.details.version', { version: recipe.version || 1 })} | {t('recipes.details.lastUpdate', { date: formatDate(recipe.updatedAt) })}
             </Typography>
           </Box>
           {recipe.description && (
@@ -509,24 +511,30 @@ const RecipeDetailsPage = () => {
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
               <Typography variant="subtitle2" color="text.secondary">
-                Domyślne stanowisko produkcyjne: {recipe.defaultWorkstationId ? 
-                  workstations.find(w => w.id === recipe.defaultWorkstationId)?.name || 'Nieznane stanowisko' : 
-                  'Nie określono'}
+                {t('recipes.details.defaultWorkstation', { 
+                  workstation: recipe.defaultWorkstationId ? 
+                    workstations.find(w => w.id === recipe.defaultWorkstationId)?.name || t('recipes.details.unknownWorkstation') : 
+                    t('recipes.details.notSpecified')
+                })}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>
               <Typography variant="subtitle2" color="text.secondary">
-                Czas/sztuka: {recipe.productionTimePerUnit ? `${parseFloat(recipe.productionTimePerUnit).toFixed(2)} min` : 'Nie określono'}
+                {recipe.productionTimePerUnit ? 
+                  t('recipes.details.timePerUnit', { time: parseFloat(recipe.productionTimePerUnit).toFixed(2) }) : 
+                  t('recipes.details.notSpecified')}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>
               <Typography variant="subtitle2" color="text.secondary">
-                Koszt/sztuka: {recipe.processingCostPerUnit ? `${recipe.processingCostPerUnit.toFixed(2)} EUR` : 'Nie określono'}
+                {recipe.processingCostPerUnit ? 
+                  t('recipes.details.costPerUnit', { cost: recipe.processingCostPerUnit.toFixed(2) }) : 
+                  t('recipes.details.notSpecified')}
               </Typography>
             </Grid>
             <Grid item xs={12}>
               <Typography variant="subtitle2" color="text.secondary">
-                Pozycja magazynowa: {inventoryProduct ? 
+                {t('recipes.details.inventoryPosition')} {inventoryProduct ? 
                   <Link 
                     to={`/inventory/${inventoryProduct.id}`} 
                     style={{ textDecoration: 'none', color: 'inherit' }}
@@ -539,17 +547,17 @@ const RecipeDetailsPage = () => {
                       sx={{ ml: 1, cursor: 'pointer' }}
                     />
                   </Link>
-                  : 'Brak powiązanej pozycji magazynowej'}
+                  : t('recipes.details.noInventoryPosition')}
               </Typography>
             </Grid>
             <Grid item xs={12}>
               <Typography variant="subtitle2" color="text.secondary">
-                Listy cenowe: {priceLists.length > 0 ? (
+                {t('recipes.details.priceLists')} {priceLists.length > 0 ? (
                   <Box component="span" sx={{ ml: 1 }}>
                     {priceLists.map((priceListInfo, index) => (
                       <Chip
                         key={priceListInfo.priceList.id}
-                        label={`${priceListInfo.customerName} - ${priceListInfo.price.toFixed(2)} EUR/${priceListInfo.unit} ${!priceListInfo.isActive ? '(nieaktywna)' : ''}`}
+                                                  label={`${priceListInfo.customerName} - ${priceListInfo.price.toFixed(2)} EUR/${priceListInfo.unit} ${!priceListInfo.isActive ? t('recipes.details.inactive') : ''}`}
                         size="small"
                         color={priceListInfo.isActive ? 'success' : 'default'}
                         variant="outlined"
@@ -566,7 +574,7 @@ const RecipeDetailsPage = () => {
                       />
                     ))}
                   </Box>
-                ) : 'Receptura nie jest dodana do żadnej listy cenowej'}
+                ) : t('recipes.details.noPriceLists')}
               </Typography>
             </Grid>
           </Grid>
@@ -574,24 +582,24 @@ const RecipeDetailsPage = () => {
 
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tabs value={tabValue} onChange={handleTabChange} aria-label="recipe tabs">
-            <Tab label="Składniki i instrukcje" id="recipe-tab-0" />
-            <Tab label="Historia wersji" id="recipe-tab-1" />
+            <Tab label={t('recipes.tabs.ingredientsAndInstructions')} id="recipe-tab-0" />
+            <Tab label={t('recipes.tabs.versionHistory')} id="recipe-tab-1" />
           </Tabs>
         </Box>
 
         <TabPanel value={tabValue} index={0}>
           <Grid container spacing={4}>
             <Grid item xs={12} md={12}>
-              <Typography variant="h6" gutterBottom>Składniki</Typography>
+              <Typography variant="h6" gutterBottom>{t('recipes.details.ingredients.title')}</Typography>
               <TableContainer>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell>Składnik</TableCell>
-                      <TableCell align="right">Ilość</TableCell>
-                      <TableCell>Jednostka</TableCell>
-                      <TableCell>Numer CAS</TableCell>
-                      <TableCell>Uwagi</TableCell>
+                      <TableCell>{t('recipes.details.ingredients.ingredient')}</TableCell>
+                      <TableCell align="right">{t('recipes.details.ingredients.quantity')}</TableCell>
+                      <TableCell>{t('recipes.details.ingredients.unit')}</TableCell>
+                      <TableCell>{t('recipes.details.ingredients.casNumber')}</TableCell>
+                      <TableCell>{t('recipes.details.ingredients.notes')}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -615,17 +623,17 @@ const RecipeDetailsPage = () => {
               {/* Sekcja składników odżywczych */}
               {recipe.micronutrients && recipe.micronutrients.length > 0 && (
                 <Box sx={{ mt: 3 }}>
-                  <Typography variant="h6" gutterBottom>Składniki odżywcze</Typography>
+                  <Typography variant="h6" gutterBottom>{t('recipes.details.nutrients.title')}</Typography>
                   <TableContainer>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell>Kod</TableCell>
-                          <TableCell>Nazwa</TableCell>
-                          <TableCell align="right">Ilość</TableCell>
-                          <TableCell>Jednostka</TableCell>
-                          <TableCell>Kategoria</TableCell>
-                          <TableCell>Uwagi</TableCell>
+                          <TableCell>{t('recipes.details.nutrients.code')}</TableCell>
+                          <TableCell>{t('recipes.details.nutrients.name')}</TableCell>
+                          <TableCell align="right">{t('recipes.details.nutrients.quantity')}</TableCell>
+                          <TableCell>{t('recipes.details.nutrients.unit')}</TableCell>
+                          <TableCell>{t('recipes.details.nutrients.category')}</TableCell>
+                          <TableCell>{t('recipes.details.nutrients.notes')}</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -672,28 +680,31 @@ const RecipeDetailsPage = () => {
               )}
             </Grid>
             <Grid item xs={12} md={7}>
-              <Typography variant="h6" gutterBottom>Notatki dodatkowe</Typography>
+              <Typography variant="h6" gutterBottom>{t('recipes.details.additionalNotes')}</Typography>
               <Typography variant="body1" paragraph style={{ whiteSpace: 'pre-line' }}>
-                {recipe.notes || 'Brak dodatkowych notatek'}
+                                  {recipe.notes || t('recipes.details.noAdditionalNotes')}
               </Typography>
             </Grid>
           </Grid>
         </TabPanel>
 
         <TabPanel value={tabValue} index={1}>
-          <Typography variant="h6" gutterBottom>Historia wersji</Typography>
+          <Typography variant="h6" gutterBottom>{t('recipes.details.versionHistory.title')}</Typography>
           
           {selectedVersions.length > 0 && (
             <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexDirection: { xs: 'column', sm: 'row' } }}>
               <Box sx={{ mb: { xs: 2, sm: 0 }, width: { xs: '100%', sm: 'auto' } }}>
                 <Typography variant="body2">
-                  Wybrano {selectedVersions.length} {selectedVersions.length === 1 ? 'wersję' : 'wersje'}
+                  {t('recipes.details.versionHistory.selected', { 
+                    count: selectedVersions.length, 
+                    type: selectedVersions.length === 1 ? t('recipes.details.versionHistory.version') : t('recipes.details.versionHistory.versions')
+                  })}
                 </Typography>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', mt: 1 }}>
                   {selectedVersions.map(v => (
                     <Chip 
                       key={v.id}
-                      label={`Wersja ${v.version}`}
+                      label={t('recipes.details.versionHistory.versionLabel', { version: v.version })}
                       size="small"
                       onDelete={() => setSelectedVersions(selectedVersions.filter(sv => sv.id !== v.id))}
                       sx={{ mr: 1, mb: 1 }}
@@ -709,7 +720,7 @@ const RecipeDetailsPage = () => {
                 fullWidth={false}
                 sx={{ width: { xs: '100%', sm: 'auto' } }}
               >
-                Porównaj wersje
+                {t('recipes.details.versionHistory.compareVersions')}
               </Button>
             </Box>
           )}
@@ -720,7 +731,7 @@ const RecipeDetailsPage = () => {
                 <ListItem
                   secondaryAction={
                     <Box>
-                      <Tooltip title="Wybierz do porównania">
+                      <Tooltip title={t('recipes.details.versionHistory.selectToCompare')}>
                         <IconButton 
                           edge="end" 
                           onClick={() => handleVersionSelect(version)}
@@ -730,7 +741,7 @@ const RecipeDetailsPage = () => {
                         </IconButton>
                       </Tooltip>
                       {version.version !== recipe.version && (
-                        <Tooltip title="Przywróć tę wersję">
+                        <Tooltip title={t('recipes.details.versionHistory.restoreVersion')}>
                           <IconButton 
                             edge="end" 
                             onClick={() => handleRestoreVersion(version)}
@@ -747,11 +758,11 @@ const RecipeDetailsPage = () => {
                     primary={
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         <Typography variant="subtitle1">
-                          Wersja {version.version}
+                          {t('recipes.details.versionHistory.versionLabel', { version: version.version })}
                         </Typography>
                         {version.restoredFrom && (
                           <Chip 
-                            label={`Przywrócona z wersji ${version.restoredFrom}`}
+                            label={t('recipes.details.versionHistory.restoredFrom', { version: version.restoredFrom })}
                             size="small"
                             color="info"
                             sx={{ ml: 2 }}
@@ -759,7 +770,7 @@ const RecipeDetailsPage = () => {
                         )}
                         {version.version === recipe.version && (
                           <Chip 
-                            label="Aktualna"
+                            label={t('recipes.details.versionHistory.current')}
                             size="small"
                             color="success"
                             sx={{ ml: 2 }}
@@ -767,7 +778,7 @@ const RecipeDetailsPage = () => {
                         )}
                       </Box>
                     }
-                    secondary={`Utworzona: ${formatDate(version.createdAt)} | Autor: ${version.createdBy}`}
+                    secondary={t('recipes.details.versionHistory.created', { date: formatDate(version.createdAt), author: version.createdBy })}
                   />
                 </ListItem>
                 <Divider />
@@ -777,7 +788,7 @@ const RecipeDetailsPage = () => {
           
           {versions.length === 0 && (
             <Typography variant="body1">
-              Brak historii wersji dla tej receptury.
+              {t('recipes.details.versionHistory.noHistory')}
             </Typography>
           )}
         </TabPanel>
@@ -791,7 +802,7 @@ const RecipeDetailsPage = () => {
         fullWidth
       >
         <DialogTitle>
-          Porównanie wersji receptury
+          {t('recipes.details.comparison.title')}
           <IconButton
             aria-label="close"
             onClick={() => setComparisonOpen(false)}
@@ -819,14 +830,14 @@ const RecipeDetailsPage = () => {
         open={restoreDialogOpen}
         onClose={() => !restoringVersion && setRestoreDialogOpen(false)}
       >
-        <DialogTitle>Przywróć wersję receptury</DialogTitle>
+        <DialogTitle>{t('recipes.details.restore.title')}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Czy na pewno chcesz przywrócić recepturę do wersji {versionToRestore?.version}?
-            Ta operacja utworzy nową wersję receptury bazującą na wybranej wersji.
+            {t('recipes.details.restore.confirm', { version: versionToRestore?.version })}
+            {t('recipes.details.restore.description')}
           </DialogContentText>
           <Alert severity="warning" sx={{ mt: 2 }}>
-            Uwaga: Przywrócenie spowoduje nadpisanie aktualnej wersji receptury.
+            {t('recipes.details.restore.warning')}
           </Alert>
         </DialogContent>
         <DialogActions>
@@ -834,7 +845,7 @@ const RecipeDetailsPage = () => {
             onClick={() => setRestoreDialogOpen(false)} 
             disabled={restoringVersion}
           >
-            Anuluj
+            {t('recipes.details.restore.cancel')}
           </Button>
           <Button 
             onClick={confirmRestoreVersion} 
@@ -842,7 +853,7 @@ const RecipeDetailsPage = () => {
             color="primary"
             disabled={restoringVersion}
           >
-            {restoringVersion ? 'Przywracanie...' : 'Przywróć'}
+            {restoringVersion ? t('recipes.details.restore.restoring') : t('recipes.details.restore.restore')}
           </Button>
         </DialogActions>
       </Dialog>

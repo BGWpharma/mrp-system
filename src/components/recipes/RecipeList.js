@@ -60,6 +60,7 @@ import { getAllRecipes, deleteRecipe, getRecipesByCustomer, getRecipesWithPagina
 import { getInventoryItemByRecipeId } from '../../services/inventoryService';
 import { useCustomersCache } from '../../hooks/useCustomersCache';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 import { formatDate } from '../../utils/formatters';
 import searchService from '../../services/searchService';
 import { getAllWorkstations } from '../../services/workstationService';
@@ -75,6 +76,7 @@ const RecipeList = () => {
   const [filteredRecipes, setFilteredRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
   const { showSuccess, showError } = useNotification();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   
   // Użyj nowego hooka do buforowania danych klientów
@@ -265,7 +267,7 @@ const RecipeList = () => {
       // Po odświeżeniu indeksu, pobierz dane ponownie
       await fetchRecipes();
       
-      showSuccess('Indeks wyszukiwania został zaktualizowany');
+      showSuccess(t('recipes.list.indexUpdated'));
     
       // Aktualizacja informacji o indeksie
       setSearchIndexStatus({
@@ -274,7 +276,7 @@ const RecipeList = () => {
       });
     } catch (error) {
       console.error('Błąd podczas odświeżania indeksu wyszukiwania:', error);
-      showError('Nie udało się odświeżyć indeksu wyszukiwania');
+      showError(t('recipes.list.indexUpdateError'));
     } finally {
       setLoading(false);
     }
@@ -304,7 +306,7 @@ const RecipeList = () => {
     // Domyślna grupa dla receptur bez klienta
     grouped['noCustomer'] = {
       id: 'noCustomer',
-      name: 'Receptury ogólne',
+      name: t('recipes.list.generalRecipes'),
       recipes: []
     };
     
@@ -442,10 +444,10 @@ const RecipeList = () => {
   };
 
   const handleDeleteRecipe = async (recipeId) => {
-    if (window.confirm('Czy na pewno chcesz usunąć tę recepturę?')) {
+    if (window.confirm(t('recipes.messages.confirmDelete'))) {
       try {
         await deleteRecipe(recipeId);
-        showSuccess('Receptura została usunięta');
+        showSuccess(t('recipes.messages.recipeDeleted'));
         
         // Odśwież właściwą listę po usunięciu
         if (tabValue === 0) {
@@ -462,7 +464,7 @@ const RecipeList = () => {
         }
       } catch (error) {
         console.error('Błąd podczas usuwania receptury:', error);
-        showError('Nie udało się usunąć receptury: ' + error.message);
+        showError(t('recipes.messages.deleteError', { error: error.message }));
       }
     }
   };
@@ -604,10 +606,10 @@ const RecipeList = () => {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      showSuccess(`Wyeksportowano ${allRecipes.length} receptur do pliku CSV`);
+      showSuccess(t('recipes.list.exportSuccess', { count: allRecipes.length }));
     } catch (error) {
       console.error('Błąd podczas eksportu CSV:', error);
-      showError('Nie udało się wyeksportować receptur do CSV');
+      showError(t('recipes.list.exportError'));
     }
   };
 
@@ -623,18 +625,21 @@ const RecipeList = () => {
       
       if (results.success) {
         showSuccess(
-          `Synchronizacja zakończona! Zaktualizowano ${results.syncedRecipes} receptur ` +
-          `(pominięto ${results.skippedRecipes}, błędy: ${results.errorRecipes})`
+          t('recipes.list.syncCompleted', { 
+            synced: results.syncedRecipes, 
+            skipped: results.skippedRecipes, 
+            errors: results.errorRecipes 
+          })
         );
         
         // Odśwież listę receptur
         await fetchRecipes();
       } else {
-        showError(`Błąd synchronizacji: ${results.error}`);
+        showError(t('recipes.list.syncError', { error: results.error }));
       }
     } catch (error) {
       console.error('Błąd podczas synchronizacji CAS:', error);
-      showError('Błąd podczas synchronizacji numerów CAS: ' + error.message);
+      showError(t('recipes.list.syncCASError', { error: error.message }));
     } finally {
       setSyncingCAS(false);
       setSyncProgress(null);
@@ -649,7 +654,7 @@ const RecipeList = () => {
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           {recipesToRender.length === 0 ? (
             <Typography variant="body1" align="center" sx={{ py: 2 }}>
-              Nie znaleziono receptur
+              {t('recipes.list.noRecipesFound')}
             </Typography>
           ) : (
             recipesToRender.map((recipe) => {
@@ -706,7 +711,11 @@ const RecipeList = () => {
                             style={{ textDecoration: 'none', color: 'inherit' }}
                           >
                             <Chip 
-                              label={`Magazyn: ${inventoryProducts[recipe.id].quantity || 0} ${inventoryProducts[recipe.id].unit || 'szt.'} - ${inventoryProducts[recipe.id].name}`}
+                              label={t('recipes.list.chips.inventory', { 
+                                quantity: inventoryProducts[recipe.id].quantity || 0, 
+                                unit: inventoryProducts[recipe.id].unit || 'szt.', 
+                                name: inventoryProducts[recipe.id].name 
+                              })}
                               size="small"
                               color="secondary"
                               variant="outlined"
@@ -778,7 +787,7 @@ const RecipeList = () => {
             <TableRow>
               <TableCell onClick={() => handleTableSort('name')} style={{ cursor: 'pointer' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  SKU
+                  {t('recipes.list.columns.sku')}
                   {tableSort.field === 'name' && (
                     <ArrowDropUpIcon 
                       sx={{ 
@@ -791,7 +800,7 @@ const RecipeList = () => {
               </TableCell>
               <TableCell onClick={() => handleTableSort('description')} style={{ cursor: 'pointer' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  Opis
+                  {t('recipes.list.columns.description')}
                   {tableSort.field === 'description' && (
                     <ArrowDropUpIcon 
                       sx={{ 
@@ -804,7 +813,7 @@ const RecipeList = () => {
               </TableCell>
               <TableCell onClick={() => handleTableSort('customer')} style={{ cursor: 'pointer' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  Klient
+                  {t('recipes.list.columns.customer')}
                   {tableSort.field === 'customer' && (
                     <ArrowDropUpIcon 
                       sx={{ 
@@ -815,10 +824,10 @@ const RecipeList = () => {
                   )}
                 </Box>
               </TableCell>
-              <TableCell sx={{ width: '280px', maxWidth: '280px' }}>Pozycja magazynowa</TableCell>
+              <TableCell sx={{ width: '280px', maxWidth: '280px' }}>{t('recipes.list.columns.inventoryPosition')}</TableCell>
               <TableCell onClick={() => handleTableSort('updatedAt')} style={{ cursor: 'pointer' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  Ostatnia aktualizacja
+                  {t('recipes.list.columns.lastUpdate')}
                   {tableSort.field === 'updatedAt' && (
                     <ArrowDropUpIcon 
                       sx={{ 
@@ -829,14 +838,14 @@ const RecipeList = () => {
                   )}
                 </Box>
               </TableCell>
-              <TableCell align="right">Akcje</TableCell>
+              <TableCell align="right">{t('recipes.list.columns.actions')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {recipesToRender.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} align="center">
-                  Nie znaleziono receptur
+                  {t('recipes.list.noRecipesFound')}
                 </TableCell>
               </TableRow>
             ) : (
@@ -864,7 +873,7 @@ const RecipeList = () => {
                           color="primary"
                         />
                       ) : (
-                        <Chip label="Ogólna" size="small" variant="outlined" />
+                        <Chip label={t('recipes.list.chips.general')} size="small" variant="outlined" />
                       )}
                     </TableCell>
                     <TableCell sx={{ width: '280px', maxWidth: '280px', overflow: 'hidden' }}>
@@ -893,7 +902,7 @@ const RecipeList = () => {
                         </Link>
                       ) : (
                         <Typography variant="body2" color="text.secondary">
-                          Brak pozycji
+                          {t('recipes.list.chips.noPosition')}
                         </Typography>
                       )}
                     </TableCell>
@@ -906,7 +915,7 @@ const RecipeList = () => {
                     </TableCell>
                     <TableCell align="right">
                       <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                        <Tooltip title="Podgląd">
+                        <Tooltip title={t('recipes.list.actions.view')}>
                           <IconButton 
                             size="small" 
                             color="primary"
@@ -916,7 +925,7 @@ const RecipeList = () => {
                             <ViewIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title="Edytuj">
+                        <Tooltip title={t('recipes.list.actions.edit')}>
                           <IconButton 
                             size="small" 
                             color="primary"
@@ -926,7 +935,7 @@ const RecipeList = () => {
                             <EditIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title="Usuń">
+                        <Tooltip title={t('recipes.list.actions.delete')}>
                           <IconButton 
                             size="small" 
                             color="error"
@@ -935,7 +944,7 @@ const RecipeList = () => {
                             <DeleteIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title="Dodaj do magazynu">
+                        <Tooltip title={t('recipes.list.actions.addToInventory')}>
                           <IconButton 
                             size="small" 
                             color="secondary"
@@ -991,7 +1000,7 @@ const RecipeList = () => {
             >
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 {group.id === 'noCustomer' ? (
-                  <Typography variant="subtitle1">Receptury ogólne</Typography>
+                  <Typography variant="subtitle1">{t('recipes.list.generalRecipes')}</Typography>
               ) : (
                   <>
                   <PersonIcon sx={{ mr: 1, color: 'primary.main' }} />
@@ -1002,7 +1011,7 @@ const RecipeList = () => {
                 {/* Dodajemy licznik receptur, jeśli został już załadowany */}
                 {customerRecipes[group.id] && (
                   <Chip 
-                    label={`${customerRecipes[group.id].length} receptur`}
+                    label={t('recipes.list.chips.recipesCount', { count: customerRecipes[group.id].length })}
                     size="small"
                     sx={{ ml: 2 }}
                   />
@@ -1051,16 +1060,15 @@ const RecipeList = () => {
           sx={{ mb: isMobile ? 2 : 3 }}
           action={
             <Button color="inherit" size="small" onClick={() => setShowIndexAlert(false)}>
-              Zamknij
+              {t('recipes.list.alerts.close')}
             </Button>
           }
         >
           <Typography variant="subtitle2">
-            Uwaga: Brak wymaganego indeksu w bazie danych
+            {t('recipes.list.alerts.indexWarningTitle')}
           </Typography>
           <Typography variant="body2">
-            Filtrowanie wg klienta może działać wolniej. Administrator powinien dodać indeks 
-            do kolekcji "recipes": customerId (Ascending), updatedAt (Descending).
+            {t('recipes.list.alerts.indexWarningMessage')}
           </Typography>
         </Alert>
       )}
@@ -1073,7 +1081,7 @@ const RecipeList = () => {
         mb: isMobile ? 2 : 3,
         gap: isMobile ? 1 : 0
       }}>
-        <Typography variant="h5">Receptury</Typography>
+        <Typography variant="h5">{t('recipes.list.title')}</Typography>
         <Box sx={{ 
           display: 'flex', 
           gap: 1, 
@@ -1082,7 +1090,7 @@ const RecipeList = () => {
         }}>
           {/* Przycisk do odświeżania indeksu wyszukiwania */}
           {!isMobile && (
-            <Tooltip title="Odśwież indeks wyszukiwania">
+            <Tooltip title={t('recipes.list.refreshIndex')}>
               <Button
                 variant="outlined"
                 startIcon={<CachedIcon />}
@@ -1090,13 +1098,13 @@ const RecipeList = () => {
                 disabled={loading}
                 size={isMobile ? "small" : "medium"}
               >
-                Odśwież indeks
+                {t('recipes.list.refreshIndex')}
               </Button>
             </Tooltip>
           )}
 
           {/* Przycisk eksportu CSV */}
-          <Tooltip title="Eksportuj receptury do pliku CSV">
+          <Tooltip title={t('recipes.list.exportCSV')}>
             <Button
               variant="outlined"
               startIcon={<DownloadIcon />}
@@ -1105,12 +1113,12 @@ const RecipeList = () => {
               size={isMobile ? "small" : "medium"}
               color="secondary"
             >
-              {isMobile ? 'CSV' : 'Eksportuj CSV'}
+              {isMobile ? 'CSV' : t('recipes.list.exportCSV')}
             </Button>
           </Tooltip>
 
           {/* Przycisk synchronizacji numerów CAS */}
-          <Tooltip title="Aktualizuj numery CAS we wszystkich recepturach">
+          <Tooltip title={t('recipes.list.syncCAS')}>
             <Button
               variant="outlined"
               startIcon={syncingCAS ? <CircularProgress size={16} /> : <SyncIcon />}
@@ -1119,7 +1127,7 @@ const RecipeList = () => {
               size={isMobile ? "small" : "medium"}
               color="warning"
             >
-              {isMobile ? 'CAS' : 'Aktualizuj CAS'}
+              {isMobile ? 'CAS' : t('recipes.list.syncCAS')}
             </Button>
           </Tooltip>
           
@@ -1140,7 +1148,7 @@ const RecipeList = () => {
               fontSize: '0.9rem'
             } : {}}
           >
-            {isMobile ? 'Dodaj recepturę' : 'Dodaj recepturę'}
+            {t('recipes.list.addRecipe')}
           </Button>
         </Box>
       </Box>
@@ -1153,7 +1161,7 @@ const RecipeList = () => {
         gap: isMobile ? 1 : 2
       }}>
         <TextField
-          placeholder="Szukaj receptur..."
+          placeholder={t('recipes.list.searchPlaceholder')}
           value={searchTerm}
           onChange={handleSearchTermChange}
           variant="outlined"
@@ -1189,16 +1197,16 @@ const RecipeList = () => {
           size="small"
           fullWidth={isMobile}
         >
-          <InputLabel id="customer-filter-label" sx={isMobile ? { fontSize: '0.9rem' } : {}}>Filtruj wg klienta</InputLabel>
+          <InputLabel id="customer-filter-label" sx={isMobile ? { fontSize: '0.9rem' } : {}}>{t('recipes.list.filters.customer')}</InputLabel>
           <Select
             labelId="customer-filter-label"
             value={selectedCustomerId}
             onChange={handleCustomerFilterChange}
-            label="Filtruj wg klienta"
+            label={t('recipes.list.filters.customer')}
             displayEmpty
             startAdornment={<FilterIcon sx={{ color: 'action.active', mr: 1 }} />}
           >
-            <MenuItem value="">Wszyscy klienci</MenuItem>
+            <MenuItem value="">{t('recipes.list.filters.allCustomers')}</MenuItem>
             {customers.map((customer) => (
               <MenuItem key={customer.id} value={customer.id}>
                 {customer.name}
@@ -1221,18 +1229,18 @@ const RecipeList = () => {
           size="small"
           fullWidth={isMobile}
         >
-          <InputLabel id="notes-filter-label" sx={isMobile ? { fontSize: '0.9rem' } : {}}>Filtruj wg notatek</InputLabel>
+          <InputLabel id="notes-filter-label" sx={isMobile ? { fontSize: '0.9rem' } : {}}>{t('recipes.list.filters.notes')}</InputLabel>
           <Select
             labelId="notes-filter-label"
             value={notesFilter === null ? '' : notesFilter.toString()}
             onChange={handleNotesFilterChange}
-            label="Filtruj wg notatek"
+            label={t('recipes.list.filters.notes')}
             displayEmpty
             startAdornment={<InfoIcon sx={{ color: 'action.active', mr: 1 }} />}
           >
-            <MenuItem value="">Wszystkie receptury</MenuItem>
-            <MenuItem value="true">Z notatkami</MenuItem>
-            <MenuItem value="false">Bez notatek</MenuItem>
+            <MenuItem value="">{t('recipes.list.filters.allRecipes')}</MenuItem>
+            <MenuItem value="true">{t('recipes.list.filters.withNotes')}</MenuItem>
+            <MenuItem value="false">{t('recipes.list.filters.withoutNotes')}</MenuItem>
           </Select>
         </FormControl>
       </Box>
@@ -1250,9 +1258,9 @@ const RecipeList = () => {
               borderRadius: '4px'
             } : {}}
           >
-            Indeks wyszukiwania aktywny
+            {t('recipes.list.indexActive')}
             {searchIndexStatus.lastRefreshed && 
-              ` (ostatnie odświeżenie: ${formatDate(searchIndexStatus.lastRefreshed)})`}
+              ` ${t('recipes.list.lastRefreshed', { date: formatDate(searchIndexStatus.lastRefreshed) })}`}
           </Typography>
         </Box>
       )}
@@ -1275,8 +1283,8 @@ const RecipeList = () => {
             borderRadius: '4px'
           } : {}}
         >
-          <Tab label="Lista receptur" />
-          <Tab label="Grupowane wg klienta" />
+          <Tab label={t('recipes.list.tabs.recipesList')} />
+          <Tab label={t('recipes.list.tabs.groupedByCustomer')} />
         </Tabs>
       </Box>
       
@@ -1301,7 +1309,7 @@ const RecipeList = () => {
               {!isMobile && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                   <Typography variant="body2">
-                    Wierszy na stronę:
+                    {t('recipes.list.rowsPerPage')}:
                   </Typography>
                   <Select
                     value={limit}
@@ -1334,7 +1342,11 @@ const RecipeList = () => {
               
               {!isMobile && (
                 <Typography variant="body2">
-                  Wyświetlanie {filteredRecipes.length > 0 ? (page - 1) * limit + 1 : 0}-{Math.min(page * limit, totalItems)} z {totalItems}
+                  {t('recipes.list.displaying', { 
+                    from: filteredRecipes.length > 0 ? (page - 1) * limit + 1 : 0, 
+                    to: Math.min(page * limit, totalItems), 
+                    count: totalItems 
+                  })}
                 </Typography>
               )}
             </Box>
@@ -1352,17 +1364,17 @@ const RecipeList = () => {
         fullWidth
       >
         <DialogTitle>
-          Synchronizacja numerów CAS
+          {t('recipes.list.syncingCAS')}
         </DialogTitle>
         <DialogContent>
           <Box sx={{ width: '100%' }}>
             {syncProgress && (
               <>
                 <Typography variant="body2" gutterBottom>
-                  Przetwarzanie: {syncProgress.recipeName}
+                  {t('recipes.list.syncProgress', { recipeName: syncProgress.recipeName })}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
-                  {syncProgress.current} z {syncProgress.total} receptur
+                  {t('recipes.list.syncProgressCount', { current: syncProgress.current, total: syncProgress.total })}
                 </Typography>
                 <LinearProgress 
                   variant="determinate" 
@@ -1374,7 +1386,7 @@ const RecipeList = () => {
             {!syncProgress && (
               <>
                 <Typography variant="body2" gutterBottom>
-                  Przygotowywanie synchronizacji...
+                  {t('recipes.list.preparingSync')}
                 </Typography>
                 <LinearProgress sx={{ mt: 2 }} />
               </>
@@ -1383,7 +1395,7 @@ const RecipeList = () => {
         </DialogContent>
         <DialogActions>
           <Typography variant="body2" color="text.secondary">
-            Proszę czekać, trwa aktualizacja numerów CAS
+            {t('recipes.list.pleaseWait')}
           </Typography>
         </DialogActions>
       </Dialog>

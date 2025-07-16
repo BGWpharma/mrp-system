@@ -57,6 +57,7 @@ import { getAllInventoryItems, getIngredientPrices, createInventoryItem, getAllW
 import { getAllPriceLists, addPriceListItem } from '../../services/priceListService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 import { getAllCustomers } from '../../services/customerService';
@@ -69,6 +70,7 @@ import { addNutritionalComponent } from '../../services/nutritionalComponentsSer
 const RecipeForm = ({ recipeId }) => {
   const { currentUser } = useAuth();
   const { showSuccess, showError, showWarning, showInfo } = useNotification();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const [loading, setLoading] = useState(!!recipeId);
@@ -436,24 +438,24 @@ const RecipeForm = ({ recipeId }) => {
     try {
       // Wyświetl informację, jeśli używane są konwertowane jednostki
       if (showDisplayUnits && (Object.keys(displayUnits).length > 0 || costUnitDisplay || timeUnitDisplay)) {
-        showInfo('Receptura zostanie zapisana w oryginalnych jednostkach, bez względu na aktualnie wyświetlane jednostki');
+        showInfo(t('recipes.messages.conversionInfo'));
       }
       
       if (recipeId) {
         await updateRecipe(recipeId, recipeData, currentUser.uid);
-        showSuccess('Receptura została zaktualizowana');
+        showSuccess(t('recipes.messages.recipeUpdated'));
         navigate(`/recipes/${recipeId}`);
       } else {
         const newRecipe = await createRecipe(recipeData, currentUser.uid);
         setNewRecipeId(newRecipe.id);
-        showSuccess('Receptura została utworzona');
+        showSuccess(t('recipes.messages.recipeCreated'));
         
         // Pokaż dialog pytający o dodanie do listy cenowej
         await fetchPriceLists();
         setAddToPriceListDialogOpen(true);
       }
     } catch (error) {
-      showError('Błąd podczas zapisywania receptury: ' + error.message);
+      showError(t('recipes.messages.saveError', { error: error.message }));
       console.error('Error saving recipe:', error);
     } finally {
       setSaving(false);
@@ -587,7 +589,7 @@ const RecipeForm = ({ recipeId }) => {
     );
     
     if (existingIndex >= 0) {
-      showError('Ten składnik już istnieje w recepturze');
+      showError(t('recipes.ingredients.existsError'));
       return;
     }
     
@@ -765,7 +767,7 @@ const RecipeForm = ({ recipeId }) => {
   // Funkcja do linkowania wszystkich składników z magazynem
   const linkAllIngredientsWithInventory = async (resetLinks = false) => {
     if (!recipeData.ingredients || recipeData.ingredients.length === 0) {
-      showWarning('Receptura nie zawiera składników');
+      showWarning(t('recipes.messages.noIngredientsToLink'));
       return;
     }
     
@@ -797,7 +799,7 @@ const RecipeForm = ({ recipeId }) => {
         }));
         
         if (resetCount > 0) {
-          showInfo(`Usunięto powiązania dla ${resetCount} składników`);
+          showInfo(t('recipes.messages.resetLinks', { count: resetCount }));
         }
       }
       
@@ -814,11 +816,11 @@ const RecipeForm = ({ recipeId }) => {
       }
       
       if (linkedCount > 0) {
-        showSuccess(`Powiązano ${linkedCount} składników ze stanami`);
+        showSuccess(t('recipes.messages.linkedIngredients', { count: linkedCount }));
       }
       
       if (notFoundCount > 0) {
-        showWarning(`Dla ${notFoundCount} składników nie znaleziono odpowiedników w stanach`);
+        showWarning(t('recipes.messages.ingredientsNotFound', { count: notFoundCount }));
       }
       
       if (linkedCount === 0 && notFoundCount === 0 && !resetLinks) {
@@ -835,7 +837,7 @@ const RecipeForm = ({ recipeId }) => {
   // Funkcja do pobierania numerów CAS z pozycji magazynowych
   const syncCASNumbers = async () => {
     if (!recipeData.ingredients || recipeData.ingredients.length === 0) {
-      showWarning('Receptura nie zawiera składników');
+      showWarning(t('recipes.messages.noIngredientsToLink'));
       return;
     }
     
@@ -1160,10 +1162,10 @@ const RecipeForm = ({ recipeId }) => {
             boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
           }}
         >
-          Powrót
+          {t('recipes.buttons.back')}
         </Button>
         <Typography variant="h5" sx={{ fontWeight: 'medium' }}>
-          {recipeId ? 'Edytuj recepturę' : 'Dodaj nową recepturę'}
+          {recipeId ? t('recipes.editRecipe') : t('recipes.addNewRecipe')}
         </Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button 
@@ -1178,10 +1180,10 @@ const RecipeForm = ({ recipeId }) => {
               px: 3
             }}
           >
-            {saving ? 'Zapisywanie...' : 'Zapisz'}
+            {saving ? t('recipes.buttons.saving') : t('recipes.buttons.save')}
           </Button>
           {recipeId && renderCreateProductButton()}
-          <Tooltip title="Kliknij ikonę konwersji (↔) obok jednostek, aby przełączać między kg/g, l/ml">
+          <Tooltip title={t('recipes.buttons.unitConversion')}>
             <IconButton color="info">
               <SwapIcon />
             </IconButton>
@@ -1214,7 +1216,7 @@ const RecipeForm = ({ recipeId }) => {
           }}
         >
           <ProductIcon color="primary" />
-          <Typography variant="h6" fontWeight="500">Dane podstawowe</Typography>
+          <Typography variant="h6" fontWeight="500">{t('recipes.basicData')}</Typography>
         </Box>
         
         <Box sx={{ p: 3 }}>
@@ -1224,11 +1226,11 @@ const RecipeForm = ({ recipeId }) => {
                 fullWidth
                 required
                 name="name"
-                label="SKU receptury"
+                label={t('recipes.recipeSKU')}
                 value={recipeData.name}
                 onChange={handleChange}
                 error={!recipeData.name}
-                helperText={!recipeData.name ? 'SKU jest wymagany' : ''}
+                helperText={!recipeData.name ? t('recipes.messages.skuRequired') : ''}
                 sx={{ 
                   '& .MuiOutlinedInput-root': { 
                     borderRadius: '8px' 
@@ -1246,17 +1248,17 @@ const RecipeForm = ({ recipeId }) => {
             
             <Grid item xs={12} sm={6}>
               <FormControl fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
-                <InputLabel id="customer-select-label">Klient</InputLabel>
+                <InputLabel id="customer-select-label">{t('recipes.customer')}</InputLabel>
                 <Select
                   labelId="customer-select-label"
                   name="customerId"
                   value={recipeData.customerId}
                   onChange={handleChange}
-                  label="Klient"
+                  label={t('recipes.customer')}
                   displayEmpty
                 >
                   <MenuItem value="">
-                    <em>Brak - receptura ogólna</em>
+                    <em>{t('recipes.noCustomer')}</em>
                   </MenuItem>
                   {customers.map((customer) => (
                     <MenuItem key={customer.id} value={customer.id}>
@@ -1264,13 +1266,13 @@ const RecipeForm = ({ recipeId }) => {
                     </MenuItem>
                   ))}
                 </Select>
-                <FormHelperText>Opcjonalnie - przypisz recepturę do konkretnego klienta</FormHelperText>
+                <FormHelperText>{t('recipes.customerHelpText')}</FormHelperText>
               </FormControl>
             </Grid>
             
             <Grid item xs={12}>
               <TextField
-                label="Opis"
+                label={t('recipes.description')}
                 name="description"
                 value={recipeData.description || ''}
                 onChange={handleChange}
@@ -1283,7 +1285,7 @@ const RecipeForm = ({ recipeId }) => {
             
             <Grid item xs={12} sm={6} md={4}>
               <TextField
-                label={`Koszt procesowy na ${costUnitDisplay || 'sztukę'} (EUR)`}
+                label={t('recipes.processingCost', { unit: costUnitDisplay || t('common.pieces') })}
                 name="processingCostPerUnit"
                 type="number"
                 InputProps={{ 
@@ -1294,7 +1296,7 @@ const RecipeForm = ({ recipeId }) => {
                     </Box>
                   ),
                   endAdornment: canConvertUnit('szt.') && (
-                    <Tooltip title="Przełącz jednostkę miary">
+                                                <Tooltip title={t('recipes.ingredients.switchUnit')}>
                       <IconButton 
                         size="small" 
                         color="primary" 
@@ -1317,7 +1319,7 @@ const RecipeForm = ({ recipeId }) => {
             </Grid>
             <Grid item xs={12} sm={6} md={4}>
               <TextField
-                label={`Czas produkcji na ${timeUnitDisplay || 'sztukę'} (min)`}
+                label={t('recipes.productionTime', { unit: timeUnitDisplay || t('common.pieces') })}
                 name="productionTimePerUnit"
                 type="number"
                 InputProps={{ 
@@ -1370,16 +1372,16 @@ const RecipeForm = ({ recipeId }) => {
             
             <Grid item xs={12}>
               <FormControl fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
-                <InputLabel>Domyślne stanowisko produkcyjne</InputLabel>
+                <InputLabel>{t('recipes.defaultWorkstation')}</InputLabel>
                 <Select
                   name="defaultWorkstationId"
                   value={recipeData.defaultWorkstationId || ''}
                   onChange={handleChange}
-                  label="Domyślne stanowisko produkcyjne"
+                  label={t('recipes.defaultWorkstation')}
                   startAdornment={<Box sx={{ color: 'text.secondary', mr: 1, display: 'flex', alignItems: 'center' }}><BuildIcon fontSize="small" /></Box>}
                 >
                   <MenuItem value="">
-                    <em>Brak</em>
+                    <em>{t('recipes.none')}</em>
                   </MenuItem>
                   {workstations.map((workstation) => (
                     <MenuItem key={workstation.id} value={workstation.id}>
@@ -1387,7 +1389,7 @@ const RecipeForm = ({ recipeId }) => {
                     </MenuItem>
                   ))}
                 </Select>
-                <FormHelperText>Stanowisko będzie automatycznie przypisywane podczas generowania MO z CO</FormHelperText>
+                <FormHelperText>{t('recipes.workstationHelpText')}</FormHelperText>
               </FormControl>
             </Grid>
             
@@ -1432,7 +1434,7 @@ const RecipeForm = ({ recipeId }) => {
         >
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <InventoryIcon color="primary" sx={{ mr: 1 }} />
-            <Typography variant="h6" fontWeight="500">Składniki</Typography>
+            <Typography variant="h6" fontWeight="500">{t('recipes.ingredients.title')}</Typography>
           </Box>
           
           <Box sx={{ display: 'flex', gap: 1 }}>
@@ -1443,7 +1445,7 @@ const RecipeForm = ({ recipeId }) => {
               startIcon={<AddIcon />}
               sx={{ borderRadius: '20px' }}
             >
-              Dodaj składnik
+              {t('recipes.ingredients.addIngredient')}
             </Button>
             <Button 
               variant="outlined"
@@ -1453,7 +1455,7 @@ const RecipeForm = ({ recipeId }) => {
               startIcon={<InventoryIcon />}
               sx={{ borderRadius: '20px' }}
             >
-              Ze stanów
+              {t('recipes.ingredients.fromInventory')}
             </Button>
             <Button 
               variant="outlined"
@@ -1462,7 +1464,7 @@ const RecipeForm = ({ recipeId }) => {
               onClick={() => linkAllIngredientsWithInventory(false)}
               sx={{ borderRadius: '20px' }}
             >
-              Powiąż
+              {t('recipes.ingredients.link')}
             </Button>
             <Button 
               variant="outlined"
@@ -1471,7 +1473,7 @@ const RecipeForm = ({ recipeId }) => {
               onClick={() => linkAllIngredientsWithInventory(true)}
               sx={{ borderRadius: '20px' }}
             >
-              Resetuj
+              {t('recipes.ingredients.reset')}
             </Button>
           </Box>
         </Box>
@@ -1486,10 +1488,10 @@ const RecipeForm = ({ recipeId }) => {
               renderInput={(params) => (
                 <TextField
                   {...params}
-                  label="Dodaj składnik ze stanów"
+                  label={t('recipes.ingredients.addFromInventory')}
                   variant="outlined"
                   fullWidth
-                  helperText="Tylko składniki ze stanów mają przypisane ceny do kalkulacji kosztów. Składniki dodane ręcznie nie będą uwzględnione w kalkulacji."
+                  helperText={t('recipes.ingredients.inventoryHelpText')}
                   InputProps={{
                     ...params.InputProps,
                     sx: { borderRadius: '8px' },
@@ -1510,7 +1512,7 @@ const RecipeForm = ({ recipeId }) => {
                     <Box>
                       <Typography variant="body1">{option.name}</Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {option.unitPrice ? `Cena: ${option.unitPrice.toFixed(2)} EUR/${option.unit}` : 'Brak ceny jednostkowej'}
+                        {option.unitPrice ? t('recipes.ingredients.priceInfo', {price: option.unitPrice.toFixed(2), unit: option.unit}) : t('recipes.ingredients.noPriceInfo')}
                       </Typography>
                     </Box>
                   </li>
@@ -1544,13 +1546,13 @@ const RecipeForm = ({ recipeId }) => {
               <Table>
                 <TableHead sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.6)' : 'rgba(240, 245, 250, 0.8)' }}>
                   <TableRow>
-                    <TableCell width="25%"><Typography variant="subtitle2">SKU składnika</Typography></TableCell>
-                    <TableCell width="19%"><Typography variant="subtitle2">Ilość</Typography></TableCell>
-                    <TableCell width="10%"><Typography variant="subtitle2">Jednostka</Typography></TableCell>
+                    <TableCell width="25%"><Typography variant="subtitle2">{t('recipes.ingredients.ingredientSKU')}</Typography></TableCell>
+                    <TableCell width="19%"><Typography variant="subtitle2">{t('recipes.ingredients.quantity')}</Typography></TableCell>
+                    <TableCell width="10%"><Typography variant="subtitle2">{t('recipes.ingredients.unit')}</Typography></TableCell>
                     <TableCell width="15%">
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <Typography variant="subtitle2">Numer CAS</Typography>
-                        <Tooltip title="Pobierz numery CAS z pozycji magazynowych">
+                        <Typography variant="subtitle2">{t('recipes.ingredients.casNumber')}</Typography>
+                        <Tooltip title={t('recipes.ingredients.syncCAS')}>
                           <IconButton 
                             size="small" 
                             color="primary" 
@@ -1563,9 +1565,9 @@ const RecipeForm = ({ recipeId }) => {
                         </Tooltip>
                       </Box>
                     </TableCell>
-                    <TableCell width="16%"><Typography variant="subtitle2">Uwagi</Typography></TableCell>
-                    <TableCell width="10%"><Typography variant="subtitle2">Źródło</Typography></TableCell>
-                    <TableCell width="5%"><Typography variant="subtitle2">Akcje</Typography></TableCell>
+                    <TableCell width="16%"><Typography variant="subtitle2">{t('recipes.ingredients.notes')}</Typography></TableCell>
+                    <TableCell width="10%"><Typography variant="subtitle2">{t('recipes.ingredients.source')}</Typography></TableCell>
+                    <TableCell width="5%"><Typography variant="subtitle2">{t('recipes.ingredients.actions')}</Typography></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1610,7 +1612,7 @@ const RecipeForm = ({ recipeId }) => {
                             disabled={!!ingredient.id}
                           />
                           {canConvertUnit(ingredient.unit) && (
-                            <Tooltip title="Przełącz jednostkę miary">
+                            <Tooltip title={t('recipes.ingredients.switchUnit')}>
                               <IconButton 
                                 size="small" 
                                 color="primary" 
@@ -1644,18 +1646,18 @@ const RecipeForm = ({ recipeId }) => {
                           <Chip 
                             size="small" 
                             color="primary" 
-                            label="Stany" 
+                            label={t('recipes.ingredients.fromInventoryChip')} 
                             icon={<InventoryIcon />} 
-                            title="Składnik ze stanów - ma przypisaną cenę do kalkulacji kosztów" 
+                            title={t('recipes.ingredients.fromInventoryTooltip')} 
                             sx={{ borderRadius: '16px' }}
                           />
                         ) : (
                           <Chip 
                             size="small" 
                             color="default" 
-                            label="Ręczny" 
+                            label={t('recipes.ingredients.manualChip')} 
                             icon={<EditIcon />} 
-                            title="Składnik dodany ręcznie - brak ceny do kalkulacji kosztów" 
+                            title={t('recipes.ingredients.manualTooltip')} 
                             sx={{ borderRadius: '16px' }}
                           />
                         )}
@@ -1687,10 +1689,10 @@ const RecipeForm = ({ recipeId }) => {
             >
               <InventoryIcon sx={{ fontSize: 40, color: 'text.secondary', mb: 1 }} />
               <Typography variant="body1" color="text.secondary" gutterBottom>
-                Brak składników. 
+                {t('recipes.ingredients.noIngredients')} 
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Dodaj składniki ze stanów lub ręcznie używając przycisków powyżej.
+                {t('recipes.ingredients.noIngredientsHelpText')}
               </Typography>
             </Paper>
           )}
@@ -1723,7 +1725,7 @@ const RecipeForm = ({ recipeId }) => {
         >
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <ScienceIcon color="secondary" sx={{ mr: 1 }} />
-            <Typography variant="h6" fontWeight="500">Składniki odżywcze</Typography>
+            <Typography variant="h6" fontWeight="500">{t('recipes.nutrients.title')}</Typography>
           </Box>
           
           <Box sx={{ display: 'flex', gap: 1 }}>
@@ -1734,7 +1736,7 @@ const RecipeForm = ({ recipeId }) => {
               startIcon={<AddIcon />}
               sx={{ borderRadius: '20px' }}
             >
-              Dodaj składnik
+              {t('recipes.nutrients.addNutrient')}
             </Button>
             <Button 
               variant="outlined"
@@ -1744,7 +1746,7 @@ const RecipeForm = ({ recipeId }) => {
               startIcon={<ScienceIcon />}
               sx={{ borderRadius: '20px' }}
             >
-              Nowy składnik
+              {t('recipes.nutrients.newNutrient')}
             </Button>
           </Box>
         </Box>
@@ -1753,13 +1755,13 @@ const RecipeForm = ({ recipeId }) => {
           {/* Pole dla podstawy składników odżywczych */}
           <Box sx={{ mb: 3 }}>
             <TextField
-              label="Podstawa składników odżywczych"
+              label={t('recipes.nutrients.nutritionalBasis')}
               name="nutritionalBasis"
               value={recipeData.nutritionalBasis}
               onChange={handleNutritionalBasisChange}
               fullWidth
               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-              helperText="Określ podstawę (np. '1 caps', '100g', '1 porcja'), dla której podane są wartości składników odżywczych"
+              helperText={t('recipes.nutrients.nutritionalBasisHelpText')}
               InputProps={{
                 startAdornment: (
                   <Box sx={{ color: 'text.secondary', mr: 1, display: 'flex', alignItems: 'center' }}>
@@ -1775,13 +1777,13 @@ const RecipeForm = ({ recipeId }) => {
               <Table>
                 <TableHead sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.6)' : 'rgba(240, 245, 250, 0.8)' }}>
                   <TableRow>
-                    <TableCell width="18%"><Typography variant="subtitle2">Składnik</Typography></TableCell>
-                    <TableCell width="18%"><Typography variant="subtitle2">Nazwa</Typography></TableCell>
-                    <TableCell width="12%"><Typography variant="subtitle2">Ilość</Typography></TableCell>
-                    <TableCell width="8%"><Typography variant="subtitle2">Jednostka</Typography></TableCell>
-                    <TableCell width="14%"><Typography variant="subtitle2">Kategoria</Typography></TableCell>
-                    <TableCell width="20%"><Typography variant="subtitle2">Uwagi</Typography></TableCell>
-                    <TableCell width="10%"><Typography variant="subtitle2">Akcje</Typography></TableCell>
+                    <TableCell width="18%"><Typography variant="subtitle2">{t('recipes.nutrients.component')}</Typography></TableCell>
+                    <TableCell width="18%"><Typography variant="subtitle2">{t('recipes.nutrients.name')}</Typography></TableCell>
+                    <TableCell width="12%"><Typography variant="subtitle2">{t('recipes.nutrients.quantity')}</Typography></TableCell>
+                    <TableCell width="8%"><Typography variant="subtitle2">{t('recipes.nutrients.unit')}</Typography></TableCell>
+                    <TableCell width="14%"><Typography variant="subtitle2">{t('recipes.nutrients.category')}</Typography></TableCell>
+                    <TableCell width="20%"><Typography variant="subtitle2">{t('recipes.nutrients.notes')}</Typography></TableCell>
+                    <TableCell width="10%"><Typography variant="subtitle2">{t('recipes.nutrients.actions')}</Typography></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1795,7 +1797,7 @@ const RecipeForm = ({ recipeId }) => {
                             // Dodaj specjalną opcję na początku listy, jeśli nie ma składników lub są ładowane
                             ...(loadingComponents ? [] : [{ 
                               isAddNewOption: true,
-                              name: 'Dodaj nowy składnik odżywczy',
+                              name: t('recipes.nutrients.addNewNutritionalComponent'),
                               code: 'ADD_NEW',
                               unit: '',
                               category: 'Brak'
@@ -1852,7 +1854,7 @@ const RecipeForm = ({ recipeId }) => {
                             <TextField
                               {...params}
                               variant="standard"
-                              placeholder="Wybierz składnik..."
+                              placeholder={t('recipes.nutrients.selectComponent')}
                               InputProps={{
                                 ...params.InputProps,
                                 endAdornment: (
@@ -2070,10 +2072,10 @@ const RecipeForm = ({ recipeId }) => {
             >
               <ScienceIcon sx={{ fontSize: 40, color: 'text.secondary', mb: 1 }} />
               <Typography variant="body1" color="text.secondary" gutterBottom>
-                Brak składników odżywczych. 
+                {t('recipes.nutrients.noNutrients')} 
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Dodaj białko, węglowodany, tłuszcze, kalorie, witaminy, minerały i inne składniki odżywcze używając przycisku powyżej.
+                {t('recipes.nutrients.noNutrientsHelpText')}
               </Typography>
             </Paper>
           )}
