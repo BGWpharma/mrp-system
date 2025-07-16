@@ -24,8 +24,10 @@ import CalculatorPage from './CalculatorPage';
 import { initializeMissingCostFields } from '../../services/productionService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from 'react-i18next';
 
 const ProductionPage = () => {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState(0);
   const [viewMode, setViewMode] = useState('list');
   const [adminDialogOpen, setAdminDialogOpen] = useState(false);
@@ -81,13 +83,13 @@ const ProductionPage = () => {
   const isAdmin = currentUser && (currentUser.role === 'admin' || currentUser.isAdmin);
   
   const tabData = [
-          { icon: <ListIcon />, label: "Lista zadań", value: 0 },
-    { icon: <TimelineIcon />, label: "Timeline", value: 1 },
-    { icon: <ReportIcon />, label: "Raport MO", value: 2 },
-    { icon: <FormsIcon />, label: "Formularze", value: 3 },
-    { icon: <ForecastIcon />, label: "Prognoza zapotrzebowania", value: 4 },
-    { icon: <CalculateIcon />, label: "Kalkulator", value: 5 },
-    { icon: <BusinessIcon />, label: "Stanowiska produkcyjne", value: 6 }
+          { icon: <ListIcon />, label: t('production.taskList.tabs.taskList'), value: 0 },
+    { icon: <TimelineIcon />, label: t('production.taskList.tabs.timeline'), value: 1 },
+    { icon: <ReportIcon />, label: t('production.taskList.tabs.moReport'), value: 2 },
+    { icon: <FormsIcon />, label: t('production.taskList.tabs.forms'), value: 3 },
+    { icon: <ForecastIcon />, label: t('production.taskList.tabs.forecast'), value: 4 },
+    { icon: <CalculateIcon />, label: t('production.taskList.tabs.calculator'), value: 5 },
+    { icon: <BusinessIcon />, label: t('production.taskList.tabs.workstations'), value: 6 }
   ];
   
   // Funkcja renderująca zawartość aktualnie wybranej zakładki

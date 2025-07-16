@@ -1393,7 +1393,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                               secondary={
                                                 <React.Fragment>
                                                   <Typography component="span" variant="body2" color="text.primary">
-                                                    Ilość: {batch.quantity} {item.unit}
+                                                    {t('common.quantity')}: {batch.quantity} {item.unit}
                                                   </Typography>
                                                   {batch.receivedDate && (
                                                     <Typography component="span" variant="body2" display="block" color="text.secondary">

@@ -79,8 +79,11 @@ import { getWorkstationById } from '../../services/workstationService';
 import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
 import { exportToCSV } from '../../utils/exportUtils';
 import { getUsersDisplayNames } from '../../services/userService';
+import { useTranslation } from 'react-i18next';
 
 const TaskList = () => {
+  const { t } = useTranslation();
+  
   // Funkcja formatowania daty i godziny w formacie liczbowym
   const formatDateTimeNumeric = (date) => {
     if (!date) return '—';
@@ -790,7 +793,7 @@ const TaskList = () => {
       case 'Zaplanowane':
       case 'Wstrzymane':
         return (
-          <Tooltip title="Rozpocznij produkcję">
+          <Tooltip title={t('production.tooltips.startProduction')}>
             <IconButton 
               color="warning" 
               onClick={() => handleStatusChange(task.id, 'W trakcie')}
@@ -802,7 +805,7 @@ const TaskList = () => {
         );
       case 'W trakcie':
         return (
-          <Tooltip title="Zatrzymaj produkcję">
+          <Tooltip title={t('production.tooltips.stopProduction')}>
             <IconButton 
               color="error" 
               onClick={() => handleStopProductionDirect(task)}
@@ -814,7 +817,7 @@ const TaskList = () => {
         );
       case 'Potwierdzenie zużycia':
         return (
-          <Tooltip title="Potwierdź zużycie materiałów">
+                      <Tooltip title={t('production.tooltips.confirmConsumption')}>
             <IconButton 
               color="info" 
               component={Link}
@@ -955,24 +958,24 @@ const TaskList = () => {
 
       // Definicja nagłówków dla CSV (usunięto "Priorytet")
       const headers = [
-        { label: 'Numer MO', key: 'moNumber' },
-        { label: 'Nazwa zadania', key: 'name' },
-        { label: 'Produkt', key: 'productName' },
-        { label: 'Ilość', key: 'quantity' },
-        { label: 'Jednostka', key: 'unit' },
-        { label: 'Pozostało do produkcji', key: 'remainingQuantity' },
-        { label: 'Status', key: 'status' },
-        { label: 'Stanowisko produkcyjne', key: 'workstationName' },
-        { label: 'Planowany start', key: 'scheduledDate' },
-        { label: 'Planowane zakończenie', key: 'endDate' },
-        { label: 'Szacowany czas produkcji (godz.)', key: 'estimatedDurationHours' },
-        { label: 'Czas na jednostkę (min.)', key: 'productionTimePerUnit' },
-        { label: 'Numer zamówienia klienta', key: 'orderNumber' },
-        { label: 'Klient', key: 'clientName' },
-        { label: 'Opis', key: 'description' },
-        { label: 'Numer partii (LOT)', key: 'lotNumber' },
-        { label: 'Data utworzenia', key: 'createdAt' },
-        { label: 'Utworzony przez', key: 'createdBy' }
+        { label: t('production.csvHeaders.moNumber'), key: 'moNumber' },
+        { label: t('production.csvHeaders.taskName'), key: 'name' },
+        { label: t('production.csvHeaders.product'), key: 'productName' },
+        { label: t('production.csvHeaders.quantity'), key: 'quantity' },
+        { label: t('production.csvHeaders.unit'), key: 'unit' },
+        { label: t('production.csvHeaders.remainingQuantity'), key: 'remainingQuantity' },
+        { label: t('production.csvHeaders.status'), key: 'status' },
+        { label: t('production.csvHeaders.workstationName'), key: 'workstationName' },
+        { label: t('production.csvHeaders.plannedStart'), key: 'scheduledDate' },
+        { label: t('production.csvHeaders.plannedEnd'), key: 'endDate' },
+        { label: t('production.csvHeaders.estimatedDurationHours'), key: 'estimatedDurationHours' },
+        { label: t('production.csvHeaders.productionTimePerUnit'), key: 'productionTimePerUnit' },
+        { label: t('production.csvHeaders.orderNumber'), key: 'orderNumber' },
+        { label: t('production.csvHeaders.client'), key: 'clientName' },
+        { label: t('production.csvHeaders.description'), key: 'description' },
+        { label: t('production.csvHeaders.lotNumber'), key: 'lotNumber' },
+        { label: t('production.csvHeaders.createdAt'), key: 'createdAt' },
+        { label: t('production.csvHeaders.createdBy'), key: 'createdBy' }
       ];
       
       // Przygotuj dane do eksportu
@@ -1068,7 +1071,7 @@ const TaskList = () => {
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
               <Box sx={{ minWidth: '45%' }}>
                 <Typography variant="caption" color="text.secondary">
-                  Produkt:
+                  {t('production.taskListLabels.product')}
                 </Typography>
                 <Typography variant="body2">
                   {task.productName}
@@ -1077,7 +1080,7 @@ const TaskList = () => {
               
               <Box>
                 <Typography variant="caption" color="text.secondary">
-                  Ilość / Pozostało:
+                  {t('production.taskListLabels.quantityRemaining')}
                 </Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
                   <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
@@ -1088,7 +1091,7 @@ const TaskList = () => {
                     color={remainingQuantity === 0 ? 'success.main' : (remainingQuantity < task.quantity * 0.2 ? 'warning.main' : 'text.secondary')}
                     sx={{ fontSize: '0.7rem' }}
                   >
-                    pozostało: {remainingQuantity} {task.unit || 'szt.'}
+                    {t('production.taskListLabels.remaining')} {remainingQuantity} {task.unit || 'szt.'}
                   </Typography>
                 </Box>
               </Box>
@@ -1097,7 +1100,7 @@ const TaskList = () => {
             {workstationNames[task.workstationId] && (
               <Box sx={{ mt: 0.5 }}>
                 <Typography variant="caption" color="text.secondary">
-                  Stanowisko:
+                  {t('production.taskListLabels.workstation')}
                 </Typography>
                 <Typography variant="body2">
                   {workstationNames[task.workstationId] || task.workstationName || '-'}
@@ -1175,7 +1178,7 @@ const TaskList = () => {
           fontSize: isMobile ? '1.1rem' : '1.5rem',
           mb: isMobile ? 0.5 : 1
         }}>
-          Zadania Produkcyjne
+          {t('production.taskList.title')}
         </Typography>
         
         <Box sx={{ 
@@ -1233,7 +1236,7 @@ const TaskList = () => {
                 }
               }}
             >
-              <InputLabel id="status-filter-label">{isMobile ? "Status" : "Status"}</InputLabel>
+              <InputLabel id="status-filter-label">{t('production.taskListColumns.status')}</InputLabel>
               <Select
                 labelId="status-filter-label"
                 id="status-filter"
@@ -1331,7 +1334,7 @@ const TaskList = () => {
           </Box>
         ) : filteredTasks.length === 0 ? (
           <Paper sx={{ p: 3, textAlign: 'center' }}>
-            <Typography variant="body1">Brak zadań produkcyjnych spełniających kryteria.</Typography>
+            <Typography variant="body1">{t('production.taskListLabels.noTasksMessage')}</Typography>
           </Paper>
         ) : isMobile ? (
           // Widok mobilny - karty zamiast tabeli
@@ -1350,7 +1353,7 @@ const TaskList = () => {
                       sx={{ cursor: 'pointer', userSelect: 'none' }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        Nazwa zadania
+                        {t('production.taskListColumns.taskName')}
                         {sortField === 'moNumber' && (
                           <ArrowDropDownIcon 
                             sx={{ 
@@ -1369,7 +1372,7 @@ const TaskList = () => {
                       sx={{ cursor: 'pointer', userSelect: 'none' }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        Produkt
+                        {t('production.taskListColumns.product')}
                         {sortField === 'productName' && (
                           <ArrowDropDownIcon 
                             sx={{ 
@@ -1388,7 +1391,7 @@ const TaskList = () => {
                       sx={{ cursor: 'pointer', userSelect: 'none' }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        Ilość / Pozostało
+                        {t('production.taskListColumns.quantityProgress')}
                         {sortField === 'quantity' && (
                           <ArrowDropDownIcon 
                             sx={{ 
@@ -1401,14 +1404,14 @@ const TaskList = () => {
                       </Box>
                     </TableCell>
                   )}
-                  {visibleColumns.workstation && <TableCell>Stanowisko</TableCell>}
+                  {visibleColumns.workstation && <TableCell>{t('production.taskListColumns.workstation')}</TableCell>}
                   {visibleColumns.status && (
                     <TableCell
                       onClick={() => handleSort('status')}
                       sx={{ cursor: 'pointer', userSelect: 'none' }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        Status
+                        {t('production.taskListColumns.status')}
                         {sortField === 'status' && (
                           <ArrowDropDownIcon 
                             sx={{ 
@@ -1421,14 +1424,14 @@ const TaskList = () => {
                       </Box>
                     </TableCell>
                   )}
-                  {visibleColumns.materialsReserved && <TableCell>Surowce zarezerwowane</TableCell>}
+                  {visibleColumns.materialsReserved && <TableCell>{t('production.taskListColumns.materialsReserved')}</TableCell>}
                   {visibleColumns.plannedStart && (
                     <TableCell
                       onClick={() => handleSort('scheduledDate')}
                       sx={{ cursor: 'pointer', userSelect: 'none' }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        Planowany start
+                        {t('production.taskListColumns.plannedStart')}
                         {sortField === 'scheduledDate' && (
                           <ArrowDropDownIcon 
                             sx={{ 
@@ -1447,7 +1450,7 @@ const TaskList = () => {
                       sx={{ cursor: 'pointer', userSelect: 'none' }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        Planowane zakończenie
+                        {t('production.taskListColumns.plannedEnd')}
                         {sortField === 'endDate' && (
                           <ArrowDropDownIcon 
                             sx={{ 
@@ -1460,9 +1463,9 @@ const TaskList = () => {
                       </Box>
                     </TableCell>
                   )}
-                  {visibleColumns.cost && <TableCell>Koszt jednostkowy</TableCell>}
-                  {visibleColumns.totalCost && <TableCell>Koszt całkowity</TableCell>}
-                  {visibleColumns.actions && <TableCell>Akcje</TableCell>}
+                  {visibleColumns.cost && <TableCell>{t('production.taskListColumns.unitCost')}</TableCell>}
+                  {visibleColumns.totalCost && <TableCell>{t('production.taskListColumns.totalCost')}</TableCell>}
+                  {visibleColumns.actions && <TableCell>{t('production.taskListColumns.actions')}</TableCell>}
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1655,37 +1658,37 @@ const TaskList = () => {
       >
         <MenuItem onClick={() => handleSortChange('moNumber')}>
           <ListItemText 
-            primary="Nazwa zadania" 
+            primary={t('production.taskListColumns.taskName')} 
             secondary={sortField === 'moNumber' ? `(${sortOrder === 'asc' ? 'A-Z' : 'Z-A'})` : ''}
           />
         </MenuItem>
         <MenuItem onClick={() => handleSortChange('productName')}>
           <ListItemText 
-            primary="Produkt" 
+            primary={t('production.taskListColumns.product')} 
             secondary={sortField === 'productName' ? `(${sortOrder === 'asc' ? 'A-Z' : 'Z-A'})` : ''}
           />
         </MenuItem>
         <MenuItem onClick={() => handleSortChange('quantity')}>
           <ListItemText 
-            primary="Ilość" 
+            primary={t('production.taskListColumns.quantityProgress')} 
             secondary={sortField === 'quantity' ? `(${sortOrder === 'asc' ? 'rosnąco' : 'malejąco'})` : ''}
           />
         </MenuItem>
         <MenuItem onClick={() => handleSortChange('status')}>
           <ListItemText 
-            primary="Status" 
+            primary={t('production.taskListColumns.status')} 
             secondary={sortField === 'status' ? `(${sortOrder === 'asc' ? 'A-Z' : 'Z-A'})` : ''}
           />
         </MenuItem>
         <MenuItem onClick={() => handleSortChange('scheduledDate')}>
           <ListItemText 
-            primary="Planowany start" 
+            primary={t('production.taskListColumns.plannedStart')} 
             secondary={sortField === 'scheduledDate' ? `(${sortOrder === 'asc' ? 'najwcześniej' : 'najpóźniej'})` : ''}
           />
         </MenuItem>
         <MenuItem onClick={() => handleSortChange('endDate')}>
           <ListItemText 
-            primary="Planowane zakończenie" 
+            primary={t('production.taskListColumns.plannedEnd')} 
             secondary={sortField === 'endDate' ? `(${sortOrder === 'asc' ? 'najwcześniej' : 'najpóźniej'})` : ''}
           />
         </MenuItem>
@@ -1699,47 +1702,47 @@ const TaskList = () => {
       >
         <MenuItem onClick={() => toggleColumnVisibility('name')}>
           <Checkbox checked={visibleColumns.name} />
-          <ListItemText primary="Nazwa zadania" />
+          <ListItemText primary={t('production.taskListColumns.taskName')} />
         </MenuItem>
         <MenuItem onClick={() => toggleColumnVisibility('productName')}>
           <Checkbox checked={visibleColumns.productName} />
-          <ListItemText primary="Produkt" />
+          <ListItemText primary={t('production.taskListColumns.product')} />
         </MenuItem>
         <MenuItem onClick={() => toggleColumnVisibility('quantityProgress')}>
           <Checkbox checked={visibleColumns.quantityProgress} />
-          <ListItemText primary="Ilość / Pozostało" />
+          <ListItemText primary={t('production.taskListColumns.quantityProgress')} />
         </MenuItem>
         <MenuItem onClick={() => toggleColumnVisibility('workstation')}>
           <Checkbox checked={visibleColumns.workstation} />
-          <ListItemText primary="Stanowisko" />
+          <ListItemText primary={t('production.taskListColumns.workstation')} />
         </MenuItem>
         <MenuItem onClick={() => toggleColumnVisibility('status')}>
           <Checkbox checked={visibleColumns.status} />
-          <ListItemText primary="Status" />
+          <ListItemText primary={t('production.taskListColumns.status')} />
         </MenuItem>
         <MenuItem onClick={() => toggleColumnVisibility('materialsReserved')}>
           <Checkbox checked={visibleColumns.materialsReserved} />
-          <ListItemText primary="Surowce zarezerwowane" />
+          <ListItemText primary={t('production.taskListColumns.materialsReserved')} />
         </MenuItem>
         <MenuItem onClick={() => toggleColumnVisibility('plannedStart')}>
           <Checkbox checked={visibleColumns.plannedStart} />
-          <ListItemText primary="Planowany start" />
+          <ListItemText primary={t('production.taskListColumns.plannedStart')} />
         </MenuItem>
         <MenuItem onClick={() => toggleColumnVisibility('plannedEnd')}>
           <Checkbox checked={visibleColumns.plannedEnd} />
-          <ListItemText primary="Planowane zakończenie" />
+          <ListItemText primary={t('production.taskListColumns.plannedEnd')} />
         </MenuItem>
         <MenuItem onClick={() => toggleColumnVisibility('cost')}>
           <Checkbox checked={visibleColumns.cost} />
-          <ListItemText primary="Koszt jednostkowy" />
+          <ListItemText primary={t('production.taskListColumns.unitCost')} />
         </MenuItem>
         <MenuItem onClick={() => toggleColumnVisibility('totalCost')}>
           <Checkbox checked={visibleColumns.totalCost} />
-          <ListItemText primary="Koszt całkowity" />
+          <ListItemText primary={t('production.taskListColumns.totalCost')} />
         </MenuItem>
         <MenuItem onClick={() => toggleColumnVisibility('actions')}>
           <Checkbox checked={visibleColumns.actions} />
-          <ListItemText primary="Akcje" />
+          <ListItemText primary={t('production.taskListColumns.actions')} />
         </MenuItem>
       </Menu>
       
@@ -1750,7 +1753,7 @@ const TaskList = () => {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Zatrzymaj produkcję</DialogTitle>
+        <DialogTitle>{t('production.taskListLabels.stopProduction')}</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
             Wprowadź informacje o zakończonej sesji produkcyjnej

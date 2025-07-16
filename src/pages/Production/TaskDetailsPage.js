@@ -143,8 +143,10 @@ import { generateEndProductReportPDF } from '../../services/endProductReportServ
 import ProductionControlFormDialog from '../../components/production/ProductionControlFormDialog';
 import CompletedMOFormDialog from '../../components/production/CompletedMOFormDialog';
 import ProductionShiftFormDialog from '../../components/production/ProductionShiftFormDialog';
+import { useTranslation } from 'react-i18next';
 
 const TaskDetailsPage = () => {
+  const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   const { showSuccess, showError, showInfo, showWarning } = useNotification();
@@ -6019,12 +6021,12 @@ const TaskDetailsPage = () => {
           {/* Główne zakładki */}
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
             <Tabs value={mainTab} onChange={handleMainTabChange} aria-label="Główne zakładki szczegółów zadania" variant="scrollable" scrollButtons="auto">
-              <Tab label="Dane podstawowe" icon={<InfoIcon />} iconPosition="start" />
-              <Tab label="Materiały i Koszty" icon={<Materials2Icon />} iconPosition="start" />
-              <Tab label="Produkcja i Plan" icon={<ProductionIcon />} iconPosition="start" />
-              <Tab label="Formularze" icon={<FormIcon />} iconPosition="start" />
-              <Tab label="Historia zmian" icon={<TimelineIcon />} iconPosition="start" />
-              <Tab label="Raport gotowego produktu" icon={<AssessmentIcon />} iconPosition="start" />
+              <Tab label={t('production.taskDetails.tabs.basicData')} icon={<InfoIcon />} iconPosition="start" />
+              <Tab label={t('production.taskDetails.tabs.materialsAndCosts')} icon={<Materials2Icon />} iconPosition="start" />
+              <Tab label={t('production.taskDetails.tabs.productionAndPlan')} icon={<ProductionIcon />} iconPosition="start" />
+              <Tab label={t('production.taskDetails.tabs.forms')} icon={<FormIcon />} iconPosition="start" />
+              <Tab label={t('production.taskDetails.tabs.changeHistory')} icon={<TimelineIcon />} iconPosition="start" />
+              <Tab label={t('production.taskDetails.tabs.finishedProductReport')} icon={<AssessmentIcon />} iconPosition="start" />
             </Tabs>
           </Box>
 
@@ -6441,9 +6443,9 @@ const TaskDetailsPage = () => {
                     <Box sx={{ width: '100%' }}>
                       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
                         <Tabs value={formTab || 0} onChange={(e, newValue) => setFormTab(newValue)} aria-label="Zakładki formularzy">
-                          <Tab label={`Raporty zakończonych MO (${formResponses.completedMO.length})`} />
-                          <Tab label={`Raporty kontroli produkcji (${formResponses.productionControl.length})`} />
-                          <Tab label={`Raporty zmian produkcyjnych (${formResponses.productionShift.length})`} />
+                          <Tab label={`${t('production.taskDetails.formTabs.completedMO')} (${formResponses.completedMO.length})`} />
+                          <Tab label={`${t('production.taskDetails.formTabs.productionControl')} (${formResponses.productionControl.length})`} />
+                          <Tab label={`${t('production.taskDetails.formTabs.productionShift')} (${formResponses.productionShift.length})`} />
                         </Tabs>
                       </Box>
                       {formTab === 0 && (<>{formResponses.completedMO.length === 0 ? (<Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>Brak raportów zakończonych MO dla tego zadania.</Typography>) : (<TableContainer><Table size="small"><TableHead><TableRow><TableCell>Data</TableCell><TableCell>Godzina</TableCell><TableCell>Email</TableCell><TableCell>Numer MO</TableCell><TableCell>Ilość produktu</TableCell><TableCell>Straty opakowania</TableCell><TableCell>Straty wieczka</TableCell><TableCell>Straty surowca</TableCell><TableCell>Raport mieszań</TableCell><TableCell>Akcje</TableCell></TableRow></TableHead><TableBody>{formResponses.completedMO.map((form) => (<TableRow key={form.id}><TableCell>{form.date ? format(new Date(form.date), 'dd.MM.yyyy') : '-'}</TableCell><TableCell>{form.time || (form.date ? format(new Date(form.date), 'HH:mm') : '-')}</TableCell><TableCell>{form.email || '-'}</TableCell><TableCell>{form.moNumber || '-'}</TableCell><TableCell>{form.productQuantity || '-'}</TableCell><TableCell>{form.packagingLoss || '-'}</TableCell><TableCell>{form.bulkLoss || '-'}</TableCell><TableCell>{form.rawMaterialLoss || '-'}</TableCell><TableCell>{form.mixingPlanReportUrl ? (<IconButton size="small" color="primary" component="a" href={form.mixingPlanReportUrl} target="_blank" title="Otwórz raport"><VisibilityIcon fontSize="small" /></IconButton>) : '-'}</TableCell><TableCell><IconButton size="small" color="primary" component={Link} to={`/production/forms/completed-mo?edit=true`} onClick={() => sessionStorage.setItem('editFormData', JSON.stringify(form))} title="Edytuj raport"><EditIcon fontSize="small" /></IconButton></TableCell></TableRow>))}</TableBody></Table></TableContainer>)}</>)}

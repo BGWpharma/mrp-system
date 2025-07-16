@@ -577,7 +577,8 @@
         "mainWarehouse": "Main warehouse",
         "unknownDate": "Unknown date",
         "noBatchesAssigned": "No batches assigned to this item",
-        "received": "Received"
+        "received": "Received",
+        "warehouse": "Warehouse"
       }
     }
   },
@@ -1490,6 +1491,100 @@
         "cancel": "Cancel",
         "delete": "Delete"
       }
+    }
+  },
+  "production": {
+    "title": "Production",
+    "taskList": {
+      "title": "Production Tasks",
+      "tabs": {
+        "taskList": "Task List",
+        "timeline": "Timeline",
+        "moReport": "MO Report",
+        "forms": "Forms",
+        "forecast": "Demand Forecast",
+        "calculator": "Calculator",
+        "workstations": "Workstations"
+      }
+    },
+    "taskDetails": {
+      "tabs": {
+        "basicData": "Basic Data",
+        "materialsAndCosts": "Materials and Costs",
+        "productionAndPlan": "Production and Plan",
+        "forms": "Forms",
+        "changeHistory": "Change History",
+        "finishedProductReport": "Finished Product Report"
+      },
+      "formTabs": {
+        "completedMO": "Completed MO Reports",
+        "productionControl": "Production Control Reports",
+        "productionShift": "Production Shift Reports"
+      }
+    },
+    "productionReport": {
+      "tabs": {
+        "taskList": "Task List",
+        "detailedTaskList": "Detailed Task List"
+      },
+      "tableHeaders": {
+        "taskName": "Task Name",
+        "moNumber": "MO No.",
+        "product": "Product",
+        "client": "Client",
+        "date": "Date",
+        "status": "Status",
+        "workTime": "Work Time (min)"
+      },
+      "noTasksInPeriod": "No production tasks in the selected period.",
+      "customerFilter": "Client",
+      "allCustomers": "All clients"
+    },
+    "taskListColumns": {
+      "taskName": "Task Name",
+      "product": "Product",
+      "quantityProgress": "Quantity / Remaining",
+      "workstation": "Workstation",
+      "status": "Status",
+      "materialsReserved": "Materials Reserved",
+      "plannedStart": "Planned Start",
+      "plannedEnd": "Planned End",
+      "unitCost": "Unit Cost",
+      "totalCost": "Total Cost",
+      "actions": "Actions"
+    },
+    "taskListLabels": {
+      "noTasksMessage": "No production tasks matching the criteria.",
+      "product": "Product:",
+      "quantityRemaining": "Quantity / Remaining:",
+      "remaining": "remaining:",
+      "workstation": "Workstation:",
+      "stopProduction": "Stop Production"
+    },
+    "tooltips": {
+      "startProduction": "Start Production",
+      "stopProduction": "Stop Production",
+      "confirmConsumption": "Confirm Material Consumption"
+    },
+    "csvHeaders": {
+      "moNumber": "MO Number",
+      "taskName": "Task Name",
+      "product": "Product",
+      "quantity": "Quantity",
+      "unit": "Unit",
+      "remainingQuantity": "Remaining to Produce",
+      "status": "Status",
+      "workstationName": "Production Workstation",
+      "plannedStart": "Planned Start",
+      "plannedEnd": "Planned End",
+      "estimatedDurationHours": "Estimated Production Time (hours)",
+      "productionTimePerUnit": "Time per Unit (min.)",
+      "orderNumber": "Customer Order Number",
+      "client": "Client",
+      "description": "Description",
+      "lotNumber": "Batch Number (LOT)",
+      "createdAt": "Created Date",
+      "createdBy": "Created By"
     }
   }
 } 

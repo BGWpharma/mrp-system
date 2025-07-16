@@ -577,7 +577,8 @@
         "mainWarehouse": "Główny magazyn",
         "unknownDate": "Nieznana data",
         "noBatchesAssigned": "Brak przypisanych partii dla tej pozycji",
-        "received": "Przyjęto"
+        "received": "Przyjęto",
+        "warehouse": "Magazyn"
       }
     }
   },
@@ -1490,6 +1491,100 @@
         "cancel": "Anuluj",
         "delete": "Usuń"
       }
+    }
+  },
+  "production": {
+    "title": "Produkcja",
+    "taskList": {
+      "title": "Zadania Produkcyjne",
+      "tabs": {
+        "taskList": "Lista zadań",
+        "timeline": "Timeline",
+        "moReport": "Raport MO",
+        "forms": "Formularze",
+        "forecast": "Prognoza zapotrzebowania",
+        "calculator": "Kalkulator",
+        "workstations": "Stanowiska produkcyjne"
+      }
+    },
+    "taskDetails": {
+      "tabs": {
+        "basicData": "Dane podstawowe",
+        "materialsAndCosts": "Materiały i Koszty",
+        "productionAndPlan": "Produkcja i Plan",
+        "forms": "Formularze",
+        "changeHistory": "Historia zmian",
+        "finishedProductReport": "Raport gotowego produktu"
+      },
+      "formTabs": {
+        "completedMO": "Raporty zakończonych MO",
+        "productionControl": "Raporty kontroli produkcji",
+        "productionShift": "Raporty zmian produkcyjnych"
+      }
+    },
+    "productionReport": {
+      "tabs": {
+        "taskList": "Lista zadań",
+        "detailedTaskList": "Szczegółowa lista zadań"
+      },
+      "tableHeaders": {
+        "taskName": "Nazwa zadania",
+        "moNumber": "Nr MO",
+        "product": "Produkt",
+        "client": "Klient",
+        "date": "Data",
+        "status": "Status",
+        "workTime": "Czas pracy (min)"
+      },
+      "noTasksInPeriod": "Brak zadań produkcyjnych w wybranym okresie.",
+      "customerFilter": "Klient",
+      "allCustomers": "Wszyscy klienci"
+    },
+    "taskListColumns": {
+      "taskName": "Nazwa zadania",
+      "product": "Produkt",
+      "quantityProgress": "Ilość / Pozostało",
+      "workstation": "Stanowisko",
+      "status": "Status",
+      "materialsReserved": "Surowce zarezerwowane",
+      "plannedStart": "Planowany start",
+      "plannedEnd": "Planowane zakończenie",
+      "unitCost": "Koszt jednostkowy",
+      "totalCost": "Koszt całkowity",
+      "actions": "Akcje"
+    },
+    "taskListLabels": {
+      "noTasksMessage": "Brak zadań produkcyjnych spełniających kryteria.",
+      "product": "Produkt:",
+      "quantityRemaining": "Ilość / Pozostało:",
+      "remaining": "pozostało:",
+      "workstation": "Stanowisko:",
+      "stopProduction": "Zatrzymaj produkcję"
+    },
+    "tooltips": {
+      "startProduction": "Rozpocznij produkcję",
+      "stopProduction": "Zatrzymaj produkcję",
+      "confirmConsumption": "Potwierdź zużycie materiałów"
+    },
+    "csvHeaders": {
+      "moNumber": "Numer MO",
+      "taskName": "Nazwa zadania",
+      "product": "Produkt",
+      "quantity": "Ilość",
+      "unit": "Jednostka",
+      "remainingQuantity": "Pozostało do produkcji",
+      "status": "Status",
+      "workstationName": "Stanowisko produkcyjne",
+      "plannedStart": "Planowany start",
+      "plannedEnd": "Planowane zakończenie",
+      "estimatedDurationHours": "Szacowany czas produkcji (godz.)",
+      "productionTimePerUnit": "Czas na jednostkę (min.)",
+      "orderNumber": "Numer zamówienia klienta",
+      "client": "Klient",
+      "description": "Opis",
+      "lotNumber": "Numer partii (LOT)",
+      "createdAt": "Data utworzenia",
+      "createdBy": "Utworzony przez"
     }
   }
 } 

@@ -63,9 +63,11 @@ import { getAllCustomers } from '../../services/customerService';
 import { getWorkstationById } from '../../services/workstationService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from 'react-i18next';
 import { PRODUCTION_TASK_STATUSES } from '../../utils/constants';
 
 const ProductionReportPage = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState([]);
@@ -422,15 +424,15 @@ const ProductionReportPage = () => {
                   Klient
                 </Typography>
                 <FormControl fullWidth size="small">
-                  <InputLabel sx={{ display: isMobile ? 'none' : 'block' }}>Klient</InputLabel>
+                  <InputLabel sx={{ display: isMobile ? 'none' : 'block' }}>{t('production.productionReport.customerFilter')}</InputLabel>
                   <Select
                     value={selectedCustomer}
                     onChange={(e) => setSelectedCustomer(e.target.value)}
-                    label={isMobile ? "" : "Klient"}
+                    label={isMobile ? "" : t('production.productionReport.customerFilter')}
                     displayEmpty={isMobile}
-                    placeholder={isMobile ? "Klient" : ""}
+                    placeholder={isMobile ? t('production.productionReport.customerFilter') : ""}
                   >
-                    <MenuItem value="all">Wszyscy klienci</MenuItem>
+                    <MenuItem value="all">{t('production.productionReport.allCustomers')}</MenuItem>
                     {customers.map(customer => (
                       <MenuItem key={customer.id} value={customer.id}>
                         {customer.name}
@@ -604,7 +606,7 @@ const ProductionReportPage = () => {
           {isMobile ? (
             <Paper sx={{ p: 1.5 }}>
               <Typography variant="caption" sx={{ display: 'block', mb: 1, fontSize: '0.8rem' }}>
-                Lista zadań
+                {t('production.productionReport.tabs.taskList')}
               </Typography>
               <Divider sx={{ mb: 1.5 }} />
               
@@ -666,26 +668,26 @@ const ProductionReportPage = () => {
           ) : (
             <Paper sx={{ p: 3 }}>
               <Typography variant="h6" gutterBottom>
-                Szczegółowa lista zadań
+                {t('production.productionReport.tabs.detailedTaskList')}
               </Typography>
               <Divider sx={{ mb: 2 }} />
               
               {filteredTasks.length === 0 ? (
                 <Typography align="center" sx={{ py: 3 }}>
-                  Brak zadań produkcyjnych w wybranym okresie.
+                  {t('production.productionReport.noTasksInPeriod')}
                 </Typography>
               ) : (
                 <TableContainer sx={{ overflowX: 'auto' }}>
                   <Table size="medium" sx={{ minWidth: 850 }}>
                     <TableHead>
                       <TableRow>
-                        <TableCell>Nazwa zadania</TableCell>
-                        <TableCell>Nr MO</TableCell>
-                        <TableCell>Produkt</TableCell>
-                        <TableCell>Klient</TableCell>
-                        <TableCell>Data</TableCell>
-                        <TableCell>Status</TableCell>
-                        <TableCell align="right">Czas pracy (min)</TableCell>
+                        <TableCell>{t('production.productionReport.tableHeaders.taskName')}</TableCell>
+                        <TableCell>{t('production.productionReport.tableHeaders.moNumber')}</TableCell>
+                        <TableCell>{t('production.productionReport.tableHeaders.product')}</TableCell>
+                        <TableCell>{t('production.productionReport.tableHeaders.client')}</TableCell>
+                        <TableCell>{t('production.productionReport.tableHeaders.date')}</TableCell>
+                        <TableCell>{t('production.productionReport.tableHeaders.status')}</TableCell>
+                        <TableCell align="right">{t('production.productionReport.tableHeaders.workTime')}</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
