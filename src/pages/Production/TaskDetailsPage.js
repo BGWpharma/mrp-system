@@ -3047,8 +3047,7 @@ const TaskDetailsPage = () => {
             <thead>
               <tr>
                 <th>Nazwa</th>
-                <th>Ilość planowana</th>
-                <th>Ilość rzeczywista</th>
+                <th>Rzeczywista ilość</th>
                 <th>Jednostka</th>
               </tr>
             </thead>
@@ -3056,7 +3055,6 @@ const TaskDetailsPage = () => {
               ${materials.map(material => `
                 <tr>
                   <td>${material.name || 'Nie określono'}</td>
-                  <td>${material.quantity || 0}</td>
                   <td>${materialQuantities[material.id] || 0}</td>
                   <td>${material.unit || 'szt.'}</td>
                 </tr>

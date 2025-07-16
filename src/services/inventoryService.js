@@ -1072,9 +1072,97 @@ import {
         }
       }
       
-      // Dodaj partię
-      if (transactionData.addBatch !== false) {
+      // Sprawdź czy istnieje już partia dla tej pozycji PO przed utworzeniem nowej
+      let existingBatchRef = null;
+      let isNewBatch = true;
+      
+      // Sprawdź flagi wymuszające określone zachowanie
+      const forceAddToExisting = transactionData.forceAddToExisting === true;
+      const forceCreateNew = transactionData.forceCreateNew === true;
+      
+      if (!forceCreateNew && (forceAddToExisting || (transactionData.source === 'purchase' || transactionData.reason === 'purchase'))) {
+        // Sprawdź czy istnieje już partia dla tej kombinacji:
+        // - itemId (ten sam produkt)
+        // - orderId (to samo zamówienie PO) 
+        // - itemPOId (ta sama pozycja w zamówieniu)
+        // - warehouseId (ten sam magazyn)
+        if (transactionData.orderId && transactionData.itemPOId && transactionData.warehouseId) {
+          console.log(`Sprawdzanie istniejących partii dla PO ${transactionData.orderId}, pozycja ${transactionData.itemPOId}, magazyn ${transactionData.warehouseId}`);
+          
+          // Wyszukaj istniejącą partię używając nowego formatu danych
+          const existingBatchQuery = query(
+            collection(db, INVENTORY_BATCHES_COLLECTION),
+            where('itemId', '==', itemId),
+            where('purchaseOrderDetails.id', '==', transactionData.orderId),
+            where('purchaseOrderDetails.itemPoId', '==', transactionData.itemPOId),
+            where('warehouseId', '==', transactionData.warehouseId)
+          );
+          
+          const existingBatchSnapshot = await getDocs(existingBatchQuery);
+          
+          if (!existingBatchSnapshot.empty) {
+            // Znaleziono istniejącą partię - użyj jej
+            const existingBatch = existingBatchSnapshot.docs[0];
+            existingBatchRef = existingBatch.ref;
+            isNewBatch = false;
+            
+            console.log(`Znaleziono istniejącą partię ${existingBatch.id} dla pozycji PO ${transactionData.itemPOId} - dodawanie ${quantity} do istniejącej ilości`);
+            
+            // Aktualizuj istniejącą partię
+            await updateDoc(existingBatchRef, {
+              quantity: increment(Number(quantity)),
+              initialQuantity: increment(Number(quantity)),
+              updatedAt: serverTimestamp(),
+              updatedBy: userId,
+              // Dodaj informacje o ostatnim przyjęciu
+              lastReceiptUpdate: {
+                addedQuantity: Number(quantity),
+                addedAt: serverTimestamp(),
+                transactionId: transactionRef.id
+              }
+            });
+          } else {
+            // Sprawdź również w starszym formacie danych (dla kompatybilności)
+            const oldFormatQuery = query(
+              collection(db, INVENTORY_BATCHES_COLLECTION),
+              where('itemId', '==', itemId),
+              where('sourceDetails.orderId', '==', transactionData.orderId),
+              where('sourceDetails.itemPoId', '==', transactionData.itemPOId),
+              where('warehouseId', '==', transactionData.warehouseId)
+            );
+            
+            const oldFormatSnapshot = await getDocs(oldFormatQuery);
+            
+            if (!oldFormatSnapshot.empty) {
+              // Znaleziono partię w starszym formacie
+              const existingBatch = oldFormatSnapshot.docs[0];
+              existingBatchRef = existingBatch.ref;
+              isNewBatch = false;
+              
+              console.log(`Znaleziono istniejącą partię ${existingBatch.id} (stary format) dla pozycji PO ${transactionData.itemPOId} - dodawanie ${quantity} do istniejącej ilości`);
+              
+              // Aktualizuj istniejącą partię
+              await updateDoc(existingBatchRef, {
+                quantity: increment(Number(quantity)),
+                initialQuantity: increment(Number(quantity)),
+                updatedAt: serverTimestamp(),
+                updatedBy: userId,
+                // Dodaj informacje o ostatnim przyjęciu
+                lastReceiptUpdate: {
+                  addedQuantity: Number(quantity),
+                  addedAt: serverTimestamp(),
+                  transactionId: transactionRef.id
+                }
+              });
+            }
+          }
+        }
+      }
+      
+      // Jeśli nie znaleziono istniejącej partii, utwórz nową
+      if (isNewBatch && transactionData.addBatch !== false) {
         await addDoc(collection(db, INVENTORY_BATCHES_COLLECTION), batch);
+        console.log(`Utworzono nową partię dla pozycji PO ${transactionData.itemPOId || 'brak itemPOId'}`);
       }
       
       // Zamiast bezpośrednio aktualizować ilość, przelicz ją na podstawie partii
@@ -1168,6 +1256,7 @@ import {
         
         if (userIdsToNotify.length > 0) {
           // Utwórz i wyślij powiadomienie
+          const lotNumberForNotification = isNewBatch ? batch.lotNumber : 'LOT dodany do istniejącej partii';
           await createRealtimeInventoryReceiveNotification(
             userIdsToNotify,
             itemId,
@@ -1175,12 +1264,12 @@ import {
             Number(quantity),
             transactionData.warehouseId,
             warehouseName,
-            batch.lotNumber,
+            lotNumberForNotification,
             transactionData.source || 'other',
             transactionData.sourceId || null,
             userId
           );
-          console.log('Wysłano powiadomienie o przyjęciu towaru na magazyn');
+          console.log(`Wysłano powiadomienie o ${isNewBatch ? 'przyjęciu towaru na magazyn (nowa partia)' : 'dodaniu towaru do istniejącej partii'}`);
         }
       } catch (notificationError) {
         console.error('Błąd podczas wysyłania powiadomienia o przyjęciu towaru:', notificationError);
@@ -1189,7 +1278,11 @@ import {
       
       return {
         id: itemId,
-        quantity: await getInventoryItemById(itemId).then(item => item.quantity)
+        quantity: await getInventoryItemById(itemId).then(item => item.quantity),
+        isNewBatch: isNewBatch,
+        message: isNewBatch 
+          ? `Utworzono nową partię LOT: ${batch.lotNumber}` 
+          : `Dodano do istniejącej partii dla pozycji PO ${transactionData.itemPOId}`
       };
     } catch (error) {
       console.error('Error receiving inventory:', error);
@@ -4992,6 +5085,59 @@ import {
     } catch (error) {
       console.error(`Błąd podczas pobierania partii o ID ${batchId}:`, error);
       throw error;
+    }
+  };
+
+  /**
+   * Sprawdza czy pozycja w zamówieniu zakupowym ma już przypisaną partię
+   * @param {string} itemId - ID pozycji magazynowej
+   * @param {string} orderId - ID zamówienia zakupowego  
+   * @param {string} itemPOId - ID pozycji w zamówieniu
+   * @param {string} warehouseId - ID magazynu
+   * @returns {Promise<Object|null>} - Zwraca partię jeśli istnieje, lub null
+   */
+  export const getExistingBatchForPOItem = async (itemId, orderId, itemPOId, warehouseId) => {
+    try {
+      if (!itemId || !orderId || !itemPOId || !warehouseId) {
+        return null;
+      }
+
+      console.log(`Sprawdzanie istniejącej partii dla: itemId=${itemId}, orderId=${orderId}, itemPOId=${itemPOId}, warehouseId=${warehouseId}`);
+
+      // Sprawdź w nowym formacie danych
+      const newFormatQuery = query(
+        collection(db, INVENTORY_BATCHES_COLLECTION),
+        where('itemId', '==', itemId),
+        where('purchaseOrderDetails.id', '==', orderId),
+        where('purchaseOrderDetails.itemPoId', '==', itemPOId),
+        where('warehouseId', '==', warehouseId)
+      );
+
+      const newFormatSnapshot = await getDocs(newFormatQuery);
+      if (!newFormatSnapshot.empty) {
+        const batch = newFormatSnapshot.docs[0];
+        return { id: batch.id, ...batch.data() };
+      }
+
+      // Sprawdź w starszym formacie danych
+      const oldFormatQuery = query(
+        collection(db, INVENTORY_BATCHES_COLLECTION),
+        where('itemId', '==', itemId),
+        where('sourceDetails.orderId', '==', orderId),
+        where('sourceDetails.itemPoId', '==', itemPOId),
+        where('warehouseId', '==', warehouseId)
+      );
+
+      const oldFormatSnapshot = await getDocs(oldFormatQuery);
+      if (!oldFormatSnapshot.empty) {
+        const batch = oldFormatSnapshot.docs[0];
+        return { id: batch.id, ...batch.data() };
+      }
+
+      return null;
+    } catch (error) {
+      console.error(`Błąd podczas sprawdzania istniejącej partii:`, error);
+      return null;
     }
   };
 

@@ -52,6 +52,7 @@ const BatchEditForm = () => {
     notes: '',
     unitPrice: '',
     quantity: '',
+    initialQuantity: '',
     itemId: '',
     purchaseOrderDetails: null
   });
@@ -100,6 +101,7 @@ const BatchEditForm = () => {
             notes: batch.notes || '',
             unitPrice: batch.unitPrice || '',
             quantity: batch.quantity || 0,
+            initialQuantity: batch.initialQuantity || 0,
             itemId: batch.itemId || id,
             purchaseOrderDetails: batch.purchaseOrderDetails || null,
             baseUnitPrice: batch.baseUnitPrice || batch.unitPrice || '',
@@ -141,6 +143,7 @@ const BatchEditForm = () => {
             notes: batch.notes || '',
             unitPrice: batch.unitPrice || '',
             quantity: batch.quantity || 0,
+            initialQuantity: batch.initialQuantity || 0,
             itemId: batch.itemId,
             purchaseOrderDetails: batch.purchaseOrderDetails || null,
             baseUnitPrice: batch.baseUnitPrice || batch.unitPrice || '',
@@ -296,6 +299,7 @@ const BatchEditForm = () => {
         notes: batchData.notes,
         unitPrice: batchData.unitPrice ? parseFloat(batchData.unitPrice) : 0,
         quantity: batchData.quantity ? parseFloat(batchData.quantity) : 0,
+        initialQuantity: batchData.initialQuantity ? parseFloat(batchData.initialQuantity) : 0,
         purchaseOrderDetails: purchaseOrderDetails,
         // Zapisujemy również wartość baseUnitPrice
         baseUnitPrice: batchData.baseUnitPrice ? parseFloat(batchData.baseUnitPrice) : 0,
@@ -507,6 +511,22 @@ const BatchEditForm = () => {
                   endAdornment: <InputAdornment position="end">{item?.unit || 'szt.'}</InputAdornment>,
                   inputProps: { min: 0, step: 0.01 }
                 }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Wartość do wyliczeń PO"
+                name="initialQuantity"
+                type="number"
+                value={batchData.initialQuantity}
+                onChange={handleChange}
+                margin="normal"
+                InputProps={{
+                  endAdornment: <InputAdornment position="end">{item?.unit || 'szt.'}</InputAdornment>,
+                  inputProps: { min: 0, step: 0.01 }
+                }}
+                helperText="Ilość używana do kalkulacji kosztów w zamówieniu zakupowym"
               />
             </Grid>
             <Grid item xs={12}>

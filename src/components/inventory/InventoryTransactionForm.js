@@ -38,10 +38,11 @@ import {
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { pl } from 'date-fns/locale';
-import { getInventoryItemById, receiveInventory, issueInventory, getItemBatches, getAllWarehouses } from '../../services/inventoryService';
+import { getInventoryItemById, receiveInventory, issueInventory, getItemBatches, getAllWarehouses, getExistingBatchForPOItem } from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { Timestamp } from 'firebase/firestore';
+import ConfirmDialog from '../common/ConfirmDialog';
 
 const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
   const [item, setItem] = useState(null);
@@ -83,6 +84,13 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
   // Dodanie stanu dla certyfikatu
   const [certificateFile, setCertificateFile] = useState(null);
   const [certificatePreviewUrl, setCertificatePreviewUrl] = useState(null);
+
+  // Stan dla dialogu wyboru partii
+  const [batchChoiceDialog, setBatchChoiceDialog] = useState({
+    open: false,
+    existingBatch: null,
+    pendingTransaction: null
+  });
 
   useEffect(() => {
     if (initialData) {
@@ -269,13 +277,58 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
       // Wykonaj odpowiednią operację w zależności od typu transakcji
       let result;
       if (isReceive) {
+        // Sprawdź czy istnieje już partia dla tej pozycji PO
+        if (transactionData.source === 'purchase' && transactionData.orderId && transactionData.itemPOId && transactionData.warehouseId) {
+          console.log('Sprawdzam czy istnieje partia dla PO:', {
+            itemId,
+            orderId: transactionData.orderId,
+            itemPOId: transactionData.itemPOId,
+            warehouseId: transactionData.warehouseId
+          });
+          
+          const existingBatch = await getExistingBatchForPOItem(
+            itemId,
+            transactionData.orderId,
+            transactionData.itemPOId,
+            transactionData.warehouseId
+          );
+          
+          if (existingBatch) {
+            console.log('Znaleziono istniejącą partię:', existingBatch);
+            // Zapisz dane transakcji i pokaż dialog wyboru
+            setBatchChoiceDialog({
+              open: true,
+              existingBatch,
+              pendingTransaction: {
+                itemId,
+                quantity: transactionData.quantity,
+                transactionPayload,
+                userId: currentUser.uid
+              }
+            });
+            setProcessing(false);
+            return; // Przerwij wykonanie - czekamy na wybór użytkownika
+          }
+        }
+        
+        // Jeśli nie ma istniejącej partii, wykonaj normalne przyjęcie
         result = await receiveInventory(
           itemId, 
           transactionData.quantity, 
           transactionPayload,
           currentUser.uid
         );
-        showSuccess(`Przyjęto ${transactionData.quantity} ${item.unit} na stan magazynu`);
+        // Pokazuj odpowiedni komunikat w zależności od tego czy partia została zaktualizowana czy utworzona nowa
+        if (result.isNewBatch !== undefined) {
+          if (result.isNewBatch) {
+            showSuccess(`Przyjęto ${transactionData.quantity} ${item.unit} na stan magazynu - utworzono nową partię`);
+          } else {
+            showSuccess(`Przyjęto ${transactionData.quantity} ${item.unit} na stan magazynu - dodano do istniejącej partii`);
+          }
+        } else {
+          // Fallback dla przypadku gdy nie mamy informacji o partii
+          showSuccess(`Przyjęto ${transactionData.quantity} ${item.unit} na stan magazynu`);
+        }
       } else {
         result = await issueInventory(
           itemId, 
@@ -319,6 +372,54 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
 
   const handleDateChange = (date) => {
     setBatchData(prev => ({ ...prev, expiryDate: date }));
+  };
+
+  // Funkcje obsługi dialogu wyboru partii
+  const handleBatchChoiceConfirm = async (addToExisting) => {
+    setProcessing(true);
+    try {
+      const { pendingTransaction } = batchChoiceDialog;
+      let result;
+      
+      if (addToExisting) {
+        // Dodaj flagę do transactionPayload informującą że ma być dodane do istniejącej partii
+        pendingTransaction.transactionPayload.forceAddToExisting = true;
+        result = await receiveInventory(
+          pendingTransaction.itemId,
+          pendingTransaction.quantity,
+          pendingTransaction.transactionPayload,
+          pendingTransaction.userId
+        );
+        showSuccess(`Przyjęto ${pendingTransaction.quantity} ${item.unit} - dodano do istniejącej partii`);
+      } else {
+        // Utwórz nową partię - dodaj flagę informującą że ma być utworzona nowa partia
+        pendingTransaction.transactionPayload.forceCreateNew = true;
+        result = await receiveInventory(
+          pendingTransaction.itemId,
+          pendingTransaction.quantity,
+          pendingTransaction.transactionPayload,
+          pendingTransaction.userId
+        );
+        showSuccess(`Przyjęto ${pendingTransaction.quantity} ${item.unit} - utworzono nową partię`);
+      }
+      
+      // Zamknij dialog
+      setBatchChoiceDialog({ open: false, existingBatch: null, pendingTransaction: null });
+      
+      // Przekieruj użytkownika
+      const urlParams = new URLSearchParams(window.location.search);
+      const returnTo = urlParams.get('returnTo');
+      navigate(returnTo || '/inventory');
+      
+    } catch (error) {
+      showError('Błąd podczas przetwarzania transakcji: ' + error.message);
+      setProcessing(false);
+    }
+  };
+
+  const handleBatchChoiceCancel = () => {
+    setBatchChoiceDialog({ open: false, existingBatch: null, pendingTransaction: null });
+    setProcessing(false);
   };
 
   // Usuń podgląd przy odmontowaniu komponentu
@@ -909,6 +1010,101 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
           {processing ? 'Przetwarzanie...' : (isReceive ? 'Przyjmij' : 'Wydaj')}
         </Button>
       </Box>
+
+      {/* Dialog wyboru partii */}
+      <ConfirmDialog
+        open={batchChoiceDialog.open}
+        title="Wykryto istniejącą partię dla tej pozycji PO"
+        content={
+          <Box>
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              mb: 2, 
+              p: 2, 
+              bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(33, 150, 243, 0.2)' : 'info.light',
+              borderRadius: 1,
+              border: theme => theme.palette.mode === 'dark' ? '1px solid rgba(33, 150, 243, 0.3)' : 'none'
+            }}>
+              <InventoryIcon sx={{ mr: 1, color: 'info.main' }} />
+              <Typography variant="body1" sx={{ 
+                color: theme => theme.palette.mode === 'dark' ? 'info.light' : 'info.contrastText'
+              }}>
+                Dla tej pozycji zamówienia zakupowego już istnieje partia w systemie
+              </Typography>
+            </Box>
+            
+            {batchChoiceDialog.existingBatch && (
+              <Box sx={{ 
+                mt: 2, 
+                p: 3, 
+                bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'grey.50',
+                borderRadius: 2, 
+                border: '1px solid', 
+                borderColor: theme => theme.palette.mode === 'dark' ? 'grey.700' : 'grey.300'
+              }}>
+                <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                  📦 Szczegóły istniejącej partii:
+                </Typography>
+                <Box sx={{ ml: 2 }}>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    <strong>Numer LOT:</strong> {batchChoiceDialog.existingBatch.lotNumber}
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    <strong>Obecna ilość:</strong> {batchChoiceDialog.existingBatch.quantity} {item?.unit}
+                  </Typography>
+                  {batchChoiceDialog.existingBatch.expiryDate && (
+                    <Typography variant="body2" sx={{ mb: 0.5 }}>
+                      <strong>Data ważności:</strong> {new Date(batchChoiceDialog.existingBatch.expiryDate.seconds * 1000).toLocaleDateString('pl-PL')}
+                    </Typography>
+                  )}
+                  {batchChoiceDialog.existingBatch.receivedDate && (
+                    <Typography variant="body2" sx={{ mb: 0.5 }}>
+                      <strong>Data pierwszego przyjęcia:</strong> {new Date(batchChoiceDialog.existingBatch.receivedDate.seconds * 1000).toLocaleDateString('pl-PL')}
+                    </Typography>
+                  )}
+                </Box>
+              </Box>
+            )}
+            
+            <Box sx={{ 
+              mt: 3, 
+              p: 2, 
+              bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.2)' : 'warning.light',
+              borderRadius: 1,
+              border: theme => theme.palette.mode === 'dark' ? '1px solid rgba(255, 152, 0, 0.3)' : 'none'
+            }}>
+              <Typography variant="body1" sx={{ 
+                fontWeight: 'medium',
+                color: theme => theme.palette.mode === 'dark' ? 'warning.light' : 'inherit'
+              }}>
+                <strong>Do przyjęcia:</strong> {batchChoiceDialog.pendingTransaction?.quantity} {item?.unit}
+              </Typography>
+              {batchChoiceDialog.existingBatch && (
+                <Typography variant="body2" sx={{ 
+                  mt: 1,
+                  color: theme => theme.palette.mode === 'dark' ? 'text.primary' : 'text.secondary'
+                }}>
+                  Po przyjęciu łączna ilość w partii wyniesie: <strong>
+                    {(parseFloat(batchChoiceDialog.existingBatch.quantity) + parseFloat(batchChoiceDialog.pendingTransaction?.quantity || 0)).toFixed(2)} {item?.unit}
+                  </strong>
+                </Typography>
+              )}
+            </Box>
+            
+            <Typography variant="body1" sx={{ mt: 3, mb: 2, textAlign: 'center', fontWeight: 'medium' }}>
+              Wybierz sposób przyjęcia towaru:
+            </Typography>
+          </Box>
+        }
+        confirmText={`✅ Dodaj do istniejącej partii (LOT: ${batchChoiceDialog.existingBatch?.lotNumber || ''})`}
+        cancelText="📦 Utwórz nową oddzielną partię"
+        onConfirm={() => handleBatchChoiceConfirm(true)}
+        onCancel={() => handleBatchChoiceConfirm(false)}
+        onClose={handleBatchChoiceCancel}
+        showCloseButton={true}
+        maxWidth="md"
+      />
     </Box>
   );
 };
