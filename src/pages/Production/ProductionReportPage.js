@@ -25,7 +25,9 @@ import {
   CircularProgress,
   useMediaQuery,
   useTheme,
-  IconButton
+  IconButton,
+  Tabs,
+  Tab
 } from '@mui/material';
 import {
   PieChart,
@@ -52,7 +54,8 @@ import {
   FileDownload as DownloadIcon,
   NavigateBefore as PrevIcon,
   NavigateNext as NextIcon,
-  ArrowDropDown as DropdownIcon
+  ArrowDropDown as DropdownIcon,
+  Inventory as InventoryIcon
 } from '@mui/icons-material';
 import { getAllTasks } from '../../services/productionService';
 import { getAllOrders } from '../../services/orderService';
@@ -76,6 +79,7 @@ const ProductionReportPage = () => {
   const [timeStats, setTimeStats] = useState({ totalMinutes: 0, avgTaskTime: 0 });
   const [selectedCustomer, setSelectedCustomer] = useState('all');
   const [workstationNames, setWorkstationNames] = useState({});
+  const [selectedTab, setSelectedTab] = useState(0);
   const { showError } = useNotification();
   
   // Dodajemy wykrywanie urządzeń mobilnych
@@ -290,6 +294,10 @@ const ProductionReportPage = () => {
     setEndDate(endOfMonth(addMonths(endDate, 1)));
   };
   
+  const handleTabChange = (event, newValue) => {
+    setSelectedTab(newValue);
+  };
+  
   const getTaskCustomerName = (task) => {
     const relatedOrder = orders.find(order => 
       order.productionTasks?.some(prodTask => prodTask.id === task.id)
@@ -318,377 +326,884 @@ const ProductionReportPage = () => {
         </Typography>
       </Box>
 
-      {/* Filtry */}
+      {/* Zakładki */}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+        <Tabs 
+          value={selectedTab} 
+          onChange={handleTabChange} 
+          aria-label="raport mo tabs"
+          sx={{
+            '& .MuiTab-root': {
+              fontWeight: 'bold',
+              py: 2
+            },
+            '& .Mui-selected': {
+              color: 'primary.main',
+              fontWeight: 'bold'
+            },
+            '& .MuiTabs-indicator': {
+              height: 3,
+              borderTopLeftRadius: 3,
+              borderTopRightRadius: 3
+            }
+          }}
+        >
+          <Tab 
+            label="Ogólny raport" 
+            icon={<AssessmentIcon />} 
+            iconPosition="start"
+            sx={{ fontSize: '1rem' }}
+          />
+          <Tab 
+            label="Konsumpcja MO"
+            icon={<InventoryIcon />} 
+            iconPosition="start"
+            sx={{ fontSize: '1rem' }}
+          />
+        </Tabs>
+      </Box>
+
+      {/* Zawartość zakładek */}
+      {selectedTab === 0 && (
+        <React.Fragment>
+          {/* Filtry */}
+          <Paper sx={{ p: isMobile ? 1.5 : 3, mb: isMobile ? 1.5 : 3 }}>
+            <Grid container spacing={isMobile ? 1 : 3} alignItems="center">
+              <Grid item xs={12} sm={6} md={3}>
+                <Typography variant="caption" sx={{ display: isMobile ? 'block' : 'none', mb: 0.5 }}>
+                  Data początkowa
+                </Typography>
+                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
+                  <DatePicker
+                    label={isMobile ? "" : "Data początkowa"}
+                    value={startDate}
+                    onChange={(newDate) => setStartDate(newDate)}
+                    slotProps={{ 
+                      textField: { 
+                        fullWidth: true,
+                        size: "small",
+                        placeholder: isMobile ? "Data początkowa" : "",
+                        sx: {
+                          '& .MuiInputLabel-root': {
+                            display: isMobile ? 'none' : 'block'
+                          }
+                        }
+                      } 
+                    }}
+                  />
+                </LocalizationProvider>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Typography variant="caption" sx={{ display: isMobile ? 'block' : 'none', mb: 0.5 }}>
+                  Data końcowa
+                </Typography>
+                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
+                  <DatePicker
+                    label={isMobile ? "" : "Data końcowa"}
+                    value={endDate}
+                    onChange={(newDate) => setEndDate(newDate)}
+                    slotProps={{ 
+                      textField: { 
+                        fullWidth: true,
+                        size: "small",
+                        placeholder: isMobile ? "Data końcowa" : "",
+                        sx: {
+                          '& .MuiInputLabel-root': {
+                            display: isMobile ? 'none' : 'block'
+                          }
+                        }
+                      } 
+                    }}
+                  />
+                </LocalizationProvider>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Typography variant="caption" sx={{ display: isMobile ? 'block' : 'none', mb: 0.5 }}>
+                  Klient
+                </Typography>
+                <FormControl fullWidth size="small">
+                  <InputLabel sx={{ display: isMobile ? 'none' : 'block' }}>Klient</InputLabel>
+                  <Select
+                    value={selectedCustomer}
+                    onChange={(e) => setSelectedCustomer(e.target.value)}
+                    label={isMobile ? "" : "Klient"}
+                    displayEmpty={isMobile}
+                    placeholder={isMobile ? "Klient" : ""}
+                  >
+                    <MenuItem value="all">Wszyscy klienci</MenuItem>
+                    {customers.map(customer => (
+                      <MenuItem key={customer.id} value={customer.id}>
+                        {customer.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Box sx={{ 
+                  display: 'flex', 
+                  justifyContent: 'center', 
+                  alignItems: 'center',
+                  height: '100%',
+                  gap: 1,
+                  mt: isMobile ? 1 : 0
+                }}>
+                  <IconButton 
+                    color="primary"
+                    onClick={handlePreviousMonth}
+                    size="small"
+                    sx={{ 
+                      border: '1px solid rgba(25, 118, 210, 0.5)', 
+                      borderRadius: 1, 
+                      width: 36, 
+                      height: 36,
+                      minWidth: 36, 
+                      p: 0.5,
+                      mx: 0.5
+                    }}
+                  >
+                    <PrevIcon fontSize="small" />
+                  </IconButton>
+                  <IconButton 
+                    color="primary"
+                    onClick={handleNextMonth}
+                    size="small"
+                    sx={{ 
+                      border: '1px solid rgba(25, 118, 210, 0.5)', 
+                      borderRadius: 1, 
+                      width: 36, 
+                      height: 36,
+                      minWidth: 36, 
+                      p: 0.5,
+                      mx: 0.5
+                    }}
+                  >
+                    <NextIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+              </Grid>
+            </Grid>
+          </Paper>
+
+          {/* Podsumowanie */}
+          <Grid container spacing={isMobile ? 1 : 3} sx={{ mb: isMobile ? 1.5 : 3 }}>
+            <Grid item xs={6} sm={6} md={3}>
+              <Card>
+                <CardContent sx={{ p: isMobile ? 1 : 2, '&:last-child': { pb: isMobile ? 1 : 2 } }}>
+                  <Typography variant="caption" sx={{ fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
+                    Liczba zadań
+                  </Typography>
+                  <Typography variant="h5" color="primary" sx={{ fontSize: isMobile ? '1.2rem' : '1.5rem', mt: 0.5 }}>
+                    {filteredTasks.length}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={6} sm={6} md={3}>
+              <Card>
+                <CardContent sx={{ p: isMobile ? 1 : 2, '&:last-child': { pb: isMobile ? 1 : 2 } }}>
+                  <Typography variant="caption" sx={{ fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
+                    Zadania zakończone
+                  </Typography>
+                  <Typography variant="h5" color="success.main" sx={{ fontSize: isMobile ? '1.2rem' : '1.5rem', mt: 0.5 }}>
+                    {filteredTasks.filter(task => task.status === 'Zakończone').length}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={6} sm={6} md={3}>
+              <Card>
+                <CardContent sx={{ p: isMobile ? 1 : 2, '&:last-child': { pb: isMobile ? 1 : 2 } }}>
+                  <Typography variant="caption" sx={{ fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
+                    Zadania w trakcie
+                  </Typography>
+                  <Typography variant="h5" color="warning.main" sx={{ fontSize: isMobile ? '1.2rem' : '1.5rem', mt: 0.5 }}>
+                    {filteredTasks.filter(task => task.status === 'W trakcie').length}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={6} sm={6} md={3}>
+              <Card>
+                <CardContent sx={{ p: isMobile ? 1 : 2, '&:last-child': { pb: isMobile ? 1 : 2 } }}>
+                  <Typography variant="caption" sx={{ fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
+                    Czas pracy
+                  </Typography>
+                  <Typography variant="h5" color="info.main" sx={{ fontSize: isMobile ? '1.2rem' : '1.5rem', mt: 0.5 }}>
+                    {formatTime(timeStats.totalMinutes)}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+
+          {/* Wykresy - na urządzeniach mobilnych pokazujemy tylko wykres statusów */}
+          <Grid container spacing={isMobile ? 1 : 3} sx={{ mb: isMobile ? 1.5 : 3 }}>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: isMobile ? 1 : 3, height: '100%' }}>
+                <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', mb: 1, fontSize: isMobile ? '0.8rem' : '1rem' }}>
+                  Zadania według statusu
+                </Typography>
+                <Box sx={{ height: isMobile ? 200 : 300 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={statusStats}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={false}
+                        outerRadius={isMobile ? 50 : 80}
+                        fill="#8884d8"
+                        dataKey="value"
+                      >
+                        {statusStats.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={getStatusColor(entry.name)} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value) => [`${value} zadań`, 'Liczba']} />
+                      <Legend layout="horizontal" align="center" verticalAlign="bottom" wrapperStyle={{ fontSize: isMobile ? '0.7rem' : '0.8rem' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </Box>
+              </Paper>
+            </Grid>
+            {!isMobile && (
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 3, height: '100%' }}>
+                  <Typography variant="h6" gutterBottom align="center">
+                    Zadania wg klienta
+                  </Typography>
+                  <Box sx={{ height: 300 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        width={500}
+                        height={300}
+                        data={customerStats}
+                        margin={{
+                          top: 5,
+                          right: 30,
+                          left: 20,
+                          bottom: 5,
+                        }}
+                      >
+                        <XAxis dataKey="name" textAnchor="middle" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="value" name="Liczba zadań" fill="#8884d8" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </Box>
+                </Paper>
+              </Grid>
+            )}
+          </Grid>
+
+          {/* Tabela szczegółowa - na urządzeniach mobilnych pokazujemy prostszą wersję */}
+          {isMobile ? (
+            <Paper sx={{ p: 1.5 }}>
+              <Typography variant="caption" sx={{ display: 'block', mb: 1, fontSize: '0.8rem' }}>
+                Lista zadań
+              </Typography>
+              <Divider sx={{ mb: 1.5 }} />
+              
+              {filteredTasks.length === 0 ? (
+                <Typography align="center" sx={{ py: 2, fontSize: '0.8rem' }}>
+                  Brak zadań w wybranym okresie
+                </Typography>
+              ) : (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  {filteredTasks.map((task) => (
+                    <Card 
+                      key={task.id} 
+                      variant="outlined" 
+                      sx={{ 
+                        cursor: 'pointer',
+                        '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.03)' } 
+                      }}
+                      onClick={() => navigate(`/production/tasks/${task.id}`)}
+                    >
+                      <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'medium', fontSize: '0.8rem' }}>
+                            {task.name}
+                          </Typography>
+                          <Chip 
+                            label={task.status} 
+                            sx={{ 
+                              backgroundColor: getStatusColor(task.status),
+                              color: 'white',
+                              fontSize: '0.65rem',
+                              height: '20px'
+                            }}
+                            size="small" 
+                          />
+                        </Box>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                          <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
+                            {task.productName}
+                          </Typography>
+                          <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
+                            {task.scheduledDate 
+                              ? format(
+                                  typeof task.scheduledDate === 'string'
+                                    ? new Date(task.scheduledDate)
+                                    : task.scheduledDate instanceof Date
+                                      ? task.scheduledDate
+                                      : task.scheduledDate.toDate(),
+                                  'dd.MM.yyyy'
+                                )
+                              : '-'}
+                          </Typography>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Box>
+              )}
+            </Paper>
+          ) : (
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                Szczegółowa lista zadań
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+              
+              {filteredTasks.length === 0 ? (
+                <Typography align="center" sx={{ py: 3 }}>
+                  Brak zadań produkcyjnych w wybranym okresie.
+                </Typography>
+              ) : (
+                <TableContainer sx={{ overflowX: 'auto' }}>
+                  <Table size="medium" sx={{ minWidth: 850 }}>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Nazwa zadania</TableCell>
+                        <TableCell>Nr MO</TableCell>
+                        <TableCell>Produkt</TableCell>
+                        <TableCell>Klient</TableCell>
+                        <TableCell>Data</TableCell>
+                        <TableCell>Status</TableCell>
+                        <TableCell align="right">Czas pracy (min)</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {filteredTasks.map((task) => (
+                        <TableRow 
+                          key={task.id}
+                          hover
+                          onClick={() => navigate(`/production/tasks/${task.id}`)}
+                          sx={{ cursor: 'pointer' }}
+                        >
+                          <TableCell>{task.name}</TableCell>
+                          <TableCell>{task.moNumber}</TableCell>
+                          <TableCell>{task.productName}</TableCell>
+                          <TableCell>{getTaskCustomerName(task)}</TableCell>
+                          <TableCell>
+                            {task.scheduledDate 
+                              ? format(
+                                  typeof task.scheduledDate === 'string'
+                                    ? new Date(task.scheduledDate)
+                                    : task.scheduledDate instanceof Date
+                                      ? task.scheduledDate
+                                      : task.scheduledDate.toDate(),
+                                  'dd.MM.yyyy'
+                                )
+                              : '-'}
+                          </TableCell>
+                          <TableCell>
+                            <Chip 
+                              label={task.status} 
+                              sx={{ 
+                                backgroundColor: getStatusColor(task.status),
+                                color: 'white',
+                                fontSize: '0.75rem'
+                              }}
+                              size="small" 
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            {task.productionSessions 
+                              ? task.productionSessions.reduce((sum, session) => sum + (session.timeSpent || 0), 0)
+                              : '-'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </Paper>
+          )}
+        </React.Fragment>
+      )}
+
+      {/* Zakładka Konsumpcja MO */}
+      {selectedTab === 1 && (
+        <ConsumptionReportTab 
+          tasks={filteredTasks}
+          startDate={startDate}
+          endDate={endDate}
+          customers={customers}
+          isMobile={isMobile}
+        />
+      )}
+    </Container>
+  );
+};
+
+// Komponent zakładki konsumpcji MO
+const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }) => {
+  const [consumptionData, setConsumptionData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filteredConsumption, setFilteredConsumption] = useState([]);
+  const [consumptionStartDate, setConsumptionStartDate] = useState(startDate);
+  const [consumptionEndDate, setConsumptionEndDate] = useState(endDate);
+  const [selectedMaterial, setSelectedMaterial] = useState('all');
+  const [selectedOrder, setSelectedOrder] = useState('all');
+  const [materialsList, setMaterialsList] = useState([]);
+  const [ordersList, setOrdersList] = useState([]);
+
+  // Funkcja do agregacji danych konsumpcji z zadań produkcyjnych
+  const aggregateConsumptionData = (tasks) => {
+    const aggregatedData = [];
+    const materialSummary = {};
+
+    tasks.forEach(task => {
+      if (task.consumedMaterials && task.consumedMaterials.length > 0) {
+        task.consumedMaterials.forEach(consumed => {
+          const materialId = consumed.materialId;
+          
+          // Znajdź materiał w liście materiałów zadania aby pobrać prawidłową nazwę
+          const material = task.materials?.find(m => 
+            (m.inventoryItemId || m.id) === materialId
+          );
+          
+          const materialName = material?.name || consumed.materialName || 'Nieznany materiał';
+          const materialUnit = material?.unit || consumed.unit || 'szt';
+          const batchNumber = consumed.batchNumber || consumed.batchId || 'Brak numeru';
+          const quantity = Number(consumed.quantity) || 0;
+          const unitPrice = Number(consumed.unitPrice) || 0;
+          const totalCost = quantity * unitPrice;
+          const consumptionDate = consumed.timestamp ? new Date(consumed.timestamp) : null;
+          
+          // Sprawdź czy konsumpcja jest w wybranym zakresie dat
+          if (consumptionDate && 
+              consumptionDate >= consumptionStartDate && 
+              consumptionDate <= consumptionEndDate) {
+            
+            // Dodaj do szczegółowych danych
+            aggregatedData.push({
+              taskId: task.id,
+              taskName: task.name,
+              moNumber: task.moNumber,
+              productName: task.productName,
+              materialId,
+              materialName,
+              batchNumber,
+              quantity,
+              unit: materialUnit,
+              unitPrice,
+              totalCost,
+              consumptionDate,
+              userName: consumed.userName || 'Nieznany użytkownik',
+              includeInCosts: consumed.includeInCosts !== false
+            });
+
+            // Agreguj dla podsumowania materiałów
+            if (!materialSummary[materialId]) {
+              materialSummary[materialId] = {
+                materialName,
+                unit: materialUnit,
+                totalQuantity: 0,
+                totalCost: 0,
+                batchCount: 0,
+                taskCount: new Set(),
+                avgUnitPrice: 0
+              };
+            }
+
+            materialSummary[materialId].totalQuantity += quantity;
+            materialSummary[materialId].totalCost += totalCost;
+            materialSummary[materialId].batchCount += 1;
+            materialSummary[materialId].taskCount.add(task.id);
+          }
+        });
+      }
+    });
+
+    // Oblicz średnie ceny jednostkowe
+    Object.values(materialSummary).forEach(material => {
+      material.avgUnitPrice = material.totalQuantity > 0 
+        ? material.totalCost / material.totalQuantity 
+        : 0;
+      material.taskCount = material.taskCount.size;
+    });
+
+    return {
+      detailedData: aggregatedData,
+      materialSummary: Object.values(materialSummary)
+    };
+  };
+
+  // Pobierz unikalne materiały do filtrowania
+  useEffect(() => {
+    const materials = [];
+    const materialSet = new Set();
+    
+    tasks.forEach(task => {
+      if (task.consumedMaterials && task.consumedMaterials.length > 0) {
+        task.consumedMaterials.forEach(consumed => {
+          const materialId = consumed.materialId;
+          
+          // Znajdź materiał w liście materiałów zadania aby pobrać prawidłową nazwę
+          const material = task.materials?.find(m => 
+            (m.inventoryItemId || m.id) === materialId
+          );
+          
+          const materialName = material?.name || consumed.materialName || 'Nieznany materiał';
+          
+          if (!materialSet.has(materialId)) {
+            materialSet.add(materialId);
+            materials.push({
+              id: materialId,
+              name: materialName
+            });
+          }
+        });
+      }
+    });
+    
+    setMaterialsList(materials.sort((a, b) => a.name.localeCompare(b.name)));
+  }, [tasks]);
+
+  // Pobierz unikalne zamówienia (CO) do filtrowania
+  useEffect(() => {
+    const orders = [];
+    const orderSet = new Set();
+    
+    tasks.forEach(task => {
+      if (task.consumedMaterials && task.consumedMaterials.length > 0) {
+        // Sprawdź czy zadanie ma powiązane zamówienie
+        if (task.orderId && task.orderNumber) {
+          const orderKey = `${task.orderId}_${task.orderNumber}`;
+          
+          if (!orderSet.has(orderKey)) {
+            orderSet.add(orderKey);
+            orders.push({
+              id: task.orderId,
+              number: task.orderNumber,
+              customer: task.customer
+            });
+          }
+        }
+      }
+    });
+    
+    setOrdersList(orders.sort((a, b) => a.number.localeCompare(b.number)));
+  }, [tasks]);
+
+  // Agreguj dane konsumpcji po zmianie filtrów
+  useEffect(() => {
+    setLoading(true);
+    
+    // Filtruj zadania po wybranym zamówieniu przed agregacją
+    let filteredTasks = tasks;
+    if (selectedOrder !== 'all') {
+      filteredTasks = tasks.filter(task => task.orderId === selectedOrder);
+    }
+    
+    const { detailedData, materialSummary } = aggregateConsumptionData(filteredTasks);
+    
+    // Filtruj po wybranym materiale
+    const filtered = selectedMaterial === 'all' 
+      ? detailedData 
+      : detailedData.filter(item => item.materialId === selectedMaterial);
+    
+    setConsumptionData(materialSummary);
+    setFilteredConsumption(filtered);
+    setLoading(false);
+  }, [tasks, consumptionStartDate, consumptionEndDate, selectedMaterial, selectedOrder]);
+
+  const formatCurrency = (value) => {
+    return new Intl.NumberFormat('pl-PL', {
+      style: 'currency',
+      currency: 'EUR',
+      minimumFractionDigits: 2
+    }).format(value);
+  };
+
+  const formatQuantity = (value, precision = 3) => {
+    return Number(value).toFixed(precision);
+  };
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  return (
+    <Box>
+      {/* Filtry dla konsumpcji */}
       <Paper sx={{ p: isMobile ? 1.5 : 3, mb: isMobile ? 1.5 : 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Filtry konsumpcji materiałów
+        </Typography>
         <Grid container spacing={isMobile ? 1 : 3} alignItems="center">
           <Grid item xs={12} sm={6} md={3}>
-            <Typography variant="caption" sx={{ display: isMobile ? 'block' : 'none', mb: 0.5 }}>
-              Data początkowa
-            </Typography>
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
               <DatePicker
-                label={isMobile ? "" : "Data początkowa"}
-                value={startDate}
-                onChange={(newDate) => setStartDate(newDate)}
+                label="Data początkowa"
+                value={consumptionStartDate}
+                onChange={(newDate) => setConsumptionStartDate(newDate)}
                 slotProps={{ 
                   textField: { 
                     fullWidth: true,
-                    size: "small",
-                    placeholder: isMobile ? "Data początkowa" : "",
-                    sx: {
-                      '& .MuiInputLabel-root': {
-                        display: isMobile ? 'none' : 'block'
-                      }
-                    }
+                    size: "small"
                   } 
                 }}
               />
             </LocalizationProvider>
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
-            <Typography variant="caption" sx={{ display: isMobile ? 'block' : 'none', mb: 0.5 }}>
-              Data końcowa
-            </Typography>
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
               <DatePicker
-                label={isMobile ? "" : "Data końcowa"}
-                value={endDate}
-                onChange={(newDate) => setEndDate(newDate)}
+                label="Data końcowa"
+                value={consumptionEndDate}
+                onChange={(newDate) => setConsumptionEndDate(newDate)}
                 slotProps={{ 
                   textField: { 
                     fullWidth: true,
-                    size: "small",
-                    placeholder: isMobile ? "Data końcowa" : "",
-                    sx: {
-                      '& .MuiInputLabel-root': {
-                        display: isMobile ? 'none' : 'block'
-                      }
-                    }
+                    size: "small"
                   } 
                 }}
               />
             </LocalizationProvider>
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
-            <Typography variant="caption" sx={{ display: isMobile ? 'block' : 'none', mb: 0.5 }}>
-              Klient
-            </Typography>
             <FormControl fullWidth size="small">
-              <InputLabel sx={{ display: isMobile ? 'none' : 'block' }}>Klient</InputLabel>
+              <InputLabel>Zamówienie (CO)</InputLabel>
               <Select
-                value={selectedCustomer}
-                onChange={(e) => setSelectedCustomer(e.target.value)}
-                label={isMobile ? "" : "Klient"}
-                displayEmpty={isMobile}
-                placeholder={isMobile ? "Klient" : ""}
+                value={selectedOrder}
+                onChange={(e) => setSelectedOrder(e.target.value)}
+                label="Zamówienie (CO)"
               >
-                <MenuItem value="all">Wszyscy klienci</MenuItem>
-                {customers.map(customer => (
-                  <MenuItem key={customer.id} value={customer.id}>
-                    {customer.name}
+                <MenuItem value="all">Wszystkie zamówienia</MenuItem>
+                {ordersList.map(order => (
+                  <MenuItem key={order.id} value={order.id}>
+                    CO #{order.number}
+                    {order.customer && ` - ${order.customer.name || order.customer}`}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
-            <Box sx={{ 
-              display: 'flex', 
-              justifyContent: 'center', 
-              alignItems: 'center',
-              height: '100%',
-              gap: 1,
-              mt: isMobile ? 1 : 0
-            }}>
-              <IconButton 
-                color="primary"
-                onClick={handlePreviousMonth}
-                size="small"
-                sx={{ 
-                  border: '1px solid rgba(25, 118, 210, 0.5)', 
-                  borderRadius: 1, 
-                  width: 36, 
-                  height: 36,
-                  minWidth: 36, 
-                  p: 0.5,
-                  mx: 0.5
-                }}
+            <FormControl fullWidth size="small">
+              <InputLabel>Materiał</InputLabel>
+              <Select
+                value={selectedMaterial}
+                onChange={(e) => setSelectedMaterial(e.target.value)}
+                label="Materiał"
               >
-                <PrevIcon fontSize="small" />
-              </IconButton>
-              <IconButton 
-                color="primary"
-                onClick={handleNextMonth}
-                size="small"
-                sx={{ 
-                  border: '1px solid rgba(25, 118, 210, 0.5)', 
-                  borderRadius: 1, 
-                  width: 36, 
-                  height: 36,
-                  minWidth: 36, 
-                  p: 0.5,
-                  mx: 0.5
-                }}
-              >
-                <NextIcon fontSize="small" />
-              </IconButton>
-            </Box>
+                <MenuItem value="all">Wszystkie materiały</MenuItem>
+                {materialsList.map(material => (
+                  <MenuItem key={material.id} value={material.id}>
+                    {material.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Grid>
         </Grid>
       </Paper>
 
-      {/* Podsumowanie */}
-      <Grid container spacing={isMobile ? 1 : 3} sx={{ mb: isMobile ? 1.5 : 3 }}>
-        <Grid item xs={6} sm={6} md={3}>
-          <Card>
-            <CardContent sx={{ p: isMobile ? 1 : 2, '&:last-child': { pb: isMobile ? 1 : 2 } }}>
-              <Typography variant="caption" sx={{ fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
-                Liczba zadań
-              </Typography>
-              <Typography variant="h5" color="primary" sx={{ fontSize: isMobile ? '1.2rem' : '1.5rem', mt: 0.5 }}>
-                {filteredTasks.length}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={6} sm={6} md={3}>
-          <Card>
-            <CardContent sx={{ p: isMobile ? 1 : 2, '&:last-child': { pb: isMobile ? 1 : 2 } }}>
-              <Typography variant="caption" sx={{ fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
-                Zadania zakończone
-              </Typography>
-              <Typography variant="h5" color="success.main" sx={{ fontSize: isMobile ? '1.2rem' : '1.5rem', mt: 0.5 }}>
-                {filteredTasks.filter(task => task.status === 'Zakończone').length}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={6} sm={6} md={3}>
-          <Card>
-            <CardContent sx={{ p: isMobile ? 1 : 2, '&:last-child': { pb: isMobile ? 1 : 2 } }}>
-              <Typography variant="caption" sx={{ fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
-                Zadania w trakcie
-              </Typography>
-              <Typography variant="h5" color="warning.main" sx={{ fontSize: isMobile ? '1.2rem' : '1.5rem', mt: 0.5 }}>
-                {filteredTasks.filter(task => task.status === 'W trakcie').length}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={6} sm={6} md={3}>
-          <Card>
-            <CardContent sx={{ p: isMobile ? 1 : 2, '&:last-child': { pb: isMobile ? 1 : 2 } }}>
-              <Typography variant="caption" sx={{ fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
-                Czas pracy
-              </Typography>
-              <Typography variant="h5" color="info.main" sx={{ fontSize: isMobile ? '1.2rem' : '1.5rem', mt: 0.5 }}>
-                {formatTime(timeStats.totalMinutes)}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      {/* Wykresy - na urządzeniach mobilnych pokazujemy tylko wykres statusów */}
-      <Grid container spacing={isMobile ? 1 : 3} sx={{ mb: isMobile ? 1.5 : 3 }}>
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: isMobile ? 1 : 3, height: '100%' }}>
-            <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', mb: 1, fontSize: isMobile ? '0.8rem' : '1rem' }}>
-              Zadania według statusu
-            </Typography>
-            <Box sx={{ height: isMobile ? 200 : 300 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={statusStats}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={false}
-                    outerRadius={isMobile ? 50 : 80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {statusStats.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={getStatusColor(entry.name)} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => [`${value} zadań`, 'Liczba']} />
-                  <Legend layout="horizontal" align="center" verticalAlign="bottom" wrapperStyle={{ fontSize: isMobile ? '0.7rem' : '0.8rem' }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </Box>
-          </Paper>
-        </Grid>
-        {!isMobile && (
-          <Grid item xs={12} md={6}>
-            <Paper sx={{ p: 3, height: '100%' }}>
-              <Typography variant="h6" gutterBottom align="center">
-                Zadania wg klienta
-              </Typography>
-              <Box sx={{ height: 300 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    width={500}
-                    height={300}
-                    data={customerStats}
-                    margin={{
-                      top: 5,
-                      right: 30,
-                      left: 20,
-                      bottom: 5,
-                    }}
-                  >
-                    <XAxis dataKey="name" textAnchor="middle" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="value" name="Liczba zadań" fill="#8884d8" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Box>
-            </Paper>
-          </Grid>
-        )}
-      </Grid>
-
-      {/* Tabela szczegółowa - na urządzeniach mobilnych pokazujemy prostszą wersję */}
-      {isMobile ? (
-        <Paper sx={{ p: 1.5 }}>
-          <Typography variant="caption" sx={{ display: 'block', mb: 1, fontSize: '0.8rem' }}>
-            Lista zadań
+      {/* Podsumowanie konsumpcji materiałów */}
+      <Paper sx={{ p: isMobile ? 1.5 : 3, mb: isMobile ? 1.5 : 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Podsumowanie konsumpcji materiałów
+        </Typography>
+        <Typography variant="body2" color="text.secondary" paragraph>
+          Okres: {format(consumptionStartDate, 'dd.MM.yyyy')} - {format(consumptionEndDate, 'dd.MM.yyyy')}
+        </Typography>
+        
+        {consumptionData.length === 0 ? (
+          <Typography align="center" sx={{ py: 3 }}>
+            Brak danych konsumpcji w wybranym okresie.
           </Typography>
-          <Divider sx={{ mb: 1.5 }} />
-          
-          {filteredTasks.length === 0 ? (
-            <Typography align="center" sx={{ py: 2, fontSize: '0.8rem' }}>
-              Brak zadań w wybranym okresie
-            </Typography>
-          ) : (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              {filteredTasks.map((task) => (
-                <Card 
-                  key={task.id} 
-                  variant="outlined" 
-                  sx={{ 
-                    cursor: 'pointer',
-                    '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.03)' } 
-                  }}
-                  onClick={() => navigate(`/production/tasks/${task.id}`)}
-                >
-                  <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 'medium', fontSize: '0.8rem' }}>
-                        {task.name}
-                      </Typography>
+        ) : (
+          <TableContainer sx={{ overflowX: 'auto' }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Materiał</TableCell>
+                  <TableCell align="right">Łączna ilość</TableCell>
+                  <TableCell>Jednostka</TableCell>
+                  <TableCell align="right">Średnia cena jedn.</TableCell>
+                  <TableCell align="right">Łączny koszt</TableCell>
+                  <TableCell align="center">Liczba partii</TableCell>
+                  <TableCell align="center">Liczba zadań</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {consumptionData.map((material, index) => (
+                  <TableRow key={index} hover>
+                    <TableCell sx={{ fontWeight: 'medium' }}>
+                      {material.materialName}
+                    </TableCell>
+                    <TableCell align="right">
+                      {formatQuantity(material.totalQuantity)}
+                    </TableCell>
+                    <TableCell>{material.unit}</TableCell>
+                    <TableCell align="right">
+                      {formatCurrency(material.avgUnitPrice)}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                      {formatCurrency(material.totalCost)}
+                    </TableCell>
+                    <TableCell align="center">
                       <Chip 
-                        label={task.status} 
-                        sx={{ 
-                          backgroundColor: getStatusColor(task.status),
-                          color: 'white',
-                          fontSize: '0.65rem',
-                          height: '20px'
-                        }}
+                        label={material.batchCount} 
                         size="small" 
+                        color="primary" 
+                        variant="outlined" 
                       />
-                    </Box>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                      <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
-                        {task.productName}
-                      </Typography>
-                      <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
-                        {task.scheduledDate 
-                          ? format(
-                              typeof task.scheduledDate === 'string'
-                                ? new Date(task.scheduledDate)
-                                : task.scheduledDate instanceof Date
-                                  ? task.scheduledDate
-                                  : task.scheduledDate.toDate(),
-                              'dd.MM.yyyy'
-                            )
-                          : '-'}
-                      </Typography>
-                    </Box>
-                  </CardContent>
-                </Card>
-              ))}
-            </Box>
-          )}
-        </Paper>
-      ) : (
-        <Paper sx={{ p: 3 }}>
-          <Typography variant="h6" gutterBottom>
-            Szczegółowa lista zadań
-          </Typography>
-          <Divider sx={{ mb: 2 }} />
-          
-          {filteredTasks.length === 0 ? (
-            <Typography align="center" sx={{ py: 3 }}>
-              Brak zadań produkcyjnych w wybranym okresie.
-            </Typography>
-          ) : (
-            <TableContainer sx={{ overflowX: 'auto' }}>
-              <Table size="medium" sx={{ minWidth: 850 }}>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Nazwa zadania</TableCell>
-                    <TableCell>Nr MO</TableCell>
-                    <TableCell>Produkt</TableCell>
-                    <TableCell>Klient</TableCell>
-                    <TableCell>Data</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell align="right">Czas pracy (min)</TableCell>
+                    </TableCell>
+                    <TableCell align="center">
+                      <Chip 
+                        label={material.taskCount} 
+                        size="small" 
+                        color="secondary" 
+                        variant="outlined" 
+                      />
+                    </TableCell>
                   </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filteredTasks.map((task) => (
-                    <TableRow 
-                      key={task.id}
-                      hover
-                      onClick={() => navigate(`/production/tasks/${task.id}`)}
-                      sx={{ cursor: 'pointer' }}
-                    >
-                      <TableCell>{task.name}</TableCell>
-                      <TableCell>{task.moNumber}</TableCell>
-                      <TableCell>{task.productName}</TableCell>
-                      <TableCell>{getTaskCustomerName(task)}</TableCell>
+                ))}
+                <TableRow sx={{ '& td': { fontWeight: 'bold', bgcolor: 'rgba(0, 0, 0, 0.04)' } }}>
+                  <TableCell>SUMA:</TableCell>
+                  <TableCell align="right">-</TableCell>
+                  <TableCell>-</TableCell>
+                  <TableCell align="right">-</TableCell>
+                  <TableCell align="right">
+                    {formatCurrency(consumptionData.reduce((sum, material) => sum + material.totalCost, 0))}
+                  </TableCell>
+                  <TableCell align="center">
+                    {consumptionData.reduce((sum, material) => sum + material.batchCount, 0)}
+                  </TableCell>
+                  <TableCell align="center">
+                    {new Set(consumptionData.flatMap(material => material.taskCount)).size}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </Paper>
+
+      {/* Szczegółowa lista konsumpcji */}
+      <Paper sx={{ p: isMobile ? 1.5 : 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Szczegółowa lista konsumpcji
+        </Typography>
+        
+        {filteredConsumption.length === 0 ? (
+          <Typography align="center" sx={{ py: 3 }}>
+            Brak szczegółowych danych konsumpcji w wybranym okresie i filtrach.
+          </Typography>
+        ) : (
+          <TableContainer sx={{ overflowX: 'auto' }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Data konsumpcji</TableCell>
+                  <TableCell>Zadanie MO</TableCell>
+                  <TableCell>Zamówienie (CO)</TableCell>
+                  <TableCell>Produkt</TableCell>
+                  <TableCell>Materiał</TableCell>
+                  <TableCell>Partia</TableCell>
+                  <TableCell align="right">Ilość</TableCell>
+                  <TableCell>Jednostka</TableCell>
+                  <TableCell align="right">Cena jedn.</TableCell>
+                  <TableCell align="right">Koszt</TableCell>
+                  <TableCell>Użytkownik</TableCell>
+                  <TableCell align="center">Wliczaj w koszty</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filteredConsumption.map((consumption, index) => {
+                  // Znajdź zadanie aby pobrać informacje o zamówieniu
+                  const task = tasks.find(t => t.id === consumption.taskId);
+                  const orderNumber = task?.orderNumber || '-';
+                  const customerName = task?.customer?.name || task?.customer || '';
+                  
+                  return (
+                    <TableRow key={index} hover>
                       <TableCell>
-                        {task.scheduledDate 
-                          ? format(
-                              typeof task.scheduledDate === 'string'
-                                ? new Date(task.scheduledDate)
-                                : task.scheduledDate instanceof Date
-                                  ? task.scheduledDate
-                                  : task.scheduledDate.toDate(),
-                              'dd.MM.yyyy'
-                            )
+                        {consumption.consumptionDate 
+                          ? format(consumption.consumptionDate, 'dd.MM.yyyy HH:mm')
                           : '-'}
                       </TableCell>
                       <TableCell>
-                        <Chip 
-                          label={task.status} 
-                          sx={{ 
-                            backgroundColor: getStatusColor(task.status),
-                            color: 'white',
-                            fontSize: '0.75rem'
-                          }}
-                          size="small" 
-                        />
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                            {consumption.taskName}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            MO: {consumption.moNumber || '-'}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                            CO #{orderNumber}
+                          </Typography>
+                          {customerName && (
+                            <Typography variant="caption" color="text.secondary">
+                              {customerName}
+                            </Typography>
+                          )}
+                        </Box>
+                      </TableCell>
+                      <TableCell>{consumption.productName}</TableCell>
+                      <TableCell sx={{ fontWeight: 'medium' }}>
+                        {consumption.materialName}
+                      </TableCell>
+                      <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.9rem' }}>
+                        {consumption.batchNumber}
                       </TableCell>
                       <TableCell align="right">
-                        {task.productionSessions 
-                          ? task.productionSessions.reduce((sum, session) => sum + (session.timeSpent || 0), 0)
-                          : '-'}
+                        {formatQuantity(consumption.quantity)}
+                      </TableCell>
+                      <TableCell>{consumption.unit}</TableCell>
+                      <TableCell align="right">
+                        {formatCurrency(consumption.unitPrice)}
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                        {formatCurrency(consumption.totalCost)}
+                      </TableCell>
+                      <TableCell>{consumption.userName}</TableCell>
+                      <TableCell align="center">
+                        <Chip 
+                          label={consumption.includeInCosts ? 'TAK' : 'NIE'}
+                          size="small"
+                          color={consumption.includeInCosts ? 'success' : 'default'}
+                          variant={consumption.includeInCosts ? 'filled' : 'outlined'}
+                        />
                       </TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </Paper>
-      )}
-    </Container>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </Paper>
+    </Box>
   );
 };
 
